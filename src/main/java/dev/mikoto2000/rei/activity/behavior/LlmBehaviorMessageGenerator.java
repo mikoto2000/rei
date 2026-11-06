@@ -74,13 +74,11 @@ public final class LlmBehaviorMessageGenerator implements BehaviorMessageGenerat
                     new SystemMessage(character.get() + "\n\n" + instruction),
                     new UserMessage(new ObjectMapper().writeValueAsString(data))),
                 requestOptions));
-    if (response == null
-        || response.getResult() == null
-        || response.getResult().getOutput() == null)
-      throw new IllegalStateException("No behavior wording");
-    var result = response.getResult();
-    String text = result.getOutput().getText();
-    if (result.getOutput().hasToolCalls()
+    var result = response == null ? null : response.getResult();
+    var output = result == null ? null : result.getOutput();
+    if (output == null) throw new IllegalStateException("No behavior wording");
+    String text = output.getText();
+    if (output.hasToolCalls()
         || "length".equalsIgnoreCase(result.getMetadata().getFinishReason())
         || text == null
         || text.isBlank()

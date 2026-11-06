@@ -226,10 +226,13 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   /** モデルへ渡す文脈の管理の実行結果を受け取り、後続の処理へ反映する。 */
   @Override
   public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
-    if (response.chatResponse() != null && response.chatResponse().getResult() != null)
+    var chat = response.chatResponse();
+    var generation = chat == null ? null : chat.getResult();
+    var output = generation == null ? null : generation.getOutput();
+    if (output != null)
       memory.add(
           java.util.Objects.toString(response.context().get(ChatMemory.CONVERSATION_ID), "default"),
-          response.chatResponse().getResult().getOutput());
+          output);
     return response;
   }
 

@@ -76,19 +76,21 @@ public final class LlmClassificationRuleModel implements ClassificationRuleSugge
       """),
                     new UserMessage(input)),
                 request));
-    if (response == null || response.getResult() == null)
+    var result = response == null ? null : response.getResult();
+    if (result == null)
       throw ClassificationRuleSuggestions.failure("EMPTY_RESPONSE", "LLMの応答または生成結果がありません。");
     if (response.hasToolCalls())
       throw ClassificationRuleSuggestions.failure(
           "UNEXPECTED_TOOL_CALL", "LLMが許可されていないツール呼び出しを返しました。");
-    if ("length".equalsIgnoreCase(response.getResult().getMetadata().getFinishReason()))
+    if ("length".equalsIgnoreCase(result.getMetadata().getFinishReason()))
       throw ClassificationRuleSuggestions.failure(
           "OUTPUT_LIMIT",
           "出力上限"
               + maxOutputTokens
               + "トークンで応答が打ち切られました（finishReason=length）。rei.activity.classification.rule-suggestion.max-output-tokens を増やしてください。");
-    if (response.getResult().getOutput() == null)
+    var output = result.getOutput();
+    if (output == null)
       throw ClassificationRuleSuggestions.failure("EMPTY_RESPONSE", "LLMの応答に本文がありません。");
-    return response.getResult().getOutput().getText();
+    return output.getText();
   }
 }

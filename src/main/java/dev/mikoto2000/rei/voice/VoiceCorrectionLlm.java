@@ -87,14 +87,14 @@ public final class VoiceCorrectionLlm {
             .options(options.mutate())
             .call()
             .chatResponse();
-    if (response == null
-        || response.getResult() == null
-        || !response.getResult().getOutput().getToolCalls().isEmpty())
+    var generation = response == null ? null : response.getResult();
+    var output = generation == null ? null : generation.getOutput();
+    if (output == null || !output.getToolCalls().isEmpty())
       throw new IllegalStateException("invalid_output");
     var usage = response.getMetadata().getUsage();
     budget.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
     if (budget.usageUnknown() || budget.tokenExceeded())
       throw new IllegalStateException("correction_budget");
-    return response.getResult().getOutput().getText();
+    return output.getText();
   }
 }

@@ -48,10 +48,11 @@ public class SpringPaperLanguageModel implements PaperLanguageModel {
     var future =
         chatModel.stream(prompt)
             .map(
-                r ->
-                    r.getResult() == null || r.getResult().getOutput() == null
-                        ? ""
-                        : java.util.Objects.toString(r.getResult().getOutput().getText(), ""))
+                r -> {
+                  var generation = r.getResult();
+                  var output = generation == null ? null : generation.getOutput();
+                  return output == null ? "" : java.util.Objects.toString(output.getText(), "");
+                })
             .scan(
                 "",
                 (a, b) -> {
