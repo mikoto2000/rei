@@ -190,9 +190,11 @@ public final class InformationLedger {
       }
     files.clear();
     identities.clear();
-    files.putAll(validated.files);
-    rangeCount = validated.rangeCount;
-    sourceCharacters = validated.sourceCharacters;
+    synchronized (validated) {
+      files.putAll(validated.files);
+      rangeCount = validated.rangeCount;
+      sourceCharacters = validated.sourceCharacters;
+    }
     identities.addAll(state.identities());
     historicalUnknown = state.historicalUnknown();
   }
