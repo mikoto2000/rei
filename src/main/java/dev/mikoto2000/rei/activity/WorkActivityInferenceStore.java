@@ -29,7 +29,7 @@ public class WorkActivityInferenceStore {
 
   /** 指定された値や利用先を使って、WorkActivityInferenceStoreを初期化する。 */
   public WorkActivityInferenceStore(DataSource ds) {
-    connections = ds::getConnection;
+    connections = () -> ds.getConnection();
   }
 
   /** 作業状況の把握に関する初期化を処理する。 */
