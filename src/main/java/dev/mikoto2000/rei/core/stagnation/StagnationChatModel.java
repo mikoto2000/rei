@@ -1,6 +1,5 @@
 package dev.mikoto2000.rei.core.stagnation;
 
-import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
 import dev.mikoto2000.rei.llm.OutputLimitDetector;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -529,9 +528,12 @@ public class StagnationChatModel implements ChatModel {
 
   /** 実行の停滞への対処で用いる準備を返す。 */
   private Prompt prepare(Prompt prompt, RunExecutionContext context) {
-    ToolCallingChatOptions options = (ToolCallingChatOptions) prompt.getOptions();
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
+      throw new IllegalArgumentException("Missing tool options for the controlled model");
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
-    var toolContext = new HashMap<>(ToolLoopSupport.toolContext(prompt));
+    var configuredContext = options.getToolContext();
+    var toolContext = new HashMap<String, Object>();
+    if (configuredContext != null) toolContext.putAll(configuredContext);
     toolContext.put("rei.contextSequenceOffset", context.nextContextSegment());
     List<ToolCallback> callbacks = new ArrayList<>();
     var configuredCallbacks = options.getToolCallbacks();
@@ -653,8 +655,10 @@ public class StagnationChatModel implements ChatModel {
 
   /** 実行の停滞への対処で用いる文脈を返す。 */
   private RunExecutionContext context(Prompt prompt) {
-    if (ToolLoopSupport.toolContext(prompt).get(RunExecutionContext.KEY)
-            instanceof RunExecutionContext context) return context;
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return null;
+    var values = options.getToolContext();
+    if (values != null && values.get(RunExecutionContext.KEY) instanceof RunExecutionContext context)
+      return context;
     return null;
   }
 }

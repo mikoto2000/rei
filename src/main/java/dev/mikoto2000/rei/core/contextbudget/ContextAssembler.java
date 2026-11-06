@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
 import dev.mikoto2000.rei.core.chat.RunCancellation;
-import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.AgentEventType;
@@ -19,6 +18,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 
 /**
  * モデルへ渡す文脈の管理に必要な文脈文脈の組み立てを扱う。
@@ -223,7 +223,7 @@ public class ContextAssembler {
     }
     String runKey = ConversationSummaryRepository.runKey(conversation, run);
     String historyKey = conversation;
-    if ("log".equals(ToolLoopSupport.toolContext(raw).get("rei.historySource"))) historyKey += "/log";
+    if ("log".equals(toolContext(raw).get("rei.historySource"))) historyKey += "/log";
     // Never reuse a rolling summary that may still contain an archived cancelled task.
     var generation =
         raw.getInstructions().stream()
@@ -634,7 +634,7 @@ public class ContextAssembler {
 
   /** モデルへ渡す文脈の管理で用いる発生順序開始位置を返す。 */
   private long sequenceOffset(Prompt prompt) {
-    if (ToolLoopSupport.toolContext(prompt).get("rei.contextSequenceOffset") instanceof Number n)
+    if (toolContext(prompt).get("rei.contextSequenceOffset") instanceof Number n)
       return n.longValue();
     return 0;
   }
@@ -651,7 +651,7 @@ public class ContextAssembler {
 
   /** モデルへ渡す文脈の管理で用いる実行を返す。 */
   static dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution(Prompt prompt) {
-    if (ToolLoopSupport.toolContext(prompt).get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+    if (toolContext(prompt).get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
             instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
       return execution;
     return null;
@@ -686,5 +686,12 @@ public class ContextAssembler {
             .contextCompression(
                 type, new ContextCompressionPayload(before, after, count, through, reason, details))
             .withOwnership(execution == null ? null : execution.runContext()));
+  }
+
+  private static Map<String, Object> toolContext(Prompt prompt) {
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
+      return Map.of();
+    var context = options.getToolContext();
+    return context == null ? Map.of() : context;
   }
 }
