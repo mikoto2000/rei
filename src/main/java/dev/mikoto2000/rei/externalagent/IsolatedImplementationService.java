@@ -132,7 +132,11 @@ public final class IsolatedImplementationService {
       String commitHash,
       String diff,
       boolean redacted,
-      List<String> warnings) {}
+      List<String> warnings) {
+    public Preview {
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 
   /** 保存。 */
   private final Path storage;

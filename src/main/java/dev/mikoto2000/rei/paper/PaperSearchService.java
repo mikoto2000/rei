@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.paper;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,7 +45,12 @@ public class PaperSearchService {
    * @param papers 論文一覧
    * @param warnings 注意事項
    */
-  public record Result(List<Paper> papers, List<String> warnings) {}
+  public record Result(List<Paper> papers, List<String> warnings) {
+    public Result {
+      papers = papers == null ? null : Collections.unmodifiableList(new ArrayList<>(papers));
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 
   /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public Result search(PaperSearchQuery q, PaperOperation op) {
