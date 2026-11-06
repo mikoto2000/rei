@@ -24,6 +24,10 @@ import org.springframework.stereotype.Component;
 public class RelatedFileGraphAdvisor implements BaseAdvisor {
 
   /** 関連ファイル関連図。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Renders the current related-file graph that tools update during a run.")
   private final RelatedFileGraph relatedFileGraph;
 
   /** 作業中集合。 */

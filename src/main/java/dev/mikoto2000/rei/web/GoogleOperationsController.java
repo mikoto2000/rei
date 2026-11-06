@@ -33,6 +33,10 @@ public final class GoogleOperationsController {
   private final GoogleCalendarService calendar;
 
   /** タスク一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared task service and its current account for command operations.")
   private final TaskService tasks;
 
   /** 実行一覧。 */

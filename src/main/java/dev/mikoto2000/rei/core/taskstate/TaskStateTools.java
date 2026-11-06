@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.core.taskstate;
 
 import dev.mikoto2000.rei.context.TaskProgressStore;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -15,6 +17,10 @@ import org.springframework.stereotype.Component;
 public class TaskStateTools {
 
   /** タスク状態。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Updates the current task state shared with the run's prompt advisor.")
   private final TaskState taskState;
 
   @FunctionalInterface

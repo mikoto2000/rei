@@ -70,6 +70,10 @@ public class DotDelegationService {
   private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpointRepository;
 
   /** 判断基準。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the current shared tool permission policy for delegation authorization.")
   private dev.mikoto2000.rei.core.policy.ToolPermissionPolicy policy;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */

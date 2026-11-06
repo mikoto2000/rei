@@ -47,9 +47,17 @@ public class VoiceCommand {
   private final ShellConversationService shell;
 
   /** モデル一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads readiness and download activity from the live voice model manager.")
   private final VoiceModelManager models;
 
   /** 配信。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared voice delivery state for binding, cancellation, and confirmations.")
   private final VoiceDeliveryService delivery;
 
   /** 排他制御。 */

@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.core;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -205,6 +207,10 @@ public final class TextDocumentChangeSetService {
   private final Clock clock;
 
   /** moveに関する値。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured filesystem move callback when applying a document transaction.")
   private final TextDocumentTransaction.Move move;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */

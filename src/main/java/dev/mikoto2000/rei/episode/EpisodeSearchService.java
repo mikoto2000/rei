@@ -93,6 +93,10 @@ public class EpisodeSearchService {
   }
 
   /** イベント一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads episode evidence from the same persistent project event store.")
   private dev.mikoto2000.rei.event.ProjectAgentEventStore events;
 
   /** 過去の経験の活用で使用するイベント一覧を設定する。 */

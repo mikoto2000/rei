@@ -176,6 +176,10 @@ public class LlmChatClientProvider {
   private final SystemPromptService systemPromptService;
 
   /** チャット記憶。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Supplies the shared conversation memory to clients created for the current history.")
   private final ChatMemory chatMemory;
 
   /** ツール一覧。 */
@@ -312,6 +316,10 @@ public class LlmChatClientProvider {
   private ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> subAgentTools;
 
   /** 補助エージェント設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Supplies the configured subagent options when creating chat clients.")
   private dev.mikoto2000.rei.subagent.SubAgentProperties subAgentProperties =
       new dev.mikoto2000.rei.subagent.SubAgentProperties();
 

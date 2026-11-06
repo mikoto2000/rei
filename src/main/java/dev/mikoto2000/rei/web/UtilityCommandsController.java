@@ -23,6 +23,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public final class UtilityCommandsController {
   /** リマインダー一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared reminder service and the same persisted reminders.")
   private final ReminderService reminders;
 
   /** 実行一覧。 */

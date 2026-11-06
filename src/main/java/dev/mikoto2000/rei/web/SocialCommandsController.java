@@ -25,6 +25,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public final class SocialCommandsController {
   /** 履歴。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared Bluesky conversation history for command operations.")
   private final BlueskyReplyConversationRepository history;
 
   /** 関心一覧。 */

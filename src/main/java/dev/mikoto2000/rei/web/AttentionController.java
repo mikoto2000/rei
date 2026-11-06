@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.attention.AttentionRepository;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -21,6 +23,10 @@ public class AttentionController {
   private final AttentionRepository repository;
 
   /** 配信。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared attention delivery state when serving API operations.")
   private dev.mikoto2000.rei.attention.AttentionDeliveryService delivery;
 
   /** Web APIによる操作で使用する配信を設定する。 */
