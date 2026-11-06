@@ -10,6 +10,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
@@ -21,8 +22,8 @@ public class ValidatingResolverGroup extends AddressResolverGroup<InetSocketAddr
   /** 許可。 */
   private final Predicate<InetAddress> allowed;
 
-  /** 承認済み。 */
-  private final Set<InetAddress> approved;
+  /** 承認したアドレスの記録先。 */
+  private final Consumer<InetAddress> recordApprovedAddress;
 
   /** 委譲先。 */
   private final AddressResolverGroup<InetSocketAddress> delegate;
@@ -43,7 +44,7 @@ public class ValidatingResolverGroup extends AddressResolverGroup<InetSocketAddr
       Set<InetAddress> approved,
       AddressResolverGroup<InetSocketAddress> delegate) {
     this.allowed = allowed;
-    this.approved = approved;
+    recordApprovedAddress = address -> approved.add(address);
     this.delegate = delegate;
   }
 
@@ -126,7 +127,7 @@ public class ValidatingResolverGroup extends AddressResolverGroup<InetSocketAddr
           return;
         }
         if (result.isCancelled()) return;
-        answers.forEach(a -> approved.add(a.getAddress()));
+        answers.forEach(answer -> recordApprovedAddress.accept(answer.getAddress()));
         result.trySuccess(List.copyOf(answers));
       }
     };
