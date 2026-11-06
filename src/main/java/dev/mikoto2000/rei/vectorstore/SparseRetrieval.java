@@ -145,8 +145,8 @@ public final class SparseRetrieval {
           false);
     } catch (RuntimeException failure) {
       RunCancellation.propagate(failure);
-      if (failure instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)
-        throw failure;
+      if (failure instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)
+        throw stopped;
       return fallback(
           request,
           failure instanceof Fallback selected
