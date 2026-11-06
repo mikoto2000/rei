@@ -133,14 +133,12 @@ public final class CaptureCommandsController {
   public Text export(@PathVariable String attempt, @RequestBody Export request) {
     approved(request == null ? null : request.approved());
     id(attempt);
-    if (request.path() == null
-        || request.path().isBlank()
-        || request.path().length() > 16384
-        || request.path().indexOf('\0') >= 0)
+    var path = request == null ? null : request.path();
+    if (path == null || path.isBlank() || path.length() > 16384 || path.indexOf('\0') >= 0)
       throw new IllegalArgumentException("Export path required");
     var command = command();
     command.setConfirmation(prompt -> true);
-    return new Text(command.reportExport(attempt, request.path()));
+    return new Text(command.reportExport(attempt, path));
   }
 
   /** 指定された対象を削除する。 */
