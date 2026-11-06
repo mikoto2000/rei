@@ -14,6 +14,8 @@ import dev.mikoto2000.rei.memory.service.MemoryService;
 import dev.mikoto2000.rei.reminder.Reminder;
 import dev.mikoto2000.rei.reminder.ReminderService;
 import dev.mikoto2000.rei.skills.AgentSkillRepository;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -25,20 +27,50 @@ import org.springframework.stereotype.Service;
  *
  * <p>Validated Web admission over shared domain services. Existing Shell behavior remains in those
  * services.
- *
- * @param feeds フィード一覧
- * @param reminders リマインダー一覧
- * @param interests 関心一覧
- * @param memories 記憶一覧
- * @param skills スキル一覧
  */
 @Service
-public record StatefulOperationService(
-    FeedService feeds,
-    ReminderService reminders,
-    InterestUpdateService interests,
-    MemoryService memories,
-    AgentSkillRepository skills) {
+public final class StatefulOperationService {
+  /** フィードの操作窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared feed service for the persisted feed state.")
+  private final FeedService feeds;
+
+  /** リマインダーの操作窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared reminder service for the active reminders.")
+  private final ReminderService reminders;
+
+  /** 関心の操作窓口。 */
+  private final InterestUpdateService interests;
+
+  /** 記憶の操作窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared memory service for persisted memory operations.")
+  private final MemoryService memories;
+
+  /** スキルの保存先。 */
+  private final AgentSkillRepository skills;
+
+  /** 操作で使用する保存先と設定を受け取る。 */
+  public StatefulOperationService(
+      FeedService feeds,
+      ReminderService reminders,
+      InterestUpdateService interests,
+      MemoryService memories,
+      AgentSkillRepository skills) {
+    this.feeds = feeds;
+    this.reminders = reminders;
+    this.interests = interests;
+    this.memories = memories;
+    this.skills = skills;
+  }
+
   /** 新たな対象を利用できるよう、フィードを作成する。 */
   public Feed createFeed(String url, String displayName) {
     url(url);
