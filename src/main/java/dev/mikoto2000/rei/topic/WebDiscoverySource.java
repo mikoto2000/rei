@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.topic;
 
 import dev.mikoto2000.rei.websearch.WebSearchAndReadRequest;
 import dev.mikoto2000.rei.websearch.WebSearchAndReadService;
+import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +23,8 @@ public class WebDiscoverySource implements DiscoverySource {
 
   /** 話題の管理で用いる利用先の検出を返す。 */
   @Override
-  public List<DiscoveryItem> discover(DiscoveryContext context) throws Exception {
+  public List<DiscoveryItem> discover(DiscoveryContext context)
+      throws IOException, InterruptedException {
     List<DiscoveryItem> items = new ArrayList<>();
     for (String seed : context.seeds()) {
       var response = service.searchAndRead(new WebSearchAndReadRequest(seed, 3, 1));

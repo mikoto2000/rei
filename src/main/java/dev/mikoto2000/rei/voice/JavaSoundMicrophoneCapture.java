@@ -7,6 +7,7 @@ import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.DataLine;
+import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.Mixer;
 import javax.sound.sampled.TargetDataLine;
 
@@ -78,7 +79,7 @@ public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureServic
    *
    * <p>Diagnostic acquisition only: no start, stream creation or audio read.
    */
-  public void acquireWithoutRecording(AudioDevice device) throws Exception {
+  public void acquireWithoutRecording(AudioDevice device) throws LineUnavailableException {
     if (Thread.currentThread().isInterrupted())
       throw new java.util.concurrent.CancellationException();
     Mixer mixer = resolveMixer(device);
