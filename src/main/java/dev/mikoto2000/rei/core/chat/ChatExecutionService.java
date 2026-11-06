@@ -1554,25 +1554,6 @@ public class ChatExecutionService {
         });
   }
 
-  /** 利用先に渡せるよう、利用者Facingメッセージを組み立てる。 */
-  private String buildUserFacingMessage(Throwable error) {
-    Throwable root = rootCause(error);
-    String message = root.getMessage();
-    if (message == null || message.isBlank()) {
-      return "回答の取得に失敗しました";
-    }
-    return "回答の取得に失敗しました: " + message;
-  }
-
-  /** 会話の実行で用いる作業ルート原因を返す。 */
-  private Throwable rootCause(Throwable error) {
-    Throwable current = error;
-    while (current.getCause() != null) {
-      current = current.getCause();
-    }
-    return current;
-  }
-
   /** 後から状況を確認できるよう、応答生成に使ったトークン数を記録する。 */
   private void captureCompletionTokens(ChatResponse response, AtomicInteger completionTokens) {
     if (response == null || response.getMetadata() == null) {

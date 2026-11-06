@@ -251,14 +251,6 @@ public class EmbedCommand implements Runnable {
     }
   }
 
-  /** 利用者に結果を伝えるため、追加済みを出力する。 */
-  private static void printAdded(List<VectorDocumentEntry> entries) {
-    for (VectorDocumentEntry entry : entries) {
-      System.out.println(
-          "追加: " + entry.docId() + " | " + entry.source() + " | chunks=" + entry.chunkCount());
-    }
-  }
-
   /** 利用者に結果を伝えるため、待機中を出力する。 */
   private static void printQueued(List<String> sources) {
     System.out.println("追加処理を開始: " + String.join(", ", sources));

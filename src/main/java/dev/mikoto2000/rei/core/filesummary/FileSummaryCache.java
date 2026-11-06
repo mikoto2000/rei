@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.core.filesummary;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import java.time.Clock;
-import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,9 +22,6 @@ public class FileSummaryCache {
 
   /** 最大項目一覧。 */
   private final int maxEntries;
-
-  /** 期限や記録日時の判定に使う時刻の取得元。 */
-  private final Clock clock;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -50,7 +46,6 @@ public class FileSummaryCache {
   public FileSummaryCache(
       int maxEntries, Clock clock, AgentEventFactory events, AgentEventPublisher eventPublisher) {
     this.maxEntries = Math.max(1, maxEntries);
-    this.clock = clock;
     this.events = events;
     this.eventPublisher = eventPublisher;
   }
@@ -130,11 +125,6 @@ public class FileSummaryCache {
       }
       entries.remove(oldest);
     }
-  }
-
-  /** ファイル内容の要約で用いる現在日時を返す。 */
-  private OffsetDateTime now() {
-    return OffsetDateTime.now(clock);
   }
 
   /** 状態や結果を購読先へ通知する。 */
