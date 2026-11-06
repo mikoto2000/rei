@@ -1167,17 +1167,17 @@ public class ChatExecutionService {
 
     var baseOptions = modelProvider.chatOptions(LlmFeature.CHAT, currentModelHolder.get(), true);
     if (mode != AgentRunContext.Mode.EXCLUSIVE) ToolLoopSupport.requireNoRawTools(baseOptions);
-    var optionsBuilder =
-        baseOptions
-            .mutate()
-            .toolContext(
-                Map.of(
-                    RunExecutionContext.KEY,
-                    execution,
-                    CommandCancellationService.class.getName(),
-                    cancellationService));
-    if (mode == AgentRunContext.Mode.CONVERSATION)
-      optionsBuilder.toolCallbacks(java.util.List.of()).toolChoice("none");
+    var optionsBuilder = baseOptions.mutate();
+    optionsBuilder.toolContext(
+        Map.of(
+            RunExecutionContext.KEY,
+            execution,
+            CommandCancellationService.class.getName(),
+            cancellationService));
+    if (mode == AgentRunContext.Mode.CONVERSATION) {
+      optionsBuilder.toolCallbacks(java.util.List.of());
+      optionsBuilder.toolChoice("none");
+    }
     var options = optionsBuilder.build();
     var messages = new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
     if (!execution.outputLimitHandoff().isBlank()) {

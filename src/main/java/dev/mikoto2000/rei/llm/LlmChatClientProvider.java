@@ -439,11 +439,14 @@ public class LlmChatClientProvider {
     if (LlmFeature.MEMORY.equals(feature) || LlmFeature.VOICE_CORRECTION.equals(feature)) {
       var options = modelProvider.chatOptions(feature, null);
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+      var defaults = options.mutate();
+      defaults.toolCallbacks(List.of());
+      defaults.toolChoice("none");
       return ChatClient.builder(
               LlmFeature.VOICE_CORRECTION.equals(feature)
                   ? modelProvider.voiceCorrectionChatModel()
                   : modelProvider.memoryChatModel())
-          .defaultOptions(options.mutate().toolCallbacks(List.of()).toolChoice("none"))
+          .defaultOptions(defaults)
           .build();
     }
     List<Advisor> advisors = new ArrayList<>();
