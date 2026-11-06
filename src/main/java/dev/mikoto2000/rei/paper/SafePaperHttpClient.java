@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.paper;
 
 import java.net.InetAddress;
 import java.net.URI;
+import java.net.UnknownHostException;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -114,7 +115,7 @@ public class SafePaperHttpClient implements PaperHttpClient {
           continue;
         }
         throw e;
-      } catch (Exception e) {
+      } catch (UnknownHostException | RuntimeException e) {
         dev.mikoto2000.rei.http.FetchOperation.propagateControls(e);
         for (Throwable cause = e; cause != null; cause = cause.getCause()) {
           if (cause instanceof PaperException paper) throw paper;

@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.computeruse;
 
 import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -173,7 +174,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
                   display.imageWidth(),
                   "sourceHeight",
                   display.imageHeight()));
-    } catch (Exception error) {
+    } catch (IOException | RuntimeException error) {
       org.slf4j.LoggerFactory.getLogger(SpringAiComputerVisionModel.class)
           .warn("Could not save refinement diagnostics: {}", error.getClass().getSimpleName());
     }
