@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.storage;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.storage.StorageObjectRegistry.StoredObject;
+import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
@@ -351,7 +352,8 @@ public final class RetentionPlanner {
   }
 
   /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
-  void validate(Connection db, Plan plan) throws Exception {
+  void validate(Connection db, Plan plan)
+      throws IOException, SQLException, NoSuchAlgorithmException {
     Policy policy = policy(db, plan.policyId());
     if (policy.version() != plan.policyVersion())
       throw new IllegalStateException("Policy changed; create a new plan");

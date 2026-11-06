@@ -56,7 +56,8 @@ public final class SqliteSessionRepository implements SessionRepository {
   }
 
   /** 会話履歴と受付記録の管理で用いる前回を返す。 */
-  private static Previous previous(Connection connection, String id) throws SQLException, JsonProcessingException {
+  private static Previous previous(Connection connection, String id)
+      throws SQLException, JsonProcessingException {
     try (var query =
         connection.prepareStatement("SELECT record,revision FROM sessions WHERE session_id=?")) {
       query.setString(1, id);

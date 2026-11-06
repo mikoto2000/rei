@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.activity.behavior;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.sql.SQLException;
@@ -54,7 +55,7 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
             ? mapper.readValue(r.getString(1), BehaviorState.class)
             : BehaviorState.empty();
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Behavior state read failed", e);
     }
   }
@@ -83,12 +84,12 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
                 "DELETE FROM activity_behavior_transitions WHERE id NOT IN (SELECT id FROM activity_behavior_transitions ORDER BY id DESC LIMIT 100)");
           }
           c.commit();
-        } catch (Exception e) {
+        } catch (SQLException | JsonProcessingException | RuntimeException e) {
           c.rollback();
           throw e;
         }
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Behavior state write failed", e);
     }
   }
@@ -107,7 +108,7 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
         s.setString(3, mapper.writeValueAsString(event));
         s.executeUpdate();
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Behavior event write failed", e);
     }
   }
@@ -138,7 +139,7 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
           return java.util.List.copyOf(events);
         }
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Behavior event read failed", e);
     }
   }

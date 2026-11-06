@@ -112,7 +112,7 @@ public final class ManagedActivityLog {
   }
 
   /** 要求された条件を満たすことを確認する。 */
-  private void verify(Segment segment) throws Exception {
+  private void verify(Segment segment) throws IOException {
     Path file = path(segment);
     if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
         || Files.size(file) != segment.bytes())
@@ -128,7 +128,7 @@ public final class ManagedActivityLog {
   }
 
   /** 要求された条件を満たすか判断するため、Chainを確認する。 */
-  private static String verifyChain(Path file) throws Exception {
+  private static String verifyChain(Path file) throws IOException, NoSuchAlgorithmException {
     String hash =
         HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest());
     try (var input =
@@ -150,7 +150,8 @@ public final class ManagedActivityLog {
   }
 
   /** データ保存の共通処理で利用した資源や登録を解放し、利用を終了する。 */
-  private void close(Connection db, Segment segment) throws Exception {
+  private void close(Connection db, Segment segment)
+      throws IOException, SQLException, NoSuchAlgorithmException {
     verify(segment);
     Path file = path(segment);
     if (!verifyChain(file).equals(segment.sha256()))
@@ -222,7 +223,8 @@ public final class ManagedActivityLog {
   }
 
   /** JSONL本文を同期してから、同じトランザクションの管理情報を更新する。 */
-  private void append(Connection db, String scope, ProfileEventLogEntry entry) throws Exception {
+  private void append(Connection db, String scope, ProfileEventLogEntry entry)
+      throws IOException, SQLException, NoSuchAlgorithmException {
     byte[] record =
         (StorageDatabase.JSON.writeValueAsString(entry) + "\n").getBytes(StandardCharsets.UTF_8);
     if (record.length > 1024 * 1024)

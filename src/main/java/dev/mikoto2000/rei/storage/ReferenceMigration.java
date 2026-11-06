@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Types;
@@ -77,7 +78,8 @@ final class ReferenceMigration {
   }
 
   /** データ保存の共通処理に関する取り込み再開用の記録一覧を処理する。 */
-  private static void importCheckpoints(Connection db, Path root) throws Exception {
+  private static void importCheckpoints(Connection db, Path root)
+      throws IOException, SQLException, NoSuchAlgorithmException {
     Path source = root.resolve("memory-consolidation.db");
     StorageBackup.requireSafePath(source);
     if (Files.notExists(source)) return;
