@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.http.FetchOperation;
 import dev.mikoto2000.rei.http.FetchScope;
 import dev.mikoto2000.rei.http.HttpFetchException;
 import dev.mikoto2000.rei.http.PublicNetworkPolicy;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.net.IDN;
 import java.net.URI;
@@ -98,6 +100,10 @@ public final class WebSearchSelection {
   private WebSearchSelection() {}
 
   /** 指定された検索条件に合う情報を探し、候補を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the provider failure when no search result can be returned.")
   public static List<Candidate> search(
       WebSearchService service,
       WebSearchQueryPlanner planner,

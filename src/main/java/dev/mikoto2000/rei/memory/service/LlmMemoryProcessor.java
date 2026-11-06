@@ -146,6 +146,10 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
    *
    * <p>Shared tool-free MEMORY call path, including input/output limits and model usage accounting.
    */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves typed execution failures and accounting failures during the memory model call.")
   public String call(String system, String data, ModelCallBudget budget) {
     var model = models.memoryChatModel();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);

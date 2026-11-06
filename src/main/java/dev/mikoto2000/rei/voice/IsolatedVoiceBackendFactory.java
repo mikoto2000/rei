@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.voice;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -148,6 +150,10 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
   }
 
   /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reports the first worker shutdown failure with subsequent failures attached.")
   public void close() {
     List<VoiceWorkerProcess> owned;
     synchronized (this) {

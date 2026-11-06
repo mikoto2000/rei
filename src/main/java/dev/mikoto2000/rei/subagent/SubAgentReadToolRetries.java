@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.subagent;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -41,6 +43,10 @@ final class SubAgentReadToolRetries {
   }
 
   /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original tool failure when a retry is ineligible or its budget is exhausted.")
   String call(
       Supplier<String> invoke, Runnable authorize, Runnable check, BooleanSupplier eligible) {
     boolean retrying = false;

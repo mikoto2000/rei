@@ -199,6 +199,10 @@ public final class ConversationInputRouter {
   }
 
   /** 依頼を実行経路へ渡すため、バックグラウンドを受け付ける。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original dispatch failure after releasing background run ownership.")
   public ActiveExecution submitBackground(
       ProjectContext project,
       ExecutionType type,
@@ -325,6 +329,10 @@ public final class ConversationInputRouter {
    *
    * <p>Explicit application work shares the agent FIFO without entering the chat runner or mailbox.
    */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original submission failure after releasing the run slot.")
   public void submitOperation(
       AgentRunContext context, Runnable operation, Consumer<Runnable> lifecycle) {
     var slot = slot(context, "operation");
@@ -404,6 +412,10 @@ public final class ConversationInputRouter {
   }
 
   /** 実行順序を管理するため、会話入力入力の振り分けを実行待ちに登録する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original enqueue failure after releasing the run slot.")
   private Disposition enqueue(Slot slot, Consumer<Runnable> lifecycle) {
     var context = slot.context();
     if (admissions != null) admissions.reserveKnownSession(context);

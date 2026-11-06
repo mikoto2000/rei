@@ -8,6 +8,8 @@ import dev.mikoto2000.rei.skills.SkillCandidate;
 import dev.mikoto2000.rei.skills.SkillCandidateSelector;
 import dev.mikoto2000.rei.skills.SkillMetadataEmbedding;
 import dev.mikoto2000.rei.vectordocument.CandidateReranker;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -140,6 +142,10 @@ public final class SkillRetrievalEvaluationAdapter implements RetrievalQualityEv
     }
 
     /** 成果の評価で用いる再評価を返す。 */
+    @SuppressFBWarnings(
+        value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+        matchType = SuppressMatchType.EXACT,
+        justification = "Preserves the reranker failure after recording it for evaluation.")
     public <T> List<T> rerank(
         String query, List<T> candidates, java.util.function.Function<T, String> text) {
       try {

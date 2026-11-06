@@ -73,6 +73,10 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
   }
 
   /** 要求された処理を実行する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the external agent failure after settling token accounting.")
   @Override
   public ExternalAgentResult execute(
       ExternalAgentRequest request,

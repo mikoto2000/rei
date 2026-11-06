@@ -147,6 +147,10 @@ public final class RawToolResultStore {
   }
 
   /** 後から参照できるよう、Serializedを保存する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original write failure and attaches cleanup failures as suppressed causes.")
   private String saveSerialized(
       String conversation, String run, String toolName, String callId, String raw) {
     try {
