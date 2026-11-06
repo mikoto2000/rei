@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -554,7 +555,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
           null,
           null,
           review.report());
-    } catch (JsonProcessingException | RuntimeException invalid) {
+    } catch (IOException | RuntimeException invalid) {
       return new ExternalAgentResult(
           Status.FAILED,
           "Invalid or incomplete structured material review; no automatic retry",
