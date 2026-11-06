@@ -27,13 +27,16 @@ class PagedFileSearchTest {
     Files.writeString(root.resolve("b.txt"), "miss\n");
     Path last = root.resolve("z.txt");
     Files.writeString(last, "miss\n");
+    Files.writeString(root.resolve(".env"), "hit\n");
+    Files.createDirectory(root.resolve("directory.txt"));
     var database = ReadingBenchmarkDatabase.prepare(root.resolve("data"));
     var search =
         new PagedFileSearch(
             new Tools() {
               @Override
               List<String> gitLsFiles(List<String> pathSpecs, Path directory) {
-                return List.of("a.txt", "b.txt", "z.txt");
+                return List.of(
+                    "z.txt", "b.txt", ".env", "a.txt", "a.txt", "directory.txt", "missing.txt");
               }
             },
             ReadingTestStores.store(database));
@@ -42,6 +45,9 @@ class PagedFileSearchTest {
         var scope = AgentRunScope.open(owner)) {
       var result = cursorFor(search, "hit");
       var scan = cursorFor(search, "absent");
+      assertEquals(3, result.progress().total());
+      assertEquals(3, scan.progress().total());
+      assertEquals("a.txt", result.files().getFirst().path());
       assertNotNull(result.resultCursor());
       assertNotNull(scan.scanCursor());
       Files.writeString(last, "modified without becoming a hit\n");

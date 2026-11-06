@@ -14,7 +14,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.TreeSet;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -460,7 +460,7 @@ final class PagedFileSearch {
 
   private List<Stamp> inventory(List<Prepared> queries, Path root)
       throws IOException, InterruptedException {
-    var paths = new TreeSet<String>();
+    var stamps = new TreeMap<String, Stamp>();
     var inventories = new java.util.HashMap<Path, List<String>>();
     for (var query : queries) {
       var base = query.base();
@@ -479,20 +479,23 @@ final class PagedFileSearch {
         }
       }
       if (listed.size() <= 20000) inventories.putIfAbsent(base, List.copyOf(listed));
-      for (String path : listed)
-        if (applies(query, path, root)) {
-          try {
-            FileSnapshots.resolve(root, Path.of(path));
-            paths.add(path);
-          } catch (IOException excluded) {
-            /* Sensitive and linked paths are never enumerated. */
-          }
+      for (String path : listed) {
+        if (stamps.containsKey(path) || !applies(query, path, root)) continue;
+        Path resolved;
+        try {
+          resolved = FileSnapshots.resolve(root, Path.of(path));
+        } catch (IOException excluded) {
+          // Sensitive and linked paths are never enumerated.
+          continue;
         }
-      if (paths.size() > 20000) throw ReadingProblem.fail("FILE_ENUMERATION_LIMIT");
+        var attrs =
+            Files.readAttributes(resolved, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+        if (!attrs.isRegularFile()) throw ReadingProblem.fail("FILE_CHANGED");
+        stamps.put(path, stamp(path, attrs));
+      }
+      if (stamps.size() > 20000) throw ReadingProblem.fail("FILE_ENUMERATION_LIMIT");
     }
-    var result = new ArrayList<Stamp>();
-    for (String path : paths) result.add(stamp(root, path));
-    return List.copyOf(result);
+    return List.copyOf(stamps.values());
   }
 
   private void verifyInventory(Path root, List<Stamp> inventory)
@@ -535,12 +538,6 @@ final class PagedFileSearch {
       if (!expected.equals(stamp(expected.path(), attrs)))
         throw ReadingProblem.fail("FILE_CHANGED");
     }
-  }
-
-  private static Stamp stamp(Path root, String relative) throws IOException {
-    var path = FileSnapshots.resolve(root, Path.of(relative));
-    var attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-    return stamp(relative, attrs);
   }
 
   private static Stamp stamp(String relative, BasicFileAttributes attrs) {
