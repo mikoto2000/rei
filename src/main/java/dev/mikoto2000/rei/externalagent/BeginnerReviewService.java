@@ -342,14 +342,11 @@ public class BeginnerReviewService {
             ToolLoopSupport.requireNoDefaultTools(model);
             var defaults = models.chatOptions(LlmFeature.CHAT, null);
             var options = defaults == null ? OpenAiChatOptions.builder() : defaults.mutate();
-            var toolOptions =
-                options
-                    .toolCallbacks(List.of())
-                    .toolChoice("none")
-                    .toolContext(
-                        Map.of(
-                            RunExecutionContext.KEY, run, AgentRunContext.class.getName(), owner))
-                    .build();
+            options.toolCallbacks(List.of());
+            options.toolChoice("none");
+            options.toolContext(
+                Map.of(RunExecutionContext.KEY, run, AgentRunContext.class.getName(), owner));
+            var toolOptions = options.build();
             String input =
                 JSON.writeValueAsString(
                     Map.of(

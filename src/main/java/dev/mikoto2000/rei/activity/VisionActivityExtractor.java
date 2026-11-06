@@ -96,16 +96,11 @@ public final class VisionActivityExtractor implements ActivityExtractor {
       format.setType(ResponseFormat.Type.JSON_SCHEMA);
       format.setJsonSchema(schema);
       format.setStrict(true);
-      var requestOptions =
-          options
-              .get()
-              .mutate()
-              .responseFormat(format)
-              .toolChoice(null)
-              .maxTokens(null)
-              .maxCompletionTokens(maxOutputTokens)
-              .toolCallbacks(List.of())
-              .build();
+      var requestBuilder = options.get().mutate().responseFormat(format).toolChoice(null);
+      requestBuilder.maxTokens(null);
+      requestBuilder.maxCompletionTokens(maxOutputTokens);
+      requestBuilder.toolCallbacks(List.of());
+      var requestOptions = requestBuilder.build();
       var system =
           """
           Extract a cautious activity journal from desktop evidence. Return only JSON matching the schema.

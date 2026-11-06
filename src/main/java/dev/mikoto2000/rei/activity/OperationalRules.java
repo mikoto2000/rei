@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.activity;
 
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -553,8 +554,12 @@ public final class OperationalRules {
 
   /** 作業状況の把握で用いる整数を返す。 */
   private static int integer(Object value) {
-    if (!(value instanceof Number n) || n.doubleValue() != n.intValue()) throw invalid();
-    return n.intValue();
+    if (!(value instanceof Number n)) throw invalid();
+    try {
+      return new BigDecimal(n.toString()).intValueExact();
+    } catch (NumberFormatException | ArithmeticException failure) {
+      throw invalid();
+    }
   }
 
   /** 作業状況の把握で用いるconfを返す。 */

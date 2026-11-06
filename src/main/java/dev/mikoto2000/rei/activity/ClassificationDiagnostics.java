@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -32,4 +34,15 @@ public record ClassificationDiagnostics(
     double entertainmentConfidence,
     String matchedEntertainmentRuleId,
     String entertainmentSource,
-    String entertainmentReason) {}
+    String entertainmentReason) {
+  public ClassificationDiagnostics {
+    matchedRuleIds =
+        matchedRuleIds == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(matchedRuleIds));
+    unknownReasons =
+        unknownReasons == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(unknownReasons));
+  }
+}

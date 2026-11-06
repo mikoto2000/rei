@@ -234,10 +234,9 @@ public class DoctorActiveService {
       String connectionIdentity = "";
       if (check == DoctorRequest.Check.INFERENCE) {
         var defaults = models.chatOptions(LlmFeature.CHAT, target);
-        inferenceOptions =
-            defaults == null
-                ? OpenAiChatOptions.builder().model(target).build()
-                : defaults.mutate().build();
+        var inferenceBuilder = defaults == null ? OpenAiChatOptions.builder() : defaults.mutate();
+        if (defaults == null) inferenceBuilder.model(target);
+        inferenceOptions = inferenceBuilder.build();
         connectionIdentity =
             Objects.toString(passive.endpoint(), "")
                 + "|"

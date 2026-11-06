@@ -225,8 +225,9 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
     for (int attempt = 0; attempt <= repairs; attempt++) {
       checkCancelled();
       // No-tools inference must omit the wire fields: compatible APIs can reject tools: [].
-      var requestOptions =
-          options.get().responseFormat(format).toolChoice(null).toolCallbacks(List.of()).build();
+      var requestBuilder = options.get().responseFormat(format).toolChoice(null);
+      requestBuilder.toolCallbacks(List.of());
+      var requestOptions = requestBuilder.build();
       ToolLoopSupport.requireNoRawTools(requestOptions);
       var prompt =
           new Prompt(
