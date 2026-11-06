@@ -181,7 +181,8 @@ public final class WebFetchBatch implements AutoCloseable {
       boolean interrupted = Thread.interrupted();
       for (var task : tasks) {
         try {
-          task.exited.await(Math.max(0, cleanupDeadline - System.nanoTime()), TimeUnit.NANOSECONDS);
+          if (!task.exited.await(
+              Math.max(0, cleanupDeadline - System.nanoTime()), TimeUnit.NANOSECONDS)) break;
         } catch (InterruptedException pending) {
           interrupted = true;
         }
