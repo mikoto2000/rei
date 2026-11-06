@@ -9,6 +9,7 @@ import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TRANSPORT;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -320,7 +321,7 @@ public final class PlanOAuth {
                 confirmed = response.status() == 200;
               }
             } else confirmed = true;
-          } catch (Exception ignored) {
+          } catch (RuntimeException ignored) {
           } finally {
             s.save(account, saved.withoutTokens());
           }
@@ -435,7 +436,7 @@ public final class PlanOAuth {
             RECEIVE_LIMIT, operation, response.status(), type, 65537, 65536, "");
       }
       throw e;
-    } catch (Exception e) {
+    } catch (IOException | RuntimeException e) {
       throw ChatGptException.of(PROTOCOL);
     }
   }

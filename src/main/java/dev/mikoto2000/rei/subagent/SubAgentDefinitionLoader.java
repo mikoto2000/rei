@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.subagent;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -63,7 +64,7 @@ public final class SubAgentDefinitionLoader {
       if (!(document instanceof Map<?, ?> map))
         throw new IllegalArgumentException("expected a mapping");
       values = map;
-    } catch (Exception error) {
+    } catch (IOException | RuntimeException error) {
       throw invalid(
           file, "YAML: invalid mapping, duplicate key, unsafe tag, unreadable or oversized file");
     }
@@ -156,7 +157,7 @@ public final class SubAgentDefinitionLoader {
               case "m" -> Duration.ofMinutes(amount);
               default -> Duration.ofHours(amount);
             };
-      } catch (Exception e) {
+      } catch (RuntimeException e) {
         throw new IllegalArgumentException(
             "timeout: required positive duration (120s, 2m, 1h, 500ms)");
       }
