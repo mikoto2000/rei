@@ -62,7 +62,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
   @Override
   public void verify(
       ComputerObservation observation, BufferedImage image, String target, double[] point)
-      throws Exception {
+      throws IOException {
     verify(observation, image, target, point, WindowsFocusProbe.UNKNOWN);
   }
 
@@ -70,7 +70,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
   @Override
   public void verifyPoint(
       ComputerObservation observation, DisplayCapture display, String target, double[] point)
-      throws Exception {
+      throws IOException {
     checkCancelled();
     if (point.length != 2
         || !Double.isFinite(point[0])
@@ -124,7 +124,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
       String target,
       double[] point,
       String pointEvidence)
-      throws Exception {
+      throws IOException {
     checkCancelled();
     String stage = point == null ? "crop-verification" : "point-verification";
     if (point != null) {
@@ -291,7 +291,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
 
   /** 画面操作の支援の要求を実行し、呼び出し元へ結果を返す。 */
   private String call(ComputerObservation observation, String stage, String text, byte[]... images)
-      throws Exception {
+      throws IOException {
     var requestOptions =
         options.get().responseFormat(null).toolChoice(null).toolCallbacks(List.of()).build();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(requestOptions);
