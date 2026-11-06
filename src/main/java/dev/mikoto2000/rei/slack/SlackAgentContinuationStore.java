@@ -5,6 +5,7 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import javax.sql.DataSource;
@@ -39,7 +40,15 @@ public final class SlackAgentContinuationStore {
       String kind,
       String text,
       List<AssistantMessage.ToolCall> calls,
-      List<ToolResponseMessage.ToolResponse> responses) {}
+      List<ToolResponseMessage.ToolResponse> responses) {
+    public StoredMessage {
+      calls = calls == null ? null : Collections.unmodifiableList(new ArrayList<>(calls));
+      responses =
+          responses == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(responses));
+    }
+  }
 
   /**
    * Slackとの連携で受け渡す文書を表す。
@@ -61,7 +70,11 @@ public final class SlackAgentContinuationStore {
       String request,
       List<StoredMessage> messages,
       OutputLimitRunBudget.Snapshot budget,
-      boolean managedParent) {}
+      boolean managedParent) {
+    public Document {
+      messages = messages == null ? null : Collections.unmodifiableList(new ArrayList<>(messages));
+    }
+  }
 
   /** 指定された値や利用先を使って、SlackAgentContinuationStoreを初期化する。 */
   public SlackAgentContinuationStore(DataSource source) {

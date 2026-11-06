@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.feed;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -11,4 +13,8 @@ import java.util.List;
  * @param items 項目一覧
  */
 public record FetchedFeed(
-    String title, String siteUrl, String description, List<FetchedFeedItem> items) {}
+    String title, String siteUrl, String description, List<FetchedFeedItem> items) {
+  public FetchedFeed {
+    items = items == null ? null : Collections.unmodifiableList(new ArrayList<>(items));
+  }
+}

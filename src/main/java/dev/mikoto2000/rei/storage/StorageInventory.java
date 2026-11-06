@@ -18,6 +18,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -58,7 +59,15 @@ public final class StorageInventory {
       List<String> unknown,
       Long deltaBytes,
       Double bytesPerSecond,
-      boolean complete) {}
+      boolean complete) {
+    public Report {
+      categories =
+          categories == null
+              ? null
+              : Collections.unmodifiableMap(new LinkedHashMap<>(categories));
+      unknown = unknown == null ? null : Collections.unmodifiableList(new ArrayList<>(unknown));
+    }
+  }
 
   /**
    * データ保存の共通処理で受け渡す前回を表す。

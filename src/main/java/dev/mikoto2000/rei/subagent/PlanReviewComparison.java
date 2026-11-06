@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.subagent;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -29,7 +30,30 @@ public final class PlanReviewComparison {
       List<String> commonFindings,
       Map<String, List<String>> independentFindings,
       Map<String, List<String>> evidence,
-      List<String> unresolved) {}
+      List<String> unresolved) {
+    public Comparison {
+      conclusions =
+          conclusions == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(conclusions));
+      commonFindings =
+          commonFindings == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(commonFindings));
+      independentFindings =
+          independentFindings == null
+              ? null
+              : Collections.unmodifiableMap(new LinkedHashMap<>(independentFindings));
+      evidence =
+          evidence == null
+              ? null
+              : Collections.unmodifiableMap(new LinkedHashMap<>(evidence));
+      unresolved =
+          unresolved == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(unresolved));
+    }
+  }
 
   /** 補助エージェントへの委譲で用いる比較を返す。 */
   public static Comparison compare(List<ParallelSubAgentDelegator.Item> items) {

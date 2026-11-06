@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -61,7 +62,11 @@ public final class McpRequestStore {
       int totalCriteria,
       List<String> criteria,
       String admissionError,
-      Instant updatedAt) {}
+      Instant updatedAt) {
+    public Request {
+      criteria = criteria == null ? null : Collections.unmodifiableList(new ArrayList<>(criteria));
+    }
+  }
 
   /** 根拠。 */
   private McpCompletionEvidence evidence = new McpCompletionEvidence(null, null, null);

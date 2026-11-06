@@ -5,6 +5,7 @@ import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -133,7 +134,11 @@ public final class SemanticValidationQuality {
       Metrics primary,
       Metrics secondary,
       Double agreement,
-      boolean truthVerified) {}
+      boolean truthVerified) {
+    public Report {
+      rows = rows == null ? null : Collections.unmodifiableList(new ArrayList<>(rows));
+    }
+  }
 
   /** 対象を判断基準に照らして評価する。 */
   public static Report evaluate(

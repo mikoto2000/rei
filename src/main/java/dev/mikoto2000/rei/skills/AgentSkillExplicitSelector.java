@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.skills;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -53,5 +54,10 @@ public class AgentSkillExplicitSelector {
    * @param sanitizedPrompt 利用可能な形に整えたプロンプト
    */
   public record ExplicitSelection(
-      List<AgentSkill> skills, List<String> warnings, String sanitizedPrompt) {}
+      List<AgentSkill> skills, List<String> warnings, String sanitizedPrompt) {
+    public ExplicitSelection {
+      skills = skills == null ? null : Collections.unmodifiableList(new ArrayList<>(skills));
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 }

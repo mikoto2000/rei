@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,7 +31,11 @@ public final class VoiceCorrectionContext {
    * @param aliases 別名一覧
    * @param description 説明
    */
-  public record Term(String canonical, String reading, List<String> aliases, String description) {}
+  public record Term(String canonical, String reading, List<String> aliases, String description) {
+    public Term {
+      aliases = aliases == null ? null : Collections.unmodifiableList(new ArrayList<>(aliases));
+    }
+  }
 
   /**
    * 音声による対話で受け渡す状態の記録を表す。
@@ -41,7 +46,12 @@ public final class VoiceCorrectionContext {
    * @param terms 検索語句一覧
    */
   public record Snapshot(
-      String projectId, String projectName, List<String> history, List<Term> terms) {}
+      String projectId, String projectName, List<String> history, List<Term> terms) {
+    public Snapshot {
+      history = history == null ? null : Collections.unmodifiableList(new ArrayList<>(history));
+      terms = terms == null ? null : Collections.unmodifiableList(new ArrayList<>(terms));
+    }
+  }
 
   /** 履歴。 */
   private final ConversationLogStore history;

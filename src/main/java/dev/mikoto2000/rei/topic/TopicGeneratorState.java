@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.topic;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -28,6 +30,12 @@ public record TopicGeneratorState(
     Instant lastSpokenAt,
     boolean spoken,
     long lastSequence) {
+  public TopicGeneratorState {
+    candidates =
+        candidates == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(candidates));
+  }
 
   /** 話題の管理で用いる操作がない状態を返す。 */
   public static TopicGeneratorState idle() {
