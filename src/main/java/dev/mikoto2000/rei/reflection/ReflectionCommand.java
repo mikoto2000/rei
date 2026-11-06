@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.reflection;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.output.CommandOutput;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -101,7 +102,7 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
   String id;
 
   /** 出力。 */
-  private java.io.PrintWriter output;
+  private CommandOutput output;
 
   /** 作業の振り返りを利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ReflectionCommand() {
@@ -119,13 +120,13 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
-    this.output = output;
+    this.output = CommandOutput.from(output);
   }
 
   /** 保存された目標・タスク・実行の証拠とレビュー提案を確認しますを行う。 */
   @Override
   public Integer call() {
-    var writer = output == null ? spec.commandLine().getOut() : output;
+    var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
       String project = projects.currentContext().id();
       Object result =

@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.subagent;
 
+import dev.mikoto2000.rei.output.CommandOutput;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -48,7 +49,7 @@ public class SubAgentCommand implements Callable<Integer> {
   }
 
   /** ターミナルへの表示先。 */
-  private java.io.PrintWriter shellOutput;
+  private CommandOutput shellOutput;
 
   /** 仕様。 */
   @Spec CommandSpec spec;
@@ -82,7 +83,7 @@ public class SubAgentCommand implements Callable<Integer> {
    * <p>Keep JLine's encoding even when picocli rebinds the shared command's @Spec.
    */
   public void setShellOutput(java.io.PrintWriter output) {
-    this.shellOutput = output;
+    this.shellOutput = CommandOutput.from(output);
   }
 
   /** 補助エージェントへの委譲で用いるレポートを返す。 */
@@ -143,8 +144,8 @@ public class SubAgentCommand implements Callable<Integer> {
   }
 
   /** 補助エージェントへの委譲で用いる出力を返す。 */
-  private java.io.PrintWriter output() {
-    return shellOutput == null ? spec.commandLine().getOut() : shellOutput;
+  private CommandOutput output() {
+    return shellOutput == null ? CommandOutput.from(spec.commandLine().getOut()) : shellOutput;
   }
 
   /** 補助エージェントへの委譲に関する出力先を処理する。 */

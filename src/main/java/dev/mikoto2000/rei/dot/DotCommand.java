@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.dot;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.output.CommandOutput;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -122,7 +123,7 @@ public final class DotCommand implements java.util.concurrent.Callable<Integer> 
   }
 
   /** 出力。 */
-  private PrintWriter output;
+  private CommandOutput output;
 
   /** 利用者の状態表示を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public DotCommand() {
@@ -138,12 +139,12 @@ public final class DotCommand implements java.util.concurrent.Callable<Integer> 
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(PrintWriter output) {
-    this.output = output;
+    this.output = CommandOutput.from(output);
   }
 
   /** てんてんへの永続依頼を作成・確認・取消を行う。 */
   public Integer call() {
-    var out = output == null ? spec.commandLine().getOut() : output;
+    var out = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
       var request = DotCommandRequest.parse(words());
       String project =

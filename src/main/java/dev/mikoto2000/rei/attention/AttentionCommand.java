@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.attention;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.output.CommandOutput;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -34,7 +35,7 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
   String id;
 
   /** 出力。 */
-  private java.io.PrintWriter output;
+  private CommandOutput output;
 
   /** 配信。 */
   private AttentionDeliveryService delivery;
@@ -65,13 +66,13 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
-    this.output = output;
+    this.output = CommandOutput.from(output);
   }
 
   /** 保存された注意事項を確認・確認済みにしますを行う。 */
   @Override
   public Integer call() {
-    var writer = output == null ? spec.commandLine().getOut() : output;
+    var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
       String project = projects.currentContext().id();
       Object result =

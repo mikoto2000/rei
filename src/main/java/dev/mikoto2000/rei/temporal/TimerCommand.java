@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.temporal;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.output.CommandOutput;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -47,7 +48,7 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
   boolean acknowledgeUncertain;
 
   /** 出力。 */
-  private java.io.PrintWriter output;
+  private CommandOutput output;
 
   /** 時刻と期間の解釈を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public TimerCommand() {
@@ -72,13 +73,13 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
-    this.output = output;
+    this.output = CommandOutput.from(output);
   }
 
   /** 保存された継続実行の予定を確認・有効化しますを行う。 */
   @Override
   public Integer call() {
-    var writer = output == null ? spec.commandLine().getOut() : output;
+    var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
       String project = projects.currentContext().id();
       Object result =

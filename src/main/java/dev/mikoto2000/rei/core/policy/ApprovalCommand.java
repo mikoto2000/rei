@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.policy;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.output.CommandOutput;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -70,7 +71,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
   String id;
 
   /** 出力。 */
-  private java.io.PrintWriter output;
+  private CommandOutput output;
 
   /** ツール利用の権限制御を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ApprovalCommand() {
@@ -86,13 +87,13 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
-    this.output = output;
+    this.output = CommandOutput.from(output);
   }
 
   /** ツールの一回限りの実行承認を確認・判断しますを行う。 */
   @Override
   public Integer call() {
-    var writer = output == null ? spec.commandLine().getOut() : output;
+    var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
       String project = projects.currentContext().id();
       if (continueRun && !"approve".equals(action))
@@ -170,7 +171,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
 
   /** 利用者に結果を伝えるため、要求を出力する。 */
   private void printRequest(
-      java.io.PrintWriter writer, ToolApprovalRepository.Request request, boolean numbered) {
+      CommandOutput writer, ToolApprovalRepository.Request request, boolean numbered) {
     String reference = numbered ? number(request) : request.id();
     writer.println("承認 " + reference + ": " + request.tool() + " [" + request.status() + "]");
     writer.println(request.argumentsPreview());
@@ -192,7 +193,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
   }
 
   /** 利用者に結果を伝えるため、再開を出力する。 */
-  private void printResume(java.io.PrintWriter writer, ToolApprovalRepository.Request request) {
+  private void printResume(CommandOutput writer, ToolApprovalRepository.Request request) {
     if (request.tool().startsWith("secretaryAuto:")
         || request.tool().startsWith("secretaryAction:")) {
       writer.println("秘書の準備許可です。/secretary orchestrator-status --project PROJECT で状態を確認してください。");

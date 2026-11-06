@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.summarize.command;
 
+import dev.mikoto2000.rei.output.CommandOutput;
 import dev.mikoto2000.rei.summarize.SummarizationException;
 import dev.mikoto2000.rei.summarize.SummaryResult;
 import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
@@ -30,7 +31,7 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
   private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
 
   /** ターミナルへの表示先。 */
-  private java.io.PrintWriter shellOutput;
+  private CommandOutput shellOutput;
 
   /** 情報の要約で使用するバックグラウンドコマンド一覧を設定する。 */
   @Autowired(required = false)
@@ -41,7 +42,7 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
-    shellOutput = output;
+    shellOutput = CommandOutput.from(output);
   }
 
   /** 参照先のURL。 */
@@ -71,7 +72,7 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
   @Override
   public Integer call() {
     if (background != null) {
-      var out = shellOutput == null ? spec.commandLine().getOut() : shellOutput;
+      var out = shellOutput == null ? CommandOutput.from(spec.commandLine().getOut()) : shellOutput;
       try {
         if (url == null || url.isBlank()) {
           background.showLastSummary(out::println);

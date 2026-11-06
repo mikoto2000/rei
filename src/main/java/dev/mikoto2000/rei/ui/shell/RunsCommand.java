@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.ui.shell;
 
+import dev.mikoto2000.rei.output.CommandOutput;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -13,7 +14,7 @@ public class RunsCommand implements Runnable {
   private final ActiveRunDisplay display;
 
   /** ターミナルへの表示先。 */
-  private java.io.PrintWriter shellOutput;
+  private CommandOutput shellOutput;
 
   /** 仕様。 */
   @Spec private CommandSpec spec;
@@ -35,12 +36,12 @@ public class RunsCommand implements Runnable {
    * <p>Keep the terminal's writer independently of picocli's rebindable command spec.
    */
   public void setShellOutput(java.io.PrintWriter output) {
-    this.shellOutput = output;
+    this.shellOutput = CommandOutput.from(output);
   }
 
   /** 全プロジェクトの実行中AgentRunを表示しますを行う。 */
   public void run() {
-    var out = shellOutput == null ? spec.commandLine().getOut() : shellOutput;
+    var out = shellOutput == null ? CommandOutput.from(spec.commandLine().getOut()) : shellOutput;
     if (display == null) {
       out.println("Active run runtime is unavailable.");
       out.flush();

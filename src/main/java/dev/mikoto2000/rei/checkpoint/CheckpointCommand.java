@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.checkpoint;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.output.CommandOutput;
 import java.util.concurrent.Callable;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -26,7 +27,7 @@ public class CheckpointCommand implements Callable<Integer> {
   @Spec CommandSpec spec;
 
   /** 出力。 */
-  private java.io.PrintWriter output;
+  private CommandOutput output;
 
   /** 作業の中断と再開を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public CheckpointCommand() {
@@ -42,12 +43,12 @@ public class CheckpointCommand implements Callable<Integer> {
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
-    this.output = output;
+    this.output = CommandOutput.from(output);
   }
 
   /** 利用者に結果を伝えるため、再開用の記録コマンドを出力する。 */
   private int print(java.util.function.Supplier<String> action) {
-    var writer = output == null ? spec.commandLine().getOut() : output;
+    var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
       writer.println(action.get());
       return 0;
@@ -98,7 +99,7 @@ public class CheckpointCommand implements Callable<Integer> {
 
   /** 現在のタスクを保存、保存量の確認・過去履歴の整理を行う。 */
   public Integer call() {
-    var writer = output == null ? spec.commandLine().getOut() : output;
+    var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
       var state = service.saveCurrent(projects.currentContext().id(), projects.currentSessionId());
       writer.println("Checkpoint saved: task=" + state.taskId() + " revision=" + state.revision());
