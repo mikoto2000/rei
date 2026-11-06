@@ -1098,7 +1098,7 @@ class VoiceInputCoordinatorTest {
 
   /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(ints = {127, 1024, -1})
+  @org.junit.jupiter.params.provider.ValueSource(ints = {0, 127, 1024, -1})
   void invalidCaptureFrameNeverReachesNativeVad(int kind) {
     var source = new Source();
     var nativeCalls = new AtomicInteger();

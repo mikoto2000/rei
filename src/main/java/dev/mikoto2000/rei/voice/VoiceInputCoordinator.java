@@ -687,7 +687,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
           break;
         }
         if (run.stop) break;
-        if (frame == null) {
+        if (frame == null || frame.length == 0) {
           fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED);
           break;
         }

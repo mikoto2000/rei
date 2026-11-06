@@ -8,7 +8,7 @@ public interface MicrophoneCaptureService {
 
   /** 音声による対話に必要な観測単位取得元を扱う。 */
   interface FrameSource extends AutoCloseable {
-    /** 必要な内容を参照できるよう、観測単位を読み取る。 */
+    /** 必要な内容を参照できるよう、観測単位を読み取る。ストリームの終了時は空の配列を返す。 */
     float[] readFrame() throws Exception;
 
     /** 後続の操作を進められるか判断するため、稼働状態を確認する。 */
