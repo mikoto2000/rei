@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,7 +28,15 @@ public final class SummaryThemeGroups {
       String displayName,
       Set<String> projects,
       Set<String> themes,
-      boolean allowSingleProject) {}
+      boolean allowSingleProject) {
+    public Group {
+      projects =
+          projects == null
+              ? null
+              : Collections.unmodifiableSet(new LinkedHashSet<>(projects));
+      themes = themes == null ? null : Collections.unmodifiableSet(new LinkedHashSet<>(themes));
+    }
+  }
 
   /** グループ一覧。 */
   private final List<Group> groups;
