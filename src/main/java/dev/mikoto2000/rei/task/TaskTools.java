@@ -91,7 +91,7 @@ public class TaskTools {
     publish(() -> events.taskStarted(Long.toString(id)));
     try {
       Task completed = taskService.complete(id);
-      if (completed == null || completed.id() != id || completed.status() != TaskStatus.DONE)
+      if (completed.id() != id || completed.status() != TaskStatus.DONE)
         throw new IllegalStateException("Task completion was not confirmed");
       publish(() -> events.taskCompleted(Long.toString(id), null));
       return completed;

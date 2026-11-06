@@ -281,7 +281,7 @@ public class MemoryConsolidatorService {
   public boolean shouldSuggestConsolidationNow() {
     Integer messageCount =
         jdbcClient.sql("SELECT COUNT(*) FROM SPRING_AI_CHAT_MEMORY").query(Integer.class).single();
-    return shouldSuggestConsolidation(messageCount == null ? 0 : messageCount, 0, 0);
+    return shouldSuggestConsolidation(messageCount, 0, 0);
   }
 
   /** 条件に合う対象を利用するため、プロンプト記憶一覧を選択する。 */

@@ -33,7 +33,7 @@ public record SubAgentRequiredCall(String tool, String argumentsJson, String exp
       throw new IllegalArgumentException("requiredToolCalls: invalid tool or oversized arguments");
     try {
       var value = PARSER.parse(argumentsJson);
-      if (value == null || !value.isObject()) throw new IllegalArgumentException();
+      if (!value.isObject()) throw new IllegalArgumentException();
       argumentsJson = MAPPER.writeValueAsString(value);
     } catch (RuntimeException error) {
       throw new IllegalArgumentException("requiredToolCalls: arguments must be a JSON object");
