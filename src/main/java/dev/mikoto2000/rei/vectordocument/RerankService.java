@@ -18,7 +18,7 @@ import tools.jackson.databind.JsonNode;
 /** 再評価のユースケースを実現する。 */
 @Service
 @EnableConfigurationProperties(RerankProperties.class)
-public class RerankService implements CandidateReranker {
+public final class RerankService implements CandidateReranker {
   /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger logger = LoggerFactory.getLogger(RerankService.class);
 

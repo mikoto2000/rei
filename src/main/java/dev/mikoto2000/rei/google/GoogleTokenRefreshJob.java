@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
     name = "enabled",
     havingValue = "true",
     matchIfMissing = true)
-public class GoogleTokenRefreshJob {
+public final class GoogleTokenRefreshJob {
   /** サービス。 */
   private final GoogleOAuthService service;
 

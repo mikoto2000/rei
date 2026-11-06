@@ -31,7 +31,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @EnableConfigurationProperties(AutoSleepProperties.class)
-public class AutoSleepService implements AutoCloseable {
+public final class AutoSleepService implements AutoCloseable {
   /** 待機。 */
   private final SleepService sleep;
 

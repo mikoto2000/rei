@@ -8,7 +8,7 @@ package dev.mikoto2000.rei.llm;
  * each outer prompt/planner call; the controlled model loop reserves every additional LLM/tool
  * cycle before invoking the model.
  */
-public class OutputLimitRunBudget {
+public final class OutputLimitRunBudget {
   /** 既定最大引数補正一覧。 */
   public static final int DEFAULT_MAX_ARGUMENT_CORRECTIONS = 5;
 

@@ -9,7 +9,7 @@ import java.util.List;
 import org.springframework.ai.transformer.splitter.TextSplitter;
 
 /** 検索対象文書の管理に必要なOverlappingトークンテキストSplitterを扱う。 */
-class OverlappingTokenTextSplitter extends TextSplitter {
+final class OverlappingTokenTextSplitter extends TextSplitter {
 
   /** 文字コード。 */
   private final Encoding encoding;

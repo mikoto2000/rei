@@ -9,7 +9,7 @@ import org.springframework.stereotype.Service;
 
 /** フィードのユースケースを実現する。 */
 @Service
-public class FeedService {
+public final class FeedService {
 
   /** データベースへの接続クライアント。 */
   private final JdbcClient jdbcClient;
