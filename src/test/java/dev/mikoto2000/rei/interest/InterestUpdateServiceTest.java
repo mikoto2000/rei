@@ -6,6 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -27,6 +31,31 @@ class InterestUpdateServiceTest {
     service =
         new InterestUpdateService(
             new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("test.db")));
+  }
+
+  @Test
+  void sameQueryIsAdmittedOnceAcrossServiceInstances() throws Exception {
+    var other =
+        new InterestUpdateService(
+            new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("test.db")));
+    var start = new CyclicBarrier(2);
+    try (var workers = Executors.newVirtualThreadPerTaskExecutor()) {
+      var first = workers.submit(() -> {
+        start.await(5, TimeUnit.SECONDS);
+        return service.saveIfNewQuery("first", "reason", "same", "summary", List.of());
+      });
+      var second = workers.submit(() -> {
+        start.await(5, TimeUnit.SECONDS);
+        return other.saveIfNewQuery("second", "reason", "same", "summary", List.of());
+      });
+      assertEquals(
+          1,
+          java.util.stream.Stream.of(
+                  first.get(5, TimeUnit.SECONDS), second.get(5, TimeUnit.SECONDS))
+              .filter(java.util.Optional::isPresent)
+              .count());
+    }
+    assertEquals(1, service.listRecent(1).size());
   }
 
   // --- existsByTopicWithinHours ---

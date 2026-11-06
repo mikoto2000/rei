@@ -72,7 +72,9 @@ public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable
           if (created != null)
             try {
               created.close();
-            } catch (Exception ignored) {
+            } catch (Exception failure) {
+              LoggerFactory.getLogger(getClass())
+                  .debug("Unused Slack connection close failed ({})", failure.getClass().getSimpleName());
             }
           return false;
         }
