@@ -4,10 +4,13 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import dev.mikoto2000.rei.activity.ActivityEvidenceDisplayFormatter.Source;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -44,6 +47,17 @@ public record ProjectThemeAssociation(
     double associationConfidence,
     @JsonIgnore Set<Source> evidenceSources,
     @JsonIgnore List<Support> provenance) {
+  public ProjectThemeAssociation {
+    evidenceSources =
+        evidenceSources == null
+            ? null
+            : Collections.unmodifiableSet(new LinkedHashSet<>(evidenceSources));
+    provenance =
+        provenance == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(provenance));
+  }
+
   /** 作業状況の把握における起点の選択肢。 */
   public enum Origin {
     /** 同一作業状況タイトル。 */
@@ -76,7 +90,14 @@ public record ProjectThemeAssociation(
       boolean foreground,
       double projectConfidence,
       double themeConfidence,
-      Set<Source> evidenceSources) {}
+      Set<Source> evidenceSources) {
+    public Support {
+      evidenceSources =
+          evidenceSources == null
+              ? null
+              : Collections.unmodifiableSet(new LinkedHashSet<>(evidenceSources));
+    }
+  }
 
   /** 作業状況の把握において、確かなに該当するか判定する。 */
   public boolean strong() {

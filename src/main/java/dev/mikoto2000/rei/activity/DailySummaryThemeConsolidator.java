@@ -6,6 +6,7 @@ import static dev.mikoto2000.rei.activity.SummaryThemeCandidate.DisplaySource;
 import static dev.mikoto2000.rei.activity.SummaryThemeCandidate.Level;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -46,6 +47,13 @@ public final class DailySummaryThemeConsolidator {
    * @param metrics 計測値
    */
   public record Result(List<SummaryThemeCandidate> candidates, Metrics metrics) {
+    public Result {
+      candidates =
+          candidates == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(candidates));
+    }
+
     /** 作業状況の把握で用いる表示名一覧を返す。 */
     public List<String> labels() {
       return candidates.stream().map(SummaryThemeCandidate::label).toList();
