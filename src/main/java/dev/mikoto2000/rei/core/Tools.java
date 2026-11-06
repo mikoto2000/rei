@@ -61,6 +61,16 @@ public class Tools {
     dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
   }
 
+  static <T> java.util.concurrent.Callable<T> captureReadingScope(
+      java.util.concurrent.Callable<T> task) {
+    var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    return () -> {
+      try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+        return task.call();
+      }
+    };
+  }
+
   public static String readingPath(dev.mikoto2000.rei.tooldelivery.ReadingRun owner, String input)
       throws IOException {
     if (!(owner instanceof dev.mikoto2000.rei.core.chat.AgentRunContext captured))

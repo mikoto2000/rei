@@ -155,14 +155,19 @@ class ReadingEfficiencyBenchmarkTest {
                 return candidates;
               }
             };
-        var search = new PagedFileSearch(reader, ReadingTestStores.store(database));
+        var store = ReadingTestStores.store(database);
+        var degrees = List.of(1, 2, 4);
+        var searches =
+            degrees.stream().map(degree -> new PagedFileSearch(reader, store, degree)).toList();
         var owner = new AgentRunContext("search-resume-" + size, "chat", root);
-        var samples = new LinkedHashMap<String, List<Map<String, Long>>>();
-        samples.put("RESULT", new ArrayList<>());
-        samples.put("SCAN", new ArrayList<>());
+        var samples = new LinkedHashMap<Integer, Map<String, List<Map<String, Long>>>>();
+        for (int degree : degrees)
+          samples.put(degree, Map.of("RESULT", new ArrayList<>(), "SCAN", new ArrayList<>()));
         try (var scope = AgentRunScope.open(owner)) {
-          var result = search.read(searchResumeRequest(query("hit", "sources"), null), root);
-          var scan = search.read(searchResumeRequest(query("absent", "sources"), null), root);
+          var result =
+              searches.getFirst().read(searchResumeRequest(query("hit", "sources"), null), root);
+          var scan =
+              searches.getFirst().read(searchResumeRequest(query("absent", "sources"), null), root);
           assertNull(result.error());
           assertNull(scan.error());
           assertEquals(size, result.progress().total());
@@ -172,10 +177,16 @@ class ReadingEfficiencyBenchmarkTest {
           var kinds = List.of("RESULT", "SCAN");
           var cursors = List.of(result.resultCursor(), scan.scanCursor());
           for (int iteration = 0; iteration < warmups + repetitions; iteration++) {
-            for (int turn = 0; turn < kinds.size(); turn++) {
-              int variant = (iteration + turn) % kinds.size();
-              var sample = searchResumeSample(search, owner, cursors.get(variant), size);
-              if (iteration >= warmups) samples.get(kinds.get(variant)).add(sample);
+            for (int turn = 0; turn < degrees.size(); turn++) {
+              int degreeIndex = (iteration + turn) % degrees.size();
+              for (int cursorIndex = 0; cursorIndex < kinds.size(); cursorIndex++) {
+                int variant = (iteration + cursorIndex) % kinds.size();
+                var sample =
+                    searchResumeSample(
+                        searches.get(degreeIndex), owner, cursors.get(variant), size);
+                if (iteration >= warmups)
+                  samples.get(degrees.get(degreeIndex)).get(kinds.get(variant)).add(sample);
+              }
             }
           }
         }
@@ -184,7 +195,7 @@ class ReadingEfficiencyBenchmarkTest {
       }
     }
     report(
-        "search-resume",
+        "search-resume-parallel",
         Map.of(
             "warmupsPerCursor", warmups,
             "samplesPerCursor", repetitions,

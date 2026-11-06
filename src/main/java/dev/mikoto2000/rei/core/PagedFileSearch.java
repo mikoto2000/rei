@@ -16,6 +16,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /** Persistent search-result and scan cursors, separate from native file read cursors. */
 final class PagedFileSearch {
@@ -85,10 +88,18 @@ final class PagedFileSearch {
 
   private final Tools tools;
   private final ReadingStateStore store;
+  private final int verificationParallelism;
 
   PagedFileSearch(Tools tools, ReadingStateStore store) {
+    this(tools, store, 4);
+  }
+
+  PagedFileSearch(Tools tools, ReadingStateStore store, int verificationParallelism) {
     this.tools = tools;
     this.store = store;
+    if (verificationParallelism < 1 || verificationParallelism > 4)
+      throw new IllegalArgumentException("Verification parallelism must be between 1 and 4");
+    this.verificationParallelism = verificationParallelism;
   }
 
   Page read(Request input, Path root) {
@@ -131,10 +142,7 @@ final class PagedFileSearch {
         prepared = prepare(state.request.queries(), root);
         ReadingMetrics.add("continuations", 1);
         long verificationStarted = System.nanoTime();
-        for (var stamp : state.inventory) {
-          var attrs = FileSnapshots.verifiedInventoryAttributes(realRoot, Path.of(stamp.path()));
-          if (!stamp.equals(stamp(stamp.path(), attrs))) throw ReadingProblem.fail("FILE_CHANGED");
-        }
+        verifyInventory(realRoot, state.inventory);
         if (!realRoot.equals(root.toRealPath())) throw ReadingProblem.fail("FILE_CHANGED");
         ReadingMetrics.add(
             "resumeInventoryVerificationNanos", System.nanoTime() - verificationStarted);
@@ -285,10 +293,13 @@ final class PagedFileSearch {
         if (state.scanLine >= lines.size()) advance(state);
       }
       return paused(state, List.of(), "COMPLETE", null);
-    } catch (IOException | InterruptedException | RuntimeException error) {
-      Tools.checkReadingCancellation(error);
+    } catch (IOException | InterruptedException | ExecutionException | RuntimeException error) {
+      var failure = error;
+      if (error instanceof ExecutionException && error.getCause() instanceof Exception cause)
+        failure = cause;
+      Tools.checkReadingCancellation(failure);
       return new Page(
-          List.of(), null, null, new Progress(0, 0, 0, "FAILED"), ReadingProblem.from(error));
+          List.of(), null, null, new Progress(0, 0, 0, "FAILED"), ReadingProblem.from(failure));
     }
   }
 
@@ -482,6 +493,48 @@ final class PagedFileSearch {
     var result = new ArrayList<Stamp>();
     for (String path : paths) result.add(stamp(root, path));
     return List.copyOf(result);
+  }
+
+  private void verifyInventory(Path root, List<Stamp> inventory)
+      throws IOException, InterruptedException, ExecutionException {
+    int workers = Math.min(verificationParallelism, inventory.size());
+    if (workers <= 1) {
+      verifyRange(root, inventory);
+      return;
+    }
+    try (var executor = Executors.newFixedThreadPool(workers)) {
+      try {
+        var tasks = new ArrayList<Future<Void>>(workers);
+        for (int worker = 0; worker < workers; worker++) {
+          var range =
+              inventory.subList(
+                  worker * inventory.size() / workers, (worker + 1) * inventory.size() / workers);
+          tasks.add(
+              executor.submit(
+                  Tools.captureReadingScope(
+                      () -> {
+                        verifyRange(root, range);
+                        return null;
+                      })));
+        }
+        // Contiguous ranges joined in manifest order preserve the first failing candidate.
+        for (var task : tasks) task.get();
+      } catch (ExecutionException error) {
+        if (error.getCause() instanceof Error failure) throw failure;
+        throw error;
+      } finally {
+        executor.shutdownNow();
+      }
+    }
+  }
+
+  private static void verifyRange(Path root, List<Stamp> inventory) throws IOException {
+    for (var expected : inventory) {
+      if (Thread.currentThread().isInterrupted()) Tools.checkReadingCancellation(null);
+      var attrs = FileSnapshots.verifiedInventoryAttributes(root, Path.of(expected.path()));
+      if (!expected.equals(stamp(expected.path(), attrs)))
+        throw ReadingProblem.fail("FILE_CHANGED");
+    }
   }
 
   private static Stamp stamp(Path root, String relative) throws IOException {
