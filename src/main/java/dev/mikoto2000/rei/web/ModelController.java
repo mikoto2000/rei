@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService;
 import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelsService;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -51,7 +53,11 @@ public class ModelController {
    * @param models モデル一覧
    * @param currentModel 現在モデル
    */
-  public record Models(List<String> models, String currentModel) {}
+  public record Models(List<String> models, String currentModel) {
+    public Models {
+      models = models == null ? null : Collections.unmodifiableList(new ArrayList<>(models));
+    }
+  }
 
   /**
    * Web APIによる操作で受け渡す選択内容を表す。

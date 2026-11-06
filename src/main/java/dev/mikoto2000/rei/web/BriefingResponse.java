@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.web;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -27,6 +29,32 @@ public record BriefingResponse(
     List<String> interestUpdates,
     List<String> cautionPoints,
     List<String> nextActions) {
+  public BriefingResponse {
+    events = events == null ? null : Collections.unmodifiableList(new ArrayList<>(events));
+    openTasks = openTasks == null ? null : Collections.unmodifiableList(new ArrayList<>(openTasks));
+    overdueTasks =
+        overdueTasks == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(overdueTasks));
+    relatedDocuments =
+        relatedDocuments == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(relatedDocuments));
+    feedItems = feedItems == null ? null : Collections.unmodifiableList(new ArrayList<>(feedItems));
+    interestUpdates =
+        interestUpdates == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(interestUpdates));
+    cautionPoints =
+        cautionPoints == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(cautionPoints));
+    nextActions =
+        nextActions == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(nextActions));
+  }
+
   /**
    * Web APIによる操作で受け渡すイベント応答を表す。
    *

@@ -219,18 +219,25 @@ public class ExternalAgentProcessRunner {
                 || child.info().startInstant().isEmpty());
     Collections.reverse(children);
     for (var child : children) if (child.isAlive()) child.destroyForcibly();
+    boolean interrupted = false;
     for (var child : children) {
       try {
         child.onExit().get(500, TimeUnit.MILLISECONDS);
-      } catch (Exception ignored) {
+      } catch (InterruptedException failure) {
+        interrupted = true;
+        break;
+      } catch (ExecutionException | TimeoutException | RuntimeException failure) {
+        org.slf4j.LoggerFactory.getLogger(ExternalAgentProcessRunner.class)
+            .debug("Child process shutdown wait failed ({})", failure.getClass().getSimpleName());
       }
     }
-    if (process.isAlive()) process.destroyForcibly();
     try {
+      if (process.isAlive()) process.destroyForcibly();
       process.waitFor(1, TimeUnit.SECONDS);
-    } catch (InterruptedException error) {
-      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
-      Thread.currentThread().interrupt();
+    } catch (InterruptedException failure) {
+      interrupted = true;
+    } finally {
+      if (interrupted) Thread.currentThread().interrupt();
     }
   }
 

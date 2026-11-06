@@ -7,6 +7,8 @@ import dev.mikoto2000.rei.goal.GoalLoopService;
 import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.goal.GoalWaitRepository;
 import dev.mikoto2000.rei.goal.GoalWaitService;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -209,7 +211,12 @@ public class GoalController {
    * @param attempts 試行回数
    */
   public record History(
-      List<GoalRepository.History> history, List<GoalRepository.Attempt> attempts) {}
+      List<GoalRepository.History> history, List<GoalRepository.Attempt> attempts) {
+    public History {
+      history = history == null ? null : Collections.unmodifiableList(new ArrayList<>(history));
+      attempts = attempts == null ? null : Collections.unmodifiableList(new ArrayList<>(attempts));
+    }
+  }
 
   /** 過去の記録を、条件に従って参照できる形で返す。 */
   @GetMapping("/{id}/history")

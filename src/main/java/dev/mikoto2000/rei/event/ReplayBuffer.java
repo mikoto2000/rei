@@ -37,7 +37,11 @@ public final class ReplayBuffer {
    * @param latestSequence 最新発生順序
    * @param terminalSequence 終端発生順序
    */
-  public record Snapshot(List<AgentEvent> events, long latestSequence, Long terminalSequence) {}
+  public record Snapshot(List<AgentEvent> events, long latestSequence, Long terminalSequence) {
+    public Snapshot {
+      events = List.copyOf(events);
+    }
+  }
 
   /** 実行一覧。 */
   private final Map<String, History> runs = new HashMap<>();

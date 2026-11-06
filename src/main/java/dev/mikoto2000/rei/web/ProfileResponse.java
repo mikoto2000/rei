@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.web;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -18,6 +20,17 @@ public record ProfileResponse(
     String last,
     Map<String, Long> countsByType,
     Map<String, DurationResponse> durationsByType) {
+  public ProfileResponse {
+    countsByType =
+        countsByType == null
+            ? null
+            : Collections.unmodifiableMap(new LinkedHashMap<>(countsByType));
+    durationsByType =
+        durationsByType == null
+            ? null
+            : Collections.unmodifiableMap(new LinkedHashMap<>(durationsByType));
+  }
+
   /**
    * Web APIによる操作で受け渡す継続時間応答を表す。
    *

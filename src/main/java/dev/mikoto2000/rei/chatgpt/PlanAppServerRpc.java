@@ -517,7 +517,9 @@ public final class PlanAppServerRpc {
                 "turn/interrupt",
                 "params",
                 Map.of("threadId", thread, "turnId", turn)));
-      } catch (Exception ignored) {
+      } catch (RuntimeException failure) {
+        org.slf4j.LoggerFactory.getLogger(PlanAppServerRpc.class)
+            .debug("App server interrupt request failed ({})", failure.getClass().getSimpleName());
       }
     }
   }

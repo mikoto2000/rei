@@ -164,7 +164,11 @@ public class ProjectAgentEventStore implements AgentEventListener {
    * @param nextOffset 次開始位置
    * @param discardingLine discarding行
    */
-  public record Page(List<AgentEvent> events, long nextOffset, boolean discardingLine) {}
+  public record Page(List<AgentEvent> events, long nextOffset, boolean discardingLine) {
+    public Page {
+      events = List.copyOf(events);
+    }
+  }
 
   /**
    * 必要な内容を参照できるよう、ページを読み取る。

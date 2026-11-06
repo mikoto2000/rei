@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.web;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -10,4 +12,8 @@ import java.util.List;
  * @param nextCursor 次続きの取得位置
  */
 public record SessionTurnListResponse(
-    String sessionId, List<SessionTurnResponse> items, String nextCursor) {}
+    String sessionId, List<SessionTurnResponse> items, String nextCursor) {
+  public SessionTurnListResponse {
+    items = items == null ? null : Collections.unmodifiableList(new ArrayList<>(items));
+  }
+}

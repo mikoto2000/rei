@@ -15,6 +15,19 @@ import org.junit.jupiter.api.Test;
 class InMemoryAgentEventBusTest {
 
   @Test
+  void replaySubscriptionKeepsAnImmutableSnapshot() {
+    var first = event("agent.run.started");
+    var events = new ArrayList<>(List.of(first));
+    var replay = new AgentEventBus.ReplaySubscription(events, () -> {}, 1, null);
+
+    events.clear();
+
+    assertEquals(List.of(first), replay.replay());
+    org.junit.jupiter.api.Assertions.assertThrows(
+        UnsupportedOperationException.class, () -> replay.replay().clear());
+  }
+
+  @Test
   void failedPersistenceIsNeverDeliveredOrReplayedAndQueuedReentryIsCleared() {
     var bus = new InMemoryAgentEventBus();
     var displayed = new ArrayList<AgentEvent>();
