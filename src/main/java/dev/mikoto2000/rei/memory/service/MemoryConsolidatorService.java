@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.memory.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
@@ -188,7 +189,7 @@ public class MemoryConsolidatorService {
                 OffsetDateTime.now()));
       }
       return memories;
-    } catch (Exception ignored) {
+    } catch (JsonProcessingException | RuntimeException ignored) {
       return List.of();
     }
   }

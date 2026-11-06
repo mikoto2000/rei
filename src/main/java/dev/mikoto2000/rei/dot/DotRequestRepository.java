@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.dot;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -113,7 +114,7 @@ public class DotRequestRepository {
   private static Map<String, Object> document(String text) {
     try {
       return text == null ? Map.of() : StorageDatabase.JSON.readValue(text, Map.class);
-    } catch (Exception e) {
+    } catch (JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Invalid saved Dot document");
     }
   }

@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.Page;
 import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.PolicyValue;
 import java.util.ArrayList;
@@ -269,7 +270,7 @@ public class ToolResultCompressor {
         }
         if (!text.isEmpty()) raw = text.toString();
       }
-    } catch (Exception ignored) {
+    } catch (JsonProcessingException | RuntimeException ignored) {
     }
     return raw.lines()
         .filter(

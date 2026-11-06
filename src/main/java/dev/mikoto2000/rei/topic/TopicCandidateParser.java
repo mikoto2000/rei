@@ -44,7 +44,7 @@ public class TopicCandidateParser {
         if (candidate != null) candidates.add(candidate);
       }
       return candidates;
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       log.warn("Topic candidate JSON parse failed");
       return List.of();
     }

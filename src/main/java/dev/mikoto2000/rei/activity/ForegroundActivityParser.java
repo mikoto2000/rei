@@ -4,6 +4,7 @@ import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.SchemaRegistryConfig;
 import com.networknt.schema.SpecificationVersion;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
@@ -65,7 +66,7 @@ public final class ForegroundActivityParser {
           n.get("confidence").asDouble());
     } catch (ActivityOutputParser.InvalidOutput e) {
       throw e;
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       throw invalid("invalid_json");
     }
   }
@@ -87,7 +88,7 @@ public final class ForegroundActivityParser {
         ForegroundActivityParser.class.getResourceAsStream(
             "/activity/foreground-classification.schema.json")) {
       return new String(Objects.requireNonNull(stream).readAllBytes(), StandardCharsets.UTF_8);
-    } catch (Exception e) {
+    } catch (IOException | RuntimeException e) {
       throw new IllegalStateException("Foreground schema unavailable");
     }
   }

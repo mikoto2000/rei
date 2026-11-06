@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.computeruse;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
@@ -81,7 +82,7 @@ final class TextInputHistory {
     try {
       var n = JSON.readTree(focus);
       return n == null ? JSON.createObjectNode() : n;
-    } catch (Exception e) {
+    } catch (JsonProcessingException | RuntimeException e) {
       return JSON.createObjectNode();
     }
   }

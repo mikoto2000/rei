@@ -47,7 +47,7 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
       var generation = response == null ? null : response.getResult();
       AssistantMessage output = generation == null ? null : generation.getOutput();
       return parser.parse(output == null ? "" : output.getText(), properties.getMaxCandidates());
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       log.warn("Topic candidate generation failed");
       return List.of();
     }
