@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.conversation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +43,10 @@ public class ConversationLogStore {
   private final Clock clock;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the caller-configured Jackson codecs to read and write the same conversation history.")
   private final ObjectMapper objectMapper;
 
   /** 書き込み排他制御。 */

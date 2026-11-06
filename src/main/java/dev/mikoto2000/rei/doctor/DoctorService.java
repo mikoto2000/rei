@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.Environment;
@@ -64,7 +65,7 @@ public class DoctorService {
   private final ClaudeCodeProperties claude;
 
   /** 言語モデル。 */
-  private final LlmProperties llm;
+  private final Supplier<LlmProperties.Server> chatSettings;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -109,7 +110,7 @@ public class DoctorService {
     this.voice = voice;
     this.codex = codex;
     this.claude = claude;
-    this.llm = llm;
+    this.chatSettings = () -> llm.feature("chat");
     this.clock = clock;
     this.manifest = manifest;
   }
@@ -199,7 +200,7 @@ public class DoctorService {
         "llm.credentials",
         "effective configuration",
         () -> {
-          var custom = llm.feature("chat");
+          var custom = chatSettings.get();
           String key =
               custom != null && present(custom.getApiKey())
                   ? custom.getApiKey()
@@ -221,7 +222,7 @@ public class DoctorService {
         "llm.model",
         "effective configuration",
         () -> {
-          var custom = llm.feature("chat");
+          var custom = chatSettings.get();
           String selected =
               custom != null && present(custom.getModel())
                   ? custom.getModel()
@@ -428,7 +429,7 @@ public class DoctorService {
 
   /** 実行環境の診断で用いる接続先を返す。 */
   public String endpoint() {
-    var custom = llm.feature("chat");
+    var custom = chatSettings.get();
     return custom != null && present(custom.getBaseUrl())
         ? custom.getBaseUrl()
         : environment.getProperty("spring.ai.openai.base-url");
@@ -436,7 +437,7 @@ public class DoctorService {
 
   /** 実行環境の診断で用いる接続先キーを返す。 */
   private String endpointKey() {
-    return llm.feature("chat") != null && present(llm.feature("chat").getBaseUrl())
+    return chatSettings.get() != null && present(chatSettings.get().getBaseUrl())
         ? "rei.llm.features.chat.base-url"
         : "spring.ai.openai.base-url";
   }

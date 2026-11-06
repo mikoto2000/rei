@@ -36,6 +36,8 @@ import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentProperties;
 import dev.mikoto2000.rei.websearch.WebSearchProperties;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -238,6 +240,10 @@ public class AiConfiguration {
   private ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> subAgentTools;
 
   /** 補助エージェント設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Passes the shared subagent configuration to the application's model wiring.")
   private dev.mikoto2000.rei.subagent.SubAgentProperties subAgentProperties =
       new dev.mikoto2000.rei.subagent.SubAgentProperties();
 

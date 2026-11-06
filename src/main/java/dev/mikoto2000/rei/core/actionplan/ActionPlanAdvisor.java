@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.core.actionplan;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -20,6 +22,10 @@ import org.springframework.stereotype.Component;
 public class ActionPlanAdvisor implements BaseAdvisor {
 
   /** 操作計画。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Renders the current action plan for the owning run.")
   private final ActionPlan actionPlan;
 
   /** イベント一覧。 */

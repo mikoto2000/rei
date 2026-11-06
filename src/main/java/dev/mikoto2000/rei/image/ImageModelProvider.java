@@ -10,6 +10,7 @@ import io.micrometer.observation.ObservationRegistry;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 import org.springframework.ai.image.ImageModel;
 import org.springframework.ai.openai.OpenAiImageModel;
 import org.springframework.ai.openai.OpenAiImageOptions;
@@ -25,7 +26,7 @@ public class ImageModelProvider {
   private final ObjectProvider<ImageModel> defaultImageModelProvider;
 
   /** この機能の動作設定。 */
-  private final LlmProperties properties;
+  private final Supplier<LlmProperties.Server> imageSettings;
 
   /** 画像設定。 */
   @SuppressFBWarnings(
@@ -52,7 +53,7 @@ public class ImageModelProvider {
       AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher) {
     this.defaultImageModelProvider = defaultImageModelProvider;
-    this.properties = properties;
+    this.imageSettings = () -> properties.feature(LlmFeature.IMAGE_GENERATION);
     this.imageProperties = imageProperties;
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
@@ -76,7 +77,7 @@ public class ImageModelProvider {
   /** 新たな対象を利用できるよう、画像モデルを作成する。 */
   private ImageModel createImageModel() {
     ImageModel defaultImageModel = defaultImageModel();
-    LlmProperties.Server server = properties.feature(LlmFeature.IMAGE_GENERATION);
+    LlmProperties.Server server = imageSettings.get();
     ImageModel model =
         server == null || !server.hasCustomServer()
             ? defaultImageModel
@@ -96,7 +97,7 @@ public class ImageModelProvider {
     if (overrideModel != null && !overrideModel.isBlank()) {
       return overrideModel;
     }
-    LlmProperties.Server server = properties.feature(LlmFeature.IMAGE_GENERATION);
+    LlmProperties.Server server = imageSettings.get();
     if (server != null && server.getModel() != null && !server.getModel().isBlank()) {
       return server.getModel();
     }

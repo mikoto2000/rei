@@ -38,6 +38,10 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private final ActivityProperties properties;
 
   /** 作業習慣。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Routes reporting commands through the shared behavior service and its current state.")
   private final dev.mikoto2000.rei.activity.behavior.BehaviorService behavior;
 
   /** 補助操作。 */

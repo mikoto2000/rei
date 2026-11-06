@@ -307,6 +307,10 @@ public final class SubAgentRunner {
   }
 
   /** 独立した予算設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured standalone, durable, and retry limits when starting child work.")
   private SubAgentProperties standaloneBudgetProperties = new SubAgentProperties();
 
   /** 補助エージェントへの委譲で使用する独立した予算設定を設定する。 */

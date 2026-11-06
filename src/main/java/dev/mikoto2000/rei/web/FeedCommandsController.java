@@ -27,6 +27,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/feed/commands")
 public final class FeedCommandsController {
   /** フィード一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared feed service for listing and mutating the same subscriptions.")
   private final FeedService feeds;
 
   /** 読み込む宣言。 */

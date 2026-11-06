@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** 状態表示委譲のユースケースを実現する。 */
@@ -24,7 +25,7 @@ public class DotDelegationService {
   final DotProperties properties;
 
   /** プロジェクト一覧。 */
-  final ProjectService projects;
+  private final Supplier<List<ProjectContext>> registeredProjects;
 
   /** 会話一覧。 */
   final SessionRepository sessions;
@@ -37,7 +38,7 @@ public class DotDelegationService {
       SessionRepository sessions) {
     this.repo = repo;
     this.properties = properties;
-    this.projects = projects;
+    this.registeredProjects = () -> projects.registeredProjects();
     this.sessions = sessions;
   }
 
@@ -45,7 +46,7 @@ public class DotDelegationService {
   ProjectContext project(String id) {
     if (!properties.enabled()) throw new DotException("FEATURE_DISABLED");
     if (!properties.allowedProjects().contains(id)) throw new DotException("NOT_FOUND");
-    return projects.registeredProjects().stream()
+    return registeredProjects.get().stream()
         .filter(p -> p.id().equals(id))
         .findFirst()
         .orElseThrow(() -> new DotException("NOT_FOUND"));
@@ -69,6 +70,10 @@ public class DotDelegationService {
   private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpointRepository;
 
   /** 判断基準。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the current shared tool permission policy for delegation authorization.")
   private dev.mikoto2000.rei.core.policy.ToolPermissionPolicy policy;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
