@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.timing;
 
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
@@ -14,6 +15,8 @@ import javax.crypto.spec.SecretKeySpec;
  * hash.
  */
 public final class PrefixDiagnostics {
+  private static final SecureRandom RANDOM = new SecureRandom();
+
   /**
    * 実行時間の把握で受け渡す取得元を表す。
    *
@@ -55,7 +58,7 @@ public final class PrefixDiagnostics {
 
   /** 既定の状態でPrefixDiagnosticsを初期化する。 */
   public PrefixDiagnostics() {
-    new java.security.SecureRandom().nextBytes(key);
+    RANDOM.nextBytes(key);
   }
 
   /** 状況を判断する根拠を得るため、接頭辞診断情報を観測する。 */

@@ -36,6 +36,8 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
  * <p>Public-client authorization. No credentials are read from other applications.
  */
 public final class PlanOAuth {
+  private static final SecureRandom RANDOM = new SecureRandom();
+
   /** 補助資料。 */
   public static final String RESOURCE = "https://api.openai.com/v1";
 
@@ -487,7 +489,7 @@ public final class PlanOAuth {
   /** ChatGPTとの連携で用いる乱数を返す。 */
   private static String random() {
     byte[] bytes = new byte[32];
-    new SecureRandom().nextBytes(bytes);
+    RANDOM.nextBytes(bytes);
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }
 }
