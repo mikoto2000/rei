@@ -191,8 +191,8 @@ public final class SemanticSkillSearch {
               .toList();
     } catch (RuntimeException error) {
       RunCancellation.propagate(error);
-      if (error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)
-        throw error;
+      if (error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)
+        throw stopped;
       cache = Map.of();
       failureAt = nanos.getAsLong();
       log.warn(
@@ -238,8 +238,8 @@ public final class SemanticSkillSearch {
       }
     } catch (RuntimeException error) {
       RunCancellation.propagate(error);
-      if (error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)
-        throw error;
+      if (error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)
+        throw stopped;
       log.warn(
           "Skill rerank unavailable; using fusion order ({})", error.getClass().getSimpleName());
     }

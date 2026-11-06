@@ -70,7 +70,8 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
         return read(c);
       }
     } catch (SQLException | JsonProcessingException | RuntimeException e) {
-      throw failure(e);
+      if (e instanceof java.util.ConcurrentModificationException conflict) throw conflict;
+      throw new IllegalStateException("Coaching persistence unavailable", e);
     }
   }
 
@@ -98,7 +99,8 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
         }
       }
     } catch (SQLException | JsonProcessingException | RuntimeException e) {
-      throw failure(e);
+      if (e instanceof java.util.ConcurrentModificationException conflict) throw conflict;
+      throw new IllegalStateException("Coaching persistence unavailable", e);
     }
   }
 
@@ -194,12 +196,5 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
           }
           return "RESERVED";
         });
-  }
-
-  /** 処理を継続できなかった理由を、失敗情報として表す。 */
-  private static RuntimeException failure(Exception e) {
-    return e instanceof java.util.ConcurrentModificationException conflict
-        ? conflict
-        : new IllegalStateException("Coaching persistence unavailable", e);
   }
 }

@@ -164,8 +164,8 @@ public final class RerankService implements CandidateReranker {
       if (budget != null) {
         dev.mikoto2000.rei.core.chat.RunCancellation.propagate(exception);
         if (invoked && !reported) budget.recordTotalTokens(null);
-        if (exception instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)
-          throw exception;
+        if (exception instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)
+          throw stopped;
       }
       logger.warn(
           "Rerank request failed; using original search order ({})",

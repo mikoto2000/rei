@@ -255,7 +255,7 @@ public class MemoryConsolidatorService {
       return output == null ? null : output.getText();
     } catch (RuntimeException error) {
       RunCancellation.propagate(error);
-      if (error instanceof ExecutionStoppedException) throw error;
+      if (error instanceof ExecutionStoppedException stopped) throw stopped;
       if (invoked && !reported && budget.tokenLimitEnabled()) budget.recordTotalTokens(null);
       throw error;
     }
