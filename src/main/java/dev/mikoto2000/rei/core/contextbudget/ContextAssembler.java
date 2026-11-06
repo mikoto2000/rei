@@ -60,7 +60,7 @@ public class ContextAssembler {
   }
 
   /** 必須条件レビュー対象範囲。 */
-  private boolean requireReviewCoverage = true;
+  private volatile boolean requireReviewCoverage = true;
 
   /** モデルへ渡す文脈の管理で使用する必須条件レビュー対象範囲を設定する。 */
   public void setRequireReviewCoverage(boolean required) {
