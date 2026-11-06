@@ -40,6 +40,10 @@ public final class SlackAgentService implements RunContinuation {
   private final SlackAgentRepository requests;
 
   /** 継続入力一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared durable continuation state for Slack operations.")
   private final SlackAgentContinuationStore continuations;
 
   /** 登録台帳。 */

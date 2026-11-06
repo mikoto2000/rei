@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.image;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -11,6 +13,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class ImageGenerationService {
   /** 成果物一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared artifact store for publication or lookup.")
   private dev.mikoto2000.rei.artifact.ArtifactStore artifacts;
 
   /** 画像の生成で使用する成果物保存先を設定する。 */

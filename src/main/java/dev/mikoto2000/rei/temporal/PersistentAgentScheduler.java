@@ -5,6 +5,8 @@ import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.event.DependencyStatusPayload;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -106,6 +108,10 @@ public class PersistentAgentScheduler
   private dev.mikoto2000.rei.storage.SqliteEventCursorStore eventCursors;
 
   /** 保存対象データ一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared object registry for retention and reference tracking.")
   private dev.mikoto2000.rei.storage.StorageObjectRegistry storageObjects;
 
   /** 時刻と期間の解釈で使用するイベント続きの取得位置保存先を設定する。 */

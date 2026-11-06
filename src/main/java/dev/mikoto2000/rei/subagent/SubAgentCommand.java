@@ -37,6 +37,10 @@ public class SubAgentCommand implements Callable<Integer> {
   private final SubAgentToolPolicy policy;
 
   /** 実行の担当。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common runner for child execution and its lifecycle.")
   private SubAgentRunner runner;
 
   /** プロジェクト一覧。 */

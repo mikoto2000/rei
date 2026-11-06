@@ -26,6 +26,10 @@ public class PaperSearchService {
   private final PaperRepository repo;
 
   /** 参照先一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the same session references for result indexing and resolution.")
   private final PaperSessionReferences refs;
 
   /** 設定。 */

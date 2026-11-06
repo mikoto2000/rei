@@ -75,6 +75,10 @@ public final class TaskManagerService {
   private final CursorCodec cursors = new CursorCodec();
 
   /** 成果物一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared artifact store for publication or lookup.")
   private dev.mikoto2000.rei.artifact.ArtifactStore artifacts;
 
   /** 実行中タスクの操作で使用する成果物保存先を設定する。 */

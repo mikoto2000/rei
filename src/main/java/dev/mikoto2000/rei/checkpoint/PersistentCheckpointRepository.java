@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.checkpoint;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -36,6 +38,10 @@ public class PersistentCheckpointRepository {
   private final CheckpointProperties settings;
 
   /** 対象データ一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared object registry for retention and reference tracking.")
   private dev.mikoto2000.rei.storage.StorageObjectRegistry objects;
 
   /** 作業の中断と再開で使用する保存対象データ登録台帳を設定する。 */

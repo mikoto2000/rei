@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.BackgroundRunSubmitService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -17,6 +19,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public class BackgroundRunController {
   /** 実行一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Submits and queries runs through the shared background service.")
   private final BackgroundRunSubmitService runs;
 
   /** 指定された値や利用先を使って、BackgroundRunControllerを初期化する。 */

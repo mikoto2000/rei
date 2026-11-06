@@ -34,6 +34,10 @@ public class ToolPermissionGuard {
           "webSearchAndRead");
 
   /** 承認一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared approval state for requests and decisions.")
   private ToolApprovalRepository approvals;
 
   /** ツール利用の権限制御で使用する承認一覧を設定する。 */

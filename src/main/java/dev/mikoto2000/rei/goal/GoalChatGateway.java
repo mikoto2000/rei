@@ -76,6 +76,10 @@ public class GoalChatGateway
   private final ConversationInputRouter router;
 
   /** チャット。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Runs operations through the shared chat execution service.")
   private final ChatExecutionService chat;
 
   /** キャンセル。 */
