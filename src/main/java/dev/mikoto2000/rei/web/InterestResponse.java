@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.web;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -21,6 +23,13 @@ public record InterestResponse(
     String summary,
     List<String> sourceUrls,
     String createdAt) {
+  public InterestResponse {
+    sourceUrls =
+        sourceUrls == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(sourceUrls));
+  }
+
   /** Web APIによる操作で利用する情報を、受け取った形式から変換する。 */
   public static InterestResponse from(dev.mikoto2000.rei.interest.InterestUpdate i) {
     return new InterestResponse(
