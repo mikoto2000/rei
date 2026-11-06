@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.paper;
 
+import java.io.Serial;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -14,6 +15,8 @@ public class PaperSessionReferences {
   private final Map<String, List<String>> refs = Collections.synchronizedMap(new ReferenceMap());
 
   private static final class ReferenceMap extends LinkedHashMap<String, List<String>> {
+    @Serial private static final long serialVersionUID = 1L;
+
     private ReferenceMap() {
       super(16, 0.75f, true);
     }
