@@ -8,6 +8,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Supplier;
 
 /**
  * データ保存の共通処理に必要な保存データベースを扱う。
@@ -55,9 +56,6 @@ public final class StorageDatabase {
   /** 状態。 */
   private final WriterState state;
 
-  /** 書き込み先。 */
-  public final Object writer;
-
   /** データ保存の共通処理に必要な作業を扱う。 */
   @FunctionalInterface
   public interface Work<T> {
@@ -69,8 +67,21 @@ public final class StorageDatabase {
   public StorageDatabase(Path root) {
     file = root.toAbsolutePath().normalize().resolve("storage.db");
     state = WRITERS.computeIfAbsent(file, p -> new WriterState());
-    writer = state;
     read(connection -> null);
+  }
+
+  /** 同じ保存先への書き込みと関連する処理を一続きに実行する。 */
+  public <T> T withWriterLock(Supplier<T> action) {
+    synchronized (state) {
+      return action.get();
+    }
+  }
+
+  /** 戻り値のない処理を保存先への書き込みと直列化する。 */
+  public void withWriterLock(Runnable action) {
+    synchronized (state) {
+      action.run();
+    }
   }
 
   /** 必要な対象を利用できるよう、保存データベースの利用を開始する。 */
@@ -109,7 +120,7 @@ public final class StorageDatabase {
    * releasing its process lease.
    */
   AutoCloseable keepWalOpen() throws java.io.IOException, SQLException {
-    synchronized (writer) {
+    synchronized (state) {
       if (state.keepOpen)
         throw new IllegalStateException("Storage writer already has a lifetime owner");
       state.retained = open(false);
@@ -124,7 +135,7 @@ public final class StorageDatabase {
         /** データ保存の共通処理で利用した資源や登録を解放し、利用を終了する。 */
         @Override
         public void close() throws Exception {
-          synchronized (writer) {
+          synchronized (state) {
             if (closed) return;
             closed = true;
             state.keepOpen = false;
@@ -217,7 +228,7 @@ public final class StorageDatabase {
 
   /** データ保存の共通処理で用いる一連の更新を返す。 */
   public <T> T transaction(Work<T> work) {
-    synchronized (writer) {
+    synchronized (state) {
       if (state.transaction)
         throw new IllegalStateException("Nested storage transactions are not supported");
       state.transaction = true;
@@ -271,7 +282,7 @@ public final class StorageDatabase {
       value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
       justification = "Preserve the original transaction failure across FutureTask; wrapping would change cancellation semantics.")
   <T> T activityTransaction(Work<T> work) {
-    if (Thread.holdsLock(writer))
+    if (Thread.holdsLock(state))
       throw new IllegalStateException("Activity commit cannot start inside a storage operation");
     var observation = StorageIoObservation.current();
     var commit =
@@ -306,7 +317,7 @@ public final class StorageDatabase {
    * <p>Explicit maintenance statements such as VACUUM require autocommit.
    */
   <T> T maintenance(Work<T> work) {
-    synchronized (writer) {
+    synchronized (state) {
       try (var connection = open(false)) {
         return work.run(connection);
       } catch (RuntimeException error) {
