@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -227,7 +229,7 @@ public final class ClassificationToolkit {
               d.diagnostics().visionRequired()),
           p.getClassification(),
           clock.instant());
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       log.warn("Activity classification telemetry unavailable; observation retained");
     }
   }
@@ -250,7 +252,7 @@ public final class ClassificationToolkit {
                           .excluded(
                               new ForegroundWindow(c.process(), 1, c.title(), "registry", null)))
           .toList();
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       log.warn("Activity classification registry unavailable");
       return List.of();
     }
@@ -312,7 +314,7 @@ public final class ClassificationToolkit {
           if (d.entertainmentSource().equals("user")) inc(m, "entertainment_user");
         }
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       log.warn("Activity classification metrics unavailable");
     }
     m.put("classification_suggestions", classificationSuggestions.sum());

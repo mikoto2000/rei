@@ -61,7 +61,7 @@ public class WorkActivityInferenceStore {
         s.setString(3, payload);
         s.executeUpdate();
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Temporal inference persistence failed", e);
     }
   }
@@ -77,7 +77,7 @@ public class WorkActivityInferenceStore {
                   "SELECT payload FROM activity_work_inferences ORDER BY window_end DESC,id DESC LIMIT 1")) {
         return r.next() ? Optional.of(decode(r.getString(1))) : Optional.empty();
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Temporal inference query failed", e);
     }
   }
@@ -108,7 +108,7 @@ public class WorkActivityInferenceStore {
       }
       Collections.reverse(result);
       return List.copyOf(result);
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Temporal inference query failed", e);
     }
   }
