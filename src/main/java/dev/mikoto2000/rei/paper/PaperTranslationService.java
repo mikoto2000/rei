@@ -208,7 +208,9 @@ public class PaperTranslationService {
       org.slf4j.LoggerFactory.getLogger(getClass())
           .info("paper translation paperId={} chunks={}", paper.id(), result.size());
       return translation;
-    } catch (PaperException | java.util.concurrent.CancellationException e) {
+    } catch (PaperException e) {
+      throw e;
+    } catch (java.util.concurrent.CancellationException e) {
       throw e;
     } catch (RuntimeException e) {
       throw new PaperException(
