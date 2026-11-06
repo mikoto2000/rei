@@ -38,6 +38,10 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
     return policy == null || policy.valid(lease);
   }
 
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads and updates the same candidate store.")
   private final TopicCandidateStore candidateStore;
 
   /** 文脈提供元。 */

@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.Supplier;
 import org.jline.reader.LineReader;
 import org.jline.reader.Widget;
@@ -17,6 +19,10 @@ public final class ActiveRunPrompt implements AutoCloseable {
   private static final String REFRESH = "rei-active-run-prompt";
 
   /** 読み取り元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the live JLine reader for the current terminal session.")
   private final LineReader reader;
 
   /** プロンプト。 */

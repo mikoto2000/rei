@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core.completion;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -31,6 +33,10 @@ public final class ApprovalActionMenu implements AutoCloseable {
   private record Request(Owner owner, String id) {}
 
   /** 読み取り元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the live JLine reader for the current terminal session.")
   private final LineReader reader;
 
   /** 所有者。 */

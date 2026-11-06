@@ -67,7 +67,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
   }
 
   /** 画面操作の支援で用いる判断を返す。 */
-  public ComputerAction decide(ComputerObservation observation) throws Exception {
+  public ComputerAction decide(ComputerObservation observation) throws IOException {
     var coarse =
         decideOnce(
             observation,
@@ -127,7 +127,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
   }
 
   /** 画面操作の支援で用いる判断概要を返す。 */
-  ComputerAction decideOverview(ComputerObservation observation) throws Exception {
+  ComputerAction decideOverview(ComputerObservation observation) throws IOException {
     return decideOnce(
         observation,
         "Choose the next action and the display containing its target. "
@@ -182,7 +182,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
 
   /** 画面操作の支援で用いる判断Onceを返す。 */
   private ComputerAction decideOnce(ComputerObservation observation, String stage)
-      throws Exception {
+      throws IOException {
     var screen = observation.screenshot();
     var media = new ArrayList<Media>();
     var displayInfo = new StringBuilder();

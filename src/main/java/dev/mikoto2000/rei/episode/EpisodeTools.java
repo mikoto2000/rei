@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.conversation.HistorySearchRequest;
 import dev.mikoto2000.rei.conversation.HistorySearchScope;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.Map;
 import org.springframework.ai.tool.annotation.Tool;
@@ -14,6 +16,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class EpisodeTools {
   /** 検索。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the current shared episode search index and registered projects.")
   private final EpisodeSearchService search;
 
   /** 保存と検索の窓口。 */

@@ -5,6 +5,8 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.ContextCompressionPayload;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -41,6 +43,10 @@ public class ContextAssembler {
   private final ConversationSummaryRepository summaries;
 
   /** ツール一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured compressor for retention and delivery of tool results.")
   private final ToolResultCompressor tools;
 
   /** 会話の要点を保ちながら文脈を圧縮する窓口。 */

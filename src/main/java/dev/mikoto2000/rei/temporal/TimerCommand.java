@@ -30,6 +30,10 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
   private final ProjectService projects;
 
   /** 実行先の振り分け。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reconciles durable schedules through the shared dispatcher.")
   private final AgentScheduleDispatcher dispatcher;
 
   /** 仕様。 */

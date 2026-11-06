@@ -180,7 +180,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
       String stage,
       int left,
       int top)
-      throws Exception {
+      throws IOException {
     checkCancelled();
     var prefix = protocol.id + stage;
     var image = resize(region);

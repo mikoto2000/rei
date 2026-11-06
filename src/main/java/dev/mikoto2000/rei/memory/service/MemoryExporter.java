@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.memory.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.mikoto2000.rei.memory.model.Memory;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,6 +28,10 @@ public class MemoryExporter {
   public record ExportResult(Path latestMd, Path datedMd, Path datedJsonl, int count) {}
 
   /** 記憶サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads active entries from the shared memory service.")
   private final MemoryService memoryService;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */

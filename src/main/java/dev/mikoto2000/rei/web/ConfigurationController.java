@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.config.ExternalConfigFileService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,6 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/config")
 public final class ConfigurationController {
   /** サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Resolves or initializes the application's current external configuration files.")
   private final ExternalConfigFileService service;
 
   /**

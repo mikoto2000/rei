@@ -41,6 +41,10 @@ public final class VoiceCorrectionLlm {
       """;
 
   /** クライアント一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Creates chat clients through the shared provider and its current configuration.")
   private final LlmChatClientProvider clients;
 
   /** モデル一覧。 */

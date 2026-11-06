@@ -46,6 +46,10 @@ public class SearchCommand implements Runnable {
   private static final Logger log = LoggerFactory.getLogger(SearchCommand.class);
 
   /** モデルへ対話を依頼する窓口提供元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Creates chat clients through the shared provider and its current configuration.")
   private final LlmChatClientProvider chatClientProvider;
 
   /** 現在モデル保持先。 */

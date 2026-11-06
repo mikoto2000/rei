@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.episode;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
 import dev.mikoto2000.rei.llm.ModelCallBudgetScope;
 import dev.mikoto2000.rei.vectorstore.LazySqliteVectorStore;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +23,10 @@ public class EpisodeDenseIndex {
   private final EpisodeRepository repository;
 
   /** ベクトル一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads and updates the same lazily opened vector index.")
   private final LazySqliteVectorStore vectors;
 
   /** 生成。 */

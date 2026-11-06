@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.websearch;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
@@ -20,6 +22,10 @@ public final class WebSearchMetrics {
   public static final WebSearchMetrics OBSERVED = new WebSearchMetrics(Metrics.globalRegistry);
 
   /** 登録台帳。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Records metrics in the application's shared registry.")
   private final MeterRegistry registry;
 
   /** 指定された値や利用先を使って、WebSearchMetricsを初期化する。 */

@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.skills;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.vectordocument.CandidateReranker;
 import dev.mikoto2000.rei.vectorstore.ReciprocalRankFusion;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,6 +41,10 @@ public final class SemanticSkillSearch {
   private final LongSupplier nanos;
 
   /** 位置。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Loads and updates the shared skill embedding index.")
   private final SkillEmbeddingIndex index;
 
   /** indexed利用者情報一覧。 */
