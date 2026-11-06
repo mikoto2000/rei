@@ -45,6 +45,10 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
   private CommandOutput output;
 
   /** 配信。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Routes shell operations through the shared attention delivery state.")
   private AttentionDeliveryService delivery;
 
   /** 重複の有無リスク。 */

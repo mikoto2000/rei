@@ -33,6 +33,10 @@ public class ProfileEventLogStore implements AgentEventListener {
   private final Path file;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the caller-configured Jackson codecs to read and write the same event history.")
   private final ObjectMapper objectMapper;
 
   /** 書き込み排他制御。 */

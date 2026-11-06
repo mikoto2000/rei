@@ -47,6 +47,10 @@ public final class ConversationInputRouter {
   }
 
   /** 実行の停止要求と資源の所有期間。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Coordinates admission with the same cancellation service that owns active commands.")
   private dev.mikoto2000.rei.core.service.CommandCancellationService cancellation =
       new dev.mikoto2000.rei.core.service.CommandCancellationService();
 

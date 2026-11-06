@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.core.completion.CompletionEngine;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Supplier;
@@ -13,6 +15,10 @@ import picocli.CommandLine;
 /** JLine入力補完を別の利用先へ接続する。 */
 public final class JLineCompletionAdapter implements Completer {
   /** コマンド。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Resolves completions against the live command tree used by the shell.")
   private final CommandLine command;
 
   /** 入力候補を選ぶ共通の処理。 */

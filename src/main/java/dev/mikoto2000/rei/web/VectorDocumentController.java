@@ -28,6 +28,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/vector-documents")
 public final class VectorDocumentController {
   /** ベクトル一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared document index for listing, search, and deletion.")
   private final VectorDocumentService vectors;
 
   /** バックグラウンド。 */
@@ -38,6 +42,10 @@ public final class VectorDocumentController {
   private final AsyncVectorDocumentService background;
 
   /** 実行一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Submits embedding runs through the shared integration lifecycle.")
   private dev.mikoto2000.rei.application.run.IntegrationRunSubmitService runs;
 
   /** Web APIによる操作で使用する実行一覧を設定する。 */

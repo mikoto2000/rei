@@ -132,6 +132,10 @@ public class Tools {
       dev.mikoto2000.rei.core.contextbudget.TokenEstimator.tokenizerAware();
 
   /** 配信設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured delivery limits for each paged tool result.")
   private dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties deliveryProperties =
       new dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties();
 
@@ -735,6 +739,10 @@ public class Tools {
   private final Clock clock;
 
   /** 作業中集合。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Updates the same run working set used by the rest of the tool pipeline.")
   private final WorkingSet workingSet;
 
   /** 直近変更一覧。 */
@@ -744,9 +752,17 @@ public class Tools {
   private final FileSummaryCache fileSummaryCache;
 
   /** 検索結果キャッシュ。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Clears the current run's shared search result cache when its state changes.")
   private final SearchResultCache searchResultCache;
 
   /** 関連ファイル関連図。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Updates the same graph that supplies related-file context for a run.")
   private final RelatedFileGraph relatedFileGraph;
 
   /** 実行状況の通知を生成する窓口。 */

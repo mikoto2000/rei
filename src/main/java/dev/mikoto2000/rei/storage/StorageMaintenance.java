@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.storage;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -47,6 +49,10 @@ public final class StorageMaintenance {
   public record Checkpoint(int busy, long logFrames, long checkpointedFrames) {}
 
   /** 登録台帳。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Coordinates maintenance against the same durable object and reference registry.")
   private final StorageObjectRegistry registry;
 
   /** 指定された値や利用先を使って、StorageMaintenanceを初期化する。 */
