@@ -278,14 +278,18 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
     if (lock != null) {
       try {
         lock.release();
-      } catch (Exception ignored) {
+      } catch (Exception failure) {
+        org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class)
+            .debug("Slack lock release failed ({})", failure.getClass().getSimpleName());
       }
       lock = null;
     }
     if (lockFile != null) {
       try {
         lockFile.close();
-      } catch (Exception ignored) {
+      } catch (Exception failure) {
+        org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class)
+            .debug("Slack lock file close failed ({})", failure.getClass().getSimpleName());
       }
       lockFile = null;
     }
