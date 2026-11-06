@@ -21,6 +21,10 @@ public final class TimingController {
   private final TimingRecorder recorder;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared project registry so lookups use the same registered projects.")
   private final ProjectRegistry projects;
 
   /** 会話一覧。 */

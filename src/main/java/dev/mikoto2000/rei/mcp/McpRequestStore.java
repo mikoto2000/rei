@@ -74,6 +74,10 @@ public final class McpRequestStore {
   private McpCompletionEvidence evidence = new McpCompletionEvidence(null, null, null);
 
   /** 再開用の記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared checkpoint state for run lookups and transitions.")
   private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints;
 
   /** MCPによる機能の提供で使用する根拠を設定する。 */

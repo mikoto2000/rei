@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.session.SessionQueryService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,6 +27,10 @@ public class SessionController {
   private dev.mikoto2000.rei.application.session.SessionLifecycle lifecycle;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared project registry so lookups use the same registered projects.")
   private dev.mikoto2000.rei.core.project.ProjectRegistry projects;
 
   /** Web APIによる操作で使用するプロジェクト一覧を設定する。 */

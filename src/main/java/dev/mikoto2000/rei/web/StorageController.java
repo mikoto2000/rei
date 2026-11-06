@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.command.StorageCommand;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -31,6 +33,10 @@ public final class StorageController {
   private final StorageCommand storage;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared project registry so lookups use the same registered projects.")
   private final ProjectRegistry projects;
 
   /**

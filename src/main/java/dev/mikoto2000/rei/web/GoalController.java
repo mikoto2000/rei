@@ -47,6 +47,10 @@ public class GoalController {
   }
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared project registry so lookups use the same registered projects.")
   private dev.mikoto2000.rei.core.project.ProjectRegistry projects;
 
   /** 会話一覧。 */

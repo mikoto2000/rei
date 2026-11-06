@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.dot;
 import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
@@ -50,12 +52,20 @@ public class DotDelegationService {
   }
 
   /** 実行環境実行一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared run registry so operations see the same lifecycle state.")
   private dev.mikoto2000.rei.application.run.RunRegistry runtimeRuns;
 
   /** 依存条件一覧。 */
   private dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies;
 
   /** 再開用の記録保存と検索の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared checkpoint state for run lookups and transitions.")
   private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpointRepository;
 
   /** 判断基準。 */

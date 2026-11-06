@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.project.ProjectQueryService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -20,6 +22,10 @@ public class ProjectController {
   private final ProjectQueryService projects;
 
   /** 登録台帳。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared project registry so lookups use the same registered projects.")
   private dev.mikoto2000.rei.core.project.ProjectRegistry registry;
 
   /** Web APIによる操作で使用する登録台帳を設定する。 */

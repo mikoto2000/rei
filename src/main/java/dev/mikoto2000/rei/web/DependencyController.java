@@ -32,6 +32,10 @@ public class DependencyController {
   private final DependencyObservationService observations;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared project registry so lookups use the same registered projects.")
   private final dev.mikoto2000.rei.core.project.ProjectRegistry projects;
 
   /** 利用条件の確認。 */

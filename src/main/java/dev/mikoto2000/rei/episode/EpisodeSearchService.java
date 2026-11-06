@@ -67,6 +67,10 @@ public class EpisodeSearchService {
   private final WorkContextService work;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared project selection and client session state.")
   private dev.mikoto2000.rei.core.project.ProjectService projects;
 
   /** トークン数の上限。 */

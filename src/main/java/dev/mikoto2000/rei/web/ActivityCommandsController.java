@@ -33,6 +33,10 @@ public final class ActivityCommandsController {
   private final ActivityCommand activity;
 
   /** 登録台帳。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared project registry so lookups use the same registered projects.")
   private final ProjectRegistry registry;
 
   /** プロジェクト一覧。 */
