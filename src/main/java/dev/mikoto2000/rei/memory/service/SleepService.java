@@ -56,6 +56,10 @@ public class SleepService {
   private MemoryEvents events;
 
   /** 経験の記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Runs pending processing through the shared episode sleep service.")
   private dev.mikoto2000.rei.episode.EpisodeSleepService episodes;
 
   /** 長期記憶の保存と検索で使用する経験の記録一覧を設定する。 */

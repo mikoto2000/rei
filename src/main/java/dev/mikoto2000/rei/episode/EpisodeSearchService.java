@@ -80,6 +80,10 @@ public class EpisodeSearchService {
   private boolean memoryEnabled = true;
 
   /** ベクトルによる。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Queries or updates the shared dense episode index.")
   private EpisodeDenseIndex dense;
 
   /** 過去の経験の活用で使用するベクトルによるを設定する。 */

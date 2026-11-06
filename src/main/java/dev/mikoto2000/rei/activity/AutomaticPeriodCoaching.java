@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.topic.AgentMessage;
 import dev.mikoto2000.rei.topic.AgentMessagePublisher;
 import dev.mikoto2000.rei.topic.MessageOrigin;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +24,10 @@ public final class AutomaticPeriodCoaching {
   private final ActivityProperties properties;
 
   /** 助言。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared coaching service for durable reservations and current status.")
   private final PeriodCoachingService coaching;
 
   /** 通知先。 */

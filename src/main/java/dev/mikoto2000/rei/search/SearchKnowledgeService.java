@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
 import dev.mikoto2000.rei.websearch.WebSearchContext;
 import dev.mikoto2000.rei.websearch.WebSearchOrchestrator;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -13,6 +15,10 @@ import org.springframework.stereotype.Service;
 public class SearchKnowledgeService {
 
   /** ベクトル文書サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Searches the shared document vector index.")
   private final VectorDocumentService vectorDocumentService;
 
   /** Web検索Orchestrator。 */

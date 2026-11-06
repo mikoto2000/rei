@@ -61,6 +61,10 @@ public class PersistentCheckpointService implements AutoCloseable {
   private final PersistentCheckpointRepository repository;
 
   /** 再開時の記録と現在の状態を照合する窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Checks the current state of durable checkpoints through the shared reconciler.")
   private final CheckpointReconciler reconciler;
 
   /** 設定。 */

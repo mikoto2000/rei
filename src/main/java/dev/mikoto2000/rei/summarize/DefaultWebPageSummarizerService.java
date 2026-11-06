@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.summarize;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +22,10 @@ public class DefaultWebPageSummarizerService implements WebPageSummarizerService
   private final SummarizationClient summarizationClient;
 
   /** 会話履歴。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Appends user and assistant messages to the current conversation history.")
   private final ConversationHistoryAppender conversationHistory;
 
   /** 指定された値や利用先を使って、DefaultWebPageSummarizerServiceを初期化する。 */

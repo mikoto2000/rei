@@ -55,6 +55,10 @@ public class SleepCommand implements Callable<Integer> {
   private final CommandCancellationService cancellation;
 
   /** 自動。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared coordinator for pending sleep runs and status.")
   private dev.mikoto2000.rei.memory.service.AutoSleepService auto;
 
   /** 長期記憶の活用で使用する自動を設定する。 */

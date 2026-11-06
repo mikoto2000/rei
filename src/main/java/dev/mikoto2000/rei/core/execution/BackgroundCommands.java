@@ -49,6 +49,10 @@ public class BackgroundCommands {
   private final WebPageSummarizerService summaries;
 
   /** 画像一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Dispatches requests through the shared image generation service.")
   private final ImageGenerationService images;
 
   /** イベント一覧。 */

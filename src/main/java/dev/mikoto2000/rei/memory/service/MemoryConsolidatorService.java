@@ -15,6 +15,8 @@ import dev.mikoto2000.rei.memory.model.Memory;
 import dev.mikoto2000.rei.memory.model.MemoryScope;
 import dev.mikoto2000.rei.memory.model.MemoryStatus;
 import dev.mikoto2000.rei.memory.model.MemoryType;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -34,6 +36,10 @@ import org.springframework.stereotype.Service;
 public class MemoryConsolidatorService {
 
   /** モデルへ対話を依頼する窓口提供元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Creates chat clients through the shared provider and its current configuration.")
   private final LlmChatClientProvider chatClientProvider;
 
   /** データベースへの接続クライアント。 */

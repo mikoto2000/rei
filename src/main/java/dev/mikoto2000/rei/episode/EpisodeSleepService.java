@@ -27,6 +27,10 @@ public class EpisodeSleepService {
   private final ConversationTurnStore turns;
 
   /** 記録された経験を整理する処理の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Processes pending episodes through the shared processor.")
   private final EpisodeProcessor processor;
 
   /** この機能の動作設定。 */
@@ -36,6 +40,10 @@ public class EpisodeSleepService {
   private final MemoryProperties memory;
 
   /** ベクトルによる。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Queries or updates the shared dense episode index.")
   private EpisodeDenseIndex dense;
 
   /** 過去の経験の活用で使用するベクトルによるを設定する。 */

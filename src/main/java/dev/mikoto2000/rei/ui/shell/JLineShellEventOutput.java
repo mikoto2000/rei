@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.ui.shell;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.PrintWriter;
 import org.jline.reader.LineReader;
 
@@ -10,6 +12,10 @@ import org.jline.reader.LineReader;
  */
 public final class JLineShellEventOutput implements ShellEventOutput {
   /** 読み取り元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the live JLine reader for the current terminal session.")
   private final LineReader reader;
 
   /** 書き込み先。 */
@@ -19,6 +25,10 @@ public final class JLineShellEventOutput implements ShellEventOutput {
   private final StringBuilder pending = new StringBuilder();
 
   /** 承認操作の選択肢。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Offers approvals through the same live shell menu.")
   private dev.mikoto2000.rei.core.completion.ApprovalActionMenu approvalMenu;
 
   /** ターミナルでの対話で使用する承認操作の選択肢を設定する。 */

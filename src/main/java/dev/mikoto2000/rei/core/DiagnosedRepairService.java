@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.service.SystemShellService;
 import dev.mikoto2000.rei.event.CredentialRedactor;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -111,6 +113,10 @@ public final class DiagnosedRepairService {
   private final TransactionTemplate transaction;
 
   /** 変更一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Operates on the shared change proposal lifecycle and its receipts.")
   private final TextChangeSetService changes;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
