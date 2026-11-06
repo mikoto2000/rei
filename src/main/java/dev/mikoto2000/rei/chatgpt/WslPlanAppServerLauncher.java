@@ -97,7 +97,7 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
     } catch (ChatGptException e) {
       remove(home);
       throw e;
-    } catch (Exception e) {
+    } catch (IOException | InterruptedException | RuntimeException e) {
       remove(home);
       throw ChatGptException.of(ROUTE_UNAVAILABLE);
     }
