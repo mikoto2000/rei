@@ -5,6 +5,8 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.ErrorInformation;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.event.SkillCandidatesEvaluatedPayload;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -127,6 +129,10 @@ public class AgentSkillAdvisor implements BaseAdvisor {
 
   /** スキルの利用の本処理へ渡す文脈を準備する。 */
   @Override
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Records skill-routing failure details and propagates the original failure.")
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     Prompt prompt = request.prompt();
     dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);

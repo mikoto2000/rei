@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.skills;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -45,6 +47,10 @@ public final class SkillEmbeddingClient implements SkillMetadataEmbedding, AutoC
 
   /** スキルの利用で用いる埋め込み表現の生成を返す。 */
   @Override
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original unchecked failure from the embedding future.")
   public List<float[]> embed(List<String> texts) {
     var budget = dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
     var future =

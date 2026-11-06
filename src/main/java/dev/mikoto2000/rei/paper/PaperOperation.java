@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.paper;
 
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -60,6 +62,10 @@ public record PaperOperation(String sessionId, RunExecutionContext execution, lo
   }
 
   /** 必要な状態が整ってから先へ進むため、論文操作を待つ。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves unchecked provider failures and operation control signals from the future.")
   public <T> T await(CompletableFuture<T> future, java.time.Duration timeout) {
     long deadline = Math.min(deadlineNanos, System.nanoTime() + timeout.toNanos());
     try {
