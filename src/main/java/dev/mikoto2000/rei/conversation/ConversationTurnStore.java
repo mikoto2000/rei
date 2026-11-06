@@ -25,9 +25,14 @@ import java.util.UUID;
  * <p>Conversation lifecycle metadata, independent of the bounded chat memory window.
  */
 public class ConversationTurnStore implements ConversationHistory {
+  /** 会話履歴の読み書きを直列化するロック。 */
+  private final Object turnLock = new Object();
+
   /** 会話履歴と受付記録の管理で用いる一回のやり取り件数を返す。 */
-  public synchronized long turnCount(String conversation) {
-    return read(conversation).size();
+  public long turnCount(String conversation) {
+    synchronized (turnLock) {
+      return read(conversation).size();
+    }
   }
 
   /**
@@ -36,15 +41,19 @@ public class ConversationTurnStore implements ConversationHistory {
    * <p>Ordinal range for bounded background processing; SQLite overrides without reading earlier
    * turns.
    */
-  public synchronized List<Turn> readRange(String conversation, long from, int limit) {
-    if (from < 0 || limit < 1 || limit > 100)
-      throw new IllegalArgumentException("Invalid turn range");
-    return read(conversation).stream().skip(from).limit(limit).toList();
+  public List<Turn> readRange(String conversation, long from, int limit) {
+    synchronized (turnLock) {
+      if (from < 0 || limit < 1 || limit > 100)
+        throw new IllegalArgumentException("Invalid turn range");
+      return read(conversation).stream().skip(from).limit(limit).toList();
+    }
   }
 
   /** 対象を特定できるよう、実行を探す。 */
-  public synchronized Optional<Turn> findRun(String conversation, String run) {
-    return read(conversation).stream().filter(t -> t.runId().equals(run)).findFirst();
+  public Optional<Turn> findRun(String conversation, String run) {
+    synchronized (turnLock) {
+      return read(conversation).stream().filter(t -> t.runId().equals(run)).findFirst();
+    }
   }
 
   /** 会話履歴と受付記録の管理における状態の選択肢。 */
@@ -97,24 +106,26 @@ public class ConversationTurnStore implements ConversationHistory {
   }
 
   /** 既存の記録へ経緯を残すため、アシスタント通知を追記する。 */
-  public synchronized void appendAssistantNotification(ConversationLogEntry entry) {
-    var rows = new ArrayList<>(read(entry.conversationId()));
-    if (rows.stream()
-        .anyMatch(
-            t ->
-                ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(t.source())
-                    && entry.sourceId().equals(t.sourceId()))) return;
-    rows.add(
-        new Turn(
-            "behavior:" + entry.sourceId(),
-            "",
-            Status.COMPLETED,
-            entry.content(),
-            entry.timestamp().toInstant(),
-            entry.source(),
-            entry.sourceId(),
-            entry.metadata()));
-    save(entry.conversationId(), rows);
+  public void appendAssistantNotification(ConversationLogEntry entry) {
+    synchronized (turnLock) {
+      var rows = new ArrayList<>(read(entry.conversationId()));
+      if (rows.stream()
+          .anyMatch(
+              t ->
+                  ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(t.source())
+                      && entry.sourceId().equals(t.sourceId()))) return;
+      rows.add(
+          new Turn(
+              "behavior:" + entry.sourceId(),
+              "",
+              Status.COMPLETED,
+              entry.content(),
+              entry.timestamp().toInstant(),
+              entry.source(),
+              entry.sourceId(),
+              entry.metadata()));
+      save(entry.conversationId(), rows);
+    }
   }
 
   /** 基準。 */
@@ -143,8 +154,10 @@ public class ConversationTurnStore implements ConversationHistory {
   }
 
   /** 要求された処理を開始する。 */
-  public synchronized void start(AgentRunContext context, String request) {
-    start(context, request, java.time.Instant.now());
+  public void start(AgentRunContext context, String request) {
+    synchronized (turnLock) {
+      start(context, request, java.time.Instant.now());
+    }
   }
 
   /**
@@ -153,68 +166,78 @@ public class ConversationTurnStore implements ConversationHistory {
    * <p>Execution starts are serialized by the project queue. Preserve that order even on clock
    * ties/rollback.
    */
-  public synchronized void startOrdered(
+  public void startOrdered(
       AgentRunContext context, String request, java.time.Instant observedAt) {
-    var last =
-        read(context.conversationId()).stream()
-            .map(Turn::createdAt)
-            .filter(Objects::nonNull)
-            .max(Comparator.naturalOrder());
-    var createdAt =
-        last.isPresent() && !observedAt.isAfter(last.get()) ? last.get().plusNanos(1) : observedAt;
-    start(context, request, createdAt);
+    synchronized (turnLock) {
+      var last =
+          read(context.conversationId()).stream()
+              .map(Turn::createdAt)
+              .filter(Objects::nonNull)
+              .max(Comparator.naturalOrder());
+      var createdAt =
+          last.isPresent() && !observedAt.isAfter(last.get()) ? last.get().plusNanos(1) : observedAt;
+      start(context, request, createdAt);
+    }
   }
 
   /** 要求された処理を開始する。 */
-  public synchronized void start(
+  public void start(
       AgentRunContext context, String request, java.time.Instant createdAt) {
-    var turns = new ArrayList<>(read(context.conversationId()));
-    turns.add(new Turn(context.runId(), request, Status.RUNNING, null, createdAt));
-    save(context.conversationId(), turns);
+    synchronized (turnLock) {
+      var turns = new ArrayList<>(read(context.conversationId()));
+      turns.add(new Turn(context.runId(), request, Status.RUNNING, null, createdAt));
+      save(context.conversationId(), turns);
+    }
   }
 
   /** 終了時に必要な状態を反映し、処理を完了させる。 */
-  public synchronized void finish(AgentRunContext context, Status status) {
-    finish(context, status, null);
+  public void finish(AgentRunContext context, Status status) {
+    synchronized (turnLock) {
+      finish(context, status, null);
+    }
   }
 
   /** 終了時に必要な状態を反映し、処理を完了させる。 */
-  public synchronized void finish(AgentRunContext context, Status status, String assistantMessage) {
-    if (status == Status.RUNNING)
-      throw new IllegalArgumentException("Expected a terminal turn status");
-    if (read(context.conversationId()).stream()
-        .noneMatch(t -> t.runId().equals(context.runId()) && t.status() == Status.RUNNING)) return;
-    var turns =
-        read(context.conversationId()).stream()
-            .map(
-                turn ->
-                    turn.runId().equals(context.runId()) && turn.status() == Status.RUNNING
-                        ? new Turn(
-                            turn.runId(),
-                            turn.request(),
-                            status,
-                            assistantMessage,
-                            turn.createdAt(),
-                            turn.source(),
-                            turn.sourceId(),
-                            turn.metadata())
-                        : turn)
-            .toList();
-    save(context.conversationId(), turns);
+  public void finish(AgentRunContext context, Status status, String assistantMessage) {
+    synchronized (turnLock) {
+      if (status == Status.RUNNING)
+        throw new IllegalArgumentException("Expected a terminal turn status");
+      if (read(context.conversationId()).stream()
+          .noneMatch(t -> t.runId().equals(context.runId()) && t.status() == Status.RUNNING)) return;
+      var turns =
+          read(context.conversationId()).stream()
+              .map(
+                  turn ->
+                      turn.runId().equals(context.runId()) && turn.status() == Status.RUNNING
+                          ? new Turn(
+                              turn.runId(),
+                              turn.request(),
+                              status,
+                              assistantMessage,
+                              turn.createdAt(),
+                              turn.source(),
+                              turn.sourceId(),
+                              turn.metadata())
+                          : turn)
+              .toList();
+      save(context.conversationId(), turns);
+    }
   }
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
-  public synchronized List<Turn> read(String conversationId) {
-    return conversations.computeIfAbsent(
-        conversationId,
-        id -> {
-          if (base == null || !Files.exists(file(id))) return List.of();
-          try {
-            return List.of(mapper.readValue(Files.readString(file(id)), Turn[].class));
-          } catch (java.io.IOException error) {
-            throw new IllegalStateException("Cannot read conversation turns", error);
-          }
-        });
+  public List<Turn> read(String conversationId) {
+    synchronized (turnLock) {
+      return conversations.computeIfAbsent(
+          conversationId,
+          id -> {
+            if (base == null || !Files.exists(file(id))) return List.of();
+            try {
+              return List.of(mapper.readValue(Files.readString(file(id)), Turn[].class));
+            } catch (java.io.IOException error) {
+              throw new IllegalStateException("Cannot read conversation turns", error);
+            }
+          });
+    }
   }
 
   /**
@@ -222,70 +245,76 @@ public class ConversationTurnStore implements ConversationHistory {
    *
    * <p>Optional observed work-time metadata, captured by the owner without changing turn identity.
    */
-  public synchronized void recordMetadata(AgentRunContext context, Map<String, String> metadata) {
-    var rows =
-        read(context.conversationId()).stream()
-            .map(
-                t -> {
-                  if (!t.runId().equals(context.runId())) return t;
-                  var combined = new HashMap<>(t.metadata());
-                  combined.putAll(metadata);
-                  return new Turn(
-                      t.runId(),
-                      t.request(),
-                      t.status(),
-                      t.assistantMessage(),
-                      t.createdAt(),
-                      t.source(),
-                      t.sourceId(),
-                      combined);
-                })
-            .toList();
-    save(context.conversationId(), rows);
+  public void recordMetadata(AgentRunContext context, Map<String, String> metadata) {
+    synchronized (turnLock) {
+      var rows =
+          read(context.conversationId()).stream()
+              .map(
+                  t -> {
+                    if (!t.runId().equals(context.runId())) return t;
+                    var combined = new HashMap<>(t.metadata());
+                    combined.putAll(metadata);
+                    return new Turn(
+                        t.runId(),
+                        t.request(),
+                        t.status(),
+                        t.assistantMessage(),
+                        t.createdAt(),
+                        t.source(),
+                        t.sourceId(),
+                        combined);
+                  })
+              .toList();
+      save(context.conversationId(), rows);
+    }
   }
 
   /** 対象を特定できるよう、やり取り一覧を探す。 */
   @Override
-  public synchronized List<SessionTurn> findTurns(
+  public List<SessionTurn> findTurns(
       String sessionId, CursorKey after, int fetchLimit) {
-    if (fetchLimit < 1 || fetchLimit > 101)
-      throw new IllegalArgumentException("Invalid fetch limit");
-    // Legacy lifecycle-only records have no timestamp; do not invent one or misassociate log
-    // messages.
-    return read(sessionId).stream()
-        .filter(turn -> turn.createdAt() != null)
-        .filter(
-            turn ->
-                after == null
-                    || turn.createdAt().isAfter(after.time())
-                    || turn.createdAt().equals(after.time())
-                        && turn.runId().compareTo(after.id()) > 0)
-        .sorted(Comparator.comparing(Turn::createdAt).thenComparing(Turn::runId))
-        .limit(fetchLimit)
-        .map(
-            turn ->
-                new SessionTurn(
-                    turn.runId(),
-                    turn.request(),
-                    turn.assistantMessage(),
-                    turn.createdAt(),
-                    turn.source(),
-                    turn.sourceId(),
-                    turn.metadata()))
-        .toList();
+    synchronized (turnLock) {
+      if (fetchLimit < 1 || fetchLimit > 101)
+        throw new IllegalArgumentException("Invalid fetch limit");
+      // Legacy lifecycle-only records have no timestamp; do not invent one or misassociate log
+      // messages.
+      return read(sessionId).stream()
+          .filter(turn -> turn.createdAt() != null)
+          .filter(
+              turn ->
+                  after == null
+                      || turn.createdAt().isAfter(after.time())
+                      || turn.createdAt().equals(after.time())
+                          && turn.runId().compareTo(after.id()) > 0)
+          .sorted(Comparator.comparing(Turn::createdAt).thenComparing(Turn::runId))
+          .limit(fetchLimit)
+          .map(
+              turn ->
+                  new SessionTurn(
+                      turn.runId(),
+                      turn.request(),
+                      turn.assistantMessage(),
+                      turn.createdAt(),
+                      turn.source(),
+                      turn.sourceId(),
+                      turn.metadata()))
+          .toList();
+    }
   }
 
   /** 会話履歴と受付記録の管理で用いるキャンセル済み文脈を返す。 */
-  public synchronized String cancelledContext(String conversationId) {
-    if (!hasCancelled(conversationId)) return "";
-    return """
-    Conversation lifecycle: CANCELLED task attempts are archived, not active work.
-    Respond to the current user input. Do not retrieve or resume archived tasks automatically.
-    Only if the user explicitly requests resumption or a retrospective, retrieve the original
-    conversation with getConversationHistory/searchConversationHistory and, when needed,
-    workContextGet. Check actual files and running processes before repeating an operation.
-    Historical records and side effects have been retained; cancellation did not undo them.
-    """;
+  public String cancelledContext(String conversationId) {
+    synchronized (turnLock) {
+      if (!hasCancelled(conversationId)) return "";
+      return """
+      Conversation lifecycle: CANCELLED task attempts are archived, not active work.
+      Respond to the current user input. Do not retrieve or resume archived tasks automatically.
+      Only if the user explicitly requests resumption or a retrospective, retrieve the original
+      conversation with getConversationHistory/searchConversationHistory and, when needed,
+      workContextGet. Check actual files and running processes before repeating an operation.
+      Historical records and side effects have been retained; cancellation did not undo them.
+      """;
+    }
   }
 
   protected boolean hasCancelled(String conversationId) {
