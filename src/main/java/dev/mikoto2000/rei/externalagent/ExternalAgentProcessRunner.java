@@ -79,14 +79,15 @@ public class ExternalAgentProcessRunner {
           readers.submit(() -> drain(running.getInputStream(), capture, false, activity));
       Future<?> stderr =
           readers.submit(() -> drain(running.getErrorStream(), capture, true, activity));
-      readers.submit(
-          () -> {
-            try (var writer = running.getOutputStream()) {
-              writer.write(input.getBytes(StandardCharsets.UTF_8));
-            } catch (IOException ignored) {
-              /* Process may exit without consuming stdin. */
-            }
-          });
+      Future<?> stdin =
+          readers.submit(
+              () -> {
+                try (var writer = running.getOutputStream()) {
+                  writer.write(input.getBytes(StandardCharsets.UTF_8));
+                } catch (IOException ignored) {
+                  /* Process may exit without consuming stdin. */
+                }
+              });
       while (true) {
         rememberDescendants(running, descendants);
         if (cancelled.getAsBoolean()) {
@@ -111,6 +112,7 @@ public class ExternalAgentProcessRunner {
       cleanup(running, descendants);
       stdout.get(2, TimeUnit.SECONDS);
       stderr.get(2, TimeUnit.SECONDS);
+      stdin.get(2, TimeUnit.SECONDS);
     } catch (InterruptedException error) {
       interrupted = true;
       status = Status.CANCELLED;
