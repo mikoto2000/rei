@@ -131,7 +131,8 @@ public final class ActionParser {
   /** 画面操作の支援で用いる対象を返す。 */
   private static Target target(JsonNode node, CapturedScreen screen) {
     JsonNode value = node.get("target");
-    boolean legacy = screen.displays().size() == 1 && value != null && !value.has("displayId");
+    if (value == null) throw new InvalidComputerDecision("Expected object");
+    boolean legacy = screen.displays().size() == 1 && !value.has("displayId");
     fields(
         value,
         legacy

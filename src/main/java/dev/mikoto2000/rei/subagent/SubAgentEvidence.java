@@ -51,13 +51,14 @@ final class SubAgentEvidence {
 
   /** 後から状況を確認できるよう、補助エージェント根拠を記録する。 */
   synchronized String capture(String tool, String input, String output) {
+    if (input == null) throw new IllegalArgumentException("Evidence capture requires tool input");
     if (observations.size() >= 64 || output == null)
       throw new IllegalStateException("Evidence capture limit or invalid tool output");
     String id = UUID.randomUUID().toString();
     String retained = output.substring(0, Math.min(16384, output.length()));
     String hash = hash(output);
     JsonNode arguments = null;
-    if (input != null && input.length() <= 16384)
+    if (input.length() <= 16384)
       try {
         arguments = new SubAgentResultParser().parse(input);
       } catch (RuntimeException invalid) {

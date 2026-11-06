@@ -171,9 +171,11 @@ public final class DailySummaryAggregator {
             "[summary-trace] raw-themes project={} category={} topics={}",
             raw,
             category,
-            WorkThemeAggregation.topics(primary, s.record()).stream()
-                .map(WorkThemeAggregation.Candidate::theme)
-                .toList());
+            primary == null
+                ? List.of()
+                : WorkThemeAggregation.topics(primary, s.record()).stream()
+                    .map(WorkThemeAggregation.Candidate::theme)
+                    .toList());
         log.debug(
             "[summary-trace] canonical-themes project={} aliasHit={} groupIds={}",
             project,
