@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.dot;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -57,7 +58,7 @@ public final class DotMcpTools {
       return Base64.getUrlEncoder()
           .withoutPadding()
           .encodeToString(mac.doFinal(text.getBytes(StandardCharsets.UTF_8)));
-    } catch (Exception e) {
+    } catch (GeneralSecurityException | RuntimeException e) {
       throw new IllegalStateException("Cursor signing failed");
     }
   }

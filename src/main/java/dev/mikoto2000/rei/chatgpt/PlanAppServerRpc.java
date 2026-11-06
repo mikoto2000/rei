@@ -10,6 +10,7 @@ import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TIMEOUT;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TRANSPORT;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.USAGE_LIMIT;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -405,12 +406,12 @@ public final class PlanAppServerRpc {
               if (pendingRefusal != null) send(pendingRefusal);
               return outcome(PlanSseAssembler.State.FAILED, "", e.code());
             }
-          } catch (Exception interrupted) {
+          } catch (JsonProcessingException | RuntimeException interrupted) {
             break;
           }
       }
       return outcome(PlanSseAssembler.State.OUTCOME_UNKNOWN, "", e.code());
-    } catch (Exception e) {
+    } catch (JsonProcessingException | RuntimeException e) {
       if (!dispatched) throw ChatGptException.of(PROTOCOL);
       interrupt();
       return outcome(PlanSseAssembler.State.OUTCOME_UNKNOWN, "", PROTOCOL);
@@ -468,7 +469,7 @@ public final class PlanAppServerRpc {
       var n = json.readTree(line);
       if (n == null || !n.isObject()) throw new IllegalArgumentException();
       return n;
-    } catch (Exception e) {
+    } catch (JsonProcessingException | RuntimeException e) {
       throw ChatGptException.of(PROTOCOL);
     }
   }

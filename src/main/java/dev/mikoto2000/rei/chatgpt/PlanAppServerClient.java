@@ -6,6 +6,7 @@ import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.PROTOCOL;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.SEND_LIMIT;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TIMEOUT;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
@@ -192,7 +193,7 @@ public final class PlanAppServerClient implements PlanInference {
       nativeInput.set(0, new PlanClient.Input("user", json.writeValueAsString(task)));
     } catch (ChatGptException e) {
       throw e;
-    } catch (Exception e) {
+    } catch (JsonProcessingException | RuntimeException e) {
       throw ChatGptException.of(PROTOCOL);
     }
     if (cancelled.getAsBoolean()) throw ChatGptException.of(CANCELLED);

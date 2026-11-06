@@ -13,6 +13,7 @@ import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.values;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
@@ -169,7 +170,7 @@ public final class PlanClient implements PlanInference {
       try {
         node = json.readTree(bytes);
         if (node == null || !node.path("models").isArray()) throw new IllegalArgumentException();
-      } catch (Exception invalid) {
+      } catch (IOException | RuntimeException invalid) {
         throw failure(PROTOCOL, response, "models", bytes.length, MODEL_CATALOG_LIMIT_BYTES);
       }
       var values = new ArrayList<Model>();
@@ -189,7 +190,7 @@ public final class PlanClient implements PlanInference {
       return result;
     } catch (ChatGptException e) {
       throw e;
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       throw ChatGptException.of(PROTOCOL);
     }
   }

@@ -180,7 +180,7 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
     } catch (InterruptedException interrupted) {
       // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
-    } catch (Exception ignored) {
+    } catch (IOException | RuntimeException ignored) {
     }
   }
 

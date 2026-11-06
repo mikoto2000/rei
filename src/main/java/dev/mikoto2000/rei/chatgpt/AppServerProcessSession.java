@@ -62,7 +62,7 @@ final class AppServerProcessSession implements PlanAppServerRpc.Session {
                 if (line.size() > 0
                     && !lines.offer(line.toString(StandardCharsets.UTF_8), 1, TimeUnit.SECONDS))
                   throw new IOException();
-              } catch (Exception ignored) {
+              } catch (IOException | InterruptedException | RuntimeException ignored) {
                 process.destroyForcibly();
               } finally {
                 while (!lines.offer(EOF)) {
@@ -137,7 +137,7 @@ final class AppServerProcessSession implements PlanAppServerRpc.Session {
       interrupted = true;
       kill.run();
       process.destroyForcibly();
-    } catch (Exception ignored) {
+    } catch (IOException | RuntimeException ignored) {
       kill.run();
       process.destroyForcibly();
     } finally {
