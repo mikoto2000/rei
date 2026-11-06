@@ -1255,10 +1255,10 @@ public class ChatExecutionService {
               .subscribe(
                   response -> {
                     try (var scope = AgentRunScope.open(execution.runContext())) {
-                      if (response.getResult() != null
-                          && response.getResult().getMetadata() != null
-                          && response.getResult().getMetadata().getFinishReason() != null
-                          && !response.getResult().getMetadata().getFinishReason().isBlank()) {
+                      var generation = response.getResult();
+                      var metadata = generation == null ? null : generation.getMetadata();
+                      var finishReason = metadata == null ? null : metadata.getFinishReason();
+                      if (finishReason != null && !finishReason.isBlank()) {
                         outputLimitReached.set(OutputLimitDetector.isOutputLimitReached(response));
                       }
                       captureCompletionTokens(response, completionTokens);

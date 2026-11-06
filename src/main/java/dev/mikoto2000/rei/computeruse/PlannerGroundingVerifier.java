@@ -331,7 +331,10 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
           stage + " reached output token limit (finish_reason=length); task stopped without retry");
     if (response == null || response.getResults().size() != 1 || response.hasToolCalls())
       throw new InvalidComputerDecision("Invalid " + stage + " response");
-    return response.getResult().getOutput().getText();
+    var generation = response.getResult();
+    var output = generation == null ? null : generation.getOutput();
+    if (output == null) throw new InvalidComputerDecision("Invalid " + stage + " response");
+    return output.getText();
   }
 
   /** 種別一覧。 */

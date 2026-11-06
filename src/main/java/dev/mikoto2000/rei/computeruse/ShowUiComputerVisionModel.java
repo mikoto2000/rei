@@ -270,7 +270,11 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
         || response.hasToolCalls()
         || dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
       throw new InvalidComputerDecision("Invalid or truncated " + protocol.id + " response");
-    return protocol.parse(response.getResult().getOutput().getText());
+    var generation = response.getResult();
+    var output = generation == null ? null : generation.getOutput();
+    if (output == null)
+      throw new InvalidComputerDecision("Missing " + protocol.id + " response body");
+    return protocol.parse(output.getText());
   }
 
   /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */

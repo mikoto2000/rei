@@ -131,10 +131,9 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
       var usage = response == null ? null : response.getMetadata().getUsage();
       budget.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
     }
-    String content =
-        response == null || response.getResult() == null
-            ? ""
-            : response.getResult().getOutput().getText();
+    var generation = response == null ? null : response.getResult();
+    var output = generation == null ? null : generation.getOutput();
+    String content = output == null ? "" : output.getText();
     return resolveSelectedSkills(parseJsonStringArray(content), candidates);
   }
 

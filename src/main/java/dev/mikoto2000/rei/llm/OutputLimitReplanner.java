@@ -81,7 +81,10 @@ public class OutputLimitReplanner {
       usageRecorder.accept(usage == null ? null : usage.getTotalTokens());
     }
     Objects.requireNonNull(response, "Replan model returned no response");
-    String text = response.getResult().getOutput().getText();
+    var generation = response.getResult();
+    var output = generation == null ? null : generation.getOutput();
+    if (output == null) throw new IllegalStateException("Replan model returned no output");
+    String text = output.getText();
     OutputLimitReplanPlan plan =
         parser.parse(text, properties.getOutputLimit().getMaxSubgoalsPerReplan());
     log.info("Output limit replan planner completed: subgoals={}", plan.subgoals().size());

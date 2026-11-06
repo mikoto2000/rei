@@ -30,13 +30,10 @@ public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
         new Prompt(
             buildPrompt(userRequest),
             modelProvider.chatOptions(LlmFeature.IMAGE_PROMPT, modelHolderService.get()));
-    String content =
-        modelProvider
-            .chatModel(LlmFeature.IMAGE_PROMPT)
-            .call(prompt)
-            .getResult()
-            .getOutput()
-            .getText();
+    var response = modelProvider.chatModel(LlmFeature.IMAGE_PROMPT).call(prompt);
+    var generation = response == null ? null : response.getResult();
+    var output = generation == null ? null : generation.getOutput();
+    String content = output == null ? null : output.getText();
     if (content == null || content.isBlank()) {
       throw new IllegalStateException("画像生成プロンプト生成結果が空です");
     }

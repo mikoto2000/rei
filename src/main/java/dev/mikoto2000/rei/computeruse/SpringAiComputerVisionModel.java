@@ -282,7 +282,10 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
       try {
         if (response == null || response.getResults().size() != 1 || response.hasToolCalls())
           throw new InvalidComputerDecision("Expected one non-tool decision");
-        return parser.parse(response.getResult().getOutput().getText(), screen);
+        var generation = response.getResult();
+        var output = generation == null ? null : generation.getOutput();
+        if (output == null) throw new InvalidComputerDecision("Expected one non-tool decision");
+        return parser.parse(output.getText(), screen);
       } catch (InvalidComputerDecision invalid) {
         log.error(
             "Computer Use invalid decision: step={}, attempt={}",

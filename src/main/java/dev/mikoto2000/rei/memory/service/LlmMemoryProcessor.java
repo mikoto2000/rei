@@ -175,9 +175,10 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
                     if (Thread.currentThread().isInterrupted())
                       throw new java.util.concurrent.CancellationException();
                     if (OutputLimitDetector.isOutputLimitReached(response)) outputLimited.set(true);
-                    if (response.getResult() != null
-                        && response.getResult().getOutput().getText() != null)
-                      result.append(response.getResult().getOutput().getText());
+                    var generation = response.getResult();
+                    var output = generation == null ? null : generation.getOutput();
+                    var text = output == null ? null : output.getText();
+                    if (text != null) result.append(text);
                     if (result.length()
                         > dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS)
                       throw new AutoSleepExecution.Failure("OUTPUT_INVALID", null);

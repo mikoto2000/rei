@@ -38,12 +38,9 @@ public class LlmSummarizationClient implements SummarizationClient {
                 modelProvider.chatOptions(
                     LlmFeature.WEB_PAGE_SUMMARY, modelHolderService.get(), false)));
     Generation generation = response == null ? null : response.getResult();
-    if (generation == null
-        || generation.getOutput() == null
-        || generation.getOutput().getText() == null) {
-      return "";
-    }
-    return generation.getOutput().getText().strip();
+    var output = generation == null ? null : generation.getOutput();
+    var text = output == null ? null : output.getText();
+    return text == null ? "" : text.strip();
   }
 
   /** 利用先に渡せるよう、プロンプトを組み立てる。 */

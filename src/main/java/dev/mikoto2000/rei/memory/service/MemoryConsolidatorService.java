@@ -249,11 +249,9 @@ public class MemoryConsolidatorService {
       Integer tokens = usage == null ? null : usage.getTotalTokens();
       reported = true;
       budget.recordTotalTokens(tokens);
-      return response == null
-              || response.getResult() == null
-              || response.getResult().getOutput() == null
-          ? null
-          : response.getResult().getOutput().getText();
+      var generation = response == null ? null : response.getResult();
+      var output = generation == null ? null : generation.getOutput();
+      return output == null ? null : output.getText();
     } catch (RuntimeException error) {
       RunCancellation.propagate(error);
       if (error instanceof ExecutionStoppedException) throw error;
