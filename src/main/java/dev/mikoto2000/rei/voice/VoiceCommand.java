@@ -33,6 +33,10 @@ public class VoiceCommand {
   private final AudioDeviceService devices;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads and updates the shared voice settings when handling user configuration commands.")
   private final VoiceProperties properties;
 
   /** シェル。 */

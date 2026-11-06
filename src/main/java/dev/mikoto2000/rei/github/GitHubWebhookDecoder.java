@@ -6,6 +6,8 @@ import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -29,6 +31,10 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class GitHubWebhookDecoder {
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared webhook security and delivery policy for incoming requests.")
   private final GitHubWebhookProperties properties;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */

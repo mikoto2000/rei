@@ -34,6 +34,10 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
  */
 public final class SlackAgentService implements RunContinuation {
   /** 設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared Slack agent settings for admission and tool operations.")
   private final SlackAgentProperties settings;
 
   /** 要求一覧。 */

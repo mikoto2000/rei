@@ -34,6 +34,10 @@ public class ContextAssembler {
       org.slf4j.LoggerFactory.getLogger(ContextAssembler.class);
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the configured context limits when assembling each request.")
   private final ContextCompressionProperties properties;
 
   /** 概算。 */

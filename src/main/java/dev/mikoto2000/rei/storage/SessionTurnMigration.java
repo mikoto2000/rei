@@ -11,7 +11,9 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.UUID;
@@ -26,7 +28,7 @@ final class SessionTurnMigration {
   private SessionTurnMigration() {}
 
   /** 指定された内容を、現在の対象へ反映する。 */
-  static void apply(Connection connection, Path root) throws Exception {
+  static void apply(Connection connection, Path root) throws IOException, NoSuchAlgorithmException, SQLException {
     try (var schema = connection.createStatement()) {
       schema.execute(
           "CREATE TABLE sessions(session_id TEXT PRIMARY KEY,project_id TEXT NOT NULL,created_seconds INTEGER NOT NULL,created_nanos INTEGER NOT NULL,updated_seconds INTEGER NOT NULL,updated_nanos INTEGER NOT NULL,updated_sort_seconds INTEGER GENERATED ALWAYS AS (-updated_seconds) STORED,updated_sort_nanos INTEGER GENERATED ALWAYS AS (-updated_nanos) STORED,id_order BLOB NOT NULL,record TEXT NOT NULL,revision INTEGER NOT NULL,import_order INTEGER UNIQUE)");
@@ -72,7 +74,7 @@ final class SessionTurnMigration {
 
   /** データ保存の共通処理に関するやり取り一覧を処理する。 */
   private static void turns(Connection connection, Path root, Path directory, String scope)
-      throws Exception {
+      throws IOException, NoSuchAlgorithmException, SQLException {
     StorageBackup.requireSafePath(directory);
     if (Files.notExists(directory, LinkOption.NOFOLLOW_LINKS)) return;
     try (var files = Files.newDirectoryStream(directory)) {
@@ -128,7 +130,7 @@ final class SessionTurnMigration {
   @FunctionalInterface
   private interface RowWriter<T> {
     /** 指定された内容を書き込み先へ反映する。 */
-    void write(T row, long ordinal) throws Exception;
+    void write(T row, long ordinal) throws IOException, SQLException;
   }
 
   /** データ保存の共通処理に関する取り込みファイルを処理する。 */
@@ -141,7 +143,7 @@ final class SessionTurnMigration {
       String verification,
       String scope,
       String key)
-      throws Exception {
+      throws IOException, NoSuchAlgorithmException, SQLException {
     StorageBackup.requireSafePath(source);
     String sourceHash = StorageBackup.hash(source);
     long count = 0;

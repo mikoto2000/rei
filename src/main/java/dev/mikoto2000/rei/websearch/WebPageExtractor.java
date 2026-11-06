@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.websearch;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
@@ -10,6 +12,10 @@ import org.springframework.stereotype.Component;
 public class WebPageExtractor {
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the current shared search provider, extraction, and request policy.")
   private final WebSearchProperties properties;
 
   /** Web上の情報の調査を利用するため、指定を補って共通の初期化へ引き渡す。 */
