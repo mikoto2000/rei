@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.computeruse;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
@@ -280,7 +282,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
   }
 
   /** 画面操作の支援で用いるPNG画像を返す。 */
-  private static byte[] png(BufferedImage image) throws Exception {
+  private static byte[] png(BufferedImage image) throws IOException {
     var bytes = new ByteArrayOutputStream();
     if (!ImageIO.write(image, "png", bytes))
       throw new IllegalStateException("PNG encoder unavailable");
@@ -342,7 +344,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
       Set.of("input", "button", "link", "text", "other", "unknown");
 
   /** 画面操作の支援で用いる厳格なJSON変換を返す。 */
-  private static com.fasterxml.jackson.databind.JsonNode strictJson(String text) throws Exception {
+  private static com.fasterxml.jackson.databind.JsonNode strictJson(String text) throws JsonProcessingException {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (text == null || text.length() > 4000) throw new IllegalArgumentException();
     return new com.fasterxml.jackson.databind.ObjectMapper()
@@ -369,7 +371,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
           || !n.get("certain").isBoolean()
           || !n.get("certain").booleanValue()) throw new IllegalArgumentException();
       return n;
-    } catch (Exception error) {
+    } catch (JsonProcessingException | RuntimeException error) {
       throw new InvalidComputerDecision("Uncertain or malformed point-description");
     }
   }
@@ -391,7 +393,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
       requireApproval(n.toString(), "point-verification");
     } catch (InvalidComputerDecision error) {
       throw error;
-    } catch (Exception error) {
+    } catch (JsonProcessingException | RuntimeException error) {
       throw new InvalidComputerDecision("Point target type mismatch or malformed verdict");
     }
   }

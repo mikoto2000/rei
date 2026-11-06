@@ -2,8 +2,10 @@ package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.json.JsonObjectSnapshot;
 import java.math.BigDecimal;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -217,7 +219,7 @@ public final class OperationalRules {
       lastStatus = "SUCCESS";
       log.info("Activity classification rules loaded/reloaded: rules={}", rules.size());
       return true;
-    } catch (Exception e) {
+    } catch (IOException | NoSuchAlgorithmException | RuntimeException e) {
       lastStatus = "FAILED (invalid or unreadable rules; previous rules retained)";
       log.warn("Activity classification rules reload failed; previous rules retained");
       return false;
@@ -235,13 +237,13 @@ public final class OperationalRules {
       return Files.exists(path)
           ? Files.size(path) > 262144 ? "oversize" : digest(Files.readAllBytes(path))
           : "missing";
-    } catch (Exception e) {
+    } catch (IOException | NoSuchAlgorithmException | RuntimeException e) {
       return "unreadable";
     }
   }
 
   /** 作業状況の把握で用いる内容の照合値を返す。 */
-  private static String digest(byte[] bytes) throws Exception {
+  private static String digest(byte[] bytes) throws NoSuchAlgorithmException {
     return HexFormat.of()
         .formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
   }
