@@ -31,7 +31,7 @@ class CrashConsistencyRecoveryTest {
 
   /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @ParameterizedTest
-  @ValueSource(strings = {"review", "repair", "notification", "single"})
+  @ValueSource(strings = {"review", "repair", "notification", "single", "document"})
   void hardKilledJvmLeavesUnknownWithoutReplayAndLiveProcessIsPreserved(String mode)
       throws Exception {
     Path root = Files.createDirectory(directory.resolve("project")),
@@ -87,6 +87,34 @@ class CrashConsistencyRecoveryTest {
                     state.receiptSha256(),
                     "/repair apply " + id + " " + state.receiptSha256(),
                     (p, o, n) -> fail("No crash replay")));
+      } else if (mode.equals("document")) {
+        var service =
+            new TextDocumentChangeSetService(
+                new TextChangeSetRepository(source), Clock.systemUTC());
+        var live = service.inspect(owner, id);
+        assertEquals("APPLYING", live.status());
+        assertEquals("PUBLISHING", live.phase());
+        assertEquals(4, live.staging().size());
+        assertEquals(3, live.stagingFiles());
+        process.destroyForcibly();
+        assertTrue(process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS));
+
+        var state = service.inspect(owner, id);
+        assertEquals("UNKNOWN", state.status());
+        assertEquals(live.staging(), state.staging());
+        assertEquals("new", Files.readString(root.resolve("A.java")));
+        assertEquals("old", Files.readString(root.resolve("B.java")));
+        assertThrows(
+            IllegalStateException.class, () -> service.apply(owner, id, state.proposalSha256()));
+        var restored =
+            service.rollback(
+                owner,
+                id,
+                state.proposalSha256(),
+                "/document rollback " + id + " " + state.proposalSha256());
+        assertEquals("ROLLED_BACK", restored.status());
+        assertTrue(restored.staging().isEmpty());
+        assertEquals("old", Files.readString(root.resolve("B.java")));
       } else if (mode.equals("single")) {
         var service = new TextChangeSetService(new TextChangeSetRepository(source));
         var projectContext =
@@ -243,6 +271,36 @@ class CrashConsistencyRecoveryTest {
             (p, o, n) -> {
               throw new AssertionError("No source write before verification");
             });
+      } else if (mode.equals("document")) {
+        Files.writeString(root.resolve("B.java"), "old");
+        var repository = new TextChangeSetRepository(source);
+        var proposal =
+            new TextDocumentChangeSetService(repository, Clock.systemUTC())
+                .propose(
+                    owner,
+                    new TextDocumentChangeSetService.Request(
+                        List.of(
+                            new TextDocumentChangeSetService.Operation(
+                                "UPDATE", "A.java", null, "old", "new"),
+                            new TextDocumentChangeSetService.Operation(
+                                "UPDATE", "B.java", null, "old", "new"))));
+        var service =
+            new TextDocumentChangeSetService(
+                repository,
+                Clock.systemUTC(),
+                (stage, target) -> {
+                  if (target.getFileName().toString().equals("B.java")) {
+                    publish(ready, proposal.id());
+                    try {
+                      Thread.sleep(60000);
+                    } catch (InterruptedException stopped) {
+                      Thread.currentThread().interrupt();
+                      throw new java.io.IOException("fixture stopped", stopped);
+                    }
+                  }
+                  TextDocumentTransaction.replace(stage, target);
+                });
+        service.apply(owner, proposal.id(), proposal.proposalSha256());
       } else if (mode.equals("single")) {
         var service = new TextChangeSetService(new TextChangeSetRepository(source));
         var project =

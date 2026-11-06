@@ -206,6 +206,50 @@ class TextDocumentChangeSetTest {
             .allMatch(file -> Objects.equals(file.proposedSha256(), file.currentSha256())));
   }
 
+  @Test
+  void publicationUpdatesPhaseAndHeartbeatWithoutRewritingStages() throws Exception {
+    write("A.md", "old");
+    write("B.md", "old");
+    var service = service();
+    var db = org.springframework.jdbc.core.simple.JdbcClient.create(source());
+    db.sql("CREATE TABLE journal_updates(phase TEXT, updates_stages INTEGER)").update();
+    db.sql(
+            """
+            CREATE TRIGGER track_journal_phase AFTER UPDATE OF phase, heartbeat
+            ON text_document_change_sets
+            BEGIN INSERT INTO journal_updates VALUES(NEW.phase, 0); END
+            """)
+        .update();
+    db.sql(
+            """
+            CREATE TRIGGER track_journal_stages AFTER UPDATE OF stages
+            ON text_document_change_sets
+            BEGIN INSERT INTO journal_updates VALUES(NEW.phase, 1); END
+            """)
+        .update();
+    var proposal =
+        service.propose(
+            owner(),
+            request(
+                op("UPDATE", "A.md", null, "old", "new"),
+                op("UPDATE", "B.md", null, "old", "next")));
+    var receipt = service.apply(owner(), proposal.id(), proposal.proposalSha256());
+
+    assertEquals("APPLIED", receipt.status());
+    assertEquals("CLEANED", receipt.phase());
+    assertTrue(receipt.staging().isEmpty());
+    assertEquals(
+        List.of("STAGING", "CLEANED"),
+        db.sql("SELECT phase FROM journal_updates WHERE updates_stages=1 ORDER BY rowid")
+            .query(String.class)
+            .list());
+    assertEquals(
+        List.of("CLAIMED", "STAGING", "PUBLISHING", "PUBLISHING", "VERIFIED", "APPLIED", "CLEANED"),
+        db.sql("SELECT phase FROM journal_updates WHERE updates_stages=0 ORDER BY rowid")
+            .query(String.class)
+            .list());
+  }
+
   /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void staleSecondBaselinePreventsFirstWriteAndUnknownHashOrOwnerCannotClaim() throws Exception {
