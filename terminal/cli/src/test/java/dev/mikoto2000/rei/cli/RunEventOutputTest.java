@@ -9,6 +9,18 @@ import org.junit.jupiter.api.Test;
 /** 実行イベント出力の結果と状態の契約を検証するテスト。 */
 class RunEventOutputTest {
   @Test
+  void llmFailureIsShownBeforeAnInterruptedThinkingStreamCompletes() throws Exception {
+    event("thinking.delta", "t", "考え中");
+    output.accept("llm.request.failed", BackendClient.JSON.createObjectNode()
+        .put("durationMs", 2026).set("error", BackendClient.JSON.createObjectNode()
+            .put("type", "connection_failed").put("message", "接続先へ接続できませんでした。")));
+    assertEquals("考え中", lines.get(lines.size() - 2));
+    assertEquals("[llm] request failed (2026 ms): 接続先へ接続できませんでした。", lines.getLast());
+    output.flush();
+    assertEquals(1, lines.stream().filter(line -> line.contains("request failed")).count());
+  }
+
+  @Test
   void displaysConnectionLossForLlmAndRunFailures() {
     var error = BackendClient.JSON.createObjectNode()
         .put("type", "connection_lost")

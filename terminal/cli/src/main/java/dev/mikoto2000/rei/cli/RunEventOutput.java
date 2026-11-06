@@ -114,6 +114,7 @@ final class RunEventOutput {
     if (active != null
         && !type.startsWith("tool.")
         && !type.equals("attention.required")
+        && !type.equals("llm.request.failed")
         && !Set.of(
                 "agent.run.completed",
                 "agent.run.failed",
