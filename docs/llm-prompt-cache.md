@@ -43,7 +43,7 @@ Run ごとに SecureRandom の256-bit鍵を生成し HMAC-SHA256 を使用。鍵
 
 ### ベースライン
 
-実 Provider の比較実験は未実施。変更前に取得できる cached / uncached / prefill は UNKNOWN。変更前の構造では Run summary が固定 System より前、Skill の User request が候補より前。これを回帰テストで再現する。Provider の実際の cache hit・TTFT 改善率は報告しない。
+Phase 1 時点では実 Provider の比較実験は未実施。変更前に取得できる cached / uncached / prefill は UNKNOWN。変更前の構造では Run summary が固定 System より前、Skill の User request が候補より前。これを回帰テストで再現する。後日の履歴圧縮 A/B は[実サーバー測定](#実サーバー測定-2026-11-06)を参照。
 
 参考: [OpenAI の cached_tokens の説明](https://developers.openai.com/cookbook/examples/prompt_caching101)、[vLLM の Automatic Prefix Caching](https://docs.vllm.ai/en/v0.15.0/features/automatic_prefix_caching/)。Prefix の構造改善とサーバーによる実際の再利用は区別する。
 
@@ -112,6 +112,41 @@ LlmModelProvider の feature model は ConcurrentHashMap で再利用され、�
 |同一集合の Tool/schema|登録順・object key 順に依存|名前/object key を canonical 化、実行・配列順は保持|
 
 実環境比較は同じモデル・endpoint・temperature・出力予算・入力で各シナリオを複数回実行し、`/timing` から input/cache の取得率と重み付き rate、uncached、最初の生成テキストまでの時間、duration と Run elapsed の中央値・範囲を比較する。cold/warm、保持時間、worker 分配を分け、response quality と Run成功率も確認する。UNKNOWN による選別バイアス、fallback、同時呼び出し、Span省略を記録する。本文保存が必要な場合のみ既存 Request Capture を明示的に使う。
+
+### 実サーバー測定 (2026-11-06)
+
+[PR #209](https://github.com/mikoto2000/rei/pull/209) の前後を、同じ TensorFold 接続先と `DeepSeek-V4.1-Flash-1017` で比較した。初回依頼からツール往復を順に再生する本試験は前後8組、圧縮直前の入力だけを事前送信する対照は前後4組。表は各試行の圧縮直後のリクエストのみを集計する。
+
+|指標|本試験・変更前|本試験・変更後|対照・変更前|対照・変更後|
+|---|---:|---:|---:|---:|
+|キャッシュヒット率（cached 合計 / input 合計）|0.0% (0 / 19,415)|84.4% (16,384 / 19,423)|0.0% (0 / 9,707)|0.0% (0 / 9,710)|
+|キャッシュ利用があった試行|0 / 8|8 / 8|0 / 4|0 / 4|
+|未キャッシュ入力トークン数（中央値）|2,427|379.5|2,426.5|2,427.5|
+|サーバー報告の TTFT（中央値、ms）|1,535.76|498.65|1,536.42|1,550.65|
+|クライアントの TTFT（中央値、ms）|1,587.81|541.20|1,584.06|1,597.59|
+|クライアントの最初の可視テキスト（中央値、ms）|1,595.60|658.27|1,648.91|1,716.01|
+
+本試験の変更後は全8回で2,048トークンを再利用した。サーバーの `/v1/tokenize` で代表入力の圧縮直前・直後を比較すると、共通の先頭部分は446 → 2,337トークンだった。対照では先頭部分が長く一致しても再利用は観測されず、TTFT の短縮も確認できなかった。この結果は、このサーバーで先行リクエストを順に送ったときのもの。測定対象は圧縮後の HTTP 呼び出しで、要約生成やツール実行を含む Run 全体の時間は計測範囲外。
+
+#### 再現手順
+
+1. マージコミット `a9b27823` の第1親 `f490d40c` を変更前、`a9b27823` を変更後として、各版の `ContextAssembler` と空の `ConversationSummaryRepository` を使う。次の合成入力で `ContextHistoryAdvisor.historical` に過去の8往復を連番1〜16で登録する。`i` は0〜7、`×` は空白を含めた文字列の連結反復。
+
+   |メッセージ|内容|
+   |---|---|
+   |先頭 System|`Benchmark case CACHE_NONCE. Only output OK. ` + `This synthetic archive concerns a warehouse inventory reconciliation. ` × 45|
+   |過去の User|`Archive request {i}. ` + `Check which pallets crossed the northern loading bay before the afternoon shift. ` × 7|
+   |過去の Assistant|`Archive reply {i}. ` + `The inventory register confirms that the reference numbers match the dispatch records. ` × 7|
+   |今回の User|`Continue the inventory reconciliation. Output exactly OK.`|
+   |1回目の Tool 結果|`Archived execution transcript. ` + `A scanned manifest lists outbound crates, pending approvals, and the destination warehouse. ` × 190|
+   |2回目の Tool 結果|`The most recent manifest is checked. Answer OK.`|
+
+2. 今回の User までを初回入力とし、そこへ1回目の Assistant tool call と Tool 結果を足したものを圧縮直前の入力にする。さらに2回目の呼び出しと結果を足す。両呼び出しの関数名は `read_manifest`、引数は `{}`、ID は順に `first` と `second`。Tool 結果の `tool_call_id` を対応させる。両版とも `TokenEstimator.conservative()` で直前の全メッセージの概算合計 + 2 を圧縮閾値、過去16メッセージの概算合計 + 64 を `recentTokens` とする。要約器は固定文 `The manifests were reconciled. Outbound crate counts and destination warehouse are confirmed.` を返す。直前の入力では圧縮ゼロ、2回目のツール結果を追加すると圧縮が1回起き、要約カーソルが2になることを確認する。投影後に過去の8往復と2回目の呼び出し・結果が残り、変更前後の差が `Run observations` の位置だけであることを確認する。
+3. 同一の OpenAI 互換 `/v1/chat/completions` へ、投影した role と本文、tool call と結果を送る。全リクエストに同じ関数定義（名前 `read_manifest`、説明 `Read the synthetic inventory manifest.`、parameters は `{"type":"object","properties":{}}`）を使い、`stream: true`、`stream_options.include_usage: true`、`temperature: 0.3`、`max_tokens: 64` とする。各試行の System 先頭の `CACHE_NONCE` は異なる24桁の16進文字列に置換し、試行内では固定する。これにより、直前の別試行のキャッシュとの混在を抑える。
+4. 本試験は「初回入力 → 圧縮直前 → 圧縮直後」、対照は「圧縮直前 → 圧縮直後」の順に同じ HTTP 接続で逐次送る。各応答の SSE を最後まで読み、前後の実行順は組ごとに交互にする。事前送信の応答は計測用の履歴に取り込まず、合成履歴の内容を両条件で揃える。モデル名と usage を確認し、取得できなかった値は UNKNOWN として件数を記録する。
+5. 圧縮直後の応答の `usage.prompt_tokens` と `usage.prompt_tokens_details.cached_tokens` から未キャッシュ入力と加重ヒット率を計算する。サーバー TTFT は `tensorfold.time_to_first_token` を秒から ms に換算する。クライアント TTFT は HTTP 送信開始から非空の `delta.reasoning_content` または `delta.content` が最初に届くまでを単調時計で測る。可視テキストは `delta.content` のみを数える。必要に応じて、同じメッセージとツール定義を `/v1/tokenize` に送り、最初に異なるトークンまでの長さを確認する。
+
+参照先は [TensorFold の API 仕様](https://github.com/ashhart/TensorFold/blob/main/docs/api.md) と [HTTP ベンチマークの計測仕様](https://github.com/ashhart/TensorFold/blob/main/docs/cache-benchmarks.md)。
 
 ### 既知の制限と今後
 
