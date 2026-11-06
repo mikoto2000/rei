@@ -275,7 +275,9 @@ public class WorkingSet {
 
   /** LLM コンテキストに渡す簡潔な表現を組み立てる。 */
   public String renderForPrompt() {
-    List<FileReference> refs = getFiles();
+    // Recency still controls eviction; presentation must not change on a repeated read.
+    List<FileReference> refs =
+        getFiles().stream().sorted(Comparator.comparing(FileReference::path)).toList();
     if (refs.isEmpty()) {
       return "";
     }

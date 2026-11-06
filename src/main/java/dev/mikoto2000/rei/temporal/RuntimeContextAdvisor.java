@@ -61,10 +61,15 @@ public class RuntimeContextAdvisor implements BaseAdvisor {
     return """
         # Runtime Context
 
-        Current time: %s
-        Timezone: %s
+        Request start time: {requestStartTime}
+        Timezone: {timezone}
+
+        This timestamp is fixed for this request; it is not the current time during execution.
+        Interpret relative dates in this request using its start time and timezone.
+        When the current time is needed, call getCurrentTime.
         """
-        .formatted(now.toOffsetDateTime(), now.getZone().getId())
+        .replace("{requestStartTime}", now.toOffsetDateTime().toString())
+        .replace("{timezone}", now.getZone().getId())
         .stripTrailing();
   }
 

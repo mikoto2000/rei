@@ -1,5 +1,21 @@
 # LLM Prompt Cache 計測と Prefix 安定性
 
+## Working Set の末尾スナップショットと依頼開始時刻 (2026-11-03)
+
+Working Set はユーザー入力へ連結せず、識別 metadata を持つ独立メッセージとして渡す。
+ContextAssembler は各送信の最終投影でその時点の Working Set を読み直し、ツール呼び出しと
+結果の組を保持した履歴の後ろにスナップショットを1件だけ置く。圧縮無効時も同じ配置とする。
+元のプロンプト・永続履歴は更新せず、空になった場合は空であることを明示して古い一覧を置き換える。
+履歴の圧縮やツール結果の再ページングが起きる場合の Prefix 一致まで保証するものではない。
+
+表示は正規化済みパスの昇順とし、再読込による並び替えを防ぐ。内部のアクセス日時更新・
+アクセス順取得・LRU による保持対象の選択は維持する。差分履歴や revision 機構は追加しない。
+
+Runtime Context は最新ユーザー入力の先頭に残し、`Request start time` と `Timezone` を示す。
+時刻はその依頼の初期プロンプト構築時に取得し、同じ依頼のツール往復では更新しない。
+その依頼の相対日付の解釈にはこの基準を使い、実行中の現在時刻は `getCurrentTime` で取得する。
+実サーバーのキャッシュ改善量は、反映後の別途測定が必要。
+
 ## Phase 1: 調査と計測
 
 基点は `6aeb5e242610b64d672101e925ba4e3c1dfffe13`。変更前は TimingStore が input/output と first framework chunk / first generation text を記録していたが、cache read は記録していなかった。Request Capture は Shell の明示的に対象になった root Run の SDK HTTP リクエストを既存の件数・容量制限で保存する。今回、新しい本文保存機構・DB テーブルは追加しない。
