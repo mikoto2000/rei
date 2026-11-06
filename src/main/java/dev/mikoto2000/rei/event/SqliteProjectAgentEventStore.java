@@ -3,9 +3,11 @@ package dev.mikoto2000.rei.event;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.storage.StorageObjectRegistry;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -213,7 +215,7 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private Page read(
       Connection db, String project, long after, int limit, boolean reverse, boolean replay)
-      throws Exception {
+      throws SQLException, IOException {
     var result = new ArrayList<AgentEvent>();
     long bytes = 0, next = after;
     String sql =
