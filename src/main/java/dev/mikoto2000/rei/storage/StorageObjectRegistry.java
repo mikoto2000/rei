@@ -118,9 +118,7 @@ public final class StorageObjectRegistry {
 
   /** データ保存の共通処理で用いるserializedを返す。 */
   public <T> T serialized(java.util.function.Supplier<T> action) {
-    synchronized (database.writer) {
-      return action.get();
-    }
+    return database.withWriterLock(action);
   }
 
   /** 要求された条件を満たすか判断するため、本文パスを確認する。 */
