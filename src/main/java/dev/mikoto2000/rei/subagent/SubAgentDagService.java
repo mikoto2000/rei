@@ -82,9 +82,6 @@ public final class SubAgentDagService {
   /** 並列。 */
   private final ParallelSubAgentDelegator parallel;
 
-  /** 期限や記録日時の判定に使う時刻の取得元。 */
-  private final Clock clock;
-
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper();
 
@@ -101,7 +98,6 @@ public final class SubAgentDagService {
     this.runner = runner;
     this.registry = registry;
     this.parallel = parallel;
-    this.clock = clock;
   }
 
   /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */

@@ -117,8 +117,6 @@ public class BackgroundProcessManager {
           new ManagedBackgroundProcess(
               processId,
               process,
-              commandLine,
-              workingDirectory,
               LOG_LINE_CAPACITY,
               Instant.now(clock),
               monotonicTimeSource.nanoTime());

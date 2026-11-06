@@ -166,9 +166,6 @@ public class LlmChatClientProvider {
   /** モデル提供元。 */
   private final LlmModelProvider modelProvider;
 
-  /** core設定。 */
-  private final CoreProperties coreProperties;
-
   /** システムへの指示サービス。 */
   private final SystemPromptService systemPromptService;
 
@@ -351,7 +348,6 @@ public class LlmChatClientProvider {
       AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher) {
     this.modelProvider = modelProvider;
-    this.coreProperties = coreProperties;
     this.systemPromptService = systemPromptService;
     this.chatMemory = chatMemory;
     this.tools = tools;
