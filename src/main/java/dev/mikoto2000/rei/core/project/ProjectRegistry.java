@@ -52,7 +52,7 @@ public final class ProjectRegistry {
 
   /** プロジェクトごとの作業環境で用いる完了条件状態の記録を返す。 */
   public List<ProjectContext> completionSnapshot() {
-    return completionSnapshot;
+    return List.copyOf(completionSnapshot);
   }
 
   /**

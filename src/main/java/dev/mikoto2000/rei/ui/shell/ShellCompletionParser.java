@@ -91,6 +91,10 @@ public final class ShellCompletionParser implements Parser {
       int end,
       char quote)
       implements CompletingParsedLine {
+    private CompletionLine {
+      words = List.copyOf(words);
+    }
+
     /** ターミナルでの対話で用いる元の語句続きの取得位置を返す。 */
     public int rawWordCursor() {
       return cursor - start;

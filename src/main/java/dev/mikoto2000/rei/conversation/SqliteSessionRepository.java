@@ -39,7 +39,7 @@ public final class SqliteSessionRepository implements SessionRepository {
   /** 会話履歴と受付記録の管理で用いる入力補完状態の記録を返す。 */
   @Override
   public List<SessionMetadata> completionSnapshot() {
-    return completion;
+    return List.copyOf(completion);
   }
 
   /** 会話履歴と受付記録の管理に関する再確認入力補完を処理する。 */

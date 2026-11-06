@@ -38,7 +38,7 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
   /** 対象を特定できるよう、全対象を探す。 */
   @Override
   public List<AgentSkill> findAll() {
-    return cache;
+    return List.copyOf(cache);
   }
 
   /** 対象を特定できるよう、有効状態を探す。 */

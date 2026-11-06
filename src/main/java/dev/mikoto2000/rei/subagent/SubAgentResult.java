@@ -41,7 +41,7 @@ public record SubAgentResult(
   /** 受け取った情報からSubAgentResultを作成する。 */
   public SubAgentResult {
     validationErrors = List.copyOf(validationErrors);
-    validationHistory = validationHistory.stream().map(List::copyOf).toList();
+    validationHistory = List.copyOf(validationHistory.stream().map(List::copyOf).toList());
     if (repairAttempts < 0 || repairAttempts > 3)
       throw new IllegalArgumentException("Invalid repair attempts");
     modelRetryHistory = List.copyOf(modelRetryHistory);

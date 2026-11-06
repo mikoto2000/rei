@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.application.session;
 
 import java.time.Instant;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -22,6 +24,11 @@ public record SessionTurn(
     String source,
     String sourceId,
     Map<String, String> metadata) {
+  /** 受け取った付随情報を読み取り専用のスナップショットとして保存する。 */
+  public SessionTurn {
+    metadata = metadata == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(metadata));
+  }
+
   /** 会話の継続管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SessionTurn(String runId, String userMessage, String assistantMessage, Instant createdAt) {
     this(runId, userMessage, assistantMessage, createdAt, null, null, Map.of());
