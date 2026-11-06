@@ -21,7 +21,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
 /** SQLiteベクトルの記録を保持し、後続の処理で参照できるようにする。 */
-public class SqliteVectorStore
+public final class SqliteVectorStore
     implements VectorStore, VectorDocumentRepository, RetrievalCandidates {
 
   /** データ取得元。 */

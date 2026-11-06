@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 
 /** リマインダーのユースケースを実現する。 */
 @Service
-public class ReminderService {
+public final class ReminderService {
 
   /** データベースへの接続クライアント。 */
   private final JdbcClient jdbcClient;

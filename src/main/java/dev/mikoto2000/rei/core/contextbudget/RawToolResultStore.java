@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>Immutable content-addressed bodies with call-specific pointers and conversation-scoped access.
  */
-public class RawToolResultStore {
+public final class RawToolResultStore {
   /**
    * モデルへ渡す文脈の管理で受け渡す結果を表す。
    *

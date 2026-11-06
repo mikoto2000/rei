@@ -20,7 +20,7 @@ import org.springframework.stereotype.Service;
  * <p>Bounded process-local observation. Missing/late records never change execution results.
  */
 @Service
-public class TimingStore implements TimingRecorder {
+public final class TimingStore implements TimingRecorder {
   /** 有効状態。 */
   private final boolean enabled;
 

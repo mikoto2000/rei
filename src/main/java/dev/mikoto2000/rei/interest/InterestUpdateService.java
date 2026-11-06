@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 
 /** 関心更新のユースケースを実現する。 */
 @Service
-public class InterestUpdateService {
+public final class InterestUpdateService {
 
   /** データベースへの接続クライアント。 */
   private final JdbcClient jdbcClient;

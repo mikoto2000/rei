@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
 
 /** 記憶のユースケースを実現する。 */
 @Service
-public class MemoryService {
+public final class MemoryService {
 
   /** データベースへの接続クライアント。 */
   private final JdbcClient jdbcClient;

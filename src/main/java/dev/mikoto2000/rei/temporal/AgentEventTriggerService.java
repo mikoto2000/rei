@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
  * <p>Live facts plus bounded durable replay. The existing dispatcher owns all execution.
  */
 @Component
-public class AgentEventTriggerService implements AutoCloseable {
+public final class AgentEventTriggerService implements AutoCloseable {
   /** 予約されたエージェント実行を管理する窓口。 */
   private final PersistentAgentScheduler schedules;
 

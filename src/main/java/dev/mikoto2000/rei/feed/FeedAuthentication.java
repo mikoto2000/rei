@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
  * <p>Exact-feed bindings, validated independently of secret resolution.
  */
 @Component
-public class FeedAuthentication {
+public final class FeedAuthentication {
   /** 実行環境名前一覧。 */
   private final Map<URI, String> environmentNames;
 
