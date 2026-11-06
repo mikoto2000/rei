@@ -205,7 +205,7 @@ public class DoctorActiveService {
                   "Doctor disabled",
                   "Administrator configuration",
                   "Enable doctor when needed")));
-    var owner = Objects.requireNonNull(run.runContext(), "Captured Run required");
+    Objects.requireNonNull(run.runContext(), "Captured Run required");
     var plans = new ArrayList<Planned>();
     for (var check : request.checks()) {
       String tool =
