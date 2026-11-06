@@ -256,7 +256,9 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
     if (socket != null) {
       try {
         socket.close();
-      } catch (Exception ignored) {
+      } catch (Exception failure) {
+        org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class)
+            .debug("Slack socket close failed ({})", failure.getClass().getSimpleName());
       }
       socket = null;
     }
@@ -267,21 +269,27 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
     if (slack != null) {
       try {
         slack.close();
-      } catch (Exception ignored) {
+      } catch (Exception failure) {
+        org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class)
+            .debug("Slack client close failed ({})", failure.getClass().getSimpleName());
       }
       slack = null;
     }
     if (lock != null) {
       try {
         lock.release();
-      } catch (Exception ignored) {
+      } catch (Exception failure) {
+        org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class)
+            .debug("Slack lock release failed ({})", failure.getClass().getSimpleName());
       }
       lock = null;
     }
     if (lockFile != null) {
       try {
         lockFile.close();
-      } catch (Exception ignored) {
+      } catch (Exception failure) {
+        org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class)
+            .debug("Slack lock file close failed ({})", failure.getClass().getSimpleName());
       }
       lockFile = null;
     }

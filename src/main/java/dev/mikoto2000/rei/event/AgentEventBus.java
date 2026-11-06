@@ -97,7 +97,11 @@ public interface AgentEventBus {
       java.util.List<AgentEvent> replay,
       Subscription subscription,
       long latestSequence,
-      Long terminalSequence) {}
+      Long terminalSequence) {
+    public ReplaySubscription {
+      replay = java.util.List.copyOf(replay);
+    }
+  }
 
   /** 実行状況の通知に関する保持期限を過ぎた情報の削除実行を処理する。 */
   default void purgeRun(String runId) {}

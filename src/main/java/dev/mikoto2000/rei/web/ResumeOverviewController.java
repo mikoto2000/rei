@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.checkpoint.ResumeOverview;
 import dev.mikoto2000.rei.checkpoint.ResumeOverviewService;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -37,7 +39,11 @@ public class ResumeOverviewController {
    * @param projects プロジェクト一覧
    */
   public record Startup(
-      boolean enabled, String preferredZone, List<ResumeOverview.ProjectCount> projects) {}
+      boolean enabled, String preferredZone, List<ResumeOverview.ProjectCount> projects) {
+    public Startup {
+      projects = projects == null ? null : Collections.unmodifiableList(new ArrayList<>(projects));
+    }
+  }
 
   /** Web APIによる操作で用いる起動時を返す。 */
   @GetMapping("/resume-overview")
