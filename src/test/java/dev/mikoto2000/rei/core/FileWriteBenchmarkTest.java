@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
@@ -314,5 +315,70 @@ class FileWriteBenchmarkTest {
             output.toFile(),
             Map.of(
                 "files", operations.size(), "payloadBytes", payloadBytes, "applyNanos", elapsed));
+  }
+
+  @Test
+  @EnabledIfSystemProperty(named = "fileWrite.diffPageSamples", matches = "[1-9][0-9]*")
+  void measureDocumentDiffPages() throws Exception {
+    int samples = Integer.getInteger("fileWrite.diffPageSamples");
+    Path root = Files.createDirectory(temporary.resolve("diff-pages")).toRealPath();
+    String secret = "benchmark-secret-value";
+    String content = "password=" + secret + "\n" + "unchanged document line 😀\n".repeat(1900);
+    var operations = new ArrayList<TextDocumentChangeSetService.Operation>();
+    for (int file = 0; file < 4; file++) {
+      String path = "file-" + file + ".txt";
+      Files.writeString(root.resolve(path), content);
+      operations.add(
+          new TextDocumentChangeSetService.Operation(
+              "RENAME", path, "renamed-" + file + ".txt", content, null));
+    }
+    var repository =
+        new TextChangeSetRepository(
+            new org.springframework.jdbc.datasource.DriverManagerDataSource(
+                "jdbc:sqlite:" + root.resolve("db")));
+    var owner = new AgentRunContext("diff-pages", "session", root, UUID.randomUUID().toString());
+    var proposal =
+        new TextDocumentChangeSetService(repository, Clock.systemUTC())
+            .propose(owner, new TextDocumentChangeSetService.Request(operations));
+    var elapsed = new ArrayList<Long>();
+    int pages = 0;
+    String full = "";
+    for (int sample = -2; sample < samples; sample++) {
+      var service = new TextDocumentChangeSetService(repository, Clock.systemUTC());
+      var received = new StringBuilder();
+      int offset = 0;
+      pages = 0;
+      long started = System.nanoTime();
+      do {
+        var page = service.diffPage(owner, proposal.id(), proposal.proposalSha256(), offset, 16384);
+        received.append(page.diff());
+        offset = page.info().nextOffset();
+        pages++;
+      } while (offset >= 0);
+      long duration = System.nanoTime() - started;
+      full = received.toString();
+      assertTrue(pages > 1);
+      assertTrue(full.contains("[REDACTED]"));
+      assertFalse(full.contains(secret));
+      assertEquals(
+          proposal.diffInfo().totalBytes(),
+          full.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+      if (sample >= 0) elapsed.add(duration);
+    }
+    Path output =
+        Path.of(System.getProperty("fileWrite.output", "target/file-write-diff-pages.json"));
+    Files.createDirectories(output.toAbsolutePath().getParent());
+    json.writerWithDefaultPrettyPrinter()
+        .writeValue(
+            output.toFile(),
+            Map.of(
+                "pages",
+                pages,
+                "diffBytes",
+                proposal.diffInfo().totalBytes(),
+                "diffSha256",
+                TextDocumentTransaction.hash(full),
+                "pagingNanos",
+                elapsed));
   }
 }

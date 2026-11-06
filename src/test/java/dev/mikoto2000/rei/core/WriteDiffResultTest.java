@@ -2,12 +2,15 @@ package dev.mikoto2000.rei.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -102,5 +105,62 @@ class WriteDiffResultTest {
     assertThrows(
         java.lang.reflect.InvocationTargetException.class,
         () -> method.invoke(service, project(), proposal.id(), "wrong-sha", 0, 1024));
+  }
+
+  @Test
+  void cachedRenderingKeepsRedactionAndPageMetadata() {
+    String secret = "example-hidden-value";
+    var changes =
+        List.of(
+            new TextDocumentTransaction.Change(
+                "a.txt", "old\n", "password=" + secret + "\n" + "日本語😀".repeat(100)));
+    var cache = new TextDiff.PageCache();
+    var scope = new TextDiff.Scope("project", "root", "session", "id", "sha");
+    var first = cache.preview(scope, changes, 0, 256);
+    assertTrue(first.page().diff().contains("[REDACTED]"));
+    assertFalse(first.page().diff().contains(secret));
+    int offset = first.page().info().nextOffset();
+    var next = cache.preview(scope, changes, offset, 512);
+    assertSame(first.summaries(), next.summaries());
+    assertEquals(TextDiff.page(changes, offset, 512), next.page());
+  }
+
+  @Test
+  void warmDocumentDiffStillChecksScopeShaAndSavedPayload() throws Exception {
+    var source =
+        new org.springframework.jdbc.datasource.DriverManagerDataSource(
+            "jdbc:sqlite:" + root.resolve("db"));
+    var service =
+        new TextDocumentChangeSetService(new TextChangeSetRepository(source), Clock.systemUTC());
+    var owner = new AgentRunContext("run", "session", root, project().id());
+    var proposal =
+        service.propose(
+            owner,
+            new TextDocumentChangeSetService.Request(
+                List.of(
+                    new TextDocumentChangeSetService.Operation(
+                        "CREATE", "a.txt", null, null, "日本語😀".repeat(4000)))));
+    assertTrue(proposal.diffInfo().truncated());
+    assertTrue(
+        service
+            .diffPage(owner, proposal.id(), proposal.proposalSha256(), 0, 256)
+            .info()
+            .truncated());
+
+    var otherSession = new AgentRunContext("run", "other-session", root, project().id());
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> service.diffPage(otherSession, proposal.id(), proposal.proposalSha256(), 0, 256));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> service.diffPage(owner, proposal.id(), "wrong-sha", 0, 256));
+
+    org.springframework.jdbc.core.simple.JdbcClient.create(source)
+        .sql("UPDATE text_document_change_sets SET payload='{}' WHERE id=?")
+        .param(proposal.id())
+        .update();
+    assertThrows(
+        IllegalStateException.class,
+        () -> service.diffPage(owner, proposal.id(), proposal.proposalSha256(), 0, 256));
   }
 }

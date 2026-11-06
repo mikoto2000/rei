@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.core;
 
+import dev.mikoto2000.rei.core.searchcache.BoundedTtlCache;
 import dev.mikoto2000.rei.toolcontract.CredentialMask;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,7 +51,35 @@ public final class TextDiff {
 
   private record Hunk(String path, int index, int start, int end) {}
 
-  private record Rendered(String text, List<Hunk> hunks, List<FileSummary> summaries) {}
+  private record Rendered(
+      String text, int totalBytes, List<Hunk> hunks, List<FileSummary> summaries) {
+    long weight() {
+      long weight = 2L * text.length() + 64L * hunks.size();
+      for (var summary : summaries)
+        weight += 128L + 2L * summary.path().length() + 64L * summary.ranges().size();
+      return weight;
+    }
+  }
+
+  /** Only the owning service may build a key, after validating the proposal and its scope. */
+  record Scope(String project, String root, String session, String id, String sha) {}
+
+  /** Retains only redacted renderings, never baselines or proposed source. */
+  static final class PageCache {
+    private final BoundedTtlCache<Scope, Rendered> entries =
+        new BoundedTtlCache<>(
+            Duration.ofMinutes(5), 16, 32L << 20, Clock.systemUTC(), Rendered::weight);
+
+    Preview preview(
+        Scope scope, List<TextDocumentTransaction.Change> changes, int offset, int maxBytes) {
+      validatePageSize(maxBytes);
+      var cached = entries.get(scope);
+      var rendered = cached.orElseGet(() -> render(changes, true));
+      var page = page(rendered, offset, maxBytes);
+      if (cached.isEmpty() && page.info().truncated()) entries.put(scope, rendered);
+      return new Preview(page, rendered.summaries());
+    }
+  }
 
   /** Summaries never contain source text. changeCount counts contiguous changed line regions. */
   public static List<FileSummary> summaries(List<TextDocumentTransaction.Change> changes) {
@@ -56,13 +87,16 @@ public final class TextDiff {
   }
 
   public static Page page(List<TextDocumentTransaction.Change> changes, int offset, int maxBytes) {
-    return preview(changes, offset, maxBytes).page();
+    validatePageSize(maxBytes);
+    return page(render(changes, true), offset, maxBytes);
   }
 
-  static Preview preview(List<TextDocumentTransaction.Change> changes, int offset, int maxBytes) {
+  private static void validatePageSize(int maxBytes) {
     if (maxBytes < 256 || maxBytes > 65536)
       throw new IllegalArgumentException("diff maxBytes must be 256..65536");
-    var rendered = render(changes, true);
+  }
+
+  private static Page page(Rendered rendered, int offset, int maxBytes) {
     String full = rendered.text();
     if (offset < 0
         || offset > full.length()
@@ -79,33 +113,31 @@ public final class TextDiff {
       bytes += size;
       end += Character.charCount(point);
     }
-    int total = full.getBytes(StandardCharsets.UTF_8).length;
+    int total = rendered.totalBytes();
     var omissions = new ArrayList<Omission>();
-    for (var change : changes) {
+    for (var summary : rendered.summaries()) {
       int first = Integer.MAX_VALUE, last = 0;
       for (var hunk : rendered.hunks()) {
-        if (hunk.path().equals(change.path()) && (hunk.start() < offset || hunk.end() > end)) {
+        if (hunk.path().equals(summary.path()) && (hunk.start() < offset || hunk.end() > end)) {
           first = Math.min(first, hunk.index());
           last = hunk.index();
         }
       }
-      if (last > 0) omissions.add(new Omission(change.path(), first, last));
+      if (last > 0) omissions.add(new Omission(summary.path(), first, last));
     }
     boolean truncated = offset > 0 || end < full.length();
-    var page =
-        new Page(
-            full.substring(offset, end),
-            new Info(
-                total,
-                bytes,
-                truncated,
-                end < full.length() ? end : -1,
-                total - bytes,
-                List.copyOf(omissions),
-                truncated
-                    ? "Use getTextChangeSetDiff or getTextDocumentChangeSetDiff with id, proposalSha256, nextOffset as offset and maxBytes. Inspection can retrieve the preview again. Review all needed pages before Apply."
-                    : ""));
-    return new Preview(page, rendered.summaries());
+    return new Page(
+        full.substring(offset, end),
+        new Info(
+            total,
+            bytes,
+            truncated,
+            end < full.length() ? end : -1,
+            total - bytes,
+            List.copyOf(omissions),
+            truncated
+                ? "Use getTextChangeSetDiff or getTextDocumentChangeSetDiff with id, proposalSha256, nextOffset as offset and maxBytes. Inspection can retrieve the preview again. Review all needed pages before Apply."
+                : ""));
   }
 
   private static Rendered render(
@@ -175,6 +207,7 @@ public final class TextDiff {
         hunks.add(new Hunk(change.path(), ++index, start, out.length()));
       }
     }
+    if (!includeBody) return new Rendered("", 0, List.of(), List.copyOf(summaries));
     // Redact each rendered line while keeping cursor/hunk coordinates coherent.
     String raw = out.toString();
     var safe = new StringBuilder();
@@ -188,7 +221,12 @@ public final class TextDiff {
       cursor = hunk.end();
     }
     safe.append(CredentialMask.redact(raw.substring(cursor)));
-    return new Rendered(safe.toString(), List.copyOf(safeHunks), List.copyOf(summaries));
+    String text = safe.toString();
+    return new Rendered(
+        text,
+        text.getBytes(StandardCharsets.UTF_8).length,
+        List.copyOf(safeHunks),
+        List.copyOf(summaries));
   }
 
   private static List<String> lines(String text) {

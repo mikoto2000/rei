@@ -29,6 +29,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class TextChangeSetService {
+  private final TextDiff.PageCache diffPages = new TextDiff.PageCache();
+
   /** 保存済み文書。 */
   private TextDocumentChangeSetService documents;
 
@@ -522,11 +524,7 @@ public class TextChangeSetService {
     var saved = owned(project, id);
     if (!saved.proposalHash().equals(sha))
       throw new IllegalArgumentException("Exact reviewed proposal SHA required");
-    return TextDiff.page(
-        List.of(
-            new TextDocumentTransaction.Change(saved.path(), saved.baseline(), saved.proposed())),
-        offset,
-        maxBytes);
+    return diffPages.preview(diffScope(saved), changes(saved), offset, maxBytes).page();
   }
 
   public TextDiff.Page documentDiffPage(
@@ -539,15 +537,26 @@ public class TextChangeSetService {
     return documents().diffPage(owner, id, sha, offset, maxBytes);
   }
 
-  private static View view(TextChangeSetRepository.Saved saved, String current) {
+  private static TextDiff.Scope diffScope(TextChangeSetRepository.Saved saved) {
+    return new TextDiff.Scope(
+        saved.projectId(), saved.root(), null, saved.id(), saved.proposalHash());
+  }
+
+  private static List<TextDocumentTransaction.Change> changes(TextChangeSetRepository.Saved saved) {
+    return List.of(
+        new TextDocumentTransaction.Change(saved.path(), saved.baseline(), saved.proposed()));
+  }
+
+  private View view(TextChangeSetRepository.Saved saved, String current) {
     return view(saved, current, true);
   }
 
-  private static View view(TextChangeSetRepository.Saved saved, String current, boolean preview) {
-    var changes =
-        List.of(
-            new TextDocumentTransaction.Change(saved.path(), saved.baseline(), saved.proposed()));
-    var diff = preview ? TextDiff.preview(changes, 0, TextWriteLimits.diffBytes()) : null;
+  private View view(TextChangeSetRepository.Saved saved, String current, boolean preview) {
+    var changes = changes(saved);
+    var diff =
+        preview
+            ? diffPages.preview(diffScope(saved), changes, 0, TextWriteLimits.diffBytes())
+            : null;
     var page = diff == null ? null : diff.page();
     var summaries = diff == null ? TextDiff.summaries(changes) : diff.summaries();
     boolean matching = saved.proposedHash().equals(current);
