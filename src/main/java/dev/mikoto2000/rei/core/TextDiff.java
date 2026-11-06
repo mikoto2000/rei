@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 /** Shared line diff with bounded Myers search, correct replacement fallback and UTF-8 paging. */
 public final class TextDiff {
@@ -69,6 +70,17 @@ public final class TextDiff {
     private final BoundedTtlCache<Scope, Rendered> entries =
         new BoundedTtlCache<>(
             Duration.ofMinutes(5), 16, 32L << 20, Clock.systemUTC(), Rendered::weight);
+
+    Optional<Page> verifiedPage(Scope scope, int offset, int maxBytes, Runnable verify) {
+      return entries
+          .get(scope)
+          .map(
+              rendered -> {
+                verify.run();
+                validatePageSize(maxBytes);
+                return page(rendered, offset, maxBytes);
+              });
+    }
 
     Preview preview(
         Scope scope, List<TextDocumentTransaction.Change> changes, int offset, int maxBytes) {
