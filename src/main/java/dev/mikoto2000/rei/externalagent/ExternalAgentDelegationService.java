@@ -1228,6 +1228,8 @@ public class ExternalAgentDelegationService implements AutoCloseable {
       ExternalAgentResult result) {
     if (result.proposedChange() == null) return result;
     try {
+      var changeStore = changes;
+      if (changeStore == null) throw new IllegalStateException("Fix proposal storage unavailable");
       var draft = result.proposedChange();
       var file = ExternalAgentRequest.resolveTarget(root, draft.path());
       if (file == null
@@ -1237,7 +1239,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
       var project =
           new dev.mikoto2000.rei.core.project.ProjectContext(
               owner.projectId(), "Current Project", root);
-      var saved = changes.propose(project, draft);
+      var saved = changeStore.propose(project, draft);
       return new ExternalAgentResult(
           result.status(),
           result.summary(),

@@ -119,9 +119,14 @@ public final class BackendConnectionProbe {
     /** 通知に応じて状態や表示を更新するため、次を受け付ける。 */
     public void onNext(java.util.List<java.nio.ByteBuffer> buffers) {
       if (result.isDone()) return;
+      var current = subscription;
+      if (current == null) {
+        result.completeExceptionally(new IllegalStateException("Missing HTTP body subscription"));
+        return;
+      }
       for (var buffer : buffers) {
         if (buffer.remaining() > 16384 - bytes.size()) {
-          subscription.cancel();
+          current.cancel();
           result.complete(new byte[0]);
           return;
         }
@@ -129,7 +134,7 @@ public final class BackendConnectionProbe {
         buffer.get(chunk);
         bytes.writeBytes(chunk);
       }
-      subscription.request(1);
+      current.request(1);
     }
 
     /** 通知に応じて状態や表示を更新するため、エラーを受け付ける。 */

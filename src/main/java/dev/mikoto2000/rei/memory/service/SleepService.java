@@ -365,10 +365,11 @@ public class SleepService {
         }
       }
     }
-    if (episodes != null && r.action() != MemoryAction.IGNORE)
+    var episodeStore = episodes;
+    if (episodeStore != null && r.action() != MemoryAction.IGNORE)
       repository
           .exact(c, project)
-          .ifPresent(m -> episodes.linkMemory(project, session, c.sourceTurnIds(), m.id()));
+          .ifPresent(m -> episodeStore.linkMemory(project, session, c.sourceTurnIds(), m.id()));
   }
 
   /** 長期記憶の保存と検索の操作を実行する。 */

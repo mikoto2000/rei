@@ -114,9 +114,11 @@ public class StorageMigrationConfiguration {
     @Override
     public void postProcessBeanFactory(ConfigurableListableBeanFactory factory)
         throws BeansException {
+      var configuredEnvironment = environment;
+      if (configuredEnvironment == null) throw new IllegalStateException("Storage environment unavailable");
       Path root =
           Path.of(
-                  environment.getProperty(
+                  configuredEnvironment.getProperty(
                       "rei.data-dir",
                       dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString()))
               .toAbsolutePath()

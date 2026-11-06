@@ -24,8 +24,15 @@ final class CompressionRetryGuard {
 
   /** モデルへ渡す文脈の管理に必要な失敗情報を扱う。 */
   private static final class Failure {
-    /** 機能の構成／理由。 */
-    String configuration, reason;
+    /** 機能の構成。 */
+    final String configuration;
+
+    /** 直近の理由。 */
+    String reason;
+
+    Failure(String configuration) {
+      this.configuration = configuration;
+    }
 
     /** 失敗一覧。 */
     int failures;
@@ -56,7 +63,7 @@ final class CompressionRetryGuard {
   /** モデルへ渡す文脈の管理で用いる状態を返す。 */
   private Failure state(String key, String configuration) {
     var failure = failures.get(key);
-    if (failure != null && !failure.configuration.equals(configuration)) {
+    if (failure != null && !java.util.Objects.equals(failure.configuration, configuration)) {
       failures.remove(key);
       return null;
     }
@@ -94,8 +101,7 @@ final class CompressionRetryGuard {
       boolean shrink) {
     var failure = state(key, configuration);
     if (failure == null) {
-      failure = new Failure();
-      failure.configuration = configuration;
+      failure = new Failure(configuration);
       failures.put(key, failure);
     }
     failure.failures = Math.min(4, failure.failures + 1);

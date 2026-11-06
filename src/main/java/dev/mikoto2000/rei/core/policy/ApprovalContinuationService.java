@@ -529,22 +529,23 @@ public class ApprovalContinuationService implements RunContinuation {
 
   /** 後続の判断に現在の状態を反映するため、再開用の記録の状態を記録する。 */
   private void markCheckpoint(AgentRunContext owner, String status) {
-    if (checkpoints == null) return;
+    var repository = checkpoints;
+    if (repository == null) return;
     try {
-      checkpoints
+      repository
           .findByRun(owner.projectId(), owner.runId())
           .filter(
               saved ->
                   saved.runId().equals(owner.runId())
                       && saved.sessionId().equals(owner.conversationId())
-                      && !checkpoints.leased(saved.projectId(), saved.taskId()))
+                      && !repository.leased(saved.projectId(), saved.taskId()))
           .ifPresent(
               saved -> {
-                var fields = checkpoints.fields(saved);
+                var fields = repository.fields(saved);
                 fields.put("status", status);
                 fields.put("interruptionReason", "approval_" + status.toLowerCase(Locale.ROOT));
-                checkpoints.save(
-                    checkpoints.fields(fields),
+                repository.save(
+                    repository.fields(fields),
                     saved.revision(),
                     "approval-stop:" + owner.runId() + ":" + status);
               });

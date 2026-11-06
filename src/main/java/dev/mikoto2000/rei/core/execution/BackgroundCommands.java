@@ -209,7 +209,8 @@ public class BackgroundCommands {
       String text =
           CredentialRedactor.redact(result.result()).replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
       out.accept(text);
-      if (narrate && narrator != null && !text.isBlank()) {
+      var summaryNarrator = narrator;
+      if (narrate && summaryNarrator != null && !text.isBlank()) {
         var execution =
             new ActiveExecution(
                 result.id(),
@@ -223,7 +224,7 @@ public class BackgroundCommands {
           runs.executeAuxiliary(
               () -> {
                 try (var scope = ExecutionScope.open(execution)) {
-                  narrator.narrateCompletedRun(text);
+                  summaryNarrator.narrateCompletedRun(text);
                 }
               });
         } catch (java.util.concurrent.RejectedExecutionException error) {

@@ -334,9 +334,10 @@ public class EpisodeSearchService {
   /** 過去の経験の活用で用いるツール取得元を返す。 */
   private Optional<dev.mikoto2000.rei.event.ToolCompletedPayload> toolSource(
       Episode e, Episode.Claim c) {
-    return events == null
+    var eventStore = events;
+    return eventStore == null
         ? Optional.empty()
-        : accessible(() -> events.findEvent(e.projectId(), c.sourceId()))
+        : accessible(() -> eventStore.findEvent(e.projectId(), c.sourceId()))
             .filter(
                 event -> e.sessionId().equals(event.sessionId()) && c.runId().equals(event.runId()))
             .map(dev.mikoto2000.rei.event.AgentEvent::payload)
