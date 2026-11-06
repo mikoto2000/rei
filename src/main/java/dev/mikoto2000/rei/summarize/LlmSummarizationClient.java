@@ -57,8 +57,8 @@ public class LlmSummarizationClient implements SummarizationClient {
         - 重要なポイントを失わない
 
         Web ページ本文:
-        %s
         """
-        .formatted(content);
+        + content
+        + "\n";
   }
 }

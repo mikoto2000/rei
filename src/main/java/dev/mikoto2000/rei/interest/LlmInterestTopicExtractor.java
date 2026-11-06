@@ -118,15 +118,19 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
         Extract candidate interest topics from user conversation history for later web search.
         Requirements:
         - Output must be a JSON array only.
-        - Maximum %d items.
+        - Maximum\s\
+        """
+        + String.format("%d", maxTopics)
+        + """
+         items.
         - Each item must contain topic, reason, searchQuery, score.
         - score must be between 0.0 and 1.0.
         - Return [] when no candidate exists.
-        %s
-        Conversation history:
-        %s
         """
-        .formatted(maxTopics, buildPastQueriesSection(pastQueries), conversation);
+        + buildPastQueriesSection(pastQueries)
+        + "\nConversation history:\n"
+        + conversation
+        + "\n";
   }
 
   /** 利用先に渡せるよう、Past検索条件一覧節を組み立てる。 */
@@ -135,12 +139,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
       return "";
     }
     String queryList = pastQueries.stream().map(q -> "- " + q).collect(Collectors.joining("\n"));
-    return """
-
-        Previously used search queries. Avoid duplicates:
-        %s
-        """
-        .formatted(queryList);
+    return "\nPreviously used search queries. Avoid duplicates:\n" + queryList + "\n";
   }
 
   /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */

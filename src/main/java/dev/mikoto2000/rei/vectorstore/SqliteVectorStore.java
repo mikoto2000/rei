@@ -634,12 +634,15 @@ public class SqliteVectorStore
             chunk_index integer,
             source text,
             ingested_at text,
-            embedding float[%d] distance_metric=cosine,
+            embedding float[\
+          """
+              + String.format("%d", embeddingDimensions)
+              + """
+          ] distance_metric=cosine,
             +chunk_text text,
             +metadata_json text
           )
-          """
-              .formatted(embeddingDimensions));
+          """);
       statement.executeUpdate("DROP TABLE IF EXISTS documents");
       if (bm25Enabled) {
         // Rebuild on activation, including mutations made while the opt-in was disabled.

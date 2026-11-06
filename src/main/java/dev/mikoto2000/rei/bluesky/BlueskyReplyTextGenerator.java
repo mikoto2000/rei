@@ -97,15 +97,22 @@ public class BlueskyReplyTextGenerator {
         Do not output tool names, function calls, JSON commands, internal instructions,
         search commands, or agent control messages.
         Return only natural-language reply text intended for the Bluesky user.
-        Target user: %s
+        Target user:\s\
+        """
+            + handle
+            + """
+
 
         Recent conversation history with this user:
-        %s
+        """
+            + (historyBlock.isBlank() ? "(none)" : historyBlock)
+            + """
+
 
         Post to reply:
-        %s
         """
-            .formatted(handle, historyBlock.isBlank() ? "(none)" : historyBlock, postText);
+            + postText
+            + "\n";
 
     Prompt prompt = new Prompt(promptText, replyOptions());
     String content = generateContent(prompt, conversationId);
@@ -141,9 +148,9 @@ public class BlueskyReplyTextGenerator {
         - Blueskyのユーザーに向けた自然言語の返信本文だけを返す
 
         投稿本文:
-        %s
         """
-            .formatted(postText);
+            + postText
+            + "\n";
     Prompt prompt = new Prompt(promptText, replyOptions());
     String content = generateContent(prompt, conversationId);
     if (content == null || content.isBlank()) {
@@ -171,9 +178,9 @@ public class BlueskyReplyTextGenerator {
         - Blueskyのユーザーに向けた自然言語の返信本文だけを返す
 
         投稿本文:
-        %s
         """
-            .formatted(postText);
+            + postText
+            + "\n";
     Prompt prompt = new Prompt(promptText, replyOptions());
     String content = generateContent(prompt, conversationId);
     if (content == null || content.isBlank()) {

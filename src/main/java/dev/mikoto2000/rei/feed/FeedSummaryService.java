@@ -116,10 +116,12 @@ public class FeedSummaryService {
         - 後で読む価値が高いもの
           - 設定の詰まりどころが具体的で再現時に役立つ。URL: https://example.com/article
 
-        対象期間: %s から %s
-        記事一覧:
+        対象期間:\s\
         """
-            .formatted(from, to));
+            + from
+            + " から "
+            + to
+            + "\n記事一覧:\n");
     Map<String, ArticleFetch> fetchCache = new LinkedHashMap<>();
     for (FeedBriefingItem item : items) {
       ResolvedContent resolved = resolveContent(item, fetchCache);
@@ -155,30 +157,36 @@ public class FeedSummaryService {
         次の記事本文を主な根拠に、重要点を日本語で簡潔に要約してください。
         与えられた情報だけを使い、不足情報を推測で補完しないでください。
 
-        フィード: %s
-        公開日時: %s
-        タイトル: %s
-        URL: %s
-        記事本文:
-        %s
+        フィード:\s\
         """
-          .formatted(
-              item.feedName(), item.publishedAt(), item.title(), item.url(), resolved.content());
+          + item.feedName()
+          + "\n公開日時: "
+          + item.publishedAt()
+          + "\nタイトル: "
+          + item.title()
+          + "\nURL: "
+          + item.url()
+          + "\n記事本文:\n"
+          + resolved.content()
+          + "\n";
     }
     return """
         あなたは RSS/Atom フィードの記事要約アシスタントです。
         記事本文は取得できませんでした。以下の Feed 提供情報だけを使って要約してください。
         不足情報を推測で補完せず、本文を読んだかのような詳細を生成しないでください。
 
-        フィード: %s
-        公開日時: %s
-        タイトル: %s
-        URL: %s
-        Feed content:
-        %s
+        フィード:\s\
         """
-        .formatted(
-            item.feedName(), item.publishedAt(), item.title(), item.url(), resolved.content());
+        + item.feedName()
+        + "\n公開日時: "
+        + item.publishedAt()
+        + "\nタイトル: "
+        + item.title()
+        + "\nURL: "
+        + item.url()
+        + "\nFeed content:\n"
+        + resolved.content()
+        + "\n";
   }
 
   /** 指定や設定に応じた対象を利用するため、内容を確定する。 */

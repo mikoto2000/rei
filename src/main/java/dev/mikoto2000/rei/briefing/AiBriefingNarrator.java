@@ -56,26 +56,34 @@ public class AiBriefingNarrator implements BriefingNarrator {
         NEXT_ACTIONS:
         - 箇条書き
 
-        対象日: %s
+        対象日:\s\
+        """
+        + context.date()
+        + """
+
 
         予定:
-        %s
+        """
+        + formatEvents(context.events())
+        + """
+
 
         未完了タスク:
-        %s
+        """
+        + formatTasks(context.openTasks())
+        + """
+
 
         期限切れタスク:
-        %s
+        """
+        + formatTasks(context.overdueTasks())
+        + """
+
 
         関連文書:
-        %s
         """
-        .formatted(
-            context.date(),
-            formatEvents(context.events()),
-            formatTasks(context.openTasks()),
-            formatTasks(context.overdueTasks()),
-            formatDocuments(context.relatedDocuments()));
+        + formatDocuments(context.relatedDocuments())
+        + "\n";
   }
 
   /** 内容を表示・参照しやすくするため、イベント一覧を整形する。 */

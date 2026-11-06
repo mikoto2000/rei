@@ -149,10 +149,11 @@ public class ToolEventCallbackDecorator
               || diagnostic.code().equals("file_unavailable")) {
             // Return an explicit failure to the model, never a successful/empty read.
             // Keep TOOL_FAILED above; do not emit TOOL_COMPLETED for this invocation.
-            return """
-              {"success":false,"error":"%s","message":"%s","guidance":"findFile または listFile で実際のパスを確認してください。同じ存在しないパスへの再試行を繰り返さず、見つからない場合は未確認として記録し、他の対象の作業を続けてください。操作が成功したとは扱わないでください。"}
-              """
-                .formatted(diagnostic.code(), diagnostic.message());
+            return "{\"success\":false,\"error\":\""
+                + diagnostic.code()
+                + "\",\"message\":\""
+                + diagnostic.message()
+                + "\",\"guidance\":\"findFile または listFile で実際のパスを確認してください。同じ存在しないパスへの再試行を繰り返さず、見つからない場合は未確認として記録し、他の対象の作業を続けてください。操作が成功したとは扱わないでください。\"}\n";
           }
         }
         throw e;

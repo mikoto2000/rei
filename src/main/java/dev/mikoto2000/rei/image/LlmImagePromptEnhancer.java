@@ -58,8 +58,8 @@ public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
         - Do not add unsafe or policy-violating content.
 
         User request:
-        %s
         """
-        .formatted(userRequest);
+        + userRequest
+        + "\n";
   }
 }
