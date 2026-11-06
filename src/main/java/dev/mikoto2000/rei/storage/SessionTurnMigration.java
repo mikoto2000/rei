@@ -66,7 +66,7 @@ final class SessionTurnMigration {
               connection,
               root,
               project.resolve("state/turns"),
-              UUID.fromString(project.getFileName().toString()).toString());
+              UUID.fromString(StorageBackup.fileName(project)).toString());
       }
   }
 
@@ -77,7 +77,7 @@ final class SessionTurnMigration {
     if (Files.notExists(directory, LinkOption.NOFOLLOW_LINKS)) return;
     try (var files = Files.newDirectoryStream(directory)) {
       for (Path file : files) {
-        String name = file.getFileName().toString();
+        String name = StorageBackup.fileName(file);
         StorageBackup.requireSafePath(file);
         if (Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
             && name.matches("turns-[0-9]+\\.tmp")) {

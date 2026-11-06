@@ -120,7 +120,7 @@ public final class StorageBackup {
               (source, kind, sourceHash) -> {
                 String relative = relative(root, source);
                 Path target = inside(backup.resolve("files"), relative);
-                Files.createDirectories(target.getParent());
+                Files.createDirectories(requireParent(target));
                 if (kind.equals("SQLITE")) onlineBackup(source, target);
                 else Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES);
                 force(target);
@@ -225,7 +225,7 @@ public final class StorageBackup {
           Path source = inside(backup.resolve("files"), entry.path()),
               restored = inside(destination, entry.path());
           requireSafePath(restored);
-          Files.createDirectories(restored.getParent());
+          Files.createDirectories(requireParent(restored));
           Files.copy(source, restored, StandardCopyOption.COPY_ATTRIBUTES);
           force(restored);
           if (!hash(restored).equals(entry.sha256()))
@@ -271,7 +271,7 @@ public final class StorageBackup {
           if (!Files.isDirectory(project, LinkOption.NOFOLLOW_LINKS))
             throw new IOException("Unexpected project storage entry: " + project);
           try {
-            UUID.fromString(project.getFileName().toString());
+            UUID.fromString(fileName(project));
           } catch (IllegalArgumentException e) {
             throw new IOException("Unknown project storage directory: " + project, e);
           }
@@ -345,7 +345,7 @@ public final class StorageBackup {
   /** データ保存の共通処理において、SQLiteかどうかを判定する。 */
   private static boolean isSqlite(Path file) throws IOException {
     requireSafePath(file);
-    String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+    String name = fileName(file).toLowerCase(Locale.ROOT);
     if (name.endsWith(".db") || name.endsWith(".sqlite") || name.endsWith(".sqlite3")) return true;
     try (var input = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
       return Arrays.equals(
@@ -410,6 +410,20 @@ public final class StorageBackup {
       }
       if (!line.isEmpty()) throw new IOException("Incomplete backup manifest");
     }
+  }
+
+  /** 保存先の親ディレクトリを確認する。 */
+  static Path requireParent(Path path) throws IOException {
+    Path parent = path.getParent();
+    if (parent == null) throw new IOException("Storage path has no parent directory");
+    return parent;
+  }
+
+  /** 保存対象のファイル名を確認する。 */
+  static String fileName(Path path) {
+    Path name = path.getFileName();
+    if (name == null) throw new IllegalArgumentException("Storage path has no file name");
+    return name.toString();
   }
 
   /** 条件を満たさない操作を拒否するため、安全性パスの前提条件を確認する。 */

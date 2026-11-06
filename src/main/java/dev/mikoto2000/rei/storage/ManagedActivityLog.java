@@ -66,21 +66,25 @@ public final class ManagedActivityLog {
   }
 
   /** データ保存の共通処理で用いるディレクトリを返す。 */
-  private Path directory(String scope) {
+  private Path logsDirectory(String scope) {
     return (scope.isEmpty() ? registry.root : registry.root.resolve("projects").resolve(scope))
-        .resolve("logs/activity-archives");
+        .resolve("logs");
+  }
+
+  private Path directory(String scope) {
+    return logsDirectory(scope).resolve("activity-archives");
   }
 
   /** データ保存の共通処理で用いる旧形式ファイルを返す。 */
   public Path legacyFile(String supplied) {
-    return directory(scope(supplied)).getParent().resolve("activity.jsonl");
+    return logsDirectory(scope(supplied)).resolve("activity.jsonl");
   }
 
   /** データ保存の共通処理で用いるパスを返す。 */
   private Path path(Segment segment) throws Exception {
     Path file = registry.root.resolve(segment.path()).normalize();
-    if (!file.getParent().equals(directory(segment.scope()))
-        || !file.getFileName().toString().equals(segment.id() + ".jsonl"))
+    if (!directory(segment.scope()).equals(file.getParent())
+        || !StorageBackup.fileName(file).equals(segment.id() + ".jsonl"))
       throw new IllegalStateException("Invalid segment identity");
     StorageBackup.requireSafePath(file);
     return file;
@@ -280,7 +284,7 @@ public final class ManagedActivityLog {
                   var result = new ArrayList<ProfileEventLogEntry>();
                   long[] bytes = {0};
                   Path parent = directory(scope),
-                      legacy = parent.getParent().resolve("activity.jsonl");
+                      legacy = logsDirectory(scope).resolve("activity.jsonl");
                   java.util.function.Consumer<Path> add =
                       file -> {
                         try {
@@ -291,7 +295,7 @@ public final class ManagedActivityLog {
                           if (bytes[0] > 32L * 1024 * 1024)
                             throw new IllegalStateException(
                                 "Activity read exceeds 32 MiB; use a narrower retained history");
-                          if (file.getParent().equals(parent)) {
+                          if (parent.equals(file.getParent())) {
                             var object =
                                 StorageObjectRegistry.find(
                                     db, StorageObjectRegistry.id(registry.root, file));
@@ -339,7 +343,7 @@ public final class ManagedActivityLog {
                       for (Path file : files) {
                         if (++count > 10000)
                           throw new IllegalStateException("Activity file scan budget exceeded");
-                        String name = file.getFileName().toString();
+                        String name = StorageBackup.fileName(file);
                         if (!name.endsWith(".jsonl"))
                           throw new IllegalStateException("Unknown Activity archive");
                         UUID.fromString(name.replaceFirst("\\.jsonl$", ""));
