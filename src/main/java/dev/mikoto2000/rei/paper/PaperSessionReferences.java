@@ -11,14 +11,18 @@ import org.springframework.stereotype.Component;
 @Component
 public class PaperSessionReferences {
   /** 参照先一覧。 */
-  private final Map<String, List<String>> refs =
-      Collections.synchronizedMap(
-          new LinkedHashMap<>(16, 0.75f, true) {
-            /** 対象を管理から外すため、Eldest項目を取り除く。 */
-            protected boolean removeEldestEntry(Map.Entry<String, List<String>> e) {
-              return size() > 1000;
-            }
-          });
+  private final Map<String, List<String>> refs = Collections.synchronizedMap(new ReferenceMap());
+
+  private static final class ReferenceMap extends LinkedHashMap<String, List<String>> {
+    private ReferenceMap() {
+      super(16, 0.75f, true);
+    }
+
+    @Override
+    protected boolean removeEldestEntry(Map.Entry<String, List<String>> eldest) {
+      return size() > 1000;
+    }
+  }
 
   /** 指定された内容へ切り替えるため、論文会話参照先一覧を置き換える。 */
   public void replace(String session, List<String> ids) {
