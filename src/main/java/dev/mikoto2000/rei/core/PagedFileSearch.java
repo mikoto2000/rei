@@ -293,10 +293,13 @@ final class PagedFileSearch {
         if (state.scanLine >= lines.size()) advance(state);
       }
       return paused(state, List.of(), "COMPLETE", null);
-    } catch (IOException | InterruptedException | RuntimeException error) {
-      Tools.checkReadingCancellation(error);
+    } catch (IOException | InterruptedException | ExecutionException | RuntimeException error) {
+      var failure = error;
+      if (error instanceof ExecutionException && error.getCause() instanceof Exception cause)
+        failure = cause;
+      Tools.checkReadingCancellation(failure);
       return new Page(
-          List.of(), null, null, new Progress(0, 0, 0, "FAILED"), ReadingProblem.from(error));
+          List.of(), null, null, new Progress(0, 0, 0, "FAILED"), ReadingProblem.from(failure));
     }
   }
 
@@ -493,7 +496,7 @@ final class PagedFileSearch {
   }
 
   private void verifyInventory(Path root, List<Stamp> inventory)
-      throws IOException, InterruptedException {
+      throws IOException, InterruptedException, ExecutionException {
     int workers = Math.min(verificationParallelism, inventory.size());
     if (workers <= 1) {
       verifyRange(root, inventory);
@@ -517,12 +520,8 @@ final class PagedFileSearch {
         // Contiguous ranges joined in manifest order preserve the first failing candidate.
         for (var task : tasks) task.get();
       } catch (ExecutionException error) {
-        switch (error.getCause()) {
-          case IOException failure -> throw failure;
-          case RuntimeException failure -> throw failure;
-          case Error failure -> throw failure;
-          default -> throw new IllegalStateException(error.getCause());
-        }
+        if (error.getCause() instanceof Error failure) throw failure;
+        throw error;
       } finally {
         executor.shutdownNow();
       }
