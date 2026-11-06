@@ -46,11 +46,15 @@ public class MemoryService {
     this.jdbcClient = JdbcClient.create(dataSource);
     this.memoryProperties = memoryProperties;
     this.clock = clock;
-    initializeSchema();
+    createSchema();
   }
 
   /** 長期記憶の保存と検索に関する初期化データ形式を処理する。 */
   public void initializeSchema() {
+    createSchema();
+  }
+
+  private void createSchema() {
     executeDb(
         () -> {
           jdbcClient
