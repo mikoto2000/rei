@@ -1,14 +1,16 @@
 package dev.mikoto2000.rei.websearch;
 
+import dev.mikoto2000.rei.http.HttpFetchPolicy;
 import java.io.IOException;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 
 /** Webページに必要な情報を外部から取得する。 */
 @Component
 public class WebPageFetcher {
 
-  /** この機能の動作設定。 */
-  private final WebSearchProperties properties;
+  /** 現在のHTTP取得ポリシー。 */
+  private final Supplier<HttpFetchPolicy> fetchPolicy;
 
   /** 情報の抽出。 */
   private final WebPageExtractor extractor;
@@ -31,14 +33,14 @@ public class WebPageFetcher {
       WebSearchProperties properties,
       WebPageExtractor extractor,
       dev.mikoto2000.rei.urlfetch.UrlContentFetchService fetcher) {
-    this.properties = properties;
+    this.fetchPolicy = () -> properties.fetchPolicy();
     this.extractor = extractor;
     this.fetcher = fetcher;
   }
 
   /** 後続の処理に必要な情報を、取得先から読み込む。 */
   public WebSearchPage fetch(WebSearchResult result) throws IOException, InterruptedException {
-    var response = fetcher.fetch(result.url(), properties.fetchPolicy());
+    var response = fetcher.fetch(result.url(), fetchPolicy.get());
     if (!response.success()) {
       var code = dev.mikoto2000.rei.http.HttpFetchException.Code.NETWORK_ERROR;
       var errorType = response.errorType();
