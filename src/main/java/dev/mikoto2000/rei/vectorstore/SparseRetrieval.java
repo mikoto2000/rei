@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.vectorstore;
 
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.LongSupplier;
@@ -59,7 +61,14 @@ public final class SparseRetrieval {
       String reason,
       String modelId,
       List<Document> documents,
-      boolean truthVerified) {}
+      boolean truthVerified) {
+    public Result {
+      documents =
+          documents == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(documents));
+    }
+  }
 
   /** 比較の基準。 */
   private final RetrievalCandidates baseline;

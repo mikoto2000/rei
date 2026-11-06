@@ -8,7 +8,9 @@ import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -69,7 +71,18 @@ public final class RetentionPlanner {
       long recoverableBytes,
       Map<String, Long> protectedReasons,
       boolean scanLimited,
-      Instant created) {}
+      Instant created) {
+    public Plan {
+      candidates =
+          candidates == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(candidates));
+      protectedReasons =
+          protectedReasons == null
+              ? null
+              : Collections.unmodifiableMap(new LinkedHashMap<>(protectedReasons));
+    }
+  }
 
   /**
    * データ保存の共通処理で受け渡す承認を表す。
@@ -418,7 +431,15 @@ public final class RetentionPlanner {
   public record Status(
       List<ObjectUsage> objects,
       Map<String, Long> protectionReasons,
-      boolean referenceScanLimited) {}
+      boolean referenceScanLimited) {
+    public Status {
+      objects = objects == null ? null : Collections.unmodifiableList(new ArrayList<>(objects));
+      protectionReasons =
+          protectionReasons == null
+              ? null
+              : Collections.unmodifiableMap(new LinkedHashMap<>(protectionReasons));
+    }
+  }
 
   /**
    * データ保存の共通処理で用いる状態全対象を返す。

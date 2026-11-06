@@ -223,7 +223,11 @@ public class EpisodeRepository {
    * @param items 項目一覧
    * @param nextCursor 次続きの取得位置
    */
-  public record RevisionPage(List<Episode> items, String nextCursor) {}
+  public record RevisionPage(List<Episode> items, String nextCursor) {
+    public RevisionPage {
+      items = items == null ? null : Collections.unmodifiableList(new ArrayList<>(items));
+    }
+  }
 
   /** 過去の経験の活用で用いる改訂番号ページを返す。 */
   public RevisionPage revisionPage(String id, String project, String beforeRevision, int limit) {

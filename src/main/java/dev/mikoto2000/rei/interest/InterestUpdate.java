@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.interest;
 
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -21,4 +23,11 @@ public record InterestUpdate(
     String searchQuery,
     String summary,
     List<String> sourceUrls,
-    OffsetDateTime createdAt) {}
+    OffsetDateTime createdAt) {
+  public InterestUpdate {
+    sourceUrls =
+        sourceUrls == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(sourceUrls));
+  }
+}
