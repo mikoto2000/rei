@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.computeruse.CapturedScreen;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -324,6 +326,10 @@ final class ActivityEvidencePipeline {
   }
 
   /** 作業状況の把握に関する定期確認を処理する。 */
+  @SuppressFBWarnings(
+      value = "REC_CATCH_EXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Isolates checked desktop observer failures and preserves the scheduled observation loop.")
   void tick() {
     if (!lifeAllowed(clock.instant())) return;
     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
@@ -761,6 +767,10 @@ final class ActivityEvidencePipeline {
   }
 
   /** 作業状況の把握に関するenrichを処理する。 */
+  @SuppressFBWarnings(
+      value = "REC_CATCH_EXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Isolates checked vision adapter failures while retaining captured activity evidence.")
   private void enrich(Work work, boolean background) {
     long started = System.nanoTime();
     Instant apiStarted = null, apiCompleted = null;
