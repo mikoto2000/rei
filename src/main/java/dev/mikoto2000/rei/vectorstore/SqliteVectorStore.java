@@ -844,7 +844,7 @@ public class SqliteVectorStore
   private IllegalStateException sqliteException(String fallbackMessage, SQLException exception) {
     String message = exception.getMessage();
     if (message != null) {
-      String lower = message.toLowerCase();
+      String lower = message.toLowerCase(Locale.ROOT);
       if (lower.contains("locked")) {
         return new IllegalStateException("SQLite がロックされています", exception);
       }

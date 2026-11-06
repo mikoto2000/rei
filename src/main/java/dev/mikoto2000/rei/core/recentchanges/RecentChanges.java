@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * 現在のタスク中に、どのファイルへどのような変更を行ったかを短く保持する。
@@ -89,7 +90,7 @@ public class RecentChanges {
       sb.append("- ")
           .append(entry.path())
           .append(" [")
-          .append(entry.operation().toLowerCase())
+          .append(entry.operation().toLowerCase(Locale.ROOT))
           .append("]\n");
       sb.append("  ").append(entry.summary()).append("\n");
     }
