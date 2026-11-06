@@ -774,7 +774,6 @@ dev.mikoto2000.rei.core.command.DocumentCommand$ActionCandidates -> dev.mikoto20
 dev.mikoto2000.rei.core.command.EmbedCommand -> dev.mikoto2000.rei.core.completion.DocumentPathResolver
 dev.mikoto2000.rei.core.command.EmbedCommand -> dev.mikoto2000.rei.core.completion.PathCompletionCandidates$Any
 dev.mikoto2000.rei.core.command.EmbedCommand -> dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService
-dev.mikoto2000.rei.core.command.EmbedCommand -> dev.mikoto2000.rei.vectordocument.VectorDocumentEntry
 dev.mikoto2000.rei.core.command.EmbedCommand -> dev.mikoto2000.rei.vectordocument.VectorDocumentService
 dev.mikoto2000.rei.core.command.EmbedCommand$AddCommand -> dev.mikoto2000.rei.core.completion.PathCompletionCandidates$Any
 dev.mikoto2000.rei.core.command.EmbedCommand$AddCommand -> dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService
