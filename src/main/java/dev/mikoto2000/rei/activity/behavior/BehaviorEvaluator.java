@@ -5,6 +5,8 @@ import dev.mikoto2000.rei.activity.ActivityRecord;
 import dev.mikoto2000.rei.activity.ActivityRolePolicy;
 import dev.mikoto2000.rei.activity.ActivitySession;
 import dev.mikoto2000.rei.activity.EntertainmentDisposition;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -22,6 +24,10 @@ import java.util.Set;
  */
 public final class BehaviorEvaluator {
   /** 設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the shared behavior thresholds and scheduling settings for each evaluation.")
   private final BehaviorProperties config;
 
   /** 役割一覧。 */

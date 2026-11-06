@@ -28,6 +28,10 @@ public final class SlackAgentTools {
   public record Receipt(String requestId, String status, String agent) {}
 
   /** 設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared Slack agent settings for admission and tool operations.")
   private final SlackAgentProperties settings;
 
   /** 保存と検索の窓口。 */

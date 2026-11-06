@@ -396,6 +396,10 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
   }
 
   /** データ保存の共通処理に関する初期化を処理する。 */
+  @SuppressFBWarnings(
+      value = "REC_CATCH_EXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Rollback covers checked failures from the migration checkpoint callback.")
   private void initialize(Path backup) throws Exception {
     try (var db = DriverManager.getConnection("jdbc:sqlite:" + root.resolve("storage.db"));
         var statement = db.createStatement()) {

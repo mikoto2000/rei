@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.paper;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
@@ -10,6 +12,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class SafePaperHttpClient implements PaperHttpClient {
   /** 設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the configured network limits and retry policy for paper requests.")
   private final PaperProperties config;
 
   /** 情報の取得元。 */

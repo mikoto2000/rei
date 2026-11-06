@@ -28,6 +28,10 @@ public final class BehaviorService {
       org.slf4j.LoggerFactory.getLogger(BehaviorService.class);
 
   /** 設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the shared behavior thresholds and scheduling settings for each evaluation.")
   private final BehaviorProperties config;
 
   /** 作業状況。 */

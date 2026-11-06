@@ -35,7 +35,7 @@ public class SseController {
             lastEventId,
             new SseBridge.Sink() {
               /** Web APIによる操作に関するイベントを処理する。 */
-              public void event(WebApiEventDto event) throws Exception {
+              public void event(WebApiEventDto event) throws java.io.IOException {
                 emitter.send(
                     SseEmitter.event()
                         .name(event.type())
@@ -44,7 +44,7 @@ public class SseController {
               }
 
               /** Web APIによる操作に関する生存確認を処理する。 */
-              public void heartbeat() throws Exception {
+              public void heartbeat() throws java.io.IOException {
                 emitter.send(
                     SseEmitter.event()
                         .name("heartbeat")
