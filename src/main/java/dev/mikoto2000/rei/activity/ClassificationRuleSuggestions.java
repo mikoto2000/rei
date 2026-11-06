@@ -86,12 +86,12 @@ public final class ClassificationRuleSuggestions {
 
   /** 作業状況の把握で用いる提案を返す。 */
   public String suggest(boolean entertainment) {
-    if (!toolkit.properties().getClassification().getRuleSuggestion().isEnabled())
+    if (!toolkit.ruleSuggestionsEnabled())
       return "ルール候補生成は無効です。";
     String stage = "候補選択";
     try {
       int minimum =
-          toolkit.properties().getClassification().getRuleSuggestion().getMinimumSamples();
+          toolkit.ruleSuggestionMinimumSamples();
       var candidate =
           toolkit.candidates(entertainment ? "uncertain" : "unknown").stream()
               .filter(
@@ -191,7 +191,7 @@ public final class ClassificationRuleSuggestions {
     return toolkit
         .classify(
             new ActivityEvidence(java.time.Instant.now(), fg, List.of(), "", "", List.of(), null))
-        .usable(toolkit.properties().getDetection().getSkipVisionConfidence());
+        .usable(toolkit.skipVisionConfidence());
   }
 
   /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */

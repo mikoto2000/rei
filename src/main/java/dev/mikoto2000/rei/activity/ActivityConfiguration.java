@@ -357,7 +357,7 @@ public class ActivityConfiguration {
         new LlmClassificationRuleModel(
             () -> provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),
             () -> provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY, current.get()),
-            toolkit.properties().getClassification().getRuleSuggestion().getMaxOutputTokens()));
+            toolkit.ruleSuggestionMaxOutputTokens()));
   }
 
   /** 作業状況の把握で用いる作業状況実行先を返す。 */
