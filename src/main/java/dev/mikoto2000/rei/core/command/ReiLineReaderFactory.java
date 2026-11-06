@@ -29,6 +29,13 @@ public final class ReiLineReaderFactory {
    * @param completer 入力候補の提示先
    */
   public record Session(LineReader reader, Completer completer) {
+    /** 現在の端末に設定された入力処理と補完処理を保持する。 */
+    @SuppressFBWarnings(
+        value = "EI_EXPOSE_REP2",
+        matchType = SuppressMatchType.EXACT,
+        justification = "Keeps the live input reader configured for the same terminal session.")
+    public Session {}
+
     /** 端末セッションに割り当てられた入力処理を返す。 */
     @SuppressFBWarnings(
         value = "EI_EXPOSE_REP",

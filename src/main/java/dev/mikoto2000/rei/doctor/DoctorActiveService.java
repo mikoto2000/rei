@@ -114,7 +114,13 @@ public class DoctorActiveService {
   private final ModelHolderService selectedModel;
 
   /** HTTP通信。 */
-  private final JavaHttpDependencyProbe http;
+  private final ConnectivityProbe connectivityProbe;
+
+  /** 接続性の診断に必要なHTTP操作。 */
+  @FunctionalInterface
+  private interface ConnectivityProbe {
+    JavaHttpDependencyProbe.Connectivity check(String endpoint, Duration timeout, Runnable checkActive);
+  }
 
   /** Codexの設定または実行の窓口。 */
   @SuppressFBWarnings(
@@ -189,7 +195,8 @@ public class DoctorActiveService {
     this.environment = environment;
     this.models = models;
     this.selectedModel = selectedModel;
-    this.http = http;
+    this.connectivityProbe = (endpoint, timeout, checkActive) ->
+        http.connectivity(endpoint, timeout, checkActive);
     this.codex = codex;
     this.claude = claude;
     this.voice = voice;
@@ -387,7 +394,7 @@ public class DoctorActiveService {
           "Unsupported URL or embedded credentials",
           "Use an HTTP(S) endpoint without userinfo, query or fragment");
     var observed =
-        http.connectivity(
+        connectivityProbe.check(
             OpenAiCompatibleEndpoint.baseUrl(endpoint) + "/models", timeout, run::checkActive);
     return switch (observed.reason()) {
       case RESPONSE ->

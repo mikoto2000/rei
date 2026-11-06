@@ -117,7 +117,7 @@ public class ReiApplication {
   private final AsyncVectorDocumentService asyncVectorDocumentService;
 
   /** 音通知通知サービス。 */
-  private final SoundNotificationService soundNotificationService;
+  private final Runnable notifyCommandCompletion;
 
   /** チャット応答読み上げの案内。 */
   private final ChatResponseNarrator chatResponseNarrator;
@@ -192,7 +192,8 @@ public class ReiApplication {
     this.commandCompletionNotificationPolicy = commandCompletionNotificationPolicy;
     this.commandUserInputDisplayPolicy = commandUserInputDisplayPolicy;
     this.asyncVectorDocumentService = asyncVectorDocumentService;
-    this.soundNotificationService = soundNotificationService;
+    this.notifyCommandCompletion =
+        () -> soundNotificationService.notify(COMMAND_COMPLETION_MESSAGE);
     this.chatResponseNarrator = chatResponseNarrator;
     this.agentEventBus = agentEventBus;
     this.agentActivityTracker = agentActivityTracker;
@@ -692,7 +693,7 @@ public class ReiApplication {
       terminal.setAttributes(originalAttributes);
       if (!chatResponseNarrator.wasNarrated()
           && commandCompletionNotificationPolicy.shouldNotify(args)) {
-        soundNotificationService.notify(COMMAND_COMPLETION_MESSAGE);
+        notifyCommandCompletion.run();
       }
       chatResponseNarrator.reset();
     }
