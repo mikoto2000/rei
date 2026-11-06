@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.websearch;
 
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -22,6 +24,10 @@ public class WebSearchAndReadService {
   private final WebPageExtractor webPageExtractor;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the current shared search provider, extraction, and request policy.")
   private final WebSearchProperties properties;
 
   /** 計画の作成。 */
