@@ -113,6 +113,7 @@ final class CapturingChatModel implements ChatModel {
             observations,
             meters,
             configured);
+    boolean handedOff = false;
     try {
       var builder =
           OpenAiChatModel.builder()
@@ -121,10 +122,11 @@ final class CapturingChatModel implements ChatModel {
               .openAiClientAsync(client.async())
               .observationRegistry(observations);
       // RunAwareToolCallingAdvisor or Rei's run loop owns tool execution, just as for the delegate.
-      return new Owned(builder.build(), client);
-    } catch (RuntimeException error) {
-      client.close();
-      throw error;
+      var owned = new Owned(builder.build(), client);
+      handedOff = true;
+      return owned;
+    } finally {
+      if (!handedOff) client.close();
     }
   }
 
@@ -157,16 +159,18 @@ final class CapturingChatModel implements ChatModel {
             store.missed(logical);
             return delegate.stream(prompt);
           }
+          boolean handedOff = false;
           try {
-            return owned.model.stream(prompt)
+            var stream = owned.model.stream(prompt)
                 .doFinally(
                     signal -> {
                       if (signal == reactor.core.publisher.SignalType.CANCEL) store.cancel(logical);
                       owned.close();
                     });
-          } catch (RuntimeException error) {
-            owned.close();
-            throw error;
+            handedOff = true;
+            return stream;
+          } finally {
+            if (!handedOff) owned.close();
           }
         });
   }

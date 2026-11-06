@@ -51,6 +51,7 @@ final class PersistedReceiptLease {
   AutoCloseableLease activate(String id) {
     String key = namespace + id;
     if (!ACTIVE.add(key)) throw new IllegalStateException("Receipt operation already active");
+    boolean handedOff = false;
     try {
       if (db.sql(
                   "UPDATE "
@@ -61,10 +62,11 @@ final class PersistedReceiptLease {
               .params(ProcessHandle.current().pid(), start(), clock.millis(), id)
               .update()
           != 1) throw new IllegalStateException("Receipt claim lost; inspect without replay");
-      return new AutoCloseableLease(key);
-    } catch (RuntimeException failure) {
-      ACTIVE.remove(key);
-      throw failure;
+      var lease = new AutoCloseableLease(key);
+      handedOff = true;
+      return lease;
+    } finally {
+      if (!handedOff) ACTIVE.remove(key);
     }
   }
 
