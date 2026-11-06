@@ -7,6 +7,8 @@ import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.AttentionRequiredPayload;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.Map;
@@ -69,6 +71,10 @@ public class AttentionDeliveryService {
   private final AgentEventBus bus;
 
   /** 判断基準。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured permission policy for the current tool authorization decision.")
   private final ToolPermissionPolicy policy;
 
   /** 通知の送信先。 */

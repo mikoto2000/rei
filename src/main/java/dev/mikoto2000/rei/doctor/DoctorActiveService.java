@@ -90,6 +90,10 @@ public class DoctorActiveService {
   }
 
   /** 外部操作を行わず環境を診断する窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured diagnostic service for passive inspection.")
   private final DoctorService passive;
 
   /** 実行環境。 */

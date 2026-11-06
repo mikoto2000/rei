@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.goal.FileGoalVerifier;
 import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.workcontext.WorkContextGit;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
 import org.springframework.stereotype.Component;
@@ -12,6 +14,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class DependencySourceProbe implements DependencyProbe {
   /** ファイル一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared verifier and its configured completion and evidence policy.")
   private final FileGoalVerifier files;
 
   /** Gitの情報。 */

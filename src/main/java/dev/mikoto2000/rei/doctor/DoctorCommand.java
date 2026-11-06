@@ -15,6 +15,10 @@ import picocli.CommandLine.Unmatched;
     mixinStandardHelpOptions = true)
 public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
   /** 環境診断。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured diagnostic service for passive inspection.")
   private final DoctorService doctor;
 
   /** 会話一覧。 */

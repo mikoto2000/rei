@@ -136,12 +136,20 @@ public class ImplementationRequestService {
   private final ToolApprovalRepository approvals;
 
   /** 判断基準。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured permission policy for the current tool authorization decision.")
   private final ToolPermissionPolicy policy;
 
   /** この機能の動作設定。 */
   private final CodexProperties properties;
 
   /** 委譲。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared delegation service for review and implementation workflows.")
   private final ExternalAgentDelegationService delegation;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */

@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.event.ProfileEventLogStore;
 import dev.mikoto2000.rei.event.ProfileEventLogStore.DurationStats;
 import dev.mikoto2000.rei.event.ProfileEventLogStore.ProfileBucket;
 import dev.mikoto2000.rei.event.ProfileEventLogStore.ProfileSummary;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
@@ -28,6 +30,10 @@ import picocli.CommandLine.Option;
 public class ProfileCommand implements Runnable {
 
   /** ログ保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared profile log for stored event queries.")
   private final ProfileEventLogStore logStore;
 
   /** 書き込み先。 */

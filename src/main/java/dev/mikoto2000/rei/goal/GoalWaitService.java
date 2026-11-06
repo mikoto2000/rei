@@ -39,6 +39,10 @@ public class GoalWaitService {
   private final GoalRepository goals;
 
   /** 繰り返し。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared goal service to operate on the active goal lifecycle.")
   private final GoalLoopService loop;
 
   /** 依存条件一覧。 */

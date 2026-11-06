@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.externalagent;
 
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -70,6 +72,10 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
       """;
 
   /** サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared delegation service for review and implementation workflows.")
   private final ExternalAgentDelegationService service;
 
   /** 記憶。 */

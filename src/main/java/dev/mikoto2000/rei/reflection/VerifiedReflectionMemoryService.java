@@ -49,6 +49,10 @@ public class VerifiedReflectionMemoryService {
   private final MemoryRepository memories;
 
   /** 確認の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared verifier and its configured completion and evidence policy.")
   private final FileGoalVerifier verifier;
 
   /** 所有者。 */

@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.externalagent;
 
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -10,6 +12,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExternalAgentTools {
   /** サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared delegation service for review and implementation workflows.")
   private final ExternalAgentDelegationService service;
 
   /** 実装要求一覧。 */

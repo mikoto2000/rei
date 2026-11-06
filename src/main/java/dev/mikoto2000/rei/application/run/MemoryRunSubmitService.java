@@ -72,6 +72,10 @@ public final class MemoryRunSubmitService {
   private final AgentEventBus bus;
 
   /** 待機。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared sleep service and its persisted consolidation state.")
   private final SleepService sleep;
 
   /** 補助。 */

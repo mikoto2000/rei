@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.github;
 
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 
 /**
  * GitHubとの連携に必要なGit連携先通知Outboxを扱う。
@@ -10,6 +12,10 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
  */
 public final class GitHubNotificationOutbox {
   /** 事実一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common repository for GitHub deliveries and notification state.")
   private final GitHubFactRepository facts;
 
   /** プロジェクト一覧。 */

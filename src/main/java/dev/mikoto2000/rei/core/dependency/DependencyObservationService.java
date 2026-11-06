@@ -35,6 +35,10 @@ public class DependencyObservationService {
   private final DependencyWatcherProperties properties;
 
   /** 判断基準。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured permission policy for the current tool authorization decision.")
   private final ToolPermissionPolicy policy;
 
   /** 通知先。 */

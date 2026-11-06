@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.conversation;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -10,6 +12,10 @@ import org.springframework.stereotype.Component;
 public class ConversationHistoryTools {
 
   /** サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured search service for shared conversation history.")
   private final ConversationHistorySearchService service;
 
   /** 指定された値や利用先を使って、ConversationHistoryToolsを初期化する。 */

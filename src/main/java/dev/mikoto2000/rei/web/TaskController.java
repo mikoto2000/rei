@@ -5,6 +5,8 @@ import dev.mikoto2000.rei.application.task.TaskControlService;
 import dev.mikoto2000.rei.application.task.TaskManagerService;
 import dev.mikoto2000.rei.application.task.TaskView;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Optional;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -29,6 +31,10 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RequestMapping("/api/v1/tasks")
 public class TaskController {
   /** タスク一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common task service for current task and execution state.")
   private final TaskManagerService tasks;
 
   /** タスクの状態変更を受け付ける窓口。 */

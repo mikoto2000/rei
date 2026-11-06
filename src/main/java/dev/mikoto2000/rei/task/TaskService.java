@@ -8,6 +8,8 @@ import com.google.api.client.util.DateTime;
 import com.google.api.services.tasks.Tasks;
 import dev.mikoto2000.rei.google.GoogleOAuthService;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -30,6 +32,10 @@ public class TaskService {
   private final GoogleCalendarProperties googleCalendarProperties;
 
   /** GoogleO認証サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared OAuth service and its current credential state.")
   private final GoogleOAuthService googleOAuthService;
 
   /** 指定された値や利用先を使って、TaskServiceを初期化する。 */

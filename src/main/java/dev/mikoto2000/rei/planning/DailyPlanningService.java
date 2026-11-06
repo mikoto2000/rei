@@ -218,6 +218,10 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
   private final List<ProjectContext> allowed;
 
   /** タスク一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common task service for current task and execution state.")
   private final TaskManagerService tasks;
 
   /** 文脈一覧。 */

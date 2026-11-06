@@ -13,6 +13,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class PaperContentService {
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common artifact store for paper content and cleanup.")
   private final PaperArtifactStore store;
 
   /** HTTP通信。 */

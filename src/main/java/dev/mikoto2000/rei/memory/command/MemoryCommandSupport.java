@@ -28,6 +28,10 @@ public class MemoryCommandSupport {
   private final MemoryRepository repository;
 
   /** 待機。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared sleep service and its persisted consolidation state.")
   private final SleepService sleep;
 
   /** プロジェクト一覧。 */

@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.goal;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
 import dev.mikoto2000.rei.core.policy.ToolPermissionProperties;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 
@@ -52,6 +54,10 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
   private final GoalRepository goals;
 
   /** 確認の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared verifier and its configured completion and evidence policy.")
   private final FileGoalVerifier verifier;
 
   /** 受付窓口。 */

@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.subagent;
 
 import dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration;
 import dev.mikoto2000.rei.core.contextbudget.ResultDelivery;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.Tool;
@@ -13,6 +15,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class SubAgentTools {
   /** 実行の担当。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common sub-agent runner and its durable child-run state.")
   private final SubAgentRunner runner;
 
   /** 登録台帳。 */

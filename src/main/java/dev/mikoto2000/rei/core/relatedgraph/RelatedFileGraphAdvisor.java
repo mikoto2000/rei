@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.core.relatedgraph;
 import dev.mikoto2000.rei.core.working.WorkingSet;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -25,6 +27,10 @@ public class RelatedFileGraphAdvisor implements BaseAdvisor {
   private final RelatedFileGraph relatedFileGraph;
 
   /** 作業中集合。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared working set so callers see the current file selection.")
   private final WorkingSet workingSet;
 
   /** イベント一覧。 */
