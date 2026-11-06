@@ -184,10 +184,11 @@ alternating execution order and three warmup chains per variant.
 
 `ReadingEfficiencyBenchmarkTest.searchResumeMeasuresInventoryVerificationByCursor`
 is enabled with `-Drei.benchmark.search-resume=true` and writes
-`target/reading-benchmark/search-resume.json`. It compares 10, 100, 1,000, and 5,000
+`target/reading-benchmark/search-resume-parallel.json`. It compares 10, 100, 1,000, and 5,000
 real file paths. Add `-Drei.benchmark.search-resume.include-max=true` to include 20,000
 candidates. For each size, the benchmark generates one cursor of each kind and
-replays each cursor three times after one warmup pair, alternating the order. A
+replays each cursor three times after one warmup at each parallelism level (1, 2, 4),
+rotating the order. A
 `RESULT` resume emits one pending hit line. A `SCAN` resume scans one file with no
 hits. Both reload and save cursor state through SQLite. Initial file creation and
 inventory enumeration are outside the measured resume. The verification timer wraps
@@ -201,6 +202,15 @@ checks the leaf type and supplies the stamp fields. The comparison still uses si
 modification time, and file key, with SHA-256 verification for a pending source.
 In the 5,000-candidate Windows sandbox fixture, median verification fell from 26.93 s
 to 12.24 s for `RESULT` and from 27.43 s to 12.33 s for `SCAN`.
+
+The resume verifier checks contiguous ranges using at most four workers per request.
+Workers inherit the captured run scope, so each candidate receives the same path
+and MCP authority checks. Ranges are joined in inventory order to preserve the first
+failure. The verifier cancels outstanding work when a range fails or the request is
+interrupted. Page generation and cursor persistence run after successful verification.
+At 5,000 candidates on the Windows sandbox, median resume times at parallelism
+1, 2, and 4 were 9.84 s, 6.86 s, and 6.15 s for `RESULT`, and 10.60 s, 8.34 s,
+and 4.66 s for `SCAN`.
 
 The seven requested scenarios map to: repeated-line and distinct-query benchmarks; the
 distant-hit benchmark; the 1030-file cursor fixture; `ReadingDeliveryTest`'s compression and

@@ -53,6 +53,13 @@ class PagedFileSearchTest {
         assertNull(stale.resultCursor());
         assertNull(stale.scanCursor());
       }
+      Files.delete(root.resolve("b.txt"));
+      for (String cursor : List.of(result.resultCursor(), scan.scanCursor())) {
+        var stale =
+            search.read(new PagedFileSearch.Request(null, null, 1024, 4096, 1, 1, cursor), root);
+        assertEquals("FILE_NOT_FOUND", stale.error().code());
+        assertTrue(stale.files().isEmpty());
+      }
     }
   }
 
