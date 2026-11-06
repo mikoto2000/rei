@@ -8,4 +8,4 @@ package dev.mikoto2000.rei.subagent;
  * @param path パス
  * @param message メッセージ
  */
-public record ValidationError(String path, String message) {}
+public record ValidationError(String path, String message) implements java.io.Serializable {}
