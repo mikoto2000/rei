@@ -104,9 +104,10 @@ public final class PeriodCoachingService {
             + "\n"
             + String.format(
                 java.util.Locale.ROOT,
-                "観測推定量: 対象 %.1f分 / 前期間 %.1f分\n",
+                "観測推定量: 対象 %.1f分 / 前期間 %.1f分",
                 current.observedSeconds() / 60.0,
                 previous.observedSeconds() / 60.0)
+            + "\n"
             + assessment.message();
     return new Prepared(settings, key, assessment.reason(), message, true);
   }

@@ -348,39 +348,43 @@ public final class ActivityPeriodAnalysis {
     appendRange(out, "直前期間", previous);
     if (current.range().partial()) out.append("途中期間と直前の全期間の比較です。観測量の増減は成果の増減を意味しません。\n");
     out.append(
-        String.format(
-            Locale.ROOT,
-            "観測推定時間の差: %+.1f分\n",
-            (current.observedSeconds() - previous.observedSeconds()) / 60.0));
+            String.format(
+                Locale.ROOT,
+                "観測推定時間の差: %+.1f分",
+                (current.observedSeconds() - previous.observedSeconds()) / 60.0))
+        .append('\n');
     out.append("推定分類（観測推定時間、前期間との差）:\n");
     var keys = new TreeSet<>(current.categorySeconds().keySet());
     keys.addAll(previous.categorySeconds().keySet());
     for (var key : keys)
       out.append(
-          String.format(
-              Locale.ROOT,
-              "  %s: %.1f分 (%+.1f分)\n",
-              DailySummaryAggregate.categoryLabel(key),
-              current.categorySeconds().getOrDefault(key, 0L) / 60.0,
-              (current.categorySeconds().getOrDefault(key, 0L)
-                      - previous.categorySeconds().getOrDefault(key, 0L))
-                  / 60.0));
+              String.format(
+                  Locale.ROOT,
+                  "  %s: %.1f分 (%+.1f分)",
+                  DailySummaryAggregate.categoryLabel(key),
+                  current.categorySeconds().getOrDefault(key, 0L) / 60.0,
+                  (current.categorySeconds().getOrDefault(key, 0L)
+                          - previous.categorySeconds().getOrDefault(key, 0L))
+                      / 60.0))
+          .append('\n');
     out.append("Project候補（推定、上位10）:\n");
     DailySummaryAggregator.top(current.projectCandidateSeconds(), 10)
         .forEach(
             v ->
-                out.append(
-                    String.format(Locale.ROOT, "  %s: %.1f分\n", v.name(), v.seconds() / 60.0)));
+                out.append(String.format(Locale.ROOT, "  %s: %.1f分", v.name(), v.seconds() / 60.0))
+                    .append('\n'));
     out.append("時間帯（現地時刻、観測推定分）:\n");
     new TreeMap<>(current.hourSeconds())
         .forEach(
             (hour, seconds) ->
-                out.append(String.format(Locale.ROOT, "  %02d時: %.1f分\n", hour, seconds / 60.0)));
+                out.append(String.format(Locale.ROOT, "  %02d時: %.1f分", hour, seconds / 60.0))
+                    .append('\n'));
     out.append("日別観測推定時間:\n");
     new TreeMap<>(current.daySeconds())
         .forEach(
             (date, seconds) ->
-                out.append(String.format(Locale.ROOT, "  %s: %.1f分\n", date, seconds / 60.0)));
+                out.append(String.format(Locale.ROOT, "  %s: %.1f分", date, seconds / 60.0))
+                    .append('\n'));
     out.append("近接観測間のProject候補切替: ")
         .append(current.observedProjectTransitions())
         .append("回（直前期間 ")
@@ -408,20 +412,22 @@ public final class ActivityPeriodAnalysis {
               now.classifiedSeconds() / 60.0));
     out.append("\n");
     if (now.score() != null && before.score() != null && now.criteria().equals(before.criteria()))
-      out.append(String.format(Locale.ROOT, "指数の前期間差: %+.1fポイント\n", now.score() - before.score()));
+      out.append(String.format(Locale.ROOT, "指数の前期間差: %+.1fポイント", now.score() - before.score()))
+          .append('\n');
     else out.append("指数の前期間差: 比較可能な分類・基準が不足\n");
     new TreeMap<>(now.dayScores())
         .forEach(
             (day, score) ->
-                out.append(String.format(Locale.ROOT, "  日別指数 %s: %.1f\n", day, score)));
+                out.append(String.format(Locale.ROOT, "  日別指数 %s: %.1f", day, score)).append('\n'));
     out.append(
-        String.format(
-            Locale.ROOT,
-            "集中候補（同一Project・分類の25分以上の連続観測）: %d回 / 推定 %.1f分 / 最長 %.1f分（前期間 %d回）\n",
-            now.focusCandidates(),
-            now.focusSeconds() / 60.0,
-            now.longestStableSeconds() / 60.0,
-            before.focusCandidates()));
+            String.format(
+                Locale.ROOT,
+                "集中候補（同一Project・分類の25分以上の連続観測）: %d回 / 推定 %.1f分 / 最長 %.1f分（前期間 %d回）",
+                now.focusCandidates(),
+                now.focusSeconds() / 60.0,
+                now.longestStableSeconds() / 60.0,
+                before.focusCandidates()))
+        .append('\n');
     out.append("中断候補（近接した同一観測系列のProject・分類切替）: ")
         .append(now.interruptionCandidates())
         .append("回（前期間 ")
@@ -439,12 +445,13 @@ public final class ActivityPeriodAnalysis {
         .append(a.range().toExclusive())
         .append(")\n");
     out.append(
-        String.format(
-            Locale.ROOT,
-            "  観測推定 %.1f分 / 未観測 %.1f分%s\n",
-            a.observedSeconds() / 60.0,
-            a.unobservedSeconds() / 60.0,
-            a.observedSeconds() == 0 ? "（観測なし）" : ""));
+            String.format(
+                Locale.ROOT,
+                "  観測推定 %.1f分 / 未観測 %.1f分%s",
+                a.observedSeconds() / 60.0,
+                a.unobservedSeconds() / 60.0,
+                a.observedSeconds() == 0 ? "（観測なし）" : ""))
+        .append('\n');
   }
 
   /** 作業状況の把握で用いる最小を返す。 */

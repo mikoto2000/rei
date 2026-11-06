@@ -107,13 +107,14 @@ public final class PeriodCoaching {
     String reason = before - share >= .1 ? "BELOW_TARGET_DECLINING" : "BELOW_TARGET";
     String message =
         String.format(
-            Locale.ROOT,
-            "指定分類の推定比率 %.1f%%（直前期間 %.1f%%、指定基準 %.1f%%）。分類可能な観測推定時間が分母です。\n"
-                + "基準より低いので、分類の妥当性と今の優先事項を確認し、必要なら指定分類に対応する短い作業枠を試してみてください。\n"
-                + "成果・生産性・集中の低下を示す測定ではありません。未観測時間の行動は不明です。",
-            share * 100,
-            before * 100,
-            settings.targetShare() * 100);
+                Locale.ROOT,
+                "指定分類の推定比率 %.1f%%（直前期間 %.1f%%、指定基準 %.1f%%）。分類可能な観測推定時間が分母です。",
+                share * 100,
+                before * 100,
+                settings.targetShare() * 100)
+            + "\n"
+            + "基準より低いので、分類の妥当性と今の優先事項を確認し、必要なら指定分類に対応する短い作業枠を試してみてください。\n"
+            + "成果・生産性・集中の低下を示す測定ではありません。未観測時間の行動は不明です。";
     return new Assessment(true, reason, share, before, message);
   }
 
