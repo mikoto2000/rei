@@ -324,8 +324,10 @@ public class ConversationTurnStore implements ConversationHistory {
       Path target = file(id);
       Path temporary = null;
       try {
-        Files.createDirectories(target.getParent());
-        temporary = Files.createTempFile(target.getParent(), "turns-", ".tmp");
+        Path parent = target.getParent();
+        if (parent == null) throw new java.io.IOException("Turn file path has no parent");
+        Files.createDirectories(parent);
+        temporary = Files.createTempFile(parent, "turns-", ".tmp");
         Files.writeString(temporary, mapper.writeValueAsString(turns));
         try {
           Files.move(

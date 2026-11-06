@@ -55,8 +55,10 @@ public class ProjectRunStateStore implements AgentEventListener {
       Path file = resultFile(result.projectId(), result.type());
       Path temporary = null;
       try {
-        Files.createDirectories(file.getParent());
-        temporary = Files.createTempFile(file.getParent(), "completed-", ".tmp");
+        Path parent = file.getParent();
+        if (parent == null) throw new java.io.IOException("Project result path has no parent");
+        Files.createDirectories(parent);
+        temporary = Files.createTempFile(parent, "completed-", ".tmp");
         Files.writeString(temporary, mapper.writeValueAsString(result));
         try {
           Files.move(
@@ -134,7 +136,9 @@ public class ProjectRunStateStore implements AgentEventListener {
     if (status == null) return;
     Path file = file(event.projectId());
     try {
-      Files.createDirectories(file.getParent());
+      Path parent = file.getParent();
+      if (parent == null) throw new java.io.IOException("Project run state path has no parent");
+      Files.createDirectories(parent);
       Path temporary = file.resolveSibling("last-run.tmp");
       Files.writeString(
           temporary,

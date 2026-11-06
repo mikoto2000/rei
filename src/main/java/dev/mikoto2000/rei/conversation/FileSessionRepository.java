@@ -122,8 +122,10 @@ public final class FileSessionRepository implements SessionRepository {
   private void save(List<SessionMetadata> rows) {
     Path temporary = null;
     try {
-      Files.createDirectories(file.getParent());
-      temporary = Files.createTempFile(file.getParent(), "sessions-", ".tmp");
+      Path parent = file.getParent();
+      if (parent == null) throw new IOException("Session file path has no parent");
+      Files.createDirectories(parent);
+      temporary = Files.createTempFile(parent, "sessions-", ".tmp");
       Files.writeString(temporary, mapper.writeValueAsString(rows));
       try {
         Files.move(

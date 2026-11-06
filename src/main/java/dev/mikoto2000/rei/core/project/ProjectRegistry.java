@@ -84,9 +84,7 @@ public final class ProjectRegistry {
       var entry =
           new Entry(
               UUID.randomUUID().toString(),
-              canonical.getFileName() == null
-                  ? canonical.toString()
-                  : canonical.getFileName().toString(),
+              displayName(canonical),
               canonical.toString());
       entries.add(entry);
       save(entries);
@@ -156,12 +154,20 @@ public final class ProjectRegistry {
     }
   }
 
+  /** ルートディレクトリも表示できるプロジェクト名を返す。 */
+  static String displayName(Path root) {
+    Path name = root.getFileName();
+    return name == null ? root.toString() : name.toString();
+  }
+
   /** 後から参照できるよう、指定された情報を保存する。 */
   private void save(List<Entry> entries) {
     Path temporary = null;
     try {
-      Files.createDirectories(file.toAbsolutePath().getParent());
-      temporary = Files.createTempFile(file.toAbsolutePath().getParent(), "projects-", ".tmp");
+      Path parent = file.toAbsolutePath().getParent();
+      if (parent == null) throw new IOException("Project registry path has no parent");
+      Files.createDirectories(parent);
+      temporary = Files.createTempFile(parent, "projects-", ".tmp");
       Files.writeString(
           temporary,
           mapper.writerWithDefaultPrettyPrinter().writeValueAsString(new Document(entries)));

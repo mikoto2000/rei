@@ -89,7 +89,7 @@ public class ProjectService {
       return new NotificationSelection(
           new ProjectContext(
               recent.projectId(),
-              recent.projectRoot().getFileName().toString(),
+              ProjectRegistry.displayName(recent.projectRoot()),
               recent.projectRoot()),
           recent.conversationId());
     return new NotificationSelection(registry.resolve(startupDirectory), null);
@@ -306,12 +306,12 @@ public class ProjectService {
     if (execution != null)
       return new ProjectContext(
           execution.projectId(),
-          execution.projectRoot().getFileName().toString(),
+          ProjectRegistry.displayName(execution.projectRoot()),
           execution.projectRoot());
     var run = AgentRunScope.current();
     if (run != null && run.projectId() != null)
       return new ProjectContext(
-          run.projectId(), run.projectRoot().getFileName().toString(), run.projectRoot());
+          run.projectId(), ProjectRegistry.displayName(run.projectRoot()), run.projectRoot());
     if (run != null) return null;
     var client = ProjectClientScope.current();
     ProjectService service = client == null ? null : client.service;
