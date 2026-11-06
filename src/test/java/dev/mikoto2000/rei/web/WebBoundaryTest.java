@@ -109,7 +109,7 @@ class WebBoundaryTest {
     var sink =
         new SseBridgeTest.Sink() {
           /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
-          public void event(WebApiEventDto event) throws Exception {
+          public void event(WebApiEventDto event) throws java.io.IOException {
             throw new java.io.IOException("disconnected");
           }
         };

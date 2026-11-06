@@ -125,12 +125,12 @@ class SseBridgeTest {
     volatile Throwable error;
 
     /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
-    public void event(WebApiEventDto event) throws Exception {
+    public void event(WebApiEventDto event) throws java.io.IOException, InterruptedException {
       events.add(event);
     }
 
     /** {@code heartbeat} の条件を再現するため、検証用の操作や状態を扱う。 */
-    public void heartbeat() throws Exception {}
+    public void heartbeat() {}
 
     /** {@code complete} の条件を再現するため、検証用の操作や状態を扱う。 */
     public void complete(Throwable error) {
@@ -173,7 +173,7 @@ class SseBridgeTest {
     var sink =
         new Sink() {
           /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
-          public void event(WebApiEventDto event) throws Exception {
+          public void event(WebApiEventDto event) throws InterruptedException {
             entered.countDown();
             release.await();
           }
