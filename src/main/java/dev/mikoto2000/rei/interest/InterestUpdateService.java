@@ -4,6 +4,7 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -96,6 +97,31 @@ public class InterestUpdateService {
       String topic, String reason, String searchQuery, String summary, List<String> sourceUrls) {
     return saveWithCreatedAt(
         topic, reason, searchQuery, summary, sourceUrls, OffsetDateTime.now(ZoneOffset.UTC));
+  }
+
+  /** 同じ検索条件が登録されていない場合だけ、関心を保存する。 */
+  public Optional<InterestUpdate> saveIfNewQuery(
+      String topic, String reason, String searchQuery, String summary, List<String> sourceUrls) {
+    var createdAt = OffsetDateTime.now(ZoneOffset.UTC);
+    return jdbcClient
+        .sql(
+            """
+            INSERT INTO interest_updates (topic, reason, search_query, summary, source_urls, created_at)
+            SELECT ?, ?, ?, ?, ?, ?
+            WHERE NOT EXISTS (SELECT 1 FROM interest_updates WHERE search_query = ?)
+            RETURNING id
+            """)
+        .params(
+            topic,
+            reason,
+            searchQuery,
+            summary,
+            String.join("\n", sourceUrls),
+            createdAt.toString(),
+            searchQuery)
+        .query(Long.class)
+        .optional()
+        .map(id -> new InterestUpdate(id, topic, reason, searchQuery, summary, sourceUrls, createdAt));
   }
 
   /** 利用可能な対象を確認できるよう、直近を一覧にする。 */
