@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.storage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -60,6 +62,10 @@ public final class StorageDatabase {
   @FunctionalInterface
   public interface Work<T> {
     /** データ保存の共通処理の操作を実行する。 */
+    @SuppressFBWarnings(
+        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+        matchType = SuppressMatchType.EXACT,
+        justification = "Transaction work may combine JDBC with file and other checked operations.")
     T run(Connection connection) throws Exception;
   }
 

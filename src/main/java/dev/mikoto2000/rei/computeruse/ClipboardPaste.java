@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.computeruse;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
@@ -20,6 +22,10 @@ public final class ClipboardPaste {
   @FunctionalInterface
   public interface PasteGesture {
     /** 画面操作の支援の操作を実行する。 */
+    @SuppressFBWarnings(
+        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+        matchType = SuppressMatchType.EXACT,
+        justification = "The paste callback can report the original checked failure from the input backend.")
     void run() throws Exception;
   }
 

@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.http.HostAdmission;
 import dev.mikoto2000.rei.http.HttpFetchException;
 import dev.mikoto2000.rei.http.TransferBudget;
 import dev.mikoto2000.rei.http.TransferScope;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -64,6 +66,10 @@ public final class WebFetchBatch implements AutoCloseable {
   @FunctionalInterface
   public interface Fetcher<T> {
     /** 後続の処理に必要な情報を、取得先から読み込む。 */
+    @SuppressFBWarnings(
+        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+        matchType = SuppressMatchType.EXACT,
+        justification = "The batch accepts fetchers with different checked transport and parsing failures.")
     T fetch(WebSearchSelection.Candidate candidate) throws Exception;
   }
 
