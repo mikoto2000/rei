@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.externalagent;
 import static dev.mikoto2000.rei.externalagent.ExternalAgentResult.Status;
 
 import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -486,7 +487,7 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
               && !node.path("is_error").booleanValue()
           ? node
           : null;
-    } catch (Exception invalid) {
+    } catch (JsonProcessingException | RuntimeException invalid) {
       return null;
     }
   }
@@ -499,7 +500,7 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
       return node != null
           && node.isObject()
           && Set.of("claude.ai", "oauth_token").contains(node.path("authMethod").asText());
-    } catch (Exception invalid) {
+    } catch (JsonProcessingException | RuntimeException invalid) {
       return false;
     }
   }
