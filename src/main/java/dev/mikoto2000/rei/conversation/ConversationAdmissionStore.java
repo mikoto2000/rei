@@ -336,7 +336,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
                   throw new IdempotencyConflictException();
                 return new Receipt(snapshot(db, old.runId()).orElseThrow().context(), true);
               }
-              capacity(db, "chat_receipts");
+              capacity(db, true);
             }
             reserve(db, context);
             long revision = 1;
@@ -396,10 +396,13 @@ public final class ConversationAdmissionStore implements AutoCloseable {
   }
 
   /** 会話履歴と受付記録の管理に関する許容件数を処理する。 */
-  private static void capacity(Connection db, String table) throws SQLException {
-    // Table names are private constants, never caller input. Expired key tombstones are not reused.
+  private static void capacity(Connection db, boolean chatReceipt) throws SQLException {
+    // Expired key tombstones are not reused.
     try (var query = db.createStatement();
-        var rows = query.executeQuery("SELECT count(*) FROM " + table)) {
+        var rows =
+            chatReceipt
+                ? query.executeQuery("SELECT count(*) FROM chat_receipts")
+                : query.executeQuery("SELECT count(*) FROM conversation_admissions")) {
       if (rows.next() && rows.getLong(1) >= CAPACITY)
         throw new java.util.concurrent.RejectedExecutionException(
             "Durable conversation admission capacity reached");
@@ -458,7 +461,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
         }
       }
     }
-    capacity(db, "conversation_admissions");
+    capacity(db, false);
     String document = StorageDatabase.JSON.writeValueAsString(Context.of(context));
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (document.length() > 20000)
