@@ -389,7 +389,7 @@ public class AutoSleepService implements AutoCloseable {
         attempts.put(id, now);
         executing.set(true);
         runningSession = id;
-        worker.submit(
+        worker.execute(
             () -> {
               runningThread = Thread.currentThread();
               try {
