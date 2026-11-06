@@ -107,7 +107,7 @@ public final class BackendConnectionProbe {
 
     /** 起動環境の準備で参照する本文を返す。 */
     public java.util.concurrent.CompletionStage<byte[]> getBody() {
-      return result;
+      return result.minimalCompletionStage();
     }
 
     /** 通知に応じて状態や表示を更新するため、購読を受け付ける。 */

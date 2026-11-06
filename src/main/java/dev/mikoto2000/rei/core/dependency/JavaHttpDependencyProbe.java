@@ -324,7 +324,7 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
 
     /** 外部条件の待機で参照する本文を返す。 */
     public CompletionStage<String> getBody() {
-      return result;
+      return result.minimalCompletionStage();
     }
 
     /** 通知に応じて状態や表示を更新するため、購読を受け付ける。 */
