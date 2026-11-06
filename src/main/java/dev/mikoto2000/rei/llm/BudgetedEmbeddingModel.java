@@ -41,10 +41,9 @@ public final class BudgetedEmbeddingModel implements EmbeddingModel {
       Integer tokens = usage == null ? null : usage.getTotalTokens();
       reported = true;
       budget.recordTotalTokens(tokens);
-      if (response != null
-          && response.getResult() != null
-          && response.getResult().getOutput() != null)
-        dimensions = response.getResult().getOutput().length;
+      var result = response == null ? null : response.getResult();
+      var output = result == null ? null : result.getOutput();
+      if (output != null) dimensions = output.length;
       return response;
     } catch (RuntimeException error) {
       RunCancellation.propagate(error);

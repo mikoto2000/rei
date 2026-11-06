@@ -40,9 +40,12 @@ public class AiBriefingNarrator implements BriefingNarrator {
             buildPrompt(context),
             modelProvider.chatOptions(LlmFeature.BRIEFING, modelHolderService.get()));
 
-    String response =
-        modelProvider.chatModel(LlmFeature.BRIEFING).call(prompt).getResult().getOutput().getText();
-    return parse(response);
+    var response = modelProvider.chatModel(LlmFeature.BRIEFING).call(prompt);
+    var generation = response == null ? null : response.getResult();
+    var output = generation == null ? null : generation.getOutput();
+    var text = output == null ? null : output.getText();
+    if (text == null) throw new IllegalStateException("Missing briefing text");
+    return parse(text);
   }
 
   /** 利用先に渡せるよう、プロンプトを組み立てる。 */

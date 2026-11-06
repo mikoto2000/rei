@@ -90,18 +90,16 @@ public class LlmConversationCompressor implements ConversationCompressor {
       // summarization too.
       var model = provider.chatModel(LlmFeature.CHAT);
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+      var ownerOptions = owner.getOptions();
       var baseOptions =
-          provider.chatOptions(
-              LlmFeature.CHAT, owner.getOptions() == null ? null : owner.getOptions().getModel());
+          provider.chatOptions(LlmFeature.CHAT, ownerOptions == null ? null : ownerOptions.getModel());
       var optionsBuilder = baseOptions.mutate().toolCallbacks(List.of()).toolChoice("none");
       // Keep the provider's supported token parameter while enforcing the summary budget.
       if (baseOptions.getMaxCompletionTokens() != null)
         optionsBuilder.maxCompletionTokens(null).maxTokens(null).maxCompletionTokens(maxTokens);
       else optionsBuilder.maxTokens(maxTokens);
-      var toolContext = new LinkedHashMap<String, Object>();
-      if (owner.getOptions()
-              instanceof org.springframework.ai.model.tool.ToolCallingChatOptions original
-          && original.getToolContext() != null) toolContext.putAll(original.getToolContext());
+      var toolContext = new LinkedHashMap<>(
+          dev.mikoto2000.rei.core.chat.ToolLoopSupport.toolContext(owner));
       toolContext.put("rei.modelCallPurpose", "context-summary");
       optionsBuilder.toolContext(toolContext);
       var options = optionsBuilder.build();
@@ -150,13 +148,12 @@ public class LlmConversationCompressor implements ConversationCompressor {
                   response -> {
                     if (execution != null) execution.checkActive();
                     if (OutputLimitDetector.isOutputLimitReached(response)) outputLimited.set(true);
-                    if (response.getResult() != null
-                        && response.getResult().getOutput() != null
-                        && !response.getResult().getOutput().getToolCalls().isEmpty())
-                      invalidResponse.set(true);
-                    if (response.getResult() != null
-                        && response.getResult().getOutput().getText() != null)
-                      result.append(response.getResult().getOutput().getText());
+                    var generation = response.getResult();
+                    var output = generation == null ? null : generation.getOutput();
+                    if (output == null) return;
+                    if (!output.getToolCalls().isEmpty()) invalidResponse.set(true);
+                    var text = output.getText();
+                    if (text != null) result.append(text);
                   });
       new org.springframework.ai.chat.model.MessageAggregator()
           .aggregate(responses, aggregate::set)
