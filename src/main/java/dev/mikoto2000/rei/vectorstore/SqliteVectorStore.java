@@ -346,6 +346,9 @@ public class SqliteVectorStore
   }
 
   /** 関連文書の検索で用いる語句による限定検索を返す。 */
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "SQL_PREPARED_STATEMENT_GENERATED_FROM_NONCONSTANT_STRING",
+      justification = "Only fixed SQL fragments and placeholder counts are composed. All search terms and filter values are bound parameters.")
   private List<Document> lexicalOnlySearch(
       SearchRequest request, FilterCriteria criteria, List<String> queryTerms) {
     if (queryTerms.isEmpty()) {
@@ -483,7 +486,7 @@ public class SqliteVectorStore
 
   /** 対象を管理から外すため、別文書の識別子を削除する。 */
   private int deleteByDocId(Connection connection, String docId) throws SQLException {
-    deleteFtsMatching(connection, "doc_id = ?", List.of(docId));
+    deleteFtsMatching(connection, FtsKey.DOCUMENT, List.of(docId));
     try (var deleteChunks =
         connection.prepareStatement("DELETE FROM document_chunks_vec WHERE doc_id = ?")) {
       deleteChunks.setString(1, docId);
@@ -493,7 +496,7 @@ public class SqliteVectorStore
 
   /** 対象を管理から外すため、別取得元を削除する。 */
   private void deleteBySource(Connection connection, String source) throws SQLException {
-    deleteFtsMatching(connection, "source = ?", List.of(source));
+    deleteFtsMatching(connection, FtsKey.SOURCE, List.of(source));
     try (var deleteChunks =
         connection.prepareStatement("DELETE FROM document_chunks_vec WHERE source = ?")) {
       deleteChunks.setString(1, source);
@@ -505,7 +508,7 @@ public class SqliteVectorStore
   private void deleteMatching(Connection connection, FilterCriteria criteria) throws SQLException {
     if (criteria.docId() != null && criteria.source() != null) {
       deleteFtsMatching(
-          connection, "doc_id = ? AND source = ?", List.of(criteria.docId(), criteria.source()));
+          connection, FtsKey.DOCUMENT_AND_SOURCE, List.of(criteria.docId(), criteria.source()));
       try (var deleteChunks =
           connection.prepareStatement(
               "DELETE FROM document_chunks_vec WHERE doc_id = ? AND source = ?")) {
@@ -540,7 +543,7 @@ public class SqliteVectorStore
 
   /** 対象を管理から外すため、文書の分割一覧を削除する。 */
   private void deleteChunks(Connection connection, List<String> ids) throws SQLException {
-    for (String id : ids) deleteFtsMatching(connection, "chunk_id = ?", List.of(id));
+    for (String id : ids) deleteFtsMatching(connection, FtsKey.CHUNK, List.of(id));
     try (var deleteChunks =
         connection.prepareStatement("DELETE FROM document_chunks_vec WHERE chunk_id = ?")) {
       for (String id : ids) {
@@ -562,15 +565,29 @@ public class SqliteVectorStore
     };
   }
 
+  private static final String DELETE_FTS_PREFIX =
+      "DELETE FROM document_chunks_fts WHERE chunk_id IN"
+          + " (SELECT chunk_id FROM document_chunks_vec WHERE ";
+
+  private enum FtsKey {
+    DOCUMENT,
+    SOURCE,
+    DOCUMENT_AND_SOURCE,
+    CHUNK
+  }
+
   /** 対象を管理から外すため、FtsMatchingを削除する。 */
-  private void deleteFtsMatching(Connection connection, String clause, List<Object> params)
+  private void deleteFtsMatching(Connection connection, FtsKey key, List<Object> params)
       throws SQLException {
     if (!hasFtsIndex(connection)) return;
     try (var statement =
-        connection.prepareStatement(
-            "DELETE FROM document_chunks_fts WHERE chunk_id IN (SELECT chunk_id FROM document_chunks_vec WHERE "
-                + clause
-                + ")")) {
+        switch (key) {
+          case DOCUMENT -> connection.prepareStatement(DELETE_FTS_PREFIX + "doc_id = ?)");
+          case SOURCE -> connection.prepareStatement(DELETE_FTS_PREFIX + "source = ?)");
+          case DOCUMENT_AND_SOURCE ->
+              connection.prepareStatement(DELETE_FTS_PREFIX + "doc_id = ? AND source = ?)");
+          case CHUNK -> connection.prepareStatement(DELETE_FTS_PREFIX + "chunk_id = ?)");
+        }) {
       bindParams(statement, params);
       statement.executeUpdate();
     }
