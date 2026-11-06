@@ -22,6 +22,11 @@ import org.springframework.stereotype.Component;
 /** 会話ログの記録を保持し、後続の処理で参照できるようにする。 */
 @Component
 public class ConversationLogStore {
+  private static boolean isJsonl(Path path) {
+    Path name = path.getFileName();
+    return name != null && name.toString().endsWith(".jsonl");
+  }
+
 
   /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(ConversationLogStore.class);
@@ -155,7 +160,7 @@ public class ConversationLogStore {
         // Fail closed on unreadable history: never mistake an I/O failure for an absent id.
         try (var files = Files.list(location)) {
           for (var file :
-              files.filter(p -> p.getFileName().toString().endsWith(".jsonl")).sorted().toList()) {
+              files.filter(ConversationLogStore::isJsonl).sorted().toList()) {
             var found = notificationInFile(file, sourceId);
             if (found.isPresent()) return found;
           }
@@ -355,7 +360,7 @@ public class ConversationLogStore {
     if (!Files.isDirectory(location)) return;
     try (var files = Files.list(location)) {
       for (Path file :
-          files.filter(p -> p.getFileName().toString().endsWith(".jsonl")).sorted().toList()) {
+          files.filter(ConversationLogStore::isJsonl).sorted().toList()) {
         readFile(
             file,
             entry -> {
@@ -441,7 +446,7 @@ public class ConversationLogStore {
     try (var files = Files.list(directory)) {
       for (Path file :
           files
-              .filter(path -> path.getFileName().toString().endsWith(".jsonl"))
+              .filter(ConversationLogStore::isJsonl)
               .sorted()
               .toList()) {
         readFile(file, entries);

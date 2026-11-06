@@ -26,8 +26,10 @@ final class ContextFiles {
   static void write(Path target, String content) {
     Path temporary = null;
     try {
-      Files.createDirectories(target.getParent());
-      temporary = Files.createTempFile(target.getParent(), "context-", ".tmp");
+      Path parent = target.getParent();
+      if (parent == null) throw new java.io.IOException("Context file path has no parent");
+      Files.createDirectories(parent);
+      temporary = Files.createTempFile(parent, "context-", ".tmp");
       Files.writeString(temporary, content, StandardCharsets.UTF_8);
       try {
         Files.move(

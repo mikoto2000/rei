@@ -57,8 +57,10 @@ public class PaperArtifactStore {
       throw new PaperException(PaperException.Code.LIBRARY_STORAGE_FAILED, "Artifact サイズ上限");
     Path target = path(id, kind, ext), tmp = null;
     try {
-      Files.createDirectories(target.getParent());
-      tmp = Files.createTempFile(target.getParent(), ".paper-", ".tmp");
+      Path parent = target.getParent();
+      if (parent == null) throw new IOException("Paper artifact path has no parent");
+      Files.createDirectories(parent);
+      tmp = Files.createTempFile(parent, ".paper-", ".tmp");
       Files.write(tmp, bytes);
       op.check();
       Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
