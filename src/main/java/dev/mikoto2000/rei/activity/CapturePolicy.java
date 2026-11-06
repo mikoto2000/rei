@@ -1,14 +1,26 @@
 package dev.mikoto2000.rei.activity;
 
+import java.util.List;
 import java.util.Locale;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
  * 作業状況の把握で受け渡す取得記録判断基準を表す。
- *
- * @param properties この機能の動作設定
  */
-public record CapturePolicy(ActivityProperties properties) {
+public final class CapturePolicy {
+  /** 取得対象から除外するプロセス名を読む操作。 */
+  private final Supplier<List<String>> excludedProcesses;
+
+  /** 取得対象から除外するウィンドウ名のパターンを読む操作。 */
+  private final Supplier<List<String>> excludedWindowTitlePatterns;
+
+  /** 除外条件に必要な設定を受け取る。 */
+  public CapturePolicy(ActivityProperties properties) {
+    excludedProcesses = () -> properties.getExcludedProcesses();
+    excludedWindowTitlePatterns = () -> properties.getExcludedWindowTitlePatterns();
+  }
+
   /** 作業状況の把握において、対象外に該当するか判定する。 */
   public boolean excluded(ForegroundWindow window) {
     if (window == null
@@ -17,9 +29,9 @@ public record CapturePolicy(ActivityProperties properties) {
         || window.windowTitle() == null
         || window.windowId() == null
         || window.processId() <= 0) return true;
-    return properties.getExcludedProcesses().stream()
+    return excludedProcesses.get().stream()
             .anyMatch(p -> process(p).equals(process(window.processName())))
-        || properties.getExcludedWindowTitlePatterns().stream()
+        || excludedWindowTitlePatterns.get().stream()
             .anyMatch(p -> glob(p).matcher(window.windowTitle()).matches());
   }
 
