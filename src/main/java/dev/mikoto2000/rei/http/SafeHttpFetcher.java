@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -38,6 +39,23 @@ public class SafeHttpFetcher {
       URI finalUri,
       java.time.Instant retrievedAt,
       java.time.Instant validatedAt) {
+    /** レスポンスを作成する時点のヘッダーと本文を保持する。 */
+    public Response {
+      headers = headers == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(headers));
+      body = body == null ? null : body.clone();
+    }
+
+    /** 呼び出し元が本文のバイト列を変更してもレスポンスには影響しない。 */
+    @Override
+    public byte[] body() {
+      return body == null ? null : body.clone();
+    }
+
+    /** 本文を複製せずにバイト数を返す。 */
+    public int bodyLength() {
+      return body.length;
+    }
+
     /** 外部情報の取得を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Response(int status, Map<String, String> headers, byte[] body, URI finalUri) {
       this(status, headers, body, finalUri, java.time.Instant.now(), java.time.Instant.now());

@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.session.SessionTurn;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -24,6 +26,11 @@ public record SessionTurnResponse(
     String source,
     String sourceId,
     Map<String, String> metadata) {
+  /** 受け取った付随情報を読み取り専用のスナップショットとして保存する。 */
+  public SessionTurnResponse {
+    metadata = metadata == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(metadata));
+  }
+
   /** Web APIによる操作で利用する情報を、受け取った形式から変換する。 */
   static SessionTurnResponse from(SessionTurn row) {
     return new SessionTurnResponse(

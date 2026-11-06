@@ -334,9 +334,9 @@ public final class HttpResponseCache implements AutoCloseable {
       if (closed.get()) throw new HttpFetchException(HttpFetchException.Code.FETCH_REJECTED);
       Cached cached = entries.get(key).orElse(null);
       if (!request.forceRefresh() && cached != null && cached.fresh(clock)) {
-        TransferScope.decoded(cached.response().body().length);
+        TransferScope.decoded(cached.response().bodyLength());
         event(request.namespace(), "hit");
-        return copy(cached.response());
+        return cached.response();
       }
       event(request.namespace(), "miss");
       Map<String, String> headers =
@@ -406,7 +406,7 @@ public final class HttpResponseCache implements AutoCloseable {
             waiter,
             observer);
       }
-      return copy(loaded.response());
+      return loaded.response();
     } finally {
       synchronized (mutex) {
         if (--flight.waiters == 0 && !flight.result.isDone())
@@ -535,7 +535,7 @@ public final class HttpResponseCache implements AutoCloseable {
                 response,
                 flight.headers,
                 received);
-        TransferScope.decoded(response.body().length);
+        TransferScope.decoded(response.bodyLength());
       } else if (response.status() == 200)
         response =
             new SafeHttpFetcher.Response(
@@ -561,7 +561,7 @@ public final class HttpResponseCache implements AutoCloseable {
                   received);
           entries.put(
               flight.key,
-              new Cached(copy(response), received.plus(ttl), System.nanoTime(), ttl.toNanos()));
+              new Cached(response, received.plus(ttl), System.nanoTime(), ttl.toNanos()));
         } else if (!flight.superseded) entries.remove(flight.key);
         flight.result.complete(new Loaded(response, shareable));
         flights.remove(flight.id, flight);
@@ -622,20 +622,9 @@ public final class HttpResponseCache implements AutoCloseable {
     }
   }
 
-  /** 取得した情報の再利用で用いる複製を返す。 */
-  private static SafeHttpFetcher.Response copy(SafeHttpFetcher.Response value) {
-    return new SafeHttpFetcher.Response(
-        value.status(),
-        Map.copyOf(value.headers()),
-        value.body().clone(),
-        value.finalUri(),
-        value.retrievedAt(),
-        value.validatedAt());
-  }
-
   /** 取得した情報の再利用で用いる重みを返す。 */
   private static long weight(SafeHttpFetcher.Response value) {
-    long size = 1152L + value.body().length + value.finalUri().toASCIIString().length() * 8L;
+    long size = 1152L + value.bodyLength() + value.finalUri().toASCIIString().length() * 8L;
     for (var header : value.headers().entrySet())
       size += 128L + (header.getKey().length() + header.getValue().length()) * 4L;
     return size;

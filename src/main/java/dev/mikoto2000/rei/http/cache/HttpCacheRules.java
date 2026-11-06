@@ -74,8 +74,9 @@ final class HttpCacheRules {
         && !type.startsWith("text/")
         && !type.contains("json")
         && !type.contains("xml")) return false;
-    for (byte value : response.body()) if (value == 0) return false;
-    return !sensitive.containsSensitiveInfo(new String(response.body(), StandardCharsets.UTF_8));
+    byte[] body = response.body();
+    for (byte value : body) if (value == 0) return false;
+    return !sensitive.containsSensitiveInfo(new String(body, StandardCharsets.UTF_8));
   }
 
   /** 取得した情報の再利用において、restrictedに該当するか判定する。 */
