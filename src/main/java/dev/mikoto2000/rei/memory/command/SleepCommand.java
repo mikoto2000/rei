@@ -30,6 +30,10 @@ import picocli.CommandLine.Spec;
     })
 public class SleepCommand implements Callable<Integer> {
   /** サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared sleep service and its persisted consolidation state.")
   private final SleepService service;
 
   /** 補助。 */

@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.memory.configuration.AutoSleepProperties;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -33,6 +35,10 @@ import org.springframework.stereotype.Component;
 @EnableConfigurationProperties(AutoSleepProperties.class)
 public final class AutoSleepService implements AutoCloseable {
   /** 待機。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared sleep service and its persisted consolidation state.")
   private final SleepService sleep;
 
   /** 記憶。 */

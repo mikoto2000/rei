@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.core.command.EmbedCommand;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -29,6 +31,10 @@ public final class VectorDocumentController {
   private final VectorDocumentService vectors;
 
   /** バックグラウンド。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared background ingestion queue and its active work state.")
   private final AsyncVectorDocumentService background;
 
   /** 実行一覧。 */

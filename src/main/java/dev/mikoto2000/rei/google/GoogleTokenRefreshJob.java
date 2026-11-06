@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.google;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,6 +20,10 @@ import org.springframework.stereotype.Component;
     matchIfMissing = true)
 public final class GoogleTokenRefreshJob {
   /** サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared OAuth service and its current credential state.")
   private final GoogleOAuthService service;
 
   /** 次の確認までに進める時間。 */

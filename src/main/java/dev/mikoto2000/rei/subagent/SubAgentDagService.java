@@ -5,6 +5,8 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -74,6 +76,10 @@ public final class SubAgentDagService {
   private final DurableSubAgentRepository repository;
 
   /** 実行の担当。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common sub-agent runner and its durable child-run state.")
   private final SubAgentRunner runner;
 
   /** 登録台帳。 */

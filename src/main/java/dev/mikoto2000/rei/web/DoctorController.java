@@ -29,6 +29,10 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class DoctorController {
   /** 環境診断。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured diagnostic service for passive inspection.")
   private final DoctorService doctor;
 
   /** 活動中。 */

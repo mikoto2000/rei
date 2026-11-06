@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.core.contextbudget;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.Page;
 import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.PolicyValue;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +22,10 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
  */
 public class ToolResultCompressor {
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common tool result store for body references and cache state.")
   private final RawToolResultStore store;
 
   /** 概算。 */

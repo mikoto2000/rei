@@ -23,6 +23,10 @@ public class PaperTranslationService {
   private final PaperRepository repo;
 
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common artifact store for paper content and cleanup.")
   private final PaperArtifactStore store;
 
   /** 内容。 */

@@ -34,6 +34,10 @@ public class HistoryShellService {
   private final ConversationLogStore store;
 
   /** 検索。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured search service for shared conversation history.")
   private final ConversationHistorySearchService search;
 
   /** 形式。 */

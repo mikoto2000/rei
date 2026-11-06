@@ -110,6 +110,10 @@ public class ReiApplication {
   private final CommandUserInputDisplayPolicy commandUserInputDisplayPolicy;
 
   /** 非同期ベクトル文書サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared background ingestion queue and its active work state.")
   private final AsyncVectorDocumentService asyncVectorDocumentService;
 
   /** 音通知通知サービス。 */

@@ -14,6 +14,8 @@ import dev.mikoto2000.rei.review.ReviewCoverageLedger.Span;
 import dev.mikoto2000.rei.review.ReviewCoverageLedger.Target;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.toolcontract.ToolReadRejectedException;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -94,6 +96,10 @@ public final class ReviewTools {
   private final ReviewCoverageLedger ledger;
 
   /** 元の。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common tool result store for body references and cache state.")
   private final RawToolResultStore raw;
 
   /** ファイル一覧。 */

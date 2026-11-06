@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.ErrorInformation;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -41,6 +43,10 @@ public class ToolPermissionGuard {
   }
 
   /** 判断基準。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured permission policy for the current tool authorization decision.")
   private final ToolPermissionPolicy policy;
 
   /** イベント一覧。 */

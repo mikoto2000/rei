@@ -68,6 +68,10 @@ public class ProjectShellActivity implements AgentEventListener {
   private final ProjectRunStateStore states;
 
   /** 作業中集合。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared working set so callers see the current file selection.")
   private final WorkingSet workingSet;
 
   /** 記憶。 */

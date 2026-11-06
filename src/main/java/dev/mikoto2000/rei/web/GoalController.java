@@ -7,6 +7,8 @@ import dev.mikoto2000.rei.goal.GoalLoopService;
 import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.goal.GoalWaitRepository;
 import dev.mikoto2000.rei.goal.GoalWaitService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -32,6 +34,10 @@ public class GoalController {
   private final GoalRepository repository;
 
   /** 繰り返し。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared goal service to operate on the active goal lifecycle.")
   private final GoalLoopService loop;
 
   /** 指定された値や利用先を使って、GoalControllerを初期化する。 */

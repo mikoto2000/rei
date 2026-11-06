@@ -73,6 +73,10 @@ public final class GitHubWebhookService {
   private final SessionLifecycle sessions;
 
   /** 事実一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common repository for GitHub deliveries and notification state.")
   private final GitHubFactRepository facts;
 
   /** 実行予定の管理。 */

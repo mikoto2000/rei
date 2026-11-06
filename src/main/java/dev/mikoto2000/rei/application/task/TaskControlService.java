@@ -21,6 +21,10 @@ import java.util.Objects;
  */
 public final class TaskControlService {
   /** タスク一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common task service for current task and execution state.")
   private final TaskManagerService tasks;
 
   /** 会話の実行を受け付ける窓口。 */
@@ -55,6 +59,10 @@ public final class TaskControlService {
   private final PersistentCheckpointService checkpoints;
 
   /** 目標一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared goal service to operate on the active goal lifecycle.")
   private final GoalLoopService goals;
 
   /** 依存条件一覧。 */

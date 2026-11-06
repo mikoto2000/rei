@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.core.contextbudget;
 
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.toolcontract.ToolReadRejectedException;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -14,6 +16,10 @@ public class RawToolResultTools {
   }
 
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common tool result store for body references and cache state.")
   private final RawToolResultStore store;
 
   /** 概算。 */

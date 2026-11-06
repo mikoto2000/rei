@@ -7,6 +7,8 @@ import dev.mikoto2000.rei.core.dependency.DependencyState;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.goal.FileGoalVerifier;
 import dev.mikoto2000.rei.goal.GoalRepository;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
@@ -20,6 +22,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class FileDependencyTools {
   /** 確認の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared verifier and its configured completion and evidence policy.")
   private final FileGoalVerifier verifier;
 
   /** 依存条件が満たされるまでの待機を管理する窓口。 */

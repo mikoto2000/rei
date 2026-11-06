@@ -14,6 +14,8 @@ import dev.mikoto2000.rei.secretary.SecretaryProvider.Item;
 import dev.mikoto2000.rei.secretary.SecretaryProvider.Outcome;
 import dev.mikoto2000.rei.secretary.SecretaryProvider.Page;
 import dev.mikoto2000.rei.secretary.SecretaryProvider.Service;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -41,6 +43,10 @@ public class GoogleCalendarService {
   private final GoogleCalendarProperties properties;
 
   /** GoogleO認証サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared OAuth service and its current credential state.")
   private final GoogleOAuthService googleOAuthService;
 
   /** 指定された値や利用先を使って、GoogleCalendarServiceを初期化する。 */
