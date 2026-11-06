@@ -9,6 +9,8 @@ import dev.mikoto2000.rei.conversation.HistorySearchScope;
 import dev.mikoto2000.rei.conversation.HistoryShellService;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.PrintWriter;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
@@ -40,6 +42,11 @@ public class HistoryCommand implements Callable<Integer> {
   private final SessionQueryService sessions;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
   private final ProjectService projects;
 
   /** 形式。 */

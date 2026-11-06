@@ -18,6 +18,8 @@ import dev.mikoto2000.rei.workcontext.WorkContext.GitState;
 import dev.mikoto2000.rei.workcontext.WorkContext.Kind;
 import dev.mikoto2000.rei.workcontext.WorkContext.Origin;
 import dev.mikoto2000.rei.workcontext.WorkContext.Status;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -45,6 +47,11 @@ public class WorkContextService {
   private final SessionRepository sessions;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
   private final ProjectService projects;
 
   /** やり取り一覧。 */

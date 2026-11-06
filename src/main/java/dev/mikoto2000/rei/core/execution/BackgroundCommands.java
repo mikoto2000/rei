@@ -11,6 +11,8 @@ import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.image.ImageGenerationRequest;
 import dev.mikoto2000.rei.image.ImageGenerationService;
 import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
@@ -29,6 +31,11 @@ public class BackgroundCommands {
   private final ConversationInputRouter runs;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
   private final ProjectService projects;
 
   /** 状態一覧。 */

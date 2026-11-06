@@ -15,6 +15,8 @@ import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -35,6 +37,11 @@ import java.util.TreeSet;
  */
 public final class TaskManagerService {
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project registry; consumers must resolve against the same registered projects.")
   private final ProjectRegistry projects;
 
   /** 実行一覧。 */

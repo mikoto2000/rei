@@ -11,6 +11,8 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.memory.command.MemoryCommandSupport;
 import dev.mikoto2000.rei.memory.service.SleepService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,11 @@ import org.springframework.stereotype.Service;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class MemoryRunSubmitService {
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project registry; consumers must resolve against the same registered projects.")
   private final ProjectRegistry projects;
 
   /** 受付から終了までの管理。 */

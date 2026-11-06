@@ -10,6 +10,8 @@ import dev.mikoto2000.rei.event.AgentEventListener;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.BackgroundExecutionPayload;
 import dev.mikoto2000.rei.event.ProjectAgentEventStore;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -48,6 +50,11 @@ public class ProjectShellActivity implements AgentEventListener {
   }
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
   private final ProjectService projects;
 
   /** 保存先。 */

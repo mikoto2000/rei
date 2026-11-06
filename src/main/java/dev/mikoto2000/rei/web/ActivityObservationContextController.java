@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.activity.ActivityQueryLimitException;
 import dev.mikoto2000.rei.activity.ActivityWorkContextService;
 import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.DateTimeException;
 import java.time.LocalDate;
 import org.springframework.beans.factory.ObjectProvider;
@@ -46,6 +48,11 @@ public class ActivityObservationContextController {
       String report) {}
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project registry; consumers must resolve against the same registered projects.")
   private final ProjectRegistry projects;
 
   /** サービス一覧。 */

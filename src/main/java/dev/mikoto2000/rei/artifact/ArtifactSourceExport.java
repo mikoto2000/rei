@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.core.TextChangeSetService;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.paper.PaperLibraryService;
 import dev.mikoto2000.rei.paper.PaperOperation;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -22,6 +24,11 @@ public final class ArtifactSourceExport {
   private final ArtifactStore store;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project registry; consumers must resolve against the same registered projects.")
   private final ProjectRegistry projects;
 
   /** 会話一覧。 */

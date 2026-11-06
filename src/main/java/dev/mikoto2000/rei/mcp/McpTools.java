@@ -13,6 +13,8 @@ import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.workcontext.WorkContextService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -44,6 +46,11 @@ public final class McpTools {
           "rei_task_cancel");
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project registry; consumers must resolve against the same registered projects.")
   private final ProjectRegistry projects;
 
   /** 許可。 */

@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.application.project;
 
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 
 /**
@@ -12,6 +14,11 @@ import java.util.List;
 @org.springframework.context.annotation.Lazy
 public final class ProjectQueryService implements dev.mikoto2000.rei.secretary.SecretaryProjects {
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project registry; consumers must resolve against the same registered projects.")
   private final ProjectRegistry projects;
 
   /** Shell and Backend share the registered identity query without changing current selection. */

@@ -4,12 +4,19 @@ import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.util.function.BiConsumer;
 
 /** チャット受付のユースケースを実現する。 */
 public final class ChatSubmitService {
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project registry; consumers must resolve against the same registered projects.")
   private final ProjectRegistry projects;
 
   /** 会話一覧。 */

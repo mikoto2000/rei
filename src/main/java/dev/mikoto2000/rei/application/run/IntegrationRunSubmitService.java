@@ -13,6 +13,8 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarService;
 import dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand;
 import dev.mikoto2000.rei.task.TaskService;
 import dev.mikoto2000.rei.task.command.TaskCommand;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,11 @@ import org.springframework.stereotype.Service;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class IntegrationRunSubmitService {
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project registry; consumers must resolve against the same registered projects.")
   private final ProjectRegistry projects;
 
   /** 受付から終了までの管理。 */

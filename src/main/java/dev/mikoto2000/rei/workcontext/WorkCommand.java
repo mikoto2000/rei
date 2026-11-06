@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.output.CommandOutput;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.concurrent.Callable;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -22,6 +24,11 @@ public class WorkCommand implements Callable<Integer> {
   private final WorkContextService service;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
   private final ProjectService projects;
 
   /** Gitの情報。 */
