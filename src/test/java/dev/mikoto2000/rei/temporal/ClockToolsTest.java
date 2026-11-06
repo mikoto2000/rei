@@ -6,6 +6,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 
 /** 時刻の取得元ツール一覧の結果と状態の契約を検証するテスト。 */
 class ClockToolsTest {
@@ -19,6 +20,9 @@ class ClockToolsTest {
     CurrentTime actual = tools.getCurrentTime();
 
     assertEquals("2026-08-17T01:35:42.152+09:00", actual.timestamp());
-    assertEquals("Asia/Tokyo", actual.timezone());
+    assertEquals("Asia/Tokyo", actual.timeZone());
+    var mapper = JsonMapper.builder().build();
+    var payload = mapper.readTree(mapper.writeValueAsString(actual));
+    assertEquals("Asia/Tokyo", payload.path("timezone").asText());
   }
 }
