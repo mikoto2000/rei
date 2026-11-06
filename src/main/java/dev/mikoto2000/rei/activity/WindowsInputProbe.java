@@ -4,7 +4,7 @@ import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Platform;
 import com.sun.jna.Pointer;
-import com.sun.jna.Structure;
+import com.sun.jna.platform.win32.WinUser.LASTINPUTINFO;
 import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.ptr.LongByReference;
 import com.sun.jna.win32.StdCallLibrary;
@@ -19,7 +19,7 @@ final class WindowsInputProbe {
   /** 作業状況の把握に必要な利用者を扱う。 */
   interface User extends StdCallLibrary {
     /** 作業状況の把握において、取得直近入力付随情報に該当するか判定する。 */
-    boolean GetLastInputInfo(LastInput value);
+    boolean GetLastInputInfo(LASTINPUTINFO value);
 
     /** 作業状況の把握で参照する前面ウィンドウを返す。 */
     Pointer GetForegroundWindow();
@@ -44,18 +44,6 @@ final class WindowsInputProbe {
     boolean QueryUnbiasedInterruptTime(LongByReference working);
   }
 
-  /** 作業状況の把握に必要な直近入力を扱う。 */
-  @Structure.FieldOrder({"cbSize", "dwTime"})
-  public static class LastInput extends Structure {
-    /** cb大きさ／dw時刻。 */
-    public int cbSize, dwTime;
-
-    /** 既定の状態でLastInputを初期化する。 */
-    public LastInput() {
-      cbSize = size();
-    }
-  }
-
   /** 作業状況の把握に必要なAPIを扱う。 */
   private static final class Api {
     /** 利用者。 */
@@ -69,7 +57,7 @@ final class WindowsInputProbe {
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   static DesktopActivityObserver.Lightweight read() {
     if (!Platform.isWindows()) return null;
-    var input = new LastInput();
+    var input = new LASTINPUTINFO();
     boolean valid = Api.USER.GetLastInputInfo(input);
     long ticks = Api.KERNEL.GetTickCount64();
     var working = new LongByReference();
