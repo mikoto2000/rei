@@ -5,6 +5,8 @@ import dev.mikoto2000.rei.core.chat.RunCancellation;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -353,13 +355,9 @@ public final class TextDocumentChangeSetService {
 
   /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public View inspect(AgentRunContext owner, String id) throws IOException {
-    return inspect(owner, id, true);
-  }
-
-  private View inspect(AgentRunContext owner, String id, boolean preview) throws IOException {
     var row = owned(owner, id);
     reconcile(row);
-    return view(owned(owner, id), preview);
+    return view(owned(owner, id));
   }
 
   /** 共通の実行基盤で用いる破棄を返す。 */
@@ -395,7 +393,7 @@ public final class TextDocumentChangeSetService {
     Path root = Path.of(row.saved().root());
     if (!TextDocumentTransaction.matches(root, row.saved().changes(), false)) {
       finish(row, "PROPOSED", "STALE", List.of("Baseline changed; no writes"));
-      return inspect(owner, id, false);
+      return view(refreshState(row), false);
     }
     if (!ACTIVE.add(id)) throw new IllegalStateException("Document apply already active");
     try {
@@ -414,10 +412,10 @@ public final class TextDocumentChangeSetService {
         cleanupTerminal(row);
         committed.accept(row.saved().changes());
       }
-      return inspect(owner, id, false);
+      return view(refreshState(row), false);
     } catch (IOException | RuntimeException failure) {
       try {
-        var current = owned(owner, id);
+        var current = refreshState(row);
         if (current.status().equals("APPLYING")) {
           boolean restored =
               current.phase().equals("ROLLED_BACK")
@@ -496,9 +494,7 @@ public final class TextDocumentChangeSetService {
 
   /** 共通の実行基盤に関する後片付け終端を処理する。 */
   private void cleanupTerminal(Row row) throws IOException {
-    var stages =
-        ownedRow(row.saved().project(), row.saved().root(), row.saved().session(), row.saved().id())
-            .stages();
+    var stages = refreshState(row).stages();
     try {
       TextDocumentTransaction.cleanupOwned(
           Path.of(row.saved().root()), row.saved().id(), row.saved().changes(), stages);
@@ -601,21 +597,36 @@ public final class TextDocumentChangeSetService {
                   || !saved.root().equals(root)
                   || !saved.session().equals(session))
                 throw new IllegalStateException("Document payload ownership changed");
-              return new Row(
-                  saved,
-                  sha,
-                  rs.getString("status"),
-                  rs.getString("phase"),
-                  List.of(decode(rs.getString("stages"), TextDocumentTransaction.Stage[].class)),
-                  List.of(decode(rs.getString("warnings"), String[].class)),
-                  rs.getLong("pid"),
-                  rs.getString("process_start"));
+              return readState(rs, saved, sha);
             })
         .optional()
         .orElseThrow(
             () ->
                 new IllegalArgumentException(
                     "Document set not found in this Project/root/session"));
+  }
+
+  /** Reload mutable state for the same verified proposal without fetching its payload. */
+  private Row refreshState(Row row) {
+    var saved = row.saved();
+    return db.sql(
+            "SELECT status,phase,stages,warnings,pid,process_start FROM text_document_change_sets WHERE id=? AND project=? AND root=? AND session=? AND sha=?")
+        .params(saved.id(), saved.project(), saved.root(), saved.session(), row.sha())
+        .query((rs, n) -> readState(rs, saved, row.sha()))
+        .optional()
+        .orElseThrow(() -> new IllegalStateException("Verified document proposal is unavailable"));
+  }
+
+  private Row readState(ResultSet rs, Saved saved, String sha) throws SQLException {
+    return new Row(
+        saved,
+        sha,
+        rs.getString("status"),
+        rs.getString("phase"),
+        List.of(decode(rs.getString("stages"), TextDocumentTransaction.Stage[].class)),
+        List.of(decode(rs.getString("warnings"), String[].class)),
+        rs.getLong("pid"),
+        rs.getString("process_start"));
   }
 
   /** 共通の実行基盤で用いる表示内容を返す。 */

@@ -407,6 +407,31 @@ class TextDocumentChangeSetTest {
     assertFalse(current.files().getFirst().currentAvailable());
   }
 
+  @Test
+  void applyReceiptObservesFileChangesAfterCommit() throws Exception {
+    write("A.md", "old");
+    var service = service();
+    var proposal = service.propose(owner(), request(op("UPDATE", "A.md", null, "old", "new")));
+    var receipt =
+        service.apply(
+            owner(),
+            proposal.id(),
+            proposal.proposalSha256(),
+            changes -> {
+              try {
+                Files.writeString(root.resolve("A.md"), "external");
+              } catch (java.io.IOException failure) {
+                throw new java.io.UncheckedIOException(failure);
+              }
+            });
+
+    assertEquals("APPLIED", receipt.status());
+    assertEquals("CLEANED", receipt.phase());
+    assertFalse(receipt.currentMatches());
+    assertEquals(
+        TextDocumentTransaction.hash("external"), receipt.files().getFirst().currentSha256());
+  }
+
   /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void outstandingUnknownDocumentSetBlocksSingleFileAndAnotherBatchBeforeWriting()
