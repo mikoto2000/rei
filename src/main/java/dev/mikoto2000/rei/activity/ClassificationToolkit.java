@@ -62,9 +62,24 @@ public final class ClassificationToolkit {
     return rules;
   }
 
-  /** 作業状況の把握で用いるこの機能の動作設定を返す。 */
-  public ActivityProperties properties() {
-    return p;
+  /** 分類ルールの提案を有効にするか返す。 */
+  boolean ruleSuggestionsEnabled() {
+    return p.getClassification().getRuleSuggestion().isEnabled();
+  }
+
+  /** ルール提案に必要な最小観測件数を返す。 */
+  int ruleSuggestionMinimumSamples() {
+    return p.getClassification().getRuleSuggestion().getMinimumSamples();
+  }
+
+  /** ルール提案の最大出力トークン数を返す。 */
+  int ruleSuggestionMaxOutputTokens() {
+    return p.getClassification().getRuleSuggestion().getMaxOutputTokens();
+  }
+
+  /** 画像解析を省略できる信頼度のしきい値を返す。 */
+  double skipVisionConfidence() {
+    return p.getDetection().getSkipVisionConfidence();
   }
 
   /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */

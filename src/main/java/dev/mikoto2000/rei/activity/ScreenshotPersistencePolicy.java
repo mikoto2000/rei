@@ -5,9 +5,20 @@ package dev.mikoto2000.rei.activity;
  *
  * <p>Evidence is optional. Success and extraction failure are independent opt-ins.
  *
- * @param properties この機能の動作設定
+ * @param retentionDays 画像の保存日数
+ * @param keepScreenshots 成功時に画像を保存するか
+ * @param keepOnExtractionFailure 抽出失敗時に画像を保存するか
  */
-public record ScreenshotPersistencePolicy(ActivityProperties properties) {
+public record ScreenshotPersistencePolicy(
+    int retentionDays, boolean keepScreenshots, boolean keepOnExtractionFailure) {
+  /** 現在の設定から画像保存に必要な値を取り出す。 */
+  public ScreenshotPersistencePolicy(ActivityProperties properties) {
+    this(
+        properties.getScreenshotRetentionDays(),
+        properties.isKeepScreenshots(),
+        properties.isKeepOnExtractionFailure());
+  }
+
   /** 作業状況の把握における最終結果の選択肢。 */
   public enum Outcome {
     /** 成功。 */
@@ -18,10 +29,10 @@ public record ScreenshotPersistencePolicy(ActivityProperties properties) {
 
   /** 作業状況の把握において、保存の実施条件を判定する。 */
   public boolean shouldSave(boolean duplicate, Outcome outcome) {
-    if (duplicate || properties.getScreenshotRetentionDays() == 0) return false;
+    if (duplicate || retentionDays == 0) return false;
     return switch (outcome) {
-      case SUCCESS -> properties.isKeepScreenshots();
-      case EXTRACTION_FAILURE -> properties.isKeepOnExtractionFailure();
+      case SUCCESS -> keepScreenshots;
+      case EXTRACTION_FAILURE -> keepOnExtractionFailure;
     };
   }
 }
