@@ -217,11 +217,19 @@ inventory still uses sorted, unique paths and skips paths rejected by the existi
 project and MCP checks. `-Drei.benchmark.search-initial=true` enables the first-page
 benchmark, which measures from the initial search call through SQLite cursor
 persistence and the returned page. It uses 10, 100, 1,000, and 5,000 real files, a
-fixed candidate listing, one warmup, and three measured calls per size. File
+fixed candidate listing, one warmup, and three measured calls per size and
+parallelism level (1, 2, 4), rotating execution order. File
 creation and Git listing are outside the timed work. Results are written to
-`target/reading-benchmark/search-initial.json`.
+`target/reading-benchmark/search-initial-parallel.json`.
 On Windows with Java 25, the median at 5,000 candidates fell from 34.15 s to
 20.64 s after removing the repeated path validation.
+
+Initial search uses the same scoped worker limit as resume. Each query's matching
+paths are deduplicated before dispatch. Workers perform the existing path and
+attribute checks, and the caller inserts accepted entries into the sorted manifest
+after joining all ranges.
+At 5,000 candidates, median time to the first page at parallelism 1, 2, and 4
+was 17.40 s, 11.67 s, and 8.02 s in the Windows sandbox.
 
 The seven requested scenarios map to: repeated-line and distinct-query benchmarks; the
 distant-hit benchmark; the 1030-file cursor fixture; `ReadingDeliveryTest`'s compression and

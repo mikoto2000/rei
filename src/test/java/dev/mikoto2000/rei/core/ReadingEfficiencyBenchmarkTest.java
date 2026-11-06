@@ -154,20 +154,30 @@ class ReadingEfficiencyBenchmarkTest {
                 return candidates;
               }
             };
-        var search = new PagedFileSearch(reader, ReadingTestStores.store(database));
+        var store = ReadingTestStores.store(database);
+        var degrees = List.of(1, 2, 4);
+        var searches =
+            degrees.stream().map(degree -> new PagedFileSearch(reader, store, degree)).toList();
         var request = searchResumeRequest(query("hit", "sources"), null);
-        var samples = new ArrayList<Long>();
+        var samples = new LinkedHashMap<Integer, List<Long>>();
+        for (int degree : degrees) samples.put(degree, new ArrayList<>());
         for (int i = 0; i < warmups + repetitions; i++) {
-          var owner = new AgentRunContext("search-initial-" + size + "-" + i, "chat", root);
-          try (var scope = AgentRunScope.open(owner)) {
-            long started = System.nanoTime();
-            var page = search.read(request, root);
-            long elapsed = System.nanoTime() - started;
-            assertNull(page.error());
-            assertEquals(size, page.progress().total());
-            assertTrue(page.resultCursor() != null && page.resultCursor().startsWith("RESULT:"));
-            assertEquals(candidates.getFirst(), page.files().getFirst().path());
-            if (i >= warmups) samples.add(elapsed);
+          for (int turn = 0; turn < degrees.size(); turn++) {
+            int index = (i + turn) % degrees.size();
+            int degree = degrees.get(index);
+            var owner =
+                new AgentRunContext(
+                    "search-initial-" + size + "-" + i + "-" + degree, "chat", root);
+            try (var scope = AgentRunScope.open(owner)) {
+              long started = System.nanoTime();
+              var page = searches.get(index).read(request, root);
+              long elapsed = System.nanoTime() - started;
+              assertNull(page.error());
+              assertEquals(size, page.progress().total());
+              assertTrue(page.resultCursor() != null && page.resultCursor().startsWith("RESULT:"));
+              assertEquals(candidates.getFirst(), page.files().getFirst().path());
+              if (i >= warmups) samples.get(degree).add(elapsed);
+            }
           }
         }
         cases.add(Map.of("candidates", size, "totalNanos", samples));
@@ -175,7 +185,7 @@ class ReadingEfficiencyBenchmarkTest {
       }
     }
     report(
-        "search-initial",
+        "search-initial-parallel",
         Map.of("warmups", warmups, "samplesPerSize", repetitions, "scanLimit", 1, "cases", cases));
   }
 
