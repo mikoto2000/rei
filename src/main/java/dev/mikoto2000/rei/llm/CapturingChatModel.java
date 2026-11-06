@@ -57,9 +57,10 @@ final class CapturingChatModel implements ChatModel {
   /** 用途に応じたモデル利用で用いるlogicalを返す。 */
   private CaptureStore.LogicalCall logical(Prompt prompt) {
     if (!(prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options)
-        || options.getToolContext() == null) return null;
+            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options))
+      return null;
     var context = options.getToolContext();
+    if (context == null) return null;
     AgentRunContext owner = null;
     if (context.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
         instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)

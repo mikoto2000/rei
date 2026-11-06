@@ -157,8 +157,8 @@ public class BriefingService {
   private String formatDocument(Document document) {
     Object source = document.getMetadata().get("source");
     String sourceLabel = source == null ? "" : source.toString();
-    String text =
-        document.getText() == null ? "" : document.getText().replaceAll("\\s+", " ").trim();
+    String content = document.getText();
+    String text = content == null ? "" : content.replaceAll("\\s+", " ").trim();
     String snippet = text.length() > 80 ? text.substring(0, 80) + "..." : text;
 
     if (!sourceLabel.isBlank() && !snippet.isBlank()) {

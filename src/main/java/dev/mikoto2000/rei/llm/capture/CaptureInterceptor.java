@@ -55,11 +55,12 @@ public final class CaptureInterceptor implements Interceptor {
           state = "CAPTURE_FAILED";
         }
       }
+      var mediaType = body == null ? null : body.contentType();
       attempt =
           store.prepare(
               logical,
               bytes,
-              body == null || body.contentType() == null ? null : body.contentType().toString(),
+              mediaType == null ? null : mediaType.toString(),
               state);
     } catch (RuntimeException | IOException ignored) {
       try {

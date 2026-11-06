@@ -97,9 +97,9 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
   /** 外部エージェントへの委譲の本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
-    if (!(request.prompt().getOptions() instanceof ToolCallingChatOptions options)
-        || options.getToolContext() == null
-        || !(options.getToolContext().get(RunExecutionContext.KEY)
+    if (!(request.prompt().getOptions() instanceof ToolCallingChatOptions options)) return request;
+    var values = options.getToolContext();
+    if (values == null || !(values.get(RunExecutionContext.KEY)
             instanceof RunExecutionContext run)) return request;
     String extra = POLICY;
     if (run.userRequest().strip().startsWith("/agent")) {

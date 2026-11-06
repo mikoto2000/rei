@@ -135,13 +135,13 @@ public class AgentSkillAdvisor implements BaseAdvisor {
       return request;
     }
 
+    var toolContext =
+        prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+            ? options.getToolContext()
+            : null;
     var execution =
-        prompt.getOptions()
-                    instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-                && options.getToolContext() != null
-                && options
-                        .getToolContext()
-                        .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+        toolContext != null
+                && toolContext.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
                     instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext context
             ? context
             : null;

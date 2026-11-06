@@ -25,11 +25,12 @@ public class OpenAiSdkConfiguration {
           properties.setBaseUrl(OpenAiCompatibleEndpoint.baseUrl(properties.getBaseUrl()));
           // Rei's empty per-feature key means inherit the shared key; AI 2 treats an
           // empty key as an explicit unauthenticated connection instead.
+          var key = properties.getApiKey();
           if (!(properties
                   instanceof
                   org.springframework.ai.model.openai.autoconfigure.OpenAiCommonProperties)
-              && properties.getApiKey() != null
-              && properties.getApiKey().isBlank()) {
+              && key != null
+              && key.isBlank()) {
             properties.setApiKey(null);
           }
         }

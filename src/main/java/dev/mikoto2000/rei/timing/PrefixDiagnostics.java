@@ -104,12 +104,14 @@ public final class PrefixDiagnostics {
   /** 実行時間の把握で用いる取得元一覧を返す。 */
   public static List<Source> sources(org.springframework.ai.chat.prompt.Prompt prompt) {
     var sources = new ArrayList<Source>();
-    if (prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolCallbacks() != null) {
+    var callbacks =
+        prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+            ? options.getToolCallbacks()
+            : null;
+    if (callbacks != null) {
       // Logical API field, not a claim about the provider's token serialization order.
       var definitions = new StringBuilder();
-      for (var callback : options.getToolCallbacks()) {
+      for (var callback : callbacks) {
         var d = callback.getToolDefinition();
         definitions
             .append(d.name())
@@ -124,12 +126,12 @@ public final class PrefixDiagnostics {
     for (var message : prompt.getInstructions()) {
       if (sources.size() >= 65) break;
       String id = message.getMessageType().name();
-      if (Boolean.TRUE.equals(message.getMetadata().get("rei.workingSet"))) id = "WORKING_SET";
-      else if (message.getText() != null && message.getText().startsWith("Run observations ("))
-        id = "RUN_OBSERVATIONS";
-      else if (message.getText() != null && message.getText().startsWith("Conversation Summary ("))
-        id = "CONTEXT_SUMMARY";
       String text = message.getText();
+      if (Boolean.TRUE.equals(message.getMetadata().get("rei.workingSet"))) id = "WORKING_SET";
+      else if (text != null && text.startsWith("Run observations ("))
+        id = "RUN_OBSERVATIONS";
+      else if (text != null && text.startsWith("Conversation Summary ("))
+        id = "CONTEXT_SUMMARY";
       if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant)
         text = String.valueOf(text) + assistant.getToolCalls();
       if (message instanceof org.springframework.ai.chat.messages.ToolResponseMessage tools)
