@@ -123,7 +123,7 @@ class DependencyToolsTest {
     try (var scope = AgentRunScope.open(owner())) {
       String id = tools.registerDependency("USER_ANSWER", "Proceed?", null, null, null).id();
       execution.beginIteration();
-      var before = execution.evaluator().beforeTool("waitForDependency", "{}");
+      var before = execution.beforeTool("waitForDependency", "{}");
       var result =
           callback.call(
               "{\"dependencyId\":\"" + id + "\",\"timeoutSeconds\":0}",

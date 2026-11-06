@@ -1345,8 +1345,18 @@ public class RunExecutionContext {
   }
 
   /** 実行の停滞への対処で用いる評価の判断を返す。 */
-  public ProgressEvaluator evaluator() {
+  ProgressEvaluator evaluator() {
     return evaluator;
+  }
+
+  /** ツールの実行前に評価用の状態を取得する。 */
+  public ProgressEvaluator.Snapshot beforeTool(String name, String arguments) {
+    return evaluator.beforeTool(name, arguments);
+  }
+
+  /** 計画の変更を判定するため、現在の状態を記録する。 */
+  public void capturePlanBaseline() {
+    evaluator.capturePlanBaseline();
   }
 
   /** 実行の停滞への対処で用いる進捗の更新番号を返す。 */

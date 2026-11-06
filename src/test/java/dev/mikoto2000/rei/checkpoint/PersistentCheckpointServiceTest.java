@@ -277,14 +277,14 @@ class PersistentCheckpointServiceTest {
     assertFalse(execution.resumeAcquisitionBlocked("readReviewFile", arguments));
     try (var scope = AgentRunScope.open(next)) {
       execution.beginIteration();
-      var before = execution.evaluator().beforeTool("readReviewFile", arguments);
+      var before = execution.beforeTool("readReviewFile", arguments);
       var page = tools.readReviewFile(job.id(), "pending.md", pending.range().version(), 0, 512);
       tools.confirmed(next, List.of(page));
       execution.recordTool("readReviewFile", arguments, json.writeValueAsString(page), before);
       execution.endIteration();
       assertNull(execution.requestReplan());
       execution.beginIteration();
-      before = execution.evaluator().beforeTool("submitReviewPage", "{}");
+      before = execution.beforeTool("submitReviewPage", "{}");
       var receipt = tools.submitReviewPage(job.id(), "pending.md", page.offset(), page.nextOffset(),
           "Assessment saved after resuming the same task", List.of());
       execution.recordTool("submitReviewPage", "{}", json.writeValueAsString(receipt), before);
@@ -296,7 +296,7 @@ class PersistentCheckpointServiceTest {
       }
       assertFalse(execution.resumeAcquisitionBlocked("readReviewFile", "{\"path\":\"remaining.md\"}"));
       execution.beginIteration();
-      before = execution.evaluator().beforeTool("readReviewFile", "{}");
+      before = execution.beforeTool("readReviewFile", "{}");
       var remaining = tools.readReviewFile(job.id(), "remaining.md",
           job.targets().stream().filter(t -> t.path().equals("remaining.md")).findFirst().orElseThrow().version(), 0, 512);
       tools.confirmed(next, List.of(remaining));
@@ -304,7 +304,7 @@ class PersistentCheckpointServiceTest {
       execution.endIteration();
       assertNull(execution.requestReplan());
       execution.beginIteration();
-      before = execution.evaluator().beforeTool("submitReviewPage", "{}");
+      before = execution.beforeTool("submitReviewPage", "{}");
       receipt = tools.submitReviewPage(job.id(), "remaining.md", remaining.offset(), remaining.nextOffset(),
           "Reviewed the next unfinished target", List.of());
       execution.recordTool("submitReviewPage", "{}", json.writeValueAsString(receipt), before);
@@ -690,7 +690,7 @@ class PersistentCheckpointServiceTest {
         "readMultiFile",
         "{}",
         "{\"path\":\"A\",\"version\":\"v1\",\"startLine\":1,\"content\":[\"line\"]}",
-        execution.evaluator().beforeTool("readMultiFile", "{}"));
+        execution.beforeTool("readMultiFile", "{}"));
     execution.endIteration();
   }
 

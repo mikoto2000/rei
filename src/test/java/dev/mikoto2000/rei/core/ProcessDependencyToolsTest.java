@@ -47,7 +47,7 @@ class ProcessDependencyToolsTest {
             .getToolCallbacks()[0];
     assertFalse(callback.getToolDefinition().inputSchema().contains("toolContext"));
     context.beginIteration();
-    var before = context.evaluator().beforeTool("waitForShellProcess", "{}");
+    var before = context.beforeTool("waitForShellProcess", "{}");
     var result =
         callback.call(
             "{\"processId\":\"p\",\"timeoutSeconds\":0}",
