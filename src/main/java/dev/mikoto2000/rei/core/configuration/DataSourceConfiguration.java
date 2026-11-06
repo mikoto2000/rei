@@ -4,6 +4,7 @@ import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.datasource.SqliteChatMemorySchemaMigration;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
+import java.io.IOException;
 import java.nio.file.Path;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -19,7 +20,7 @@ public class DataSourceConfiguration {
   /** 機能の組み立てで用いるデータ取得元を返す。 */
   @Bean
   @Primary
-  public DataSource dataSource() throws Exception {
+  public DataSource dataSource() throws IOException {
     return sqliteDataSource(ReiPaths.memoryDbPath());
   }
 
@@ -31,26 +32,26 @@ public class DataSourceConfiguration {
       havingValue = "true",
       matchIfMissing = true)
   public DataSource vectorStoreDataSource(SqliteVecExtensionLoader sqliteVecExtensionLoader)
-      throws Exception {
+      throws IOException {
     return new SqliteVecDataSource(
         sqliteVecCapableDataSource(ReiPaths.vectorStoreDbPath()), sqliteVecExtensionLoader);
   }
 
   /** 機能の組み立てで用いるデータ取得元を返す。 */
-  DataSource dataSource(Path workDirectory) throws Exception {
+  DataSource dataSource(Path workDirectory) throws IOException {
     return sqliteDataSource(ReiPaths.memoryDbPath(workDirectory));
   }
 
   /** 機能の組み立てで用いるベクトル保存先データ取得元を返す。 */
   DataSource vectorStoreDataSource(
-      Path workDirectory, SqliteVecExtensionLoader sqliteVecExtensionLoader) throws Exception {
+      Path workDirectory, SqliteVecExtensionLoader sqliteVecExtensionLoader) throws IOException {
     return new SqliteVecDataSource(
         sqliteVecCapableDataSource(ReiPaths.vectorStoreDbPath(workDirectory)),
         sqliteVecExtensionLoader);
   }
 
   /** 機能の組み立てで用いるSQLiteデータ取得元を返す。 */
-  private DataSource sqliteDataSource(Path dbPath) throws Exception {
+  private DataSource sqliteDataSource(Path dbPath) throws IOException {
     ReiPaths.ensureParentDirectoryExists(dbPath);
 
     SQLiteDataSource dataSource = new SQLiteDataSource();
@@ -60,7 +61,7 @@ public class DataSourceConfiguration {
   }
 
   /** 機能の組み立てで用いるSQLiteベクトルCapableデータ取得元を返す。 */
-  private DataSource sqliteVecCapableDataSource(Path dbPath) throws Exception {
+  private DataSource sqliteVecCapableDataSource(Path dbPath) throws IOException {
     ReiPaths.ensureParentDirectoryExists(dbPath);
 
     SQLiteDataSource dataSource = new SQLiteDataSource();

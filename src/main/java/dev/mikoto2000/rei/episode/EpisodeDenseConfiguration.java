@@ -4,6 +4,7 @@ import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
 import dev.mikoto2000.rei.vectorstore.LazySqliteVectorStore;
+import java.io.IOException;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
@@ -24,7 +25,7 @@ public class EpisodeDenseConfiguration {
       JsonMapper json,
       dev.mikoto2000.rei.conversation.ConversationTurnStore turns,
       dev.mikoto2000.rei.event.ProjectAgentEventStore events)
-      throws Exception {
+      throws IOException {
     var path = ReiPaths.vectorStoreDbPath().resolveSibling("episode-vectors.db");
     ReiPaths.ensureParentDirectoryExists(path);
     var source = new org.sqlite.SQLiteDataSource();

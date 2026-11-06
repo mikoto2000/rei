@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.datasource;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -90,9 +91,9 @@ public final class ReiPaths {
    * 指定したファイルパスの親ディレクトリを作成します。
    *
    * @param filePath 親ディレクトリを作成したいファイルパス
-   * @throws Exception ディレクトリ作成に失敗した場合
+   * @throws IOException ディレクトリ作成に失敗した場合
    */
-  public static void ensureParentDirectoryExists(Path filePath) throws Exception {
+  public static void ensureParentDirectoryExists(Path filePath) throws IOException {
     var parent = filePath.getParent();
     if (parent != null) Files.createDirectories(parent);
   }
