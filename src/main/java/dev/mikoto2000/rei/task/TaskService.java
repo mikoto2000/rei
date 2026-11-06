@@ -76,7 +76,7 @@ public class TaskService {
       com.google.api.services.tasks.model.Task created =
           getTasksClient().tasks().insert(DEFAULT_TASK_LIST_ID, request).execute();
       return toTask(created);
-    } catch (Exception e) {
+    } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
       throw new IllegalStateException("Google Tasks へのタスク追加に失敗しました", e);
     }
   }
@@ -108,7 +108,7 @@ public class TaskService {
                   query.dueBefore() == null
                       || (task.dueDate() != null && !task.dueDate().isAfter(query.dueBefore())))
           .toList();
-    } catch (Exception e) {
+    } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
       throw new IllegalStateException("Google Tasks の一覧取得に失敗しました", e);
     }
   }
@@ -121,7 +121,7 @@ public class TaskService {
       com.google.api.services.tasks.model.Task updated =
           getTasksClient().tasks().update(DEFAULT_TASK_LIST_ID, current.getId(), current).execute();
       return toTask(updated);
-    } catch (Exception e) {
+    } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
       throw new IllegalStateException("Google Tasks の完了更新に失敗しました", e);
     }
   }
@@ -141,7 +141,7 @@ public class TaskService {
       com.google.api.services.tasks.model.Task updated =
           getTasksClient().tasks().update(DEFAULT_TASK_LIST_ID, current.getId(), current).execute();
       return toTask(updated);
-    } catch (Exception e) {
+    } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
       throw new IllegalStateException("Google Tasks の更新に失敗しました", e);
     }
   }
@@ -158,7 +158,7 @@ public class TaskService {
       com.google.api.services.tasks.model.Task updated =
           getTasksClient().tasks().update(DEFAULT_TASK_LIST_ID, current.getId(), current).execute();
       return toTask(updated);
-    } catch (Exception e) {
+    } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
       throw new IllegalStateException("Google Tasks の期限更新に失敗しました", e);
     }
   }
@@ -168,18 +168,18 @@ public class TaskService {
     try {
       com.google.api.services.tasks.model.Task current = fetchByHashId(id, true);
       getTasksClient().tasks().delete(DEFAULT_TASK_LIST_ID, current.getId()).execute();
-    } catch (Exception e) {
+    } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
       throw new IllegalStateException("Google Tasks の削除に失敗しました", e);
     }
   }
 
   /** タスクの管理に関する再確認Googleトークンを処理する。 */
-  public void refreshGoogleToken() throws Exception {
+  public void refreshGoogleToken() throws java.io.IOException, java.security.GeneralSecurityException {
     googleOAuthService.refreshToken();
   }
 
   /** タスクの管理に関する権限の確認を処理する。 */
-  public void authorize() throws Exception {
+  public void authorize() throws java.io.IOException, java.security.GeneralSecurityException {
     if (!googleCalendarProperties.task().enabled()) {
       throw new IllegalStateException("Google Task integration is disabled");
     }
@@ -188,7 +188,7 @@ public class TaskService {
 
   /** 外部の情報を利用できるよう、別ハッシュ値識別子を取得する。 */
   private com.google.api.services.tasks.model.Task fetchByHashId(long id, boolean includeCompleted)
-      throws Exception {
+      throws java.io.IOException, java.security.GeneralSecurityException {
     List<com.google.api.services.tasks.model.Task> items =
         getTasksClient()
             .tasks()
@@ -236,7 +236,7 @@ public class TaskService {
   }
 
   /** タスクの管理で参照するタスク一覧クライアントを返す。 */
-  private Tasks getTasksClient() throws Exception {
+  private Tasks getTasksClient() throws java.io.IOException, java.security.GeneralSecurityException {
     if (!googleCalendarProperties.task().enabled()) {
       throw new IllegalStateException("Google Task integration is disabled");
     }

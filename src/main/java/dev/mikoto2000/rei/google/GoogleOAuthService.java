@@ -16,6 +16,7 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import java.awt.Desktop;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.security.GeneralSecurityException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -82,7 +83,7 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
 
   /** Googleサービスの認証で用いる権限の確認を返す。 */
   public synchronized Credential authorize(NetHttpTransport transport, boolean force)
-      throws Exception {
+      throws IOException {
     if (credential != null && !force) {
       return credential;
     }
@@ -101,7 +102,7 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
   }
 
   /** Googleサービスの認証に関する認証を更新するトークンを処理する。 */
-  public synchronized void refreshToken() throws Exception {
+  public synchronized void refreshToken() throws IOException, GeneralSecurityException {
     refresh(authorize(GoogleNetHttpTransport.newTrustedTransport(), false));
   }
 
@@ -110,7 +111,8 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
    *
    * <p>Never starts interactive authorization from a scheduler thread.
    */
-  public synchronized boolean refreshIfExpiring(Duration advance) throws Exception {
+  public synchronized boolean refreshIfExpiring(Duration advance)
+      throws IOException, GeneralSecurityException {
     if (!isEnabled()) {
       return false;
     }
@@ -459,7 +461,7 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
     try {
       authorize(GoogleNetHttpTransport.newTrustedTransport(), force || !secretaryScopesMatch());
       return secretaryGoogleStatus(true);
-    } catch (Exception failure) {
+    } catch (IOException | GeneralSecurityException | RuntimeException failure) {
       throw new Failure("AUTH_REQUIRED", 0, false);
     }
   }

@@ -84,7 +84,7 @@ public class McpConfiguration {
   @Bean
   @org.springframework.core.annotation.Order(-10)
   @ConditionalOnProperty(name = "rei.mcp-server.enabled", havingValue = "true")
-  SecurityFilterChain mcpSecurity(HttpSecurity http) throws Exception {
+  SecurityFilterChain mcpSecurity(HttpSecurity http) {
     return http.securityMatcher("/mcp")
         .csrf(c -> c.disable())
         .httpBasic(c -> c.disable())

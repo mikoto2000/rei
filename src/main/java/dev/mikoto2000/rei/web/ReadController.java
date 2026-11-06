@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.read.ReadQueryService;
 import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -58,7 +59,7 @@ public class ReadController {
 
   /** Web APIによる操作で用いる日次案内を返す。 */
   @GetMapping("/briefing")
-  public BriefingResponse briefing() throws Exception {
+  public BriefingResponse briefing() throws IOException, GeneralSecurityException {
     return BriefingResponse.from(queries.briefing());
   }
 

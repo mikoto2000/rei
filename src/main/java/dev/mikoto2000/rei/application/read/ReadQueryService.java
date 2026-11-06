@@ -11,6 +11,7 @@ import dev.mikoto2000.rei.search.SearchKnowledgeService;
 import dev.mikoto2000.rei.skills.AgentSkill;
 import dev.mikoto2000.rei.skills.AgentSkillRepository;
 import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.util.List;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
@@ -83,7 +84,7 @@ public final class ReadQueryService {
   }
 
   /** 情報の照会で用いる日次案内を返す。 */
-  public DailyBriefing briefing() throws Exception {
+  public DailyBriefing briefing() throws IOException, GeneralSecurityException {
     return briefings.today();
   }
 

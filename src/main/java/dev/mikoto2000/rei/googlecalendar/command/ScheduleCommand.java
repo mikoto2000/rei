@@ -95,7 +95,7 @@ public class ScheduleCommand {
       try {
         googleCalendarService.authorize();
         out().println("Google Calendar の認可が完了しました");
-      } catch (Exception e) {
+      } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
         throw new IllegalStateException("Google Calendar の認可に失敗しました", e);
       }
     }
@@ -116,7 +116,7 @@ public class ScheduleCommand {
       try {
         googleCalendarService.refreshToken();
         out().println("Google Calendar のトークンを更新しました");
-      } catch (Exception e) {
+      } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
         throw new IllegalStateException("Google Calendar のトークン更新に失敗しました", e);
       }
     }
@@ -172,7 +172,7 @@ public class ScheduleCommand {
         }
 
         events.forEach(this::printEvent);
-      } catch (Exception e) {
+      } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
         throw new IllegalStateException("Google Calendar の予定一覧取得に失敗しました", e);
       }
     }
@@ -238,7 +238,7 @@ public class ScheduleCommand {
                     created.id(),
                     created.summary(),
                     DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(resolvedStart)));
-      } catch (Exception e) {
+      } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
         out().println("[error] " + userFacingMessage(e, "Google Calendar への予定追加に失敗しました"));
       }
     }

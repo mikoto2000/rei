@@ -44,10 +44,6 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
   }
 
   /** 指定された条件に従って、依頼された内容を生成する。 */
-  @SuppressFBWarnings(
-      value = "REC_CATCH_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "A discovery source can report checked failures without preventing other sources from contributing.")
   @Override
   public List<TopicCandidate> generate(TopicGenerationContext context) {
     if (!properties.isEnabled() || !properties.getDiscovery().isEnabled()) return List.of();
@@ -64,7 +60,7 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
           candidates.add(toCandidate(item, context.currentTime()));
           seenRepository.markSeen(item.source(), item.externalId());
         }
-      } catch (Exception e) {
+      } catch (java.io.IOException | InterruptedException | RuntimeException e) {
         log.warn("Discovery source failed: {}", source.getClass().getSimpleName());
       }
     }

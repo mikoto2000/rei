@@ -169,7 +169,7 @@ public class SubAgentCommand implements Callable<Integer> {
       if (registry == null) throw new IllegalArgumentException("SubAgent runtime unavailable");
       action.run();
       return 0;
-    } catch (Exception e) {
+    } catch (java.io.IOException | RuntimeException e) {
       out("[error] " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
       return 2;
     } finally {
@@ -181,7 +181,7 @@ public class SubAgentCommand implements Callable<Integer> {
   @FunctionalInterface
   private interface Action {
     /** 補助エージェントへの委譲の操作を実行する。 */
-    void run() throws Exception;
+    void run() throws java.io.IOException;
   }
 
   /** 補助エージェントへの委譲のうち、実行の操作を利用者コマンドとして受け付ける。 */

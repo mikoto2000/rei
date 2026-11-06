@@ -63,12 +63,12 @@ public class GoogleCalendarService {
   }
 
   /** 予定の管理に関する権限の確認を処理する。 */
-  public void authorize() throws Exception {
+  public void authorize() throws java.io.IOException, java.security.GeneralSecurityException {
     authorize(true);
   }
 
   /** 予定の管理に関する権限の確認を処理する。 */
-  public void authorize(boolean forceReauthorize) throws Exception {
+  public void authorize(boolean forceReauthorize) throws java.io.IOException, java.security.GeneralSecurityException {
     if (!properties.calendar().enabled()) {
       throw new IllegalStateException("Google Calendar integration is disabled");
     }
@@ -77,7 +77,7 @@ public class GoogleCalendarService {
   }
 
   /** 予定の管理に関する認証を更新するトークンを処理する。 */
-  public void refreshToken() throws Exception {
+  public void refreshToken() throws java.io.IOException, java.security.GeneralSecurityException {
     if (!properties.calendar().enabled()) {
       throw new IllegalStateException("Google Calendar integration is disabled");
     }
@@ -86,7 +86,7 @@ public class GoogleCalendarService {
   }
 
   /** 利用可能な対象を確認できるよう、イベント一覧を一覧にする。 */
-  public List<GoogleCalendarEventSummary> listEvents(Instant from, Instant to) throws Exception {
+  public List<GoogleCalendarEventSummary> listEvents(Instant from, Instant to) throws java.io.IOException, java.security.GeneralSecurityException {
     Calendar client = getCalendarClient();
 
     return client
@@ -106,7 +106,7 @@ public class GoogleCalendarService {
   /** 新たな対象を利用できるよう、イベントを作成する。 */
   public GoogleCalendarEventSummary createEvent(
       String summary, ZonedDateTime start, ZonedDateTime end, String location, String description)
-      throws Exception {
+      throws java.io.IOException, java.security.GeneralSecurityException {
     if (!end.isAfter(start)) {
       throw new IllegalArgumentException("end must be after start");
     }
@@ -125,7 +125,7 @@ public class GoogleCalendarService {
   }
 
   /** 利用可能な対象を確認できるよう、イベント一覧対象日付を一覧にする。 */
-  public List<GoogleCalendarEventSummary> listEventsForDate(LocalDate date) throws Exception {
+  public List<GoogleCalendarEventSummary> listEventsForDate(LocalDate date) throws java.io.IOException, java.security.GeneralSecurityException {
     ZonedDateTime from = date.atStartOfDay(zoneId());
     ZonedDateTime to = date.plusDays(1).atStartOfDay(zoneId());
     return listEvents(from.toInstant(), to.toInstant());
@@ -162,7 +162,7 @@ public class GoogleCalendarService {
   }
 
   /** 予定の管理で参照する予定表クライアントを返す。 */
-  private Calendar getCalendarClient() throws Exception {
+  private Calendar getCalendarClient() throws java.io.IOException, java.security.GeneralSecurityException {
     if (!properties.calendar().enabled()) {
       throw new IllegalStateException("Google Calendar integration is disabled");
     }

@@ -18,7 +18,7 @@ public class GoogleCalendarTools {
   @Tool(
       name = "googleCalendarListEvents",
       description = "Google Calendar の予定を指定期間で一覧します。日時は ISO-8601 形式で指定します。")
-  List<GoogleCalendarEventSummary> listEvents(String from, String to) throws Exception {
+  List<GoogleCalendarEventSummary> listEvents(String from, String to) throws java.io.IOException, java.security.GeneralSecurityException {
     IO.println(String.format("Google Calendar の予定を %s から %s で一覧するよ", from, to));
     return googleCalendarService.listEvents(
         googleCalendarService.parseDateTime(from).toInstant(),
@@ -29,7 +29,7 @@ public class GoogleCalendarTools {
   @Tool(
       name = "googleCalendarListEventsForDate",
       description = "Google Calendar の予定を指定日で一覧します。日付は yyyy-MM-dd 形式で指定します。")
-  List<GoogleCalendarEventSummary> listEventsForDate(String date) throws Exception {
+  List<GoogleCalendarEventSummary> listEventsForDate(String date) throws java.io.IOException, java.security.GeneralSecurityException {
     IO.println(String.format("Google Calendar の予定を %s で一覧するよ", date));
     return googleCalendarService.listEventsForDate(LocalDate.parse(date));
   }
@@ -40,7 +40,7 @@ public class GoogleCalendarTools {
       description = "Google Calendar に予定を作成します。日時は ISO-8601 形式で指定します。")
   GoogleCalendarEventSummary createEvent(
       String summary, String start, String end, String location, String description)
-      throws Exception {
+      throws java.io.IOException, java.security.GeneralSecurityException {
     IO.println(String.format("Google Calendar に予定 %s を作成するよ", summary));
     try {
       return googleCalendarService.createEvent(
@@ -49,7 +49,7 @@ public class GoogleCalendarTools {
           googleCalendarService.parseDateTime(end),
           location,
           description);
-    } catch (Exception e) {
+    } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
       IO.println("[error] " + userFacingMessage(e, "Google Calendar への予定追加に失敗しました"));
       throw e;
     }
