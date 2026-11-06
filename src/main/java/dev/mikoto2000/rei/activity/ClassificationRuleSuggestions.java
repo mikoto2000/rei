@@ -91,6 +91,10 @@ public final class ClassificationRuleSuggestions {
   }
 
   /** 作業状況の把握で用いる提案を返す。 */
+  @SuppressFBWarnings(
+      value = "REC_CATCH_EXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Converts checked failures from the configured model into suggestion diagnostics.")
   public String suggest(boolean entertainment) {
     if (!toolkit.ruleSuggestionsEnabled())
       return "ルール候補生成は無効です。";
