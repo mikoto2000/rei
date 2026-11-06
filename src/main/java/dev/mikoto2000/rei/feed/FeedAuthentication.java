@@ -53,7 +53,7 @@ public class FeedAuthentication {
             || binding.tokenEnv() == null
             || !binding.tokenEnv().matches("[A-Z_][A-Z0-9_]{0,127}")
             || bindings.putIfAbsent(url, binding.tokenEnv()) != null) throw invalidConfiguration();
-      } catch (IllegalArgumentException | NullPointerException e) {
+      } catch (IllegalArgumentException e) {
         // Neither binding values nor nested exception messages are safe to echo.
         throw invalidConfiguration();
       }
