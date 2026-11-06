@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.state.StatefulOperationService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,6 +27,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public class StatefulController {
   /** 操作一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the application service that coordinates shared state updates.")
   private final StatefulOperationService operations;
 
   /** 指定された値や利用先を使って、StatefulControllerを初期化する。 */

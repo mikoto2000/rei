@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -12,21 +14,60 @@ import java.util.Set;
 
 /**
  * 作業状況の把握で受け渡す作業状況時系列の記録を表す。
- *
- * @param store 保存先
- * @param clock 判定や記録に使う時刻の取得元
- * @param summaryPolicy 要約判断基準
- * @param dailySummaries 日次要約一覧
- * @param scoreCriteria 評価値判断基準一覧
- * @param workInferences 作業推定一覧
  */
-public record ActivityTimeline(
-    ActivityStore store,
-    Clock clock,
-    SemanticSessionPolicy summaryPolicy,
-    DailySummaryService dailySummaries,
-    PeriodCoachingStore scoreCriteria,
-    WorkActivityInferenceStore workInferences) {
+public final class ActivityTimeline {
+  /** 時系列の保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the shared activity store for the current timeline.")
+  private final ActivityStore store;
+
+  /** 時刻の取得元。 */
+  private final Clock clock;
+
+  /** 要約判断基準。 */
+  private final SemanticSessionPolicy summaryPolicy;
+
+  /** 日次要約。 */
+  private final DailySummaryService dailySummaries;
+
+  /** 評価値の保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads score criteria from the common period coaching store.")
+  private final PeriodCoachingStore scoreCriteria;
+
+  /** 作業推定の保存先。 */
+  private final WorkActivityInferenceStore workInferences;
+
+  /** 操作で使用する保存先と設定を受け取る。 */
+  public ActivityTimeline(
+      ActivityStore store,
+      Clock clock,
+      SemanticSessionPolicy summaryPolicy,
+      DailySummaryService dailySummaries,
+      PeriodCoachingStore scoreCriteria,
+      WorkActivityInferenceStore workInferences) {
+    this.store = store;
+    this.clock = clock;
+    this.summaryPolicy = summaryPolicy;
+    this.dailySummaries = dailySummaries;
+    this.scoreCriteria = scoreCriteria;
+    this.workInferences = workInferences;
+  }
+
+  /** 表示時に使用する時刻の取得元を返す。 */
+  Clock clock() {
+    return clock;
+  }
+
+  /** セッションの要約判断基準を返す。 */
+  SemanticSessionPolicy summaryPolicy() {
+    return summaryPolicy;
+  }
+
   /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ActivityTimeline(
       ActivityStore store,
