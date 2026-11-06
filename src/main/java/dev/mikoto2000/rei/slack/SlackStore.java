@@ -70,7 +70,7 @@ public final class SlackStore {
   @FunctionalInterface
   private interface Work<T> {
     /** Slackとの連携の操作を実行する。 */
-    T run(Connection c) throws Exception;
+    T run(Connection c) throws SQLException, JsonProcessingException;
   }
 
   /** 指定された値や利用先を使って、SlackStoreを初期化する。 */
@@ -121,11 +121,11 @@ public final class SlackStore {
         var result = work.run(c);
         c.commit();
         return result;
-      } catch (Exception | Error e) {
+      } catch (SQLException | JsonProcessingException | RuntimeException | Error e) {
         c.rollback();
         throw e;
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Slack storage operation failed");
     }
   }

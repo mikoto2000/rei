@@ -5,6 +5,7 @@ import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.CANCELLED;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.STORE_UNAVAILABLE;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -86,7 +87,7 @@ public final class ProtectedCredentialStore {
         var all = read();
         var node = all.get(account);
         return node == null ? null : json.treeToValue(node, TokenSet.class);
-      } catch (Exception e) {
+      } catch (IOException | RuntimeException e) {
         throw ChatGptException.of(STORE_UNAVAILABLE);
       }
     }
@@ -98,7 +99,7 @@ public final class ProtectedCredentialStore {
         var result = new TreeSet<String>();
         all.fieldNames().forEachRemaining(result::add);
         return result;
-      } catch (Exception e) {
+      } catch (IOException | RuntimeException e) {
         throw ChatGptException.of(STORE_UNAVAILABLE);
       }
     }
@@ -124,7 +125,7 @@ public final class ProtectedCredentialStore {
             directory.resolve("credentials.bin"),
             StandardCopyOption.ATOMIC_MOVE,
             StandardCopyOption.REPLACE_EXISTING);
-      } catch (Exception e) {
+      } catch (IOException | RuntimeException e) {
         throw ChatGptException.of(STORE_UNAVAILABLE);
       } finally {
         if (plain != null) Arrays.fill(plain, (byte) 0);
@@ -155,7 +156,7 @@ public final class ProtectedCredentialStore {
     }
 
     /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
-    private com.fasterxml.jackson.databind.node.ObjectNode read() throws Exception {
+    private com.fasterxml.jackson.databind.node.ObjectNode read() throws IOException {
       var file = directory.resolve("credentials.bin");
       if (!Files.exists(file)) return json.createObjectNode();
       if (Files.isSymbolicLink(file) || Files.size(file) > 1048576)
@@ -173,7 +174,8 @@ public final class ProtectedCredentialStore {
   }
 
   /** ChatGPTとの連携で用いる確保を返す。 */
-  private static java.nio.channels.FileLock acquire(FileChannel channel) throws Exception {
+  private static java.nio.channels.FileLock acquire(FileChannel channel)
+      throws IOException, InterruptedException {
     long deadline = System.nanoTime() + java.time.Duration.ofSeconds(20).toNanos();
     while (System.nanoTime() < deadline) {
       var lock = channel.tryLock();

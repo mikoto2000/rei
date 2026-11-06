@@ -1,5 +1,8 @@
 package dev.mikoto2000.rei.attention;
 
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
+
 /**
  * Webhook通知通知を用途や設定に応じて提供する窓口。
  *
@@ -30,7 +33,8 @@ public final class WebhookNotificationProvider implements NotificationProvider {
   }
 
   /** 注意の管理で用いるdeliverを返す。 */
-  public Receipt deliver(String id, String metadata) throws Exception {
+  public Receipt deliver(String id, String metadata)
+      throws InterruptedException, ExecutionException, TimeoutException {
     int code = sender.send(properties, id, metadata);
     return new Receipt(code >= 200 && code < 300 ? "SENT" : "FAILED", "http_" + code, "", 0);
   }
