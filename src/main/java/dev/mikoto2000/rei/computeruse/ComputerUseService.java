@@ -11,6 +11,7 @@ import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.MODEL_ERRO
 import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.SAFETY_BLOCKED;
 import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.STABILIZATION_ERROR;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -374,14 +375,14 @@ public final class ComputerUseService {
   @FunctionalInterface
   private interface DiagnosticWrite {
     /** 指定された内容を書き込み先へ反映する。 */
-    void write() throws Exception;
+    void write() throws IOException;
   }
 
   /** 後から経緯や使用量を確認できるよう、診断情報を記録する。 */
   private void recordDiagnostics(int step, DiagnosticWrite write) {
     try {
       write.write();
-    } catch (Exception error) {
+    } catch (IOException | RuntimeException error) {
       diagnosticError(step, error);
     }
   }
