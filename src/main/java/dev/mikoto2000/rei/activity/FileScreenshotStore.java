@@ -26,7 +26,7 @@ public final class FileScreenshotStore implements ScreenshotStore {
   }
 
   /** 後から参照できるよう、指定された情報を保存する。 */
-  public List<String> save(String id, Instant capturedAt, CapturedScreen screen) throws Exception {
+  public List<String> save(String id, Instant capturedAt, CapturedScreen screen) throws IOException {
     UUID.fromString(id);
     Files.createDirectories(root);
     if (Files.isSymbolicLink(root))
@@ -50,7 +50,7 @@ public final class FileScreenshotStore implements ScreenshotStore {
   }
 
   /** 作業状況の把握に関する後片付けを処理する。 */
-  public void cleanup(Instant before) throws Exception {
+  public void cleanup(Instant before) throws IOException {
     if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return;
     try (var files = Files.newDirectoryStream(root, "*.png")) {
       for (var path : files) {

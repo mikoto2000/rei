@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.HexFormat;
@@ -34,7 +35,7 @@ final class EventMigration {
   private record LegacyCursor(long offset, boolean discard) {}
 
   /** 指定された内容を、現在の対象へ反映する。 */
-  static void apply(Connection db, Path root) throws Exception {
+  static void apply(Connection db, Path root) throws IOException, SQLException, NoSuchAlgorithmException {
     try (var sql = db.createStatement()) {
       sql.execute(
           "CREATE TABLE agent_events(project_id TEXT NOT NULL,sequence INTEGER NOT NULL,id TEXT NOT NULL,event_type TEXT NOT NULL,created_seconds INTEGER NOT NULL,created_nanos INTEGER NOT NULL,session_id TEXT,run_id TEXT,turn_scope TEXT,conversation_key TEXT,legacy_replayable INTEGER NOT NULL,legacy_start INTEGER,legacy_end INTEGER,record TEXT NOT NULL,PRIMARY KEY(project_id,sequence),UNIQUE(project_id,id))");
@@ -86,7 +87,8 @@ final class EventMigration {
   }
 
   /** データ保存の共通処理に関する取り込み続きの取得位置一覧および参照先一覧を処理する。 */
-  private static void importCursorsAndReferences(Connection db, Path root) throws Exception {
+  private static void importCursorsAndReferences(Connection db, Path root)
+      throws IOException, SQLException {
     Path file = root.resolve("memory-consolidation.db");
     StorageBackup.requireSafePath(file);
     if (Files.notExists(file)) return;

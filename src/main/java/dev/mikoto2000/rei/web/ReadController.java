@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.read.ReadQueryService;
+import java.io.IOException;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -63,7 +64,8 @@ public class ReadController {
 
   /** 指定された検索条件に合う情報を探し、候補を返す。 */
   @PostMapping("/search")
-  public SearchResponse search(@RequestBody SearchRequest request) throws Exception {
+  public SearchResponse search(@RequestBody SearchRequest request)
+      throws IOException, InterruptedException {
     return SearchResponse.from(
         queries.search(
             request.query(), request.vectorTopK(), request.webTopK(), request.threshold()));

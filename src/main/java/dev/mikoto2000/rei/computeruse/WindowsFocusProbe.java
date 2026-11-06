@@ -116,7 +116,7 @@ final class WindowsFocusProbe implements Supplier<String> {
   }
 
   /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
-  static String validate(String text) throws Exception {
+  static String validate(String text) {
     com.fasterxml.jackson.databind.JsonNode node;
     try {
       node =
