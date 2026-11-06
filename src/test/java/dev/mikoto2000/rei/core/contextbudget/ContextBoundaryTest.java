@@ -37,13 +37,14 @@ class ContextBoundaryTest {
   void assemblesAfterToolsCompleteAndKeepsRawPromptOutsideProjection() {
     List<String> order = new ArrayList<>();
     var events = new AgentEventFactory(Clock.systemUTC());
+    var evaluator = mock(ProgressEvaluator.class);
     var context =
         new RunExecutionContext(
-            "run", new OutputLimitRunBudget(2, 10), mock(ProgressEvaluator.class), events, e -> {});
+            "run", new OutputLimitRunBudget(2, 10), evaluator, events, e -> {});
     context.setRunContext(new AgentRunContext("run", "chat", Path.of(".")));
-    when(context.evaluator().afterTool(any(), any(), any(), any())).thenReturn(List.of());
-    when(context.evaluator().readFeedback()).thenReturn("[]");
-    when(context.evaluator().snapshot()).thenReturn(new ProgressEvaluator(Path.of(".")).snapshot());
+    when(evaluator.afterTool(any(), any(), any(), any())).thenReturn(List.of());
+    when(evaluator.readFeedback()).thenReturn("[]");
+    when(evaluator.snapshot()).thenReturn(new ProgressEvaluator(Path.of(".")).snapshot());
     var assembler = mock(ContextAssembler.class);
     when(assembler.assemble(any(), any(), any(), any()))
         .thenAnswer(

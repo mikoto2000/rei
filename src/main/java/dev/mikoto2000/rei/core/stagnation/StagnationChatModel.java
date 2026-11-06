@@ -609,7 +609,7 @@ public class StagnationChatModel implements ChatModel {
                           dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback domain
                       && domain.availableAfterDelegation()))
                 return "External review is complete or already attempted. Evaluate the supplied result independently and answer; no further tool execution or automatic fixes are allowed in this review run.";
-              var before = context.evaluator().beforeTool(name, input);
+              var before = context.beforeTool(name, input);
               boolean decorated =
                   delegateTool instanceof dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
               String actualId = context.claimToolId(name, input);

@@ -96,7 +96,7 @@ class FileDependencyToolsTest {
     assertFalse(required.contains("timeoutSeconds"));
     execution.beginIteration();
     try (var scope = AgentRunScope.open(new AgentRunContext("r", "s", dir, "p"))) {
-      var before = execution.evaluator().beforeTool("waitForFile", "{}");
+      var before = execution.beforeTool("waitForFile", "{}");
       var result =
           callback.call(
               "{\"relativeFile\":\"missing\",\"timeoutSeconds\":0}",

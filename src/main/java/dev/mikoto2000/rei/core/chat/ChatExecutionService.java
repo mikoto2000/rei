@@ -612,7 +612,7 @@ public class ChatExecutionService {
     try {
       if (resumed == null) turns.startOrdered(context, promptText, clock.instant());
       if (checkpoints != null) checkpoints.start(context, promptText);
-      execution.evaluator().capturePlanBaseline();
+      execution.capturePlanBaseline();
       if (checkpoints != null && checkpoints.hasProgressHistory(context)) {
         execution.restoreProgress(checkpoints.progress(context));
         if (execution.needsProgressReconciliation()) {
