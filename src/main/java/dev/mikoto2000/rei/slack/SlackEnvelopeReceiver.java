@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.slack;
 
 import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -79,7 +80,7 @@ public final class SlackEnvelopeReceiver {
         if (collaboration != null) collaboration.receive(message);
       } else runtime.accept(message);
       return id;
-    } catch (Exception failed) {
+    } catch (JsonProcessingException | RuntimeException failed) {
       org.slf4j.LoggerFactory.getLogger(getClass())
           .warn(
               "Slack envelope not acknowledged: validation or persistence unavailable (details omitted)");

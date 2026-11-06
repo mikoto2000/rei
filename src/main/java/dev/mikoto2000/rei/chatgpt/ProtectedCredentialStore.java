@@ -71,7 +71,7 @@ public final class ProtectedCredentialStore {
       }
     } catch (ChatGptException error) {
       throw error;
-    } catch (Exception error) {
+    } catch (IOException | InterruptedException | RuntimeException error) {
       throw ChatGptException.of(STORE_UNAVAILABLE);
     } finally {
       mutex.unlock();
@@ -150,7 +150,7 @@ public final class ProtectedCredentialStore {
         UUID.fromString(value.substring("urn:uuid:".length()));
         if (!value.startsWith("urn:uuid:")) throw new IllegalStateException();
         return value;
-      } catch (Exception e) {
+      } catch (IOException | RuntimeException e) {
         throw ChatGptException.of(STORE_UNAVAILABLE);
       }
     }

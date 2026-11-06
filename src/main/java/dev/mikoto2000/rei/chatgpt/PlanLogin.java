@@ -6,6 +6,7 @@ import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TIMEOUT;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.values;
 
 import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -14,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
@@ -57,7 +59,7 @@ public final class PlanLogin {
               exchange.getResponseHeaders().set("Cache-Control", "no-store");
               exchange.sendResponseHeaders(200, reply.length);
               exchange.getResponseBody().write(reply);
-            } catch (Exception e) {
+            } catch (IOException | RuntimeException e) {
               callback.completeExceptionally(ChatGptException.of(AUTH_INVALID));
               exchange.sendResponseHeaders(400, -1);
             } finally {
@@ -79,7 +81,7 @@ public final class PlanLogin {
       // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw ChatGptException.of(CANCELLED);
-    } catch (Exception e) {
+    } catch (IOException | ExecutionException | RuntimeException e) {
       throw ChatGptException.of(AUTH_INVALID);
     } finally {
       if (server != null) server.stop(0);
