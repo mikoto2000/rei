@@ -233,6 +233,10 @@ public final class StorageDatabase {
   }
 
   /** データ保存の共通処理で用いる一連の更新を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Propagates unchecked transaction failures with their original types after rollback.")
   public <T> T transaction(Work<T> work) {
     synchronized (state) {
       if (state.transaction)
@@ -322,6 +326,10 @@ public final class StorageDatabase {
    *
    * <p>Explicit maintenance statements such as VACUUM require autocommit.
    */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Propagates unchecked storage failures with their original types.")
   <T> T maintenance(Work<T> work) {
     synchronized (state) {
       try (var connection = open(false)) {

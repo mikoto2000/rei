@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.computeruse;
 
 import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -181,6 +183,10 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
   }
 
   /** 画面操作の支援で用いる判断Onceを返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original model failure after recording HTTP diagnostics.")
   private ComputerAction decideOnce(ComputerObservation observation, String stage)
       throws IOException {
     var screen = observation.screenshot();

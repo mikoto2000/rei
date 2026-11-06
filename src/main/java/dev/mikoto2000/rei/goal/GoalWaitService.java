@@ -235,6 +235,10 @@ public class GoalWaitService {
   }
 
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original resume failure after aborting preparation and recording admission uncertainty.")
   private GoalWaitRepository.Wait resume(
       GoalWaitRepository.Wait wait, PersistentAgentScheduler.Entry scheduled) {
     requireWaiting(wait);

@@ -241,6 +241,10 @@ public final class DotResumeService {
   }
 
   /** 利用者の状態表示で用いる実行先への引き渡しを返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original resume failure after recording the durable outcome.")
   public ChatExecutionResult dispatch(PersistentAgentScheduler.Entry entry) {
     try {
       return dispatchChecked(entry);
@@ -256,6 +260,10 @@ public final class DotResumeService {
   }
 
   /** 利用者の状態表示で用いる実行先への引き渡し確認済みを返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original admission failure after recording the uncertain resume outcome.")
   private ChatExecutionResult dispatchChecked(PersistentAgentScheduler.Entry entry) {
     String id = entry.task().action().substring("dot-resume:".length());
     var owner = repo.owner(entry.projectId(), id);

@@ -120,6 +120,10 @@ public class PersistentCheckpointRepository {
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reports the original decode failure when every stored revision is invalid.")
   public PersistentCheckpoint get(String project, String task) {
     RuntimeException invalid = null;
     try (var rows = rows(project, task)) {

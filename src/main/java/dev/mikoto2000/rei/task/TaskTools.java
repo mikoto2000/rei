@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.task;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +50,10 @@ public class TaskTools {
   }
 
   /** タスクの管理で用いるタスク作成を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original task failure after reporting its user-facing message.")
   @Tool(name = "taskCreate", description = "タスクを作成します。dueDate は yyyy-MM-dd 形式です。")
   Task taskCreate(String title, String dueDate, int priority) {
     IO.println(String.format("タスク %s を作成するよ。期限=%s、優先度=%d", title, dueDate, priority));
@@ -85,6 +91,10 @@ public class TaskTools {
   }
 
   /** タスクの管理で用いるタスク完了を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original task failure after emitting the failed operation event.")
   @Tool(name = "taskComplete", description = "タスクを完了にします")
   Task taskComplete(long id) {
     IO.println(String.format("タスク %d を完了にするよ", id));

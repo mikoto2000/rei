@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core.command;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.awt.HeadlessException;
 import java.awt.Image;
 import java.awt.Toolkit;
@@ -133,6 +135,10 @@ public class InlineFileAttachmentResolver {
   /** Awtクリップボードメディアを用途や設定に応じて提供する窓口。 */
   static class AwtClipboardMediaProvider implements ClipboardMediaProvider {
     /** 共通の実行基盤で参照するクリップボードメディアを返す。 */
+    @SuppressFBWarnings(
+        value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+        matchType = SuppressMatchType.EXACT,
+        justification = "Preserves the original clipboard failure when the platform fallback is unavailable.")
     @Override
     public Media getClipboardMedia() throws Exception {
       try {

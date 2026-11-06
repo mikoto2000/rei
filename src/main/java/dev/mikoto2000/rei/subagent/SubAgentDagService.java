@@ -212,6 +212,10 @@ public final class SubAgentDagService {
   }
 
   /** 要求された処理を実行する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original execution failure after updating durable DAG ownership.")
   private Outcome execute(
       RunExecutionContext run,
       DurableSubAgentRepository.Checkpoint saved,

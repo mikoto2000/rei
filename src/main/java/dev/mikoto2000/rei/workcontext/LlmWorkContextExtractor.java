@@ -43,6 +43,10 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
   }
 
   /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original extraction failure after checking for cancellation.")
   @Override
   public List<WorkContextCandidate> extract(
       List<Evidence> evidence, List<WorkContext.Item> existing, String runStatus) {

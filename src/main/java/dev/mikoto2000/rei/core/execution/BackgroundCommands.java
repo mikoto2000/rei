@@ -116,6 +116,10 @@ public class BackgroundCommands {
   }
 
   /** 要求された処理を開始する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original dispatch failure after publishing the failed run status.")
   private ActiveExecution start(ExecutionType type, String source, Supplier<String> operation) {
     var project = projects.currentContext();
     var registered = new java.util.concurrent.atomic.AtomicReference<ActiveExecution>();
