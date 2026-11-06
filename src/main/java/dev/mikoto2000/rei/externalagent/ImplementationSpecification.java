@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.externalagent;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -27,6 +29,29 @@ public record ImplementationSpecification(
     List<AcceptanceCriterion> acceptanceCriteria,
     List<RequirementReference> references,
     String changeMode) {
+  public ImplementationSpecification {
+    instructions =
+        instructions == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(instructions));
+    allowedPaths =
+        allowedPaths == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(allowedPaths));
+    constraints =
+        constraints == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(constraints));
+    acceptanceCriteria =
+        acceptanceCriteria == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(acceptanceCriteria));
+    references =
+        references == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(references));
+  }
+
   /**
    * 外部エージェントへの委譲で受け渡す受け入れ条件判断基準を表す。
    *

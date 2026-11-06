@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.paper;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -25,6 +27,11 @@ public record PaperSummary(
     Content content,
     List<PaperEvidence> evidence,
     List<String> warnings) {
+  public PaperSummary {
+    evidence = evidence == null ? null : Collections.unmodifiableList(new ArrayList<>(evidence));
+    warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+  }
+
   /** 指定された論文識別子を反映した情報を作成する。 */
   public PaperSummary withPaperId(String id) {
     return new PaperSummary(
@@ -63,5 +70,22 @@ public record PaperSummary(
       String evaluation,
       List<String> results,
       List<String> limitations,
-      List<String> futureWork) {}
+      List<String> futureWork) {
+    public Content {
+      contributions =
+          contributions == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(contributions));
+      datasets = datasets == null ? null : Collections.unmodifiableList(new ArrayList<>(datasets));
+      results = results == null ? null : Collections.unmodifiableList(new ArrayList<>(results));
+      limitations =
+          limitations == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(limitations));
+      futureWork =
+          futureWork == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(futureWork));
+    }
+  }
 }
