@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.urlfetch;
 
+import dev.mikoto2000.rei.http.HttpFetchPolicy;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -10,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.jsoup.Jsoup;
@@ -40,8 +42,8 @@ public class UrlContentFetchService {
   /** 安全性情報の取得元。 */
   private final dev.mikoto2000.rei.http.SafeHttpFetcher safeFetcher;
 
-  /** この機能の動作設定。 */
-  private final UrlFetchProperties properties;
+  /** 現在のHTTP取得ポリシー。 */
+  private final Supplier<HttpFetchPolicy> fetchPolicy;
 
   /** キャッシュ。 */
   private final dev.mikoto2000.rei.http.cache.HttpResponseCache cache;
@@ -68,7 +70,7 @@ public class UrlContentFetchService {
       dev.mikoto2000.rei.http.SafeHttpFetcher fetcher,
       dev.mikoto2000.rei.http.cache.HttpResponseCache cache) {
     this.urlValidator = validator;
-    this.properties = properties;
+    this.fetchPolicy = () -> properties.fetchPolicy();
     this.safeFetcher = fetcher;
     this.httpClient = null;
     this.cache = cache;
@@ -79,13 +81,13 @@ public class UrlContentFetchService {
     this.urlValidator = urlValidator;
     this.httpClient = httpClient;
     this.safeFetcher = null;
-    this.properties = new UrlFetchProperties();
+    this.fetchPolicy = new UrlFetchProperties()::fetchPolicy;
     this.cache = dev.mikoto2000.rei.http.cache.HttpResponseCache.disabled();
   }
 
   /** 後続の処理に必要な情報を、取得先から読み込む。 */
   public UrlContentFetchResult fetch(String url) {
-    return fetch(url, properties.fetchPolicy());
+    return fetch(url, fetchPolicy.get());
   }
 
   /** 後続の処理に必要な情報を、取得先から読み込む。 */
