@@ -48,6 +48,10 @@ public final class SkillRetrievalEvaluationAdapter implements RetrievalQualityEv
   }
 
   /** 成果の評価で用いる取得を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the retrieval failure after recording it for the evaluation.")
   public List<String> retrieve(
       RetrievalQualityEvaluation.Case fixture,
       RetrievalQualityEvaluation.Mode mode,
