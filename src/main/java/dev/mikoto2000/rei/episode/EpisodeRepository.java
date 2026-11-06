@@ -33,8 +33,8 @@ public class EpisodeRepository {
 
   /** 指定された値や利用先を使って、EpisodeRepositoryを初期化する。 */
   public EpisodeRepository(@Qualifier("memoryConsolidationDataSource") DataSource source) {
-    db = JdbcClient.create(source);
-    transactions = new TransactionTemplate(new DataSourceTransactionManager(source));
+    var db = JdbcClient.create(source);
+    var transactions = new TransactionTemplate(new DataSourceTransactionManager(source));
     transactions.execute(
         s -> {
           db.sql(
@@ -79,6 +79,9 @@ public class EpisodeRepository {
               .update();
           return null;
         });
+    super();
+    this.db = db;
+    this.transactions = transactions;
   }
 
   /** 過去の経験の活用で用いる再開用の記録を返す。 */
