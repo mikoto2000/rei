@@ -63,6 +63,7 @@ public final class HostAdmission {
               return value;
             });
     boolean acquired = false;
+    boolean handedOff = false;
     try {
       while (!acquired) {
         operation.check();
@@ -70,23 +71,24 @@ public final class HostAdmission {
       }
       operation.check();
       var released = new AtomicBoolean();
-      return () -> {
+      Lease lease = () -> {
         // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
         if (released.compareAndSet(false, true)) {
           entry.slots.release();
           release(key, entry);
         }
       };
+      handedOff = true;
+      return lease;
     } catch (InterruptedException interrupted) {
       // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
-      if (acquired) entry.slots.release();
-      release(key, entry);
       throw new CancellationException();
-    } catch (RuntimeException stopped) {
-      if (acquired) entry.slots.release();
-      release(key, entry);
-      throw stopped;
+    } finally {
+      if (!handedOff) {
+        if (acquired) entry.slots.release();
+        release(key, entry);
+      }
     }
   }
 
