@@ -7,6 +7,8 @@ import dev.mikoto2000.rei.core.completion.FilePathCompletionProvider;
 import dev.mikoto2000.rei.core.completion.PathFallbackCompletionProvider;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.ui.shell.JLineCompletionAdapter;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import org.jline.reader.Completer;
 import org.jline.reader.LineReader;
@@ -26,7 +28,16 @@ public final class ReiLineReaderFactory {
    * @param reader 読み取り元
    * @param completer 入力候補の提示先
    */
-  public record Session(LineReader reader, Completer completer) {}
+  public record Session(LineReader reader, Completer completer) {
+    /** 端末セッションに割り当てられた入力処理を返す。 */
+    @SuppressFBWarnings(
+        value = "EI_EXPOSE_REP",
+        matchType = SuppressMatchType.EXACT,
+        justification = "The shell must use the reader configured for its terminal session.")
+    public LineReader reader() {
+      return reader;
+    }
+  }
 
   /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ReiLineReaderFactory() {}
