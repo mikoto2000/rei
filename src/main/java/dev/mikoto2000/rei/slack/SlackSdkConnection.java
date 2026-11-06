@@ -149,7 +149,7 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
       store.recoverSending();
       // Separate lifecycle object shares the repository, without changing Shell notification
       // selection.
-      connection.runtime =
+      var runtime =
           new SlackRuntime(
               verified,
               store,
@@ -160,7 +160,8 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
               runs,
               router,
               clock);
-      connection.runtime.onCompletedAnswer(
+      connection.runtime = runtime;
+      runtime.onCompletedAnswer(
           (session, run) ->
               turns
                   .findRun(session, run)
@@ -195,26 +196,27 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
         collaboration.attach(auth.getUserId(), auth.getTeamId(), connection.transport, false);
         connection.collaboration = collaboration;
       }
-      var receiver = new SlackEnvelopeReceiver(connection.runtime, auth.getTeamId(), collaboration);
+      var receiver = new SlackEnvelopeReceiver(runtime, auth.getTeamId(), collaboration);
       connection.subscription =
           bus.subscribeBoundary(
               event -> {
                 try {
-                  connection.runtime.onEvent(event);
+                  runtime.onEvent(event);
                 } catch (RuntimeException error) {
                   org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class)
                       .warn("Slack reply persistence unavailable (details omitted)");
                 }
               });
-      connection.socket =
+      var socket =
           connection.slack.socketMode(
               System.getenv("SLACK_APP_TOKEN"), SocketModeClient.Backend.JavaWebSocket);
-      connection.socket.addWebSocketMessageListener(
+      connection.socket = socket;
+      socket.addWebSocketMessageListener(
           raw -> {
             String ack = receiver.receive(raw);
             if (ack != null) {
               try {
-                connection.socket.sendSocketModeResponse(
+                socket.sendSocketModeResponse(
                     com.slack.api.socket_mode.response.AckResponse.builder()
                         .envelopeId(ack)
                         .build());
@@ -224,8 +226,8 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
               }
             }
           });
-      connection.socket.setAutoReconnectEnabled(true);
-      connection.socket.connect();
+      socket.setAutoReconnectEnabled(true);
+      socket.connect();
       if (collaboration != null) collaboration.enableRequests();
       return connection;
     } catch (Exception error) {
@@ -241,9 +243,13 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
   /** Slackとの連携に関するpumpを処理する。 */
   @Override
   public void pump() {
-    runtime.tick();
+    var activeRuntime = runtime;
+    var activeTransport = transport;
+    if (activeRuntime == null || activeTransport == null)
+      throw new IllegalStateException("Slack connection is not initialized");
+    activeRuntime.tick();
     if (collaboration != null) collaboration.pump();
-    runtime.send(transport);
+    activeRuntime.send(activeTransport);
   }
 
   /** Slackとの連携で利用した資源や登録を解放し、利用を終了する。 */
