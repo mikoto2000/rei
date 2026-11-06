@@ -382,7 +382,9 @@ public final class PlanClient implements PlanInference {
       try {
         var node = json.readTree(bytes);
         if (node != null) code = node.path("error").path("code").asText();
-      } catch (Exception ignored) {
+      } catch (Exception failure) {
+        org.slf4j.LoggerFactory.getLogger(PlanClient.class)
+            .debug("Could not decode HTTP error code ({})", failure.getClass().getSimpleName());
       }
     }
     var classified = PlanSseAssembler.classify(code, response.status());

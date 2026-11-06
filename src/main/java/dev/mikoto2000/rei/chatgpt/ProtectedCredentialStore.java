@@ -132,7 +132,9 @@ public final class ProtectedCredentialStore {
         if (temporary != null)
           try {
             Files.deleteIfExists(temporary);
-          } catch (Exception ignored) {
+          } catch (Exception failure) {
+            org.slf4j.LoggerFactory.getLogger(ProtectedCredentialStore.class)
+                .warn("Could not remove temporary credential file ({})", failure.getClass().getSimpleName());
           }
       }
     }
