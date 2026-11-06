@@ -271,11 +271,13 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
                 throw new IOException("Cannot recover an unknown unversioned database");
             }
           else
-            try (var rows =
-                query.executeQuery(
-                    "SELECT status FROM storage_migrations WHERE version=" + originalVersion)) {
-              if (!rows.next() || !"COMPLETE".equals(rows.getString(1)))
-                throw new IOException("Original storage version has no completion marker");
+            try (var versionQuery =
+                db.prepareStatement("SELECT status FROM storage_migrations WHERE version=?")) {
+              versionQuery.setInt(1, originalVersion);
+              try (var rows = versionQuery.executeQuery()) {
+                if (!rows.next() || !"COMPLETE".equals(rows.getString(1)))
+                  throw new IOException("Original storage version has no completion marker");
+              }
             }
         } catch (SQLException error) {
           throw new IOException("Cannot validate interrupted migration's original database", error);

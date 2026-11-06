@@ -1271,7 +1271,7 @@ public class ChatExecutionService {
                             thinkingBuilder);
                       }
                       String chunk = answerText(response);
-                      if (chunk == null || chunk.isEmpty()) {
+                      if (chunk.isEmpty()) {
                         return;
                       }
                       // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
@@ -1611,7 +1611,7 @@ public class ChatExecutionService {
       String thinkingId,
       StringBuilder thinkingBuilder) {
     String thinking = thinkingText(response);
-    if (thinking == null || thinking.isEmpty()) {
+    if (thinking.isEmpty()) {
       return;
     }
     String delta = thinkingDelta(thinking, previousThinking);

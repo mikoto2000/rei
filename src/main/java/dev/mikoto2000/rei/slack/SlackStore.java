@@ -214,10 +214,6 @@ public final class SlackStore {
         r.getString("session"));
   }
 
-  /** 後続の処理で判断できるよう、未完了の対象を返す。 */
-  public List<Receipt> pending() {
-    return receipts("state='ACCEPTED'", 256);
-  }
 
   /** Slackとの連携で用いる活動中を返す。 */
   public List<Receipt> active() {
@@ -235,18 +231,15 @@ public final class SlackStore {
         });
   }
 
-  /** Slackとの連携で用いる受付記録一覧を返す。 */
-  private List<Receipt> receipts(String where, int limit) {
+  /** 後続の処理で判断できるよう、未完了の対象を返す。 */
+  public List<Receipt> pending() {
     return tx(
         c -> {
           var result = new ArrayList<Receipt>();
           try (var s = c.createStatement();
               var r =
                   s.executeQuery(
-                      "SELECT * FROM slack_events WHERE "
-                          + where
-                          + " ORDER BY rowid LIMIT "
-                          + limit)) {
+                      "SELECT * FROM slack_events WHERE state='ACCEPTED' ORDER BY rowid LIMIT 256")) {
             while (r.next()) result.add(receipt(r));
           }
           return result;

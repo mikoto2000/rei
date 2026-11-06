@@ -71,10 +71,10 @@ public final class SqliteActivityStore implements ActivityStore {
         c.setAutoCommit(false);
         try {
           try (var s =
-              c.prepareStatement(
-                  replace
-                      ? "UPDATE activity_records SET payload=? WHERE id=? AND captured_at=?"
-                      : "INSERT INTO activity_records VALUES(?,?,?)")) {
+              replace
+                  ? c.prepareStatement(
+                      "UPDATE activity_records SET payload=? WHERE id=? AND captured_at=?")
+                  : c.prepareStatement("INSERT INTO activity_records VALUES(?,?,?)")) {
             if (replace) {
               s.setString(1, mapper.writeValueAsString(record));
               s.setString(2, record.id());

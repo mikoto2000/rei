@@ -110,7 +110,7 @@ public final class ActivityOutputParser {
    * @param path パス
    * @param code コード
    */
-  public record ResultError(String path, String code) {}
+  public record ResultError(String path, String code) implements java.io.Serializable {}
 
   /** 作業状況の把握に必要な不正出力を扱う。 */
   public static final class InvalidOutput extends IllegalArgumentException {

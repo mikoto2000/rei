@@ -261,7 +261,7 @@ public class FeedService {
             .param(url)
             .query(Long.class)
             .single();
-    return count != null && count > 0;
+    return count > 0;
   }
 
   /** フィードの購読と収集で用いる対応表フィードを返す。 */
@@ -382,8 +382,8 @@ public class FeedService {
             FOREIGN KEY(feed_id) REFERENCES feeds(id) ON DELETE CASCADE
           )
           """);
-      addColumnIfMissing(connection, "feed_items", "description", "TEXT");
-      addColumnIfMissing(connection, "feed_items", "content", "TEXT");
+      addColumnIfMissing(connection, "description");
+      addColumnIfMissing(connection, "content");
       statement.executeUpdate(
           """
           CREATE UNIQUE INDEX IF NOT EXISTS idx_feed_items_dedupe_key
@@ -406,16 +406,19 @@ public class FeedService {
   }
 
   /** 新たな対象を管理できるよう、列条件付き未指定を追加する。 */
-  private void addColumnIfMissing(
-      java.sql.Connection connection, String table, String column, String type)
+  private void addColumnIfMissing(java.sql.Connection connection, String column)
       throws java.sql.SQLException {
-    try (var resultSet = connection.getMetaData().getColumns(null, null, table, column)) {
+    try (var resultSet = connection.getMetaData().getColumns(null, null, "feed_items", column)) {
       if (resultSet.next()) {
         return;
       }
     }
     try (var statement = connection.createStatement()) {
-      statement.executeUpdate("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type);
+      switch (column) {
+        case "description" -> statement.executeUpdate("ALTER TABLE feed_items ADD COLUMN description TEXT");
+        case "content" -> statement.executeUpdate("ALTER TABLE feed_items ADD COLUMN content TEXT");
+        default -> throw new IllegalArgumentException("Unknown feed item column");
+      }
     }
   }
 }
