@@ -300,19 +300,23 @@ public class ActivityConfiguration {
   /**
    * 作業状況の把握で受け渡す期間助言実行する作業を表す。
    *
-   * @param service サービス
-   * @param executor 実行先
+   * @param enabled 処理が有効かを返す操作
+   * @param submit 実行を依頼する操作
    */
-  public record PeriodCoachingJob(
-      AutomaticPeriodCoaching service, ThreadPoolTaskExecutor executor) {
+  public record PeriodCoachingJob(java.util.function.BooleanSupplier enabled, Runnable submit) {
+    /** 有効状態と実行依頼の操作をスケジューラーに渡す。 */
+    public PeriodCoachingJob(AutomaticPeriodCoaching service, ThreadPoolTaskExecutor executor) {
+      this(() -> service.enabled(), () -> executor.execute(service::tick));
+    }
+
     /** 作業状況の把握に関する状態確認を処理する。 */
     @Scheduled(
         fixedDelayString = "#{${rei.activity.coaching.check-interval-seconds:3600} * 1000}",
         initialDelayString = "#{${rei.activity.coaching.check-interval-seconds:3600} * 1000}")
     public void poll() {
-      if (!service.enabled()) return;
+      if (!enabled.getAsBoolean()) return;
       try {
-        executor.execute(service::tick);
+        submit.run();
       } catch (org.springframework.core.task.TaskRejectedException ignored) {
         /* Never queue stale advice. */
       }
@@ -461,15 +465,19 @@ public class ActivityConfiguration {
   /**
    * 作業状況の把握で受け渡す作業状況実行する作業を表す。
    *
-   * @param capture 取得記録
-   * @param executor 実行先
+   * @param submit 取得処理の実行を依頼する操作
+   * @param closeCapture 取得処理を終了する操作
    */
-  public record ActivityJob(ActivityCapture capture, ThreadPoolTaskExecutor executor)
-      implements AutoCloseable {
+  public record ActivityJob(Runnable submit, Runnable closeCapture) implements AutoCloseable {
+    /** 実行依頼と終了に必要な操作をスケジューラーに渡す。 */
+    public ActivityJob(ActivityCapture capture, ThreadPoolTaskExecutor executor) {
+      this(() -> executor.execute(capture::tick), () -> capture.close());
+    }
+
     /** 作業状況の把握で利用した資源や登録を解放し、利用を終了する。 */
     @Override
     public void close() {
-      capture.close();
+      closeCapture.run();
     }
 
     /** 作業状況の把握に関する状態確認を処理する。 */
@@ -480,7 +488,7 @@ public class ActivityConfiguration {
             "#{${rei.activity.observation.input-aware-enabled:true} ? ${rei.activity.observation.interval-seconds:15} * 1000 : ${rei.activity.capture-interval-seconds:60} * 1000}")
     public void poll() {
       try {
-        executor.execute(capture::tick);
+        submit.run();
       } catch (org.springframework.core.task.TaskRejectedException ignored) {
         /* Single worker is busy or shutting down; never queue screenshots. */
       }

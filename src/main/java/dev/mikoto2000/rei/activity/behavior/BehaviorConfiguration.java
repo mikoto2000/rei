@@ -76,18 +76,23 @@ public class BehaviorConfiguration {
   /**
    * 作業習慣の支援で受け渡す作業習慣実行する作業を表す。
    *
-   * @param service サービス
-   * @param executor 実行先
+   * @param enabled 処理が有効かを返す操作
+   * @param submit 実行を依頼する操作
    */
-  public record BehaviorJob(BehaviorService service, ThreadPoolTaskExecutor executor) {
+  public record BehaviorJob(java.util.function.BooleanSupplier enabled, Runnable submit) {
+    /** 有効状態と実行依頼の操作をスケジューラーに渡す。 */
+    public BehaviorJob(BehaviorService service, ThreadPoolTaskExecutor executor) {
+      this(() -> service.enabled(), () -> executor.execute(service::tick));
+    }
+
     /** 作業習慣の支援に関する状態確認を処理する。 */
     @Scheduled(
         fixedDelayString = "#{${rei.activity.behavior.check-interval-seconds:60} * 1000}",
         initialDelayString = "#{${rei.activity.behavior.check-interval-seconds:60} * 1000}")
     public void poll() {
-      if (!service.enabled()) return;
+      if (!enabled.getAsBoolean()) return;
       try {
-        executor.execute(service::tick);
+        submit.run();
       } catch (org.springframework.core.task.TaskRejectedException ignored) {
         /* Never queue stale notifications. */
       }
