@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.config;
 
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.springframework.stereotype.Service;
@@ -44,13 +45,13 @@ public class ExternalConfigFileService {
       Files.writeString(configFile, template());
       initializeAdditionalSystemPromptFile(force);
       return configFile;
-    } catch (Exception e) {
+    } catch (IOException | RuntimeException e) {
       throw new IllegalStateException("外部設定ファイルの初期化に失敗しました", e);
     }
   }
 
   /** 設定の管理に関する初期化追加システムへの指示ファイルを処理する。 */
-  private void initializeAdditionalSystemPromptFile(boolean force) throws Exception {
+  private void initializeAdditionalSystemPromptFile(boolean force) throws IOException {
     Path file = additionalSystemPromptFilePath();
     ReiPaths.ensureParentDirectoryExists(file);
     if (!force && Files.exists(file)) {

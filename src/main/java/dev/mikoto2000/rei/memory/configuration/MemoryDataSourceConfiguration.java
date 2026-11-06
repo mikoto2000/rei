@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.memory.configuration;
 
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
+import java.io.IOException;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -16,7 +17,7 @@ public class MemoryDataSourceConfiguration {
   /** 長期記憶の準備で用いる記憶統合データ取得元を返す。 */
   @Bean
   @Qualifier("memoryConsolidationDataSource")
-  public DataSource memoryConsolidationDataSource() throws Exception {
+  public DataSource memoryConsolidationDataSource() throws IOException {
     var path = ReiPaths.memoryConsolidationDbPath();
     ReiPaths.ensureParentDirectoryExists(path);
     SQLiteDataSource dataSource = new SQLiteDataSource();

@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.topic;
 
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
+import java.io.IOException;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
@@ -14,7 +15,7 @@ public class CuriosityQueueConfiguration {
   /** 話題の管理で用いる情報への関心データ取得元を返す。 */
   @Bean
   @Qualifier("curiosityDataSource")
-  public DataSource curiosityDataSource() throws Exception {
+  public DataSource curiosityDataSource() throws IOException {
     var path = ReiPaths.curiosityDbPath();
     ReiPaths.ensureParentDirectoryExists(path);
     SQLiteDataSource dataSource = new SQLiteDataSource();
