@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -15,6 +17,7 @@ public record FindFileRequest(List<String> keywords, Integer maxResults) {
 
   /** 受け取った情報からFindFileRequestを作成する。 */
   public FindFileRequest {
+    keywords = keywords == null ? null : Collections.unmodifiableList(new ArrayList<>(keywords));
     if (keywords == null
         || keywords.stream().noneMatch(value -> value != null && !value.isBlank())) {
       throw new IllegalArgumentException("keywords must contain at least one non-blank value");

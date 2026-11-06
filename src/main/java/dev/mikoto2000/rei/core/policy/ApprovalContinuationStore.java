@@ -7,6 +7,7 @@ import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -75,7 +76,11 @@ public class ApprovalContinuationStore {
       List<StoredMessage> history,
       RunContinuation.PendingTools pending,
       OutputLimitRunBudget.Snapshot budget,
-      boolean managedParent) {}
+      boolean managedParent) {
+    public Document {
+      history = history == null ? null : Collections.unmodifiableList(new ArrayList<>(history));
+    }
+  }
 
   /**
    * ツール利用の権限制御で受け渡す項目を表す。

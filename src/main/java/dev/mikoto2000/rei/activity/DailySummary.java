@@ -27,7 +27,8 @@ public record DailySummary(
   /** 受け取った情報からDailySummaryを作成する。 */
   public DailySummary {
     timeOfDay =
-        timeOfDay == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(timeOfDay));
+        Collections.unmodifiableMap(
+            timeOfDay == null ? Map.of() : new LinkedHashMap<>(timeOfDay));
     workThemes = workThemes == null ? List.of() : List.copyOf(workThemes);
     nonWorkActivities = nonWorkActivities == null ? List.of() : List.copyOf(nonWorkActivities);
   }

@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.core.command.EmbedCommand;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -50,7 +52,14 @@ public final class VectorDocumentController {
    *
    * @param documents 保存済み文書
    */
-  public record Documents(List<String> documents) implements StrictApiRequest {}
+  public record Documents(List<String> documents) implements StrictApiRequest {
+    public Documents {
+      documents =
+          documents == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(documents));
+    }
+  }
 
   /**
    * Web APIによる操作で受け渡すIngestionを表す。
@@ -60,7 +69,14 @@ public final class VectorDocumentController {
    * @param documents 保存済み文書
    */
   public record Ingestion(String projectId, String sessionId, List<String> documents)
-      implements StrictApiRequest {}
+      implements StrictApiRequest {
+    public Ingestion {
+      documents =
+          documents == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(documents));
+    }
+  }
 
   /** Web APIによる操作で用いるingestを返す。 */
   @PostMapping("/ingestions")

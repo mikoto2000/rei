@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.core.process;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -62,6 +64,8 @@ public record BackgroundProcessSnapshot(
 
   /** 受け取った情報からBackgroundProcessSnapshotを作成する。 */
   public BackgroundProcessSnapshot {
+    stdout = stdout == null ? null : Collections.unmodifiableList(new ArrayList<>(stdout));
+    stderr = stderr == null ? null : Collections.unmodifiableList(new ArrayList<>(stderr));
     diagnosis = BuildTestFailureDiagnosis.process(status, exitCode, found, stdout, stderr, message);
   }
 }

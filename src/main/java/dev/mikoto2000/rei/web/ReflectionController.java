@@ -11,6 +11,8 @@ import dev.mikoto2000.rei.reflection.ReflectionLessonService;
 import dev.mikoto2000.rei.reflection.RunReflectionRepository;
 import dev.mikoto2000.rei.reflection.RunReflectionService;
 import dev.mikoto2000.rei.reflection.VerifiedReflectionMemoryService;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -100,7 +102,11 @@ public final class ReflectionController {
       String note,
       List<String> evidence,
       String observation)
-      implements StrictApiRequest {}
+      implements StrictApiRequest {
+    public Review {
+      evidence = evidence == null ? null : Collections.unmodifiableList(new ArrayList<>(evidence));
+    }
+  }
 
   /** 指定された値や利用先を使って、ReflectionControllerを初期化する。 */
   public ReflectionController(

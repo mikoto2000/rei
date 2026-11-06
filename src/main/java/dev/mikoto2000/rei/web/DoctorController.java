@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.doctor.DoctorActiveService;
 import dev.mikoto2000.rei.doctor.DoctorRequest;
 import dev.mikoto2000.rei.doctor.DoctorService;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -50,7 +52,11 @@ public final class DoctorController {
    */
   public record ActiveRequest(
       String projectId, String sessionId, List<String> checks, boolean details)
-      implements StrictApiRequest {}
+      implements StrictApiRequest {
+    public ActiveRequest {
+      checks = checks == null ? null : Collections.unmodifiableList(new ArrayList<>(checks));
+    }
+  }
 
   /** 指定された値や利用先を使って、DoctorControllerを初期化する。 */
   public DoctorController(

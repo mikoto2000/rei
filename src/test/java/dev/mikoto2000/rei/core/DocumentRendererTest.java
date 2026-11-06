@@ -19,6 +19,16 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /** 文書表示への変換の結果と状態の契約を検証するテスト。 */
 class DocumentRendererTest {
+  @Test
+  void renderedPngKeepsAnIndependentSnapshot() {
+    byte[] original = {1, 2, 3};
+    var rendered = new DocumentRendererService.Rendered(0, false, original, "fixture");
+    original[0] = 9;
+    rendered.png()[1] = 9;
+
+    org.junit.jupiter.api.Assertions.assertArrayEquals(new byte[] {1, 2, 3}, rendered.png());
+  }
+
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 

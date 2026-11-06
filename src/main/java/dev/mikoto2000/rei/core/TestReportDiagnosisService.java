@@ -13,6 +13,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -89,6 +90,15 @@ public final class TestReportDiagnosisService {
       List<TestCase> testCases) {
     /** 受け取った情報からResultを作成する。 */
     public Result {
+      failedTests =
+          failedTests == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(failedTests));
+      nextActions =
+          nextActions == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(nextActions));
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
       testCases = testCases == null ? List.of() : List.copyOf(testCases);
     }
 

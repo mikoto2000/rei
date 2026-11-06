@@ -13,6 +13,8 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
@@ -121,6 +123,10 @@ public class TextChangeSetService {
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String replacement,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String baseVersion,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) List<Edit> edits) {
+    public Request {
+      edits = edits == null ? null : Collections.unmodifiableList(new ArrayList<>(edits));
+    }
+
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Request(String path, String expectedText, String replacement) {
       this(path, expectedText, replacement, null, null);

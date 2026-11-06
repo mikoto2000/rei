@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.state.StatefulOperationService;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -70,7 +72,14 @@ public class StatefulController {
    */
   public record CreateInterestRequest(
       String topic, String reason, String searchQuery, String summary, List<String> sourceUrls)
-      implements StrictApiRequest {}
+      implements StrictApiRequest {
+    public CreateInterestRequest {
+      sourceUrls =
+          sourceUrls == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(sourceUrls));
+    }
+  }
 
   /**
    * Web APIによる操作で受け渡す作成記憶要求を表す。

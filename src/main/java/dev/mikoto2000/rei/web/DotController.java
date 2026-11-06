@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.dot.DotDelegationService;
 import dev.mikoto2000.rei.dot.DotResumeService;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -57,6 +58,17 @@ public final class DotController {
       List<String> acceptance_criteria,
       Object timeout)
       implements StrictApiRequest {
+    public CreateRequest {
+      constraints =
+          constraints == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(constraints));
+      acceptance_criteria =
+          acceptance_criteria == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(acceptance_criteria));
+    }
+
     /** Web APIによる操作で用いる通知内容を返す。 */
     Map<String, Object> payload() {
       var a = new LinkedHashMap<String, Object>();
