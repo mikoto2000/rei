@@ -19,6 +19,15 @@ class BuildTestFailureDiagnosisTest {
         status, "foreground", "foreground", exit, out, err, null, null, timeout, null);
   }
 
+  /** 実行結果のJSONから診断を参照できることを確認する。 */
+  @Test
+  void exposesDerivedDiagnosisInJson() {
+    var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
+    var result = result("failed", 7, "", "", false);
+    var json = mapper.readTree(mapper.writeValueAsString(result));
+    assertEquals(result.diagnosis().outcome(), json.path("diagnosis").path("outcome").asText());
+  }
+
   /** 外部プロセスの管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void extractsReportedTestsAndCausesWithStreamEvidence() {
