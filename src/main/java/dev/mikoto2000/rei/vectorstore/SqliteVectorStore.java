@@ -849,7 +849,7 @@ public final class SqliteVectorStore
         T result = work.run(connection);
         connection.commit();
         return result;
-      } catch (Exception e) {
+      } catch (SQLException | RuntimeException e) {
         connection.rollback();
         dev.mikoto2000.rei.core.chat.RunCancellation.propagate(e);
         if (e instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)
@@ -922,6 +922,6 @@ public final class SqliteVectorStore
   @FunctionalInterface
   private interface SqliteWork<T> {
     /** 関連文書の検索の操作を実行する。 */
-    T run(Connection connection) throws Exception;
+    T run(Connection connection) throws SQLException;
   }
 }
