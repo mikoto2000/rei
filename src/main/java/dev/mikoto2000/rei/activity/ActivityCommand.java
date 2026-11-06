@@ -150,17 +150,12 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   }
 
   /** 作業状況の把握で用いるレポートを返す。 */
-  private static String report(java.util.concurrent.Callable<Integer> command) {
+  private static String report(
+      java.util.concurrent.Callable<Integer> command, Runnable runReport) {
     var text = new java.io.StringWriter();
     var out = new java.io.PrintWriter(text, true);
     new picocli.CommandLine(command).setOut(out).setErr(out);
-    try {
-      command.call();
-    } catch (RuntimeException error) {
-      throw error;
-    } catch (Exception error) {
-      throw new IllegalStateException("Activity report failed", error);
-    }
+    runReport.run();
     out.flush();
     return text.toString().replaceFirst("[\\r\\n]+$", "");
   }
@@ -170,7 +165,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     var command = reportingCopy();
     command.action = date == null ? "today" : date;
     command.verbose = details;
-    return report(command);
+    return report(command, command::call);
   }
 
   /** 作業状況の把握で用いるレポート一時停止を返す。 */
@@ -188,14 +183,14 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     var command = new SummaryCommand();
     command.parent = this;
     command.date = date == null ? "today" : date;
-    return report(command);
+    return report(command, command::call);
   }
 
   /** 作業状況の把握で用いるレポート期間を返す。 */
   private String reportPeriod(PeriodCommand command, String date) {
     command.parent = this;
     command.date = date == null ? "today" : date;
-    return report(command);
+    return report(command, command::call);
   }
 
   /** 作業状況の把握で用いるレポート週次を返す。 */
@@ -213,7 +208,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     var command = new ContextCommand();
     command.parent = this;
     command.date = date == null ? "today" : date;
-    return report(command);
+    return report(command, command::call);
   }
 
   /** 作業状況の把握で用いるレポート助言状態を返す。 */
@@ -257,7 +252,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
       command.unknownShare = settings.maximumUnknownShare();
       command.cooldownDays = settings.cooldownDays();
     }
-    return report(command);
+    return report(command, command::call);
   }
 
   /** 作業状況の把握で用いるレポート作業習慣を返す。 */
@@ -266,7 +261,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     command.parent = this;
     command.action = action;
     command.top = top;
-    return report(command);
+    return report(command, command::call);
   }
 
   /** 作業状況の把握で用いるレポート作業習慣状態を返す。 */
@@ -300,7 +295,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     command.parent = this;
     command.action = action;
     command.top = top;
-    return report(command);
+    return report(command, command::call);
   }
 
   /** 作業状況の把握で用いるレポート分類状態を返す。 */

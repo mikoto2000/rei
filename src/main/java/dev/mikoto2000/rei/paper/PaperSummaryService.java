@@ -124,7 +124,9 @@ public class PaperSummaryService {
               paper.id(),
               (System.nanoTime() - started) / 1_000_000);
       return result;
-    } catch (PaperException | java.util.concurrent.CancellationException e) {
+    } catch (PaperException e) {
+      throw e;
+    } catch (java.util.concurrent.CancellationException e) {
       throw e;
     } catch (RuntimeException e) {
       throw new PaperException(PaperException.Code.SUMMARY_FAILED, "要約生成に失敗しました", e);

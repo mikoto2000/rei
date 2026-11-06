@@ -178,7 +178,9 @@ public class SqlitePaperRepository implements PaperRepository {
             op.check();
             return p;
           });
-    } catch (PaperException | java.util.concurrent.CancellationException e) {
+    } catch (PaperException e) {
+      throw e;
+    } catch (java.util.concurrent.CancellationException e) {
       throw e;
     } catch (RuntimeException e) {
       throw new PaperException(PaperException.Code.LIBRARY_STORAGE_FAILED, "論文の保存に失敗しました", e);
@@ -327,7 +329,9 @@ public class SqlitePaperRepository implements PaperRepository {
             action.run();
             op.check();
           });
-    } catch (PaperException | java.util.concurrent.CancellationException e) {
+    } catch (PaperException e) {
+      throw e;
+    } catch (java.util.concurrent.CancellationException e) {
       throw e;
     } catch (RuntimeException e) {
       throw new PaperException(PaperException.Code.LIBRARY_DELETE_FAILED, "ライブラリ更新に失敗しました", e);
