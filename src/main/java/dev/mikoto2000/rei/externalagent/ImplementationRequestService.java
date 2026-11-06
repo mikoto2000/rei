@@ -143,6 +143,10 @@ public class ImplementationRequestService {
   private final ToolPermissionPolicy policy;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound CodexProperties shared by consumers of these settings.")
   private final CodexProperties properties;
 
   /** 委譲。 */

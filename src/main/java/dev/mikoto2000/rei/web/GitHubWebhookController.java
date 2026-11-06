@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.github.GitHubFactRepository;
 import dev.mikoto2000.rei.github.GitHubWebhookProperties;
 import dev.mikoto2000.rei.github.GitHubWebhookService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.util.Collections;
@@ -31,6 +33,10 @@ public class GitHubWebhookController {
   private final GitHubWebhookService service;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound GitHubWebhookProperties shared by consumers of these settings.")
   private final GitHubWebhookProperties properties;
 
   /** 指定された値や利用先を使って、GitHubWebhookControllerを初期化する。 */

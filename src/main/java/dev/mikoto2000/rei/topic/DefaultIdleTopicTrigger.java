@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.topic;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.stream.Stream;
@@ -7,6 +9,10 @@ import java.util.stream.Stream;
 /** 話題の管理に必要な既定操作がない状態話題実行条件を扱う。 */
 public class DefaultIdleTopicTrigger implements IdleTopicTrigger {
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound TopicGeneratorProperties shared by consumers of these settings.")
   private final TopicGeneratorProperties properties;
 
   /** 作業状況追跡。 */

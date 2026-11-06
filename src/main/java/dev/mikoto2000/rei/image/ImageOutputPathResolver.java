@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.image;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -16,6 +18,10 @@ public class ImageOutputPathResolver {
   private final Path workDirectory;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ImageProperties shared by consumers of these settings.")
   private final ImageProperties properties;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */

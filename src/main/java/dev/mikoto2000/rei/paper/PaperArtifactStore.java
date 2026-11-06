@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.paper;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -18,6 +20,10 @@ public class PaperArtifactStore {
   private final Path root;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
   private final PaperProperties properties;
 
   /** 論文の調査と整理を利用するため、指定を補って共通の初期化へ引き渡す。 */

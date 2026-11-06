@@ -117,12 +117,24 @@ public class DoctorActiveService {
   private final JavaHttpDependencyProbe http;
 
   /** Codexの設定または実行の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound CodexProperties shared by consumers of these settings.")
   private final CodexProperties codex;
 
   /** Claudeの設定または実行の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ClaudeCodeProperties shared by consumers of these settings.")
   private final ClaudeCodeProperties claude;
 
   /** 音声。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound VoiceProperties shared by consumers of these settings.")
   private final VoiceProperties voice;
 
   /** マイク。 */

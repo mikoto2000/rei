@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.topic;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,6 +25,10 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
   private final DiscoverySeenRepository seenRepository;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound TopicGeneratorProperties shared by consumers of these settings.")
   private final TopicGeneratorProperties properties;
 
   /** 指定された値や利用先を使って、DiscoveryTopicCandidateGeneratorを初期化する。 */

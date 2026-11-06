@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.workcontext.WorkContext;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -28,6 +30,10 @@ public final class ActivityObservationContextSource implements ActivityEvidenceS
   }
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ActivityProperties shared by consumers of these settings.")
   private final ActivityProperties properties;
 
   /** プロジェクト一覧。 */

@@ -67,6 +67,10 @@ public final class VoiceCorrectionContext {
   private final Path data;
 
   /** 上限一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound VoiceCorrectionProperties shared by consumers of these settings.")
   private final VoiceCorrectionProperties limits;
 
   /** 指定された値や利用先を使って、VoiceCorrectionContextを初期化する。 */

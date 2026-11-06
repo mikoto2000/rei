@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.paper;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +15,10 @@ public class CrossrefSearchProvider implements AcademicSearchProvider {
   private final PaperHttpClient http;
 
   /** 設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
   private final PaperProperties config;
 
   /** 指定された値や利用先を使って、CrossrefSearchProviderを初期化する。 */

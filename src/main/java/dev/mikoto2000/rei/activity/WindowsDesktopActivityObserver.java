@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.computeruse.DisplayCapture;
 import dev.mikoto2000.rei.computeruse.RobotScreenCapture;
 import dev.mikoto2000.rei.computeruse.ScreenCapture;
 import dev.mikoto2000.rei.computeruse.ScreenGeometry;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -60,6 +62,10 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
   }
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ActivityProperties shared by consumers of these settings.")
   private final ActivityProperties properties;
 
   /** 直近付随情報。 */

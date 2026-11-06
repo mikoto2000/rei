@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
 import dev.mikoto2000.rei.llm.OutputLimitDetector;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -29,6 +31,10 @@ public class LlmConversationCompressor implements ConversationCompressor {
   private final ObjectProvider<LlmModelProvider> models;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ContextCompressionProperties shared by consumers of these settings.")
   private final ContextCompressionProperties properties;
 
   /** 指定された値や利用先を使って、LlmConversationCompressorを初期化する。 */

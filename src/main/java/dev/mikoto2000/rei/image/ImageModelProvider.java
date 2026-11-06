@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmProperties;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import io.micrometer.observation.ObservationRegistry;
 import java.time.Duration;
 import java.util.Map;
@@ -26,6 +28,10 @@ public class ImageModelProvider {
   private final LlmProperties properties;
 
   /** 画像設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ImageProperties shared by consumers of these settings.")
   private final ImageProperties imageProperties;
 
   /** 実行状況の通知を生成する窓口。 */

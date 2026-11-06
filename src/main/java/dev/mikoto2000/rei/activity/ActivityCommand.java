@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -29,6 +31,10 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private final ActivityCapture capture;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ActivityProperties shared by consumers of these settings.")
   private final ActivityProperties properties;
 
   /** 作業習慣。 */
