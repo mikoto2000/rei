@@ -737,7 +737,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
           }
         }
         return 0;
-      } catch (Exception e) {
+      } catch (RuntimeException e) {
         spec.commandLine()
             .getErr()
             .println(
