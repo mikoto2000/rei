@@ -49,7 +49,7 @@ Run ごとに SecureRandom の256-bit鍵を生成し HMAC-SHA256 を使用。鍵
 
 ## Phase 2: 固定 Prefix
 
-ContextAssembler は元の先頭 System メッセージ群を保持し、その後に Run observations を挿入する。元のメッセージ相互の順序、System/User の role、historical data の注意文を維持。Tool definitions は別 API field のまま。
+ContextAssembler は元の先頭 System メッセージ群と過去の会話履歴を保持し、Run observations を今回の依頼の直前に挿入する。今回の実行履歴だけが圧縮されたとき、過去の会話履歴までのプレフィックスは維持される。元のメッセージ相互の順序、System/User の role、historical data の注意文を維持。Tool definitions は別 API field のまま。
 
 AgentSkillImplicitSelector はルール → 候補 metadata → Return format → User request の順にする。repository 全件の場合は name 順、検索が提供した候補の場合は既存 score 順をそのまま維持する。選択・解析・fallback・予算処理は変更しない。
 

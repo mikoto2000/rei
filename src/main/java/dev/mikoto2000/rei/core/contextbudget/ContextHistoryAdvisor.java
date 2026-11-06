@@ -28,6 +28,8 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   /** 発生順序。 */
   public static final String SEQUENCE = "rei.historySequence";
 
+  static final String LEGACY_HISTORY = "rei.legacyHistory";
+
   /** やり取り一覧。 */
   private final ConversationTurnStore turns;
 
@@ -155,8 +157,15 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     } else if (history.isEmpty()) {
       // Legacy bounded memory is a compatibility source only; do not persist positional summary
       // cursors for it.
-      for (var message : memory.get(id))
-        if (!(message instanceof SystemMessage)) messages.add(message);
+      for (var message : memory.get(id)) {
+        if (message instanceof UserMessage user) {
+          var metadata = new HashMap<>(user.getMetadata());
+          metadata.put(LEGACY_HISTORY, true);
+          messages.add(user.mutate().metadata(metadata).build());
+        } else if (!(message instanceof SystemMessage)) {
+          messages.add(message);
+        }
+      }
     } else {
       for (int i = 0; i < history.size(); i++) {
         var turn = history.get(i);
