@@ -240,10 +240,10 @@ public final class StorageObjectRegistry {
     Path parent =
         (physicalScope.isEmpty() ? root : root.resolve("projects").resolve(physicalScope))
             .resolve("logs/activity-archives");
-    if (!normalized.getParent().equals(parent)
-        || !normalized.getFileName().toString().endsWith(".jsonl"))
+    String name = StorageBackup.fileName(normalized);
+    if (!parent.equals(normalized.getParent()) || !name.endsWith(".jsonl"))
       throw new IllegalArgumentException("Unsupported managed activity path");
-    UUID.fromString(normalized.getFileName().toString().replaceFirst("\\.jsonl$", ""));
+    UUID.fromString(name.replaceFirst("\\.jsonl$", ""));
     return database.transaction(
         db ->
             put(

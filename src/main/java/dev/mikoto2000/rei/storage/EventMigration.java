@@ -56,7 +56,7 @@ final class EventMigration {
         int count = 0;
         for (Path project : entries) {
           if (++count > 1000000) throw new IOException("Event project limit exceeded");
-          String scope = SqliteProjectAgentEventStore.scope(project.getFileName().toString());
+          String scope = SqliteProjectAgentEventStore.scope(StorageBackup.fileName(project));
           Path source = project.resolve("events/events.jsonl");
           StorageBackup.requireSafePath(source);
           if (Files.exists(source, LinkOption.NOFOLLOW_LINKS)) importFile(db, root, source, scope);

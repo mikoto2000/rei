@@ -165,11 +165,12 @@ public final class RetentionExecutor {
                     .resolve("projects")
                     .resolve(UUID.fromString(object.scope()).toString()))
             .resolve("logs/activity-archives");
-    if (!path.getParent().equals(parent)
-        || !path.getFileName().toString().endsWith(".jsonl")
+    String name = StorageBackup.fileName(path);
+    if (!parent.equals(path.getParent())
+        || !name.endsWith(".jsonl")
         || !StorageObjectRegistry.id(registry.root, path).equals(object.id()))
       throw new IllegalStateException("Unsupported producer path");
-    UUID.fromString(path.getFileName().toString().replaceFirst("\\.jsonl$", ""));
+    UUID.fromString(name.replaceFirst("\\.jsonl$", ""));
     StorageBackup.requireSafePath(path);
     return path;
   }
@@ -211,7 +212,7 @@ public final class RetentionExecutor {
   private static void move(Path source, Path target) throws Exception {
     StorageBackup.requireSafePath(source);
     StorageBackup.requireSafePath(target);
-    Files.createDirectories(target.getParent());
+    Files.createDirectories(StorageBackup.requireParent(target));
     // No REPLACE_EXISTING: the destination must remain absent, including on retry.
     Files.move(source, target);
     StorageBackup.force(target);

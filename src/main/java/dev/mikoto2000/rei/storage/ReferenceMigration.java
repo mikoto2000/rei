@@ -69,7 +69,7 @@ final class ReferenceMigration {
         int count = 0;
         for (Path project : entries) {
           if (++count > 1000000) throw new IOException("Project limit exceeded");
-          String scope = UUID.fromString(project.getFileName().toString()).toString();
+          String scope = UUID.fromString(StorageBackup.fileName(project)).toString();
           importRaw(db, root, project.resolve("state/context/results"), scope);
         }
       }
@@ -131,11 +131,12 @@ final class ReferenceMigration {
               throws IOException {
             if (++count[0] > 1000000 || !attrs.isRegularFile() || attrs.isSymbolicLink())
               throw new IOException("Unsupported raw result source");
-            if (!path.getFileName().toString().endsWith(".json")) return FileVisitResult.CONTINUE;
-            String key = path.getParent().getFileName().toString();
+            String name = StorageBackup.fileName(path);
+            if (!name.endsWith(".json")) return FileVisitResult.CONTINUE;
+            String key = StorageBackup.fileName(StorageBackup.requireParent(path));
             try {
               UUID.fromString(key);
-              UUID.fromString(path.getFileName().toString().replaceFirst("\\.json$", ""));
+              UUID.fromString(name.replaceFirst("\\.json$", ""));
             } catch (IllegalArgumentException unknown) {
               return FileVisitResult.CONTINUE;
             }
