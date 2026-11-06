@@ -38,19 +38,19 @@ public class MemoryRepository {
   /** 指定された値や利用先を使って、MemoryRepositoryを初期化する。 */
   public MemoryRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, MemoryService legacy) {
-    db = JdbcClient.create(source);
-    transactions = new TransactionTemplate(new DataSourceTransactionManager(source));
+    var db = JdbcClient.create(source);
+    var transactions = new TransactionTemplate(new DataSourceTransactionManager(source));
     transactions.executeWithoutResult(
         status -> {
-          column("memories", "project_id", "TEXT");
-          column("memories", "summary", "TEXT");
-          column("memories", "importance", "REAL NOT NULL DEFAULT 0.5");
-          column("memories", "last_accessed_at", "TEXT");
-          column("memories", "valid_from", "TEXT");
-          column("memories", "superseded_by", "TEXT");
-          column("memories", "content_key", "TEXT");
-          column("memory_sources", "session_id", "TEXT");
-          column("memory_sources", "turn_id", "TEXT");
+          column(db, "memories", "project_id", "TEXT");
+          column(db, "memories", "summary", "TEXT");
+          column(db, "memories", "importance", "REAL NOT NULL DEFAULT 0.5");
+          column(db, "memories", "last_accessed_at", "TEXT");
+          column(db, "memories", "valid_from", "TEXT");
+          column(db, "memories", "superseded_by", "TEXT");
+          column(db, "memories", "content_key", "TEXT");
+          column(db, "memory_sources", "session_id", "TEXT");
+          column(db, "memory_sources", "turn_id", "TEXT");
           db.sql(
                   "CREATE INDEX IF NOT EXISTS memory_scope_status ON memories(scope, project_id, status)")
               .update();
@@ -92,10 +92,13 @@ public class MemoryRepository {
                   "CREATE TABLE IF NOT EXISTS verified_reflection_memories(project_id TEXT NOT NULL,reflection_id TEXT NOT NULL,goal_id TEXT NOT NULL,session_id TEXT NOT NULL,memory_id TEXT NOT NULL UNIQUE,criteria_sha256 TEXT NOT NULL,verified_at TEXT NOT NULL,PRIMARY KEY(project_id,reflection_id))")
               .update();
         });
+    super();
+    this.db = db;
+    this.transactions = transactions;
   }
 
   /** 長期記憶の保存と検索に関する列を処理する。 */
-  private void column(String table, String name, String definition) {
+  private static void column(JdbcClient db, String table, String name, String definition) {
     if (!db.sql("PRAGMA table_info(" + table + ")")
         .query((r, n) -> r.getString("name"))
         .list()

@@ -106,14 +106,9 @@ public class AttentionDeliveryRepository {
   /** 指定された値や利用先を使って、AttentionDeliveryRepositoryを初期化する。 */
   public AttentionDeliveryRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
-    try (var connection = source.getConnection()) {
-      leaseNamespace = connection.getMetaData().getURL() + ":";
-    } catch (java.sql.SQLException failure) {
-      throw new IllegalStateException("Outbox storage identity unavailable", failure);
-    }
-    db = JdbcClient.create(source);
-    this.clock = clock;
-    tx =
+    String namespace = storageNamespace(source);
+    var db = JdbcClient.create(source);
+    var tx =
         new org.springframework.transaction.support.TransactionTemplate(
             new org.springframework.jdbc.datasource.DataSourceTransactionManager(source));
     db.sql(
@@ -145,6 +140,20 @@ public class AttentionDeliveryRepository {
     db.sql(
             "CREATE TABLE IF NOT EXISTS attention_provider_rate(destination TEXT PRIMARY KEY,not_before INTEGER NOT NULL)")
         .update();
+    super();
+    this.db = db;
+    this.tx = tx;
+    this.clock = clock;
+    leaseNamespace = namespace;
+  }
+
+  /** 配信ストアを識別する名前空間を取得する。 */
+  private static String storageNamespace(DataSource source) {
+    try (var connection = source.getConnection()) {
+      return connection.getMetaData().getURL() + ":";
+    } catch (java.sql.SQLException failure) {
+      throw new IllegalStateException("Outbox storage identity unavailable", failure);
+    }
   }
 
   /** 行。 */

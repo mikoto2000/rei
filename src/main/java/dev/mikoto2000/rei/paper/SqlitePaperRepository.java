@@ -25,8 +25,8 @@ public class SqlitePaperRepository implements PaperRepository {
 
   /** 指定された値や利用先を使って、SqlitePaperRepositoryを初期化する。 */
   public SqlitePaperRepository(DataSource source) {
-    jdbc = new JdbcTemplate(source);
-    tx = new TransactionTemplate(new DataSourceTransactionManager(source));
+    var jdbc = new JdbcTemplate(source);
+    var tx = new TransactionTemplate(new DataSourceTransactionManager(source));
     jdbc.execute(
         "CREATE TABLE IF NOT EXISTS papers(id TEXT PRIMARY KEY,payload TEXT NOT NULL,doi TEXT,arxiv"
             + " TEXT,fingerprint TEXT,search_text TEXT NOT NULL,removed INTEGER NOT NULL DEFAULT"
@@ -45,6 +45,9 @@ public class SqlitePaperRepository implements PaperRepository {
     jdbc.execute(
         "CREATE INDEX IF NOT EXISTS paper_artifact_lookup ON"
             + " paper_artifacts(paper_id,kind,cache_key,created_at)");
+    super();
+    this.jdbc = jdbc;
+    this.tx = tx;
   }
 
   /** 論文の調査と整理で用いるnormを返す。 */
