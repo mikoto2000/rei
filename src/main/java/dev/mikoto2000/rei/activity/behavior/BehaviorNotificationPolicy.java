@@ -1,13 +1,20 @@
 package dev.mikoto2000.rei.activity.behavior;
 
 import java.time.Instant;
+import java.util.function.ToLongFunction;
 
 /**
  * 作業習慣の支援で受け渡す作業習慣通知判断基準を表す。
- *
- * @param config 設定
  */
-public record BehaviorNotificationPolicy(BehaviorProperties config) {
+public final class BehaviorNotificationPolicy {
+  /** 通知の重要度に応じた待機時間を読む操作。 */
+  private final ToLongFunction<BehaviorSeverity> cooldownSeconds;
+
+  /** 通知の判断に必要な待機時間設定を受け取る。 */
+  public BehaviorNotificationPolicy(BehaviorProperties config) {
+    cooldownSeconds = severity -> config.cooldownSeconds(severity);
+  }
+
   /** 作業習慣の支援における通知の抑制の選択肢。 */
   public enum Suppression {
     /** 該当なし。 */
@@ -84,6 +91,6 @@ public record BehaviorNotificationPolicy(BehaviorProperties config) {
         ? null
         : state
             .lastNotificationAt()
-            .plusSeconds(config.cooldownSeconds(state.lastNotifiedSeverity()));
+            .plusSeconds(cooldownSeconds.applyAsLong(state.lastNotifiedSeverity()));
   }
 }

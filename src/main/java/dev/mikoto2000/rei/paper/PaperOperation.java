@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.paper;
 
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
@@ -8,16 +9,53 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.model.ToolContext;
 
-/**
- * 論文の調査と整理で受け渡す論文操作を表す。
- *
- * @param sessionId 会話の識別子
- * @param execution 実行
- * @param deadlineNanos 期限ナノ秒数
- */
-public record PaperOperation(String sessionId, RunExecutionContext execution, long deadlineNanos) {
+/** 論文操作の会話、期限、実行中の確認操作をまとめる。 */
+public final class PaperOperation {
+  private final String sessionId;
+  private final long deadlineNanos;
+  private final Runnable checkExecution;
+  private final Supplier<AgentRunContext> runContext;
+
+  /** 実行中の確認とプロジェクト参照に必要な操作を受け取る。 */
+  public PaperOperation(String sessionId, RunExecutionContext execution, long deadlineNanos) {
+    this(
+        sessionId,
+        deadlineNanos,
+        () -> {
+          if (execution != null) execution.checkActive();
+        },
+        () -> execution == null ? null : execution.runContext());
+  }
+
+  private PaperOperation(
+      String sessionId,
+      long deadlineNanos,
+      Runnable checkExecution,
+      Supplier<AgentRunContext> runContext) {
+    this.sessionId = sessionId;
+    this.deadlineNanos = deadlineNanos;
+    this.checkExecution = checkExecution;
+    this.runContext = runContext;
+  }
+
+  /** 操作の会話識別子を返す。 */
+  public String sessionId() {
+    return sessionId;
+  }
+
+  /** 操作の期限を返す。 */
+  public long deadlineNanos() {
+    return deadlineNanos;
+  }
+
+  /** プロジェクトの境界確認に使用する実行情報を返す。 */
+  AgentRunContext runContext() {
+    return runContext.get();
+  }
+
   /** 論文の調査と整理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public PaperOperation(String sessionId, RunExecutionContext execution) {
     this(sessionId, execution, Long.MAX_VALUE);
@@ -27,12 +65,13 @@ public record PaperOperation(String sessionId, RunExecutionContext execution, lo
   public PaperOperation withDeadline(java.time.Duration timeout) {
     return new PaperOperation(
         sessionId,
-        execution,
         Math.min(
             deadlineNanos,
             new dev.mikoto2000.rei.http.FetchOperation(() -> {}, Long.MAX_VALUE)
                 .withTimeout(timeout)
-                .deadlineNanos()));
+                .deadlineNanos()),
+        checkExecution,
+        runContext);
   }
 
   /** 論文の調査と整理で用いるローカルを返す。 */
@@ -56,7 +95,7 @@ public record PaperOperation(String sessionId, RunExecutionContext execution, lo
   /** 後続の処理を進められるか、現在の条件を確認する。 */
   public void check() {
     if (Thread.currentThread().isInterrupted()) throw new CancellationException();
-    if (execution != null) execution.checkActive();
+    checkExecution.run();
     if (deadlineNanos != Long.MAX_VALUE && System.nanoTime() >= deadlineNanos)
       throw new PaperException(PaperException.Code.PROVIDER_TIMEOUT, "処理がタイムアウトしました");
   }

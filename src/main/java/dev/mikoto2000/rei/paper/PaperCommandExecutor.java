@@ -90,17 +90,15 @@ public class PaperCommandExecutor {
             }
             case "library" -> library(r, op);
             case "import" -> {
-              if (op.execution() != null
-                  && op.execution().runContext() != null
-                  && op.execution().runContext().requestSource()
+              var run = op.runContext();
+              if (run != null
+                  && run.requestSource()
                       != dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL)
                 throw new PaperException(
                     PaperException.Code.INVALID_QUERY, "PDF import はローカル Shell 専用です");
               var path = java.nio.file.Path.of(r.args.get(1));
-              if (!path.isAbsolute()
-                  && op.execution() != null
-                  && op.execution().runContext() != null)
-                path = op.execution().runContext().projectRoot().resolve(path).normalize();
+              if (!path.isAbsolute() && run != null)
+                path = run.projectRoot().resolve(path).normalize();
               try (var stream = java.nio.file.Files.newInputStream(path)) {
                 var pdf = stream.readNBytes(config.getMaxPdfBytes() + 1);
                 service.content.importPdf(service.library.get(r.args.getFirst(), op), pdf, op);
