@@ -5,6 +5,7 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
+import java.io.IOException;
 import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
@@ -73,23 +74,14 @@ public final class ClipboardPaste {
             }
           };
       board.setContents(inserted, null);
-      Exception failure = null;
-      try {
+      try (AutoCloseable restore = () -> {
+        if (owns(board, token))
+          board.setContents(original == null ? new StringSelection("") : original, null);
+      }) {
         if (!owns(board, token)) throw new IllegalStateException("Clipboard changed before paste");
         if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
         gesture.run();
         sleeper.sleep(consumeDelay);
-      } catch (Exception error) {
-        failure = error;
-        throw error;
-      } finally {
-        try {
-          if (owns(board, token))
-            board.setContents(original == null ? new StringSelection("") : original, null);
-        } catch (Exception restoreError) {
-          if (failure != null) failure.addSuppressed(restoreError);
-          else throw restoreError;
-        }
       }
     } finally {
       LOCK.unlock();
@@ -97,7 +89,8 @@ public final class ClipboardPaste {
   }
 
   /** 画面操作の支援において、ownsに該当するか判定する。 */
-  private static boolean owns(Clipboard board, String token) throws Exception {
+  private static boolean owns(Clipboard board, String token)
+      throws IOException, UnsupportedFlavorException {
     var current = board.getContents(null);
     return current != null
         && current.isDataFlavorSupported(MARKER)
@@ -109,7 +102,8 @@ public final class ClipboardPaste {
    *
    * <p>System Transferables may read lazily from native storage: materialize before replacing it.
    */
-  private static Transferable snapshot(Transferable original) throws Exception {
+  private static Transferable snapshot(Transferable original)
+      throws IOException, UnsupportedFlavorException {
     if (original == null) return null;
     var values = new java.util.LinkedHashMap<DataFlavor, Supplier<Object>>();
     for (DataFlavor flavor : original.getTransferDataFlavors()) {
