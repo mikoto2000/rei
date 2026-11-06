@@ -66,6 +66,10 @@ public class GoalWaitService {
   private final PersistentCheckpointService checkpoints;
 
   /** 再開用の記録保存と検索の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared checkpoint state for run lookups and transitions.")
   private final PersistentCheckpointRepository checkpointRepository;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */

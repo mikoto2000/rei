@@ -56,6 +56,10 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
       new java.util.WeakHashMap<>();
 
   /** 再開用の記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared checkpoint state for run lookups and transitions.")
   private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints;
 
   /** ツール利用の権限制御で使用する再開用の記録一覧を設定する。 */

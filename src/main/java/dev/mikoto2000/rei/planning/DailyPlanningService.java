@@ -212,6 +212,10 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
   private final Duration staleAfter;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared project registry so lookups use the same registered projects.")
   private final ProjectRegistry projects;
 
   /** 許可。 */

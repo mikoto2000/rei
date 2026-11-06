@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.subagent;
 
 import dev.mikoto2000.rei.output.CommandOutput;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -38,6 +40,10 @@ public class SubAgentCommand implements Callable<Integer> {
   private SubAgentRunner runner;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared project selection and client session state.")
   private dev.mikoto2000.rei.core.project.ProjectService projects;
 
   /** 補助エージェントへの委譲に関する設定実行を処理する。 */

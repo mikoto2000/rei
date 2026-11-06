@@ -105,6 +105,10 @@ public final class AutoSleepService implements AutoCloseable {
   private dev.mikoto2000.rei.application.session.SessionRepository savedSessions;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared project selection and client session state.")
   private dev.mikoto2000.rei.core.project.ProjectService projects;
 
   /** 起動時。 */

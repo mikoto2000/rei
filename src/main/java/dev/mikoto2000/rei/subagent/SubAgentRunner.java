@@ -325,6 +325,10 @@ public final class SubAgentRunner {
   }
 
   /** 権限一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared guard for current tool authorization.")
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
 
   /** 補助エージェントへの委譲で使用するツール権限利用条件の確認を設定する。 */

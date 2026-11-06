@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.chatgpt;
 
 import dev.mikoto2000.rei.output.CommandOutput;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -26,9 +28,17 @@ public final class ChatGptCommand {
   private final ObjectProvider<PlanLogin> login;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared project selection and client session state.")
   private dev.mikoto2000.rei.core.project.ProjectService projects;
 
   /** 権限一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared guard for current tool authorization.")
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
 
   /** ChatGPTとの連携に関する設定利用可否の確認を処理する。 */

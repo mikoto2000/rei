@@ -16,6 +16,8 @@ import dev.mikoto2000.rei.event.ErrorInformation;
 import dev.mikoto2000.rei.event.ExecutionProgressPayload;
 import dev.mikoto2000.rei.event.ToolStartedPayload;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -817,6 +819,10 @@ public class RunExecutionContext {
   public static final String KEY = RunExecutionContext.class.getName();
 
   /** 権限一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared guard for current tool authorization.")
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
 
   /** 実行の停滞への対処で使用するツール権限利用条件の確認を設定する。 */

@@ -112,6 +112,10 @@ public class GoalChatGateway
   }
 
   /** 実行登録台帳。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared run registry so operations see the same lifecycle state.")
   private dev.mikoto2000.rei.application.run.RunRegistry runRegistry;
 
   /** 実行受付から終了までの管理。 */
