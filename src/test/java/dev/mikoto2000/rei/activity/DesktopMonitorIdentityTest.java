@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.mikoto2000.rei.computeruse.CapturedScreen;
@@ -43,7 +43,14 @@ class DesktopMonitorIdentityTest {
     assertEquals(
         List.of("interface-left", "interface-right"),
         reversed.displays().stream().map(d -> d.geometry().id()).toList());
-    assertSame(image, mapped.image());
+    var mappedImage = mapped.image();
+    int width = image.getWidth();
+    int height = image.getHeight();
+    assertEquals(width, mappedImage.getWidth());
+    assertEquals(height, mappedImage.getHeight());
+    assertArrayEquals(
+        image.getRGB(0, 0, width, height, null, 0, width),
+        mappedImage.getRGB(0, 0, width, height, null, 0, width));
   }
 
   /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
