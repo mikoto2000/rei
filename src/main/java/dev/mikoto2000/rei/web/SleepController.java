@@ -7,6 +7,7 @@ import dev.mikoto2000.rei.memory.command.MemoryCommandSupport;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
+import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -40,11 +41,7 @@ public final class SleepController {
   private final Predicate<String> projectExists;
 
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
-  private final SessionLifecycle sessions;
+  private final BiConsumer<String, String> validateSession;
 
   /**
    * Web APIによる操作で受け渡すテキストを表す。
@@ -101,7 +98,7 @@ public final class SleepController {
     this.runs = runs;
     this.support = support;
     this.projectExists = id -> projects.resolveById(id).isPresent();
-    this.sessions = sessions;
+    this.validateSession = (session, project) -> sessions.validate(session, project);
   }
 
   /** Web APIによる操作で用いる待機を返す。 */
@@ -164,7 +161,7 @@ public final class SleepController {
   public Text status(
       @PathVariable String projectId, @RequestParam(required = false) String sessionId) {
     project(projectId);
-    if (sessionId != null) sessions.validate(sessionId, projectId);
+    if (sessionId != null) validateSession.accept(sessionId, projectId);
     return new Text(support.statusForProject(projectId, sessionId));
   }
 
@@ -189,7 +186,7 @@ public final class SleepController {
       @PathVariable String sessionId,
       @RequestBody Cancellation request) {
     project(projectId);
-    sessions.validate(sessionId, projectId);
+    validateSession.accept(sessionId, projectId);
     if (request == null || request.revision() == null)
       throw new IllegalArgumentException("Observed revision required");
     return new Text(

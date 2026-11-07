@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.checkpoint;
 
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 
 /**
  * 再開概要のユースケースを実現する。
@@ -32,12 +34,7 @@ public class ResumeOverviewService {
   private final PersistentCheckpointRepository repository;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final Supplier<List<ProjectContext>> registeredProjects;
 
   /** この機能の動作設定。 */
   @SuppressFBWarnings(
@@ -56,7 +53,7 @@ public class ResumeOverviewService {
       ResumeOverviewProperties properties,
       Clock clock) {
     this.repository = repository;
-    this.projects = projects;
+    this.registeredProjects = () -> projects.registeredProjects();
     this.properties = properties;
     this.clock = clock;
   }
@@ -79,7 +76,7 @@ public class ResumeOverviewService {
   /** 作業の中断と再開で用いる概要を返す。 */
   public ResumeOverview overview(String projectId) {
     var project =
-        projects.registeredProjects().stream()
+        registeredProjects.get().stream()
             .filter(p -> p.id().equals(projectId))
             .findFirst()
             .orElseThrow(
@@ -109,7 +106,7 @@ public class ResumeOverviewService {
   /** 作業の中断と再開で用いる件数を返す。 */
   public List<ResumeOverview.ProjectCount> counts() {
     var result = new ArrayList<ResumeOverview.ProjectCount>();
-    for (var project : projects.registeredProjects()) {
+    for (var project : registeredProjects.get()) {
       var overview = overview(project.id());
       if (overview.count() > 0)
         result.add(

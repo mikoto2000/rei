@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
@@ -24,16 +25,12 @@ public class CheckpointTools {
   private final PersistentCheckpointService service;
 
   /** やり取り一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent turn store for history and run lookups.")
-  private final ConversationTurnStore turns;
+  private final Function<String, List<ConversationTurnStore.Turn>> readTurns;
 
   /** 指定された値や利用先を使って、CheckpointToolsを初期化する。 */
   public CheckpointTools(PersistentCheckpointService service, ConversationTurnStore turns) {
     this.service = service;
-    this.turns = turns;
+    this.readTurns = conversation -> turns.read(conversation);
   }
 
   /** 作業の中断と再開で用いる所有者を返す。 */
@@ -51,7 +48,7 @@ public class CheckpointTools {
   /** 作業の中断と再開で用いる要求を返す。 */
   private String request() {
     var owner = owner();
-    return turns.read(owner.conversationId()).stream()
+    return readTurns.apply(owner.conversationId()).stream()
             .filter(t -> t.runId().equals(owner.runId()))
             .map(ConversationTurnStore.Turn::request)
             .findFirst()

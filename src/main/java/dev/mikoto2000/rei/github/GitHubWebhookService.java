@@ -22,6 +22,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 /**
@@ -72,11 +73,7 @@ public final class GitHubWebhookService {
   private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
-  private final SessionLifecycle sessions;
+  private final BiConsumer<String, String> validateSession;
 
   /** 事実一覧。 */
   @SuppressFBWarnings(
@@ -118,7 +115,7 @@ public final class GitHubWebhookService {
     this.decoder = new GitHubWebhookDecoder(properties, clock);
     this.properties = properties;
     this.findProject = id -> projects.resolveById(id);
-    this.sessions = sessions;
+    this.validateSession = (session, project) -> sessions.validate(session, project);
     this.facts = facts;
     this.scheduler = scheduler;
     this.inbox = inbox;
@@ -136,7 +133,7 @@ public final class GitHubWebhookService {
                               () ->
                                   new IllegalArgumentException(
                                       "GitHub mapping Project not registered"));
-                  sessions.validate(mapping.sessionId(), project.id());
+                  validateSession.accept(mapping.sessionId(), project.id());
                   return new Owner(mapping, project);
                 })
             .toList();
@@ -174,7 +171,7 @@ public final class GitHubWebhookService {
         if (!findProject.apply(owner.project().id())
             .filter(current -> current.root().equals(owner.project().root()))
             .isPresent()) throw new ResourceNotFoundException("GitHub mapping");
-        sessions.validate(rule.sessionId(), rule.projectId());
+        validateSession.accept(rule.sessionId(), rule.projectId());
         if (properties.isRecheckRequired()
             && verifier.verify(fact) != GitHubStateVerifier.Verdict.CONFIRMED)
           throw new OperationConflictException();
@@ -237,7 +234,7 @@ public final class GitHubWebhookService {
                     && owner.mapping().sessionId().equals(session)))
       throw new ResourceNotFoundException("GitHub mapping");
     try {
-      sessions.validate(session, project);
+      validateSession.accept(session, project);
     } catch (dev.mikoto2000.rei.application.run.SessionConflictException foreign) {
       throw new ResourceNotFoundException("GitHub mapping");
     }

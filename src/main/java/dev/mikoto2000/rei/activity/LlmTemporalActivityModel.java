@@ -60,7 +60,7 @@ public final class LlmTemporalActivityModel implements TemporalActivityInference
   /** 作業状況の把握で用いる推定を返す。 */
   @Override
   public TemporalActivityInferenceService.Outcome infer(
-      String input, int outputTokens, int timeoutSeconds, long tokenLimit) throws Exception {
+      String input, int outputTokens, int timeoutSeconds, long tokenLimit) {
     if (input == null
         || input.length() > 16000
         || outputTokens < 1

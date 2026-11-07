@@ -1,13 +1,12 @@
 package dev.mikoto2000.rei.slack;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
@@ -25,11 +24,7 @@ public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable
   }
 
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound SlackProperties shared by consumers of these settings.")
-  private final SlackProperties settings;
+  private final BooleanSupplier slackEnabled;
 
   /** 実行環境。 */
   private final Map<String, String> environment;
@@ -55,7 +50,7 @@ public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable
   /** 指定された値や利用先を使って、SlackSocketLifecycleを初期化する。 */
   public SlackSocketLifecycle(
       SlackProperties settings, Map<String, String> environment, Supplier<Connection> factory) {
-    this.settings = settings;
+    this.slackEnabled = () -> settings.isEnabled();
     this.environment =
         environment == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(environment));
     this.factory = factory;
@@ -65,7 +60,7 @@ public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable
   boolean connectOnce() {
     synchronized (this) {
       if (connection != null) return true;
-      if (closed || connecting || !settings.isEnabled()) return false;
+      if (closed || connecting || !slackEnabled.getAsBoolean()) return false;
       if (environment.getOrDefault("SLACK_BOT_TOKEN", "").isBlank()
           || environment.getOrDefault("SLACK_APP_TOKEN", "").isBlank()) {
         LoggerFactory.getLogger(getClass())
@@ -106,7 +101,7 @@ public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable
   /** 要求された処理を開始する。 */
   @Override
   public synchronized void start() {
-    if (running || !settings.isEnabled()) return;
+    if (running || !slackEnabled.getAsBoolean()) return;
     closed = false;
     running = true;
     worker =

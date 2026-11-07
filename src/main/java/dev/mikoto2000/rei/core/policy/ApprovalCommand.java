@@ -4,6 +4,7 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -22,12 +23,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
   private final ToolApprovalRepository repository;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final Supplier<String> currentProjectId;
 
   /** 継続入力一覧。 */
   @SuppressFBWarnings(
@@ -101,7 +97,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
   @org.springframework.beans.factory.annotation.Autowired
   public ApprovalCommand(ToolApprovalRepository repository, ProjectService projects) {
     this.repository = repository;
-    this.projects = projects;
+    this.currentProjectId = () -> projects.currentContext().id();
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -114,7 +110,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
   public Integer call() {
     var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
-      String project = projects.currentContext().id();
+      String project = currentProjectId.get();
       if (continueRun && !"approve".equals(action))
         throw new IllegalArgumentException("--continue is only valid with approve");
       Object result =
@@ -263,7 +259,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
     synchronized (aliases) {
       var item = aliases.getOrDefault(clientKey(), java.util.Map.of()).get(id);
       if (item == null
-          || !item.project().equals(projects.currentContext().id())
+          || !item.project().equals(currentProjectId.get())
           || !java.util.Objects.equals(item.session(), ProjectService.selectedShellSession()))
         throw new IllegalArgumentException(
             "表示した承認番号が見つかりません。現在のProject/Sessionで /approval list を実行してください。");

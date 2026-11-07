@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /**
@@ -47,12 +48,7 @@ public class WorkContextService {
   private final SessionRepository sessions;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final Supplier<List<ProjectContext>> registeredProjects;
 
   /** やり取り一覧。 */
   @SuppressFBWarnings(
@@ -104,7 +100,7 @@ public class WorkContextService {
       Clock clock) {
     this.repository = repository;
     this.sessions = sessions;
-    this.projects = projects;
+    this.registeredProjects = () -> projects.registeredProjects();
     this.turns = turns;
     this.events = events;
     this.extractor = extractor;
@@ -117,7 +113,7 @@ public class WorkContextService {
   public ProjectContext project(String id) {
     if (id == null || id.isBlank())
       throw new IllegalArgumentException("プロジェクトを選択してください (/project cd <directory>)。");
-    return projects.registeredProjects().stream()
+    return registeredProjects.get().stream()
         .filter(p -> p.id().equals(id))
         .findFirst()
         .orElseThrow(() -> new IllegalArgumentException("Unknown registered project"));

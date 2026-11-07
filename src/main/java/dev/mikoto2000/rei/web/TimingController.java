@@ -5,9 +5,8 @@ import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.timing.TimingCommand;
 import dev.mikoto2000.rei.timing.TimingRecorder;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -27,11 +26,7 @@ public final class TimingController {
   private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
-  private final SessionLifecycle sessions;
+  private final BiConsumer<String, String> validateSession;
 
   /**
    * Web APIによる操作で受け渡すテキストを表す。
@@ -45,7 +40,7 @@ public final class TimingController {
       TimingRecorder recorder, ProjectRegistry projects, SessionLifecycle sessions) {
     this.recorder = recorder;
     this.findProject = id -> projects.resolveById(id);
-    this.sessions = sessions;
+    this.validateSession = (session, project) -> sessions.validate(session, project);
   }
 
   /** 利用者が対象の情報を確認できるように表示する。 */
@@ -66,7 +61,7 @@ public final class TimingController {
         findProject.apply(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
-    sessions.validate(sessionId, project.id());
+    validateSession.accept(sessionId, project.id());
     var run =
         runId.equals("last")
             ? recorder.latest(project.id(), sessionId)
