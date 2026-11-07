@@ -772,7 +772,7 @@ public final class TerminalClient implements AutoCloseable {
         String confirmation =
             reader.readLine("秘密情報を含む未加工本文を表示・保存します。端末履歴・保存後のコピーは削除対象外です。続行しますか? [y/N] ");
         if (!confirmation.equalsIgnoreCase("y") && !confirmation.equalsIgnoreCase("yes")) return;
-        var body = new LinkedHashMap<String, Object>((Map<String, Object>) request.body());
+        Map<Object, Object> body = new LinkedHashMap<>((Map<?, ?>) request.body());
         body.put("approved", true);
         var response = backend.post(request.path(), body);
         // Raw is already control-escaped by CaptureDisplay and was explicitly approved. Do not mask
