@@ -81,26 +81,29 @@ class ManagedActivityLogTest {
     var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
     var interrupted = new java.util.concurrent.atomic.AtomicBoolean();
     var caller =
-        Thread.ofVirtual().start(
-            () -> {
-              try {
-                activity.appendWith(
-                    null, entry("during", "session", "run"), root,
-                    db -> {
-                      entered.countDown();
-                      try {
-                        if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
-                          throw new AssertionError("Commit barrier timed out");
-                      } catch (InterruptedException cancelled) {
-                        Thread.currentThread().interrupt();
-                      }
-                      return null;
-                    });
-                interrupted.set(Thread.currentThread().isInterrupted());
-              } catch (Throwable error) {
-                failure.set(error);
-              }
-            });
+        Thread.ofVirtual()
+            .start(
+                () -> {
+                  try {
+                    activity.appendWith(
+                        null,
+                        entry("during", "session", "run"),
+                        root,
+                        db -> {
+                          entered.countDown();
+                          try {
+                            if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                              throw new AssertionError("Commit barrier timed out");
+                          } catch (InterruptedException cancelled) {
+                            Thread.currentThread().interrupt();
+                          }
+                          return null;
+                        });
+                    interrupted.set(Thread.currentThread().isInterrupted());
+                  } catch (Throwable error) {
+                    failure.set(error);
+                  }
+                });
     try {
       assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
       caller.interrupt();
@@ -115,6 +118,37 @@ class ManagedActivityLogTest {
     assertThat(activity.read(null))
         .extracting(ProfileEventLogEntry::id)
         .containsExactly("before", "during", "next");
+  }
+
+  @Test
+  void failedActivityCommitPropagatesCancellationAndLeavesLogUsable() {
+    var activity = new ManagedActivityLog(registry);
+    var cancellation = new java.util.concurrent.CancellationException("cancel commit");
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () ->
+                activity.appendWith(
+                    null,
+                    entry("cancelled", "session", "run"),
+                    root,
+                    db -> {
+                      throw cancellation;
+                    }))
+        .isSameAs(cancellation);
+
+    var fatal = new AssertionError("fatal commit");
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () ->
+                activity.appendWith(
+                    null,
+                    entry("failed", "session", "run"),
+                    root,
+                    db -> {
+                      throw fatal;
+                    }))
+        .isSameAs(fatal);
+
+    activity.append(null, entry("next", "session", "run"));
+    assertThat(activity.read(null)).extracting(ProfileEventLogEntry::id).containsExactly("next");
   }
 
   /** 新規区間一覧について、旧形式ログを保持することを確認する。 */
