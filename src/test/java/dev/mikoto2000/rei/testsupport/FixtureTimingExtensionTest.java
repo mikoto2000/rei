@@ -27,7 +27,8 @@ class FixtureTimingExtensionTest {
     clock.set(12);
     timing.beforeTestExecution(context);
     clock.set(13);
-    try (var phase = FixtureTimingExtension.phase("seed")) {
+    var phase = FixtureTimingExtension.phase("seed");
+    try (phase) {
       clock.set(15);
     }
     clock.set(18);
@@ -52,7 +53,8 @@ class FixtureTimingExtensionTest {
     var timing = new FixtureTimingExtension(false, clock, output);
     timing.beforeEach(context);
     timing.beforeTestExecution(context);
-    try (var phase = FixtureTimingExtension.phase("seed")) {}
+    var phase = FixtureTimingExtension.phase("seed");
+    try (phase) {}
     timing.afterTestExecution(context);
     timing.testSuccessful(context);
     verifyNoInteractions(context, clock, output);

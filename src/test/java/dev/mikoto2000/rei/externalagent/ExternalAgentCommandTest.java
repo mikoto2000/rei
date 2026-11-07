@@ -39,7 +39,8 @@ class ExternalAgentCommandTest {
                     temp.resolve("sessions.json")),
                 java.time.Clock.systemUTC()),
             router::submit);
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       shell.submit("active chat");
       assertEquals(0, new CommandLine(new ExternalAgentCommand(shell)).execute("codex", "review"));
       tasks.getFirst().run();

@@ -124,36 +124,39 @@ class SubAgentIntegrationTest {
                       : new AssistantMessage(SubAgentResultParserTest.VALID);
               return Flux.just(new ChatResponse(List.of(new Generation(message))));
             });
-    try (var scope = AgentRunScope.open(new AgentRunContext("parent", main, directory))) {
-      var before = workingSet.getFiles();
-      var result = runner.run("reviewer", "review note.txt", null);
-      assertThat(result.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
-      assertThat(requests).allMatch(p -> !p.getContents().contains("parent private reasoning"));
-      assertThat(requests.getLast().getInstructions())
-          .filteredOn(m -> m instanceof ToolResponseMessage)
-          .anyMatch(
-              m ->
-                  ((ToolResponseMessage) m)
-                      .getResponses()
-                      .toString()
-                      .contains("independent evidence"));
-      assertThat(workingSet.getFiles()).isEqualTo(before);
-      assertThat(history.get(main))
-          .extracting(Message::getText)
-          .containsExactly("parent private reasoning");
-      assertThat(history.get("subagent:" + result.subAgentRunId())).isEmpty();
-      var batch =
-          parallel.delegate(
-              List.of(
-                  new ParallelSubAgentDelegator.Request("first", "reviewer", "review A", null),
-                  new ParallelSubAgentDelegator.Request("second", "reviewer", "review B", null)));
-      assertThat(batch.status()).isEqualTo(ParallelSubAgentDelegator.Status.COMPLETED);
-      assertThat(batch.items()).hasSize(2);
-      assertThat(batch.items().stream().map(i -> i.result().subAgentRunId()).distinct()).hasSize(2);
-      assertThat(workingSet.getFiles()).isEqualTo(before);
-      assertThat(history.get(main))
-          .extracting(Message::getText)
-          .containsExactly("parent private reasoning");
+    try {
+      var scope = AgentRunScope.open(new AgentRunContext("parent", main, directory));
+      try (scope) {
+        var before = workingSet.getFiles();
+        var result = runner.run("reviewer", "review note.txt", null);
+        assertThat(result.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
+        assertThat(requests).allMatch(p -> !p.getContents().contains("parent private reasoning"));
+        assertThat(requests.getLast().getInstructions())
+            .filteredOn(m -> m instanceof ToolResponseMessage)
+            .anyMatch(
+                m ->
+                    ((ToolResponseMessage) m)
+                        .getResponses()
+                        .toString()
+                        .contains("independent evidence"));
+        assertThat(workingSet.getFiles()).isEqualTo(before);
+        assertThat(history.get(main))
+            .extracting(Message::getText)
+            .containsExactly("parent private reasoning");
+        assertThat(history.get("subagent:" + result.subAgentRunId())).isEmpty();
+        var batch =
+            parallel.delegate(
+                List.of(
+                    new ParallelSubAgentDelegator.Request("first", "reviewer", "review A", null),
+                    new ParallelSubAgentDelegator.Request("second", "reviewer", "review B", null)));
+        assertThat(batch.status()).isEqualTo(ParallelSubAgentDelegator.Status.COMPLETED);
+        assertThat(batch.items()).hasSize(2);
+        assertThat(batch.items().stream().map(i -> i.result().subAgentRunId()).distinct()).hasSize(2);
+        assertThat(workingSet.getFiles()).isEqualTo(before);
+        assertThat(history.get(main))
+            .extracting(Message::getText)
+            .containsExactly("parent private reasoning");
+      }
     } finally {
       history.clear(main);
     }

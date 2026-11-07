@@ -78,13 +78,17 @@ class ReadingEfficiencyBenchmarkTest {
     long duplicateBefore;
     long duplicateAfter;
     var beforeRun = new AgentRunContext("duplicate-before", "chat", root);
-    try (var scope = AgentRunScope.open(beforeRun)) {
-      new SearchReadResultConverter().convert(legacy, List.class);
-      duplicateBefore =
-          ReadingMetrics.snapshot(beforeRun).getOrDefault("wireDuplicateBodyBytes", 0L);
+    {
+      var scope = AgentRunScope.open(beforeRun);
+      try (scope) {
+        new SearchReadResultConverter().convert(legacy, List.class);
+        duplicateBefore =
+            ReadingMetrics.snapshot(beforeRun).getOrDefault("wireDuplicateBodyBytes", 0L);
+      }
     }
     var afterRun = new AgentRunContext("duplicate-after", "chat", root);
-    try (var scope = AgentRunScope.open(afterRun)) {
+    var scope = AgentRunScope.open(afterRun);
+    try (scope) {
       new SearchReadResultConverter().convert(compact, List.class);
       duplicateAfter = ReadingMetrics.snapshot(afterRun).getOrDefault("wireDuplicateBodyBytes", 0L);
     }
@@ -119,7 +123,8 @@ class ReadingEfficiencyBenchmarkTest {
     var queries =
         java.util.stream.IntStream.range(0, 8).mapToObj(i -> query("needle" + i, ".")).toList();
     var owner = new AgentRunContext("distinct-query-benchmark", "chat", root);
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var result = tools("queries.txt").grepMultiQuery(queries, root);
       assertEquals(8, result.size());
       assertTrue(result.stream().allMatch(r -> r.matches().size() == 1));
@@ -144,7 +149,8 @@ class ReadingEfficiencyBenchmarkTest {
     }
     var database = ReadingBenchmarkDatabase.prepare(root.resolve("data"));
     var cases = new ArrayList<Map<String, Object>>();
-    try (var lease = ReadingBenchmarkDatabase.keepOpen(database)) {
+    var lease = ReadingBenchmarkDatabase.keepOpen(database);
+    try (lease) {
       for (int size : sizes) {
         var candidates = List.copyOf(paths.subList(0, size));
         var reader =
@@ -168,7 +174,8 @@ class ReadingEfficiencyBenchmarkTest {
             var owner =
                 new AgentRunContext(
                     "search-initial-" + size + "-" + i + "-" + degree, "chat", root);
-            try (var scope = AgentRunScope.open(owner)) {
+            var scope = AgentRunScope.open(owner);
+            try (scope) {
               long started = System.nanoTime();
               var page = searches.get(index).read(request, root);
               long elapsed = System.nanoTime() - started;
@@ -205,7 +212,8 @@ class ReadingEfficiencyBenchmarkTest {
     }
     var cases = new ArrayList<Map<String, Object>>();
     var database = ReadingBenchmarkDatabase.prepare(root.resolve("data"));
-    try (var lease = ReadingBenchmarkDatabase.keepOpen(database)) {
+    var lease = ReadingBenchmarkDatabase.keepOpen(database);
+    try (lease) {
       for (int size : sizes) {
         var candidates = List.copyOf(paths.subList(0, size));
         var reader =
@@ -223,7 +231,8 @@ class ReadingEfficiencyBenchmarkTest {
         var samples = new LinkedHashMap<Integer, Map<String, List<Map<String, Long>>>>();
         for (int degree : degrees)
           samples.put(degree, Map.of("RESULT", new ArrayList<>(), "SCAN", new ArrayList<>()));
-        try (var scope = AgentRunScope.open(owner)) {
+        var scope = AgentRunScope.open(owner);
+        try (scope) {
           var result =
               searches.getFirst().read(searchResumeRequest(query("hit", "sources"), null), root);
           var scan =
@@ -369,7 +378,8 @@ class ReadingEfficiencyBenchmarkTest {
     var pages = new ArrayList<Tools.ReadFileResult>();
     var next = new Tools.ReadFileRequest(name, 1, expected.size());
     long elapsed;
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       long started = System.nanoTime();
       while (next != null && pages.size() < expected.size()) {
         var page = reader.readMultiFile(List.of(next), root).getFirst();
@@ -463,8 +473,9 @@ class ReadingEfficiencyBenchmarkTest {
       gate.prepare();
     }
     var query = query("hit", "gap.txt");
-    try (var scope =
-        AgentRunScope.open(new AgentRunContext("gap-benchmark", "chat", root, "project"))) {
+    var scope =
+        AgentRunScope.open(new AgentRunContext("gap-benchmark", "chat", root, "project"));
+    try (scope) {
       var initial =
           reader
               .searchAndRead(

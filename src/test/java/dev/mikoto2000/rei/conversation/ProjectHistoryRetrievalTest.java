@@ -206,7 +206,8 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
       add(b, "needle B " + i);
     }
     var run = new AgentRunContext("run-a", a, "chat:main");
-    try (var ignored = AgentRunScope.open(run)) {
+    var ignored = AgentRunScope.open(run);
+    try (ignored) {
       projects.cd(b.root().toString());
       var mailbox = new UserInterventionQueue();
       mailbox.offer("needle");
@@ -286,7 +287,8 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     bus.subscribe(captured::add);
     service.setHistoryEvents(
         new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), bus);
-    try (var ignored = AgentRunScope.open(new AgentRunContext("run-a", a, "chat:main"))) {
+    var ignored = AgentRunScope.open(new AgentRunContext("run-a", a, "chat:main"));
+    try (ignored) {
       projects.cd(b.root().toString());
       service.search("needle", "chat", null, null, null, 10);
     }

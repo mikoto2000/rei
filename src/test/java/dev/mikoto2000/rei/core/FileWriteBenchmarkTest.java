@@ -144,7 +144,8 @@ class FileWriteBenchmarkTest {
         started = System.nanoTime();
         try {
           if (scenario.equals("cp932")) {
-            try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+            var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+            try (scope) {
               var result = new Tools().applyTextDiff("a.txt", "old", "changed 20", "windows-31j");
               output += json.writeValueAsBytes(result).length;
               status = result.success() ? "APPLIED" : "REJECTED";

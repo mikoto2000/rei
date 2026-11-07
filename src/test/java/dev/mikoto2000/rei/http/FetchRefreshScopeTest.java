@@ -11,10 +11,14 @@ class FetchRefreshScopeTest {
   @Test
   void refreshSurvivesNestedScopesAndRestoresAfterClose() {
     assertFalse(FetchScope.forceRefresh());
-    try (var refresh = FetchScope.withForceRefresh(true)) {
-      try (var nested = FetchScope.enter(FetchOperation.active());
-          var weaker = FetchScope.withForceRefresh(false)) {
-        assertTrue(FetchScope.forceRefresh());
+    var refresh = FetchScope.withForceRefresh(true);
+    try (refresh) {
+      var nested = FetchScope.enter(FetchOperation.active());
+      try (nested) {
+        var weaker = FetchScope.withForceRefresh(false);
+        try (weaker) {
+          assertTrue(FetchScope.forceRefresh());
+        }
       }
       assertTrue(FetchScope.forceRefresh());
     }

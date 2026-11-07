@@ -36,7 +36,8 @@ class ReviewEvidenceValidationTest {
             new Tools(),
             TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", dir, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = tools.beginReview(List.of("source.md"), "correctness", "v1");
       var page =
           tools.readReviewFile(job.id(), "source.md", job.targets().getFirst().version(), 0, 512);
@@ -72,7 +73,8 @@ class ReviewEvidenceValidationTest {
             new RawToolResultStore(dir.resolve("data")),
             new Tools(),
             TokenEstimator.conservative());
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir, "project"));
+    try (scope) {
       assertThatThrownBy(
               () -> tools.beginReview(List.of("MixedCase.md", "mixedcase.md"), "review", "v1"))
           .hasMessageContaining("REVIEW_RESULT_INVALID");
@@ -94,7 +96,8 @@ class ReviewEvidenceValidationTest {
             new Tools(),
             TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", dir, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = tools.beginReview(List.of("source.md"), "review", "v1");
       var page =
           tools.readReviewFile(job.id(), "source.md", job.targets().getFirst().version(), 0, 512);
@@ -124,7 +127,8 @@ class ReviewEvidenceValidationTest {
         "\uFEFF本文🙂\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_16LE));
     Files.write(
         dir.resolve("cp932.txt"), "日本語\r\n".getBytes(java.nio.charset.Charset.forName("MS932")));
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir, "project"));
+    try (scope) {
       assertThat(files.reviewSnapshot("utf16.txt").text()).isEqualTo("\uFEFF本文🙂\r\n");
       assertThat(files.reviewSnapshot("cp932.txt").text()).isEqualTo("日本語\r\n");
     }

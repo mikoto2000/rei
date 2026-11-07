@@ -41,7 +41,8 @@ class PersistentAgentSchedulerTest {
 
   /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   String create(PersistentAgentScheduler scheduler) {
-    try (var scope = AgentRunScope.open(owner())) {
+    var scope = AgentRunScope.open(owner());
+    try (scope) {
       return scheduler.scheduleAfter(Duration.ofSeconds(1), "Check build status", "session").id();
     }
   }
@@ -54,7 +55,8 @@ class PersistentAgentSchedulerTest {
     for (boolean active : new boolean[] {false, true}) {
       String id = create(scheduler);
       if (active) scheduler.activate("project", id);
-      try (var scope = AgentRunScope.open(owner())) {
+      var scope = AgentRunScope.open(owner());
+      try (scope) {
         assertEquals("Schedule cancelled", tools.cancelScheduledAction(id));
         assertTrue(tools.listScheduledActions().isEmpty());
       }
@@ -78,7 +80,8 @@ class PersistentAgentSchedulerTest {
           new AgentRunContext("run", "other", dir, "project"),
           new AgentRunContext("run", "session", dir.resolve("other"), "project")
         }) {
-      try (var scope = AgentRunScope.open(foreign)) {
+      var scope = AgentRunScope.open(foreign);
+      try (scope) {
         assertThrows(IllegalArgumentException.class, () -> tools.cancelScheduledAction(id));
       }
     }
@@ -86,7 +89,8 @@ class PersistentAgentSchedulerTest {
     scheduler.activate("project", id);
     var due = scheduler(now.plusSeconds(2));
     due.claimDue().orElseThrow();
-    try (var scope = AgentRunScope.open(owner())) {
+    var scope = AgentRunScope.open(owner());
+    try (scope) {
       assertThrows(
           IllegalStateException.class, () -> new SchedulerTools(due).cancelScheduledAction(id));
     }
@@ -98,7 +102,8 @@ class PersistentAgentSchedulerTest {
   void toolCancellationStopsRecurringAndEventSchedules() {
     var scheduler = scheduler(now);
     var tools = new SchedulerTools(scheduler);
-    try (var scope = AgentRunScope.open(owner())) {
+    var scope = AgentRunScope.open(owner());
+    try (scope) {
       var interval = tools.scheduleInterval("1m", 3, "Repeat", "session");
       scheduler.activate("project", interval.id());
       tools.cancelScheduledAction(interval.id());
@@ -138,7 +143,8 @@ class PersistentAgentSchedulerTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> scheduler.scheduleAfter(Duration.ofSeconds(1), "x", "session"));
-    try (var scope = AgentRunScope.open(owner())) {
+    var scope = AgentRunScope.open(owner());
+    try (scope) {
       assertThrows(
           IllegalArgumentException.class,
           () -> scheduler.scheduleAfter(Duration.ofSeconds(1), "x", "other"));
@@ -179,7 +185,8 @@ class PersistentAgentSchedulerTest {
   void intervalPersistsCoalescesAndStopsAtBound() {
     var first = scheduler(now);
     String id;
-    try (var scope = AgentRunScope.open(owner())) {
+    var scope = AgentRunScope.open(owner());
+    try (scope) {
       id = first.scheduleInterval(Duration.ofMinutes(1), 3, "Check", "session").id();
     }
     first.activate("project", id);
@@ -207,21 +214,25 @@ class PersistentAgentSchedulerTest {
   void intervalFailureAndCancellationDoNotRepeat() {
     var first = scheduler(now);
     String id;
-    try (var scope = AgentRunScope.open(owner())) {
-      assertThrows(
-          IllegalArgumentException.class,
-          () -> first.scheduleInterval(Duration.ofSeconds(1), 3, "x", "session"));
-      assertThrows(
-          IllegalArgumentException.class,
-          () -> first.scheduleInterval(Duration.ofMinutes(1), 101, "x", "session"));
-      id = first.scheduleInterval(Duration.ofMinutes(1), 3, "x", "session").id();
+    {
+      var scope = AgentRunScope.open(owner());
+      try (scope) {
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> first.scheduleInterval(Duration.ofSeconds(1), 3, "x", "session"));
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> first.scheduleInterval(Duration.ofMinutes(1), 101, "x", "session"));
+        id = first.scheduleInterval(Duration.ofMinutes(1), 3, "x", "session").id();
+      }
     }
     first.activate("project", id);
     var later = scheduler(now.plusSeconds(60));
     later.finish(later.claimDue().orElseThrow(), "FAILED", "failure");
     assertEquals("FAILED", later.get("project", id).status());
     assertTrue(scheduler(now.plusSeconds(1000)).claimDue().isEmpty());
-    try (var scope = AgentRunScope.open(owner())) {
+    var scope = AgentRunScope.open(owner());
+    try (scope) {
       id = first.scheduleInterval(Duration.ofMinutes(1), 3, "x", "session").id();
     }
     first.activate("project", id);

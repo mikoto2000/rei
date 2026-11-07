@@ -129,19 +129,25 @@ class ProjectCommandHistoryTest {
   @Test
   void reloadsOnRestartAndKeepsLegacySharedHistoryUntouched() throws Exception {
     Files.writeString(root.resolve("history"), "old shared command\n");
-    try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
-      reader.unsetOpt(LineReader.Option.HISTORY_INCREMENTAL);
-      read("persist on close");
+    {
+      var history = new ProjectCommandHistory(() -> reader, selected::get, root);
+      try (history) {
+        reader.unsetOpt(LineReader.Option.HISTORY_INCREMENTAL);
+        read("persist on close");
+      }
     }
     assertThat(Files.readString(file("00000000-0000-0000-0000-000000000001")))
         .contains("persist on close");
     reader.setHistory(new org.jline.reader.impl.history.DefaultHistory());
-    try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
-      assertThat(entries()).containsExactly("persist on close");
-      assertThat(
-              read(
-                  org.jline.keymap.KeyMap.key(terminal, org.jline.utils.InfoCmp.Capability.key_up)))
-          .isEqualTo("persist on close");
+    {
+      var history = new ProjectCommandHistory(() -> reader, selected::get, root);
+      try (history) {
+        assertThat(entries()).containsExactly("persist on close");
+        assertThat(
+                read(
+                    org.jline.keymap.KeyMap.key(terminal, org.jline.utils.InfoCmp.Capability.key_up)))
+            .isEqualTo("persist on close");
+      }
     }
     assertThat(Files.readString(root.resolve("history"))).isEqualTo("old shared command\n");
   }
@@ -211,7 +217,9 @@ class ProjectCommandHistoryTest {
             .addSubcommand("cd", new ProjectCommand.CdCommand(projects))
             .addSubcommand("remove", new ProjectCommand.RemoveCommand(projects));
     ShellProjectCommands.configure(command, projects, client, null);
-    try (var scope = client.open();
+    var scope = client.open();
+    try (
+        scope;
         var history = new ProjectCommandHistory(() -> reader, projects::currentContext, root)) {
       read("startup command");
       assertThat(command.execute("cd", other.toString())).isZero();

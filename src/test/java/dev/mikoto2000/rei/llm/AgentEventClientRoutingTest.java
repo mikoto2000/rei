@@ -45,7 +45,8 @@ class AgentEventClientRoutingTest {
   void cliReceivesItsFailureOverSseWithoutLeakingItToShellOrAnotherCli(@TempDir Path root)
       throws Exception {
     var projects = new ProjectService(root, new ProjectRegistry(root.resolve("projects.json")));
-    try (var client = projects.newClient().open()) {
+    var client = projects.newClient().open();
+    try (client) {
       var project = projects.currentContext();
       var caller = new AgentRunContext("cli-run", "cli-session", project.root(), project.id(),
           AgentRunContext.RequestSource.WEB);
@@ -74,7 +75,10 @@ class AgentEventClientRoutingTest {
         when(delegate.stream(prompt)).thenReturn(Flux.error(failure));
         var model = new AgentEventChatModel(LlmFeature.CHAT, delegate, factory, bus);
         Flux<ChatResponse> stream;
-        try (var scope = AgentRunScope.open(caller)) { stream = model.stream(prompt); }
+        {
+          var scope = AgentRunScope.open(caller);
+          try (scope) { stream = model.stream(prompt); }
+        }
         stream.subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
             .onErrorComplete().blockLast(Duration.ofSeconds(5));
         bus.publish(factory.runFailed(caller.runId(),
@@ -95,7 +99,8 @@ class AgentEventClientRoutingTest {
 
         // Shell-originated failures still render on the Shell.
         var shell = new AgentRunContext("shell-run", project, "chat:main");
-        try (var scope = AgentRunScope.open(shell)) {
+        var scope = AgentRunScope.open(shell);
+        try (scope) {
           model.stream(prompt).onErrorComplete().blockLast(Duration.ofSeconds(5));
         }
         verify(shellOutput).println(contains("接続先へ接続できませんでした"));

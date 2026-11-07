@@ -58,7 +58,8 @@ class SessionManagementTest {
     var err = new StringWriter();
     command.setOut(new PrintWriter(out, true));
     command.setErr(new PrintWriter(err, true));
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       assertThat(command.execute()).isZero();
       assertThat(out.toString()).contains("No active session.");
       out.getBuffer().setLength(0);

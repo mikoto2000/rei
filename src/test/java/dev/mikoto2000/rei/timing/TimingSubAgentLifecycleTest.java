@@ -24,7 +24,8 @@ class TimingSubAgentLifecycleTest {
     var bus = new InMemoryAgentEventBus();
     var factory = new AgentEventFactory(Clock.systemUTC());
     var child = new AgentRunContext("child", "subagent:child", Path.of("."), "project");
-    try (var observer = new TimingEventObserver(store, bus)) {
+    var observer = new TimingEventObserver(store, bus);
+    try (observer) {
       bus.publish(
           factory
               .subAgentLifecycle(

@@ -103,8 +103,9 @@ class EmbeddingEndpointTest {
                   new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
                       "embedding", budget, null, null, null);
               var wrapped = new dev.mikoto2000.rei.llm.BudgetedEmbeddingModel(model);
-              try (var scope =
-                  dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget())) {
+              var scope =
+                  dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget());
+              try (scope) {
                 assertArrayEquals(new float[] {0.1f, 0.2f}, wrapped.embed("document"));
                 assertEquals(1, budget.totalTokens());
                 org.assertj.core.api.Assertions.assertThatThrownBy(() -> wrapped.embed("next"))

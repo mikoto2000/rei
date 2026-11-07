@@ -125,18 +125,23 @@ class AgentEventChatModelTimingTest {
           .thenReturn(
               Flux.create(
                   sink -> {
-                    try (var scope = AgentRunScope.open(unrelated)) {
+                    var scope = AgentRunScope.open(unrelated);
+                    try (scope) {
                       tick.set(7);
                       sink.next(response("ok"));
                       sink.complete();
                     }
                   }));
       Flux<ChatResponse> stream;
-      try (var scope = AgentRunScope.open(owner)) {
-        stream = model.stream(lexicalPrompt);
+      {
+        var scope = AgentRunScope.open(owner);
+        try (scope) {
+          stream = model.stream(lexicalPrompt);
+        }
       }
       stream.subscribeOn(scheduler).blockLast(Duration.ofSeconds(5));
-      try (var scope = AgentRunScope.open(unrelated)) {
+      var scope = AgentRunScope.open(unrelated);
+      try (scope) {
         stream.blockLast(Duration.ofSeconds(5));
       }
 
@@ -163,7 +168,8 @@ class AgentEventChatModelTimingTest {
     var delegate = mock(ChatModel.class);
     var plain = new Prompt("AUXILIARY-SECRET");
     when(delegate.call(plain)).thenReturn(response("OK"));
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       model(delegate).call(plain);
     }
     var spans = store.latest("project", "session").orElseThrow().spans();

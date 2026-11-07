@@ -241,7 +241,8 @@ public class BackgroundCommands {
         try {
           executeAuxiliary.accept(
               () -> {
-                try (var scope = ExecutionScope.open(execution)) {
+                var scope = ExecutionScope.open(execution);
+                try (scope) {
                   summaryNarrator.narrateCompletedRun(text);
                 }
               });

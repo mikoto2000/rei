@@ -91,7 +91,8 @@ class ReiVersionCommandTest {
     var command = new CommandLine(new RootCommand());
     ReiApplication.configureCommandOutput(command, terminal);
     var writer = command.getOut();
-    try (var console = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession()) {
+    var console = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession();
+    try (console) {
       assertThat(command.execute("--version")).isZero();
     }
     assertThat(output.toString(java.nio.charset.Charset.forName(encoding)))

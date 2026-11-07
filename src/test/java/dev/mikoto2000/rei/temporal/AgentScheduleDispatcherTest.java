@@ -81,9 +81,10 @@ class AgentScheduleDispatcherTest {
         new PersistentAgentScheduler(
             new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("schedule.db")),
             Clock.fixed(Instant.EPOCH, ZoneOffset.UTC));
-    try (var scope =
+    var scope =
         AgentRunScope.open(
-            new AgentRunContext("r", "s", dir, "00000000-0000-0000-0000-000000000001"))) {
+            new AgentRunContext("r", "s", dir, "00000000-0000-0000-0000-000000000001"));
+    try (scope) {
       id = schedules.scheduleAfter(Duration.ZERO, "inspect build", "s").id();
     }
     schedules.activate("00000000-0000-0000-0000-000000000001", id);
@@ -148,9 +149,10 @@ class AgentScheduleDispatcherTest {
     failed.tick();
     failed.tick();
     assertEquals("FAILED", schedules.get("00000000-0000-0000-0000-000000000001", id).status());
-    try (var scope =
+    var scope =
         AgentRunScope.open(
-            new AgentRunContext("r", "s", dir, "00000000-0000-0000-0000-000000000001"))) {
+            new AgentRunContext("r", "s", dir, "00000000-0000-0000-0000-000000000001"));
+    try (scope) {
       id = schedules.scheduleAfter(Duration.ZERO, "x", "s").id();
     }
     schedules.activate("00000000-0000-0000-0000-000000000001", id);
@@ -370,7 +372,8 @@ class AgentScheduleDispatcherTest {
       verifyNoInteractions(h.chat());
       assertTrue(h.jobs().isEmpty());
       String next;
-      try (var scope = AgentRunScope.open(new AgentRunContext("source", "s", dir, project))) {
+      var scope = AgentRunScope.open(new AgentRunContext("source", "s", dir, project));
+      try (scope) {
         next = schedules.scheduleAfter(Duration.ZERO, "next", "s").id();
       }
       schedules.activate(project, next);
@@ -485,7 +488,8 @@ class AgentScheduleDispatcherTest {
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(h.chat());
     String next;
-    try (var scope = AgentRunScope.open(new AgentRunContext("source", "s", dir, project))) {
+    var scope = AgentRunScope.open(new AgentRunContext("source", "s", dir, project));
+    try (scope) {
       next = schedules.scheduleAfter(Duration.ZERO, "next", "s").id();
     }
     schedules.activate(project, next);
@@ -514,10 +518,14 @@ class AgentScheduleDispatcherTest {
     String run = schedules.get(project, id).runId();
     dispatcher.reconcile(project, id, run);
     String next, third;
-    try (var scope = AgentRunScope.open(new AgentRunContext("source", "s", dir, project))) {
-      next = schedules.scheduleAfter(Duration.ZERO, "next", "s").id();
+    {
+      var scope = AgentRunScope.open(new AgentRunContext("source", "s", dir, project));
+      try (scope) {
+        next = schedules.scheduleAfter(Duration.ZERO, "next", "s").id();
+      }
     }
-    try (var scope = AgentRunScope.open(new AgentRunContext("source", "other", dir, project))) {
+    var scope = AgentRunScope.open(new AgentRunContext("source", "other", dir, project));
+    try (scope) {
       third = schedules.scheduleAfter(Duration.ZERO, "third", "other").id();
     }
     schedules.activate(project, next);

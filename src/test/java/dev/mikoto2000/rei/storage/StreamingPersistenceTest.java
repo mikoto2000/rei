@@ -101,11 +101,14 @@ class StreamingPersistenceTest {
         stores.set(context);
         var io = new StorageIoObservation();
         probe.active.set(true);
-        try (var scope = io.observe()) {
-          for (int i = 0; i < 20; i++) {
-            var event = event("chunk-" + i, PROJECT, i % 2 == 0);
-            if (i == 10) bus.publishBoundary(event);
-            else bus.publish(event);
+        try {
+          var scope = io.observe();
+          try (scope) {
+            for (int i = 0; i < 20; i++) {
+              var event = event("chunk-" + i, PROJECT, i % 2 == 0);
+              if (i == 10) bus.publishBoundary(event);
+              else bus.publish(event);
+            }
           }
         } finally {
           probe.active.set(false);

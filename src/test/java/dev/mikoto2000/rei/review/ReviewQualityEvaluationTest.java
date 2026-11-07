@@ -169,7 +169,8 @@ class ReviewQualityEvaluationTest {
     long started = System.nanoTime(), tokens = 0;
     int calls = 0, toolCalls = 0;
     var findings = new ArrayList<ReviewCoverageLedger.Finding>();
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job =
           tools.beginReview(
               gold.stream().map(Gold::path).distinct().toList(),

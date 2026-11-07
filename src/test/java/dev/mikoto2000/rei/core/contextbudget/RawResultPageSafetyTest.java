@@ -20,7 +20,8 @@ class RawResultPageSafetyTest {
     var store = new RawToolResultStore(dir);
     String raw = "教材🙂\\\"\r\n".repeat(4000);
     String ref = store.save("chat", "run", "reader", "call", raw);
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir));
+    try (scope) {
       var page = new RawToolResultTools(store).readRawToolResult(ref, 0, 16000);
       assertThat(TokenEstimator.conservative().text(page)).isLessThanOrEqualTo(2048);
       assertThat(page).contains("nextOffset:", "hasMore: true");
@@ -32,7 +33,8 @@ class RawResultPageSafetyTest {
   void lowSurrogateCursorIsRejected() {
     var store = new RawToolResultStore(dir);
     String ref = store.save("chat", "run", "reader", "call", "a🙂b");
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir));
+    try (scope) {
       assertThatThrownBy(() -> new RawToolResultTools(store).readRawToolResult(ref, 2, 1))
           .hasMessageContaining("INVALID_CURSOR");
     }

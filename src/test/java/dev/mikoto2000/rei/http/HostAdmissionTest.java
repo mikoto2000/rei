@@ -37,7 +37,8 @@ class HostAdmissionTest {
     lease.close();
     lease.close();
     assertEquals(0, admission.entries());
-    try (var next = admission.acquire("example.com", FetchOperation.active())) {
+    var next = admission.acquire("example.com", FetchOperation.active());
+    try (next) {
       assertThrows(
           HttpFetchException.class,
           () ->
@@ -52,18 +53,23 @@ class HostAdmissionTest {
   void nestedFetchScopePreservesAdmissionAndCloseRestoresIt() {
     var admission = new HostAdmission(1);
     URI uri = URI.create("https://example.com/page");
-    try (var held = admission.acquire(uri.getHost(), FetchOperation.active())) {
-      try (var scope = FetchScope.enter(FetchOperation.active(), admission);
-          var nested = FetchScope.enter(FetchOperation.active())) {
-        assertThrows(
-            HttpFetchException.class,
-            () ->
-                FetchScope.acquireConnection(
-                    uri, FetchOperation.active().withTimeout(Duration.ofMillis(20))));
+    var held = admission.acquire(uri.getHost(), FetchOperation.active());
+    try (held) {
+      var scope = FetchScope.enter(FetchOperation.active(), admission);
+      try (scope) {
+        var nested = FetchScope.enter(FetchOperation.active());
+        try (nested) {
+          assertThrows(
+              HttpFetchException.class,
+              () ->
+                  FetchScope.acquireConnection(
+                      uri, FetchOperation.active().withTimeout(Duration.ofMillis(20))));
+        }
       }
       assertDoesNotThrow(
           () -> {
-            try (var unconstrained = FetchScope.acquireConnection(uri, FetchOperation.active())) {}
+            var unconstrained = FetchScope.acquireConnection(uri, FetchOperation.active());
+            try (unconstrained) {}
           });
     }
     assertEquals(0, admission.entries());

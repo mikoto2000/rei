@@ -72,7 +72,8 @@ class ConcurrentChatHttpTest {
       return new ConversationInputRouter(
           executor,
           (owner, prompt, input) -> {
-            try (var binding = AgentRunScope.open(owner)) {
+            var binding = AgentRunScope.open(owner);
+            try (binding) {
               cancellation.begin(Thread.currentThread());
               turns.start(owner, prompt);
               bus.publish(events.runStarted(owner.runId(), "fixture", null).withOwnership(owner));

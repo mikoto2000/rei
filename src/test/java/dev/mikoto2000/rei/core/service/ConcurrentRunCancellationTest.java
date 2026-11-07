@@ -29,7 +29,8 @@ class ConcurrentRunCancellationTest {
             dev.mikoto2000.rei.core.execution.ExecutionType.IMAGE,
             "picture",
             java.time.Instant.now());
-    try (var ignored = dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution)) {
+    var ignored = dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution);
+    try (ignored) {
       assertThat(service.isCancellationRequested()).isFalse();
       assertThat(service.consumeCancellationRequested()).isFalse();
     }
@@ -43,7 +44,8 @@ class ConcurrentRunCancellationTest {
     var service = new CommandCancellationService();
     var run = new AgentRunContext("run", "chat:main", Path.of("a"));
     var stream = mock(Disposable.class);
-    try (var ignored = AgentRunScope.open(run)) {
+    var ignored = AgentRunScope.open(run);
+    try (ignored) {
       service.begin(mock(Thread.class));
       service.register(stream);
       service.clear();
@@ -61,21 +63,28 @@ class ConcurrentRunCancellationTest {
     var threadB = mock(Thread.class);
     var streamA = mock(Disposable.class);
     var streamB = mock(Disposable.class);
-    try (var ignored = AgentRunScope.open(a)) {
-      service.begin(threadA);
-      service.register(streamA);
+    {
+      var ignored = AgentRunScope.open(a);
+      try (ignored) {
+        service.begin(threadA);
+        service.register(streamA);
+      }
     }
-    try (var ignored = AgentRunScope.open(b)) {
-      service.begin(threadB);
-      service.register(streamB);
-      service.cancel();
-      service.clear();
+    {
+      var ignored = AgentRunScope.open(b);
+      try (ignored) {
+        service.begin(threadB);
+        service.register(streamB);
+        service.cancel();
+        service.clear();
+      }
     }
     verify(streamB).dispose();
     verify(threadB).interrupt();
     verify(streamA, never()).dispose();
     verify(threadA, never()).interrupt();
-    try (var ignored = AgentRunScope.open(a)) {
+    var ignored = AgentRunScope.open(a);
+    try (ignored) {
       assertThat(service.isCancellationRequested()).isFalse();
       service.cancel();
       assertThat(service.consumeCancellationRequested()).isTrue();

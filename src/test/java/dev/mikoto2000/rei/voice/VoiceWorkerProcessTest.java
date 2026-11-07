@@ -97,10 +97,13 @@ class VoiceWorkerProcessTest {
     var startup =
         new Thread(
             () -> {
-              try (var ignored =
-                  VoiceWorkerProcess.start(
-                      command, Duration.ofSeconds(10), Duration.ofSeconds(3))) {
-                failure.set(new AssertionError("Interrupted startup must not complete"));
+              try {
+                var ignored =
+                    VoiceWorkerProcess.start(
+                        command, Duration.ofSeconds(10), Duration.ofSeconds(3));
+                try (ignored) {
+                  failure.set(new AssertionError("Interrupted startup must not complete"));
+                }
               } catch (Throwable expected) {
                 failure.set(expected);
               } finally {

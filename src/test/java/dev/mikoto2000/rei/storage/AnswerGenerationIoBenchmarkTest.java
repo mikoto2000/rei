@@ -334,7 +334,8 @@ class AnswerGenerationIoBenchmarkTest {
                   futures.add(
                       executor.submit(
                           () -> {
-                            try (var observation = applicationIo.observe()) {
+                            var observation = applicationIo.observe();
+                            try (observation) {
                               for (int i = 0; i < count; i++) {
                                 if (offeredRate > 0)
                                   await(

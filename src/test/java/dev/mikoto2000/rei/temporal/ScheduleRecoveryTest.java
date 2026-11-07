@@ -32,7 +32,8 @@ class ScheduleRecoveryTest {
 
   /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   String create(PersistentAgentScheduler scheduler) {
-    try (var scope = AgentRunScope.open(new AgentRunContext("source", "session", dir, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("source", "session", dir, "project"));
+    try (scope) {
       var task = scheduler.scheduleAfter(Duration.ZERO, "inspect", "session");
       scheduler.activate("project", task.id());
       return task.id();

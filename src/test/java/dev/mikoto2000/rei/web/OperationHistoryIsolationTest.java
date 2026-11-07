@@ -20,10 +20,11 @@ class OperationHistoryIsolationTest {
     var memory = mock(ChatMemory.class);
     var log = mock(ConversationLogStore.class);
     var appender = new CurrentConversationHistoryAppender(memory, Optional.of(log));
-    try (var scope =
+    var scope =
         AgentRunScope.open(
             new AgentRunContext(
-                "run", "", Path.of("."), "project", AgentRunContext.RequestSource.WEB))) {
+                "run", "", Path.of("."), "project", AgentRunContext.RequestSource.WEB));
+    try (scope) {
       appender.appendUserMessage("url");
       appender.appendAssistantMessage("summary");
     }

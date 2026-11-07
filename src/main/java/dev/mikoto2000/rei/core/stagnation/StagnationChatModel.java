@@ -249,9 +249,10 @@ public class StagnationChatModel implements ChatModel {
                       })
                   : Mono.fromCallable(
                           () -> {
-                            try (var scope =
+                            var scope =
                                 dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-                                    context.runContext())) {
+                                    context.runContext());
+                            try (scope) {
                               try {
                                 return assemblePrompt.apply(
                                     invocationPrompt,
@@ -603,8 +604,9 @@ public class StagnationChatModel implements ChatModel {
 
           /** 実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input, ToolContext toolContext) {
-            try (var scope =
-                dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
+            var scope =
+                dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext());
+            try (scope) {
               context.checkActive();
               String name = getToolDefinition().name();
               // A model may have queued several reads in one response. Recheck at execution

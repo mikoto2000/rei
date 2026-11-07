@@ -65,13 +65,14 @@ class TransferBudgetTest {
   void scopeRestoresAndCarriesTheSameBudgetAcrossWorkers() throws Exception {
     var budget = new TransferBudget(10, 20);
     assertNull(TransferScope.current());
-    try (var scope = TransferScope.enter(budget);
-        var worker = Executors.newSingleThreadExecutor()) {
+    var scope = TransferScope.enter(budget);
+    try (scope; var worker = Executors.newSingleThreadExecutor()) {
       var captured = TransferScope.current();
       worker
           .submit(
               () -> {
-                try (var transferred = TransferScope.enter(captured)) {
+                var transferred = TransferScope.enter(captured);
+                try (transferred) {
                   TransferScope.current().wire(4);
                 }
               })

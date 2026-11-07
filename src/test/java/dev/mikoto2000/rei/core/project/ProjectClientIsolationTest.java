@@ -32,7 +32,8 @@ class ProjectClientIsolationTest {
       worker
           .submit(
               () -> {
-                try (var scope = first.open()) {
+                var scope = first.open();
+                try (scope) {
                   projects.cd(a.toString());
                 }
               })
@@ -40,7 +41,8 @@ class ProjectClientIsolationTest {
       worker
           .submit(
               () -> {
-                try (var scope = second.open()) {
+                var scope = second.open();
+                try (scope) {
                   projects.cd(b.toString());
                 }
               })
@@ -48,7 +50,8 @@ class ProjectClientIsolationTest {
       worker
           .submit(
               () -> {
-                try (var scope = first.open()) {
+                var scope = first.open();
+                try (scope) {
                   assertThat(projects.currentProject()).isEqualTo(a);
                   assertThat(ProjectService.contextForOperation().root()).isEqualTo(a);
                   assertThat(projects.cd("child")).isEqualTo(a.resolve("child"));
@@ -61,7 +64,8 @@ class ProjectClientIsolationTest {
       worker
           .submit(
               () -> {
-                try (var scope = second.open()) {
+                var scope = second.open();
+                try (scope) {
                   assertThat(projects.currentProject()).isEqualTo(b);
                   assertThat(ProjectService.currentProjectOrStartupDirectory()).isEqualTo(b);
                 }
@@ -83,15 +87,17 @@ class ProjectClientIsolationTest {
       var one =
           workers.submit(
               () -> {
-                try (var scope = first.open()) {
+                var scope = first.open();
+                try (scope) {
                   projects.cd(a.toString());
                   var owner = projects.currentContext();
                   ready.await(5, TimeUnit.SECONDS);
                   assertThat(ProjectService.contextForOperation()).isEqualTo(owner);
                   assertThat(projects.currentProject()).isEqualTo(a);
                   projects.cd(b.toString());
-                  try (var run =
-                      AgentRunScope.open(new AgentRunContext("run", owner, "chat:main"))) {
+                  var run =
+                      AgentRunScope.open(new AgentRunContext("run", owner, "chat:main"));
+                  try (run) {
                     assertThat(ProjectService.contextForOperation()).isEqualTo(owner);
                     assertThat(projects.currentProject()).isEqualTo(b);
                     assertThat(ProjectService.currentProjectOrStartupDirectory()).isEqualTo(b);
@@ -103,7 +109,8 @@ class ProjectClientIsolationTest {
       var two =
           workers.submit(
               () -> {
-                try (var scope = second.open()) {
+                var scope = second.open();
+                try (scope) {
                   projects.cd(b.toString());
                   ready.await(5, TimeUnit.SECONDS);
                   assertThat(ProjectService.contextForOperation().root()).isEqualTo(b);
@@ -122,11 +129,13 @@ class ProjectClientIsolationTest {
     var projects = new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json")));
     var first = projects.newClient();
     var second = projects.newClient();
-    try (var outer = first.open()) {
+    var outer = first.open();
+    try (outer) {
       projects.cd(a.toString());
       assertThatThrownBy(
               () -> {
-                try (var inner = second.open()) {
+                var inner = second.open();
+                try (inner) {
                   projects.cd("missing");
                 }
               })
@@ -136,7 +145,8 @@ class ProjectClientIsolationTest {
       assertThat(ProjectService.contextForOperation().root()).isEqualTo(a);
       assertThatThrownBy(() -> unrelated.cd(temp.toString()))
           .isInstanceOf(IllegalStateException.class);
-      try (var inner = second.open()) {
+      var inner = second.open();
+      try (inner) {
         assertThat(projects.currentProject()).isEqualTo(temp);
         projects.remove(a.toString());
       }

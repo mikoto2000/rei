@@ -43,7 +43,8 @@ class PdfDeliveryTest {
     }
     var files = new Tools();
     var owner = new AgentRunContext("run", "chat", dir, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var first = files.readPdfPage("source.pdf", 1, 0, null, 512);
       var middle = files.readPdfPage("source.pdf", 2, 0, first.version(), 512);
       assertThat(middle.page()).isEqualTo(2);

@@ -75,7 +75,8 @@ class ReviewPageBatchTest {
 
   @Test
   void invalidReadBoundsReturnCorrectionWithoutFetchingAnyPages() throws Exception {
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = begin();
       for (var bounds :
           List.of(
@@ -98,7 +99,8 @@ class ReviewPageBatchTest {
 
   @Test
   void fourFetchedPagesUseOneRevisionAndRemainUndelivered() throws Exception {
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = begin();
       var pages = read(job, 2048);
       assertThat(pages).hasSize(4);
@@ -113,7 +115,8 @@ class ReviewPageBatchTest {
 
   @Test
   void invalidLastFetchRollsBackEveryRange() throws Exception {
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = begin();
       var span = new ReviewCoverageLedger.Span(0, 1, 1, 1, 0, 1);
       var valid =
@@ -133,7 +136,8 @@ class ReviewPageBatchTest {
 
   @Test
   void batchUsesOneSnapshotAndRespectsWholeWireBudgetAndUnicode() throws Exception {
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = begin();
       for (int budget : List.of(512, 1024, 2048)) {
         snapshots = 0;
@@ -162,7 +166,8 @@ class ReviewPageBatchTest {
 
   @Test
   void dispatcherReceiptConfirmsAllPagesOnlyAtSuccessfulDeliveryBoundary() throws Exception {
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = begin();
       var options =
           OpenAiChatOptions.builder()
@@ -233,7 +238,8 @@ class ReviewPageBatchTest {
 
   @Test
   void oversizedBatchSavesNothingAndCanBeRetriedInGroupsOfFour() throws Exception {
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = begin();
       var pages = new ArrayList<>(read(job, 2048));
       var last = pages.getLast();
@@ -261,7 +267,8 @@ class ReviewPageBatchTest {
 
   @Test
   void batchAssessmentIsAtomicAndIdempotent() throws Exception {
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = begin();
       var pages = read(job, 2048);
       tools.confirmed(owner, pages);
@@ -287,13 +294,15 @@ class ReviewPageBatchTest {
 
   @Test
   void staleSourceAndForeignOwnerCannotSubmit() throws Exception {
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = begin();
       var pages = read(job, 2048);
       tools.confirmed(owner, pages);
       var inputs = pages.stream().map(p -> assessment(p, "reviewed")).toList();
-      try (var foreign =
-          AgentRunScope.open(new AgentRunContext("other", "other-chat", root, "project"))) {
+      var foreign =
+          AgentRunScope.open(new AgentRunContext("other", "other-chat", root, "project"));
+      try (foreign) {
         assertThatThrownBy(() -> tools.submitReviewPages(job.id(), inputs))
             .isInstanceOf(dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException.class);
       }
@@ -309,7 +318,8 @@ class ReviewPageBatchTest {
   @Test
   void subagentEnvelopeAndBatchProgressRemainBoundedAndVisible() throws Exception {
     var child = new AgentRunContext("child", "subagent:review", root, "project");
-    try (var scope = AgentRunScope.open(child)) {
+    var scope = AgentRunScope.open(child);
+    try (scope) {
       var job = begin();
       var pages = read(job, 2048);
       String wire = StorageDatabase.JSON.writeValueAsString(pages);
@@ -351,7 +361,8 @@ class ReviewPageBatchTest {
 
   @Test
   void receiptRejectsTruncationAndBindsWholeArray() throws Exception {
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var pages = read(begin(), 2048);
       var wire = StorageDatabase.JSON.writeValueAsString(pages);
       assertThat(ReviewTools.receipt(wire).serializedHash()).isEqualTo(ReviewTools.hash(wire));

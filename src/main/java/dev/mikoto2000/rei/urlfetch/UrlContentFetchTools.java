@@ -42,12 +42,15 @@ public class UrlContentFetchTools {
               description = "Revalidate cached web sources")
           Boolean forceRefresh,
       org.springframework.ai.chat.model.ToolContext context) {
-    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
-        var refresh =
-            dev.mikoto2000.rei.http.FetchScope.withForceRefresh(
-                Boolean.TRUE.equals(forceRefresh))) {
-      resultBudget.requireAvailable(context);
-      return resultBudget.fit(fetchUrlContent(url), context);
+    var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
+    try (scope) {
+      var refresh =
+          dev.mikoto2000.rei.http.FetchScope.withForceRefresh(
+              Boolean.TRUE.equals(forceRefresh));
+      try (refresh) {
+        resultBudget.requireAvailable(context);
+        return resultBudget.fit(fetchUrlContent(url), context);
+      }
     }
   }
 

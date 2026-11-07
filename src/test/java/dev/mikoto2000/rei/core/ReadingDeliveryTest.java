@@ -59,7 +59,8 @@ class ReadingDeliveryTest {
         new ReadingDelivery.Saved(history),
         java.time.Duration.ofDays(1));
     tools.setReadingDelivery(ReadingTestStores.delivery(store, raw));
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var result =
           tools
               .readMultiFile(List.of(new Tools.ReadFileRequest("lesson.md", 301, 340)), root)
@@ -93,7 +94,8 @@ class ReadingDeliveryTest {
     budgets.setPageMaxTokens(16000);
     tools.configureDelivery(
         dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative(), budgets);
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var initial =
           tools
               .readMultiFile(List.of(new Tools.ReadFileRequest("a.txt", 1, 1000)), root)
@@ -163,7 +165,8 @@ class ReadingDeliveryTest {
     var tools = new Tools();
     tools.setReadingDelivery(delivery);
     var owner = new AgentRunContext("delivery", "chat", root, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var request =
           StorageDatabase.JSON.readValue(
               "{\"path\":\"a.txt\",\"startLine\":1,\"endLine\":2,\"unreadOnly\":true}",

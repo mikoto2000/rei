@@ -280,7 +280,8 @@ public final class SubAgentConsensusService {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (context.length() > 32768)
       throw new IllegalArgumentException("Judge context exceeds bounded limit");
-    try (var scope = AgentRunScope.open(run.runContext())) {
+    var scope = AgentRunScope.open(run.runContext());
+    try (scope) {
       return new Judged(comparison, judge.apply(run, new JudgeRequest(agent, context)));
     }
   }

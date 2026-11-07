@@ -23,10 +23,14 @@ class WebPageSummarizerServiceTest {
     var second =
         new dev.mikoto2000.rei.core.chat.AgentRunContext("second", "session-b", root, "project");
     java.util.function.Consumer<String> completion;
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(first)) {
-      completion = appender.beginSummary("summarize");
+    {
+      var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(first);
+      try (scope) {
+        completion = appender.beginSummary("summarize");
+      }
     }
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(second)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(second);
+    try (scope) {
       completion.accept("result");
     }
     org.mockito.Mockito.verify(memory)

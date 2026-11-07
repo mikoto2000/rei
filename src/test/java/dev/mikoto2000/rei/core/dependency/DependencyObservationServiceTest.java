@@ -146,13 +146,15 @@ class DependencyObservationServiceTest {
             new DependencyObservation(entry.id(), DependencyState.COMPLETED, "file_exists"));
     var bus = new InMemoryAgentEventBus();
     var store = new ProjectAgentEventStore(dir.resolve("history"));
-    try (var subscriber = new ProjectAgentEventSubscriber(bus, store)) {
+    var subscriber = new ProjectAgentEventSubscriber(bus, store);
+    try (subscriber) {
       var scheduler =
           new dev.mikoto2000.rei.temporal.PersistentAgentScheduler(
               new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("timer.db")),
               Clock.fixed(now, ZoneOffset.UTC));
       String timer;
-      try (var scope = AgentRunScope.open(new AgentRunContext("r", "s", dir, project))) {
+      var scope = AgentRunScope.open(new AgentRunContext("r", "s", dir, project));
+      try (scope) {
         timer =
             scheduler
                 .scheduleOnEvent(
@@ -164,8 +166,9 @@ class DependencyObservationServiceTest {
                 .id();
       }
       scheduler.activate(project, timer);
-      try (var triggers =
-          new dev.mikoto2000.rei.temporal.AgentEventTriggerService(scheduler, bus, store)) {
+      var triggers =
+          new dev.mikoto2000.rei.temporal.AgentEventTriggerService(scheduler, bus, store);
+      try (triggers) {
         var failed =
             new DependencyObservationService(
                 repo,

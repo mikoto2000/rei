@@ -199,20 +199,24 @@ class HttpApiReadTest {
   @Test
   void cancellationAndDeadlineAreDistinct() {
     var request = request(null, null);
-    try (var scope =
-        dev.mikoto2000.rei.http.FetchScope.enter(
-            new dev.mikoto2000.rei.http.FetchOperation(
-                () -> {
-                  throw new java.util.concurrent.CancellationException();
-                },
-                Long.MAX_VALUE))) {
-      var result = service.read(request);
-      assertTrue(result.cancelled());
-      assertFalse(result.timedOut());
+    {
+      var scope =
+          dev.mikoto2000.rei.http.FetchScope.enter(
+              new dev.mikoto2000.rei.http.FetchOperation(
+                  () -> {
+                    throw new java.util.concurrent.CancellationException();
+                  },
+                  Long.MAX_VALUE));
+      try (scope) {
+        var result = service.read(request);
+        assertTrue(result.cancelled());
+        assertFalse(result.timedOut());
+      }
     }
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.http.FetchScope.enter(
-            new dev.mikoto2000.rei.http.FetchOperation(() -> {}, System.nanoTime() - 1))) {
+            new dev.mikoto2000.rei.http.FetchOperation(() -> {}, System.nanoTime() - 1));
+    try (scope) {
       var result = service.read(request);
       assertEquals("TOTAL_TIMEOUT", result.error());
       assertTrue(result.timedOut());

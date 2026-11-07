@@ -35,7 +35,8 @@ class ProjectSwitchTest extends dev.mikoto2000.rei.core.project.ProjectClientTes
         .isInstanceOf(IllegalStateException.class);
     assertThat(service.currentContext()).isEqualTo(project);
     assertThat(service.currentSessionId()).isEqualTo("original");
-    try (var scope = service.newClient().open()) {
+    var scope = service.newClient().open();
+    try (scope) {
       assertThat(service.currentSessionId()).isNull();
     }
     assertThat(service.currentSessionId()).isEqualTo("original");
@@ -52,7 +53,8 @@ class ProjectSwitchTest extends dev.mikoto2000.rei.core.project.ProjectClientTes
     var run = new dev.mikoto2000.rei.core.chat.AgentRunContext("run", first, "chat:main");
     service.cd(b.toString());
     assertThat(service.currentContext().id()).isNotEqualTo(first.id());
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(run)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(run);
+    try (scope) {
       assertThat(ProjectService.contextForOperation()).isEqualTo(first);
     }
     service.cd(a.toString());

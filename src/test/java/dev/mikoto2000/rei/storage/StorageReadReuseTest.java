@@ -98,8 +98,8 @@ class StorageReadReuseTest {
 
   @Test
   void concurrentAndNestedReadsNeverWaitForAnOccupiedReader() throws Exception {
-    try (var context = context();
-        var executor = Executors.newFixedThreadPool(2)) {
+    var context = context();
+    try (context; var executor = Executors.newFixedThreadPool(2)) {
       var database = new StorageDatabase(root);
       var entered = new CountDownLatch(1);
       var release = new CountDownLatch(1);
@@ -128,7 +128,8 @@ class StorageReadReuseTest {
 
   @Test
   void failedOrTransactionalReaderIsDiscardedAndSchemaIsRechecked() throws Exception {
-    try (var context = context()) {
+    var context = context();
+    try (context) {
       var database = new StorageDatabase(root);
       var reader = database.read(db -> db);
       assertThatThrownBy(
@@ -162,16 +163,19 @@ class StorageReadReuseTest {
       migration.prepare();
       var database = new StorageDatabase(root);
       var restarted = new java.util.concurrent.atomic.AtomicReference<AutoCloseable>();
-      try (var first = database.keepWalOpen()) {
-        var late =
-            database.read(
-                db -> {
-                  first.close();
-                  restarted.set(database.keepWalOpen());
-                  return db;
-                });
-        assertThat(late.isClosed()).isTrue();
-        assertThat(count(database)).isZero();
+      try {
+        var first = database.keepWalOpen();
+        try (first) {
+          var late =
+              database.read(
+                  db -> {
+                    first.close();
+                    restarted.set(database.keepWalOpen());
+                    return db;
+                  });
+          assertThat(late.isClosed()).isTrue();
+          assertThat(count(database)).isZero();
+        }
       } finally {
         if (restarted.get() != null) restarted.get().close();
       }
@@ -183,7 +187,8 @@ class StorageReadReuseTest {
   void unchangedCursorDoesNotWriteButStillChecksGenerationExistenceAndEventBounds()
       throws Exception {
     String project = UUID.randomUUID().toString();
-    try (var context = context()) {
+    var context = context();
+    try (context) {
       var cursor = new SqliteEventCursorStore(root);
       var initial = new SqliteEventCursorStore.Cursor(0, 0);
       assertThat(cursor.compareAndSet(project, initial, 0)).isFalse();
@@ -234,24 +239,28 @@ class StorageReadReuseTest {
   @Test
   @EnabledIfSystemProperty(named = "rei.io.read-benchmark", matches = "true")
   void measureRepeatedReads() throws Exception {
-    try (var context = context()) {
-      new StorageDatabase(root)
-          .transaction(
-              db -> {
-                try (var sql = db.prepareStatement("INSERT INTO event_sequences VALUES(?,1)")) {
-                  for (int i = 0; i < 1000; i++) {
-                    sql.setString(1, "fixture-" + i);
-                    sql.addBatch();
+    {
+      var context = context();
+      try (context) {
+        new StorageDatabase(root)
+            .transaction(
+                db -> {
+                  try (var sql = db.prepareStatement("INSERT INTO event_sequences VALUES(?,1)")) {
+                    for (int i = 0; i < 1000; i++) {
+                      sql.setString(1, "fixture-" + i);
+                      sql.addBatch();
+                    }
+                    sql.executeBatch();
                   }
-                  sql.executeBatch();
-                }
-                return null;
-              });
+                  return null;
+                });
+      }
     }
     var results = new ArrayList<Map<String, Object>>();
     for (int repeat = 0; repeat < 3; repeat++) {
       for (boolean reuse : new boolean[] {false, true}) {
-        try (var context = reuse ? context() : null) {
+        var context = reuse ? context() : null;
+        try (context) {
           var database = new StorageDatabase(root);
           assertThat(count(database)).isEqualTo(1000);
           var before = AnswerGenerationIoBenchmarkTest.io();

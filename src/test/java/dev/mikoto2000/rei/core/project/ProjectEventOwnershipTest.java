@@ -24,7 +24,8 @@ class ProjectEventOwnershipTest {
     var bus = new InMemoryAgentEventBus();
     List<AgentEvent> observed = new ArrayList<>();
     bus.subscribe(observed::add);
-    try (var scope = AgentRunScope.open(run)) {
+    var scope = AgentRunScope.open(run);
+    try (scope) {
       bus.publish(new AgentEventFactory(Clock.systemUTC()).messageStarted("message", "assistant"));
     }
     assertThat(observed.getFirst().projectId()).isEqualTo(project.id());

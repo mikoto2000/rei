@@ -97,7 +97,8 @@ public final class ActivityCommandsController {
     this.findProject = id -> registry.resolveById(id);
     this.contextReport =
         (root, date) -> {
-          try (var scope = ProjectClientScope.open(projects.newClient())) {
+          var scope = ProjectClientScope.open(projects.newClient());
+          try (scope) {
             projects.cd(root.toString());
             return activity.reportContext(date);
           }

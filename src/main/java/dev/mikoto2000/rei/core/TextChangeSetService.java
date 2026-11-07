@@ -380,22 +380,25 @@ public class TextChangeSetService {
     }
     if (!repository.transition(project.id(), id, "PROPOSED", "APPLYING"))
       throw new IllegalStateException("Change Set already claimed");
-    try (var lease = repository.activate(id)) {
-      RunCancellation.propagate(null);
-      // Recheck after the durable claim and immediately before the existing editing boundary.
-      file = resolve(root, saved.path());
-      if (!saved.baselineHash().equals(hash(read(file)))) {
-        repository.transition(project.id(), id, "APPLYING", "STALE");
+    try {
+      var lease = repository.activate(id);
+      try (lease) {
+        RunCancellation.propagate(null);
+        // Recheck after the durable claim and immediately before the existing editing boundary.
+        file = resolve(root, saved.path());
+        if (!saved.baselineHash().equals(hash(read(file)))) {
+          repository.transition(project.id(), id, "APPLYING", "STALE");
+          return inspect(project, id, false);
+        }
+        writer.write(file, saved.baseline(), saved.proposed());
+        RunCancellation.propagate(null);
+        if (!saved.proposedHash().equals(hash(read(resolve(root, saved.path())))))
+          throw new IOException("Applied content requires inspection");
+        repository.heartbeat(id);
+        if (!repository.transition(project.id(), id, "APPLYING", "APPLIED"))
+          throw new IOException("Apply receipt could not be saved");
         return inspect(project, id, false);
       }
-      writer.write(file, saved.baseline(), saved.proposed());
-      RunCancellation.propagate(null);
-      if (!saved.proposedHash().equals(hash(read(resolve(root, saved.path())))))
-        throw new IOException("Applied content requires inspection");
-      repository.heartbeat(id);
-      if (!repository.transition(project.id(), id, "APPLYING", "APPLIED"))
-        throw new IOException("Apply receipt could not be saved");
-      return inspect(project, id, false);
     } catch (IOException | RuntimeException error) {
       try {
         repository.transition(project.id(), id, "APPLYING", "FAILED_UNCERTAIN");

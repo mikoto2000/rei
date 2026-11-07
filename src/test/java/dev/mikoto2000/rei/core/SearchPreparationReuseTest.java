@@ -78,7 +78,8 @@ class SearchPreparationReuseTest {
       migration.prepare();
     }
     var tools = new CountingTools();
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "chat", root, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "chat", root, "project"));
+    try (scope) {
       var search = new PagedFileSearch(tools, ReadingTestStores.store(new StorageDatabase(data)));
       var page =
           search.read(

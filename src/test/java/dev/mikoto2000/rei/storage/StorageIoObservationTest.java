@@ -21,9 +21,11 @@ class StorageIoObservationTest {
     Path file = Files.writeString(root.resolve("fixture"), "fixture");
     var outer = new StorageIoObservation();
     var inner = new StorageIoObservation();
-    try (var scope = outer.observe()) {
+    var scope = outer.observe();
+    try (scope) {
       StorageBackup.force(file);
-      try (var nested = inner.observe()) {
+      var nested = inner.observe();
+      try (nested) {
         StorageBackup.force(file);
       }
       assertThatThrownBy(() -> StorageBackup.force(root.resolve("missing")))

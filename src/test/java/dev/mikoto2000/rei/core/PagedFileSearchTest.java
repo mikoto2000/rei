@@ -41,30 +41,33 @@ class PagedFileSearchTest {
             "hit", "allowed.txt", false, true, false, false, 0, 0, null, true, null, null);
     var queries = new java.util.ArrayList<>(java.util.Collections.nCopies(19, excluded));
     queries.add(allowed);
-    try (var lease = ReadingBenchmarkDatabase.keepOpen(database);
-        var scope = AgentRunScope.open(new AgentRunContext("run", "chat", root, "project"))) {
-      var first =
-          search.read(new PagedFileSearch.Request(queries, 0, 512, 2048, 1, 1, null), root);
-      assertNull(first.error());
-      assertEquals(
-          java.util.stream.IntStream.range(0, 19).boxed().toList(),
-          first.excludedQueries().queryIndexes());
-      assertEquals("PROJECT_PATH_EXCLUDED", first.excludedQueries().problem().code());
-      assertTrue(
-          first.excludedQueries().problem().recovery()
-              .contains("Retry with an allowed Project-relative path"));
-      assertEquals(19, first.files().getFirst().matches().getFirst().queryIndex());
-      assertTrue(FileResultBudget.fits(first, 2048, 512));
-      assertNotNull(first.resultCursor());
+    var lease = ReadingBenchmarkDatabase.keepOpen(database);
+    try (lease) {
+      var scope = AgentRunScope.open(new AgentRunContext("run", "chat", root, "project"));
+      try (scope) {
+        var first =
+            search.read(new PagedFileSearch.Request(queries, 0, 512, 2048, 1, 1, null), root);
+        assertNull(first.error());
+        assertEquals(
+            java.util.stream.IntStream.range(0, 19).boxed().toList(),
+            first.excludedQueries().queryIndexes());
+        assertEquals("PROJECT_PATH_EXCLUDED", first.excludedQueries().problem().code());
+        assertTrue(
+            first.excludedQueries().problem().recovery()
+                .contains("Retry with an allowed Project-relative path"));
+        assertEquals(19, first.files().getFirst().matches().getFirst().queryIndex());
+        assertTrue(FileResultBudget.fits(first, 2048, 512));
+        assertNotNull(first.resultCursor());
 
-      var next =
-          search.read(
-              new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, first.resultCursor()),
-              root);
-      assertNull(next.error());
-      assertEquals(first.excludedQueries(), next.excludedQueries());
-      assertEquals(19, next.files().getFirst().matches().getFirst().queryIndex());
-      assertEquals(2, next.files().getFirst().sections().getFirst().startLine());
+        var next =
+            search.read(
+                new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, first.resultCursor()),
+                root);
+        assertNull(next.error());
+        assertEquals(first.excludedQueries(), next.excludedQueries());
+        assertEquals(19, next.files().getFirst().matches().getFirst().queryIndex());
+        assertEquals(2, next.files().getFirst().sections().getFirst().startLine());
+      }
     }
   }
 
@@ -88,30 +91,33 @@ class PagedFileSearchTest {
             },
             ReadingTestStores.store(database));
     var owner = new AgentRunContext("changed-candidate", "chat", root, "project");
-    try (var lease = ReadingBenchmarkDatabase.keepOpen(database);
-        var scope = AgentRunScope.open(owner)) {
-      var result = cursorFor(search, "hit");
-      var scan = cursorFor(search, "absent");
-      assertEquals(3, result.progress().total());
-      assertEquals(3, scan.progress().total());
-      assertEquals("a.txt", result.files().getFirst().path());
-      assertNotNull(result.resultCursor());
-      assertNotNull(scan.scanCursor());
-      Files.writeString(last, "modified without becoming a hit\n");
-      for (String cursor : List.of(result.resultCursor(), scan.scanCursor())) {
-        var stale =
-            search.read(new PagedFileSearch.Request(null, null, 1024, 4096, 1, 1, cursor), root);
-        assertEquals("FILE_CHANGED", stale.error().code());
-        assertTrue(stale.files().isEmpty());
-        assertNull(stale.resultCursor());
-        assertNull(stale.scanCursor());
-      }
-      Files.delete(root.resolve("b.txt"));
-      for (String cursor : List.of(result.resultCursor(), scan.scanCursor())) {
-        var stale =
-            search.read(new PagedFileSearch.Request(null, null, 1024, 4096, 1, 1, cursor), root);
-        assertEquals("FILE_NOT_FOUND", stale.error().code());
-        assertTrue(stale.files().isEmpty());
+    var lease = ReadingBenchmarkDatabase.keepOpen(database);
+    try (lease) {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
+        var result = cursorFor(search, "hit");
+        var scan = cursorFor(search, "absent");
+        assertEquals(3, result.progress().total());
+        assertEquals(3, scan.progress().total());
+        assertEquals("a.txt", result.files().getFirst().path());
+        assertNotNull(result.resultCursor());
+        assertNotNull(scan.scanCursor());
+        Files.writeString(last, "modified without becoming a hit\n");
+        for (String cursor : List.of(result.resultCursor(), scan.scanCursor())) {
+          var stale =
+              search.read(new PagedFileSearch.Request(null, null, 1024, 4096, 1, 1, cursor), root);
+          assertEquals("FILE_CHANGED", stale.error().code());
+          assertTrue(stale.files().isEmpty());
+          assertNull(stale.resultCursor());
+          assertNull(stale.scanCursor());
+        }
+        Files.delete(root.resolve("b.txt"));
+        for (String cursor : List.of(result.resultCursor(), scan.scanCursor())) {
+          var stale =
+              search.read(new PagedFileSearch.Request(null, null, 1024, 4096, 1, 1, cursor), root);
+          assertEquals("FILE_NOT_FOUND", stale.error().code());
+          assertTrue(stale.files().isEmpty());
+        }
       }
     }
   }
@@ -137,29 +143,33 @@ class PagedFileSearchTest {
         new Tools.GrepQuery(
             "hit", "a.txt", false, true, false, false, 0, 0, null, true, null, null);
     var reader = new Tools();
-    try (var scope = AgentRunScope.open(owner)) {
-      var first =
-          new PagedFileSearch(reader, ReadingTestStores.store(new StorageDatabase(data)))
-              .read(new PagedFileSearch.Request(List.of(query), 0, 512, 2048, 1, 1, null), root);
-      assertNotNull(first.resultCursor());
-      assertEquals(0, first.files().getFirst().matches().getFirst().queryIndex());
-      var next =
-          new PagedFileSearch(reader, ReadingTestStores.store(new StorageDatabase(data)))
-              .read(
-                  new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, first.resultCursor()),
-                  root);
-      assertEquals(1000, next.files().getFirst().sections().getFirst().startLine());
-      assertEquals(List.of("hit"), next.files().getFirst().sections().getFirst().content());
-      assertTrue(!next.files().getFirst().truncated());
-      Files.writeString(root.resolve("a.txt"), "changed");
-      var stale =
-          new PagedFileSearch(reader, ReadingTestStores.store(new StorageDatabase(data)))
-              .read(
-                  new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, first.resultCursor()),
-                  root);
-      assertEquals("FILE_CHANGED", stale.error().code());
+    {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
+        var first =
+            new PagedFileSearch(reader, ReadingTestStores.store(new StorageDatabase(data)))
+                .read(new PagedFileSearch.Request(List.of(query), 0, 512, 2048, 1, 1, null), root);
+        assertNotNull(first.resultCursor());
+        assertEquals(0, first.files().getFirst().matches().getFirst().queryIndex());
+        var next =
+            new PagedFileSearch(reader, ReadingTestStores.store(new StorageDatabase(data)))
+                .read(
+                    new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, first.resultCursor()),
+                    root);
+        assertEquals(1000, next.files().getFirst().sections().getFirst().startLine());
+        assertEquals(List.of("hit"), next.files().getFirst().sections().getFirst().content());
+        assertTrue(!next.files().getFirst().truncated());
+        Files.writeString(root.resolve("a.txt"), "changed");
+        var stale =
+            new PagedFileSearch(reader, ReadingTestStores.store(new StorageDatabase(data)))
+                .read(
+                    new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, first.resultCursor()),
+                    root);
+        assertEquals("FILE_CHANGED", stale.error().code());
+      }
     }
-    try (var scope = AgentRunScope.open(new AgentRunContext("other", "chat", root, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("other", "chat", root, "project"));
+    try (scope) {
       var invalid =
           new PagedFileSearch(reader, ReadingTestStores.store(new StorageDatabase(data)))
               .read(new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, "not-a-cursor"), root);
@@ -181,7 +191,8 @@ class PagedFileSearchTest {
     var query =
         new Tools.GrepQuery(
             "hit", "sources", false, true, false, false, 0, 0, null, true, null, null);
-    try (var scope = AgentRunScope.open(new AgentRunContext("large", "chat", root, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("large", "chat", root, "project"));
+    try (scope) {
       var search =
           new PagedFileSearch(new Tools(), ReadingTestStores.store(new StorageDatabase(data)));
       var page =
@@ -234,7 +245,8 @@ class PagedFileSearchTest {
       gate.prepare();
     }
     String cursor;
-    try (var scope = AgentRunScope.open(new AgentRunContext("restart", "chat", root, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("restart", "chat", root, "project"));
+    try (scope) {
       var query =
           new Tools.GrepQuery(
               "hit", "a.txt", false, true, false, false, 0, 0, null, true, null, null);

@@ -49,23 +49,26 @@ class ForegroundActivityVisionTest {
         new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     appender.start();
     logger.addAppender(appender);
-    try (var scope = org.slf4j.MDC.putCloseable("activityScope", "foreground")) {
-      new VisionActivityExtractor(() -> model, () -> OpenAiChatOptions.builder().build())
-          .extract(
-              ActivityCaptureTest.screen(20),
-              new ForegroundWindow("Firefox", 1, "PRIVATE_TITLE", "1"));
-      assertTrue(
-          appender.list.stream()
-              .anyMatch(
-                  e ->
-                      e.getFormattedMessage().contains("reasoning_tokens=1500")
-                          && e.getFormattedMessage().contains("max_output_tokens=2048")));
-      assertTrue(
-          appender.list.stream()
-              .noneMatch(
-                  e ->
-                      e.getFormattedMessage().contains("PRIVATE_TITLE")
-                          || e.getFormattedMessage().contains(VALID)));
+    try {
+      var scope = org.slf4j.MDC.putCloseable("activityScope", "foreground");
+      try (scope) {
+        new VisionActivityExtractor(() -> model, () -> OpenAiChatOptions.builder().build())
+            .extract(
+                ActivityCaptureTest.screen(20),
+                new ForegroundWindow("Firefox", 1, "PRIVATE_TITLE", "1"));
+        assertTrue(
+            appender.list.stream()
+                .anyMatch(
+                    e ->
+                        e.getFormattedMessage().contains("reasoning_tokens=1500")
+                            && e.getFormattedMessage().contains("max_output_tokens=2048")));
+        assertTrue(
+            appender.list.stream()
+                .noneMatch(
+                    e ->
+                        e.getFormattedMessage().contains("PRIVATE_TITLE")
+                            || e.getFormattedMessage().contains(VALID)));
+      }
     } finally {
       logger.detachAppender(appender);
       appender.stop();
@@ -84,7 +87,8 @@ class ForegroundActivityVisionTest {
       throws Exception {
     var model = mock(ChatModel.class);
     when(model.call(any(Prompt.class))).thenReturn(response(VALID, "stop"));
-    try (var scope = org.slf4j.MDC.putCloseable("activityScope", "foreground")) {
+    var scope = org.slf4j.MDC.putCloseable("activityScope", "foreground");
+    try (scope) {
       var result =
           new VisionActivityExtractor(
                   () -> model,
@@ -137,7 +141,8 @@ class ForegroundActivityVisionTest {
                             < 2048
                         ? "length"
                         : "stop"));
-    try (var scope = org.slf4j.MDC.putCloseable("activityScope", "foreground")) {
+    var scope = org.slf4j.MDC.putCloseable("activityScope", "foreground");
+    try (scope) {
       var low =
           new VisionActivityExtractor(
               () -> model, () -> OpenAiChatOptions.builder().build(), .5, 1024);

@@ -270,9 +270,10 @@ class StorageEventMigrationTest {
             "jdbc:sqlite:" + root.resolve("memory-consolidation.db"));
     var scheduler = new dev.mikoto2000.rei.temporal.PersistentAgentScheduler(dataSource, clock);
     String id;
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-            new dev.mikoto2000.rei.core.chat.AgentRunContext("parent", "session", root, project))) {
+            new dev.mikoto2000.rei.core.chat.AgentRunContext("parent", "session", root, project));
+    try (scope) {
       id =
           scheduler
               .scheduleOnEvent(
@@ -344,8 +345,9 @@ class StorageEventMigrationTest {
   /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void hundredThousandEventsMigrateInSixtyFourMiBWithoutChangingSource() throws Exception {
-    try (var timing =
-        dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("event-jsonl-fixture")) {
+    var timing =
+        dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("event-jsonl-fixture");
+    try (timing) {
       Files.createDirectories(source().getParent());
       try (var output = Files.newBufferedWriter(source())) {
         var mapper = EventJsonCodec.mapper();

@@ -327,9 +327,10 @@ class MultiHunkChangeSetTest {
         "{\"request\":{\"path\":\"a.txt\",\"baseVersion\":\""
             + service.readBase(project(), "a.txt").sha256()
             + "\",\"edits\":[{\"oldText\":\"old\",\"newText\":\"new\"}]}}";
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-            new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", root, projectId))) {
+            new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", root, projectId));
+    try (scope) {
       var result = new com.fasterxml.jackson.databind.ObjectMapper().readTree(callback.call(input));
       assertEquals("PROPOSED", result.get("status").asText());
       assertTrue(result.get("diff").asText().contains("+new"));

@@ -110,7 +110,8 @@ class WebSearchCacheIntegrationTest {
       var candidate =
           new WebSearchSelection.Candidate(
               new WebSearchResult("topic", "https://example.com", "", null), List.of(), 0);
-      try (var refresh = FetchScope.withForceRefresh(true)) {
+      var refresh = FetchScope.withForceRefresh(true);
+      try (refresh) {
         assertTrue(
             batch
                 .fetch(

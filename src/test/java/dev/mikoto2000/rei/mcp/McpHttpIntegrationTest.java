@@ -447,7 +447,8 @@ class McpHttpIntegrationTest {
   @Test
   void disabledServerHasNoDedicatedListener() throws Exception {
     int port = availablePort();
-    try (var context = start(false, port, "")) {
+    var context = start(false, port, "");
+    try (context) {
       assertThrows(
           java.io.IOException.class,
           () -> {

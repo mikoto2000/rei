@@ -56,7 +56,8 @@ public final class HistoryReportController {
     this.sessions = sessions;
     this.selectedReport =
         (root, request) -> {
-          try (var scope = selection.newClient().open()) {
+          var scope = selection.newClient().open();
+          try (scope) {
             selection.cd(root.toString());
             selection.selectSession(request.sessionId());
             return request.action().get();

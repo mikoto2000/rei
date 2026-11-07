@@ -59,7 +59,8 @@ class StorageWalLifetimeTest {
   /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void writerConnectionIsReusedWhileEveryWriteCommitsIndependently() {
-    try (var context = context()) {
+    var context = context();
+    try (context) {
       var connections = new ArrayList<java.sql.Connection>();
       for (int i = 0; i < 3; i++) {
         String id = "write-" + i;
@@ -95,45 +96,49 @@ class StorageWalLifetimeTest {
   /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void contextKeepsWalAliveWithImmediateFullCommitsAndSameCheckpointByteBudget() throws Exception {
-    try (var context = context()) {
-      write("committed");
-      assertThat(Files.exists(root.resolve("storage.db-wal"))).isTrue();
-      assertThat(Files.size(root.resolve("storage.db-wal"))).isPositive();
-      new StorageDatabase(root)
-          .read(
-              db -> {
-                try (var sql = db.createStatement()) {
-                  try (var rows =
-                      sql.executeQuery(
-                          "SELECT sequence FROM event_sequences WHERE project_id='committed'")) {
-                    assertThat(rows.next()).isTrue();
-                    assertThat(rows.getLong(1)).isEqualTo(1);
-                  }
-                  for (var expected : Map.of("synchronous", 2, "page_size", 1024).entrySet()) {
-                    try (var rows = sql.executeQuery("PRAGMA " + expected.getKey())) {
-                      assertThat(rows.getInt(1)).isEqualTo(expected.getValue());
+    {
+      var context = context();
+      try (context) {
+        write("committed");
+        assertThat(Files.exists(root.resolve("storage.db-wal"))).isTrue();
+        assertThat(Files.size(root.resolve("storage.db-wal"))).isPositive();
+        new StorageDatabase(root)
+            .read(
+                db -> {
+                  try (var sql = db.createStatement()) {
+                    try (var rows =
+                        sql.executeQuery(
+                            "SELECT sequence FROM event_sequences WHERE project_id='committed'")) {
+                      assertThat(rows.next()).isTrue();
+                      assertThat(rows.getLong(1)).isEqualTo(1);
+                    }
+                    for (var expected : Map.of("synchronous", 2, "page_size", 1024).entrySet()) {
+                      try (var rows = sql.executeQuery("PRAGMA " + expected.getKey())) {
+                        assertThat(rows.getInt(1)).isEqualTo(expected.getValue());
+                      }
                     }
                   }
-                }
-                return null;
-              });
-      new StorageDatabase(root)
-          .transaction(
-              db -> {
-                try (var sql = db.createStatement()) {
-                  for (var expected :
-                      Map.of("synchronous", 2, "wal_autocheckpoint", 4000, "page_size", 1024)
-                          .entrySet()) {
-                    try (var rows = sql.executeQuery("PRAGMA " + expected.getKey())) {
-                      assertThat(rows.getInt(1)).isEqualTo(expected.getValue());
+                  return null;
+                });
+        new StorageDatabase(root)
+            .transaction(
+                db -> {
+                  try (var sql = db.createStatement()) {
+                    for (var expected :
+                        Map.of("synchronous", 2, "wal_autocheckpoint", 4000, "page_size", 1024)
+                            .entrySet()) {
+                      try (var rows = sql.executeQuery("PRAGMA " + expected.getKey())) {
+                        assertThat(rows.getInt(1)).isEqualTo(expected.getValue());
+                      }
                     }
                   }
-                }
-                return null;
-              });
+                  return null;
+                });
+      }
     }
     assertThat(Files.exists(root.resolve("storage.db-wal"))).isFalse();
-    try (var restarted = context()) {
+    var restarted = context();
+    try (restarted) {
       write("after-restart");
     }
   }
@@ -191,7 +196,8 @@ class StorageWalLifetimeTest {
   /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void nestedWriteCannotCommitOuterPartialData() {
-    try (var context = context()) {
+    var context = context();
+    try (context) {
       var database = new StorageDatabase(root);
       assertThatThrownBy(
               () ->
@@ -220,7 +226,8 @@ class StorageWalLifetimeTest {
   /** データ保存の共通処理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unusableWriterIsReleasedAndReopenedAfterRollbackFailure() {
-    try (var context = context()) {
+    var context = context();
+    try (context) {
       var database = new StorageDatabase(root);
       assertThatThrownBy(
               () ->
@@ -276,7 +283,8 @@ class StorageWalLifetimeTest {
   /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void automaticCheckpointStillWritesBackWithoutExplicitMaintenance() throws Exception {
-    try (var context = context()) {
+    var context = context();
+    try (context) {
       var database = new StorageDatabase(root);
       database.transaction(
           db -> {
@@ -315,7 +323,8 @@ class StorageWalLifetimeTest {
   /** データ保存の共通処理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void committedWalSurvivesAbnormalProcessExitAndRestart() throws Exception {
-    try (var prepared = context()) {
+    var prepared = context();
+    try (prepared) {
       write("before-crash");
     }
     String classpath =
@@ -352,7 +361,8 @@ class StorageWalLifetimeTest {
       }
     }
     assertThat(Files.size(root.resolve("storage.db-wal"))).isPositive();
-    try (var restarted = context()) {
+    var restarted = context();
+    try (restarted) {
       new StorageDatabase(root)
           .read(
               db -> {
@@ -392,7 +402,8 @@ class StorageWalLifetimeTest {
       var profile = new ProfileEventLogStore();
       profile.setManagedActivityLog(activity);
       var delivered = new ArrayList<String>();
-      try (var subscriber = new ProjectAgentEventSubscriber(bus, store)) {
+      var subscriber = new ProjectAgentEventSubscriber(bus, store);
+      try (subscriber) {
         bus.subscribe(profile);
         bus.subscribe(e -> delivered.add(e.id()));
         for (int run = 0; run < 2; run++) {
@@ -432,7 +443,8 @@ class StorageWalLifetimeTest {
         }
       }
     }
-    try (var restarted = context()) {
+    var restarted = context();
+    try (restarted) {
       var store = new SqliteProjectAgentEventStore(root);
       expected.forEach(
           (project, ids) ->

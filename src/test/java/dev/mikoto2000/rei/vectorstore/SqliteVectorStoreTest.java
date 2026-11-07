@@ -57,7 +57,8 @@ class SqliteVectorStoreTest {
     var budget = new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0, 10, null, 5);
     var run =
         new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("run", budget, null, null, null);
-    try (var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget())) {
+    var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget());
+    try (scope) {
       assertTrue(
           assertThrows(
                   dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.class,

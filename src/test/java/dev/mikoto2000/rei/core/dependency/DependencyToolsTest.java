@@ -87,14 +87,18 @@ class DependencyToolsTest {
         IllegalArgumentException.class,
         () -> tools.registerDependency("FILE_EXISTS", "file", null, null, null));
     String id;
-    try (var scope = AgentRunScope.open(owner())) {
-      id = tools.registerDependency("HTTP_STATUS", "https://example.com", "200", "PT1H", null).id();
-      assertThrows(IllegalArgumentException.class, () -> tools.checkDependency(id));
-      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
-      verifyNoInteractions(source);
-      assertEquals(DependencyState.WAITING, tools.checkHttpDependency(id).state());
+    {
+      var scope = AgentRunScope.open(owner());
+      try (scope) {
+        id = tools.registerDependency("HTTP_STATUS", "https://example.com", "200", "PT1H", null).id();
+        assertThrows(IllegalArgumentException.class, () -> tools.checkDependency(id));
+        // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
+        verifyNoInteractions(source);
+        assertEquals(DependencyState.WAITING, tools.checkHttpDependency(id).state());
+      }
     }
-    try (var scope = AgentRunScope.open(new AgentRunContext("r", "other", dir, project))) {
+    var scope = AgentRunScope.open(new AgentRunContext("r", "other", dir, project));
+    try (scope) {
       assertThrows(IllegalArgumentException.class, () -> tools.dependencyStatus(id));
     }
   }
@@ -120,7 +124,8 @@ class DependencyToolsTest {
             .findFirst()
             .orElseThrow();
     assertFalse(callback.getToolDefinition().inputSchema().contains("toolContext"));
-    try (var scope = AgentRunScope.open(owner())) {
+    var scope = AgentRunScope.open(owner());
+    try (scope) {
       String id = tools.registerDependency("USER_ANSWER", "Proceed?", null, null, null).id();
       execution.beginIteration();
       var before = execution.beforeTool("waitForDependency", "{}");
@@ -146,7 +151,8 @@ class DependencyToolsTest {
   @Test
   void shellHumanAnswerCompletesOnlyItsOwnedProject() {
     PersistentDependencyRepository.Entry entry;
-    try (var scope = AgentRunScope.open(owner())) {
+    var scope = AgentRunScope.open(owner());
+    try (scope) {
       entry = tools.registerDependency("USER_ANSWER", "Proceed?", null, null, null);
     }
     doAnswer(

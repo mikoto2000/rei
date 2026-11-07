@@ -51,29 +51,32 @@ class PlanParallelReviewTest {
     when(runner.run(eq("reviewer"), eq("same task"), isNull(), eq(budget))).thenReturn(local);
     when(runner.runAutomaticBackend(any(), eq(owner), eq(budget)))
         .thenThrow(new IllegalArgumentException("unavailable"));
-    try (var parallel =
-            new ParallelSubAgentDelegator(runner, registry, new CommandCancellationService());
-        var scope = AgentRunScope.open(owner)) {
-      var batch =
-          parallel.delegate(
-              List.of(
-                  new ParallelSubAgentDelegator.Request("local", "reviewer", "same task", null),
-                  new ParallelSubAgentDelegator.Request(
-                      "plan",
-                      "reviewer",
-                      "same task",
-                      null,
-                      "chatgpt-plan",
-                      "personal",
-                      "model",
-                      List.of(),
-                      "{\"unverified\":[]}")),
-              budget);
-      assertEquals(ParallelSubAgentDelegator.Status.PARTIAL, batch.status());
-      assertEquals(local, batch.items().get(0).result());
-      assertEquals(ParallelSubAgentDelegator.Status.FAILED, batch.items().get(1).status());
-      assertNotNull(batch.comparison());
-      assertFalse(batch.comparison().truthVerified());
+    try (
+        var parallel =
+            new ParallelSubAgentDelegator(runner, registry, new CommandCancellationService())) {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
+        var batch =
+            parallel.delegate(
+                List.of(
+                    new ParallelSubAgentDelegator.Request("local", "reviewer", "same task", null),
+                    new ParallelSubAgentDelegator.Request(
+                        "plan",
+                        "reviewer",
+                        "same task",
+                        null,
+                        "chatgpt-plan",
+                        "personal",
+                        "model",
+                        List.of(),
+                        "{\"unverified\":[]}")),
+                budget);
+        assertEquals(ParallelSubAgentDelegator.Status.PARTIAL, batch.status());
+        assertEquals(local, batch.items().get(0).result());
+        assertEquals(ParallelSubAgentDelegator.Status.FAILED, batch.items().get(1).status());
+        assertNotNull(batch.comparison());
+        assertFalse(batch.comparison().truthVerified());
+      }
     }
   }
 }

@@ -90,7 +90,8 @@ public class AgentSkillSelectionService {
         beforeModelCall instanceof dev.mikoto2000.rei.llm.ModelCallBudget accounting
             ? accounting
             : dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
-    try (var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(budget)) {
+    var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(budget);
+    try (scope) {
       return selectBudgeted(prompt, beforeModelCall);
     }
   }

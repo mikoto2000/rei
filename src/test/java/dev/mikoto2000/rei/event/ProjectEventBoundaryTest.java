@@ -41,7 +41,8 @@ class ProjectEventBoundaryTest {
     var bus = new InMemoryAgentEventBus();
     var store = new ProjectAgentEventStore(dir);
     String project = UUID.randomUUID().toString();
-    try (var subscriber = new ProjectAgentEventSubscriber(bus, store)) {
+    var subscriber = new ProjectAgentEventSubscriber(bus, store);
+    try (subscriber) {
       var first = event(project);
       var second = event(project);
       bus.subscribe(
@@ -63,7 +64,8 @@ class ProjectEventBoundaryTest {
     var store = new ProjectAgentEventStore(dir);
     var published = new ArrayList<AgentEvent>();
     bus.subscribe(published::add);
-    try (var subscriber = new ProjectAgentEventSubscriber(bus, store)) {
+    var subscriber = new ProjectAgentEventSubscriber(bus, store);
+    try (subscriber) {
       assertThrows(
           IllegalStateException.class,
           () -> bus.publishBoundary(event(UUID.randomUUID().toString())));

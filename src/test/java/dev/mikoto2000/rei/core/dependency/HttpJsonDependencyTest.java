@@ -211,9 +211,10 @@ class HttpJsonDependencyTest {
           new DependencyObservationService(
               repo, source, new DependencyWatcherProperties(true), read, e -> {});
       var tools = new DependencyTools(repo, service, source);
-      try (var scope =
+      var scope =
           dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-              new dev.mikoto2000.rei.core.chat.AgentRunContext("r", "s", root, project))) {
+              new dev.mikoto2000.rei.core.chat.AgentRunContext("r", "s", root, project));
+      try (scope) {
         String expected = "{\"status\":200,\"pointer\":\"/ready\",\"value\":true}";
         var entry =
             tools.registerDependency(

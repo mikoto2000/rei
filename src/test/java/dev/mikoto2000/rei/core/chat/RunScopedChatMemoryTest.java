@@ -82,7 +82,8 @@ class RunScopedChatMemoryTest {
                 RunScopedAdvisor.wrap(List.of(MessageChatMemoryAdvisor.builder(memory).build())))
             .build();
     List<ChatResponse> delivered;
-    try (var ignored = AgentRunScope.open(run)) {
+    var ignored = AgentRunScope.open(run);
+    try (ignored) {
       delivered =
           client.prompt("remember?").stream()
               .chatResponse()

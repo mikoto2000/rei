@@ -13,9 +13,9 @@ final class LifeContextMigration {
   }
 
   static void verify(Connection db) throws SQLException {
-    try (var q = db.createStatement();
-        var r = q.executeQuery("SELECT id,revision,record FROM life_context LIMIT 0")) {
-      /* schema only */
+    try (var q = db.createStatement()) {
+      if (!q.execute("SELECT id,revision,record FROM life_context LIMIT 0"))
+        throw new SQLException("Expected life context schema query to return a result set");
     }
   }
 }

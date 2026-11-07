@@ -159,7 +159,8 @@ class TaskProjectionSourcesTest {
             List.of());
     var schedules = new PersistentAgentScheduler(source, clock);
     String schedule;
-    try (var binding = AgentRunScope.open(owner)) {
+    var binding = AgentRunScope.open(owner);
+    try (binding) {
       schedule = schedules.scheduleAfter(Duration.ofMinutes(5), "next iteration", "session").id();
     }
     var runs = new RunRegistry(clock);

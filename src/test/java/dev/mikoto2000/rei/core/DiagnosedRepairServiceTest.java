@@ -247,7 +247,8 @@ class DiagnosedRepairServiceTest {
     var tools = new Tools();
     tools.setTextChangeSets(changes());
     tools.setDiagnosedRepairs(service(true));
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner())) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner());
+    try (scope) {
       var proposal = tools.proposeDiagnosedRepair(request());
       assertEquals(proposal.id(), tools.inspectDiagnosedRepair(proposal.id()).id());
       var run =

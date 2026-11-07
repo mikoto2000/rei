@@ -12,7 +12,8 @@ public final class ReadingCursorRestartProbe {
 
   public static void main(String[] args) throws Exception {
     Path root = Path.of(args[0]);
-    try (var scope = AgentRunScope.open(new AgentRunContext("restart", "chat", root, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("restart", "chat", root, "project"));
+    try (scope) {
       var search =
           new PagedFileSearch(
               new Tools(), ReadingTestStores.store(new StorageDatabase(root.resolve("data"))));

@@ -68,7 +68,8 @@ class RequestCapturePhaseZeroTest {
     try (var probe = new Probe(true, false)) {
       var model = probe.model();
       var run = new AgentRunContext("run-a", "conversation-a", Path.of("."));
-      try (var ignored = AgentRunScope.open(run)) {
+      var ignored = AgentRunScope.open(run);
+      try (ignored) {
         var results =
             model.stream(new Prompt("hello", model.getOptions()))
                 .collectList()

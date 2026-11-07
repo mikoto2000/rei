@@ -20,17 +20,21 @@ class RunCancellationTest {
     var child = new AtomicInteger();
     var disposed = new AtomicInteger();
     service.cancelRun("one");
-    try (var scope = AgentRunScope.open(RunRegistryTest.context("one"))) {
-      service.begin(thread);
-      assertThat(service.isCancellationRequested()).isTrue();
-      service.onCancel("one", child::incrementAndGet);
-      service.register(disposed::incrementAndGet);
-      assertThat(child).hasValue(1);
-      assertThat(disposed).hasValue(1);
-      assertThat(thread.isInterrupted()).isTrue();
-      service.clear();
+    {
+      var scope = AgentRunScope.open(RunRegistryTest.context("one"));
+      try (scope) {
+        service.begin(thread);
+        assertThat(service.isCancellationRequested()).isTrue();
+        service.onCancel("one", child::incrementAndGet);
+        service.register(disposed::incrementAndGet);
+        assertThat(child).hasValue(1);
+        assertThat(disposed).hasValue(1);
+        assertThat(thread.isInterrupted()).isTrue();
+        service.clear();
+      }
     }
-    try (var scope = AgentRunScope.open(RunRegistryTest.context("two"))) {
+    var scope = AgentRunScope.open(RunRegistryTest.context("two"));
+    try (scope) {
       service.begin(new Thread());
       assertThat(service.isCancellationRequested()).isFalse();
       service.clear();

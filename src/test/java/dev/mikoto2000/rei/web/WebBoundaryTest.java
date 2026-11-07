@@ -140,7 +140,8 @@ class WebBoundaryTest {
           new ConversationInputRouter(
               executor,
               (context, prompt, input) -> {
-                try (var scope = AgentRunScope.open(context)) {
+                var scope = AgentRunScope.open(context);
+                try (scope) {
                   cancellation.begin(Thread.currentThread());
                   try {
                     if (prompt.equals("slow")) {
