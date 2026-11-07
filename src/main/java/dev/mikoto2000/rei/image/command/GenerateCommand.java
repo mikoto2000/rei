@@ -6,8 +6,6 @@ import dev.mikoto2000.rei.image.ImageGenerationResult;
 import dev.mikoto2000.rei.image.ImageGenerationService;
 import dev.mikoto2000.rei.image.ImageProperties;
 import dev.mikoto2000.rei.image.ImageSize;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -42,17 +40,13 @@ public class GenerateCommand implements Callable<Integer> {
   private final CommandCancellationService cancellationService;
 
   /** バックグラウンド。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared background command dispatcher and its current results.")
-  private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
+  private java.util.function.Consumer<ImageGenerationRequest> submitImage;
 
   /** 画像の生成で使用するバックグラウンドコマンド一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setBackgroundCommands(
       dev.mikoto2000.rei.core.execution.BackgroundCommands background) {
-    this.background = background;
+    this.submitImage = background == null ? null : request -> background.image(request);
   }
 
   /** 仕様。 */
@@ -84,7 +78,7 @@ public class GenerateCommand implements Callable<Integer> {
   /** プロンプトから画像を生成しますを行う。 */
   @Override
   public Integer call() {
-    if (background != null) {
+    if (submitImage != null) {
       try {
         var request =
             new ImageGenerationRequest(
@@ -93,7 +87,7 @@ public class GenerateCommand implements Callable<Integer> {
                 model,
                 ImageSize.parse(size == null || size.isBlank() ? properties.getSize() : size),
                 !raw);
-        background.image(request);
+        submitImage.accept(request);
         return 0;
       } catch (RuntimeException error) {
         var out = spec.commandLine().getErr();

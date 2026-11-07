@@ -66,11 +66,9 @@ public final class MemoryRunSubmitService {
   private final AgentEventBus bus;
 
   /** 待機。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared sleep service and its persisted consolidation state.")
-  private final SleepService sleep;
+  private record SleepOutput(boolean completed, String text) {}
+
+  private final java.util.function.BiFunction<AgentRunContext, Boolean, SleepOutput> runSleep;
 
   /** 補助。 */
   private final MemoryCommandSupport support;
@@ -122,7 +120,13 @@ public final class MemoryRunSubmitService {
     this.cancellationRequested = () -> cancellation.isCancellationRequested();
     this.events = events;
     this.bus = bus;
-    this.sleep = sleep;
+    this.runSleep =
+        (context, preview) -> {
+          var report = sleep.sleep(context.conversationId(), context.projectId(), preview);
+          if (cancellationRequested.getAsBoolean() || Thread.currentThread().isInterrupted())
+            return new SleepOutput(false, null);
+          return new SleepOutput(true, support.report(report));
+        };
     this.support = support;
   }
 
@@ -263,10 +267,9 @@ public final class MemoryRunSubmitService {
                 .messageDelta(
                     context.runId(), preview ? "Sleep preview started..." : "Sleep started...")
                 .withOwnership(context));
-        var report = sleep.sleep(context.conversationId(), context.projectId(), preview);
-        if (cancellationRequested.getAsBoolean() || Thread.currentThread().isInterrupted()) return;
-        bus.publish(
-            events.messageDelta(context.runId(), support.report(report)).withOwnership(context));
+        var report = runSleep.apply(context, preview);
+        if (!report.completed()) return;
+        bus.publish(events.messageDelta(context.runId(), report.text()).withOwnership(context));
         bus.publish(events.runCompleted(context.runId(), 0).withOwnership(context));
       } catch (java.util.concurrent.CancellationException cancelled) {
         runs.cancel(context.runId());
