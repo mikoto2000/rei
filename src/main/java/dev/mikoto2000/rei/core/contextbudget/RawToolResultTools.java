@@ -2,8 +2,7 @@ package dev.mikoto2000.rei.core.contextbudget;
 
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.toolcontract.ToolReadRejectedException;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.BiFunction;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -16,11 +15,7 @@ public class RawToolResultTools {
   }
 
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common tool result store for body references and cache state.")
-  private final RawToolResultStore store;
+  private final BiFunction<String, String, RawToolResultStore.Result> readResult;
 
   /** 概算。 */
   private final TokenEstimator estimator;
@@ -40,7 +35,7 @@ public class RawToolResultTools {
 
   /** 指定された値や利用先を使って、RawToolResultToolsを初期化する。 */
   public RawToolResultTools(RawToolResultStore store, TokenEstimator estimator, int pageTokens) {
-    this.store = store;
+    this.readResult = (conversation, ref) -> store.read(conversation, ref);
     this.estimator = estimator;
     this.pageTokens = pageTokens;
   }
@@ -65,7 +60,7 @@ public class RawToolResultTools {
     var owner = AgentRunScope.current();
     if (owner == null) throw new IllegalStateException("A run is required");
     if (offset < 0 || limit < 1 || limit > 16000) throw invalidCursor();
-    var result = store.read(owner.conversationId(), rawResultRef);
+    var result = readResult.apply(owner.conversationId(), rawResultRef);
     return pageText(rawResultRef, result, offset, limit, pageTokens);
   }
 

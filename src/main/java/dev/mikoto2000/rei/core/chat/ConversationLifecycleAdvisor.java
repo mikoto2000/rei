@@ -1,9 +1,8 @@
 package dev.mikoto2000.rei.core.chat;
 
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
+import java.util.function.Function;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -19,18 +18,14 @@ import org.springframework.ai.chat.prompt.Prompt;
  */
 public final class ConversationLifecycleAdvisor implements BaseAdvisor {
   /** やり取り一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent turn store for history and run lookups.")
-  private final ConversationTurnStore turns;
+  private final Function<String, String> cancelledContext;
 
   /** 会話の識別子。 */
   private final String conversationId;
 
   /** 指定された値や利用先を使って、ConversationLifecycleAdvisorを初期化する。 */
   public ConversationLifecycleAdvisor(ConversationTurnStore turns, String conversationId) {
-    this.turns = turns;
+    this.cancelledContext = id -> turns.cancelledContext(id);
     this.conversationId = conversationId;
   }
 
@@ -43,7 +38,7 @@ public final class ConversationLifecycleAdvisor implements BaseAdvisor {
   /** 会話の実行の本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
-    String context = turns.cancelledContext(conversationId);
+    String context = cancelledContext.apply(conversationId);
     if (context.isEmpty()) return request;
     var messages = new ArrayList<Message>();
     var originalSystem = request.prompt().getSystemMessage();

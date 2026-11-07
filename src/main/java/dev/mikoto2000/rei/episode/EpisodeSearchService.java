@@ -21,6 +21,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 import org.springframework.stereotype.Service;
 
 /** 経験の記録検索のユースケースを実現する。 */
@@ -50,11 +51,7 @@ public class EpisodeSearchService {
   private final MemoryRepository memories;
 
   /** 履歴。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured search service for shared conversation history.")
-  private final ConversationHistorySearchService history;
+  private final Function<HistorySearchRequest, List<ConversationSearchResult>> searchHistory;
 
   /** やり取り一覧。 */
   @SuppressFBWarnings(
@@ -128,7 +125,7 @@ public class EpisodeSearchService {
       WorkContextService work) {
     this.episodes = episodes;
     this.memories = memories;
-    this.history = history;
+    this.searchHistory = request -> history.search(request);
     this.turns = turns;
     this.work = work;
   }
@@ -173,7 +170,7 @@ public class EpisodeSearchService {
       }
     }
     var histories =
-        history.search(
+        searchHistory.apply(
             new HistorySearchRequest(
                 query,
                 request.preferredProjectId(),

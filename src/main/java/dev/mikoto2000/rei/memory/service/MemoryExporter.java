@@ -3,14 +3,13 @@ package dev.mikoto2000.rei.memory.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.mikoto2000.rei.memory.model.Memory;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 
 /** 長期記憶の保存と検索に必要な記憶Exporterを扱う。 */
@@ -28,25 +27,21 @@ public class MemoryExporter {
   public record ExportResult(Path latestMd, Path datedMd, Path datedJsonl, int count) {}
 
   /** 記憶サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads active entries from the shared memory service.")
-  private final MemoryService memoryService;
+  private final Supplier<List<Memory>> activeMemories;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
   /** 指定された値や利用先を使って、MemoryExporterを初期化する。 */
   public MemoryExporter(MemoryService memoryService) {
-    this.memoryService = memoryService;
+    this.activeMemories = () -> memoryService.listActiveWithExpiryCheck();
   }
 
   /** 長期記憶の保存と検索で用いる書き出しを返す。 */
   public ExportResult export(Path exportDirectory) {
     try {
       Files.createDirectories(exportDirectory);
-      List<Memory> memories = memoryService.listActiveWithExpiryCheck();
+      List<Memory> memories = activeMemories.get();
       String ts = OffsetDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
       Path latestMd = exportDirectory.resolve("latest.md");
       Path datedMd = exportDirectory.resolve("memory-" + ts + ".md");

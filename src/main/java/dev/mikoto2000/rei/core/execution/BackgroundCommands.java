@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.image.ImageGenerationRequest;
+import dev.mikoto2000.rei.image.ImageGenerationResult;
 import dev.mikoto2000.rei.image.ImageGenerationService;
 import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -17,6 +18,7 @@ import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
@@ -44,11 +46,7 @@ public class BackgroundCommands {
   private final WebPageSummarizerService summaries;
 
   /** 画像一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Dispatches requests through the shared image generation service.")
-  private final ImageGenerationService images;
+  private final Function<ImageGenerationRequest, ImageGenerationResult> generateImage;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -82,7 +80,7 @@ public class BackgroundCommands {
     this.currentProject = () -> projects.currentContext();
     this.states = states;
     this.summaries = summaries;
-    this.images = images;
+    this.generateImage = request -> images.generate(request);
     this.events = events;
     this.publisher = publisher;
     this.clock = clock;
@@ -100,7 +98,7 @@ public class BackgroundCommands {
         ExecutionType.IMAGE,
         request.prompt(),
         () -> {
-          var result = images.generate(request);
+          var result = generateImage.apply(request);
           if (!result.success()) {
             if ("cancelled".equals(result.message()))
               throw new java.util.concurrent.CancellationException();

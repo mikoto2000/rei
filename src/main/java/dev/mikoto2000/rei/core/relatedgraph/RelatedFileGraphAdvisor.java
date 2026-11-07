@@ -8,6 +8,7 @@ import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -31,11 +32,7 @@ public class RelatedFileGraphAdvisor implements BaseAdvisor {
   private final RelatedFileGraph relatedFileGraph;
 
   /** 作業中集合。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared working set so callers see the current file selection.")
-  private final WorkingSet workingSet;
+  private final Supplier<Set<String>> loadWorkingSetPaths;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -65,7 +62,10 @@ public class RelatedFileGraphAdvisor implements BaseAdvisor {
       AgentEventFactory events,
       AgentEventPublisher eventPublisher) {
     this.relatedFileGraph = relatedFileGraph;
-    this.workingSet = workingSet;
+    this.loadWorkingSetPaths =
+        () -> workingSet.getFiles().stream()
+            .map(ref -> ref.path())
+            .collect(java.util.stream.Collectors.toSet());
     this.events = events;
     this.eventPublisher = eventPublisher;
   }
@@ -82,10 +82,7 @@ public class RelatedFileGraphAdvisor implements BaseAdvisor {
     if (userMessage == null) {
       return request;
     }
-    Set<String> workingSetPaths =
-        workingSet.getFiles().stream()
-            .map(ref -> ref.path())
-            .collect(java.util.stream.Collectors.toSet());
+    Set<String> workingSetPaths = loadWorkingSetPaths.get();
     String context = relatedFileGraph.renderForPrompt(workingSetPaths);
     if (context.isBlank()) {
       return request;

@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * 作業状況の把握で受け渡す作業状況時系列の記録を表す。
@@ -33,11 +34,7 @@ public final class ActivityTimeline {
   private final DailySummaryService dailySummaries;
 
   /** 評価値の保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads score criteria from the common period coaching store.")
-  private final PeriodCoachingStore scoreCriteria;
+  private final Supplier<PeriodCoachingStore.Snapshot> loadScoreCriteria;
 
   /** 作業推定の保存先。 */
   private final WorkActivityInferenceStore workInferences;
@@ -54,7 +51,7 @@ public final class ActivityTimeline {
     this.clock = clock;
     this.summaryPolicy = summaryPolicy;
     this.dailySummaries = dailySummaries;
-    this.scoreCriteria = scoreCriteria;
+    this.loadScoreCriteria = () -> scoreCriteria == null ? null : scoreCriteria.load();
     this.workInferences = workInferences;
   }
 
@@ -287,7 +284,7 @@ public final class ActivityTimeline {
   private PeriodComparison periodComparison(
       ActivityPeriodAnalysis.Period period, String day, boolean bounded) {
     var snapshot = Clock.fixed(clock.instant(), clock.getZone());
-    var configured = scoreCriteria == null ? null : scoreCriteria.load();
+    var configured = loadScoreCriteria.get();
     var selected =
         configured == null || configured.revision() == 0
             ? Set.<String>of()

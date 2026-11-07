@@ -13,8 +13,6 @@ import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.subagent.SubAgentResultParser;
 import dev.mikoto2000.rei.subagent.SubAgentResultSchema;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -26,6 +24,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -210,11 +209,7 @@ public class BeginnerReviewService {
   private final Supplier<OpenAiChatOptions> optionsForCalls;
 
   /** 権限一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common guard for the current tool authorization policy.")
-  private final ToolPermissionGuard permissions;
+  private final BiConsumer<String, AgentRunContext> authorizeReviewRead;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON = new ObjectMapper();
@@ -248,7 +243,7 @@ public class BeginnerReviewService {
   public BeginnerReviewService(LlmModelProvider models, ToolPermissionGuard permissions) {
     this.modelForCalls = () -> models.subAgentChatModel();
     this.optionsForCalls = () -> models.chatOptions(LlmFeature.CHAT, null);
-    this.permissions = permissions;
+    this.authorizeReviewRead = (input, owner) -> permissions.check("readMultiFile", input, owner);
   }
 
   /** 外部エージェントへの委譲で用いるレビューを返す。 */
@@ -257,7 +252,7 @@ public class BeginnerReviewService {
     run.checkActive();
     var owner = run.runContext();
     if (owner == null) throw new IllegalArgumentException("Captured Project Run required");
-    permissions.check("readMultiFile", "material-review " + request.root(), owner);
+    authorizeReviewRead.accept("material-review " + request.root(), owner);
     Path root = ExternalAgentRequest.resolveTarget(owner.projectRoot(), request.root());
     if (root == null || ExternalAgentSourceSnapshot.excluded(owner.projectRoot().relativize(root)))
       throw new IllegalArgumentException("Material root is excluded");

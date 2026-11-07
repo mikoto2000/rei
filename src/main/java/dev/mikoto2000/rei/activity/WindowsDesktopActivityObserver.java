@@ -8,6 +8,7 @@ import dev.mikoto2000.rei.computeruse.ScreenCapture;
 import dev.mikoto2000.rei.computeruse.ScreenGeometry;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.awt.AWTException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -29,34 +30,46 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
     life = () -> policy;
   }
 
-  private <T> T guarded(java.util.concurrent.Callable<T> read) throws Exception {
+  private Runnable beginGuard() {
     var policy = life.get();
     var lease = policy == null ? null : policy.begin();
     if (policy != null && !policy.valid(lease)) throw new IllegalStateException("life_policy");
-    var result = read.call();
-    if (policy != null && !policy.valid(lease))
-      throw new IllegalStateException("life_policy_changed");
+    return () -> {
+      if (policy != null && !policy.valid(lease))
+        throw new IllegalStateException("life_policy_changed");
+    };
+  }
+
+  public CapturedScreen capture() throws AWTException, IOException, InterruptedException {
+    var validate = beginGuard();
+    var result = readCapture();
+    validate.run();
     return result;
   }
 
-  public CapturedScreen capture() throws Exception {
-    return guarded(this::readCapture);
+  public ForegroundWindow foreground() throws IOException, InterruptedException {
+    var validate = beginGuard();
+    var result = readForeground();
+    validate.run();
+    return result;
   }
 
-  public ForegroundWindow foreground() throws Exception {
-    return guarded(this::readForeground);
-  }
-
-  public Metadata metadata() throws Exception {
-    return guarded(this::readMetadata);
+  public Metadata metadata() throws IOException, InterruptedException {
+    var validate = beginGuard();
+    var result = readMetadata();
+    validate.run();
+    return result;
   }
 
   /** 作業状況の把握で用いるlightweightを返す。 */
   @Override
   public Lightweight lightweight() {
     try {
-      return guarded(WindowsInputProbe::read);
-    } catch (Exception failure) {
+      var validate = beginGuard();
+      var result = WindowsInputProbe.read();
+      validate.run();
+      return result;
+    } catch (RuntimeException failure) {
       throw new IllegalStateException("life_policy_or_probe", failure);
     }
   }
@@ -86,8 +99,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
   private final ScreenCapture capture = new RobotScreenCapture(new AwtRobotDriver());
 
   /** 後から状況を確認できるよう、Windowsデスクトップ作業状況観測を記録する。 */
-  private CapturedScreen readCapture()
-      throws java.awt.AWTException, java.io.IOException, InterruptedException {
+  private CapturedScreen readCapture() throws AWTException, IOException, InterruptedException {
     var metadata = lastMetadata;
     boolean identified =
         properties != null && properties.getDetection().isBackgroundFullScreenEnabled();

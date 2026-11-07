@@ -1,37 +1,25 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.computeruse.CapturedScreen;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.awt.AWTException;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 
 /** デスクトップ作業状況の状況を観測し、記録や判断に必要な情報を提供する。 */
 public interface DesktopActivityObserver {
   /** 作業状況の把握で用いる前面を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "A platform adapter may report its own checked foreground query failure.")
-  ForegroundWindow foreground() throws Exception;
+  ForegroundWindow foreground() throws IOException, InterruptedException;
 
   /** 後から状況を確認できるよう、デスクトップ作業状況観測を記録する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "A platform adapter may report its own checked screen acquisition failure.")
-  CapturedScreen capture() throws Exception;
+  CapturedScreen capture() throws AWTException, IOException, InterruptedException;
 
   /**
    * 作業状況の把握で用いるlightweightを返す。
    *
    * <p>Session-local timing and identity only; never input contents. Null means unavailable.
    */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Forwards checked foreground observation failures from the selected platform adapter.")
-  default Lightweight lightweight() throws Exception {
+  default Lightweight lightweight() {
     return null;
   }
 
@@ -62,7 +50,7 @@ public interface DesktopActivityObserver {
   }
 
   /** 作業状況の把握で用いる付随情報を返す。 */
-  default Metadata metadata() throws Exception {
+  default Metadata metadata() throws IOException, InterruptedException {
     return new Metadata(foreground(), java.util.List.of());
   }
 

@@ -14,6 +14,8 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.function.BiFunction;
+import java.util.function.IntSupplier;
+import java.util.function.ToIntFunction;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -66,18 +68,10 @@ public class ProjectShellActivity implements AgentEventListener {
   private final ProjectRunStateStore states;
 
   /** 作業中集合。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared working set so callers see the current file selection.")
-  private final WorkingSet workingSet;
+  private final IntSupplier workingSetSize;
 
   /** 記憶。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared conversation memory for the current history.")
-  private final ChatMemory memory;
+  private final ToIntFunction<String> conversationSize;
 
   /** 出力。 */
   private ShellEventOutput output;
@@ -128,8 +122,8 @@ public class ProjectShellActivity implements AgentEventListener {
     this.projects = projects;
     this.recentEvents = (project, limit) -> store.recent(project, limit);
     this.states = states;
-    this.workingSet = workingSet;
-    this.memory = memory;
+    this.workingSetSize = () -> workingSet.getFiles().size();
+    this.conversationSize = id -> memory.get(id).size();
   }
 
   /** ターミナルでの対話に関する関連付けを処理する。 */
@@ -206,9 +200,9 @@ public class ProjectShellActivity implements AgentEventListener {
         "Conversation restored: "
             + (visibleSession == null ? "chat:main" : visibleSession)
             + " ("
-            + memory.get(conversation).size()
+            + conversationSize.applyAsInt(conversation)
             + " messages)");
-    output.println("Working Set restored: " + workingSet.getFiles().size() + " items");
+    output.println("Working Set restored: " + workingSetSize.getAsInt() + " items");
     if (visibleSession == null)
       output.println(
           "Last run: "

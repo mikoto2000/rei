@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.image.ImageGenerationRequest;
+import dev.mikoto2000.rei.image.ImageGenerationResult;
 import dev.mikoto2000.rei.image.ImageGenerationService;
 import dev.mikoto2000.rei.image.ImageProperties;
 import dev.mikoto2000.rei.image.ImageSize;
@@ -65,11 +66,7 @@ public final class BackgroundRunSubmitService {
   private final WebPageSummarizerService summaries;
 
   /** 画像一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Dispatches requests through the shared image generation service.")
-  private final ImageGenerationService images;
+  private final Function<ImageGenerationRequest, ImageGenerationResult> generateImage;
 
   /** この機能の動作設定。 */
   private final Supplier<String> defaultImageSize;
@@ -170,7 +167,7 @@ public final class BackgroundRunSubmitService {
                   registry.get(context.runId()).startedAt());
           try (var scope = dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution)) {
             var result =
-                images.generate(
+                generateImage.apply(
                     new ImageGenerationRequest(
                         prompt,
                         output == null ? null : java.nio.file.Path.of(output),
@@ -239,7 +236,7 @@ public final class BackgroundRunSubmitService {
     this.events = events;
     this.bus = bus;
     this.summaries = summaries;
-    this.images = images;
+    this.generateImage = request -> images.generate(request);
     this.defaultImageSize = () -> properties.getSize();
   }
 
@@ -265,7 +262,7 @@ public final class BackgroundRunSubmitService {
           var output =
               context.projectRoot().resolve(".rei/web-images").resolve(context.runId() + ".png");
           var result =
-              images.generate(new ImageGenerationRequest(prompt, output, null, dimensions, true));
+              generateImage.apply(new ImageGenerationRequest(prompt, output, null, dimensions, true));
           if (!result.success()) {
             if ("cancelled".equals(result.message()))
               throw new java.util.concurrent.CancellationException();
