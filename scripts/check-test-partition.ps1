@@ -1,8 +1,12 @@
+[CmdletBinding(DefaultParameterSetName='Profiles')]
 param(
-    [Parameter(Mandatory)][string]$Fast,
-    [Parameter(Mandatory)][string]$Integration,
-    [Parameter(Mandatory)][string]$Full,
-    [string]$Before = '',
+    [Parameter(Mandatory, ParameterSetName='Profiles')][string]$Fast,
+    [Parameter(Mandatory, ParameterSetName='Profiles')][string]$Integration,
+    [Parameter(Mandatory, ParameterSetName='Profiles')][string]$Full,
+    [Parameter(ParameterSetName='Profiles')][string]$Before = '',
+    [Parameter(Mandatory, ParameterSetName='Shards')][string]$ShardA,
+    [Parameter(Mandatory, ParameterSetName='Shards')][string]$ShardB,
+    [Parameter(Mandatory, ParameterSetName='Shards')][string]$ShardList,
     [string]$ExpectedSkips = "$PSScriptRoot/../config/test-expected-skips.json",
     [string]$Output = 'target/test-performance/partition.json'
 )
@@ -50,6 +54,40 @@ function Read-Tests([string]$Directory) {
     }
     return ,$tests
 }
+
+if ($PSCmdlet.ParameterSetName -eq 'Shards') {
+    $aTests = Read-Tests $ShardA
+    $bTests = Read-Tests $ShardB
+    $assigned = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($path in Get-Content -LiteralPath $ShardList) {
+        if ($path -cnotmatch '^(?:[\w]+/)*[\w]+\.java$') { throw "Invalid shard A class path: $path" }
+        $class = $path.Substring(0, $path.Length - '.java'.Length).Replace('/', '.')
+        if (!$assigned.Add($class)) { throw "Duplicate shard A class: $class" }
+    }
+    $reported = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($test in $aTests.Values) {
+        [void]$reported.Add($test.Suite.Split('$')[0])
+    }
+    if (!$assigned.SetEquals($reported)) {
+        $missing = @($assigned | Where-Object { !$reported.Contains($_) })
+        $extra = @($reported | Where-Object { !$assigned.Contains($_) })
+        throw "Shard A class coverage differs. Missing: $($missing -join ', '); extra: $($extra -join ', ')"
+    }
+    foreach ($key in $bTests.Keys) {
+        if ($aTests.ContainsKey($key)) { throw "Overlapping tests: $key" }
+        $class = $bTests[$key].Suite.Split('$')[0]
+        if ($assigned.Contains($class)) { throw "Shard B ran a class assigned to shard A: $class" }
+    }
+    foreach ($key in $allowed.Keys) {
+        if ($aTests.ContainsKey($key)) { $test = $aTests[$key] }
+        elseif ($bTests.ContainsKey($key)) { $test = $bTests[$key] }
+        else { throw "Expected skip is missing from both shards: $key" }
+        if ($test.Result -ne 'Skipped') { throw "Expected skip ran: $key" }
+    }
+    "Verified: shard A=$($aTests.Count), shard B=$($bTests.Count), total=$($aTests.Count + $bTests.Count); class assignments disjoint, expected skips=$($allowed.Count)."
+    return
+}
+
 $fastTests=Read-Tests $Fast
 $integrationTests=Read-Tests $Integration
 $fullTests=Read-Tests $Full

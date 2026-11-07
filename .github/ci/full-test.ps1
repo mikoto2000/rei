@@ -1,4 +1,4 @@
-param([ValidateRange(1, 1800)][int]$TimeoutSeconds = 1200)
+param([ValidateRange(1, 1800)][int]$TimeoutSeconds = 1200, [ValidateSet("A", "B")][string]$Shard)
 
 $ErrorActionPreference = 'Stop'
 $repository = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -7,7 +7,13 @@ New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
 $stdout = Join-Path $artifacts 'ci-full.stdout.log'
 $stderr = Join-Path $artifacts 'ci-full.stderr.log'
 $wrapper = Join-Path $repository 'mvnw.cmd'
-$commandText = '"' + $wrapper + '" -B -Pfull "-Djava.io.tmpdir=' + $env:TEMP + '" test'
+# An explicit excludes file replaces Surefire's default nested-class exclusion.
+$selection = switch ($Shard) {
+    'A' { ' "-Dsurefire.includesFile=.github/ci/java-shard-a.txt"' }
+    'B' { ' "-Dsurefire.excludes=**/*$*" "-Dsurefire.excludesFile=.github/ci/java-shard-a.txt"' }
+    default { '' }
+}
+$commandText = '"' + $wrapper + '" -B -Pfull "-Djava.io.tmpdir=' + $env:TEMP + '"' + $selection + ' test'
 $process = Start-Process -FilePath $env:ComSpec -ArgumentList ('/d /s /c "' + $commandText + '"') `
     -WorkingDirectory $repository -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput $stdout -RedirectStandardError $stderr
