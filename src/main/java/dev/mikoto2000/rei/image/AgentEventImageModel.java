@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.image;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.UUID;
 import org.springframework.ai.image.ImageModel;
 import org.springframework.ai.image.ImagePrompt;
@@ -42,10 +40,6 @@ final class AgentEventImageModel implements ImageModel {
 
   /** 画像の生成の要求を実行し、呼び出し元へ結果を返す。 */
   @Override
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Records the failure event and preserves the delegated image model failure.")
   public ImageResponse call(ImagePrompt prompt) {
     String requestId = UUID.randomUUID().toString();
     long startedAtNanos = System.nanoTime();
@@ -56,7 +50,7 @@ final class AgentEventImageModel implements ImageModel {
           eventFactory.llmResponseCompleted(
               null, requestId, (System.nanoTime() - startedAtNanos) / 1_000_000L));
       return response;
-    } catch (RuntimeException e) {
+    } catch (RuntimeException | Error e) {
       eventPublisher.publish(
           eventFactory.llmRequestFailed(
               null, requestId, (System.nanoTime() - startedAtNanos) / 1_000_000L, e));

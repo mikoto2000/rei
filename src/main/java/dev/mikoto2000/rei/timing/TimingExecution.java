@@ -6,8 +6,6 @@ import static dev.mikoto2000.rei.timing.TimingRecorder.Status;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
@@ -46,10 +44,6 @@ public class TimingExecution {
   }
 
   /** 状況を判断する根拠を得るため、実行を観測する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Records terminal timing status and preserves the observed operation failure.")
   public ChatExecutionResult observeRun(
       AgentRunContext owner, Supplier<ChatExecutionResult> operation) {
     if (!enabled() || owner == null) return operation.get();
@@ -63,7 +57,7 @@ public class TimingExecution {
       var result = operation.get();
       status = status(result);
       return result;
-    } catch (RuntimeException failure) {
+    } catch (RuntimeException | Error failure) {
       status = status(failure);
       throw failure;
     } finally {
