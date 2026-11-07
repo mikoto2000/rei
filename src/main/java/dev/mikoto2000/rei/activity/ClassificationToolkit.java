@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.activity;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
@@ -28,11 +26,19 @@ public final class ClassificationToolkit {
       org.slf4j.LoggerFactory.getLogger(ClassificationToolkit.class);
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ActivityProperties shared by consumers of these settings.")
-  private final ActivityProperties p;
+  private final CapturePolicy capturePolicy;
+
+  private final java.util.function.BooleanSupplier hotReload;
+  private final java.util.function.BooleanSupplier ruleSuggestions;
+  private final java.util.function.IntSupplier minimumSamples;
+  private final java.util.function.IntSupplier suggestionOutputTokens;
+  private final java.util.function.DoubleSupplier visionConfidence;
+  private final java.util.function.Supplier<DiagnosticSettings> diagnosticSettings;
+  private final java.util.function.Supplier<ClassificationTelemetryRepository.Retention> retention;
+  private final java.util.function.Supplier<String> zone;
+
+  private record DiagnosticSettings(
+      double visionConfidence, boolean canUseVisionFallback, boolean logDiagnostics) {}
 
   /** 規則一覧。 */
   private final OperationalRules rules;
@@ -57,7 +63,25 @@ public final class ClassificationToolkit {
       OperationalRules rules,
       ClassificationTelemetryRepository repository,
       Clock clock) {
-    this.p = p;
+    this.capturePolicy = new CapturePolicy(p);
+    this.hotReload = () -> p.getClassification().isHotReload();
+    this.ruleSuggestions = () -> p.getClassification().getRuleSuggestion().isEnabled();
+    this.minimumSamples = () -> p.getClassification().getRuleSuggestion().getMinimumSamples();
+    this.suggestionOutputTokens =
+        () -> p.getClassification().getRuleSuggestion().getMaxOutputTokens();
+    this.visionConfidence = () -> p.getDetection().getSkipVisionConfidence();
+    this.diagnosticSettings =
+        () -> {
+          var detection = p.getDetection();
+          return new DiagnosticSettings(
+              detection.getSkipVisionConfidence(),
+              p.isExtractionEnabled()
+                  && detection.isVisionEnabled()
+                  && detection.isFallbackEnabled(),
+              p.getClassification().getDiagnostics().isEnabled());
+        };
+    this.retention = () -> ClassificationTelemetryRepository.Retention.from(p.getClassification());
+    this.zone = () -> p.getZone();
     this.rules = rules;
     this.repository = repository;
     this.clock = clock;
@@ -70,22 +94,22 @@ public final class ClassificationToolkit {
 
   /** 分類ルールの提案を有効にするか返す。 */
   boolean ruleSuggestionsEnabled() {
-    return p.getClassification().getRuleSuggestion().isEnabled();
+    return ruleSuggestions.getAsBoolean();
   }
 
   /** ルール提案に必要な最小観測件数を返す。 */
   int ruleSuggestionMinimumSamples() {
-    return p.getClassification().getRuleSuggestion().getMinimumSamples();
+    return minimumSamples.getAsInt();
   }
 
   /** ルール提案の最大出力トークン数を返す。 */
   int ruleSuggestionMaxOutputTokens() {
-    return p.getClassification().getRuleSuggestion().getMaxOutputTokens();
+    return suggestionOutputTokens.getAsInt();
   }
 
   /** 画像解析を省略できる信頼度のしきい値を返す。 */
   double skipVisionConfidence() {
-    return p.getDetection().getSkipVisionConfidence();
+    return visionConfidence.getAsDouble();
   }
 
   /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
@@ -95,12 +119,12 @@ public final class ClassificationToolkit {
 
   /** 作業状況の把握に関する状態確認を処理する。 */
   public void poll() {
-    if (p.getClassification().isHotReload()) rules.poll();
+    if (hotReload.getAsBoolean()) rules.poll();
   }
 
   /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   private boolean safe(ActivityRecord r) {
-    if (new CapturePolicy(p).excluded(r.foreground())) return false;
+    if (capturePolicy.excluded(r.foreground())) return false;
     var a = r.inference().activities();
     String text = r.foreground().windowTitle() + " " + a.toString();
     return !sensitive.containsSensitiveInfo(text)
@@ -113,7 +137,8 @@ public final class ClassificationToolkit {
       if (!safe(r) || r.inference().activities().isEmpty()) return r;
       var a = r.inference().activities().getFirst();
       var fields = ActivityEnrichment.fields(r);
-      boolean usable = fields.usable(p.getDetection().getSkipVisionConfidence());
+      var settings = diagnosticSettings.get();
+      boolean usable = fields.usable(settings.visionConfidence());
       var d = r.detection();
       String winning = d == null ? "legacy" : d.reason().split("\\|", 2)[0];
       var matching =
@@ -158,11 +183,7 @@ public final class ClassificationToolkit {
               r.foreground().windowTitle(),
               a.contentTitle(),
               a.type());
-      boolean required =
-          !usable
-              && p.isExtractionEnabled()
-              && p.getDetection().isVisionEnabled()
-              && p.getDetection().isFallbackEnabled();
+      boolean required = !usable && settings.canUseVisionFallback();
       var diagnostics =
           new ClassificationDiagnostics(
               List.copyOf(matching),
@@ -197,7 +218,7 @@ public final class ClassificationToolkit {
               d.secondaryConfidence(),
               diagnostics,
               d.visionDiagnostics());
-      if (p.getClassification().getDiagnostics().isEnabled())
+      if (settings.logDiagnostics())
         log.debug(
             "Activity operational classification: rule={} source={} usable={} visionReason={} entertainment={} entertainmentRule={}",
             winning,
@@ -248,7 +269,7 @@ public final class ClassificationToolkit {
                   ? d.reason().substring(d.reason().indexOf('|') + 1)
                   : "",
               d.diagnostics().visionRequired()),
-          p.getClassification(),
+          retention.get(),
           clock.instant());
     } catch (SQLException | JsonProcessingException | RuntimeException e) {
       log.warn("Activity classification telemetry unavailable; observation retained");
@@ -257,21 +278,18 @@ public final class ClassificationToolkit {
 
   /** 作業状況の把握で用いる候補一覧を返す。 */
   public List<ClassificationTelemetryRepository.Candidate> candidates(String kind) {
-    var retention =
-        kind.equals("unknown")
-            ? p.getClassification().getUnknownRegistry()
-            : p.getClassification().getEntertainmentRegistry();
-    if (!retention.isEnabled()) return List.of();
+    var settings = retention.get();
+    var registry = kind.equals("unknown") ? settings.unknown() : settings.entertainment();
+    if (!registry.enabled()) return List.of();
     try {
       return repository
-          .candidates(kind, clock.instant().minus(Duration.ofDays(retention.getRetentionDays())))
+          .candidates(kind, clock.instant().minus(Duration.ofDays(registry.retentionDays())))
           .stream()
           .filter(
               c ->
                   !sensitive.containsSensitiveInfo(c.title() + c.content() + c.service())
-                      && !new CapturePolicy(p)
-                          .excluded(
-                              new ForegroundWindow(c.process(), 1, c.title(), "registry", null)))
+                      && !capturePolicy.excluded(
+                          new ForegroundWindow(c.process(), 1, c.title(), "registry", null)))
           .toList();
     } catch (SQLException | JsonProcessingException | RuntimeException e) {
       log.warn("Activity classification registry unavailable");
@@ -301,11 +319,9 @@ public final class ClassificationToolkit {
             "entertainment_user",
             "entertainment_rule_hit")) m.put(name, 0L);
     try {
+      var zoneId = ZoneId.of(zone.get());
       for (var r :
-          repository.rows(
-              LocalDate.now(clock.withZone(ZoneId.of(p.getZone())))
-                  .atStartOfDay(ZoneId.of(p.getZone()))
-                  .toInstant())) {
+          repository.rows(LocalDate.now(clock.withZone(zoneId)).atStartOfDay(zoneId).toInstant())) {
         var d = r.diagnostics();
         inc(m, "observations");
         inc(m, r.initialVisionRequired() ? "vision_fallback" : "evidence_only");
