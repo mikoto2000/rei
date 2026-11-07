@@ -6,8 +6,7 @@ import dev.mikoto2000.rei.http.HostAdmission;
 import dev.mikoto2000.rei.http.HttpFetchException;
 import dev.mikoto2000.rei.http.TransferBudget;
 import dev.mikoto2000.rei.http.TransferScope;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -66,11 +65,7 @@ public final class WebFetchBatch implements AutoCloseable {
   @FunctionalInterface
   public interface Fetcher<T> {
     /** 後続の処理に必要な情報を、取得先から読み込む。 */
-    @SuppressFBWarnings(
-        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-        matchType = SuppressMatchType.EXACT,
-        justification = "The batch accepts fetchers with different checked transport and parsing failures.")
-    T fetch(WebSearchSelection.Candidate candidate) throws Exception;
+    T fetch(WebSearchSelection.Candidate candidate) throws IOException, InterruptedException;
   }
 
   /** Web上の情報の調査に必要な既定値を扱う。 */
@@ -214,8 +209,7 @@ public final class WebFetchBatch implements AutoCloseable {
       FetchOperation operation,
       boolean refresh,
       TransferBudget transferBudget,
-      String query)
-      throws Exception {
+      String query) {
     try (var lease = loaderAdmission.acquire(host, operation);
         var scope = FetchScope.enter(operation, transferAdmission, refresh);
         var transfer = TransferScope.enter(transferBudget);
@@ -224,7 +218,7 @@ public final class WebFetchBatch implements AutoCloseable {
       T value = loader.fetch(candidate);
       operation.check();
       return new Outcome<>(Status.SUCCESS, value, null);
-    } catch (Exception failure) {
+    } catch (IOException | InterruptedException | RuntimeException failure) {
       FetchOperation.propagateControls(failure);
       if (failure instanceof HttpFetchException http)
         return new Outcome<>(

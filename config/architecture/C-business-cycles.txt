@@ -1475,7 +1475,6 @@ dev.mikoto2000.rei.feed.DefaultFeedArticlePageFetcher -> dev.mikoto2000.rei.urlf
 dev.mikoto2000.rei.feed.DefaultFeedArticlePageFetcher -> dev.mikoto2000.rei.websearch.WebPageExtractor
 dev.mikoto2000.rei.feed.DefaultFeedArticlePageFetcher -> dev.mikoto2000.rei.websearch.WebSearchPage
 dev.mikoto2000.rei.feed.DefaultFeedArticlePageFetcher -> dev.mikoto2000.rei.websearch.WebSearchResult
-dev.mikoto2000.rei.feed.FeedArticlePageFetcher -> dev.mikoto2000.rei.websearch.WebSearchPage
 dev.mikoto2000.rei.feed.FeedSummaryService -> dev.mikoto2000.rei.websearch.WebSearchPage
 dev.mikoto2000.rei.feed.LlmFeedSummaryGenerator -> dev.mikoto2000.rei.llm.ConversationIds
 dev.mikoto2000.rei.feed.LlmFeedSummaryGenerator -> dev.mikoto2000.rei.llm.FixedLlmChatClientProvider

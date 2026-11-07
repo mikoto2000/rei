@@ -517,7 +517,7 @@ public class DoctorService {
       List<DoctorResult> results, String id, String method, DoctorDiagnostic probe) {
     try {
       results.add(probe.inspect());
-    } catch (Exception error) {
+    } catch (IOException | RuntimeException error) {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
       results.add(
           result(
