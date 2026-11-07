@@ -4,8 +4,6 @@ import com.openai.errors.OpenAIIoException;
 import com.openai.errors.OpenAIRetryableException;
 import com.openai.errors.OpenAIServiceException;
 import dev.mikoto2000.rei.llm.OutputLimitDetector;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -36,11 +34,11 @@ public final class BoundedToolLoop {
   private final ToolLoopSupport tools = new ToolLoopSupport();
 
   /** 文脈の組み立て。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured assembler for consistent context budgeting and tool result delivery.")
-  private final dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler;
+  private final java.util.function.BiFunction<Prompt, Assembly, Prompt> assemblePrompt;
+
+  private final java.util.function.BiConsumer<Prompt, AgentRunContext> confirmDelivery;
+
+  private record Assembly(String conversation, String run, Runnable checkActive) {}
 
   /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public BoundedToolLoop() {
@@ -49,7 +47,12 @@ public final class BoundedToolLoop {
 
   /** 指定された値や利用先を使って、BoundedToolLoopを初期化する。 */
   public BoundedToolLoop(dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler) {
-    this.assembler = assembler;
+    this.assemblePrompt =
+        assembler == null
+            ? null
+            : (prompt, input) ->
+                assembler.assemble(prompt, input.conversation(), input.run(), input.checkActive());
+    this.confirmDelivery = (prompt, owner) -> assembler.confirmedDelivery(prompt, owner);
   }
 
   /** 会話の実行に必要な共有予算上限超過を扱う。 */
@@ -206,8 +209,7 @@ public final class BoundedToolLoop {
           var trace =
               timing != null && timing.enabled()
                   ? (previous == null
-                      ? new dev.mikoto2000.rei.timing.TimingAttempt(
-                          UUID.randomUUID().toString(), 1)
+                      ? new dev.mikoto2000.rei.timing.TimingAttempt(UUID.randomUUID().toString(), 1)
                       : previous)
                   : null;
           if (remaining.getAndDecrement() <= 0) return Mono.error(new MaxStepsExceeded());
@@ -281,12 +283,14 @@ public final class BoundedToolLoop {
                       if (retries.reserve()) {
                         var delay = Mono.delay(java.time.Duration.ofMillis(100));
                         var values =
-                            trace != null && prompt.getOptions() instanceof ToolCallingChatOptions options
+                            trace != null
+                                    && prompt.getOptions() instanceof ToolCallingChatOptions options
                                 ? options.getToolContext()
                                 : null;
                         if (trace != null && values != null) {
                           var captured =
-                              values.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY);
+                              values.get(
+                                  dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY);
                           AgentRunContext owner =
                               captured
                                       instanceof
@@ -353,7 +357,7 @@ public final class BoundedToolLoop {
       ModelRetries retries) {
     return Mono.fromCallable(
             () -> {
-              if (assembler == null) return prompt;
+              if (assemblePrompt == null) return prompt;
               var summaryBudget =
                   new dev.mikoto2000.rei.llm.ModelCallBudget() {
                     /** 会話の実行の操作を実行する。 */
@@ -377,8 +381,8 @@ public final class BoundedToolLoop {
                   };
               try (var scope = AgentRunScope.open(owner);
                   var budget = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(summaryBudget)) {
-                return assembler.assemble(
-                    prompt, owner.conversationId(), owner.runId(), checkActive);
+                return assemblePrompt.apply(
+                    prompt, new Assembly(owner.conversationId(), owner.runId(), checkActive));
               }
             })
         .subscribeOn(Schedulers.boundedElastic())
@@ -402,8 +406,8 @@ public final class BoundedToolLoop {
                                   else
                                     dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
                                         owner, "providerInputTokensUnavailable", 1);
-                                  if (assembler != null)
-                                    assembler.confirmedDelivery(projected, owner);
+                                  if (assemblePrompt != null)
+                                    confirmDelivery.accept(projected, owner);
                                   if (!response.hasToolCalls()) {
                                     var generation =
                                         Objects.requireNonNull(

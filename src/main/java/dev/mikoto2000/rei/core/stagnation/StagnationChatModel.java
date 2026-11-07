@@ -38,11 +38,22 @@ public class StagnationChatModel implements ChatModel {
   private final ChatModel delegate;
 
   /** 文脈の組み立て。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured assembler for consistent context budgeting and tool result delivery.")
-  private final dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler;
+  private final java.util.function.BiFunction<Prompt, Assembly, Prompt> assemblePrompt;
+
+  private final java.util.function.BiConsumer<Prompt, dev.mikoto2000.rei.core.chat.AgentRunContext>
+      confirmDelivery;
+  private final java.util.function.BiConsumer<
+          List<org.springframework.ai.chat.messages.Message>,
+          dev.mikoto2000.rei.core.chat.AgentRunContext>
+      preserveDeliveredResults;
+  private final java.util.function.Function<dev.mikoto2000.rei.core.chat.AgentRunContext, String>
+      reviewContinuation;
+  private final java.util.function.Consumer<dev.mikoto2000.rei.core.chat.AgentRunContext>
+      requireReviewed;
+  private final java.util.function.BiConsumer<dev.mikoto2000.rei.core.chat.AgentRunContext, Boolean>
+      finishReview;
+
+  private record Assembly(String conversation, String run, Runnable checkActive) {}
 
   /** ツール一覧。 */
   private final dev.mikoto2000.rei.core.chat.ToolLoopSupport tools =
@@ -57,7 +68,19 @@ public class StagnationChatModel implements ChatModel {
   public StagnationChatModel(
       ChatModel delegate, dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler) {
     this.delegate = delegate;
-    this.assembler = assembler;
+    this.assemblePrompt =
+        assembler == null
+            ? null
+            : (prompt, input) ->
+                assembler.assemble(prompt, input.conversation(), input.run(), input.checkActive());
+    this.confirmDelivery = (prompt, owner) -> assembler.confirmedDelivery(prompt, owner);
+    this.preserveDeliveredResults =
+        (history, owner) ->
+            assembler.preserveToolResults(history, owner.conversationId(), owner.runId());
+    this.reviewContinuation = owner -> assembler.reviewContinuation(owner);
+    this.requireReviewed = owner -> assembler.requireReviewed(owner);
+    this.finishReview =
+        (owner, cancelled) -> assembler.finishReviewRun(owner, cancelled, false, null);
   }
 
   /** 実行の停滞への対処で参照する選択可能な設定を返す。 */
@@ -120,17 +143,14 @@ public class StagnationChatModel implements ChatModel {
             })
         .doOnError(
             error -> {
-              if (assembler != null)
-                assembler.finishReviewRun(
+              if (assemblePrompt != null)
+                finishReview.accept(
                     context.runContext(),
-                    error instanceof java.util.concurrent.CancellationException,
-                    false,
-                    null);
+                    error instanceof java.util.concurrent.CancellationException);
             })
         .doOnCancel(
             () -> {
-              if (assembler != null)
-                assembler.finishReviewRun(context.runContext(), true, false, null);
+              if (assemblePrompt != null) finishReview.accept(context.runContext(), true);
             });
   }
 
@@ -145,19 +165,20 @@ public class StagnationChatModel implements ChatModel {
           Prompt actionPrompt = resumeRecoveryPrompt(prompt, context);
           String feedback = context.progressFeedback() + context.resumeBatchFeedback();
           if (hasReviewProtocol(prompt)) {
-            feedback += " For a new whole-repository review prefer beginRepositoryReview, scanReviewSnapshot"
-                + " until SEALED, then readNextReviewWorkItem with tokenBudget omitted. It claims and reads"
-                + " one semantic unit with a host-selected budget up to 100000 estimated tokens, bounded"
-                + " by 1/8 of effective model input capacity and current free context. Assess the whole"
-                + " delivered unit with submitReviewWorkItem(workItemId,attempt,assessment,findings)."
-                + " Preserve existing durable task IDs; use listReviewTasks/resumeRepositoryReview when"
-                + " resuming. Do not create a second legacy job for the same durable task. Submit assessed"
-                + " units first and read the next unit in the same tool-call response. Read cross-file"
-                + " dependencies when necessary to corroborate findings. Existing legacy jobs must be"
-                + " completed through their original ledger. Prefer readNextReviewWorkItem(taskId='legacy:'"
-                + " + reviewJobId) and submitReviewWorkItem using the returned workItemId/attempt; this"
-                + " continues pending semantic units without losing saved legacy assessments. The following legacy guidance applies ONLY"
-                + " to explicit-target reviews or existing legacy jobs.";
+            feedback +=
+                " For a new whole-repository review prefer beginRepositoryReview, scanReviewSnapshot"
+                    + " until SEALED, then readNextReviewWorkItem with tokenBudget omitted. It claims and reads"
+                    + " one semantic unit with a host-selected budget up to 100000 estimated tokens, bounded"
+                    + " by 1/8 of effective model input capacity and current free context. Assess the whole"
+                    + " delivered unit with submitReviewWorkItem(workItemId,attempt,assessment,findings)."
+                    + " Preserve existing durable task IDs; use listReviewTasks/resumeRepositoryReview when"
+                    + " resuming. Do not create a second legacy job for the same durable task. Submit assessed"
+                    + " units first and read the next unit in the same tool-call response. Read cross-file"
+                    + " dependencies when necessary to corroborate findings. Existing legacy jobs must be"
+                    + " completed through their original ledger. Prefer readNextReviewWorkItem(taskId='legacy:'"
+                    + " + reviewJobId) and submitReviewWorkItem using the returned workItemId/attempt; this"
+                    + " continues pending semantic units without losing saved legacy assessments. The following legacy guidance applies ONLY"
+                    + " to explicit-target reviews or existing legacy jobs.";
             if (!context.isResumedContext())
               feedback +=
                   " For authorized review work, use beginReview for the explicit targets and criteria."
@@ -190,7 +211,7 @@ public class StagnationChatModel implements ChatModel {
                       + " delivered pages first, then request their known nextOffset pages in the same response."
                       + " Assess only text already delivered. This confirms outcomes before acquiring new source. Follow the original scope"
                       + " through all remaining targets.";
-            if (assembler != null) feedback += assembler.reviewContinuation(context.runContext());
+            if (assemblePrompt != null) feedback += reviewContinuation.apply(context.runContext());
           }
           if (actionPrompt != prompt && !context.needsResumeContentWork())
             feedback +=
@@ -221,7 +242,7 @@ public class StagnationChatModel implements ChatModel {
           var invoked = new java.util.concurrent.atomic.AtomicBoolean();
           var reported = new java.util.concurrent.atomic.AtomicBoolean();
           Flux<ChatResponse> requests =
-              assembler == null || context.runContext() == null
+              assemblePrompt == null || context.runContext() == null
                   ? Flux.defer(
                       () -> {
                         context.checkModelTokenBudget();
@@ -234,11 +255,12 @@ public class StagnationChatModel implements ChatModel {
                                 dev.mikoto2000.rei.core.chat.AgentRunScope.open(
                                     context.runContext())) {
                               try {
-                                return assembler.assemble(
+                                return assemblePrompt.apply(
                                     invocationPrompt,
-                                    context.runContext().conversationId(),
-                                    context.runContext().runId(),
-                                    context::checkActive);
+                                    new Assembly(
+                                        context.runContext().conversationId(),
+                                        context.runContext().runId(),
+                                        context::checkActive));
                               } catch (java.util.concurrent.CancellationException cancelled) {
                                 // Disposal may interrupt the summary worker after the downstream
                                 // subscriber has gone away.
@@ -273,8 +295,8 @@ public class StagnationChatModel implements ChatModel {
                           return finishOrContinueReview(prompt, null, context, progressAtLimit);
                         }
                         context.checkActive();
-                        if (assembler != null && sent.get() != null)
-                          assembler.confirmedDelivery(sent.get(), context.runContext());
+                        if (assemblePrompt != null && sent.get() != null)
+                          confirmDelivery.accept(sent.get(), context.runContext());
                         var usage = result.getMetadata().getUsage();
                         if (usage != null
                             && usage.getPromptTokens() != null
@@ -309,11 +331,9 @@ public class StagnationChatModel implements ChatModel {
                                       var history =
                                           withoutResumeWorkReminder(
                                               toolResult.conversationHistory());
-                                      if (assembler != null && context.runContext() != null)
-                                        assembler.preserveToolResults(
-                                            history,
-                                            context.runContext().conversationId(),
-                                            context.runContext().runId());
+                                      if (assemblePrompt != null && context.runContext() != null)
+                                        preserveDeliveredResults.accept(
+                                            history, context.runContext());
                                       context.preserveToolResults(history);
                                       context.suspendIfWaiting(history);
                                       return toolResult;
@@ -385,9 +405,9 @@ public class StagnationChatModel implements ChatModel {
                                 (sent.get() == null ? invocationPrompt : sent.get())
                                     .getInstructions(),
                                 generation.getOutput().getText(),
-                                assembler == null
+                                assemblePrompt == null
                                     ? ""
-                                    : assembler.reviewContinuation(context.runContext()),
+                                    : reviewContinuation.apply(context.runContext()),
                                 context.outputLimitHandoff()));
                         return Flux
                             .empty(); // Outer output-limit splitter handles a goal that made no
@@ -434,7 +454,7 @@ public class StagnationChatModel implements ChatModel {
                     + " complete the review. Continue with reviewPending/readReviewFile/submitReviewResult;"
                     + " preserve already verified assessments. Do not restart all files or append another"
                     + " unread-file report in place of assessing a delivered range."
-                    + assembler.reviewContinuation(context.runContext())
+                    + reviewContinuation.apply(context.runContext())
                     + (notice == null ? "" : " " + notice))
             .metadata(java.util.Map.of("rei.resumeWorkReminder", true))
             .build());
@@ -443,9 +463,9 @@ public class StagnationChatModel implements ChatModel {
 
   private Flux<ChatResponse> finishOrContinueReview(
       Prompt prompt, AssistantMessage reply, RunExecutionContext context, long progressAtLimit) {
-    if (assembler != null) {
+    if (assemblePrompt != null) {
       try {
-        assembler.requireReviewed(context.runContext());
+        requireReviewed.accept(context.runContext());
       } catch (ExecutionStoppedException incomplete) {
         if (!context.isResumedContext()
             || incomplete.reason() != ExecutionStoppedException.Reason.REVIEW_PARTIAL
@@ -544,8 +564,7 @@ public class StagnationChatModel implements ChatModel {
     List<ToolCallback> callbacks = new ArrayList<>();
     var configuredCallbacks = options.getToolCallbacks();
     if (configuredCallbacks != null)
-      for (ToolCallback callback : configuredCallbacks)
-        callbacks.add(observe(callback, context));
+      for (ToolCallback callback : configuredCallbacks) callbacks.add(observe(callback, context));
     var resumed = context.takeResumeMessages();
     var instructions = new ArrayList<Message>();
     if (resumed.isEmpty()) instructions.addAll(prompt.getInstructions());
@@ -588,7 +607,8 @@ public class StagnationChatModel implements ChatModel {
           @SuppressFBWarnings(
               value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
               matchType = SuppressMatchType.EXACT,
-              justification = "Preserves the original tool failure when it cannot be handled as a review correction.")
+              justification =
+                  "Preserves the original tool failure when it cannot be handled as a review correction.")
           public String call(String input, ToolContext toolContext) {
             try (var scope =
                 dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
@@ -641,7 +661,12 @@ public class StagnationChatModel implements ChatModel {
                     dev.mikoto2000.rei.toolcontract.ToolResultRejectedException.find(error);
                 if (rejected
                         instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read
-                    && java.util.Set.of("readReviewPages", "readRawToolResult", "claimReviewWorkItem", "readNextReviewWorkItem").contains(name))
+                    && java.util.Set.of(
+                            "readReviewPages",
+                            "readRawToolResult",
+                            "claimReviewWorkItem",
+                            "readNextReviewWorkItem")
+                        .contains(name))
                   return context.toolReadCorrection(read.code(), read.getMessage());
                 if (rejected != null
                     && java.util.Set.of(
@@ -667,7 +692,8 @@ public class StagnationChatModel implements ChatModel {
   private RunExecutionContext context(Prompt prompt) {
     if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return null;
     var values = options.getToolContext();
-    if (values != null && values.get(RunExecutionContext.KEY) instanceof RunExecutionContext context)
+    if (values != null
+        && values.get(RunExecutionContext.KEY) instanceof RunExecutionContext context)
       return context;
     return null;
   }
