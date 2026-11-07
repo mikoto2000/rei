@@ -2237,12 +2237,13 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void editInvalidatesRelatedRelations() throws Exception {
     Path text = tempDir.resolve("note.txt");
     Files.writeString(text, "hello\nworld\n");
-    Tools tools = new Tools();
-    tools.relatedFileGraph().addRelation(text.toString(), "src/Other.java", "REFERENCES", "SEARCH");
+    var graph = new RelatedFileGraph();
+    Tools tools = toolsWithSearchState(new SearchResultCache(), graph);
+    graph.addRelation(text.toString(), "src/Other.java", "REFERENCES", "SEARCH");
 
     tools.applyTextDiff(text.toString(), "world", "rei", "");
 
-    assertTrue(tools.relatedFileGraph().getRelated(text.toString()).isEmpty());
+    assertTrue(graph.getRelated(text.toString()).isEmpty());
   }
 
   /** 取り除く関連関連一覧を削除することを確認する。 */
@@ -2250,12 +2251,13 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void deleteRemovesRelatedRelations() throws Exception {
     Path text = tempDir.resolve("note.txt");
     Files.writeString(text, "hello\n");
-    Tools tools = new Tools();
-    tools.relatedFileGraph().addRelation(text.toString(), "src/Other.java", "REFERENCES", "SEARCH");
+    var graph = new RelatedFileGraph();
+    Tools tools = toolsWithSearchState(new SearchResultCache(), graph);
+    graph.addRelation(text.toString(), "src/Other.java", "REFERENCES", "SEARCH");
 
     tools.deleteFile(text.toString());
 
-    assertTrue(tools.relatedFileGraph().getRelated(text.toString()).isEmpty());
+    assertTrue(graph.getRelated(text.toString()).isEmpty());
   }
 
   /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
@@ -2263,12 +2265,13 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void failedEditDoesNotInvalidateRelatedRelations() throws Exception {
     Path text = tempDir.resolve("note.txt");
     Files.writeString(text, "hello\nworld\n");
-    Tools tools = new Tools();
-    tools.relatedFileGraph().addRelation(text.toString(), "src/Other.java", "REFERENCES", "SEARCH");
+    var graph = new RelatedFileGraph();
+    Tools tools = toolsWithSearchState(new SearchResultCache(), graph);
+    graph.addRelation(text.toString(), "src/Other.java", "REFERENCES", "SEARCH");
 
     tools.applyTextDiff(text.toString(), "missing", "rei", "");
 
-    assertEquals(1, tools.relatedFileGraph().getRelated(text.toString()).size());
+    assertEquals(1, graph.getRelated(text.toString()).size());
   }
 
   /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
@@ -2283,7 +2286,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("add", "src");
     runGit("commit", "-m", "initial");
 
-    Tools tools = new Tools();
+    var graph = new RelatedFileGraph();
+    Tools tools = toolsWithSearchState(new SearchResultCache(), graph);
     tools.grepMultiQuery(
         List.of(
             new Tools.GrepQuery(
@@ -2291,7 +2295,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
         tempDir);
 
     assertTrue(
-        tools.relatedFileGraph().getRelated("src/UserController.java").stream()
+        graph.getRelated("src/UserController.java").stream()
             .anyMatch(r -> r.targetPath().equals("UserService")));
   }
 
@@ -2304,21 +2308,34 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("add", "docs");
     runGit("commit", "-m", "initial");
 
-    Tools tools = new Tools();
+    var cache = new SearchResultCache();
+    Tools tools = toolsWithSearchState(cache, new RelatedFileGraph());
     Tools.GrepQuery query =
         new Tools.GrepQuery(
             "spring", "docs", null, null, null, null, null, null, null, null, null, null);
     tools.grepMultiQuery(List.of(query), tempDir);
-    tools
-        .searchResultCache()
-        .put(
-            new dev.mikoto2000.rei.core.searchcache.SearchCacheKey("legacy", "entry"),
-            List.of("spring"));
-    assertTrue(tools.searchResultCache().size() >= 1);
+    cache.put(
+        new dev.mikoto2000.rei.core.searchcache.SearchCacheKey("legacy", "entry"),
+        List.of("spring"));
+    assertTrue(cache.size() >= 1);
 
     tools.writeTextFile(tempDir.resolve("docs/a.txt").toString(), "spring\nchanged\n", false, "");
 
-    assertTrue(tools.searchResultCache().isEmpty());
+    assertTrue(cache.isEmpty());
+  }
+
+  private Tools toolsWithSearchState(SearchResultCache cache, RelatedFileGraph graph) {
+    var shell = new SystemShellService();
+    return new Tools(
+        null,
+        shell,
+        new BackgroundProcessManager(shell),
+        Clock.systemDefaultZone(),
+        new WorkingSet(),
+        new dev.mikoto2000.rei.core.recentchanges.RecentChanges(),
+        new FileSummaryCache(),
+        cache,
+        graph);
   }
 
   /** 検証用に、指定された内容を保存先へ反映するため、PDFを書き込む。 */

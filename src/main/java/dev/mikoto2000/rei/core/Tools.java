@@ -1,11 +1,13 @@
 package dev.mikoto2000.rei.core;
 
+import dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties;
 import dev.mikoto2000.rei.core.filesummary.FileSummaryCache;
 import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.process.BackgroundProcessStatus;
 import dev.mikoto2000.rei.core.process.RunCommandRequest;
 import dev.mikoto2000.rei.core.process.RunCommandResult;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.recentchanges.RecentChanges;
 import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraph;
@@ -18,8 +20,6 @@ import dev.mikoto2000.rei.tooldelivery.ReadingDelivery;
 import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
 import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
 import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -29,6 +29,7 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -48,6 +49,11 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
@@ -132,12 +138,9 @@ public class Tools {
       dev.mikoto2000.rei.core.contextbudget.TokenEstimator.tokenizerAware();
 
   /** 配信設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured delivery limits for each paged tool result.")
-  private dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties deliveryProperties =
-      new dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties();
+  private static final FileDeliveryLimits DEFAULT_FILE_DELIVERY_LIMITS =
+      readDeliveryLimits(new ToolResultDeliveryProperties());
+  private Supplier<FileDeliveryLimits> fileDeliveryLimits = () -> DEFAULT_FILE_DELIVERY_LIMITS;
 
   private java.util.function.ToIntFunction<org.springframework.ai.chat.prompt.Prompt>
       readInputLimit;
@@ -155,7 +158,7 @@ public class Tools {
       dev.mikoto2000.rei.core.contextbudget.TokenEstimator estimator,
       dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties properties) {
     deliveryEstimator = estimator;
-    deliveryProperties = properties;
+    fileDeliveryLimits = () -> readDeliveryLimits(properties);
   }
 
   /** 文書表示への変換。 */
@@ -447,7 +450,7 @@ public class Tools {
           "保存複数file案の正確なid/proposalSha256と全baseline一致を確認し、一回だけlogical transactionでApplyします。全fileの再検証後だけAPPLIED。通常失敗はrollback、外部編集/結果不明はUNKNOWNを保持し自動再送しません。EXCLUSIVE/LOCAL_WRITE/DESTRUCTIVEが必要です。簡潔な結果のcurrentMatches、新SHA、changesの変更範囲は保存bytesの確認です。直後の全文再読は不要ですが構文/意味/testの検証は別途必要です。失敗時はerror.codeとstagingを確認してください。")
   TextDocumentChangeSetService.View applyTextDocumentChangeSet(String id, String proposalSha256)
       throws IOException {
-    try (var workingSetBatch = workingSet.batchPersistence()) {
+    try (var workingSetBatch = batchWorkingSetChanges.get()) {
       return changeSets()
           .applyDocuments(
               diagnosedOwner(),
@@ -457,18 +460,16 @@ public class Tools {
                 for (var change : changes) {
                   var path = diagnosedOwner().projectRoot().resolve(change.path());
                   if (change.after() == null) {
-                    workingSet.remove(path);
+                    forgetFile.accept(path);
                     recentChanges.record(path.toString(), RecentChanges.OP_DELETE, "deleted");
                     fileSummaryCache.invalidate(path.toString());
-                    relatedFileGraph.removeRelationsFor(path.toString());
-                    searchResultCache.clear();
+                    invalidateSearchEvidence.accept(path.toString());
                     publishFileDeleted(path);
                   } else if (change.before() == null) {
-                    workingSet.recordEdit(path);
+                    observeEdit.accept(path);
                     recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
                     fileSummaryCache.invalidate(path.toString());
-                    relatedFileGraph.removeRelationsFor(path.toString());
-                    searchResultCache.clear();
+                    invalidateSearchEvidence.accept(path.toString());
                     publishFileCreated(path);
                   } else recordTextEdit(path);
                 }
@@ -524,7 +525,7 @@ public class Tools {
   TextChangeSetService.Baseline readTextChangeSetBase(String path) throws IOException {
     var project = changeSetProject();
     var baseline = changeSets().readBase(project, path);
-    workingSet.recordRead(project.root().resolve(baseline.path()));
+    observeRead.accept(project.root().resolve(baseline.path()));
     return baseline;
   }
 
@@ -594,7 +595,7 @@ public class Tools {
     if (owner != null)
       return new dev.mikoto2000.rei.core.project.ProjectContext(
           owner.projectId(), "", owner.projectRoot());
-    var project = projectService == null ? null : projectService.currentContext();
+    var project = currentProjectContext.get();
     if (project == null) throw new IllegalArgumentException("Select a Project before editing");
     return project;
   }
@@ -722,12 +723,8 @@ public class Tools {
   private static final Charset CP932 = Charset.forName("windows-31j");
 
   /** プロジェクトサービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projectService;
+  private final Supplier<ProjectContext> currentProjectContext;
+  private final Supplier<Path> projectDirectory;
 
   /** システムシェルサービス。 */
   private final SystemShellService systemShellService;
@@ -739,11 +736,20 @@ public class Tools {
   private final Clock clock;
 
   /** 作業中集合。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Updates the same run working set used by the rest of the tool pipeline.")
-  private final WorkingSet workingSet;
+  private final Supplier<java.io.Closeable> batchWorkingSetChanges;
+  private final Consumer<Path> observeRead;
+  private final Consumer<Path> observeWrite;
+  private final Consumer<Path> observeEdit;
+  private final Consumer<Path> observeCreate;
+  private final Consumer<Path> forgetFile;
+  private final Predicate<Path> inWorkingSet;
+  private final Function<String, Runnable> observeSearch;
+  private final CompleteSearch completeSearch;
+
+  @FunctionalInterface
+  private interface CompleteSearch {
+    void complete(int hits, int candidates, int selected, int alreadyPresent);
+  }
 
   /** 直近変更一覧。 */
   private final RecentChanges recentChanges;
@@ -752,18 +758,10 @@ public class Tools {
   private final FileSummaryCache fileSummaryCache;
 
   /** 検索結果キャッシュ。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Clears the current run's shared search result cache when its state changes.")
-  private final SearchResultCache searchResultCache;
+  private final Consumer<String> invalidateSearchEvidence;
 
   /** 関連ファイル関連図。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Updates the same graph that supplies related-file context for a run.")
-  private final RelatedFileGraph relatedFileGraph;
+  private final BiConsumer<String, String> noteSearchReference;
 
   /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
@@ -945,15 +943,36 @@ public class Tools {
       RelatedFileGraph relatedFileGraph,
       AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher) {
-    this.projectService = projectService;
+    this.currentProjectContext =
+        () -> projectService == null ? null : projectService.currentContext();
+    this.projectDirectory =
+        () -> projectService == null
+            ? Paths.get(".").toAbsolutePath().normalize()
+            : projectService.currentProject();
     this.systemShellService = systemShellService;
     this.backgroundProcessManager = backgroundProcessManager;
     this.clock = clock;
-    this.workingSet = workingSet;
+    this.batchWorkingSetChanges = () -> workingSet.batchPersistence();
+    this.observeRead = path -> workingSet.recordRead(path);
+    this.observeWrite = path -> workingSet.recordWrite(path);
+    this.observeEdit = path -> workingSet.recordEdit(path);
+    this.observeCreate = path -> workingSet.recordCreate(path);
+    this.forgetFile = path -> workingSet.remove(path);
+    this.inWorkingSet = path -> workingSet.contains(path);
+    this.observeSearch = query -> workingSet.beginSearch(query, "searchAndRead");
+    this.completeSearch =
+        (hits, candidates, selected, present) ->
+            workingSet.completeSearch(hits, candidates, selected, present);
     this.recentChanges = recentChanges;
     this.fileSummaryCache = fileSummaryCache;
-    this.searchResultCache = searchResultCache;
-    this.relatedFileGraph = relatedFileGraph;
+    this.invalidateSearchEvidence =
+        path -> {
+          relatedFileGraph.removeRelationsFor(path);
+          searchResultCache.clear();
+        };
+    this.noteSearchReference =
+        (source, target) -> relatedFileGraph.addRelation(
+            source, target, RelatedFileGraph.TYPE_REFERENCES, RelatedFileGraph.EVIDENCE_SEARCH);
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
   }
@@ -1773,11 +1792,7 @@ public class Tools {
           continue;
         }
         // ヒットファイルが検索対象の名前を含む場合、参照関係とみなす
-        relatedFileGraph.addRelation(
-            sourcePath,
-            pattern,
-            RelatedFileGraph.TYPE_REFERENCES,
-            RelatedFileGraph.EVIDENCE_SEARCH);
+        noteSearchReference.accept(sourcePath, pattern);
       }
     }
   }
@@ -2158,7 +2173,7 @@ public class Tools {
         throw new IllegalArgumentException(
             "Search budget: bytes 256..65536, estimated tokens 256..32000, lines 1..5000");
       if (dev.mikoto2000.rei.core.chat.AgentRunScope.current() != null)
-        tokenLimit = Math.min(tokenLimit, deliveryProperties.getPageTargetTokens());
+        tokenLimit = Math.min(tokenLimit, fileDeliveryLimits.get().targetTokens());
       List<String> preferred = new ArrayList<>();
       if (request.preferredPaths() != null) {
         if (request.preferredPaths().size() > 20)
@@ -2186,8 +2201,7 @@ public class Tools {
 
       String observableQuery =
           request.queries().stream().map(GrepQuery::pattern).collect(Collectors.joining(" | "));
-      WorkingSet.SearchObservation searchObservation =
-          workingSet.beginSearch(observableQuery, "searchAndRead");
+      Runnable closeSearchObservation = observeSearch.apply(observableQuery);
 
       // 1. 検索を実行する（grepMultiQuery と同じ共通ロジックを再利用）
       try {
@@ -2230,7 +2244,7 @@ public class Tools {
                 workingDirectory,
                 snapshots,
                 repositoryMaps,
-                workingSet);
+                inWorkingSet);
         Map<String, SearchRanking.Ranked> ranking = new LinkedHashMap<>();
         fileMatches.clear();
         for (var item : ranked) {
@@ -2244,7 +2258,7 @@ public class Tools {
         var alreadyPresentPaths =
             fileMatches.keySet().stream()
                 .limit(selectedCount)
-                .filter(path -> workingSet.contains(resolveProjectPath(path, workingDirectory)))
+                .filter(path -> inWorkingSet.test(resolveProjectPath(path, workingDirectory)))
                 .collect(Collectors.toSet());
 
         // 3. ファイルを選び、ヒット行の前後を読み込む
@@ -2325,15 +2339,14 @@ public class Tools {
                 .filter(item -> item.error() == null)
                 .mapToInt(item -> alreadyPresentPaths.contains(item.path()) ? 1 : 0)
                 .sum();
-        workingSet.completeSearch(
-            searchObservation, hitCount, fileMatches.size(), selectedCount, alreadyPresentCount);
+        completeSearch.complete(
+            hitCount, fileMatches.size(), selectedCount, alreadyPresentCount);
         return boundedFileResult(
             Boolean.TRUE.equals(request.compactOutput())
                 ? fileResults.stream().map(SearchAndReadResult::withCompact).toList()
                 : fileResults);
-      } catch (IOException | InterruptedException | RuntimeException e) {
-        workingSet.abandonSearch(searchObservation);
-        throw e;
+      } finally {
+        closeSearchObservation.run();
       }
     }
   }
@@ -2378,7 +2391,7 @@ public class Tools {
     java.nio.file.Path filePath = resolveProjectPath(relativePath, workingDirectory);
     var snapshot = snapshots.get(workingDirectory, filePath);
     List<String> lines = snapshots.lines(snapshot, charset, () -> snapshotLines(snapshot, charset));
-    workingSet.recordRead(filePath);
+    observeRead.accept(filePath);
 
     // ヒット行から前後コンテキストを計算し、overlapping / adjacent をマージする
     List<int[]> ranges = new ArrayList<>();
@@ -2935,7 +2948,7 @@ public class Tools {
   List<ReadFileResult> readMultiFile(
       List<ReadFileRequest> files, java.nio.file.Path workingDirectory) throws IOException {
     try (var measurement = ReadingMetrics.operation("read", readingStateStore);
-        var workingSetBatch = workingSet.batchPersistence()) {
+        var workingSetBatch = batchWorkingSetChanges.get()) {
       if (files == null || files.isEmpty()) {
         throw new IllegalArgumentException("files must not be empty");
       }
@@ -2959,10 +2972,11 @@ public class Tools {
                                   && request.startLine() == null
                                   && request.endLine() == null
                                   && request.offset() == null));
+      var limits = fileDeliveryLimits.get();
       int bulkTokens =
           whole && readInputLimit != null
               ? dev.mikoto2000.rei.tooldelivery.FileReadContext.bulkBudget(
-                  deliveryProperties.getBulkMaxTokens(),
+                  limits.bulkTokens(),
                   readInputLimit,
                   prompt ->
                       prompt.getInstructions().stream().mapToLong(deliveryEstimator::message).sum(),
@@ -2971,13 +2985,13 @@ public class Tools {
       if (whole
           && readInputLimit != null
           && dev.mikoto2000.rei.tooldelivery.FileReadContext.active()
-          && bulkTokens < deliveryProperties.getPageMinTokens())
+          && bulkTokens < limits.minTokens())
         throw new IOException(
             "CONTEXT_BUDGET_INSUFFICIENT: no room for a file page; reduce the active prompt");
-      boolean bulk = bulkTokens > deliveryProperties.getPageMaxTokens();
-      int resultTokens = bulkTokens > 0 ? bulkTokens : deliveryProperties.getPageMaxTokens();
+      boolean bulk = bulkTokens > limits.maxTokens();
+      int resultTokens = bulkTokens > 0 ? bulkTokens : limits.maxTokens();
       if (!whole && files.stream().anyMatch(request -> request.purpose() == ReadPurpose.OVERVIEW))
-        resultTokens = Math.min(resultTokens, deliveryProperties.getPageTargetTokens());
+        resultTokens = Math.min(resultTokens, limits.targetTokens());
       int totalLineLimit = bulk ? 100_000 : MAX_READ_TOTAL_LINES;
       dev.mikoto2000.rei.tooldelivery.FileReadContext.selected(
           bulk ? "BULK" : "PAGED", resultTokens);
@@ -3013,7 +3027,7 @@ public class Tools {
                           lineBudget,
                           (dev.mikoto2000.rei.core.chat.AgentRunScope.current() == null
                                       ? 8000
-                                      : deliveryProperties.getPageTargetTokens())
+                                      : limits.targetTokens())
                                   / files.size()
                               - 16)
                       : readSingleFile(
@@ -3024,7 +3038,7 @@ public class Tools {
                           lineBudget,
                           bulk ? 100_000 : MAX_READ_LINES_PER_FILE);
           if (request.symbol() != null && result.error() == null)
-            workingSet.recordRead(workingDirectory.resolve(result.path()));
+            observeRead.accept(workingDirectory.resolve(result.path()));
           if (readingDelivery != null) result = applyReadingDelivery(request, result);
           int remaining = totalLineLimit - totalLines;
           if (result.content().size() > remaining) {
@@ -3126,7 +3140,7 @@ public class Tools {
     if (request.expectedVersion() != null && !request.expectedVersion().equals(snapshot.version()))
       throw new IOException("STALE_VERSION: File version mismatch; search/read again");
     List<String> lines = verifiedReadLines(workingDirectory, request, snapshots, snapshot);
-    workingSet.recordRead(path);
+    observeRead.accept(path);
     int fromIndex = startLine == null ? 0 : startLine - 1;
     if (fromIndex >= lines.size()) {
       return new ReadFileResult(
@@ -3721,7 +3735,7 @@ public class Tools {
       validated.add(request);
     }
     List<WriteFileResult> results = new ArrayList<>();
-    try (var workingSetBatch = workingSet.batchPersistence()) {
+    try (var workingSetBatch = batchWorkingSetChanges.get()) {
       for (WriteFileRequest request : validated) {
         try {
           writeSingleFile(request, workingDirectory);
@@ -3766,12 +3780,12 @@ public class Tools {
     boolean existed = Files.exists(path);
     Files.writeString(path, request.content(), resolvedCharset, options);
     if (Boolean.TRUE.equals(request.append())) {
-      workingSet.recordEdit(path);
+      observeEdit.accept(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
       fileSummaryCache.invalidate(path.toString());
       publishFileModified(path, null, null);
     } else {
-      workingSet.recordWrite(path);
+      observeWrite.accept(path);
       recentChanges.record(
           path.toString(),
           existed ? RecentChanges.OP_EDIT : RecentChanges.OP_CREATE,
@@ -3779,8 +3793,7 @@ public class Tools {
       fileSummaryCache.invalidate(path.toString());
       publishFileCreatedOrModified(path, existed);
     }
-    relatedFileGraph.removeRelationsFor(path.toString());
-    searchResultCache.clear();
+    invalidateSearchEvidence.accept(path.toString());
   }
 
   /**
@@ -3894,7 +3907,7 @@ public class Tools {
     IO.println(String.format("%s のテキストファイルを読むよ", pathStr));
     java.nio.file.Path path = resolveProjectPath(pathStr);
     List<String> lines = readTextFileLines(path, pathStr, "");
-    workingSet.recordRead(path);
+    observeRead.accept(path);
     return lines;
   }
 
@@ -3910,7 +3923,7 @@ public class Tools {
     IO.println(String.format("%s の %d 行目から %d 行目を読むよ", pathStr, startLine, endLine));
     java.nio.file.Path path = resolveProjectPath(pathStr);
     List<String> lines = readTextFileLines(path, pathStr, "");
-    workingSet.recordRead(path);
+    observeRead.accept(path);
     int fromIndex = startLine - 1;
     if (fromIndex >= lines.size()) {
       return List.of();
@@ -3957,11 +3970,12 @@ public class Tools {
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String expectedVersion,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer tokenBudget)
       throws IOException {
+    var limits = fileDeliveryLimits.get();
     int number = page == null ? 1 : page,
         start = offset == null ? 0 : offset,
-        budget = tokenBudget == null ? deliveryProperties.getPageTargetTokens() : tokenBudget;
-    if (budget < deliveryProperties.getPageMinTokens()
-        || budget > deliveryProperties.getPageMaxTokens())
+        budget = tokenBudget == null ? limits.targetTokens() : tokenBudget;
+    if (budget < limits.minTokens()
+        || budget > limits.maxTokens())
       throw new IOException("CONTEXT_BUDGET_INSUFFICIENT");
     var root = currentWorkingDirectory();
     var snapshot = newSnapshots().get(root, resolveProjectPath(pathStr, root));
@@ -4013,7 +4027,7 @@ public class Tools {
       if (deliveryEstimator.text(FILE_RESULT_JSON.writeValueAsString(result)) > budget
           || low == 0 && start < text.length())
         throw new IOException("CONTEXT_BUDGET_INSUFFICIENT");
-      workingSet.recordRead(snapshot.path());
+      observeRead.accept(snapshot.path());
       return result;
     }
   }
@@ -4044,7 +4058,7 @@ public class Tools {
             .map(Document::getText)
             .filter(text -> text != null && !text.isBlank())
             .collect(Collectors.joining(System.lineSeparator()));
-    workingSet.recordRead(path);
+    observeRead.accept(path);
     return extracted;
   }
 
@@ -4076,12 +4090,12 @@ public class Tools {
     boolean existed = Files.exists(path);
     Files.writeString(path, contents, resolvedCharset, options);
     if (append) {
-      workingSet.recordEdit(path);
+      observeEdit.accept(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
       fileSummaryCache.invalidate(path.toString());
       publishFileModified(path, null, null);
     } else {
-      workingSet.recordWrite(path);
+      observeWrite.accept(path);
       recentChanges.record(
           path.toString(),
           existed ? RecentChanges.OP_EDIT : RecentChanges.OP_CREATE,
@@ -4089,8 +4103,7 @@ public class Tools {
       fileSummaryCache.invalidate(path.toString());
       publishFileCreatedOrModified(path, existed);
     }
-    relatedFileGraph.removeRelationsFor(path.toString());
-    searchResultCache.clear();
+    invalidateSearchEvidence.accept(path.toString());
   }
 
   /** 指定された変更を有効にするため、テキスト差分を反映する。 */
@@ -4168,12 +4181,11 @@ public class Tools {
 
   /** 後から経緯や使用量を確認できるよう、テキスト編集を記録する。 */
   private void recordTextEdit(java.nio.file.Path path) {
-    workingSet.recordEdit(path);
+    observeEdit.accept(path);
     recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
     fileSummaryCache.invalidate(path.toString());
     publishFileModified(path, null, null);
-    relatedFileGraph.removeRelationsFor(path.toString());
-    searchResultCache.clear();
+    invalidateSearchEvidence.accept(path.toString());
   }
 
   /**
@@ -4200,7 +4212,7 @@ public class Tools {
     IO.println(String.format("%s のバイナリファイルを読むよ", pathStr));
     java.nio.file.Path path = resolveProjectPath(pathStr);
     byte[] bytes = Files.readAllBytes(path);
-    workingSet.recordRead(path);
+    observeRead.accept(path);
     return bytes;
   }
 
@@ -4231,12 +4243,12 @@ public class Tools {
     boolean existed = Files.exists(path);
     Files.write(path, contents, options);
     if (append) {
-      workingSet.recordEdit(path);
+      observeEdit.accept(path);
       recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
       fileSummaryCache.invalidate(path.toString());
       publishFileModified(path, null, null);
     } else {
-      workingSet.recordWrite(path);
+      observeWrite.accept(path);
       recentChanges.record(
           path.toString(),
           existed ? RecentChanges.OP_EDIT : RecentChanges.OP_CREATE,
@@ -4244,8 +4256,7 @@ public class Tools {
       fileSummaryCache.invalidate(path.toString());
       publishFileCreatedOrModified(path, existed);
     }
-    relatedFileGraph.removeRelationsFor(path.toString());
-    searchResultCache.clear();
+    invalidateSearchEvidence.accept(path.toString());
   }
 
   /** 対象を管理から外すため、ファイルを削除する。 */
@@ -4254,11 +4265,10 @@ public class Tools {
     IO.println(String.format("%s を削除するよ", pathStr));
     java.nio.file.Path path = resolveProjectPath(pathStr);
     Files.delete(path);
-    workingSet.remove(path);
+    forgetFile.accept(path);
     recentChanges.record(path.toString(), RecentChanges.OP_DELETE, "deleted");
     fileSummaryCache.invalidate(path.toString());
-    relatedFileGraph.removeRelationsFor(path.toString());
-    searchResultCache.clear();
+    invalidateSearchEvidence.accept(path.toString());
     publishFileDeleted(path);
   }
 
@@ -4278,14 +4288,13 @@ public class Tools {
         resolvedSourcePath,
         resolvedDestPath,
         overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.COPY_ATTRIBUTES);
-    workingSet.recordCreate(resolvedDestPath);
+    observeCreate.accept(resolvedDestPath);
     recentChanges.record(
         resolvedDestPath.toString(),
         exists ? RecentChanges.OP_EDIT : RecentChanges.OP_CREATE,
         exists ? "edited" : "created");
     fileSummaryCache.invalidate(resolvedDestPath.toString());
-    relatedFileGraph.removeRelationsFor(resolvedDestPath.toString());
-    searchResultCache.clear();
+    invalidateSearchEvidence.accept(resolvedDestPath.toString());
     publishFileCreatedOrModified(resolvedDestPath, exists);
   }
 
@@ -4305,21 +4314,15 @@ public class Tools {
         resolvedSourcePath,
         resolvedDestPath,
         overwrite ? StandardCopyOption.REPLACE_EXISTING : StandardCopyOption.ATOMIC_MOVE);
-    workingSet.recordCreate(resolvedDestPath);
+    observeCreate.accept(resolvedDestPath);
     recentChanges.record(
         resolvedDestPath.toString(),
         exists ? RecentChanges.OP_EDIT : RecentChanges.OP_CREATE,
         exists ? "edited" : "created");
     fileSummaryCache.invalidate(resolvedDestPath.toString());
-    relatedFileGraph.removeRelationsFor(resolvedDestPath.toString());
-    searchResultCache.clear();
+    invalidateSearchEvidence.accept(resolvedDestPath.toString());
     publishFileDeleted(resolvedSourcePath);
     publishFileCreatedOrModified(resolvedDestPath, exists);
-  }
-
-  /** 共通の実行基盤で用いる作業中集合を返す。 */
-  WorkingSet workingSet() {
-    return workingSet;
   }
 
   /** 共通の実行基盤で用いる直近変更一覧を返す。 */
@@ -4332,24 +4335,11 @@ public class Tools {
     return fileSummaryCache;
   }
 
-  /** 依頼に関連する情報を得るため、結果キャッシュを検索する。 */
-  SearchResultCache searchResultCache() {
-    return searchResultCache;
-  }
-
-  /** 共通の実行基盤で用いる関連ファイル関連図を返す。 */
-  RelatedFileGraph relatedFileGraph() {
-    return relatedFileGraph;
-  }
-
   /** 共通の実行基盤で用いる現在作業ディレクトリを返す。 */
   private java.nio.file.Path currentWorkingDirectory() {
     var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     if (run != null) return run.projectRoot();
-    if (projectService == null) {
-      return Paths.get(".").toAbsolutePath().normalize();
-    }
-    return projectService.currentProject();
+    return projectDirectory.get();
   }
 
   /** 指定や設定に応じた対象を利用するため、プロジェクトパスを確定する。 */
@@ -4509,4 +4499,14 @@ public class Tools {
    * @param charset 文字コード
    */
   private record ResolvedTextFile(String content, Charset charset) {}
+
+  private record FileDeliveryLimits(int minTokens, int targetTokens, int maxTokens, int bulkTokens) {}
+
+  private static FileDeliveryLimits readDeliveryLimits(ToolResultDeliveryProperties properties) {
+    return new FileDeliveryLimits(
+        properties.getPageMinTokens(),
+        properties.getPageTargetTokens(),
+        properties.getPageMaxTokens(),
+        properties.getBulkMaxTokens());
+  }
 }
