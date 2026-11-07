@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.voice;
 
 import dev.mikoto2000.rei.application.input.ConversationTarget;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.UUID;
 import java.util.function.IntSupplier;
 import org.springframework.stereotype.Component;
@@ -33,12 +31,7 @@ public class VoiceCommand {
   private final AudioDeviceService devices;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Reads and updates the shared voice settings when handling user configuration commands.")
-  private final VoiceProperties properties;
+  private final VoiceSettingsAccess properties;
 
   /** シェル。 */
   private final java.util.function.Supplier<dev.mikoto2000.rei.core.project.ProjectClient>
@@ -53,19 +46,44 @@ public class VoiceCommand {
   private final java.util.function.BiPredicate<ConversationTarget, java.util.UUID> cancelPending;
 
   /** モデル一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads readiness and download activity from the live voice model manager.")
-  private final VoiceModelManager models;
+  private final ModelActions models;
 
   /** 配信。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared voice delivery state for binding, cancellation, and confirmations.")
-  private final VoiceDeliveryService delivery;
+  private final DeliveryActions delivery;
+
+  private record VoiceSettingsAccess(
+      java.util.function.BooleanSupplier isAutoStart,
+      java.util.function.Supplier<String> getDeviceId,
+      java.util.function.Consumer<String> setDeviceId,
+      java.util.function.Supplier<VoiceSettings> settings,
+      java.util.function.Consumer<VoiceSettings> setSettings,
+      java.util.function.Supplier<VoiceInferenceOptions> inference,
+      java.util.function.Consumer<VoiceInferenceOptions> setInference,
+      java.util.function.Supplier<VoiceAdvancedOptions> advanced,
+      java.util.function.Consumer<VoiceAdvancedOptions> setAdvanced,
+      java.util.function.BooleanSupplier isConfirmation,
+      java.util.function.Consumer<Boolean> setConfirmation) {}
+
+  @FunctionalInterface
+  private interface CheckModelDirectory {
+    java.nio.file.Path readyDirectory() throws java.io.IOException;
+  }
+
+  private record ModelActions(
+      java.util.function.Supplier<VoiceModelManifest> manifest,
+      java.util.function.Supplier<VoiceModelManager.Status> status,
+      java.util.function.BooleanSupplier busy,
+      CheckModelDirectory directory,
+      java.util.function.Predicate<String> install,
+      java.util.function.BooleanSupplier cancel) {}
+
+  private record DeliveryActions(
+      Runnable bind,
+      java.util.function.Consumer<Boolean> setConfirmation,
+      java.util.function.Supplier<java.util.List<String>> pendingLines,
+      java.util.function.Predicate<java.util.UUID> cancel,
+      java.util.function.BiConsumer<java.util.UUID, String> confirm,
+      Runnable clear) {}
 
   /** 排他制御。 */
   private final WindowsMicrophoneMonitor monitor;
@@ -197,27 +215,59 @@ public class VoiceCommand {
       WindowsMicrophoneMonitor monitor) {
     this.voice = voice;
     this.devices = devices;
-    this.properties = properties;
+    this.properties =
+        properties == null
+            ? null
+            : new VoiceSettingsAccess(
+                () -> properties.isAutoStart(),
+                () -> properties.getDeviceId(),
+                value -> properties.setDeviceId(value),
+                () -> properties.settings(),
+                value -> properties.setSettings(value),
+                () -> properties.inference(),
+                value -> properties.setInference(value),
+                () -> properties.advanced(),
+                value -> properties.setAdvanced(value),
+                () -> properties.isConfirmation(),
+                value -> properties.setConfirmation(value));
     this.captureClient = shell == null ? null : () -> shell.captureClient();
     this.captureTarget = () -> shell.captureTarget();
     this.selectedTarget = (client, destination) -> shell.isSelected(client, destination);
     this.pendingInputs = destination -> VoiceDeliveryService.pendingInputLines(shell, destination);
     this.cancelPending = (destination, id) -> shell.cancelPending(destination, id);
-    this.models = models;
-    this.delivery = delivery;
+    this.models =
+        models == null
+            ? null
+            : new ModelActions(
+                () -> models.manifest(),
+                () -> models.status(),
+                () -> models.busy(),
+                () -> models.readyDirectory(),
+                value -> models.install(value),
+                () -> models.cancel());
+    this.delivery =
+        delivery == null
+            ? null
+            : new DeliveryActions(
+                () -> delivery.bind(captureClient.get(), target),
+                value -> delivery.setConfirmation(value),
+                () -> delivery.pendingReviewLines(),
+                value -> delivery.cancel(value),
+                (id, correction) -> delivery.confirm(id, correction),
+                () -> delivery.clear());
     this.monitor = monitor;
   }
 
   /** 後続の照会で対応する対象を見つけられるよう、配信を関連付ける。 */
   private void bindDelivery() {
     if (delivery != null) {
-      delivery.setConfirmation(properties.isConfirmation());
-      delivery.bind(captureClient.get(), target);
+      delivery.setConfirmation().accept(properties.isConfirmation().getAsBoolean());
+      delivery.bind().run();
     }
   }
 
   /** 音声による対話で用いる認識レビュー一覧を返す。 */
-  private VoiceDeliveryService recognitionReviews() {
+  private DeliveryActions recognitionReviews() {
     if (delivery == null)
       throw new IllegalStateException("Recognition review service is unavailable");
     return delivery;
@@ -233,7 +283,7 @@ public class VoiceCommand {
       @Option(names = "--text", paramLabel = "CORRECTION") String correction) {
     return attempt(
         () -> {
-          recognitionReviews().confirm(id, correction);
+          recognitionReviews().confirm().accept(id, correction);
           spec.commandLine().getOut().println("confirmed: " + id);
           return 0;
         });
@@ -303,7 +353,7 @@ public class VoiceCommand {
     synchronized (startGuard) {
       if (autoStartAttempted || shellClosed) return;
       autoStartAttempted = true;
-      if (!interactive || properties == null || !properties.isAutoStart()) return;
+      if (!interactive || properties == null || !properties.isAutoStart().getAsBoolean()) return;
       try {
         if (voice.state() != VoiceInputCoordinator.State.OFF) return;
         var selected = devices.selected();
@@ -322,7 +372,7 @@ public class VoiceCommand {
                         synchronized (startGuard) {
                           if (generation == startGeneration && !shellClosed) {
                             voice.off();
-                            if (delivery != null) delivery.clear();
+                            if (delivery != null) delivery.clear().run();
                             autoStartFailure(output, failure);
                           }
                         }
@@ -370,10 +420,10 @@ public class VoiceCommand {
       bindDelivery();
       startup =
           diagnostic
-              ? voice.startDiagnostic(target, selected, properties.settings())
+              ? voice.startDiagnostic(target, selected, properties.settings().get())
               : automatic
-                  ? voice.start(target, selected, properties.settings())
-                  : voice.startManual(target, selected, properties.settings());
+                  ? voice.start(target, selected, properties.settings().get())
+                  : voice.startManual(target, selected, properties.settings().get());
     }
     var state = startup.await(VoiceRuntimeLimits.COMMAND_STARTUP);
     synchronized (startGuard) {
@@ -414,7 +464,7 @@ public class VoiceCommand {
           synchronized (startGuard) {
             cancelAutoStart();
             voice.off();
-            if (delivery != null) delivery.clear();
+            if (delivery != null) delivery.clear().run();
           }
           spec.commandLine().getOut().println("voice: " + voice.state());
           return 0;
@@ -433,7 +483,7 @@ public class VoiceCommand {
             spec.commandLine()
                 .getOut()
                 .println("target: " + target.project().id() + " / " + target.sessionId());
-          spec.commandLine().getOut().println("selected device: " + properties.getDeviceId());
+          spec.commandLine().getOut().println("selected device: " + properties.getDeviceId().get());
           return 0;
         });
   }
@@ -490,8 +540,8 @@ public class VoiceCommand {
           Integer asrTailFrames) {
     return attempt(
         () -> {
-          var s = properties.settings();
-          var inference = properties.inference();
+          var s = properties.settings().get();
+          var inference = properties.inference().get();
           if (threshold != null
               || preRoll != null
               || minSpeech != null
@@ -514,18 +564,18 @@ public class VoiceCommand {
                 new VoiceInferenceOptions(
                     asrThreads == null ? inference.threads() : asrThreads,
                     asrTailFrames == null ? inference.tailFrames() : asrTailFrames);
-            properties.setSettings(s);
-            properties.setInference(inference);
+            properties.setSettings().accept(s);
+            properties.setInference().accept(inference);
             if (confirmation != null) {
-              properties.setConfirmation(confirmation);
-              if (delivery != null) delivery.setConfirmation(confirmation);
+              properties.setConfirmation().accept(confirmation);
+              if (delivery != null) delivery.setConfirmation().accept(confirmation);
             }
           }
           spec.commandLine().getOut().println(s);
           spec.commandLine().getOut().println(inference);
           spec.commandLine()
               .getOut()
-              .println("recognition confirmation: " + properties.isConfirmation());
+              .println("recognition confirmation: " + properties.isConfirmation().getAsBoolean());
           return 0;
         });
   }
@@ -544,7 +594,7 @@ public class VoiceCommand {
       @Option(names = "--echo-tail-ms") Integer tail) {
     return attempt(
         () -> {
-          var current = properties.advanced();
+          var current = properties.advanced().get();
           if (wake != null
               || word != null
               || interrupt != null
@@ -560,23 +610,23 @@ public class VoiceCommand {
                     tts == null ? current.ttsEnabled() : tts,
                     ttsVoice == null ? current.ttsVoice() : ttsVoice,
                     tail == null ? current.echoTailMs() : tail);
-            properties.setAdvanced(changed);
+            properties.setAdvanced().accept(changed);
           }
-          spec.commandLine().getOut().println(properties.advanced());
+          spec.commandLine().getOut().println(properties.advanced().get());
           spec.commandLine().getOut().println("呼びかけは認識後の受付条件です。本人確認・ツール承認の代わりにはなりません。");
           return 0;
         });
   }
 
   /** 音声による対話で用いるモデル管理を返す。 */
-  private VoiceModelManager modelManager() {
+  private ModelActions modelManager() {
     if (models == null) throw new IllegalStateException("Voice model manager is unavailable");
     return models;
   }
 
   /** 利用者に結果を伝えるため、モデル一覧を出力する。 */
   private void printModels() {
-    var manifest = modelManager().manifest();
+    var manifest = modelManager().manifest().get();
     var out = spec.commandLine().getOut();
     out.println(
         "Whisper large-v3-turbo multilingual FP32 / Silero VAD / sherpa-onnx Windows x64 CPU");
@@ -593,10 +643,10 @@ public class VoiceCommand {
   /** 条件を満たさない操作を拒否するため、モデル一覧準備完了の前提条件を確認する。 */
   private void requireModelsReady(boolean automatic) {
     if (models == null) return; // compatibility for metadata-only and legacy injected tests
-    if (models.busy())
+    if (models.busy().getAsBoolean())
       throw new IllegalStateException("モデル取得中です。/voice models status または cancel を使ってください");
     try {
-      models.readyDirectory();
+      models.directory().readyDirectory();
     } catch (java.io.IOException missing) {
       if (!automatic) printModels();
       throw new IllegalStateException("モデル一式が未配置または破損しています。承認後に取得するか、固定一式を手動配置してください", missing);
@@ -635,13 +685,13 @@ public class VoiceCommand {
       return parent.attempt(
           () -> {
             var manager = parent.modelManager();
-            if (!manager.busy())
+            if (!manager.busy().getAsBoolean())
               try {
                 parent
                     .spec
                     .commandLine()
                     .getOut()
-                    .println("verified ready: " + manager.readyDirectory());
+                    .println("verified ready: " + manager.directory().readyDirectory());
               } catch (java.io.IOException unavailable) {
                 parent
                     .spec
@@ -651,7 +701,7 @@ public class VoiceCommand {
                         "bundle: missing or corrupt 原因: "
                             + dev.mikoto2000.rei.event.FailureMessages.describe(unavailable));
               }
-            parent.spec.commandLine().getOut().println(manager.status());
+            parent.spec.commandLine().getOut().println(manager.status().get());
             return 0;
           });
     }
@@ -665,13 +715,14 @@ public class VoiceCommand {
       return parent.attempt(
           () -> {
             var manager = parent.modelManager();
-            if (manager.busy()) throw new IllegalStateException("モデル取得中です。完了後に検証してください");
+            if (manager.busy().getAsBoolean())
+              throw new IllegalStateException("モデル取得中です。完了後に検証してください");
             try {
               parent
                   .spec
                   .commandLine()
                   .getOut()
-                  .println("verified ready: " + manager.readyDirectory());
+                  .println("verified ready: " + manager.directory().readyDirectory());
               return 0;
             } catch (java.io.IOException invalid) {
               throw new IllegalStateException("モデル一式が未配置または破損しています。models info を確認してください", invalid);
@@ -688,7 +739,7 @@ public class VoiceCommand {
       return parent.attempt(
           () -> {
             parent.manualChange();
-            boolean started = parent.modelManager().install(approval);
+            boolean started = parent.modelManager().install().test(approval);
             parent
                 .spec
                 .commandLine()
@@ -711,7 +762,7 @@ public class VoiceCommand {
                 .commandLine()
                 .getOut()
                 .println(
-                    parent.modelManager().cancel()
+                    parent.modelManager().cancel().getAsBoolean()
                         ? "取消を受け付けました。終了は models status で確認してください"
                         : "取得は実行中ではありません");
             return 0;
@@ -733,7 +784,7 @@ public class VoiceCommand {
           () -> {
             parent.manualChange();
             parent.devices.select(id);
-            parent.properties.setDeviceId(id);
+            parent.properties.setDeviceId().accept(id);
             if (parent.monitor != null) parent.monitor.reselect(id);
             parent
                 .spec
@@ -762,12 +813,8 @@ public class VoiceCommand {
               .getOut()
               .println("correction: " + input.inputId() + " " + correctionDisplay(input.text()));
       if (parent.delivery != null)
-        for (var input : parent.delivery.pending())
-          parent
-              .spec
-              .commandLine()
-              .getOut()
-              .println("review: " + input.inputId() + " " + input.text());
+        for (var line : parent.delivery.pendingLines().get())
+          parent.spec.commandLine().getOut().println(line);
       if (parent.target == null) {
         parent.spec.commandLine().getOut().println("音声入力の送信先は未設定です");
         return;
@@ -782,7 +829,7 @@ public class VoiceCommand {
       return parent.attempt(
           () -> {
             if (!(parent.voice != null && parent.voice.cancelPendingCorrection(id))
-                && !(parent.delivery != null && parent.delivery.cancel(id))
+                && !(parent.delivery != null && parent.delivery.cancel().test(id))
                 && (parent.target == null || !parent.cancelPending.test(parent.target, id))) {
               parent.spec.commandLine().getErr().println("待機中の入力が見つかりません");
               return 2;

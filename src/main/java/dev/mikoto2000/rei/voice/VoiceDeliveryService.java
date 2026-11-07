@@ -208,6 +208,12 @@ public final class VoiceDeliveryService {
     return inbox.confirmation();
   }
 
+  List<String> pendingReviewLines() {
+    return pending().stream()
+        .map(input -> "review: " + input.inputId() + " " + input.text())
+        .toList();
+  }
+
   /** 後続の処理で判断できるよう、未完了の対象を返す。 */
   public List<ConversationInput> pending() {
     return inbox.pending();
