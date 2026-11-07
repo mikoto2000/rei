@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.computeruse.CapturedScreen;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -63,7 +64,7 @@ public final class VisionActivityExtractor implements ActivityExtractor {
 
   /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
   @Override
-  public Result extract(CapturedScreen screen, ForegroundWindow foreground) throws Exception {
+  public Result extract(CapturedScreen screen, ForegroundWindow foreground) throws IOException {
     long started = System.nanoTime(),
         requestStarted = 0,
         parseStarted = 0,
