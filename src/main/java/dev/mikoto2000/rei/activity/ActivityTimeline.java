@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.activity;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -13,16 +11,14 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.function.Supplier;
 
-/**
- * 作業状況の把握で受け渡す作業状況時系列の記録を表す。
- */
+/** 作業状況の把握で受け渡す作業状況時系列の記録を表す。 */
 public final class ActivityTimeline {
   /** 時系列の保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the shared activity store for the current timeline.")
-  private final ActivityStore store;
+  private final java.util.function.BiFunction<Instant, Instant, List<ActivityRecord>> observations;
+
+  private final java.util.function.BiFunction<Instant, Instant, List<ActivityRecord>>
+      boundedObservations;
+  private final java.util.function.BiFunction<Instant, Instant, List<ActivitySession>> sessions;
 
   /** 時刻の取得元。 */
   private final Clock clock;
@@ -47,7 +43,9 @@ public final class ActivityTimeline {
       DailySummaryService dailySummaries,
       PeriodCoachingStore scoreCriteria,
       WorkActivityInferenceStore workInferences) {
-    this.store = store;
+    this.observations = (from, to) -> store.findRecordsBetween(from, to);
+    this.boundedObservations = (from, to) -> store.findRecordsBetweenBounded(from, to, 50000);
+    this.sessions = (from, to) -> store.findBetween(from, to);
     this.clock = clock;
     this.summaryPolicy = summaryPolicy;
     this.dailySummaries = dailySummaries;
@@ -104,7 +102,7 @@ public final class ActivityTimeline {
 
   /** 対象を特定できるよう、別日付を探す。 */
   public List<ActivitySession> findByDate(LocalDate date) {
-    return store.findBetween(
+    return sessions.apply(
         date.atStartOfDay(clock.getZone()).toInstant(),
         date.plusDays(1).atStartOfDay(clock.getZone()).toInstant());
   }
@@ -112,7 +110,7 @@ public final class ActivityTimeline {
   /** 対象を特定できるよう、期間を探す。 */
   public List<ActivitySession> findBetween(Instant start, Instant end) {
     validateRange(start, end);
-    return store.findBetween(start, end);
+    return sessions.apply(start, end);
   }
 
   /** 利用条件に合わない指定を受け付けないよう、対象範囲を検証する。 */
@@ -145,7 +143,7 @@ public final class ActivityTimeline {
     var start = date.atStartOfDay(clock.getZone()).toInstant();
     var end = date.plusDays(1).atStartOfDay(clock.getZone()).toInstant();
     return new SummaryGroupingPolicy(summaryPolicy)
-        .aggregate(summaryPolicy.aggregate(store.findRecordsBetween(start, end), start, end));
+        .aggregate(summaryPolicy.aggregate(observations.apply(start, end), start, end));
   }
 
   /** 作業状況の把握で用いる要約区間一覧を返す。 */
@@ -159,14 +157,14 @@ public final class ActivityTimeline {
   /** 作業状況の把握で用いる要約期間を返す。 */
   public List<SummarySegment> summaryBetween(Instant start, Instant end) {
     validateRange(start, end);
-    var fine = store.findBetween(start, end);
+    var fine = sessions.apply(start, end);
     return summaryBetween(start, end, fine);
   }
 
   /** 作業状況の把握で用いる要約期間を返す。 */
   private List<SummarySegment> summaryBetween(
       Instant start, Instant end, List<ActivitySession> fine) {
-    var records = store.findRecordsBetween(start, end);
+    var records = observations.apply(start, end);
     return new SummaryGroupingPolicy(summaryPolicy)
         .aggregate(summaryPolicy.aggregate(records, start, end)).stream()
             .map(
@@ -216,7 +214,7 @@ public final class ActivityTimeline {
   /** 作業状況の把握で用いる傾向期間を返す。 */
   private List<TrendSummarySegment> trendBetween(Instant start, Instant end) {
     if (start.equals(end)) return List.of();
-    var fine = store.findBetween(start, end);
+    var fine = sessions.apply(start, end);
     return new TrendSummaryPolicy(clock.getZone(), summaryPolicy.minimumConfidence())
         .aggregate(summaryBetween(start, end, fine)).stream()
             .map(s -> s.withFineSessions(fine))
@@ -313,8 +311,8 @@ public final class ActivityTimeline {
   /** 作業状況の把握で用いる期間記録一覧を返す。 */
   private List<ActivityRecord> periodRecords(ActivityPeriodAnalysis.Range range, boolean bounded) {
     return bounded
-        ? store.findRecordsBetweenBounded(range.fromInclusive(), range.toExclusive(), 50000)
-        : store.findRecordsBetween(range.fromInclusive(), range.toExclusive());
+        ? boundedObservations.apply(range.fromInclusive(), range.toExclusive())
+        : observations.apply(range.fromInclusive(), range.toExclusive());
   }
 
   /** 作業状況の把握で用いる作業推定一覧を返す。 */

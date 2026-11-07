@@ -9,8 +9,6 @@ import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.DependencyStatusPayload;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -38,11 +36,9 @@ public class DependencyObservationService {
   private final DependencyWatcherProperties properties;
 
   /** 判断基準。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured permission policy for the current tool authorization decision.")
-  private final ToolPermissionPolicy policy;
+  private final java.util.function.BooleanSupplier policyEnforced;
+
+  private final java.util.function.Function<Boolean, PermissionDecision> dependencyPermission;
 
   /** 通知先。 */
   private final AgentEventPublisher publisher;
@@ -79,7 +75,9 @@ public class DependencyObservationService {
     this.repo = repo;
     this.probe = probe;
     this.properties = properties;
-    this.policy = policy;
+    this.policyEnforced = () -> policy.enforced();
+    this.dependencyPermission =
+        network -> policy.evaluate(network ? "checkHttpDependency" : "checkDependency");
     this.publisher = publisher;
     this.registeredProjects = projects == null ? null : () -> projects.registeredProjects();
     this.sessions = sessions;
@@ -143,10 +141,9 @@ public class DependencyObservationService {
       return new DependencyObservation(id, DependencyState.BLOCKED, "dependency_deadline_expired");
     if (!validProject(entry))
       return new DependencyObservation(id, DependencyState.BLOCKED, "owner_unavailable");
-    if (!policy.enforced())
+    if (!policyEnforced.getAsBoolean())
       return new DependencyObservation(id, DependencyState.BLOCKED, "permission_policy_disabled");
-    var permission =
-        policy.evaluate(entry.spec().network() ? "checkHttpDependency" : "checkDependency");
+    var permission = dependencyPermission.apply(entry.spec().network());
     if (permission != PermissionDecision.AUTO_APPROVE)
       return new DependencyObservation(
           id,
@@ -188,7 +185,7 @@ public class DependencyObservationService {
   @Scheduled(fixedDelayString = "${rei.dependency-watcher.check-interval-ms:5000}")
   public synchronized void tick() {
     flushFacts();
-    if (!properties.enabled() || !policy.enforced()) return;
+    if (!properties.enabled() || !policyEnforced.getAsBoolean()) return;
     var entries = repo.activeAfter(after);
     if (entries.isEmpty()) {
       after = "";
@@ -202,7 +199,7 @@ public class DependencyObservationService {
             || entry.reason().equals("dependency_waiting")
             || entry.reason().equals("dependency_failed")) continue;
         boolean http = entry.spec().network();
-        var permission = policy.evaluate(http ? "checkHttpDependency" : "checkDependency");
+        var permission = dependencyPermission.apply(http);
         if (permission != PermissionDecision.AUTO_APPROVE)
           repo.observe(
               entry,

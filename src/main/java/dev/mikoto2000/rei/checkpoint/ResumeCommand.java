@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.checkpoint;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.concurrent.Callable;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -25,12 +23,22 @@ import picocli.CommandLine.Spec;
     })
 public class ResumeCommand implements Callable<Integer> {
   /** サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared checkpoint service for save, inspect, and resume operations.")
-  private final PersistentCheckpointService service;
+  private final java.util.function.Function<String, java.util.List<PersistentCheckpoint>>
+      listCheckpoints;
+
+  private final java.util.function.BiFunction<String, String, PersistentCheckpoint> findCheckpoint;
+  private final java.util.function.BiFunction<String, String, CheckpointReconciler.Result>
+      inspectCheckpoint;
+  private final java.util.function.BiFunction<String, String, PersistentCheckpoint>
+      abandonCheckpoint;
+
+  @FunctionalInterface
+  private interface ResumeFromShell {
+    PersistentCheckpointService.ResumeResult resume(
+        String project, String task, java.util.function.Consumer<String> beforeSubmit);
+  }
+
+  private final ResumeFromShell resumeFromShell;
 
   /** プロジェクト一覧。 */
   private final java.util.function.Supplier<String> currentProjectId;
@@ -77,7 +85,11 @@ public class ResumeCommand implements Callable<Integer> {
       PersistentCheckpointService service,
       ProjectService projects,
       dev.mikoto2000.rei.core.service.CommandCancellationService cancellation) {
-    this.service = service;
+    this.listCheckpoints = project -> service.list(project);
+    this.findCheckpoint = (project, task) -> service.get(project, task);
+    this.inspectCheckpoint = (project, task) -> service.inspect(project, task);
+    this.abandonCheckpoint = (project, task) -> service.abandon(project, task);
+    this.resumeFromShell = (project, task, before) -> service.resumeForShell(project, task, before);
     this.currentProjectId = () -> projects.currentContext().id();
     this.currentSessionId = () -> projects.currentSessionId();
     this.selectSession = session -> projects.selectSession(session);
@@ -118,7 +130,7 @@ public class ResumeCommand implements Callable<Integer> {
   /** 保存タスクの一覧・照合・明示再開・除外を行う。 */
   @Override
   public Integer call() {
-    return print(() -> task == null ? service.list(project()) : resumeTask());
+    return print(() -> task == null ? listCheckpoints.apply(project()) : resumeTask());
   }
 
   /** 再開した実行の出力と後続の入力を同じ会話へ向ける。 */
@@ -126,7 +138,7 @@ public class ResumeCommand implements Callable<Integer> {
     String previousSession = currentSessionId.get();
     boolean[] selected = {false};
     try {
-      return service.resumeForShell(
+      return resumeFromShell.resume(
           project(),
           task,
           sessionId -> {
@@ -149,7 +161,7 @@ public class ResumeCommand implements Callable<Integer> {
     public Integer call() {
       return parent.print(
           () ->
-              parent.service.list(parent.project()).stream()
+              parent.listCheckpoints.apply(parent.project()).stream()
                   .map(
                       s ->
                           s.taskId()
@@ -192,9 +204,9 @@ public class ResumeCommand implements Callable<Integer> {
     public Integer call() {
       return parent.print(
           () ->
-              parent.service.get(parent.project(), task)
+              parent.findCheckpoint.apply(parent.project(), task)
                   + "\n"
-                  + parent.service.inspect(parent.project(), task));
+                  + parent.inspectCheckpoint.apply(parent.project(), task));
     }
   }
 
@@ -210,7 +222,7 @@ public class ResumeCommand implements Callable<Integer> {
 
     /** 作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return parent.print(() -> parent.service.abandon(parent.project(), task));
+      return parent.print(() -> parent.abandonCheckpoint.apply(parent.project(), task));
     }
   }
 }

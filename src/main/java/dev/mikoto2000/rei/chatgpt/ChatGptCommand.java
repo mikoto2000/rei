@@ -35,11 +35,8 @@ public final class ChatGptCommand {
   private dev.mikoto2000.rei.core.project.ProjectService projects;
 
   /** 権限一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared guard for current tool authorization.")
-  private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
+  private java.util.function.BiConsumer<String, dev.mikoto2000.rei.core.chat.AgentRunContext>
+      authorizeInference;
 
   /** ChatGPTとの連携に関する設定利用可否の確認を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
@@ -47,13 +44,16 @@ public final class ChatGptCommand {
       dev.mikoto2000.rei.core.project.ProjectService projects,
       dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {
     this.projects = projects;
-    this.permissions = permissions;
+    this.authorizeInference =
+        permissions == null
+            ? null
+            : (digest, owner) -> permissions.check("requestChatGptPlanInference", digest, owner);
   }
 
   /** ChatGPTとの連携に関する権限の確認利用可否の確認を処理する。 */
   private void authorizeProbe(String account, String model, String task) {
     if (projects == null
-        || permissions == null
+        || authorizeInference == null
         || !dev.mikoto2000.rei.event.CredentialRedactor.redact(task).equals(task))
       throw ChatGptException.of(ChatGptException.Code.PERMISSION_DENIED);
     synchronized (projects.currentClient()) {
@@ -67,7 +67,7 @@ public final class ChatGptCommand {
           dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256(
               (account + "\u0000" + model + "\u0000" + task)
                   .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-      permissions.check("requestChatGptPlanInference", digest, owner);
+      authorizeInference.accept(digest, owner);
     }
   }
 

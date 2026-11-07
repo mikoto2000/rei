@@ -30,25 +30,39 @@ public final class FeedCommandsController {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared feed service for listing and mutating the same subscriptions.")
+      justification =
+          "Uses the shared feed service for listing and mutating the same subscriptions.")
   private final FeedService feeds;
 
   /** 読み込む宣言。 */
   private final FeedOpmlImportService imports;
 
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits operations through the shared integration run entry point.")
-  private final IntegrationRunSubmitService runs;
+  private final java.util.function.Function<
+          Update, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitUpdateFeeds;
+
+  private final java.util.function.Function<
+          Summary, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitSummarizeFeeds;
+  private final java.util.function.Function<
+          ItemSummary, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitSummarizeFeedItem;
 
   /** 指定された値や利用先を使って、FeedCommandsControllerを初期化する。 */
   public FeedCommandsController(
       FeedService feeds, FeedOpmlImportService imports, IntegrationRunSubmitService runs) {
     this.feeds = feeds;
     this.imports = imports;
-    this.runs = runs;
+    this.submitUpdateFeeds =
+        request ->
+            accepted(runs.updateFeeds(request.projectId(), request.sessionId(), request.feedId()));
+    this.submitSummarizeFeeds =
+        request -> accepted(runs.summarizeFeeds(request.projectId(), request.sessionId()));
+    this.submitSummarizeFeedItem =
+        request ->
+            accepted(
+                runs.summarizeFeedItem(request.projectId(), request.sessionId(), request.itemId()));
   }
 
   /**
@@ -166,7 +180,7 @@ public final class FeedCommandsController {
   public ResponseEntity<BackgroundRunController.AcceptedRunResponse> update(
       @RequestBody Update request) {
     required(request.projectId());
-    return accepted(runs.updateFeeds(request.projectId(), request.sessionId(), request.feedId()));
+    return submitUpdateFeeds.apply(request);
   }
 
   /** Web APIによる操作で用いる要約を返す。 */
@@ -175,7 +189,7 @@ public final class FeedCommandsController {
       @RequestBody Summary request) {
     required(request.projectId());
     if (request.feedId() != null) throw new IllegalArgumentException("Summary takes no feed ID");
-    return accepted(runs.summarizeFeeds(request.projectId(), request.sessionId()));
+    return submitSummarizeFeeds.apply(request);
   }
 
   /** 利用者が要点を把握できるよう、項目を要約する。 */
@@ -184,8 +198,7 @@ public final class FeedCommandsController {
       @RequestBody ItemSummary request) {
     required(request.projectId());
     if (request.itemId() == null) throw new IllegalArgumentException("Item required");
-    return accepted(
-        runs.summarizeFeedItem(request.projectId(), request.sessionId(), request.itemId()));
+    return submitSummarizeFeedItem.apply(request);
   }
 
   /** Web APIによる操作に関する任意を処理する。 */

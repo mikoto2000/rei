@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.IntegrationRunSubmitService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.LocalDate;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -24,15 +22,82 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/google-operations")
 public final class GoogleQueuedController {
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits operations through the shared integration run entry point.")
-  private final IntegrationRunSubmitService runs;
+  private final java.util.function.Function<
+          SecretaryAuthorize, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitAuthorizeSecretary;
+
+  private final java.util.function.Function<
+          CalendarList, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitListCalendar;
+  private final java.util.function.Function<
+          CalendarAdd, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitAddCalendarEvent;
+  private final java.util.function.Function<
+          TaskList, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitListGoogleTasks;
+  private final java.util.function.Function<
+          TaskAdd, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitAddGoogleTask;
+  private final java.util.function.BiFunction<
+          Scope, Long, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitCompleteGoogleTask;
+  private final java.util.function.BiFunction<
+          Scope, Long, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitDeleteGoogleTask;
 
   /** 指定された値や利用先を使って、GoogleQueuedControllerを初期化する。 */
   public GoogleQueuedController(IntegrationRunSubmitService runs) {
-    this.runs = runs;
+    this.submitAuthorizeSecretary =
+        r ->
+            accepted(
+                runs.authorizeSecretary(
+                    r.projectId(),
+                    r.sessionId(),
+                    r.connectionId(),
+                    Boolean.TRUE.equals(r.force())));
+    this.submitListCalendar =
+        request ->
+            accepted(
+                runs.listCalendar(
+                    request.projectId(),
+                    request.sessionId(),
+                    request.date(),
+                    request.from(),
+                    request.to()));
+    this.submitAddCalendarEvent =
+        request ->
+            accepted(
+                runs.addCalendarEvent(
+                    request.projectId(),
+                    request.sessionId(),
+                    request.title(),
+                    request.start(),
+                    request.end(),
+                    request.location(),
+                    request.description()));
+    this.submitListGoogleTasks =
+        request ->
+            accepted(
+                runs.listGoogleTasks(
+                    request.projectId(),
+                    request.sessionId(),
+                    request.priority(),
+                    request.dueBefore()));
+    this.submitAddGoogleTask =
+        request ->
+            accepted(
+                runs.addGoogleTask(
+                    request.projectId(),
+                    request.sessionId(),
+                    request.title(),
+                    request.due(),
+                    request.priority() == null ? 3 : request.priority()));
+    this.submitCompleteGoogleTask =
+        (request, id) ->
+            accepted(runs.completeGoogleTask(request.projectId(), request.sessionId(), id));
+    this.submitDeleteGoogleTask =
+        (request, id) ->
+            accepted(runs.deleteGoogleTask(request.projectId(), request.sessionId(), id));
   }
 
   public record SecretaryAuthorize(
@@ -45,9 +110,7 @@ public final class GoogleQueuedController {
     scope(r.projectId(), r.sessionId());
     required(r.sessionId());
     required(r.connectionId());
-    return accepted(
-        runs.authorizeSecretary(
-            r.projectId(), r.sessionId(), r.connectionId(), Boolean.TRUE.equals(r.force())));
+    return submitAuthorizeSecretary.apply(r);
   }
 
   /**
@@ -123,13 +186,7 @@ public final class GoogleQueuedController {
     scope(request.projectId(), request.sessionId());
     optional(request.from());
     optional(request.to());
-    return accepted(
-        runs.listCalendar(
-            request.projectId(),
-            request.sessionId(),
-            request.date(),
-            request.from(),
-            request.to()));
+    return submitListCalendar.apply(request);
   }
 
   /** Web APIによる操作で用いる予定表追加を返す。 */
@@ -142,15 +199,7 @@ public final class GoogleQueuedController {
     required(request.end());
     optional(request.location());
     optional(request.description());
-    return accepted(
-        runs.addCalendarEvent(
-            request.projectId(),
-            request.sessionId(),
-            request.title(),
-            request.start(),
-            request.end(),
-            request.location(),
-            request.description()));
+    return submitAddCalendarEvent.apply(request);
   }
 
   /** Web APIによる操作で用いるタスク一覧を返す。 */
@@ -158,9 +207,7 @@ public final class GoogleQueuedController {
   public ResponseEntity<BackgroundRunController.AcceptedRunResponse> taskList(
       @RequestBody TaskList request) {
     scope(request.projectId(), request.sessionId());
-    return accepted(
-        runs.listGoogleTasks(
-            request.projectId(), request.sessionId(), request.priority(), request.dueBefore()));
+    return submitListGoogleTasks.apply(request);
   }
 
   /** Web APIによる操作で用いるタスク追加を返す。 */
@@ -169,13 +216,7 @@ public final class GoogleQueuedController {
       @RequestBody TaskAdd request) {
     scope(request.projectId(), request.sessionId());
     required(request.title());
-    return accepted(
-        runs.addGoogleTask(
-            request.projectId(),
-            request.sessionId(),
-            request.title(),
-            request.due(),
-            request.priority() == null ? 3 : request.priority()));
+    return submitAddGoogleTask.apply(request);
   }
 
   /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
@@ -183,7 +224,7 @@ public final class GoogleQueuedController {
   public ResponseEntity<BackgroundRunController.AcceptedRunResponse> complete(
       @PathVariable long id, @RequestBody Scope request) {
     scope(request.projectId(), request.sessionId());
-    return accepted(runs.completeGoogleTask(request.projectId(), request.sessionId(), id));
+    return submitCompleteGoogleTask.apply(request, id);
   }
 
   /** 指定された対象を削除する。 */
@@ -191,7 +232,7 @@ public final class GoogleQueuedController {
   public ResponseEntity<BackgroundRunController.AcceptedRunResponse> delete(
       @PathVariable long id, @RequestBody Scope request) {
     scope(request.projectId(), request.sessionId());
-    return accepted(runs.deleteGoogleTask(request.projectId(), request.sessionId(), id));
+    return submitDeleteGoogleTask.apply(request, id);
   }
 
   /** Web APIによる操作に関する対象範囲を処理する。 */

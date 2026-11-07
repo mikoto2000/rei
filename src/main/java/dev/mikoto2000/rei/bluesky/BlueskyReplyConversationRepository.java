@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.bluesky;
 
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.llm.ConversationIds;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.OffsetDateTime;
 import java.util.List;
 import javax.sql.DataSource;
@@ -19,11 +17,12 @@ public class BlueskyReplyConversationRepository {
   private final JdbcClient jdbcClient;
 
   /** 会話ログ保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common conversation log and its shared indexing state.")
-  private final ConversationLogStore conversationLogStore;
+  @FunctionalInterface
+  private interface ReplyHistory {
+    void append(String handle, String role, String content);
+  }
+
+  private final ReplyHistory replyHistory;
 
   /** Blueskyとの連携を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public BlueskyReplyConversationRepository(DataSource dataSource) {
@@ -35,7 +34,11 @@ public class BlueskyReplyConversationRepository {
   public BlueskyReplyConversationRepository(
       DataSource dataSource, ConversationLogStore conversationLogStore) {
     this.jdbcClient = JdbcClient.create(dataSource);
-    this.conversationLogStore = conversationLogStore;
+    this.replyHistory =
+        conversationLogStore == null
+            ? null
+            : (handle, role, content) ->
+                conversationLogStore.append(ConversationIds.blueskyReply(handle), role, content);
     initializeSchema();
   }
 
@@ -95,8 +98,8 @@ public class BlueskyReplyConversationRepository {
         """)
         .params(handle, role, content, OffsetDateTime.now().toString())
         .update();
-    if (conversationLogStore != null) {
-      conversationLogStore.append(ConversationIds.blueskyReply(handle), role, content);
+    if (replyHistory != null) {
+      replyHistory.append(handle, role, content);
     }
   }
 

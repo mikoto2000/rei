@@ -29,7 +29,8 @@ public final class ActivityCapture implements AutoCloseable {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Reads the configured activity capture or coaching policy when work is admitted.")
+      justification =
+          "Reads the configured activity capture or coaching policy when work is admitted.")
   private final ActivityProperties properties;
 
   /** 観測。 */
@@ -39,11 +40,7 @@ public final class ActivityCapture implements AutoCloseable {
   private final ActivityExtractor extractor;
 
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common timeline store for activity observations.")
-  private final ActivityStore store;
+  private final java.util.function.Consumer<ActivityRecord> appendObservation;
 
   /** 画面画像一覧。 */
   private final ScreenshotStore screenshots;
@@ -222,7 +219,7 @@ public final class ActivityCapture implements AutoCloseable {
     this.properties = properties;
     this.observer = observer;
     this.extractor = extractor;
-    this.store = store;
+    this.appendObservation = record -> store.append(record);
     this.screenshots = screenshots;
     this.clock = clock;
     this.analysisExecutor = analysisExecutor;
@@ -547,7 +544,7 @@ public final class ActivityCapture implements AutoCloseable {
                 change,
                 duplicate,
                 continuityId);
-        store.append(record);
+        appendObservation.accept(record);
         log.info(
             "Activity record saved: storage_ms={} observation_age_ms={} duplicate={}",
             ms(System.nanoTime() - saveStarted),

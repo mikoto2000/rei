@@ -6,8 +6,6 @@ import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.llm.ConversationIds;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.stereotype.Component;
 
 /** 話題の管理に必要なイベントエージェントメッセージ通知先を扱う。 */
@@ -18,11 +16,7 @@ public class EventAgentMessagePublisher implements AgentMessagePublisher {
       org.slf4j.LoggerFactory.getLogger(EventAgentMessagePublisher.class);
 
   /** 会話ログ保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common conversation log and its shared indexing state.")
-  private final ConversationLogStore conversationLogStore;
+  private final java.util.function.BiConsumer<String, String> appendChat;
 
   /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
@@ -52,7 +46,8 @@ public class EventAgentMessagePublisher implements AgentMessagePublisher {
       AgentEventPublisher eventPublisher,
       AgentActivityTracker activityTracker,
       dev.mikoto2000.rei.ui.shell.sound.AgentMessageNarrator narrator) {
-    this.conversationLogStore = conversationLogStore;
+    this.appendChat =
+        (role, content) -> conversationLogStore.append(ConversationIds.chat(), role, content);
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
     this.activityTracker = activityTracker;
@@ -84,7 +79,7 @@ public class EventAgentMessagePublisher implements AgentMessagePublisher {
         append(destination, message);
         return;
       }
-    } else conversationLogStore.append(ConversationIds.chat(), message.role(), message.content());
+    } else appendChat.accept(message.role(), message.content());
     eventPublisher.publish(
         owned(eventFactory.messageStarted(message.id(), message.role()), message, destination));
     eventPublisher.publish(
