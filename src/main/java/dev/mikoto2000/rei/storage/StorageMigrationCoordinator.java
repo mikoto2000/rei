@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.storage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
@@ -51,11 +49,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
   @FunctionalInterface
   interface Checkpoint {
     /** データ保存の共通処理に関するreachedを処理する。 */
-    @SuppressFBWarnings(
-        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-        matchType = SuppressMatchType.EXACT,
-        justification = "A checkpoint callback can abort migration with an arbitrary checked failure so rollback can preserve its cause.")
-    void reached(Stage stage, Path backup) throws Exception;
+    void reached(Stage stage, Path backup) throws IOException, InterruptedException, SQLException;
   }
 
   /**
@@ -171,7 +165,11 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
       checkpoint.reached(stage, backup);
       progress.step("保存データの更新が完了しました");
       return prepared = new Result(SCHEMA_VERSION, backup);
-    } catch (Exception error) {
+    } catch (IOException
+        | InterruptedException
+        | java.security.NoSuchAlgorithmException
+        | SQLException
+        | RuntimeException error) {
       System.err.printf(
           "[storage] 保存データの更新を停止しました（stage=%s）。詳細は起動ログを確認してください。backup=%s%n", stage, backup);
       org.slf4j.LoggerFactory.getLogger(getClass())
@@ -396,11 +394,11 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
   }
 
   /** データ保存の共通処理に関する初期化を処理する。 */
-  @SuppressFBWarnings(
-      value = "REC_CATCH_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Rollback covers checked failures from the migration checkpoint callback.")
-  private void initialize(Path backup) throws Exception {
+  private void initialize(Path backup)
+      throws IOException,
+          InterruptedException,
+          java.security.NoSuchAlgorithmException,
+          SQLException {
     try (var db = DriverManager.getConnection("jdbc:sqlite:" + root.resolve("storage.db"));
         var statement = db.createStatement()) {
       statement.execute("PRAGMA synchronous=FULL");
@@ -475,7 +473,11 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
         }
         statement.execute("PRAGMA user_version=" + SCHEMA_VERSION);
         db.commit();
-      } catch (Exception error) {
+      } catch (IOException
+          | InterruptedException
+          | java.security.NoSuchAlgorithmException
+          | SQLException
+          | RuntimeException error) {
         db.rollback();
         throw error;
       }
