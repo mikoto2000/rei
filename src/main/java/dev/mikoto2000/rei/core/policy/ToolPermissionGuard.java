@@ -4,8 +4,6 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.ErrorInformation;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import org.springframework.stereotype.Component;
@@ -52,12 +50,12 @@ public class ToolPermissionGuard {
   }
 
   /** 判断基準。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the configured permission policy for the current tool authorization decision.")
-  private final ToolPermissionPolicy policy;
+  private final java.util.function.BiConsumer<String, String> validatePolicyArguments;
+  private final java.util.function.BiFunction<String, String, PermissionDecision> evaluatePolicy;
+  private final java.util.function.Function<String, PermissionDecision> evaluateDefaultPolicy;
+  private final java.util.function.Function<String, java.util.Set<ActionCapability>> capabilities;
+  private final java.util.function.BiPredicate<String, String> readOnly;
+  private final java.util.function.BooleanSupplier fullAuto;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -68,7 +66,12 @@ public class ToolPermissionGuard {
   /** 指定された値や利用先を使って、ToolPermissionGuardを初期化する。 */
   public ToolPermissionGuard(
       ToolPermissionPolicy policy, AgentEventFactory events, AgentEventPublisher publisher) {
-    this.policy = policy;
+    this.validatePolicyArguments = (tool, input) -> policy.validateArguments(tool, input);
+    this.evaluatePolicy = (tool, input) -> policy.evaluate(tool, input);
+    this.evaluateDefaultPolicy = tool -> policy.evaluate(tool);
+    this.capabilities = tool -> policy.capabilities(tool);
+    this.readOnly = (tool, input) -> policy.readOnly(tool, input);
+    this.fullAuto = () -> policy.fullAuto();
     this.events = events;
     this.publisher = publisher;
   }
@@ -80,18 +83,18 @@ public class ToolPermissionGuard {
 
   /** 利用条件に合わない指定を受け付けないよう、引数を検証する。 */
   public void validateArguments(String tool, String input) {
-    policy.validateArguments(tool, input);
+    validatePolicyArguments.accept(tool, input);
   }
 
   /** 利用条件に合わない指定を受け付けないよう、引数を検証する。 */
   public void validateArguments(String tool, String input, AgentRunContext owner) {
     try {
-      policy.validateArguments(tool, input);
+      validatePolicyArguments.accept(tool, input);
     } catch (InvalidToolArgumentsException invalid) {
       // A model selection error must not turn an actual capability/ownership DENY into retries.
       if (invalid.kind() == InvalidToolArgumentsException.Kind.MODEL_SELECTION
           && (restricted(tool, input, owner)
-              || policy.evaluate(tool, input) == PermissionDecision.DENY))
+              || evaluatePolicy.apply(tool, input) == PermissionDecision.DENY))
         check(tool, input, owner);
       throw invalid;
     }
@@ -103,8 +106,8 @@ public class ToolPermissionGuard {
    * <p>A one-use approval is never a reusable grant for background read retries.
    */
   public boolean automaticallyApprovedRead(String tool) {
-    return policy.evaluate(tool) == PermissionDecision.AUTO_APPROVE
-        && policy.capabilities(tool).stream()
+    return evaluateDefaultPolicy.apply(tool) == PermissionDecision.AUTO_APPROVE
+        && capabilities.apply(tool).stream()
             .allMatch(c -> c == ActionCapability.READ || c == ActionCapability.NETWORK_READ);
   }
 
@@ -124,9 +127,9 @@ public class ToolPermissionGuard {
    * grant.
    */
   public void checkAuthorizedPlanPolicy(String tool, String input, AgentRunContext owner) {
-    if (restricted(tool, input, owner) || policy.evaluate(tool, input) == PermissionDecision.DENY)
+    if (restricted(tool, input, owner) || evaluatePolicy.apply(tool, input) == PermissionDecision.DENY)
       check(tool, input, owner);
-    policy.validateArguments(tool, input);
+    validatePolicyArguments.accept(tool, input);
   }
 
   /**
@@ -146,7 +149,7 @@ public class ToolPermissionGuard {
             && parent.projectRoot().equals(child.projectRoot())
             && parent.requestSource() == child.requestSource()
             && parent.voiceInput() == child.voiceInput()
-            && policy.capabilities(tool).stream()
+            && capabilities.apply(tool).stream()
                 .allMatch(
                     capability ->
                         capability == ActionCapability.READ
@@ -159,7 +162,7 @@ public class ToolPermissionGuard {
     boolean restricted =
         owner != null
             && (owner.mode() == AgentRunContext.Mode.CONVERSATION
-                || owner.mode() == AgentRunContext.Mode.READ_ONLY && !policy.readOnly(tool, input));
+                || owner.mode() == AgentRunContext.Mode.READ_ONLY && !readOnly.test(tool, input));
     restricted |=
         owner != null
             && owner.conversationId().startsWith("subagent:")
@@ -175,14 +178,14 @@ public class ToolPermissionGuard {
   private void check(
       String tool, String input, AgentRunContext owner, AgentRunContext approvalOwner) {
     var decision =
-        restricted(tool, input, owner) ? PermissionDecision.DENY : policy.evaluate(tool, input);
-    if (decision != PermissionDecision.DENY) policy.validateArguments(tool, input);
+        restricted(tool, input, owner) ? PermissionDecision.DENY : evaluatePolicy.apply(tool, input);
+    if (decision != PermissionDecision.DENY) validatePolicyArguments.accept(tool, input);
     // Speech requires exact-input approval unless startup explicitly opted into common full auto.
     if (decision == PermissionDecision.AUTO_APPROVE
-        && !policy.fullAuto()
+        && !fullAuto.getAsBoolean()
         && owner != null
         && owner.voiceInput()
-        && !policy.readOnly(tool, input)) decision = PermissionDecision.REQUIRE_APPROVAL;
+        && !readOnly.test(tool, input)) decision = PermissionDecision.REQUIRE_APPROVAL;
     if (decision == PermissionDecision.AUTO_APPROVE) return;
     String request = null;
     if (decision == PermissionDecision.REQUIRE_APPROVAL
