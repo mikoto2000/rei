@@ -123,6 +123,67 @@ public class PersistentCheckpointRepository {
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
+  LifecycleAccess lifecycleAccess() {
+    return new LifecycleAccess();
+  }
+
+  /** Checkpoint lifecycle persistence, independent of overview and storage maintenance queries. */
+  final class LifecycleAccess {
+    private LifecycleAccess() {}
+
+    PersistentCheckpoint get(String project, String task) {
+      return PersistentCheckpointRepository.this.get(project, task);
+    }
+
+    List<PersistentCheckpoint> list(String project) {
+      return PersistentCheckpointRepository.this.list(project);
+    }
+
+    PersistentCheckpoint save(PersistentCheckpoint state, long expected, String event) {
+      return PersistentCheckpointRepository.this.save(state, expected, event);
+    }
+
+    Map<String, Object> fields(PersistentCheckpoint state) {
+      return PersistentCheckpointRepository.this.fields(state);
+    }
+
+    PersistentCheckpoint fields(Map<String, Object> fields) {
+      return PersistentCheckpointRepository.this.fields(fields);
+    }
+
+    List<String> diagnostics(String project, String task) {
+      return PersistentCheckpointRepository.this.diagnostics(project, task);
+    }
+
+    boolean recordedEvent(String project, String task, String event) {
+      return PersistentCheckpointRepository.this.recordedEvent(project, task, event);
+    }
+
+    boolean acquire(String project, String task, String run) {
+      return PersistentCheckpointRepository.this.acquire(project, task, run);
+    }
+
+    boolean leased(String project, String task) {
+      return PersistentCheckpointRepository.this.leased(project, task);
+    }
+
+    void release(String project, String task, String run) {
+      PersistentCheckpointRepository.this.release(project, task, run);
+    }
+
+    CheckpointHistory.Usage historyUsage() {
+      return PersistentCheckpointRepository.this.historyUsage();
+    }
+
+    CheckpointHistory.Cleanup cleanupHistory(boolean apply) {
+      return PersistentCheckpointRepository.this.cleanupHistory(apply);
+    }
+
+    CheckpointHistory.Cleanup cleanupHistory(boolean apply, boolean force) {
+      return PersistentCheckpointRepository.this.cleanupHistory(apply, force);
+    }
+  }
+
   public PersistentCheckpoint get(String project, String task) {
     CheckpointException invalid = null;
     try (var rows = rows(project, task)) {
