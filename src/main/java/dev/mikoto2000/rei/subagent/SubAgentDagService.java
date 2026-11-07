@@ -5,8 +5,6 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -80,21 +78,25 @@ public final class SubAgentDagService {
   private final DurableSubAgentRepository repository;
 
   /** 実行の担当。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common sub-agent runner and its durable child-run state.")
-  private final SubAgentRunner runner;
+  private final java.util.function.BiFunction<SubAgentDefinition, AgentRunContext, String>
+      resolveBaseline;
 
   /** 登録台帳。 */
   private final SubAgentRegistry registry;
 
   /** 並列。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Delegates child runs through the shared subagent coordinator.")
-  private final ParallelSubAgentDelegator parallel;
+  private final java.util.function.Function<
+          AgentRunContext,
+          java.util.function.BiFunction<
+              LlmCallReservation, GraphWave, ParallelSubAgentDelegator.Batch>>
+      runGraphWave;
+
+  private record GraphWave(
+      List<ParallelSubAgentDelegator.Request> requests,
+      String graphId,
+      Map<String, String> children,
+      Duration timeout,
+      boolean failFast) {}
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper();
@@ -111,9 +113,23 @@ public final class SubAgentDagService {
     this.durableTokenLimit = () -> properties.getDurableMaxTotalTokens();
     this.dagTimeout = () -> properties.getDagTimeout();
     this.repository = repository;
-    this.runner = runner;
+    this.resolveBaseline = (definition, owner) -> runner.durableBaseline(definition, owner);
     this.registry = registry;
-    this.parallel = parallel;
+    this.runGraphWave =
+        owner ->
+            (budget, wave) ->
+                parallel.delegate(
+                    wave.requests(),
+                    budget,
+                    (request, reservation) ->
+                        runner.runGraphChild(
+                            owner,
+                            wave.graphId(),
+                            wave.children().get(request.id()),
+                            request.context(),
+                            reservation),
+                    wave.timeout(),
+                    wave.failFast());
   }
 
   /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
@@ -167,7 +183,7 @@ public final class SubAgentDagService {
                     node.context(),
                     Math.min(1000, definition.maxSteps()),
                     cap,
-                    runner.durableBaseline(definition, owner));
+                    resolveBaseline.apply(definition, owner));
               }
               return group;
             });
@@ -303,18 +319,16 @@ public final class SubAgentDagService {
                   nodeId, node.agent(), node.task(), context(owner, node, plan)));
         }
         var batch =
-            parallel.delegate(
-                requests,
-                budget,
-                (request, reservation) ->
-                    runner.runGraphChild(
-                        owner,
+            runGraphWave
+                .apply(owner)
+                .apply(
+                    budget,
+                    new GraphWave(
+                        requests,
                         saved.id(),
-                        plan.children().get(request.id()),
-                        request.context(),
-                        reservation),
-                Duration.ofNanos(Math.min(left, Duration.ofSeconds(120).toNanos())),
-                plan.spec().failurePolicy() == SubAgentDagSpec.FailurePolicy.FAIL_FAST);
+                        plan.children(),
+                        Duration.ofNanos(Math.min(left, Duration.ofSeconds(120).toNanos())),
+                        plan.spec().failurePolicy() == SubAgentDagSpec.FailurePolicy.FAIL_FAST));
         if (batch.status() == ParallelSubAgentDelegator.Status.REJECTED) {
           forced = "BUSY";
           break;
@@ -450,7 +464,7 @@ public final class SubAgentDagService {
           registry
               .findById(node.agent())
               .orElseThrow(() -> new IllegalArgumentException("DAG agent unavailable"));
-      values.put(node.id(), runner.durableBaseline(definition, owner));
+      values.put(node.id(), resolveBaseline.apply(definition, owner));
     }
     return DurableSubAgentRepository.hash(encode(spec) + encode(values));
   }
