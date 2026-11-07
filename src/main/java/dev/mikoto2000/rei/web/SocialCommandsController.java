@@ -35,11 +35,13 @@ public final class SocialCommandsController {
   private final InterestUpdateService interests;
 
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits operations through the shared integration run entry point.")
-  private final IntegrationRunSubmitService runs;
+  private final java.util.function.Function<
+          Reply, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitReplyBluesky;
+
+  private final java.util.function.Function<
+          Scope, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitDiscoverInterests;
 
   /** 指定された値や利用先を使って、SocialCommandsControllerを初期化する。 */
   public SocialCommandsController(
@@ -48,7 +50,13 @@ public final class SocialCommandsController {
       IntegrationRunSubmitService runs) {
     this.history = history;
     this.interests = interests;
-    this.runs = runs;
+    this.submitReplyBluesky =
+        request ->
+            accepted(
+                runs.replyBluesky(
+                    request.projectId(), request.sessionId(), request.target(), request.text()));
+    this.submitDiscoverInterests =
+        request -> accepted(runs.discoverInterests(request.projectId(), request.sessionId()));
   }
 
   /**
@@ -98,9 +106,7 @@ public final class SocialCommandsController {
     required(request.projectId());
     required(request.target());
     if (request.text() != null) required(request.text());
-    return accepted(
-        runs.replyBluesky(
-            request.projectId(), request.sessionId(), request.target(), request.text()));
+    return submitReplyBluesky.apply(request);
   }
 
   /** Web APIによる操作で用いる関心一覧を返す。 */
@@ -115,7 +121,7 @@ public final class SocialCommandsController {
       @RequestBody Scope request) {
     if (request == null) throw new IllegalArgumentException("Project required");
     required(request.projectId());
-    return accepted(runs.discoverInterests(request.projectId(), request.sessionId()));
+    return submitDiscoverInterests.apply(request);
   }
 
   /** Web APIによる操作に関する必須を処理する。 */

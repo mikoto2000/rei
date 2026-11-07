@@ -36,15 +36,18 @@ public final class GoogleOperationsController {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared task service and its current account for command operations.")
+      justification =
+          "Uses the shared task service and its current account for command operations.")
   private final TaskService tasks;
 
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits operations through the shared integration run entry point.")
-  private final IntegrationRunSubmitService runs;
+  private final java.util.function.BiFunction<Scope, String, ResponseEntity<ChatResponse>>
+      submitAuthorizeCalendar;
+
+  private final java.util.function.BiFunction<Scope, String, ResponseEntity<ChatResponse>>
+      submitRefreshCalendar;
+  private final java.util.function.BiFunction<Scope, String, ResponseEntity<ChatResponse>>
+      submitAuthorizeTasks;
 
   /**
    * Web APIによる操作で受け渡すテキストを表す。
@@ -87,7 +90,15 @@ public final class GoogleOperationsController {
       GoogleCalendarService calendar, TaskService tasks, IntegrationRunSubmitService runs) {
     this.calendar = calendar;
     this.tasks = tasks;
-    this.runs = runs;
+    this.submitAuthorizeCalendar =
+        (request, key) ->
+            accepted(runs.authorizeCalendar(request.projectId(), request.sessionId(), key));
+    this.submitRefreshCalendar =
+        (request, key) ->
+            accepted(runs.refreshCalendar(request.projectId(), request.sessionId(), key));
+    this.submitAuthorizeTasks =
+        (request, key) ->
+            accepted(runs.authorizeTasks(request.projectId(), request.sessionId(), key));
   }
 
   /** Web APIによる操作で用いるイベント一覧を返す。 */
@@ -125,7 +136,7 @@ public final class GoogleOperationsController {
   public ResponseEntity<ChatResponse> authorizeCalendar(
       @RequestBody Scope request, @RequestHeader("Idempotency-Key") String key) {
     scope(request);
-    return accepted(runs.authorizeCalendar(request.projectId(), request.sessionId(), key));
+    return submitAuthorizeCalendar.apply(request, key);
   }
 
   /** Web APIによる操作で用いる再確認を返す。 */
@@ -133,7 +144,7 @@ public final class GoogleOperationsController {
   public ResponseEntity<ChatResponse> refresh(
       @RequestBody Scope request, @RequestHeader("Idempotency-Key") String key) {
     scope(request);
-    return accepted(runs.refreshCalendar(request.projectId(), request.sessionId(), key));
+    return submitRefreshCalendar.apply(request, key);
   }
 
   /** Web APIによる操作で用いるタスク一覧を返す。 */
@@ -174,7 +185,7 @@ public final class GoogleOperationsController {
   public ResponseEntity<ChatResponse> authorizeTasks(
       @RequestBody Scope request, @RequestHeader("Idempotency-Key") String key) {
     scope(request);
-    return accepted(runs.authorizeTasks(request.projectId(), request.sessionId(), key));
+    return submitAuthorizeTasks.apply(request, key);
   }
 
   /** Web APIによる操作に関する対象範囲を処理する。 */
