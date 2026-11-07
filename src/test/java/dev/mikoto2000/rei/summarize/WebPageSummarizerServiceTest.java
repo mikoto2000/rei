@@ -13,6 +13,33 @@ import org.junit.jupiter.api.Test;
 /** WebページSummarizerサービスの結果と状態の契約を検証するテスト。 */
 class WebPageSummarizerServiceTest {
 
+  @Test
+  void summaryCompletionStaysWithTheConversationThatRecordedTheRequest() {
+    var memory = org.mockito.Mockito.mock(org.springframework.ai.chat.memory.ChatMemory.class);
+    var appender = new CurrentConversationHistoryAppender(memory, java.util.Optional.empty());
+    var root = java.nio.file.Path.of(".");
+    var first =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext("first", "session-a", root, "project");
+    var second =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext("second", "session-b", root, "project");
+    java.util.function.Consumer<String> completion;
+    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(first)) {
+      completion = appender.beginSummary("summarize");
+    }
+    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(second)) {
+      completion.accept("result");
+    }
+    org.mockito.Mockito.verify(memory)
+        .add(
+            "session-a",
+            List.of(new org.springframework.ai.chat.messages.UserMessage("summarize")));
+    org.mockito.Mockito.verify(memory)
+        .add(
+            "session-a",
+            List.of(new org.springframework.ai.chat.messages.AssistantMessage("result")));
+    org.mockito.Mockito.verifyNoMoreInteractions(memory);
+  }
+
   /** 会話履歴を保存することを確認する。 */
   @Test
   void fetchesExtractsSummarizesAndStoresConversationHistoryInOrder() {
