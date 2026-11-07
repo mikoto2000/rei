@@ -7,8 +7,6 @@ import dev.mikoto2000.rei.core.project.ProjectClientScope;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.project.ProjectService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.Optional;
 import java.util.function.Function;
@@ -39,12 +37,7 @@ public final class ActivityCommandsController {
   private final Function<String, Optional<ProjectContext>> findProject;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final java.util.function.BiFunction<java.nio.file.Path, String, String> contextReport;
 
   /** 実行一覧。 */
   private final java.util.function.Function<
@@ -102,7 +95,13 @@ public final class ActivityCommandsController {
       IntegrationRunSubmitService runs) {
     this.activity = activity;
     this.findProject = id -> registry.resolveById(id);
-    this.projects = projects;
+    this.contextReport =
+        (root, date) -> {
+          try (var scope = ProjectClientScope.open(projects.newClient())) {
+            projects.cd(root.toString());
+            return activity.reportContext(date);
+          }
+        };
     this.submitSuggestBehaviorRules =
         request -> accepted(runs.suggestBehaviorRules(request.projectId(), request.sessionId()));
     this.submitSuggestClassificationRules =
@@ -162,10 +161,7 @@ public final class ActivityCommandsController {
             .apply(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
-    try (var scope = ProjectClientScope.open(projects.newClient())) {
-      projects.cd(project.root().toString());
-      return text(activity.reportContext(date));
-    }
+    return text(contextReport.apply(project.root(), date));
   }
 
   /** Web APIによる操作で用いる助言状態を返す。 */
