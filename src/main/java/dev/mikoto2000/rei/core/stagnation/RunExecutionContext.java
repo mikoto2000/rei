@@ -1108,12 +1108,27 @@ public class RunExecutionContext {
   }
 
   /** 実行の停滞への対処に関するfail永続化されたツールを処理する。 */
-  public void failDurableTool(String call, String name, RuntimeException error) {
+  public void failDurableTool(String call, String name, Throwable error) {
     publisher.publishBoundary(
         factory
             .toolFailed(
                 call, name, dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(error))
             .withOwnership(runContext));
+  }
+
+  /**
+   * Tool controls keep their type across dispatch, with an explicit failure for unknown callbacks.
+   */
+  public static IllegalStateException toolCallbackFailure(RuntimeException error) {
+    if (error instanceof ExecutionStoppedException stopped) throw stopped;
+    if (error instanceof dev.mikoto2000.rei.core.chat.RunWaitingException waiting) throw waiting;
+    if (error instanceof dev.mikoto2000.rei.chatgpt.ChatGptException denied) throw denied;
+    if (error instanceof org.springframework.ai.tool.execution.ToolExecutionException toolFailure)
+      throw toolFailure;
+    if (error instanceof IllegalArgumentException invalid) throw invalid;
+    if (error instanceof SecurityException forbidden) throw forbidden;
+    if (error instanceof IllegalStateException stateFailure) return stateFailure;
+    return new IllegalStateException("Tool callback failed", error);
   }
 
   /** 待機中。 */
@@ -1576,7 +1591,7 @@ public class RunExecutionContext {
   }
 
   /** 後から経緯や使用量を確認できるよう、失敗情報を記録する。 */
-  public synchronized void recordFailure(String name, String arguments, RuntimeException error) {
+  public synchronized void recordFailure(String name, String arguments, Throwable error) {
     iterationFailed = true;
     if (closed) return;
     evaluator.recordFailure(name, arguments);
