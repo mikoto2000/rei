@@ -20,10 +20,10 @@ class LlmModelProviderTest {
     chat.setBaseUrl("https://chat.invalid/v1");
     chat.setApiKey("test-key");
     chat.setModel("chat-model");
-    properties.getFeatures().put(LlmFeature.CHAT, chat);
+    properties.setFeature(LlmFeature.CHAT, chat);
     var correction = new LlmProperties.Server();
     correction.setModel("corrector");
-    properties.getFeatures().put(LlmFeature.VOICE_CORRECTION, correction);
+    properties.setFeature(LlmFeature.VOICE_CORRECTION, correction);
     var provider = new LlmModelProvider(fallback, properties);
     var options = provider.chatOptions(LlmFeature.VOICE_CORRECTION, null);
     assertThat(options.getBaseUrl()).isEqualTo("https://chat.invalid/v1");
@@ -31,6 +31,7 @@ class LlmModelProviderTest {
     assertThat(provider.voiceCorrectionChatModel())
         .isInstanceOf(org.springframework.ai.openai.OpenAiChatModel.class);
     correction.setBaseUrl("https://correction.invalid/v1");
+    properties.setFeature(LlmFeature.VOICE_CORRECTION, correction);
     assertThat(
             new LlmModelProvider(fallback, properties)
                 .chatOptions(LlmFeature.VOICE_CORRECTION, null)
@@ -80,7 +81,7 @@ class LlmModelProviderTest {
     var properties = new LlmProperties();
     var feature = new LlmProperties.Server();
     feature.setMaxOutputTokens(128);
-    properties.getFeatures().put(LlmFeature.OUTPUT_LIMIT_PLANNER, feature);
+    properties.setFeature(LlmFeature.OUTPUT_LIMIT_PLANNER, feature);
     var provider = new LlmModelProvider(defaultModel, properties);
     var options = provider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, null);
 
@@ -137,7 +138,7 @@ class LlmModelProviderTest {
     var properties = new LlmProperties();
     var server = new LlmProperties.Server();
     server.setBaseUrl("http://vision.example.test");
-    properties.getFeatures().put(LlmFeature.COMPUTER_USE, server);
+    properties.setFeature(LlmFeature.COMPUTER_USE, server);
     var provider = new LlmModelProvider(defaultModel, properties);
 
     assertThat(provider.chatOptions(LlmFeature.COMPUTER_USE, null).getModel())
@@ -152,7 +153,7 @@ class LlmModelProviderTest {
     var properties = new LlmProperties();
     var server = new LlmProperties.Server();
     server.setBaseUrl("http://vision.example.test");
-    properties.getFeatures().put("activity", server);
+    properties.setFeature("activity", server);
     assertThat(
             new LlmModelProvider(Mockito.mock(ChatModel.class), properties).chatModel("activity"))
         .isInstanceOf(org.springframework.ai.openai.OpenAiChatModel.class);
@@ -165,7 +166,7 @@ class LlmModelProviderTest {
     properties.setMaxOutputTokens(16384);
     LlmProperties.Server server = new LlmProperties.Server();
     server.setMaxOutputTokens(512);
-    properties.getFeatures().put(LlmFeature.COMPUTER_USE, server);
+    properties.setFeature(LlmFeature.COMPUTER_USE, server);
     var provider = new LlmModelProvider(Mockito.mock(ChatModel.class), properties);
     assertThat(provider.chatOptions(LlmFeature.COMPUTER_USE, "vision").getMaxTokens())
         .isEqualTo(512);
@@ -182,7 +183,7 @@ class LlmModelProviderTest {
     LlmProperties.Server server = new LlmProperties.Server();
     server.setBaseUrl("http://vision.example.test");
     server.setModel("vision-model");
-    properties.getFeatures().put(LlmFeature.COMPUTER_USE, server);
+    properties.setFeature(LlmFeature.COMPUTER_USE, server);
 
     var model = new LlmModelProvider(defaultModel, properties).computerUseChatModel();
 
@@ -225,7 +226,7 @@ class LlmModelProviderTest {
     server.setBaseUrl("http://feature.example.test");
     server.setApiKey("feature-key");
     server.setModel("feature-model");
-    properties.getFeatures().put(LlmFeature.SEARCH, server);
+    properties.setFeature(LlmFeature.SEARCH, server);
 
     LlmModelProvider provider = new LlmModelProvider(defaultModel, properties);
 

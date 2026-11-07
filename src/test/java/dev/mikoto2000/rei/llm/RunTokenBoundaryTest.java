@@ -159,7 +159,7 @@ class RunTokenBoundaryTest {
     var holder = mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
     when(holder.get()).thenReturn("test");
     var properties = new LlmProperties();
-    properties.getOutputLimit().setMaxTotalTokensPerRun(10);
+    properties.updateOutputLimit(limits -> limits.setMaxTotalTokensPerRun(10));
     var client =
         org.springframework.ai.chat.client.ChatClient.builder(new StagnationChatModel(model))
             .defaultAdvisors(new RunAwareToolCallingAdvisor())

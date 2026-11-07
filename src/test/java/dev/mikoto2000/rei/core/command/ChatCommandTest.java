@@ -378,7 +378,7 @@ class ChatCommandTest {
     ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
     OutputLimitReplanner replanner = Mockito.mock(OutputLimitReplanner.class);
     LlmProperties properties = new LlmProperties();
-    properties.getOutputLimit().setMaxReplansPerGoal(1);
+    properties.updateOutputLimit(limits -> limits.setMaxReplansPerGoal(1));
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
@@ -422,7 +422,7 @@ class ChatCommandTest {
     ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
     OutputLimitReplanner replanner = Mockito.mock(OutputLimitReplanner.class);
     LlmProperties properties = new LlmProperties();
-    properties.getOutputLimit().setMaxLlmCallsPerRun(1);
+    properties.updateOutputLimit(limits -> limits.setMaxLlmCallsPerRun(1));
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);

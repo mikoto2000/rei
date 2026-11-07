@@ -51,7 +51,7 @@ class ImageModelProviderTest {
     server.setBaseUrl("http://feature.example.test");
     server.setApiKey("feature-key");
     server.setModel("feature-model");
-    properties.getFeatures().put(LlmFeature.IMAGE_GENERATION, server);
+    properties.setFeature(LlmFeature.IMAGE_GENERATION, server);
 
     ImageModelProvider provider = new ImageModelProvider(defaultModel, properties);
 

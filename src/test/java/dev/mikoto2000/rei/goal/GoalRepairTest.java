@@ -211,7 +211,7 @@ class GoalRepairTest {
   @Test
   void pendingTokenUsageCannotBeHiddenByMatchingFiles() throws Exception {
     var properties = new dev.mikoto2000.rei.llm.LlmProperties();
-    properties.getOutputLimit().setMaxTotalTokensPerGoal(20);
+    properties.updateOutputLimit(limits -> limits.setMaxTotalTokensPerGoal(20));
     goals =
         new GoalRepository(
             new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("goals.db")),
@@ -291,7 +291,7 @@ class GoalRepairTest {
   @Test
   void reserveForwardsActualTokenUsageAndNeverHidesUnknown() throws Exception {
     var properties = new dev.mikoto2000.rei.llm.LlmProperties();
-    properties.getOutputLimit().setMaxTotalTokensPerGoal(20);
+    properties.updateOutputLimit(limits -> limits.setMaxTotalTokensPerGoal(20));
     goals =
         new GoalRepository(
             new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("goals.db")),

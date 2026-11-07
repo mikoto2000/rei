@@ -160,8 +160,8 @@ class ChatExecutionStagnationTest {
     when(holder.get()).thenReturn("test");
     var planner = mock(OutputLimitReplanner.class);
     var properties = new LlmProperties();
-    properties.getOutputLimit().setLlmCallBudgetEnabled(callBudgetEnabled);
-    properties.getOutputLimit().setMaxLlmCallsPerRun(callBudgetEnabled ? 3 : 1);
+    properties.updateOutputLimit(limits -> limits.setLlmCallBudgetEnabled(callBudgetEnabled));
+    properties.updateOutputLimit(limits -> limits.setMaxLlmCallsPerRun(callBudgetEnabled ? 3 : 1));
     var service =
         new ChatExecutionService(
             new FixedLlmChatClientProvider(client),
@@ -252,8 +252,8 @@ class ChatExecutionStagnationTest {
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
     var properties = new LlmProperties();
-    properties.getOutputLimit().setLlmCallBudgetEnabled(callBudgetEnabled);
-    properties.getOutputLimit().setMaxLlmCallsPerRun(callBudgetEnabled ? 120 : 1);
+    properties.updateOutputLimit(limits -> limits.setLlmCallBudgetEnabled(callBudgetEnabled));
+    properties.updateOutputLimit(limits -> limits.setMaxLlmCallsPerRun(callBudgetEnabled ? 120 : 1));
     var service =
         new ChatExecutionService(
             new FixedLlmChatClientProvider(client),

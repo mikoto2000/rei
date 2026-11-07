@@ -167,7 +167,7 @@ class RerankServiceTest {
         new org.springframework.jdbc.datasource.DriverManagerDataSource(
             "jdbc:sqlite:" + root.resolve("goals.db"));
     var props = new dev.mikoto2000.rei.llm.LlmProperties();
-    props.getOutputLimit().setMaxTotalTokensPerGoal(5);
+    props.updateOutputLimit(limits -> limits.setMaxTotalTokensPerGoal(5));
     var goals =
         new dev.mikoto2000.rei.goal.GoalRepository(source, java.time.Clock.systemUTC(), props);
     var goal =

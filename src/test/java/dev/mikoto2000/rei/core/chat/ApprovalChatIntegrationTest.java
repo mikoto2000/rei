@@ -187,7 +187,7 @@ class ApprovalChatIntegrationTest {
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
     var settings = new LlmProperties();
-    settings.getOutputLimit().setMaxLlmCallsPerRun(2);
+    settings.updateOutputLimit(limits -> limits.setMaxLlmCallsPerRun(2));
     var chat =
         new ChatExecutionService(
             new FixedLlmChatClientProvider(client),

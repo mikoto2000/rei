@@ -120,7 +120,7 @@ class ChatExecutionArgumentCorrectionLimitTest {
             .defaultToolCallbacks(tool)
             .build();
     var properties = new LlmProperties();
-    properties.getOutputLimit().setMaxToolArgumentCorrectionsPerRun(limit);
+    properties.updateOutputLimit(limits -> limits.setMaxToolArgumentCorrectionsPerRun(limit));
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
     var events = new ArrayList<AgentEvent>();
