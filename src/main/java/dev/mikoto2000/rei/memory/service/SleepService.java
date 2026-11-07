@@ -33,7 +33,8 @@ public class SleepService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common repository for persisted memory and its transaction boundaries.")
+      justification =
+          "Uses the common repository for persisted memory and its transaction boundaries.")
   private final MemoryRepository repository;
 
   /** やり取り一覧。 */
@@ -132,10 +133,6 @@ public class SleepService {
   }
 
   /** 長期記憶の保存と検索で用いる待機を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the execution failure and attaches a secondary audit failure to it.")
   public Report sleep(
       String session,
       String project,
@@ -311,29 +308,38 @@ public class SleepService {
             run.added(),
             run.status());
       return new Report(run, plans, preview);
-    } catch (RuntimeException error) {
-      if (execution != null && execution.deadlineExpired() && !cancellation.getAsBoolean()) {
+    } catch (RuntimeException | Error error) {
+      AutoSleepExecution.Failure exceeded = null;
+      if (!(error instanceof Error)
+          && execution != null
+          && execution.deadlineExpired()
+          && !cancellation.getAsBoolean()) {
         Thread.interrupted();
-        var exceeded = new AutoSleepExecution.Failure("AUTO_SLEEP_DEADLINE_EXCEEDED", null);
+        exceeded = new AutoSleepExecution.Failure("AUTO_SLEEP_DEADLINE_EXCEEDED", null);
         exceeded.addSuppressed(error);
-        error = exceeded;
       }
-      if (events != null)
-        events.publish(
-            dev.mikoto2000.rei.event.AgentEventType.MEMORY_SLEEP_FAILED,
-            project,
-            session,
-            id,
-            preview,
-            processed,
-            0,
-            0,
-            RunCancellation.isCancellation(error) || Thread.currentThread().isInterrupted()
-                ? "CANCELLED"
-                : "FAILED");
+      Throwable failure = exceeded == null ? error : exceeded;
+      boolean cancelled =
+          !(error instanceof Error)
+              && (RunCancellation.isCancellation(failure)
+                  || Thread.currentThread().isInterrupted());
+      if (events != null) {
+        try {
+          events.publish(
+              dev.mikoto2000.rei.event.AgentEventType.MEMORY_SLEEP_FAILED,
+              project,
+              session,
+              id,
+              preview,
+              processed,
+              0,
+              0,
+              cancelled ? "CANCELLED" : "FAILED");
+        } catch (RuntimeException | Error notification) {
+          if (notification != failure) failure.addSuppressed(notification);
+        }
+      }
       if (!preview) {
-        boolean cancelled =
-            RunCancellation.isCancellation(error) || Thread.currentThread().isInterrupted();
         // Clear interrupt only around the failure audit; restore before propagating cancellation.
         boolean interrupted = Thread.interrupted();
         try {
@@ -349,13 +355,14 @@ public class SleepService {
                   processed,
                   List.of(),
                   1));
-        } catch (RuntimeException audit) {
-          error.addSuppressed(audit);
+        } catch (RuntimeException | Error audit) {
+          if (audit != failure) failure.addSuppressed(audit);
         } finally {
           if (interrupted) Thread.currentThread().interrupt();
         }
       }
-      RunCancellation.propagate(error);
+      if (!(error instanceof Error)) RunCancellation.propagate(failure);
+      if (exceeded != null) throw exceeded;
       throw error;
     } finally {
       RUNNING.remove(session);
