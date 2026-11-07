@@ -214,9 +214,10 @@ public class ContextAssembler {
                     return message;
                   })
               .toList();
+      var restored = restoreSuppressed(new Prompt(messages, raw.getOptions()));
       var projected =
           fitToolResults.apply(
-              withWorkingSetSnapshot(restoreSuppressed(new Prompt(messages, raw.getOptions()))),
+              withWorkingSetSnapshot(restored, captureWorkingSet(restored)),
               conversation,
               run,
               hardLimit(raw));
@@ -243,6 +244,7 @@ public class ContextAssembler {
   /** モデルへ渡す文脈の管理で用いるassemble使用中を返す。 */
   private Prompt assembleLocked(Prompt raw, String conversation, String run, Runnable check) {
     check.run();
+    String workingSetSnapshot = captureWorkingSet(raw);
     int hard = hardLimit(raw);
     int threshold = Math.min(compressionThreshold.getAsInt(), hard - 1);
     var history = new ArrayList<Entry>();
@@ -273,7 +275,7 @@ public class ContextAssembler {
     active.removeIf(e -> e.sequence() <= runSummary.throughSequence());
     var h = new Segment(historyKey, conversationSummary, history, run);
     var a = new Segment(runKey, runSummary, active, run);
-    long before = estimate(project(raw, h, a));
+    long before = estimate(project(raw, h, a, workingSetSnapshot));
     log.debug("Context estimated tokens={}, threshold={}, hardLimit={}", before, threshold, hard);
     if (before > threshold) {
       var inherited = dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
@@ -282,12 +284,13 @@ public class ContextAssembler {
               ? (inherited == null ? newStandaloneSummaryBudget.get() : inherited)
               : null;
       compress(h, raw, check, budget);
-      if (estimate(project(raw, h, a)) > threshold) compress(a, raw, check, budget);
+      if (estimate(project(raw, h, a, workingSetSnapshot)) > threshold)
+        compress(a, raw, check, budget);
     }
     // Bounded degraded behavior. Remove oldest complete groups only from this projection.
     // Retrieved memories are optional. Drop them before sacrificing more conversation at the hard
     // limit.
-    if (estimate(project(raw, h, a)) > hard
+    if (estimate(project(raw, h, a, workingSetSnapshot)) > hard
         && raw.getInstructions().stream()
             .anyMatch(
                 m ->
@@ -303,14 +306,15 @@ public class ContextAssembler {
                   .toList(),
               raw.getOptions());
     }
-    if (estimate(project(raw, h, a)) > hard) {
+    if (estimate(project(raw, h, a, workingSetSnapshot)) > hard) {
       var costs = new ProjectionCosts();
-      costs.tokens = estimate(project(raw, h, a, costs));
+      costs.tokens = estimate(project(raw, h, a, workingSetSnapshot, costs));
       trimOldest(h, costs.history, costs, hard, check);
       trimOldest(a, costs.active, costs, hard, check);
     }
     Prompt result =
-        fitToolResults.apply(restoreSuppressed(project(raw, h, a)), conversation, run, hard);
+        fitToolResults.apply(
+            restoreSuppressed(project(raw, h, a, workingSetSnapshot)), conversation, run, hard);
     long after = estimate(result);
     if (after > hard)
       throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
@@ -602,11 +606,17 @@ public class ContextAssembler {
   }
 
   /** モデルへ渡す文脈の管理で用いるプロジェクトを返す。 */
-  private Prompt project(Prompt original, Segment history, Segment active) {
-    return project(original, history, active, null);
+  private Prompt project(
+      Prompt original, Segment history, Segment active, String workingSetSnapshot) {
+    return project(original, history, active, workingSetSnapshot, null);
   }
 
-  private Prompt project(Prompt original, Segment history, Segment active, ProjectionCosts costs) {
+  private Prompt project(
+      Prompt original,
+      Segment history,
+      Segment active,
+      String workingSetSnapshot,
+      ProjectionCosts costs) {
     var messages = new ArrayList<Message>();
     var historyBySequence = new HashMap<Long, Message>();
     history.entries.forEach(e -> historyBySequence.put(e.sequence(), e.message()));
@@ -654,23 +664,35 @@ public class ContextAssembler {
       }
     }
     if (runObservations != null) messages.add(runObservations);
-    return withWorkingSetSnapshot(new Prompt(messages, original.getOptions()));
+    return withWorkingSetSnapshot(new Prompt(messages, original.getOptions()), workingSetSnapshot);
+  }
+
+  /** Capture once for all projections in this assembly. Null leaves the marker text in use. */
+  private String captureWorkingSet(Prompt prompt) {
+    var render = workingSet;
+    if (render == null
+        || prompt.getInstructions().stream().noneMatch(ContextAssembler::isWorkingSet))
+      return null;
+    return Objects.toString(render.get(), "");
+  }
+
+  private static boolean isWorkingSet(Message message) {
+    return Boolean.TRUE.equals(message.getMetadata().get("rei.workingSet"));
   }
 
   /** Keep changing working state after complete exchanges, outside the loop's raw history. */
-  private Prompt withWorkingSetSnapshot(Prompt prompt) {
+  private static Prompt withWorkingSetSnapshot(Prompt prompt, String snapshot) {
     var messages = new ArrayList<Message>();
     Message marker = null;
     for (var message : prompt.getInstructions()) {
-      if (Boolean.TRUE.equals(message.getMetadata().get("rei.workingSet"))) marker = message;
+      if (isWorkingSet(message)) marker = message;
       else messages.add(message);
     }
     if (marker == null) return prompt;
-    String snapshot = workingSet == null ? marker.getText() : workingSet.get();
-    if (snapshot == null || snapshot.isBlank())
-      snapshot = "## Current Working Set\n\nThe current working set is empty.";
-    messages.add(
-        SystemMessage.builder().text(snapshot).metadata(marker.getMetadata()).build());
+    String text = snapshot == null ? marker.getText() : snapshot;
+    if (text == null || text.isBlank())
+      text = "## Current Working Set\n\nThe current working set is empty.";
+    messages.add(SystemMessage.builder().text(text).metadata(marker.getMetadata()).build());
     return new Prompt(messages, prompt.getOptions());
   }
 

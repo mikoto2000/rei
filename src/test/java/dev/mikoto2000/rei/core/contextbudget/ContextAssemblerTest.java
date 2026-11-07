@@ -232,6 +232,27 @@ class ContextAssemblerTest {
     assertThat(raw.getContents()).contains("Working Set: old");
   }
 
+  @Test
+  void takesOneWorkingSetSnapshotPerAssembly() {
+    var contextAssembler = assembler((previous, messages, budget, request) -> "summary");
+    var snapshots = new AtomicInteger();
+    contextAssembler.setWorkingSet(() -> "Working Set: revision " + snapshots.incrementAndGet());
+    var marker =
+        SystemMessage.builder()
+            .text("Working Set: old")
+            .metadata(Map.of("rei.workingSet", true))
+            .build();
+    var raw = new Prompt(List.of(new UserMessage("request"), marker));
+
+    var first = contextAssembler.assemble(raw, "conversation", "run", () -> {});
+    assertThat(first.getInstructions().getLast().getText()).isEqualTo("Working Set: revision 1");
+    assertThat(snapshots.get()).isEqualTo(1);
+
+    var next = contextAssembler.assemble(raw, "conversation", "run", () -> {});
+    assertThat(next.getInstructions().getLast().getText()).isEqualTo("Working Set: revision 2");
+    assertThat(snapshots.get()).isEqualTo(2);
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void workingSetChangesOnlyTheTailAfterCompleteToolExchanges(boolean compressionEnabled) {
