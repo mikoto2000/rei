@@ -2,11 +2,12 @@ package dev.mikoto2000.rei.core.dependency;
 
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -22,11 +23,9 @@ public class DependencyTools {
   private final DependencyObservationService service;
 
   /** 取得元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads dependency baselines through the configured source probe.")
-  private final DependencySourceProbe source;
+  private final Function<Path, String> gitBaseline;
+
+  private final BiFunction<Path, String, String> fileBaseline;
 
   /** HTTP通信Awaiter。 */
   private final DependencyAwaiter httpAwaiter =
@@ -47,7 +46,8 @@ public class DependencyTools {
       DependencySourceProbe source) {
     this.repo = repo;
     this.service = service;
-    this.source = source;
+    this.gitBaseline = root -> source.gitBaseline(root);
+    this.fileBaseline = (root, file) -> source.fileBaseline(root, file);
   }
 
   /** 後から対象を参照できるよう、依存条件を登録する。 */
@@ -71,9 +71,9 @@ public class DependencyTools {
       throw new IllegalArgumentException(
           "External dependencies are created only by askExternalAgent");
     if (type == DependencySpec.Kind.GIT_STATE_CHANGED && expected == null)
-      expected = source.gitBaseline(owner.projectRoot());
+      expected = gitBaseline.apply(owner.projectRoot());
     if (type == DependencySpec.Kind.FILE_CHANGED && expected == null)
-      expected = source.fileBaseline(owner.projectRoot(), target);
+      expected = fileBaseline.apply(owner.projectRoot(), target);
     var entry =
         repo.create(
             owner,
