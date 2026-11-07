@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.subagent;
 
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -37,25 +35,28 @@ public class SubAgentCommand implements Callable<Integer> {
   private final SubAgentToolPolicy policy;
 
   /** 実行の担当。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common runner for child execution and its lifecycle.")
-  private SubAgentRunner runner;
+  private LocalDelegation runLocal;
 
-  /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project selection and client session state.")
-  private dev.mikoto2000.rei.core.project.ProjectService projects;
+  private java.util.function.BiFunction<
+          ChatGptSubAgentBackend.Request, OwnerSelection, ChatGptSubAgentBackend.Receipt>
+      runExternal;
+
+  private java.util.function.Supplier<OwnerSelection> selectedOwner;
+
+  @FunctionalInterface
+  private interface LocalDelegation {
+    SubAgentResult run(String role, String task, String context);
+  }
+
+  private record OwnerSelection(String session, java.nio.file.Path root, String project) {}
 
   /** 補助エージェントへの委譲に関する設定実行を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void configureExecution(
       SubAgentRunner runner, dev.mikoto2000.rei.core.project.ProjectService projects) {
-    this.runner = runner;
-    this.projects = projects;
+    this.runLocal = runner == null ? null : runner::run;
+    this.runExternal = (request, selection) -> RunCommand.runExternal(runner, request, selection);
+    this.selectedOwner = () -> RunCommand.selectedOwner(projects);
   }
 
   /** ターミナルへの表示先。 */
@@ -189,6 +190,29 @@ public class SubAgentCommand implements Callable<Integer> {
       name = "run",
       description = "Run a role manually; chatgpt-plan consumes ChatGPT plan usage")
   public static class RunCommand implements Callable<Integer> {
+    private static OwnerSelection selectedOwner(
+        dev.mikoto2000.rei.core.project.ProjectService projects) {
+      projects.currentContext();
+      synchronized (projects.currentClient()) {
+        var project = projects.currentContext();
+        var session = projects.currentSessionId();
+        if (session == null)
+          throw new IllegalArgumentException("Select a Session before external delegation");
+        return new OwnerSelection(session, project.root(), project.id());
+      }
+    }
+
+    private static ChatGptSubAgentBackend.Receipt runExternal(
+        SubAgentRunner runner, ChatGptSubAgentBackend.Request request, OwnerSelection selection) {
+      var owner =
+          new dev.mikoto2000.rei.core.chat.AgentRunContext(
+              java.util.UUID.randomUUID().toString(),
+              selection.session(),
+              selection.root(),
+              selection.project());
+      return runner.runManualBackend(request, owner, true, null);
+    }
+
     /** 親。 */
     @ParentCommand SubAgentCommand parent;
 
@@ -228,13 +252,13 @@ public class SubAgentCommand implements Callable<Integer> {
     public Integer call() {
       return parent.execute(
           () -> {
-            if (parent.runner == null)
+            if (parent.runLocal == null)
               throw new IllegalArgumentException("SubAgent runtime unavailable");
             if (backend.equals("local")) {
               if (model != null)
                 throw new IllegalArgumentException(
                     "Local model is selected by the existing role definition");
-              var result = parent.runner.run(role, task, context);
+              var result = parent.runLocal.run(role, task, context);
               parent.out(
                   result.status()
                       + " | "
@@ -249,21 +273,11 @@ public class SubAgentCommand implements Callable<Integer> {
                 || context != null)
               throw new IllegalArgumentException(
                   "External backend requires --model and --expected-result; material is supplied by --source");
-            var project = parent.projects.currentContext();
-            String session;
-            synchronized (parent.projects.currentClient()) {
-              project = parent.projects.currentContext();
-              session = parent.projects.currentSessionId();
-            }
-            if (session == null)
-              throw new IllegalArgumentException("Select a Session before external delegation");
-            var owner =
-                new dev.mikoto2000.rei.core.chat.AgentRunContext(
-                    java.util.UUID.randomUUID().toString(), session, project.root(), project.id());
+            var selection = parent.selectedOwner.get();
             var request =
                 new ChatGptSubAgentBackend.Request(
                     role, backend, model, account, task, sources, expected);
-            var receipt = parent.runner.runManualBackend(request, owner, true, null);
+            var receipt = parent.runExternal.apply(request, selection);
             parent.out(
                 "ChatGPT plan usage | "
                     + receipt.backendId()
@@ -314,36 +328,37 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return requireParent(parent).execute(
-          () -> {
-            var command = requireParent(parent);
-            var d =
-                command
-                    .registry
-                    .findById(id)
-                    .orElseThrow(() -> new IllegalArgumentException("Unknown SubAgent: " + id));
-            command.out(
-                "id: "
-                    + d.id()
-                    + "\nname: "
-                    + d.name()
-                    + "\ndescription: "
-                    + d.description()
-                    + "\nrequested tools: "
-                    + d.requestedTools()
-                    + "\neffective tools: "
-                    + command.policy.effectiveTools(d.requestedTools())
-                    + "\nmodel: "
-                    + (d.model() == null ? "(current chat model)" : d.model())
-                    + "\nmaxSteps: "
-                    + d.maxSteps()
-                    + "\ntimeout: "
-                    + d.timeout()
-                    + "\nresultSchema: "
-                    + (d.resultSchema() == null ? "(envelope only)" : "compiled")
-                    + "\nsource config file: "
-                    + d.source());
-          });
+      return requireParent(parent)
+          .execute(
+              () -> {
+                var command = requireParent(parent);
+                var d =
+                    command
+                        .registry
+                        .findById(id)
+                        .orElseThrow(() -> new IllegalArgumentException("Unknown SubAgent: " + id));
+                command.out(
+                    "id: "
+                        + d.id()
+                        + "\nname: "
+                        + d.name()
+                        + "\ndescription: "
+                        + d.description()
+                        + "\nrequested tools: "
+                        + d.requestedTools()
+                        + "\neffective tools: "
+                        + command.policy.effectiveTools(d.requestedTools())
+                        + "\nmodel: "
+                        + (d.model() == null ? "(current chat model)" : d.model())
+                        + "\nmaxSteps: "
+                        + d.maxSteps()
+                        + "\ntimeout: "
+                        + d.timeout()
+                        + "\nresultSchema: "
+                        + (d.resultSchema() == null ? "(envelope only)" : "compiled")
+                        + "\nsource config file: "
+                        + d.source());
+              });
     }
   }
 
@@ -355,13 +370,15 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return requireParent(parent).execute(
-          () -> {
-            var command = requireParent(parent);
-            var errors = command.registry.reload();
-            if (!errors.isEmpty()) throw new IllegalArgumentException(String.join("\n", errors));
-            command.out("SubAgents reloaded: " + command.registry.list().size());
-          });
+      return requireParent(parent)
+          .execute(
+              () -> {
+                var command = requireParent(parent);
+                var errors = command.registry.reload();
+                if (!errors.isEmpty())
+                  throw new IllegalArgumentException(String.join("\n", errors));
+                command.out("SubAgents reloaded: " + command.registry.list().size());
+              });
     }
   }
 
@@ -377,19 +394,20 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return requireParent(parent).execute(
-          () -> {
-            var command = requireParent(parent);
-            var d = command.loader.load(file);
-            command.out(
-                "valid: "
-                    + d.id()
-                    + "\nprompt: valid\nmaxSteps: "
-                    + d.maxSteps()
-                    + "\ntimeout: "
-                    + d.timeout());
-            for (String tool : d.requestedTools()) command.out(tool + ": allowed");
-          });
+      return requireParent(parent)
+          .execute(
+              () -> {
+                var command = requireParent(parent);
+                var d = command.loader.load(file);
+                command.out(
+                    "valid: "
+                        + d.id()
+                        + "\nprompt: valid\nmaxSteps: "
+                        + d.maxSteps()
+                        + "\ntimeout: "
+                        + d.timeout());
+                for (String tool : d.requestedTools()) command.out(tool + ": allowed");
+              });
     }
   }
 
@@ -405,23 +423,24 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return requireParent(parent).execute(
-          () -> {
-            var command = requireParent(parent);
-            if (id == null || !id.matches("[a-z][a-z0-9-]{0,63}"))
-              throw new IllegalArgumentException("id: expected [a-z][a-z0-9-]{0,63}");
-            Path directory = command.registry.directory();
-            Files.createDirectories(directory);
-            Path target = directory.resolve(id + ".yaml").normalize();
-            if (!directory.equals(target.getParent()))
-              throw new IllegalArgumentException("id: invalid path");
-            Files.writeString(
-                target,
-                "id: "
-                    + id
-                    + "\nname: "
-                    + id
-                    + """
+      return requireParent(parent)
+          .execute(
+              () -> {
+                var command = requireParent(parent);
+                if (id == null || !id.matches("[a-z][a-z0-9-]{0,63}"))
+                  throw new IllegalArgumentException("id: expected [a-z][a-z0-9-]{0,63}");
+                Path directory = command.registry.directory();
+                Files.createDirectories(directory);
+                Path target = directory.resolve(id + ".yaml").normalize();
+                if (!directory.equals(target.getParent()))
+                  throw new IllegalArgumentException("id: invalid path");
+                Files.writeString(
+                    target,
+                    "id: "
+                        + id
+                        + "\nname: "
+                        + id
+                        + """
 
           description: TODO
           systemPrompt: |
@@ -430,11 +449,11 @@ public class SubAgentCommand implements Callable<Integer> {
           maxSteps: 10
           timeout:\s\
           """
-                    + (id.equals("reviewer") ? "30m" : "120s")
-                    + "\n",
-                StandardOpenOption.CREATE_NEW);
-            command.out("Created: " + target + " (edit, validate, then reload)");
-          });
+                        + (id.equals("reviewer") ? "30m" : "120s")
+                        + "\n",
+                    StandardOpenOption.CREATE_NEW);
+                command.out("Created: " + target + " (edit, validate, then reload)");
+              });
     }
   }
 }
