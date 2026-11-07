@@ -67,7 +67,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     var publisher = publisher(owner);
     String runId = owner == null ? null : owner.runId();
     String requestId = UUID.randomUUID().toString();
-    var measured = measurement(prompt, requestId);
+    var measured = measurement(prompt, runId, requestId, null);
     long startedAtNanos = System.nanoTime();
     publisher.publish(eventFactory.llmRequestStarted(runId, requestId, observedFeature(prompt)));
     try {
@@ -105,7 +105,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
           String requestId = UUID.randomUUID().toString();
           dev.mikoto2000.rei.timing.TimingAttempt trace =
               context.getOrDefault(dev.mikoto2000.rei.timing.TimingAttempt.KEY, null);
-          var measured = measurement(prompt, requestId, trace);
+          var measured = measurement(prompt, runId, requestId, trace);
           long startedAtNanos = System.nanoTime();
           var metrics = new ResponseMetrics();
           java.util.concurrent.atomic.AtomicBoolean firstTokenPublished =
@@ -115,7 +115,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
               .doOnNext(
                   response -> {
                     metrics.observe(response);
-                    observeChunk(prompt, measured, response);
+                    observeChunk(runId, measured, response);
                     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
                     if (firstTokenPublished.compareAndSet(false, true)) {
                       metrics.firstResponseMillis = elapsedMillis(startedAtNanos);
@@ -207,25 +207,14 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
 
   /** 用途に応じたモデル利用で用いる計測値を返す。 */
   private dev.mikoto2000.rei.timing.TimingExecution.SpanLease measurement(
-      Prompt prompt, String request) {
-    if (timing == null || !timing.enabled()) return null;
-    var owner = owner(prompt);
-    if (owner == null) return null;
-    return measurement(prompt, request, null);
-  }
-
-  /** 用途に応じたモデル利用で用いる計測値を返す。 */
-  private dev.mikoto2000.rei.timing.TimingExecution.SpanLease measurement(
-      Prompt prompt, String request, dev.mikoto2000.rei.timing.TimingAttempt trace) {
-    if (timing == null || !timing.enabled()) return null;
-    var owner = owner(prompt);
-    if (owner == null) return null;
+      Prompt prompt, String runId, String request, dev.mikoto2000.rei.timing.TimingAttempt trace) {
+    if (timing == null || !timing.enabled() || runId == null) return null;
     if (trace != null) trace.physicalSpan().set(request);
     var span =
         timing.startSpanWithId(
-            owner.runId(),
+            runId,
             request,
-            owner.runId(),
+            runId,
             trace == null ? request : trace.requestId(),
             trace == null ? request : Integer.toString(trace.number()),
             dev.mikoto2000.rei.timing.TimingRecorder.Category.LLM);
@@ -246,27 +235,22 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
 
   /** 状況を判断する根拠を得るため、文書の分割単位を観測する。 */
   private void observeChunk(
-      Prompt prompt,
+      String runId,
       dev.mikoto2000.rei.timing.TimingExecution.SpanLease measured,
       ChatResponse response) {
     if (measured == null) return;
     timing.safely(
         () -> {
           measured.mark(dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_FRAMEWORK_CHUNK);
-          var owner = owner(prompt);
-          if (owner != null)
-            timing.markRun(
-                owner.runId(),
-                dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_FRAMEWORK_CHUNK);
+          timing.markRun(
+              runId, dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_FRAMEWORK_CHUNK);
           var generation = response == null ? null : response.getResult();
           var output = generation == null ? null : generation.getOutput();
           var content = output == null ? null : output.getText();
           if (content != null && !content.isEmpty()) {
             measured.mark(dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_GENERATION_TEXT);
-            if (owner != null)
-              timing.markRun(
-                  owner.runId(),
-                  dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_GENERATION_TEXT);
+            timing.markRun(
+                runId, dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_GENERATION_TEXT);
           }
           observeUsage(measured, response);
         });
