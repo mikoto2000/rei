@@ -6,8 +6,6 @@ import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -30,11 +28,9 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
   private final Supplier<ProjectContext> currentProject;
 
   /** 利用条件の確認。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common guard for the current tool authorization policy.")
-  private final ToolPermissionGuard guard;
+  private final java.util.function.BiConsumer<
+          PersistentDependencyRepository.Entry, dev.mikoto2000.rei.core.chat.AgentRunContext>
+      authorizeCheck;
 
   /** 仕様。 */
   @Spec picocli.CommandLine.Model.CommandSpec spec;
@@ -73,7 +69,14 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
     this.repo = repo;
     this.service = service;
     this.currentProject = () -> projects.currentContext();
-    this.guard = guard;
+    this.authorizeCheck =
+        guard == null
+            ? null
+            : (entry, owner) ->
+                guard.check(
+                    entry.spec().network() ? "checkHttpDependency" : "checkDependency",
+                    "{\"dependencyId\":\"" + entry.id() + "\"}",
+                    owner);
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -101,10 +104,7 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
               case "history" -> repo.history(project.id(), id);
               case "check" -> {
                 boolean network = entry.spec().network();
-                guard.check(
-                    network ? "checkHttpDependency" : "checkDependency",
-                    "{\"dependencyId\":\"" + entry.id() + "\"}",
-                    owner);
+                authorizeCheck.accept(entry, owner);
                 yield service.inspect(project.id(), id, network);
               }
               case "cancel" -> {

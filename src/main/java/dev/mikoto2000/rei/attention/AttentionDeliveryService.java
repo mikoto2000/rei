@@ -75,12 +75,7 @@ public class AttentionDeliveryService {
   private final AgentEventBus bus;
 
   /** 判断基準。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the configured permission policy for the current tool authorization decision.")
-  private final ToolPermissionPolicy policy;
+  private final java.util.function.BooleanSupplier deliveryApproved;
 
   /** 通知の送信先。 */
   private final JdkAttentionSender sender;
@@ -124,7 +119,8 @@ public class AttentionDeliveryService {
     this.inbox = inbox;
     this.outbox = outbox;
     this.bus = bus;
-    this.policy = policy;
+    this.deliveryApproved =
+        () -> policy.evaluate("deliverAttention") == PermissionDecision.AUTO_APPROVE;
     this.sender = sender;
   }
 
@@ -269,7 +265,7 @@ public class AttentionDeliveryService {
       outbox.skip(item, "BLOCKED", "configuration_changed");
       return;
     }
-    if (policy.evaluate("deliverAttention") != PermissionDecision.AUTO_APPROVE) {
+    if (!deliveryApproved.getAsBoolean()) {
       outbox.skip(item, "BLOCKED", "policy_not_granted");
       return;
     }

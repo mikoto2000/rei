@@ -35,15 +35,14 @@ public class DependencyController {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
+      justification =
+          "Uses the shared project registry so lookups use the same registered projects.")
   private final dev.mikoto2000.rei.core.project.ProjectRegistry projects;
 
   /** 利用条件の確認。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common guard for the current tool authorization policy.")
-  private final dev.mikoto2000.rei.core.policy.ToolPermissionGuard guard;
+  private final java.util.function.BiConsumer<
+          PersistentDependencyRepository.Entry, dev.mikoto2000.rei.core.chat.AgentRunContext>
+      authorizeCheck;
 
   /** Web APIによる操作を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public DependencyController(
@@ -61,7 +60,14 @@ public class DependencyController {
     this.repository = repository;
     this.observations = observations;
     this.projects = projects;
-    this.guard = guard;
+    this.authorizeCheck =
+        guard == null
+            ? null
+            : (entry, owner) ->
+                guard.check(
+                    entry.spec().network() ? "checkHttpDependency" : "checkDependency",
+                    "{\"dependencyId\":\"" + entry.id() + "\"}",
+                    owner);
   }
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
@@ -113,10 +119,7 @@ public class DependencyController {
             project.root(),
             projectId,
             dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB);
-    guard.check(
-        network ? "checkHttpDependency" : "checkDependency",
-        "{\"dependencyId\":\"" + entry.id() + "\"}",
-        owner);
+    authorizeCheck.accept(entry, owner);
     try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
       var result = observations.inspect(projectId, id, network);
       observations.flushFacts();
@@ -150,7 +153,7 @@ public class DependencyController {
 
   /** Web APIによる操作で用いるプロジェクトを返す。 */
   private dev.mikoto2000.rei.core.project.ProjectContext project(String id) {
-    if (projects == null || guard == null)
+    if (projects == null || authorizeCheck == null)
       throw new IllegalStateException("Dependency controls unavailable");
     return projects
         .resolveById(id)
