@@ -1,18 +1,10 @@
 package dev.mikoto2000.rei.voice;
 
-import static java.lang.foreign.ValueLayout.ADDRESS;
-import static java.lang.foreign.ValueLayout.JAVA_BYTE;
-import static java.lang.foreign.ValueLayout.JAVA_CHAR;
-import static java.lang.foreign.ValueLayout.JAVA_INT;
-import static java.lang.foreign.ValueLayout.JAVA_SHORT;
-
-import java.lang.foreign.Arena;
-import java.lang.foreign.FunctionDescriptor;
-import java.lang.foreign.Linker;
-import java.lang.foreign.MemoryLayout;
-import java.lang.foreign.MemorySegment;
-import java.lang.foreign.SymbolLookup;
-import java.lang.invoke.MethodHandle;
+import com.sun.jna.Function;
+import com.sun.jna.Memory;
+import com.sun.jna.Native;
+import com.sun.jna.NativeLibrary;
+import com.sun.jna.Pointer;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,186 +28,151 @@ public final class WindowsAudioEndpoints {
 
   /** 後から状況を確認できるよう、接続先一覧を記録する。 */
   public List<Endpoint> captureEndpoints() {
-    if (!System.getProperty("os.name", "").startsWith("Windows") || ADDRESS.byteSize() != 8)
+    if (!System.getProperty("os.name", "").startsWith("Windows") || Native.POINTER_SIZE != 8)
       throw new IllegalStateException("Windows x64 endpoint monitoring is required");
     if (!WindowsAudioEndpoints.class.getModule().isNativeAccessEnabled())
       throw new IllegalStateException(
           "Endpoint monitoring requires --enable-native-access=ALL-UNNAMED");
-    try (var arena = Arena.ofConfined()) {
-      var linker = Linker.nativeLinker();
-      var library =
-          SymbolLookup.libraryLookup(
-              Path.of(System.getenv("SystemRoot"), "System32", "Ole32.dll"), arena);
-      var api = new Com(arena, linker, library);
-      api.check(
-          api.call(
-              api.function("CoInitializeEx", JAVA_INT, ADDRESS, JAVA_INT), MemorySegment.NULL, 0));
-      try {
-        return api.endpoints();
-      } finally {
-        api.call(api.function("CoUninitialize", null));
-      }
+    var library = Path.of(System.getenv("SystemRoot"), "System32", "Ole32.dll");
+    // JNA manages the shared DLL handle. The COM references and buffers are per query.
+    var api = new Com(NativeLibrary.getInstance(library.toString()));
+    api.check(api.function("CoInitializeEx").invokeInt(new Object[] {null, 0}));
+    try {
+      return api.endpoints();
+    } finally {
+      api.function("CoUninitialize").invokeVoid(new Object[0]);
     }
   }
 
-  /** 音声による対話に必要なComを扱う。 */
-  private static final class Com {
-    /** OS連携で使う資源の管理範囲。 */
-    final Arena arena;
-
-    /** OSの機能を呼び出す窓口。 */
-    final Linker linker;
-
-    /** 保管資料。 */
-    final SymbolLookup library;
-
-    /** 指定された値や利用先を使って、Comを初期化する。 */
-    Com(Arena arena, Linker linker, SymbolLookup library) {
-      this.arena = arena;
-      this.linker = linker;
-      this.library = library;
+  /** Read-only access to the MMDevice interfaces and their Windows x64 layouts. */
+  private record Com(NativeLibrary library) {
+    Function function(String name) {
+      return library.getFunction(name, Function.ALT_CONVENTION);
     }
 
-    /** 音声による対話で用いる変換処理を返す。 */
-    MethodHandle function(String name, MemoryLayout result, MemoryLayout... args) {
-      return linker.downcallHandle(library.find(name).orElseThrow(), descriptor(result, args));
-    }
-
-    /** 音声による対話で用いるdescriptorを返す。 */
-    FunctionDescriptor descriptor(MemoryLayout result, MemoryLayout... args) {
-      return result == null ? FunctionDescriptor.ofVoid(args) : FunctionDescriptor.of(result, args);
-    }
-
-    /** 音声による対話の要求を実行し、呼び出し元へ結果を返す。 */
-    Object call(MethodHandle handle, Object... args) {
-      try {
-        return handle.invokeWithArguments(args);
-      } catch (Throwable failure) {
-        throw new IllegalStateException("Windows endpoint query failed", failure);
-      }
-    }
-
-    /** 後続の処理を進められるか、現在の条件を確認する。 */
-    void check(Object result) {
-      if ((Integer) result < 0)
+    void check(int result) {
+      if (result < 0)
         throw new IllegalStateException(
-            "Windows endpoint API failed (HRESULT " + Integer.toHexString((Integer) result) + ")");
+            "Windows endpoint API failed (HRESULT " + Integer.toHexString(result) + ")");
     }
 
-    /** 音声による対話で用いるメソッドを返す。 */
-    MethodHandle method(MemorySegment object, int slot, MemoryLayout... args) {
-      var table = object.reinterpret(ADDRESS.byteSize()).get(ADDRESS, 0);
-      var address = table.reinterpret((slot + 1) * ADDRESS.byteSize()).getAtIndex(ADDRESS, slot);
-      var layouts = new MemoryLayout[args.length + 1];
-      layouts[0] = ADDRESS;
-      System.arraycopy(args, 0, layouts, 1, args.length);
-      return linker.downcallHandle(address, FunctionDescriptor.of(JAVA_INT, layouts));
+    int invoke(Pointer object, int slot, Object... args) {
+      var table = requirePointer(object).getPointer(0);
+      var address = requirePointer(table).getPointer((long) slot * Native.POINTER_SIZE);
+      var parameters = new Object[args.length + 1];
+      parameters[0] = object;
+      System.arraycopy(args, 0, parameters, 1, args.length);
+      return Function.getFunction(requirePointer(address), Function.ALT_CONVENTION)
+          .invokeInt(parameters);
     }
 
-    /** 後続の処理が利用できるよう、Comを解放する。 */
-    void release(MemorySegment object) {
-      if (!object.equals(MemorySegment.NULL)) call(method(object, 2), object);
+    Pointer requirePointer(Pointer pointer) {
+      if (pointer == null) throw new IllegalStateException("Windows endpoint pointer is missing");
+      return pointer;
     }
 
-    /** 音声による対話で用いるguidを返す。 */
-    MemorySegment guid(String text) {
+    void release(Pointer object) {
+      if (object != null) invoke(object, 2);
+    }
+
+    void guid(Memory memory, String text) {
       var value = UUID.fromString(text);
-      var segment = arena.allocate(16, 4);
       long most = value.getMostSignificantBits(), least = value.getLeastSignificantBits();
-      segment.set(JAVA_INT, 0, (int) (most >>> 32));
-      segment.set(JAVA_SHORT, 4, (short) (most >>> 16));
-      segment.set(JAVA_SHORT, 6, (short) most);
-      for (int i = 0; i < 8; i++) segment.set(JAVA_BYTE, 8 + i, (byte) (least >>> (56 - i * 8)));
-      return segment;
+      memory.setInt(0, (int) (most >>> 32));
+      memory.setShort(4, (short) (most >>> 16));
+      memory.setShort(6, (short) most);
+      for (int i = 0; i < 8; i++) memory.setByte(8 + i, (byte) (least >>> (56 - i * 8)));
     }
 
-    /** 音声による対話で用いるwide文字列表現を返す。 */
-    String wideString(MemorySegment pointer) {
-      if (pointer.equals(MemorySegment.NULL))
-        throw new IllegalStateException("Windows endpoint string is missing");
-      var chars = pointer.reinterpret(1024);
+    String wideString(Pointer pointer) {
+      requirePointer(pointer);
       var value = new StringBuilder();
       for (int i = 0; i < 512; i++) {
-        char c = chars.getAtIndex(JAVA_CHAR, i);
+        char c = (char) pointer.getShort((long) i * Character.BYTES);
         if (c == 0) return value.toString();
         value.append(c);
       }
       throw new IllegalStateException("Windows endpoint string exceeds the supported bound");
     }
 
-    /** 音声による対話で用いる接続先一覧を返す。 */
     List<Endpoint> endpoints() {
-      var output = arena.allocate(ADDRESS);
-      MemorySegment enumerator = MemorySegment.NULL, collection = MemorySegment.NULL;
-      try {
-        check(
-            call(
-                function(
-                    "CoCreateInstance", JAVA_INT, ADDRESS, ADDRESS, JAVA_INT, ADDRESS, ADDRESS),
-                guid("bcde0395-e52f-467c-8e3d-c4579291692e"),
-                MemorySegment.NULL,
-                1,
-                guid("a95664d2-9614-4f35-a746-de8db63617e6"),
-                output));
-        enumerator = output.get(ADDRESS, 0);
-        output.set(ADDRESS, 0, MemorySegment.NULL);
-        check(call(method(enumerator, 3, JAVA_INT, JAVA_INT, ADDRESS), enumerator, 1, 15, output));
-        collection = output.get(ADDRESS, 0);
-        var count = arena.allocate(JAVA_INT);
-        check(call(method(collection, 3, ADDRESS), collection, count));
-        int size = count.get(JAVA_INT, 0);
-        if (size < 0 || size > 256)
-          throw new IllegalStateException("Windows endpoint count exceeds the supported bound");
-        var endpoints = new ArrayList<Endpoint>();
-        for (int i = 0; i < size; i++) {
-          output.set(ADDRESS, 0, MemorySegment.NULL);
-          check(call(method(collection, 4, JAVA_INT, ADDRESS), collection, i, output));
-          var device = output.get(ADDRESS, 0);
+      try (var output = new Memory(Native.POINTER_SIZE);
+          var classId = new Memory(16);
+          var interfaceId = new Memory(16);
+          var count = new Memory(Integer.BYTES)) {
+        guid(classId, "bcde0395-e52f-467c-8e3d-c4579291692e");
+        guid(interfaceId, "a95664d2-9614-4f35-a746-de8db63617e6");
+        Pointer enumerator = null, collection = null;
+        try {
+          output.clear();
+          check(function("CoCreateInstance")
+              .invokeInt(new Object[] {classId, null, 1, interfaceId, output}));
+          enumerator = output.getPointer(0);
+          output.clear();
+          check(invoke(enumerator, 3, 1, 15, output));
+          collection = output.getPointer(0);
+          count.clear();
+          check(invoke(collection, 3, count));
+          int size = count.getInt(0);
+          if (size < 0 || size > 256)
+            throw new IllegalStateException("Windows endpoint count exceeds the supported bound");
+          var endpoints = new ArrayList<Endpoint>();
+          for (int i = 0; i < size; i++) {
+            output.clear();
+            check(invoke(collection, 4, i, output));
+            var device = output.getPointer(0);
+            try {
+              endpoints.add(endpoint(device));
+            } finally {
+              release(device);
+            }
+          }
+          return List.copyOf(endpoints);
+        } finally {
           try {
-            endpoints.add(endpoint(device));
+            release(collection);
           } finally {
-            release(device);
+            release(enumerator);
           }
         }
-        return List.copyOf(endpoints);
-      } finally {
-        release(collection);
-        release(enumerator);
       }
     }
 
-    /** 音声による対話で用いる接続先を返す。 */
-    Endpoint endpoint(MemorySegment device) {
-      var output = arena.allocate(ADDRESS);
-      var state = arena.allocate(JAVA_INT);
-      check(call(method(device, 6, ADDRESS), device, state));
-      check(call(method(device, 5, ADDRESS), device, output));
-      var idPointer = output.get(ADDRESS, 0);
-      String id;
-      try {
-        id = wideString(idPointer);
-      } finally {
-        call(function("CoTaskMemFree", null, ADDRESS), idPointer);
-      }
-      output.set(ADDRESS, 0, MemorySegment.NULL);
-      check(call(method(device, 4, JAVA_INT, ADDRESS), device, 0, output));
-      var properties = output.get(ADDRESS, 0);
-      try {
-        var key = arena.allocate(20, 4);
-        MemorySegment.copy(guid("a45c254e-df1c-4efd-8020-67d146a850e0"), 0, key, 0, 16);
-        key.set(JAVA_INT, 16, 14);
-        var value = arena.allocate(24, 8);
+    Endpoint endpoint(Pointer device) {
+      try (var output = new Memory(Native.POINTER_SIZE);
+          var state = new Memory(Integer.BYTES);
+          var key = new Memory(20);
+          var value = new Memory(24)) {
+        state.clear();
+        output.clear();
+        check(invoke(device, 6, state));
+        check(invoke(device, 5, output));
+        var idPointer = output.getPointer(0);
+        String id;
         try {
-          check(call(method(properties, 5, ADDRESS, ADDRESS), properties, key, value));
-          if (value.get(JAVA_SHORT, 0) != 31)
-            throw new IllegalStateException(
-                "Windows endpoint friendly name has an unsupported type");
-          return new Endpoint(id, wideString(value.get(ADDRESS, 8)), state.get(JAVA_INT, 0));
+          id = wideString(idPointer);
         } finally {
-          check(call(function("PropVariantClear", JAVA_INT, ADDRESS), value));
+          function("CoTaskMemFree").invokeVoid(new Object[] {idPointer});
         }
-      } finally {
-        release(properties);
+        output.clear();
+        check(invoke(device, 4, 0, output));
+        var properties = output.getPointer(0);
+        try {
+          guid(key, "a45c254e-df1c-4efd-8020-67d146a850e0");
+          key.setInt(16, 14);
+          value.clear();
+          try {
+            check(invoke(properties, 5, key, value));
+            if (value.getShort(0) != 31)
+              throw new IllegalStateException(
+                  "Windows endpoint friendly name has an unsupported type");
+            return new Endpoint(id, wideString(value.getPointer(8)), state.getInt(0));
+          } finally {
+            check(function("PropVariantClear").invokeInt(new Object[] {value}));
+          }
+        } finally {
+          release(properties);
+        }
       }
     }
   }
