@@ -1,8 +1,7 @@
 package dev.mikoto2000.rei.websearch;
 
+import dev.mikoto2000.rei.http.cache.HttpResponseCache;
 import dev.mikoto2000.rei.websearch.WebSearchProperties.ProviderProperties;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -11,9 +10,11 @@ import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -32,11 +33,12 @@ public class WebSearchService {
   private static final Logger log = LoggerFactory.getLogger(WebSearchService.class);
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the current shared search provider, extraction, and request policy.")
-  private final WebSearchProperties properties;
+  private final Supplier<SearchSettings> searchSettings;
+
+  private final Supplier<WebResearchScope> enterResearch;
+  private final Supplier<List<ProviderProperties>> readProviders;
+  private final Supplier<String> fallbackOpenAiKey;
+  private final CacheRequestFactory<HttpResponseCache.Request> requestFactory;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectReader responseReader;
@@ -73,7 +75,21 @@ public class WebSearchService {
       JsonMapper objectMapper,
       dev.mikoto2000.rei.http.SafeHttpFetcher fetcher,
       dev.mikoto2000.rei.http.cache.HttpResponseCache cache) {
-    this.properties = properties;
+    this.searchSettings =
+        () -> {
+          properties.validateSelection();
+          return new SearchSettings(
+              properties.isEnabled(),
+              properties.getMaxResults(),
+              properties.getMaxSearchApiCalls(),
+              Duration.ofSeconds(properties.getTimeoutSeconds()));
+        };
+    this.enterResearch = () -> WebResearchScope.enter(properties);
+    this.readProviders = () -> configuredProviders(properties);
+    this.fallbackOpenAiKey = () -> properties.getOpenaiApiKey();
+    this.requestFactory =
+        (request, provider, limit, body) ->
+            cacheRequest(properties, request, provider, limit, body);
     this.responseReader = objectMapper.reader();
     this.openai = new OpenAiWebSearch(objectMapper);
     this.fetcher = fetcher;
@@ -84,13 +100,13 @@ public class WebSearchService {
   public List<WebSearchResult> search(String query, Integer limit)
       throws IOException, InterruptedException {
     long started = System.nanoTime();
-    properties.validateSelection();
+    var settings = searchSettings.get();
     try (var refresh =
             dev.mikoto2000.rei.http.FetchScope.withForceRefresh(
                 query != null && WebSearchSelection.needsFreshness(query));
-        var research = WebResearchScope.enter(properties);
-        var budget = SearchRequestBudget.enter(properties.getMaxSearchApiCalls())) {
-      return searchObserved(query, limit);
+        var research = enterResearch.get();
+        var budget = SearchRequestBudget.enter(settings.maxApiCalls())) {
+      return searchObserved(query, limit, settings);
     } finally {
       WebSearchMetrics.OBSERVED.duration("search", System.nanoTime() - started);
     }
@@ -101,16 +117,16 @@ public class WebSearchService {
       value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
       justification =
           "Rethrow original cancellation and provider failures after safe logging; wrapping changes their semantics.")
-  private List<WebSearchResult> searchObserved(String query, Integer limit)
+  private List<WebSearchResult> searchObserved(String query, Integer limit, SearchSettings settings)
       throws IOException, InterruptedException {
-    if (!properties.isEnabled()) {
+    if (!settings.enabled()) {
       throw new IllegalStateException(
           "Web search is disabled. Set REI_WEB_SEARCH_ENABLED=true to enable it.");
     }
 
-    int requestedLimit = limit == null ? properties.getMaxResults() : limit;
+    int requestedLimit = limit == null ? settings.maxResults() : limit;
     // 利用者の希望件数を、設定された検索結果の上限に収める。
-    int clampedLimit = Math.max(1, Math.min(requestedLimit, properties.getMaxResults()));
+    int clampedLimit = Math.max(1, Math.min(requestedLimit, settings.maxResults()));
     List<ProviderProperties> providers = configuredProviders();
     Map<String, WebSearchResult> resultsByUrl = new LinkedHashMap<>();
     Exception firstError = null;
@@ -136,7 +152,8 @@ public class WebSearchService {
           providers.size(),
           clampedLimit);
       try {
-        var results = searchWithProvider(provider, query, clampedLimit, attempt);
+        var results =
+            searchWithProvider(provider, query, clampedLimit, settings.timeout(), attempt);
         for (WebSearchResult result : results) {
           WebSearchMetrics.OBSERVED.add("results", 1);
           if (resultsByUrl.containsKey(result.url()))
@@ -234,37 +251,64 @@ public class WebSearchService {
 
   /** 有効な検索先の設定を取り出し、検索先がない場合は設定の問題を伝える。 */
   List<ProviderProperties> configuredProviders() {
-    if (properties.getProviders() == null || properties.getProviders().isEmpty()) {
+    return readProviders.get();
+  }
+
+  private static List<ProviderProperties> configuredProviders(WebSearchProperties properties) {
+    var configured = properties.getProviders();
+    if (configured == null || configured.isEmpty()) {
       String detail = "enabled=%s, providersCount=0".formatted(properties.isEnabled());
       log.warn("Web search providers were empty at execution time: {}", detail);
       throw new IllegalStateException("No web search providers are configured. " + detail);
     }
 
     List<ProviderProperties> providers = new ArrayList<>();
-    for (ProviderProperties provider : properties.getProviders()) {
+    for (ProviderProperties provider : configured) {
       if (provider == null || provider.getName() == null || provider.getName().isBlank()) {
         continue;
       }
-      providers.add(provider);
+      providers.add(copyProvider(provider));
     }
     if (providers.isEmpty()) {
       String detail =
-          "enabled=%s, providersCount=%s"
-              .formatted(properties.isEnabled(), properties.getProviders().size());
+          "enabled=%s, providersCount=%s".formatted(properties.isEnabled(), configured.size());
       log.warn("Web search providers were present but all invalid at execution time: {}", detail);
       throw new IllegalStateException("No web search providers are configured. " + detail);
     }
     return providers;
   }
 
+  private static ProviderProperties copyProvider(ProviderProperties source) {
+    var provider = new ProviderProperties();
+    provider.setName(source.getName());
+    provider.setBaseUrl(source.getBaseUrl());
+    provider.setApiKey(source.getApiKey());
+    provider.setModel(source.getModel());
+    provider.setSearchContextSize(source.getSearchContextSize());
+    provider.setMaxUrls(source.getMaxUrls());
+    provider.setTimeoutSeconds(source.getTimeoutSeconds());
+    provider.setAllowedDomains(copyDomains(source.getAllowedDomains()));
+    provider.setBlockedDomains(copyDomains(source.getBlockedDomains()));
+    provider.setAllowPrivateNetwork(source.isAllowPrivateNetwork());
+    return provider;
+  }
+
+  private static List<String> copyDomains(List<String> domains) {
+    return domains == null ? null : Collections.unmodifiableList(new ArrayList<>(domains));
+  }
+
   /** 依頼に関連する情報を得るため、付き提供元を検索する。 */
   private List<WebSearchResult> searchWithProvider(
-      ProviderProperties provider, String query, int limit, ProviderAttempt attempt)
+      ProviderProperties provider,
+      String query,
+      int limit,
+      Duration timeout,
+      ProviderAttempt attempt)
       throws IOException, InterruptedException {
     String providerName = provider.getName().trim().toLowerCase(java.util.Locale.ROOT);
     return switch (providerName) {
-      case "duckduckgo" -> searchDuckDuckGo(provider, query, limit, attempt);
-      case "brave" -> searchBrave(provider, query, limit, attempt);
+      case "duckduckgo" -> searchDuckDuckGo(provider, query, limit, timeout, attempt);
+      case "brave" -> searchBrave(provider, query, limit, timeout, attempt);
       case "openai" -> searchOpenAi(provider, query, limit, attempt);
       default ->
           throw new IllegalStateException("Unsupported web search provider: " + provider.getName());
@@ -275,7 +319,7 @@ public class WebSearchService {
   private List<WebSearchResult> searchOpenAi(
       ProviderProperties provider, String query, int limit, ProviderAttempt attempt) {
     String key = provider.getApiKey();
-    if (key == null || key.isBlank()) key = properties.getOpenaiApiKey();
+    if (key == null || key.isBlank()) key = fallbackOpenAiKey.get();
     if (key == null || key.isBlank()) throw OpenAiWebSearch.failure("API_KEY_NOT_CONFIGURED");
     if (key.chars().anyMatch(character -> character <= 32 || character >= 127))
       throw OpenAiWebSearch.failure("API_KEY_INVALID");
@@ -289,8 +333,10 @@ public class WebSearchService {
             .build();
     long started = System.nanoTime();
     var sent = new java.util.concurrent.atomic.AtomicBoolean();
+    HttpResponseCache.Request cacheIdentity = null;
     try {
-      var response = send(request, provider, limit, body, sent, attempt);
+      cacheIdentity = requestFactory.create(request, provider, limit, body);
+      var response = send(cacheIdentity, provider, sent, attempt);
       if (response.status() != 200) throw OpenAiWebSearch.failure("HTTP_" + response.status());
       String json = new String(response.body(), StandardCharsets.UTF_8);
       if (sent.get()) openai.recordUsage(json);
@@ -299,7 +345,7 @@ public class WebSearchService {
       return results;
     } catch (RuntimeException | Error failure) {
       try {
-        cache.invalidate(cacheRequest(request, provider, limit, body), fetcher);
+        if (cacheIdentity != null) cache.invalidate(cacheIdentity, fetcher);
       } catch (RuntimeException | Error eviction) {
         if (eviction != failure) failure.addSuppressed(eviction);
       }
@@ -315,7 +361,11 @@ public class WebSearchService {
 
   /** 依頼に関連する情報を得るため、Braveを検索する。 */
   private List<WebSearchResult> searchBrave(
-      ProviderProperties provider, String query, int limit, ProviderAttempt attempt)
+      ProviderProperties provider,
+      String query,
+      int limit,
+      Duration timeout,
+      ProviderAttempt attempt)
       throws IOException, InterruptedException {
     if (provider.getApiKey() == null || provider.getApiKey().isBlank()) {
       throw new IllegalStateException("Web search API key is not configured for provider brave.");
@@ -326,13 +376,14 @@ public class WebSearchService {
 
     HttpRequest request =
         HttpRequest.newBuilder(uri)
-            .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
+            .timeout(timeout)
             .header("Accept", "application/json")
             .header("X-Subscription-Token", provider.getApiKey())
             .GET()
             .build();
 
-    var response = send(request, provider, limit, attempt);
+    var cacheIdentity = requestFactory.create(request, provider, limit, "");
+    var response = send(cacheIdentity, provider, attempt);
     if (response.status() >= 400) {
       throw new WebSearchHttpException(response.status());
     }
@@ -342,20 +393,25 @@ public class WebSearchService {
 
   /** 依頼に関連する情報を得るため、DuckDuckGoを検索する。 */
   private List<WebSearchResult> searchDuckDuckGo(
-      ProviderProperties provider, String query, int limit, ProviderAttempt attempt)
+      ProviderProperties provider,
+      String query,
+      int limit,
+      Duration timeout,
+      ProviderAttempt attempt)
       throws IOException, InterruptedException {
     String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
     URI uri = URI.create(provider.getBaseUrl() + "?q=" + encodedQuery);
 
     HttpRequest request =
         HttpRequest.newBuilder(uri)
-            .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
+            .timeout(timeout)
             .header("Accept", "text/html")
             .header("User-Agent", "Rei/0.0.1")
             .GET()
             .build();
 
-    var response = send(request, provider, limit, attempt);
+    var cacheIdentity = requestFactory.create(request, provider, limit, "");
+    var response = send(cacheIdentity, provider, attempt);
     if (response.status() >= 400) {
       throw new WebSearchHttpException(response.status());
     }
@@ -365,10 +421,18 @@ public class WebSearchService {
     if (document.selectFirst("form#challenge-form, form[action*=/anomaly.js], .anomaly-modal")
         != null) {
       // HTTP 200 の制限ページもキャッシュに残さず、次の検索先へフォールバックする。
-      cache.invalidate(cacheRequest(request, provider, limit, ""), fetcher);
+      cache.invalidate(cacheIdentity, fetcher);
       throw new WebSearchResponseException(response.status());
     }
     return parseDuckDuckGoResults(html, limit);
+  }
+
+  private record SearchSettings(
+      boolean enabled, int maxResults, int maxApiCalls, Duration timeout) {}
+
+  @FunctionalInterface
+  private interface CacheRequestFactory<R> {
+    R create(HttpRequest request, ProviderProperties provider, int limit, String body);
   }
 
   /** 検索先の通信状況だけを保持し、検索語・本文・認証情報は保持しない。 */
@@ -413,16 +477,13 @@ public class WebSearchService {
 
   /** Web上の情報の調査で用いる送信を返す。 */
   private dev.mikoto2000.rei.http.SafeHttpFetcher.Response send(
-      HttpRequest request, ProviderProperties provider, int limit, ProviderAttempt attempt) {
-    return send(
-        request, provider, limit, "", new java.util.concurrent.atomic.AtomicBoolean(), attempt);
+      HttpResponseCache.Request request, ProviderProperties provider, ProviderAttempt attempt) {
+    return send(request, provider, new java.util.concurrent.atomic.AtomicBoolean(), attempt);
   }
 
   private dev.mikoto2000.rei.http.SafeHttpFetcher.Response send(
-      HttpRequest request,
+      HttpResponseCache.Request request,
       ProviderProperties provider,
-      int limit,
-      String body,
       java.util.concurrent.atomic.AtomicBoolean sent,
       ProviderAttempt attempt) {
     var observed =
@@ -461,18 +522,18 @@ public class WebSearchService {
           }
         };
     var response =
-        cache.fetch(
-            cacheRequest(request, provider, limit, body),
-            dev.mikoto2000.rei.http.FetchScope.current(),
-            observer,
-            fetcher);
+        cache.fetch(request, dev.mikoto2000.rei.http.FetchScope.current(), observer, fetcher);
     attempt.httpStatus = response.status();
     return response;
   }
 
   /** Use identical request identity for loading and removing invalid 200 responses. */
-  private dev.mikoto2000.rei.http.cache.HttpResponseCache.Request cacheRequest(
-      HttpRequest request, ProviderProperties provider, int limit, String body) {
+  private static HttpResponseCache.Request cacheRequest(
+      WebSearchProperties properties,
+      HttpRequest request,
+      ProviderProperties provider,
+      int limit,
+      String body) {
     Map<String, String> headers = new LinkedHashMap<>();
     request.headers().map().forEach((name, values) -> headers.put(name, String.join(",", values)));
     return new dev.mikoto2000.rei.http.cache.HttpResponseCache.Request(
