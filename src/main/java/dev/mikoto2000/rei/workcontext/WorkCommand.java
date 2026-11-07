@@ -4,8 +4,6 @@ import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.concurrent.Callable;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -34,12 +32,7 @@ public class WorkCommand implements Callable<Integer> {
   private final WorkContextGit git;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final java.util.function.Supplier<Runnable> beginCommand;
 
   /** 仕様。 */
   @Spec CommandSpec spec;
@@ -67,7 +60,11 @@ public class WorkCommand implements Callable<Integer> {
         };
     this.currentSessionId = () -> projects.currentSessionId();
     this.git = git;
-    this.cancellation = cancellation;
+    this.beginCommand =
+        () -> {
+          cancellation.begin(Thread.currentThread());
+          return cancellation::clear;
+        };
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -104,7 +101,7 @@ public class WorkCommand implements Callable<Integer> {
         () -> {
           // Capture session first; the application service resolves the immutable session owner.
           String session = currentSessionId.get();
-          cancellation.begin(Thread.currentThread());
+          Runnable clearCancellation = beginCommand.get();
           try {
             return service
                 .update(session, null, true)
@@ -116,7 +113,7 @@ public class WorkCommand implements Callable<Integer> {
                             + c.revision())
                 .orElse("保存できる会話はまだありません。");
           } finally {
-            cancellation.clear();
+            clearCancellation.run();
           }
         });
   }

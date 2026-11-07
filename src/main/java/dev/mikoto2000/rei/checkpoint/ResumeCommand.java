@@ -40,12 +40,7 @@ public class ResumeCommand implements Callable<Integer> {
   private final java.util.function.Consumer<String> selectSession;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final dev.mikoto2000.rei.core.service.CommandCancellationService cancellation;
+  private final java.util.function.Supplier<Runnable> beginCommand;
 
   /** 仕様。 */
   @Spec CommandSpec spec;
@@ -86,7 +81,11 @@ public class ResumeCommand implements Callable<Integer> {
     this.currentProjectId = () -> projects.currentContext().id();
     this.currentSessionId = () -> projects.currentSessionId();
     this.selectSession = session -> projects.selectSession(session);
-    this.cancellation = cancellation;
+    this.beginCommand =
+        () -> {
+          cancellation.begin(Thread.currentThread());
+          return cancellation::clear;
+        };
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -97,7 +96,7 @@ public class ResumeCommand implements Callable<Integer> {
   /** 利用者に結果を伝えるため、再開コマンドを出力する。 */
   int print(java.util.function.Supplier<Object> action) {
     var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
-    cancellation.begin(Thread.currentThread());
+    Runnable clearCancellation = beginCommand.get();
     try {
       CheckpointReconciler.active();
       writer.println(action.get());
@@ -106,7 +105,7 @@ public class ResumeCommand implements Callable<Integer> {
       writer.println("[error] " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
       return Thread.currentThread().isInterrupted() ? 130 : 2;
     } finally {
-      cancellation.clear();
+      clearCancellation.run();
       writer.flush();
     }
   }

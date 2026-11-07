@@ -45,12 +45,7 @@ public class SleepCommand implements Callable<Integer> {
   private final java.util.function.Supplier<String> currentSessionId;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final java.util.function.Supplier<Runnable> beginCommand;
 
   /** 自動。 */
   @SuppressFBWarnings(
@@ -91,7 +86,11 @@ public class SleepCommand implements Callable<Integer> {
     this.support = support;
     this.currentProjectId = () -> projects.currentContext().id();
     this.currentSessionId = () -> projects.currentSessionId();
-    this.cancellation = cancellation;
+    this.beginCommand =
+        () -> {
+          cancellation.begin(Thread.currentThread());
+          return cancellation::clear;
+        };
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -116,13 +115,13 @@ public class SleepCommand implements Callable<Integer> {
         () -> {
           support.enabled();
           String session = currentSessionId.get(), project = currentProjectId.get();
-          cancellation.begin(Thread.currentThread());
+          Runnable clearCancellation = beginCommand.get();
           try {
             out().println(preview ? "Sleep preview started..." : "Sleep started...");
             out().flush();
             return support.report(service.sleep(session, project, preview));
           } finally {
-            cancellation.clear();
+            clearCancellation.run();
           }
         });
   }
