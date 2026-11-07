@@ -591,7 +591,6 @@ dev.mikoto2000.rei.core.RepositoryMapService -> dev.mikoto2000.rei.externalagent
 dev.mikoto2000.rei.core.RepositoryMapService -> dev.mikoto2000.rei.externalagent.ExternalAgentProcessRunner$Output
 dev.mikoto2000.rei.core.RepositoryMapService -> dev.mikoto2000.rei.externalagent.ExternalAgentResult$Status
 dev.mikoto2000.rei.core.SearchRanking -> dev.mikoto2000.rei.core.chat.RunCancellation
-dev.mikoto2000.rei.core.SearchRanking -> dev.mikoto2000.rei.core.working.WorkingSet
 dev.mikoto2000.rei.core.SelfPatchRepairService -> dev.mikoto2000.rei.core.chat.RunCancellation
 dev.mikoto2000.rei.core.SelfPatchReviewService -> dev.mikoto2000.rei.core.chat.RunCancellation
 dev.mikoto2000.rei.core.SelfPatchReviewService -> dev.mikoto2000.rei.core.process.BuildTestFailureDiagnosis
