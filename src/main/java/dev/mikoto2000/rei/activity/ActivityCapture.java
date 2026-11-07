@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.activity;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.awt.AWTException;
 import java.io.IOException;
 import java.time.Clock;
@@ -26,12 +24,19 @@ public final class ActivityCapture implements AutoCloseable {
       org.slf4j.LoggerFactory.getLogger(ActivityCapture.class);
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Reads the configured activity capture or coaching policy when work is admitted.")
-  private final ActivityProperties properties;
+  private final java.util.function.BooleanSupplier captureEnabled;
+
+  private final java.util.function.BooleanSupplier inputAware;
+  private final java.util.function.BooleanSupplier useEvidencePipeline;
+  private final java.util.function.IntSupplier screenshotRetentionDays;
+  private final java.util.function.Predicate<ForegroundWindow> excludedWindow;
+  private final java.util.function.BooleanSupplier foregroundCrop;
+  private final java.util.function.DoubleSupplier changeThreshold;
+  private final java.util.function.LongSupplier duplicateWindowSeconds;
+  private final java.util.function.BooleanSupplier visionEnabled;
+  private final java.util.function.IntSupplier captureIntervalSeconds;
+  private final java.util.function.BiPredicate<Boolean, ScreenshotPersistencePolicy.Outcome>
+      saveScreenshot;
 
   /** 観測。 */
   private final DesktopActivityObserver observer;
@@ -216,7 +221,27 @@ public final class ActivityCapture implements AutoCloseable {
       java.util.concurrent.Executor backgroundExecutor,
       List<ActivityEvidenceSource> sources) {
     properties.validate();
-    this.properties = properties;
+    this.captureEnabled = () -> properties.isEnabled();
+    this.inputAware = () -> properties.getObservation().isInputAwareEnabled();
+    this.useEvidencePipeline =
+        () ->
+            properties.getDetection().isBackgroundFullScreenEnabled()
+                || properties.getDetection().getMode()
+                    == ActivityProperties.DetectionMode.EVIDENCE_FIRST;
+    this.screenshotRetentionDays = () -> properties.getScreenshotRetentionDays();
+    this.excludedWindow = window -> new CapturePolicy(properties).excluded(window);
+    this.foregroundCrop = () -> properties.getDetection().isForegroundCrop();
+    this.changeThreshold = () -> properties.getChangeThreshold();
+    this.duplicateWindowSeconds =
+        () ->
+            Math.max(
+                properties.getSessionGapSeconds(), properties.getCaptureIntervalSeconds() * 2L);
+    this.visionEnabled =
+        () -> properties.isExtractionEnabled() && properties.getDetection().isVisionEnabled();
+    this.captureIntervalSeconds = () -> properties.getCaptureIntervalSeconds();
+    this.saveScreenshot =
+        (duplicate, outcome) ->
+            new ScreenshotPersistencePolicy(properties).shouldSave(duplicate, outcome);
     this.observer = observer;
     this.extractor = extractor;
     this.appendObservation = record -> store.append(record);
@@ -283,7 +308,7 @@ public final class ActivityCapture implements AutoCloseable {
 
   /** 作業状況の把握において、許可に該当するか判定する。 */
   private synchronized boolean allowed(long token) {
-    return properties.isEnabled()
+    return captureEnabled.getAsBoolean()
         && !paused
         && !closed
         && token == generation
@@ -305,7 +330,7 @@ public final class ActivityCapture implements AutoCloseable {
 
   /** 作業状況の把握に関する観測内容定期確認を処理する。 */
   private void observationTick() {
-    if (!properties.getObservation().isInputAwareEnabled()) {
+    if (!inputAware.getAsBoolean()) {
       detailTick(false);
       return;
     }
@@ -345,9 +370,7 @@ public final class ActivityCapture implements AutoCloseable {
 
   /** 作業状況の把握に関する詳細定期確認を処理する。 */
   private void detailTick(boolean optimized) {
-    if (optimized
-        || properties.getDetection().isBackgroundFullScreenEnabled()
-        || properties.getDetection().getMode() == ActivityProperties.DetectionMode.EVIDENCE_FIRST) {
+    if (optimized || useEvidencePipeline.getAsBoolean()) {
       evidencePipeline.tick();
       return;
     }
@@ -358,7 +381,7 @@ public final class ActivityCapture implements AutoCloseable {
     try {
       try {
         screenshots.cleanup(
-            clock.instant().minus(Duration.ofDays(properties.getScreenshotRetentionDays())));
+            clock.instant().minus(Duration.ofDays(screenshotRetentionDays.getAsInt())));
       } catch (IOException | RuntimeException e) {
         failure("retention", e);
       }
@@ -369,7 +392,7 @@ public final class ActivityCapture implements AutoCloseable {
       if (!allowed(token)) return;
       var lifeLease = life == null ? null : life.begin();
       var foreground = observer.foreground();
-      if (new CapturePolicy(properties).excluded(foreground)) {
+      if (excludedWindow.test(foreground)) {
         invalidate();
         return;
       }
@@ -468,9 +491,7 @@ public final class ActivityCapture implements AutoCloseable {
                   })
               .toList();
       var front =
-          properties.getDetection().isForegroundCrop()
-              ? ActivityImages.foreground(screen, foreground)
-              : screen;
+          foregroundCrop.getAsBoolean() ? ActivityImages.foreground(screen, foreground) : screen;
       var current = fingerprints(front);
       ActivityRecord prior;
       Map<String, double[]> baseline;
@@ -483,11 +504,9 @@ public final class ActivityCapture implements AutoCloseable {
           prior != null
               && Objects.equals(prior.foreground(), foreground)
               && sameGeometry(prior.observations(), observations)
-              && change <= properties.getChangeThreshold()
+              && change <= changeThreshold.getAsDouble()
               && Duration.between(prior.capturedAt(), at).getSeconds()
-                  <= Math.max(
-                      properties.getSessionGapSeconds(),
-                      properties.getCaptureIntervalSeconds() * 2L);
+                  <= duplicateWindowSeconds.getAsLong();
       if ((!allowed(token) || (!lifeAllowed(at) || life != null && !life.valid(frame.lifeLease))))
         return;
       log.info(
@@ -501,7 +520,7 @@ public final class ActivityCapture implements AutoCloseable {
         result =
             duplicate
                 ? new ActivityExtractor.Result(prior.inference(), prior.confidence())
-                : properties.isExtractionEnabled() && properties.getDetection().isVisionEnabled()
+                : visionEnabled.getAsBoolean()
                     ? extract(front, foreground, "foreground")
                     : new ActivityExtractor.Result(
                         new ActivityRecord.Inference(
@@ -535,7 +554,7 @@ public final class ActivityCapture implements AutoCloseable {
             new ActivityRecord(
                 id,
                 at,
-                properties.getCaptureIntervalSeconds(),
+                captureIntervalSeconds.getAsInt(),
                 observations,
                 foreground,
                 result.inference(),
@@ -574,9 +593,7 @@ public final class ActivityCapture implements AutoCloseable {
       ScreenshotPersistencePolicy.Outcome outcome) {
     // Called only after the foreground privacy checks. A pause/close invalidates in-flight failures
     // too.
-    if (!allowed(token)
-        || !lifeAllowed(at)
-        || !new ScreenshotPersistencePolicy(properties).shouldSave(duplicate, outcome))
+    if (!allowed(token) || !lifeAllowed(at) || !saveScreenshot.test(duplicate, outcome))
       return List.of();
     try {
       return screenshots.save(id, at, screen);

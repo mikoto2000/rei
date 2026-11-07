@@ -31,17 +31,16 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private final ActivityCapture capture;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ActivityProperties shared by consumers of these settings.")
-  private final ActivityProperties properties;
+  private final java.util.function.BooleanSupplier captureEnabled;
+
+  private final java.util.function.BooleanSupplier automaticCoachingEnabled;
 
   /** 作業習慣。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Routes reporting commands through the shared behavior service and its current state.")
+      justification =
+          "Routes reporting commands through the shared behavior service and its current state.")
   private final dev.mikoto2000.rei.activity.behavior.BehaviorService behavior;
 
   /** 補助操作。 */
@@ -136,26 +135,33 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
       dev.mikoto2000.rei.activity.behavior.BehaviorService behavior) {
     this.timeline = timeline;
     this.capture = capture;
-    this.properties = properties;
+    this.captureEnabled = () -> properties.isEnabled();
+    this.automaticCoachingEnabled =
+        () -> properties != null && properties.getCoaching().isAutomaticEnabled();
     this.behavior = behavior;
     this.presentation = new ActivityTimelinePresentationService(timeline, null);
   }
 
-  /** 作業状況の把握で用いるreporting複製を返す。 */
+  private ActivityCommand(ActivityCommand source) {
+    this.timeline = source.timeline;
+    this.capture = source.capture;
+    this.captureEnabled = source.captureEnabled;
+    this.automaticCoachingEnabled = source.automaticCoachingEnabled;
+    this.behavior = source.behavior;
+    this.toolkit = source.toolkit;
+    this.suggestions = source.suggestions;
+    this.presentation = source.presentation;
+    this.coaching = source.coaching;
+    this.workLinks = source.workLinks;
+    this.projects = source.projects;
+  }
+
   private ActivityCommand reportingCopy() {
-    var copy = new ActivityCommand(timeline, capture, properties, behavior);
-    copy.toolkit = toolkit;
-    copy.suggestions = suggestions;
-    copy.presentation = presentation;
-    copy.coaching = coaching;
-    copy.workLinks = workLinks;
-    copy.projects = projects;
-    return copy;
+    return new ActivityCommand(this);
   }
 
   /** 作業状況の把握で用いるレポートを返す。 */
-  private static String report(
-      java.util.concurrent.Callable<Integer> command, Runnable runReport) {
+  private static String report(java.util.concurrent.Callable<Integer> command, Runnable runReport) {
     var text = new java.io.StringWriter();
     var out = new java.io.PrintWriter(text, true);
     new picocli.CommandLine(command).setOut(out).setErr(out);
@@ -597,7 +603,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
 
     /** 作業状況の把握において、自動有効状態に該当するか判定する。 */
     private boolean automaticEnabled() {
-      return parent.properties != null && parent.properties.getCoaching().isAutomaticEnabled();
+      return parent.automaticCoachingEnabled.getAsBoolean();
     }
   }
 
@@ -630,7 +636,8 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
         spec.commandLine()
             .getOut()
             .println(
-                dev.mikoto2000.rei.event.CredentialRedactor.redact(command.workLinks.format(links)));
+                dev.mikoto2000.rei.event.CredentialRedactor.redact(
+                    command.workLinks.format(links)));
         return 0;
       } catch (java.time.DateTimeException | IllegalArgumentException e) {
         spec.commandLine()
@@ -829,7 +836,7 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
         case "resume" -> {
           capture.resume();
           result =
-              properties.isEnabled()
+              captureEnabled.getAsBoolean()
                   ? "Activity Capture を再開しました。"
                   : "Activity Capture は設定で無効です。rei.activity.enabled=true が必要です。";
         }

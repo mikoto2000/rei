@@ -21,17 +21,17 @@ import java.util.function.Supplier;
  */
 public final class AutomaticPeriodCoaching {
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the configured activity capture or coaching policy when work is admitted.")
-  private final ActivityProperties properties;
+  private final java.util.function.BooleanSupplier automaticEnabled;
+
+  private final java.util.function.BooleanSupplier monthlyEnabled;
+  private final java.util.function.BooleanSupplier weeklyEnabled;
 
   /** 助言。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared coaching service for durable reservations and current status.")
+      justification =
+          "Uses the shared coaching service for durable reservations and current status.")
   private final PeriodCoachingService coaching;
 
   /** 通知先。 */
@@ -83,7 +83,10 @@ public final class AutomaticPeriodCoaching {
       Clock clock,
       Supplier<String> ids) {
     properties.validate();
-    this.properties = properties;
+    this.automaticEnabled =
+        () -> properties.isEnabled() && properties.getCoaching().isAutomaticEnabled();
+    this.monthlyEnabled = () -> properties.getCoaching().isMonthlyEnabled();
+    this.weeklyEnabled = () -> properties.getCoaching().isWeeklyEnabled();
     this.coaching = coaching;
     this.publisher = publisher;
     this.tracker = tracker;
@@ -94,7 +97,7 @@ public final class AutomaticPeriodCoaching {
 
   /** この機能を利用する設定が有効かどうかを返す。 */
   public boolean enabled() {
-    return properties.isEnabled() && properties.getCoaching().isAutomaticEnabled();
+    return automaticEnabled.getAsBoolean();
   }
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
@@ -131,8 +134,8 @@ public final class AutomaticPeriodCoaching {
       for (var period :
           List.of(ActivityPeriodAnalysis.Period.MONTH, ActivityPeriodAnalysis.Period.WEEK)) {
         if (period == ActivityPeriodAnalysis.Period.MONTH
-            ? !properties.getCoaching().isMonthlyEnabled()
-            : !properties.getCoaching().isWeeklyEnabled()) continue;
+            ? !monthlyEnabled.getAsBoolean()
+            : !weeklyEnabled.getAsBoolean()) continue;
         if (!allowed() || tracker.activityVersion() != version) {
           status = "CONTEXT_CHANGED";
           return;
