@@ -34,6 +34,11 @@ public class CommandCancellationService {
     void close();
   }
 
+  /** Acquire a child lease and return only the action that releases it. */
+  public Runnable acquireChildRelease(String runId) {
+    return enterChild(runId)::close;
+  }
+
   /** 子処理の実体が戻るまで所有権を保持する。停止済みなら開始を拒否する。 */
   public ChildLease enterChild(String runId) {
     State state;
