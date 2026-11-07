@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 
@@ -11,11 +9,13 @@ import picocli.CommandLine.Command;
 @Command(name = "cancel", description = "実行中の Agent をキャンセルします")
 public class CancelCommand implements Runnable {
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final java.util.function.Function<String, CommandCancellationService.Diagnostic>
+      diagnoseRun;
+
+  private final java.util.function.Predicate<String> cancelRun;
+  private final java.util.function.BooleanSupplier cancelProject;
+  private final java.util.function.Supplier<java.util.List<CommandCancellationService.Diagnostic>>
+      diagnoseProject;
 
   /** ターミナルでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public CancelCommand() {
@@ -25,7 +25,10 @@ public class CancelCommand implements Runnable {
   /** 指定された値や利用先を使って、CancelCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public CancelCommand(CommandCancellationService cancellation) {
-    this.cancellation = cancellation;
+    this.diagnoseRun = cancellation == null ? null : run -> cancellation.diagnostic(run);
+    this.cancelRun = run -> cancellation.cancelRegisteredRun(run);
+    this.cancelProject = () -> cancellation.cancelCurrentProject();
+    this.diagnoseProject = () -> cancellation.currentProjectDiagnostics();
   }
 
   /** 省略時は選択中 Project、指定時はその Run だけを停止する。 */
@@ -37,22 +40,21 @@ public class CancelCommand implements Runnable {
 
   /** 実行中の Agent をキャンセルしますを行う。 */
   public void run() {
-    if (cancellation == null)
-      throw new IllegalStateException("Cancellation runtime is unavailable");
+    if (diagnoseRun == null) throw new IllegalStateException("Cancellation runtime is unavailable");
     var out = spec.commandLine().getOut();
     if (runId != null) {
-      var before = cancellation.diagnostic(runId);
+      var before = diagnoseRun.apply(runId);
       if (before.status().equals("NOT_FOUND")) out.println("[cancel] 対象 Run は存在しません: " + runId);
       else if (before.status().equals("FINISHED")) out.println("[cancel] Run は既に終了しています: " + runId);
       else {
-        boolean accepted = cancellation.cancelRegisteredRun(runId);
+        boolean accepted = cancelRun.test(runId);
         out.println(
             accepted ? "[cancel] 停止を要求しました: " + runId : "[cancel] 既に停止要求済みで、終了を待っています: " + runId);
-        printDiagnostic(out, cancellation.diagnostic(runId));
+        printDiagnostic(out, diagnoseRun.apply(runId));
       }
     } else {
-      boolean accepted = cancellation.cancelCurrentProject();
-      var diagnostics = cancellation.currentProjectDiagnostics();
+      boolean accepted = cancelProject.getAsBoolean();
+      var diagnostics = diagnoseProject.get();
       out.println(
           accepted
               ? "[cancel] ユーザーの要求により停止を要求しました。終了通知を確認してください。"
