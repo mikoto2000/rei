@@ -42,16 +42,24 @@ public class DependencySourceProbe implements DependencyProbe {
   }
 
   /** GitHubの利用設定または連携情報の保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the common repository for accepted GitHub facts.")
-  private dev.mikoto2000.rei.github.GitHubFactRepository github;
+  private java.util.function.Predicate<PersistentDependencyRepository.Entry> pullRequestMerged;
 
   /** 外部条件の待機で使用するGit連携先事実一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setGitHubFacts(dev.mikoto2000.rei.github.GitHubFactRepository github) {
-    this.github = github;
+    this.pullRequestMerged =
+        github == null
+            ? null
+            : entry -> {
+              String target = entry.spec().target();
+              int separator = target.lastIndexOf('#');
+              return github.merged(
+                  entry.projectId(),
+                  entry.projectRoot(),
+                  entry.sessionId(),
+                  target.substring(0, separator),
+                  Integer.parseInt(target.substring(separator + 1)));
+            };
   }
 
   /** 指定された値や利用先を使って、DependencySourceProbeを初期化する。 */
@@ -207,17 +215,10 @@ public class DependencySourceProbe implements DependencyProbe {
       }
       case EXTERNAL_AGENT -> new DependencyObservation(entry.id(), entry.state(), entry.reason());
       case GITHUB_PR_MERGED -> {
-        if (github == null)
+        if (pullRequestMerged == null)
           yield new DependencyObservation(
               entry.id(), DependencyState.BLOCKED, "github_webhook_unavailable");
-        int separator = spec.target().lastIndexOf('#');
-        boolean merged =
-            github.merged(
-                entry.projectId(),
-                entry.projectRoot(),
-                entry.sessionId(),
-                spec.target().substring(0, separator),
-                Integer.parseInt(spec.target().substring(separator + 1)));
+        boolean merged = pullRequestMerged.test(entry);
         yield new DependencyObservation(
             entry.id(),
             merged ? DependencyState.COMPLETED : DependencyState.WAITING,

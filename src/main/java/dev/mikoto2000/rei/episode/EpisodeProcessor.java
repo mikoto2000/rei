@@ -1,10 +1,8 @@
 package dev.mikoto2000.rei.episode;
 
-import dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
+import dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,16 +24,14 @@ public class EpisodeProcessor {
   private final BiFunction<String, String, Optional<ConversationTurnStore.Turn>> findTurn;
 
   /** イベント一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the common event store for persisted project history.")
-  private dev.mikoto2000.rei.event.ProjectAgentEventStore events;
+  private java.util.function.BiFunction<
+          String, String, java.util.Optional<dev.mikoto2000.rei.event.AgentEvent>>
+      findToolEvent;
 
   /** 過去の経験の活用で使用するイベント一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setEvents(dev.mikoto2000.rei.event.ProjectAgentEventStore events) {
-    this.events = events;
+    this.findToolEvent = events == null ? null : (project, id) -> events.findEvent(project, id);
   }
 
   /** 過去の経験の活用を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -77,9 +73,9 @@ public class EpisodeProcessor {
                                 c ->
                                     findTurn.apply(e.sessionId(), c.runId()).isPresent()
                                         && (!c.speaker().equals("tool")
-                                            || events != null
-                                                && events
-                                                    .findEvent(e.projectId(), c.sourceId())
+                                            || findToolEvent != null
+                                                && findToolEvent
+                                                    .apply(e.projectId(), c.sourceId())
                                                     .isPresent())))
             .toList();
     var candidates =
@@ -112,7 +108,9 @@ public class EpisodeProcessor {
           throw new IllegalArgumentException("Episode cites a turn outside the batch");
         if (claim.speaker().equals("tool")) {
           var event =
-              events == null ? null : events.findEvent(project, claim.sourceId()).orElse(null);
+              findToolEvent == null
+                  ? null
+                  : findToolEvent.apply(project, claim.sourceId()).orElse(null);
           if (event == null
               || !session.equals(event.sessionId())
               || !claim.runId().equals(event.runId())

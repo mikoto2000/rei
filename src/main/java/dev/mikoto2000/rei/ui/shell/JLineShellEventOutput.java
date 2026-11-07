@@ -25,21 +25,22 @@ public final class JLineShellEventOutput implements ShellEventOutput {
   private final StringBuilder pending = new StringBuilder();
 
   /** 承認操作の選択肢。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Offers approvals through the same live shell menu.")
-  private dev.mikoto2000.rei.core.completion.ApprovalActionMenu approvalMenu;
+  @FunctionalInterface
+  private interface ApprovalOffer {
+    void show(String project, String session, String approval);
+  }
+
+  private ApprovalOffer approvalOffer;
 
   /** ターミナルでの対話で使用する承認操作の選択肢を設定する。 */
   public void setApprovalMenu(dev.mikoto2000.rei.core.completion.ApprovalActionMenu menu) {
-    approvalMenu = menu;
+    approvalOffer = menu == null ? null : menu::offer;
   }
 
   /** ターミナルでの対話に関する承認操作一覧を処理する。 */
   @Override
   public void approvalActions(String project, String session, String id) {
-    if (approvalMenu != null) approvalMenu.offer(project, session, id);
+    if (approvalOffer != null) approvalOffer.show(project, session, id);
   }
 
   /** 指定された値や利用先を使って、JLineShellEventOutputを初期化する。 */

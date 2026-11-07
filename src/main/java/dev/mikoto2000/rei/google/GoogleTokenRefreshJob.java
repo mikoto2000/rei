@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.google;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,30 +18,28 @@ import org.springframework.stereotype.Component;
     matchIfMissing = true)
 public final class GoogleTokenRefreshJob {
   /** サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared OAuth service and its current credential state.")
-  private final GoogleOAuthService service;
+  @FunctionalInterface
+  private interface ExpiringTokenRefresh {
+    boolean refresh() throws java.io.IOException, java.security.GeneralSecurityException;
+  }
 
-  /** 次の確認までに進める時間。 */
-  private final Duration advance;
+  private final ExpiringTokenRefresh refreshExpiringToken;
 
   /** 指定された値や利用先を使って、GoogleTokenRefreshJobを初期化する。 */
   public GoogleTokenRefreshJob(
       GoogleOAuthService service, @Value("${rei.google.token-refresh.advance:5m}") String advance) {
-    this.advance = DurationStyle.detectAndParse(advance);
-    if (this.advance.isNegative() || this.advance.isZero()) {
+    Duration advanceBy = DurationStyle.detectAndParse(advance);
+    if (advanceBy.isNegative() || advanceBy.isZero()) {
       throw new IllegalArgumentException("Google token refresh advance must be positive");
     }
-    this.service = service;
+    this.refreshExpiringToken = () -> service.refreshIfExpiring(advanceBy);
   }
 
   /** Googleサービスの認証の操作を実行する。 */
   @Scheduled(fixedDelayString = "${rei.google.token-refresh.check-interval:5m}")
   public void run() {
     try {
-      if (service.refreshIfExpiring(advance)) {
+      if (refreshExpiringToken.refresh()) {
         log.debug("Google access token refreshed");
       }
     } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {

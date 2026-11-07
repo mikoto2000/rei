@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.topic;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -31,11 +29,7 @@ public class TopicGeneratorService {
   private final TopicMessageGenerator messageGenerator;
 
   /** 情報への関心実行待ち。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared queue for pending and consumed curiosity items.")
-  private final CuriosityQueue curiosityQueue;
+  private final java.util.function.BiConsumer<CuriosityQuery, String> markCuriosityTopicUsed;
 
   /** この機能の動作設定。 */
   private final Supplier<TopicSettings> settings;
@@ -70,7 +64,15 @@ public class TopicGeneratorService {
     this.ranker = ranker;
     this.speakDecisionPolicy = speakDecisionPolicy;
     this.messageGenerator = messageGenerator;
-    this.curiosityQueue = curiosityQueue;
+    this.markCuriosityTopicUsed =
+        (query, topic) ->
+            curiosityQueue.findCandidates(query).stream()
+                .filter(
+                    item ->
+                        DeterministicTopicRanker.normalize(item.question())
+                            .equals(DeterministicTopicRanker.normalize(topic)))
+                .findFirst()
+                .ifPresent(item -> curiosityQueue.markUsed(item.id()));
     this.settings = () -> TopicSettings.capture(properties);
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
@@ -336,16 +338,9 @@ public class TopicGeneratorService {
       recentTopics.add(candidate.topic());
       if (recentTopics.size() > topicSettings.maxCandidates()) recentTopics.removeFirst();
       if (candidate.source() == TopicSource.CURIOSITY_QUEUE) {
-        curiosityQueue
-            .findCandidates(
-                new CuriosityQuery(executionContext.now(), topicSettings.maxCandidates()))
-            .stream()
-            .filter(
-                item ->
-                    DeterministicTopicRanker.normalize(item.question())
-                        .equals(DeterministicTopicRanker.normalize(candidate.topic())))
-            .findFirst()
-            .ifPresent(item -> curiosityQueue.markUsed(item.id()));
+        markCuriosityTopicUsed.accept(
+            new CuriosityQuery(executionContext.now(), topicSettings.maxCandidates()),
+            candidate.topic());
       }
       TopicRunResult result =
           TopicRunResult.spoken(

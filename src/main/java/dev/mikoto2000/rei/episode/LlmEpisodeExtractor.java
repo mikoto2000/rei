@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.episode;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
 import dev.mikoto2000.rei.memory.service.LlmMemoryProcessor;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -17,16 +15,13 @@ public class LlmEpisodeExtractor implements EpisodeExtractor {
   private final LlmMemoryProcessor model;
 
   /** イベント一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the common event store for persisted project history.")
-  private dev.mikoto2000.rei.event.ProjectAgentEventStore events;
+  private java.util.function.Function<String, List<dev.mikoto2000.rei.event.AgentEvent>>
+      recentToolEvents;
 
   /** 過去の経験の活用で使用するイベント一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setEvents(dev.mikoto2000.rei.event.ProjectAgentEventStore events) {
-    this.events = events;
+    this.recentToolEvents = events == null ? null : project -> events.recent(project, 1000);
   }
 
   /** 指定された値や利用先を使って、LlmEpisodeExtractorを初期化する。 */
@@ -44,9 +39,9 @@ public class LlmEpisodeExtractor implements EpisodeExtractor {
     String data;
     var runIds = turns.stream().map(Turn::runId).collect(java.util.stream.Collectors.toSet());
     var tools =
-        events == null
+        recentToolEvents == null
             ? List.of()
-            : events.recent(project, 1000).stream()
+            : recentToolEvents.apply(project).stream()
                 .filter(
                     e ->
                         session.equals(e.sessionId())

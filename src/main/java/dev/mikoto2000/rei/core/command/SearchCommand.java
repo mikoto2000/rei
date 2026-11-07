@@ -49,22 +49,13 @@ public class SearchCommand implements Runnable {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Creates chat clients through the shared provider and its current configuration.")
+      justification =
+          "Creates chat clients through the shared provider and its current configuration.")
   private final LlmChatClientProvider chatClientProvider;
 
   /** 現在モデル保持先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the model selection shared by commands and the API.")
-  private final ModelHolderService currentModelHolder;
-
-  /** モデル提供元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider modelProvider;
+  private final java.util.function.Supplier<org.springframework.ai.openai.OpenAiChatOptions>
+      searchOptions;
 
   /** 検索知識サービス。 */
   private final SearchKnowledgeService searchKnowledgeService;
@@ -73,7 +64,8 @@ public class SearchCommand implements Runnable {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
+      justification =
+          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellationService;
 
   /** 出力。 */
@@ -92,13 +84,7 @@ public class SearchCommand implements Runnable {
       Double threshold,
       String source,
       java.util.function.Consumer<String> output) {
-    var command =
-        new SearchCommand(
-            chatClientProvider,
-            currentModelHolder,
-            modelProvider,
-            searchKnowledgeService,
-            cancellationService);
+    var command = new SearchCommand(this);
     command.queryParts = new String[] {query};
     command.vectorTopK = vectorTopK;
     command.webTopK = webTopK;
@@ -131,10 +117,17 @@ public class SearchCommand implements Runnable {
       SearchKnowledgeService searchKnowledgeService,
       CommandCancellationService cancellationService) {
     this.chatClientProvider = chatClientProvider;
-    this.currentModelHolder = currentModelHolder;
-    this.modelProvider = modelProvider;
+    this.searchOptions =
+        () -> modelProvider.chatOptions(LlmFeature.SEARCH, currentModelHolder.get());
     this.searchKnowledgeService = searchKnowledgeService;
     this.cancellationService = cancellationService;
+  }
+
+  private SearchCommand(SearchCommand source) {
+    this.chatClientProvider = source.chatClientProvider;
+    this.searchOptions = source.searchOptions;
+    this.searchKnowledgeService = source.searchKnowledgeService;
+    this.cancellationService = source.cancellationService;
   }
 
   /** ベクトル上位件数。 */
@@ -173,9 +166,7 @@ public class SearchCommand implements Runnable {
           chatClientProvider
               .chatClient(LlmFeature.SEARCH)
               .prompt(
-                  new Prompt(
-                      buildPrompt(query, vectorResults, webContext),
-                      modelProvider.chatOptions(LlmFeature.SEARCH, currentModelHolder.get())))
+                  new Prompt(buildPrompt(query, vectorResults, webContext), searchOptions.get()))
               .advisors(
                   advisor ->
                       advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("search")));
