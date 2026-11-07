@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.subagent;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -113,11 +111,12 @@ public final class SubAgentConsensusService {
   private final DurableSubAgentRepository repository;
 
   /** 実行の担当。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common sub-agent runner and its durable child-run state.")
-  private final SubAgentRunner runner;
+  private final java.util.function.BiFunction<SubAgentDefinition, AgentRunContext, String> baseline;
+
+  private final java.util.function.BiFunction<RunExecutionContext, JudgeRequest, SubAgentResult>
+      judge;
+
+  private record JudgeRequest(String agent, String evidenceContext) {}
 
   /** 登録台帳。 */
   private final SubAgentRegistry registry;
@@ -131,7 +130,14 @@ public final class SubAgentConsensusService {
     this.consensusEnabled = () -> properties.isDurableEnabled() && properties.isConsensusEnabled();
     this.judgeEnabled = () -> properties.isConsensusJudgeEnabled();
     this.repository = repository;
-    this.runner = runner;
+    this.baseline = (definition, owner) -> runner.durableBaseline(definition, owner);
+    this.judge =
+        (run, request) ->
+            runner.run(
+                request.agent(),
+                "Compare the supplied independent answers and evidence; preserve unresolved claims.",
+                request.evidenceContext(),
+                run.sharedLlmReservation());
     this.registry = registry;
   }
 
@@ -206,7 +212,7 @@ public final class SubAgentConsensusService {
       boolean validated =
           definition != null
               && !definition.evidenceTools().isEmpty()
-              && child.baseline().equals(runner.durableBaseline(definition, owner))
+              && child.baseline().equals(baseline.apply(definition, owner))
               && evidence.stream()
                   .map(Evidence::tool)
                   .collect(java.util.stream.Collectors.toSet())
@@ -275,13 +281,7 @@ public final class SubAgentConsensusService {
     if (context.length() > 32768)
       throw new IllegalArgumentException("Judge context exceeds bounded limit");
     try (var scope = AgentRunScope.open(run.runContext())) {
-      return new Judged(
-          comparison,
-          runner.run(
-              agent,
-              "Compare the supplied independent answers and evidence; preserve unresolved claims.",
-              context,
-              run.sharedLlmReservation()));
+      return new Judged(comparison, judge.apply(run, new JudgeRequest(agent, context)));
     }
   }
 
