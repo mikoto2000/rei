@@ -15,12 +15,13 @@ class SecretaryPrivateModelTest {
     var server = new LlmProperties.Server();
     server.setBaseUrl("http://127.0.0.1:1234/v1");
     server.setModel("local-private");
-    props.getFeatures().put("secretary-reply", server);
+    props.setFeature("secretary-reply", server);
     var provider = new LlmModelProvider(null, props);
     String fingerprint = provider.privateSecretaryDescriptor().fingerprint();
     var first = provider.privateSecretaryModel(fingerprint);
     org.junit.jupiter.api.Assertions.assertSame(first, provider.privateSecretaryModel(fingerprint));
     server.setModel("changed");
+    props.setFeature("secretary-reply", server);
     assertThrows(
         IllegalStateException.class,
         () -> provider.privateSecretaryModel(provider.privateSecretaryDescriptor().fingerprint()));
@@ -37,18 +38,22 @@ class SecretaryPrivateModelTest {
   void descriptorRejectsCredentialsInUrlAndBindsTheExactModel() {
     var properties = new LlmProperties();
     var server = new LlmProperties.Server();
-    properties.getFeatures().put("secretary-reply", server);
+    properties.setFeature("secretary-reply", server);
     var provider = new LlmModelProvider(null, properties);
     server.setBaseUrl("https://user:secret@example.org/v1");
     server.setModel("private");
+    properties.setFeature("secretary-reply", server);
     assertNull(provider.privateSecretaryDescriptor());
     server.setBaseUrl("http://remote.example.org/v1");
+    properties.setFeature("secretary-reply", server);
     assertNull(provider.privateSecretaryDescriptor());
     server.setBaseUrl("http://127.0.0.1:1234/v1");
+    properties.setFeature("secretary-reply", server);
     var first = provider.privateSecretaryDescriptor();
     assertNotNull(first);
     assertFalse(first.fingerprint().contains("private"));
     server.setModel("another");
+    properties.setFeature("secretary-reply", server);
     assertNotEquals(first.fingerprint(), provider.privateSecretaryDescriptor().fingerprint());
     assertThrows(
         IllegalStateException.class, () -> provider.privateSecretaryModel(first.fingerprint()));

@@ -58,12 +58,35 @@ class LlmPropertiesTest {
   @Test
   void outputLimitReplanBudgetsFallbackWhenInvalid() {
     LlmProperties properties = new LlmProperties();
-    properties.getOutputLimit().setMaxReplansPerGoal(0);
-    properties.getOutputLimit().setMaxSubgoalsPerReplan(-1);
-    properties.getOutputLimit().setMaxLlmCallsPerRun(null);
+    properties.updateOutputLimit(limits -> limits.setMaxReplansPerGoal(0));
+    properties.updateOutputLimit(limits -> limits.setMaxSubgoalsPerReplan(-1));
+    properties.updateOutputLimit(limits -> limits.setMaxLlmCallsPerRun(null));
 
     assertThat(properties.getOutputLimit().getMaxReplansPerGoal()).isEqualTo(2);
     assertThat(properties.getOutputLimit().getMaxSubgoalsPerReplan()).isEqualTo(8);
     assertThat(properties.getOutputLimit().getMaxLlmCallsPerRun()).isEqualTo(120);
   }
+  @Test
+  void boundFeaturesAndOutputLimitsAreDefensiveCopies() {
+    var source =
+        new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(
+            java.util.Map.of(
+                "rei.llm.features.chat.model", "configured-model",
+                "rei.llm.output-limit.max-total-tokens-per-run", "20"));
+    var properties =
+        new org.springframework.boot.context.properties.bind.Binder(source)
+            .bind("rei.llm", LlmProperties.class)
+            .get();
+    properties.getFeatures().get("chat").setModel("discarded");
+    properties.getOutputLimit().setMaxTotalTokensPerRun(1);
+    assertThat(properties.feature("chat").getModel()).isEqualTo("configured-model");
+    assertThat(properties.getOutputLimit().getMaxTotalTokensPerRun()).isEqualTo(20);
+
+    var replacement = properties.feature("chat");
+    replacement.setModel("replacement");
+    properties.setFeature("chat", replacement);
+    replacement.setModel("discarded");
+    assertThat(properties.feature("chat").getModel()).isEqualTo("replacement");
+  }
+
 }

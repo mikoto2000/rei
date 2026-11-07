@@ -196,7 +196,7 @@ class EmbeddingRunModelBudgetTest {
         new org.springframework.jdbc.datasource.DriverManagerDataSource(
             "jdbc:sqlite:" + root.resolve("goals.db"));
     var props = new LlmProperties();
-    props.getOutputLimit().setMaxTotalTokensPerGoal(3);
+    props.updateOutputLimit(limits -> limits.setMaxTotalTokensPerGoal(3));
     var goals =
         new dev.mikoto2000.rei.goal.GoalRepository(source, java.time.Clock.systemUTC(), props);
     var goal =

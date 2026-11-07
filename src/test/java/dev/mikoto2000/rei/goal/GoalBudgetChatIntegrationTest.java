@@ -86,7 +86,7 @@ class GoalBudgetChatIntegrationTest {
           }
         };
     var properties = new LlmProperties();
-    properties.getOutputLimit().setMaxTotalTokensPerGoal(10);
+    properties.updateOutputLimit(limits -> limits.setMaxTotalTokensPerGoal(10));
     assertEquals(0, properties.getOutputLimit().getMaxTotalTokensPerRun());
     var goals =
         new GoalRepository(

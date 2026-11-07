@@ -24,7 +24,7 @@ class GoalTokenBudgetTest {
   /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
   GoalRepository repository(long limit) {
     var properties = new LlmProperties();
-    properties.getOutputLimit().setMaxTotalTokensPerGoal(limit);
+    properties.updateOutputLimit(limits -> limits.setMaxTotalTokensPerGoal(limit));
     return new GoalRepository(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("goals.db")),
         Clock.systemUTC(),
