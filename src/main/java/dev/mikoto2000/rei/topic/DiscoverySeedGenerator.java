@@ -1,26 +1,22 @@
 package dev.mikoto2000.rei.topic;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.function.Supplier;
 
 /** 利用先の検出生成の初期値の内容を生成する。 */
 public class DiscoverySeedGenerator {
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound TopicGeneratorProperties shared by consumers of these settings.")
-  private final TopicGeneratorProperties properties;
+  private final Supplier<TopicSettings> settings;
 
   /** 指定された値や利用先を使って、DiscoverySeedGeneratorを初期化する。 */
   public DiscoverySeedGenerator(TopicGeneratorProperties properties) {
-    this.properties = properties;
+    this.settings = () -> TopicSettings.capture(properties);
   }
 
   /** 指定された条件に従って、依頼された内容を生成する。 */
   public List<String> generate(TopicGenerationContext context) {
+    var topicSettings = settings.get();
     LinkedHashSet<String> seeds = new LinkedHashSet<>();
     context.workingSet().stream()
         .map(WorkingSetTopicItem::identifier)
@@ -36,7 +32,7 @@ public class DiscoverySeedGenerator {
         .map(this::seedText)
         .filter(seed -> !seed.isBlank())
         .forEach(seeds::add);
-    return seeds.stream().limit(properties.getDiscovery().getMaxSeeds()).toList();
+    return seeds.stream().limit(topicSettings.maxSeeds()).toList();
   }
 
   /** 話題の管理で用いる生成の初期値テキストを返す。 */
