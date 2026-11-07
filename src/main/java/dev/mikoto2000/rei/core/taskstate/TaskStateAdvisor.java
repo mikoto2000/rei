@@ -2,10 +2,9 @@ package dev.mikoto2000.rei.core.taskstate;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -22,11 +21,9 @@ import org.springframework.stereotype.Component;
 public class TaskStateAdvisor implements BaseAdvisor {
 
   /** タスク状態。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Renders the current task state for the owning run.")
-  private final TaskState taskState;
+  private final Supplier<String> stateOwner;
+
+  private final Supplier<String> promptState;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -51,26 +48,22 @@ public class TaskStateAdvisor implements BaseAdvisor {
   /** 指定された値や利用先を使って、TaskStateAdvisorを初期化する。 */
   public TaskStateAdvisor(
       TaskState taskState, AgentEventFactory events, AgentEventPublisher eventPublisher) {
-    this.taskState = taskState;
+    this.stateOwner = () -> taskState.ownerRunId();
+    this.promptState = () -> taskState.renderForPrompt();
     this.events = events;
     this.eventPublisher = eventPublisher;
-  }
-
-  /** 作業状態の記録で用いるタスク状態を返す。 */
-  TaskState taskState() {
-    return taskState;
   }
 
   /** 作業状態の記録の本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     if (!dev.mikoto2000.rei.context.CancelledTaskHistory.allowsState(
-        request.context(), taskState.ownerRunId())) return request;
+        request.context(), stateOwner.get())) return request;
     UserMessage userMessage = request.prompt().getUserMessage();
     if (userMessage == null) {
       return request;
     }
-    String taskStateContext = taskState.renderForPrompt();
+    String taskStateContext = promptState.get();
     if (taskStateContext.isBlank()) {
       return request;
     }
