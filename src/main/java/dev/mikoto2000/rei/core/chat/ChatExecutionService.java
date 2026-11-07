@@ -46,6 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -157,11 +158,7 @@ public class ChatExecutionService {
   private final LlmChatClientProvider chatClientProvider;
 
   /** 現在モデル保持先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the model selection shared by commands and the API.")
-  private final ModelHolderService currentModelHolder;
+  private final Supplier<String> readSelectedModel;
 
   /** モデル提供元。 */
   @SuppressFBWarnings(
@@ -374,7 +371,7 @@ public class ChatExecutionService {
       AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher) {
     this.chatClientProvider = chatClientProvider;
-    this.currentModelHolder = currentModelHolder;
+    this.readSelectedModel = () -> currentModelHolder.get();
     this.modelProvider = modelProvider;
     this.llmProperties = llmProperties;
     this.cancellationService = cancellationService;
@@ -1195,7 +1192,7 @@ public class ChatExecutionService {
       log.warn("Prompt attachment warning: {}", warning);
     }
 
-    var baseOptions = modelProvider.chatOptions(LlmFeature.CHAT, currentModelHolder.get(), true);
+    var baseOptions = modelProvider.chatOptions(LlmFeature.CHAT, readSelectedModel.get(), true);
     if (mode != AgentRunContext.Mode.EXCLUSIVE) ToolLoopSupport.requireNoRawTools(baseOptions);
     var optionsBuilder = baseOptions.mutate();
     optionsBuilder.toolContext(

@@ -5,6 +5,7 @@ import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
@@ -20,17 +21,13 @@ public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
   private final LlmModelProvider modelProvider;
 
   /** モデル保持先サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the model selection shared by commands and the API.")
-  private final ModelHolderService modelHolderService;
+  private final Supplier<String> readSelectedModel;
 
   /** 指定された値や利用先を使って、LlmImagePromptEnhancerを初期化する。 */
   public LlmImagePromptEnhancer(
       LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
     this.modelProvider = modelProvider;
-    this.modelHolderService = modelHolderService;
+    this.readSelectedModel = () -> modelHolderService.get();
   }
 
   /** 画像の生成で用いるenhanceを返す。 */
@@ -39,7 +36,7 @@ public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
     Prompt prompt =
         new Prompt(
             buildPrompt(userRequest),
-            modelProvider.chatOptions(LlmFeature.IMAGE_PROMPT, modelHolderService.get()));
+            modelProvider.chatOptions(LlmFeature.IMAGE_PROMPT, readSelectedModel.get()));
     var response = modelProvider.chatModel(LlmFeature.IMAGE_PROMPT).call(prompt);
     var generation = response == null ? null : response.getResult();
     var output = generation == null ? null : generation.getOutput();
