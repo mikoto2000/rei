@@ -34,6 +34,8 @@ class NotificationHistoryIndexTest {
   }
 
   private static final class CountingMapper extends ObjectMapper {
+    @java.io.Serial private static final long serialVersionUID = -1621507196242478828L;
+
     final AtomicInteger reads = new AtomicInteger();
 
     CountingMapper() {

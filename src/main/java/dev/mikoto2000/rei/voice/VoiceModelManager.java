@@ -72,6 +72,8 @@ public final class VoiceModelManager implements AutoCloseable {
 
   /** 音声による対話を継続できないInsufficient保存の状況を伝える例外。 */
   private static final class InsufficientStorageException extends IOException {
+    @java.io.Serial private static final long serialVersionUID = 2228049660852933649L;
+
     /** 指定された値や利用先を使って、InsufficientStorageExceptionを初期化する。 */
     InsufficientStorageException(long required) {
       super("insufficient free space; requires " + required + " bytes including reserve");

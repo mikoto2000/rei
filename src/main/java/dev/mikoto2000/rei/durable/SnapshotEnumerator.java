@@ -97,7 +97,9 @@ public final class SnapshotEnumerator {
     return store.status(scope, task);
   }
 
-  private static final class DirectoryChanged extends IOException {}
+  private static final class DirectoryChanged extends IOException {
+    @java.io.Serial private static final long serialVersionUID = -3462254676009522024L;
+  }
 
   private static String stamp(Path directory) throws IOException {
     var attributes = Files.readAttributes(directory, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);

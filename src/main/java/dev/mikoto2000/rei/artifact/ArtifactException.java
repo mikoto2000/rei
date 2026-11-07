@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.artifact;
 
 /** 成果物の管理を継続できない成果物の状況を伝える例外。 */
 public final class ArtifactException extends RuntimeException {
+  @java.io.Serial private static final long serialVersionUID = -790214878000644941L;
+
   /** 成果物の管理におけるコードの選択肢。 */
   public enum Code {
     /** 許容件数。 */

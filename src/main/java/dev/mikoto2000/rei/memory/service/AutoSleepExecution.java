@@ -154,6 +154,8 @@ public final class AutoSleepExecution implements ModelCallBudget {
 
   /** 長期記憶の保存と検索に必要な失敗情報を扱う。 */
   public static final class Failure extends IllegalStateException {
+    @java.io.Serial private static final long serialVersionUID = -3561072169595820895L;
+
     /** コード。 */
     public final String code;
 

@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.paper;
 
 /** 論文の調査と整理を継続できない論文の状況を伝える例外。 */
 public class PaperException extends RuntimeException {
+  @java.io.Serial private static final long serialVersionUID = -3462241299541388904L;
+
   /** 論文の調査と整理におけるコードの選択肢。 */
   public enum Code {
     /** 検索失敗。 */

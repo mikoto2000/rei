@@ -115,6 +115,8 @@ public final class ActivityOutputParser {
 
   /** 作業状況の把握に必要な不正出力を扱う。 */
   public static final class InvalidOutput extends IllegalArgumentException {
+    @java.io.Serial private static final long serialVersionUID = -6925881177401344997L;
+
     /** 安全性コード一覧。 */
     private static final Set<String> SAFE_CODES =
         Set.of(
@@ -137,8 +139,29 @@ public final class ActivityOutputParser {
             "maxLength",
             "maxItems");
 
-    /** エラー一覧。 */
-    private final List<ResultError> errors;
+    @java.io.Serial
+    private static final java.io.ObjectStreamField[] serialPersistentFields = {
+      new java.io.ObjectStreamField("errors", List.class)
+    };
+
+    private transient List<ResultError> errors;
+
+    @java.io.Serial
+    private void writeObject(java.io.ObjectOutputStream output) throws java.io.IOException {
+      var fields = output.putFields();
+      fields.put("errors", errors);
+      output.writeFields();
+    }
+
+    @java.io.Serial
+    private void readObject(java.io.ObjectInputStream input)
+        throws java.io.IOException, ClassNotFoundException {
+      Object stored = input.readFields().get("errors", null);
+      if (!(stored instanceof List<?> list)
+          || list.stream().anyMatch(error -> !(error instanceof ResultError)))
+        throw new java.io.InvalidObjectException("Invalid serialized diagnostics");
+      errors = List.copyOf(list.stream().map(ResultError.class::cast).toList());
+    }
 
     /** 指定された値や利用先を使って、InvalidOutputを初期化する。 */
     public InvalidOutput(List<ResultError> errors) {

@@ -30,6 +30,8 @@ public final class ProjectRunQueue {
   /** 会話の実行を継続できない許容件数上限超過の状況を伝える例外。 */
   public static final class CapacityExceededException
       extends java.util.concurrent.RejectedExecutionException {
+    @java.io.Serial private static final long serialVersionUID = 8025351274322442270L;
+
     /** 既定の状態でCapacityExceededExceptionを初期化する。 */
     public CapacityExceededException() {
       super("Run admission capacity reached");

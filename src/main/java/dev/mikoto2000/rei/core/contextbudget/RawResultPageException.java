@@ -6,6 +6,8 @@ package dev.mikoto2000.rei.core.contextbudget;
  * <p>Fixed diagnostics for trusted raw-result page envelopes; never retains the supplied page.
  */
 public final class RawResultPageException extends IllegalArgumentException {
+  @java.io.Serial private static final long serialVersionUID = 4630539594029482531L;
+
   /** モデルへ渡す文脈の管理における理由の選択肢。 */
   public enum Reason {
     /** 不正情報の来歴。 */

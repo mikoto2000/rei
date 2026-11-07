@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.mcp;
 
 /** MCPによる機能の提供に必要なMCPエラーを扱う。 */
 public final class McpError extends RuntimeException {
+  @java.io.Serial private static final long serialVersionUID = 4738260916273885225L;
+
   /** コード。 */
   private final String code;
 

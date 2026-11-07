@@ -6,6 +6,8 @@ package dev.mikoto2000.rei.computeruse;
  * <p>Contains only local validation diagnostics, never provider output or typed text.
  */
 final class InvalidComputerDecision extends IllegalArgumentException {
+  @java.io.Serial private static final long serialVersionUID = -8130997030746165737L;
+
   /** 指定された値や利用先を使って、InvalidComputerDecisionを初期化する。 */
   InvalidComputerDecision(String diagnostic) {
     super(diagnostic);

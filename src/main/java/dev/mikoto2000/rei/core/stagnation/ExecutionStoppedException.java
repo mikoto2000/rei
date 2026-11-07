@@ -6,6 +6,8 @@ package dev.mikoto2000.rei.core.stagnation;
  * <p>Control signal, distinguished from model/transport failures at the run boundary.
  */
 public class ExecutionStoppedException extends RuntimeException {
+  @java.io.Serial private static final long serialVersionUID = 628992870161387121L;
+
   /** 実行の停滞への対処における理由の選択肢。 */
   public enum Reason {
     /** 進捗が得られず停滞した状態。 */

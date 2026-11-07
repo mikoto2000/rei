@@ -522,6 +522,8 @@ public class SleepService {
 
   /** 長期記憶の保存と検索を継続できない待機使用中の状況を伝える例外。 */
   public static class SleepBusyException extends IllegalStateException {
+    @java.io.Serial private static final long serialVersionUID = 1752729784176571430L;
+
     /** 既定の状態でSleepBusyExceptionを初期化する。 */
     public SleepBusyException() {
       super("Sleep already running for this session");

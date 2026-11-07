@@ -174,6 +174,8 @@ public final class SparseRetrieval {
 
   /** 関連文書の検索に必要な代替手段を扱う。 */
   private static final class Fallback extends RuntimeException {
+    @java.io.Serial private static final long serialVersionUID = -4231330172986241956L;
+
     /** 理由。 */
     private final String reason;
 
@@ -184,5 +186,7 @@ public final class SparseRetrieval {
   }
 
   /** 関連文書の検索に必要な期限を扱う。 */
-  private static final class Deadline extends RuntimeException {}
+  private static final class Deadline extends RuntimeException {
+    @java.io.Serial private static final long serialVersionUID = 3899019131787934089L;
+  }
 }

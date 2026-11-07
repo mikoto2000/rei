@@ -183,7 +183,9 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
   }
 
   /** 外部条件の待機に必要な本文上限上限超過を扱う。 */
-  private static final class BodyLimitExceeded extends java.io.IOException {}
+  private static final class BodyLimitExceeded extends java.io.IOException {
+    @java.io.Serial private static final long serialVersionUID = 6190420716996580833L;
+  }
 
   /** 外部条件の待機で用いる利用可否の確認JSON変換を返す。 */
   @Override

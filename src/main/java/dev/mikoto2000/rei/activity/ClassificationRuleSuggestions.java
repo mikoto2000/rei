@@ -68,6 +68,8 @@ public final class ClassificationRuleSuggestions {
    * bodies.
    */
   static final class Failure extends IllegalArgumentException {
+    @java.io.Serial private static final long serialVersionUID = -7139884107570373567L;
+
     /** 指定された値や利用先を使って、Failureを初期化する。 */
     Failure(String code, String detail) {
       super(code + ": " + detail);

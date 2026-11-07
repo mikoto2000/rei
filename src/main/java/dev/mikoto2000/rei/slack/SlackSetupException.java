@@ -6,6 +6,8 @@ package dev.mikoto2000.rei.slack;
  * <p>Only fixed diagnostics may cross the connection initialization boundary.
  */
 final class SlackSetupException extends RuntimeException {
+  @java.io.Serial private static final long serialVersionUID = -1966712568600157830L;
+
   /** Slackとの連携におけるコードの選択肢。 */
   enum Code {
     /** ANOTHERバックエンド。 */
