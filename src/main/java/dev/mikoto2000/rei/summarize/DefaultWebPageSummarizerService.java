@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.summarize;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import org.springframework.stereotype.Service;
 
@@ -22,11 +20,8 @@ public class DefaultWebPageSummarizerService implements WebPageSummarizerService
   private final SummarizationClient summarizationClient;
 
   /** 会話履歴。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Appends user and assistant messages to the current conversation history.")
-  private final ConversationHistoryAppender conversationHistory;
+  private final java.util.function.Function<String, java.util.function.Consumer<String>>
+      beginSummary;
 
   /** 指定された値や利用先を使って、DefaultWebPageSummarizerServiceを初期化する。 */
   public DefaultWebPageSummarizerService(
@@ -37,7 +32,7 @@ public class DefaultWebPageSummarizerService implements WebPageSummarizerService
     this.fetcher = fetcher;
     this.extractor = extractor;
     this.summarizationClient = summarizationClient;
-    this.conversationHistory = conversationHistory;
+    this.beginSummary = request -> conversationHistory.beginSummary(request);
   }
 
   /** 対象の内容を、要点が分かる形にまとめる。 */
@@ -45,7 +40,7 @@ public class DefaultWebPageSummarizerService implements WebPageSummarizerService
   public SummaryResult summarize(URI uri) {
     long startedAt = System.nanoTime();
     String requestMessage = "次のWebページを要約してください: " + uri;
-    conversationHistory.appendUserMessage(requestMessage);
+    var completeSummary = beginSummary.apply(requestMessage);
 
     long fetchStartedAt = System.nanoTime();
     UrlFetch fetched = fetcher.fetch(uri);
@@ -79,7 +74,7 @@ public class DefaultWebPageSummarizerService implements WebPageSummarizerService
     }
 
     String strippedSummary = summary.strip();
-    conversationHistory.appendAssistantMessage(strippedSummary);
+    completeSummary.accept(strippedSummary);
     return new SummaryResult(
         uri,
         strippedSummary,

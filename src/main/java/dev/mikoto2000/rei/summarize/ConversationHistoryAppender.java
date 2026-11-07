@@ -8,4 +8,10 @@ public interface ConversationHistoryAppender {
 
   /** 既存の記録へ経緯を残すため、アシスタントメッセージを追記する。 */
   void appendAssistantMessage(String content);
+
+  /** Record the request and return the completion for that summary. */
+  default java.util.function.Consumer<String> beginSummary(String request) {
+    appendUserMessage(request);
+    return summary -> appendAssistantMessage(summary);
+  }
 }
