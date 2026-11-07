@@ -66,7 +66,8 @@ class MemoryRunSubmitServiceTest {
             any()))
         .thenAnswer(
             call -> {
-              ((java.util.function.Consumer<AgentRunContext>) call.getArgument(8)).accept(captured);
+              java.util.function.Consumer<AgentRunContext> admit = call.getArgument(8);
+              admit.accept(captured);
               return captured;
             });
     var summary = mock(dev.mikoto2000.rei.memory.command.MemoryCommand.SummarizeCommand.class);
@@ -163,7 +164,8 @@ class MemoryRunSubmitServiceTest {
             any()))
         .thenAnswer(
             call -> {
-              ((java.util.function.Consumer<AgentRunContext>) call.getArgument(8)).accept(captured);
+              java.util.function.Consumer<AgentRunContext> admit = call.getArgument(8);
+              admit.accept(captured);
               return captured;
             });
     try (var runs = new RunService(registry, bus, events, cancellation, router::cancelQueued)) {
