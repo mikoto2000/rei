@@ -4,8 +4,6 @@ import dev.mikoto2000.rei.application.run.IntegrationRunSubmitService;
 import dev.mikoto2000.rei.feed.FeedOpmlImportService;
 import dev.mikoto2000.rei.feed.FeedService;
 import dev.mikoto2000.rei.feed.command.FeedCommand;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.OffsetDateTime;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -27,12 +25,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/feed/commands")
 public final class FeedCommandsController {
   /** フィード一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared feed service for listing and mutating the same subscriptions.")
-  private final FeedService feeds;
+  private final java.util.function.Supplier<String> listFeeds;
+
+  private final java.util.function.Function<Add, String> addFeed;
+  private final java.util.function.BiFunction<Long, Edit, String> editFeed;
+  private final java.util.function.LongFunction<String> deleteFeed;
+  private final java.util.function.Function<ItemQuery, String> listItems;
+
+  private record ItemQuery(OffsetDateTime from, OffsetDateTime to, int limit) {}
 
   /** 読み込む宣言。 */
   private final FeedOpmlImportService imports;
@@ -52,7 +52,14 @@ public final class FeedCommandsController {
   /** 指定された値や利用先を使って、FeedCommandsControllerを初期化する。 */
   public FeedCommandsController(
       FeedService feeds, FeedOpmlImportService imports, IntegrationRunSubmitService runs) {
-    this.feeds = feeds;
+    this.listFeeds = () -> FeedCommand.reportList(feeds);
+    this.addFeed = request -> FeedCommand.reportAdd(feeds, request.url(), request.displayName());
+    this.editFeed =
+        (id, request) ->
+            FeedCommand.reportEdit(feeds, id, request.displayName(), request.enabled());
+    this.deleteFeed = id -> FeedCommand.reportDelete(feeds, id);
+    this.listItems =
+        query -> FeedCommand.reportItems(feeds, query.from(), query.to(), query.limit());
     this.imports = imports;
     this.submitUpdateFeeds =
         request ->
@@ -128,7 +135,7 @@ public final class FeedCommandsController {
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @GetMapping
   public Text list() {
-    return text(FeedCommand.reportList(feeds));
+    return text(listFeeds.get());
   }
 
   /** 新たな対象を登録し、後から利用できるようにする。 */
@@ -136,20 +143,20 @@ public final class FeedCommandsController {
   public Text add(@RequestBody Add request) {
     required(request.url());
     optional(request.displayName());
-    return text(FeedCommand.reportAdd(feeds, request.url(), request.displayName()));
+    return text(addFeed.apply(request));
   }
 
   /** Web APIによる操作で用いる編集を返す。 */
   @PatchMapping("/{id}")
   public Text edit(@PathVariable long id, @RequestBody Edit request) {
     optional(request.displayName());
-    return text(FeedCommand.reportEdit(feeds, id, request.displayName(), request.enabled()));
+    return text(editFeed.apply(id, request));
   }
 
   /** 指定された対象を削除する。 */
   @DeleteMapping("/{id}")
   public Text delete(@PathVariable long id) {
-    return text(FeedCommand.reportDelete(feeds, id));
+    return text(deleteFeed.apply(id));
   }
 
   /** Web APIによる操作で用いる取り込みOPMLを返す。 */
@@ -168,11 +175,11 @@ public final class FeedCommandsController {
       @RequestParam(required = false) String to,
       @RequestParam(defaultValue = "10") int limit) {
     return text(
-        FeedCommand.reportItems(
-            feeds,
-            from == null ? null : OffsetDateTime.parse(from),
-            to == null ? null : OffsetDateTime.parse(to),
-            limit));
+        listItems.apply(
+            new ItemQuery(
+                from == null ? null : OffsetDateTime.parse(from),
+                to == null ? null : OffsetDateTime.parse(to),
+                limit)));
   }
 
   /** 指定された変更を、管理中の情報へ反映する。 */
