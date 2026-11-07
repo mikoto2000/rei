@@ -142,13 +142,13 @@ class JavaSymbolReadTest {
   void interfacesRecordsEnumsAndAnnotationLiteralsUseAstBoundaries() throws Exception {
     Files.writeString(
         root.resolve("C.java"),
-        "@SuppressWarnings(\"{ }\") class C { }\ninterface I { void work(); }\nrecord R(int value) {}\nenum E { VALUE; }\n@interface A { String value(); }\n");
+        "@Deprecated(since = \"{ }\") class C { }\ninterface I { void work(); }\nrecord R(int value) {}\nenum E { VALUE; }\n@interface A { String value(); }\n");
     var tools = new Tools();
     for (String id : List.of("C", "I#work()", "R", "E", "A#value()"))
       assertNull(
           tools.readMultiFile(List.of(request(id, false, false)), root).getFirst().error(), id);
     var read = tools.readMultiFile(List.of(request("C", false, false)), root).getFirst();
-    assertEquals("@SuppressWarnings(\"{ }\") class C", String.join("\n", read.content()).strip());
+    assertEquals("@Deprecated(since = \"{ }\") class C", String.join("\n", read.content()).strip());
   }
 
   /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */

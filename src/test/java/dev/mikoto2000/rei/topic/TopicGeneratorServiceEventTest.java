@@ -230,7 +230,6 @@ class TopicGeneratorServiceEventTest {
   /** 話題の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledFeatureFlagDoesNotCallGenerators() {
-    @SuppressWarnings("unchecked")
     TopicCandidateGenerator generator = org.mockito.Mockito.mock(TopicCandidateGenerator.class);
     TopicGeneratorService service =
         new TopicGeneratorService(

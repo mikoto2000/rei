@@ -130,9 +130,8 @@ class McpToolsTest {
   }
 
   /** {@code data} の条件を再現するための補助情報を返す。 */
-  @SuppressWarnings("unchecked")
-  Map<String, Object> data(McpSchema.CallToolResult result) {
-    return (Map<String, Object>) result.structuredContent();
+  Map<?, ?> data(McpSchema.CallToolResult result) {
+    return (Map<?, ?>) result.structuredContent();
   }
 
   /** {@code input} の条件を再現するための補助情報を返す。 */

@@ -281,7 +281,6 @@ class McpHttpIntegrationTest {
   }
 
   /** MCPによる機能の提供で、指定した条件に対する結果と状態の変化を確認する。 */
-  @SuppressWarnings("unchecked")
   @Test
   void sdkInitializesAndCallsExactlySixToolsWhileWebBearerRemainsRequired() throws Exception {
     var p = new ProjectRegistry(root.resolve("projects.json")).resolve(root);
@@ -420,7 +419,7 @@ class McpHttpIntegrationTest {
                     Map.of(
                         "project_id", p.id(), "instruction", "review", "request_id", "sdk-key")));
         assertFalse(submitted.isError(), submitted.toString());
-        var data = (Map<String, Object>) submitted.structuredContent();
+        var data = (Map<?, ?>) submitted.structuredContent();
         String run = (String) data.get("run_id");
         assertFalse(
             client

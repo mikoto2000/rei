@@ -29,8 +29,7 @@ class ChatGptCommandTest {
   /** ChatGPTとの連携の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void phaseZeroProbeCannotSendWithoutProjectPermission() {
-    @SuppressWarnings("unchecked")
-    var provider = (ObjectProvider<PlanClient>) mock(ObjectProvider.class);
+    ObjectProvider<PlanClient> provider = mock();
     var client = mock(PlanClient.class);
     when(provider.getIfAvailable()).thenReturn(client);
     var command = new CommandLine(new ChatGptCommand(null, provider, null));

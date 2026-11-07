@@ -60,8 +60,7 @@ class ContextSummaryTokenBudgetTest {
     when(provider.chatOptions(eq(LlmFeature.CHAT), any()))
         .thenAnswer(
             invocation -> org.springframework.ai.openai.OpenAiChatOptions.builder().build());
-    @SuppressWarnings("unchecked")
-    ObjectProvider<LlmModelProvider> models = mock(ObjectProvider.class);
+    ObjectProvider<LlmModelProvider> models = mock();
     when(models.getObject()).thenReturn(provider);
     return new LlmConversationCompressor(models, properties);
   }
@@ -326,9 +325,8 @@ class ContextSummaryTokenBudgetTest {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class)))
-        .thenReturn(
-            Flux.error(new IllegalStateException("offline")),
-            Flux.<ChatResponse>never().doOnCancel(() -> cancelled.set(true)));
+        .thenReturn(Flux.error(new IllegalStateException("offline")))
+        .thenReturn(Flux.<ChatResponse>never().doOnCancel(() -> cancelled.set(true)));
     var compressor = compressor(model, props);
     for (int i = 0; i < 2; i++)
       assertThatThrownBy(

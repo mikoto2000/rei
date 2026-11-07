@@ -3,6 +3,9 @@ package dev.mikoto2000.rei.http;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.netty.resolver.AbstractAddressResolver;
 import io.netty.resolver.AddressResolver;
@@ -12,6 +15,8 @@ import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.Promise;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.net.UnixDomainSocketAddress;
 import java.net.UnknownHostException;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -84,6 +89,36 @@ class ValidatingResolverGroupTest {
               .getResolver(executor)
               .resolve(new InetSocketAddress(InetAddress.getByName("127.0.0.1"), 80));
       assertThrows(ExecutionException.class, () -> resolution.get(2, TimeUnit.SECONDS));
+    } finally {
+      executor.shutdownGracefully(0, 1, TimeUnit.SECONDS).sync();
+    }
+  }
+
+  @Test
+  void mixedSocketTypesFailWithoutApprovingAnyAnswer() throws Exception {
+    var executor = new DefaultEventExecutor();
+    var approved = ConcurrentHashMap.<InetAddress>newKeySet();
+    var publicAddress = new InetSocketAddress(InetAddress.getByName("1.1.1.1"), 80);
+    var delegate =
+        new AddressResolverGroup<SocketAddress>() {
+          @Override
+          protected AddressResolver<SocketAddress> newResolver(EventExecutor owner) {
+            AddressResolver<SocketAddress> resolver = mock();
+            when(resolver.resolveAll(any()))
+                .thenReturn(owner.newSucceededFuture(
+                    List.of(publicAddress, UnixDomainSocketAddress.of("fixture.sock"))));
+            return resolver;
+          }
+        };
+    try (delegate;
+        var group =
+            new ValidatingResolverGroup(PublicNetworkPolicy::isPublic, approved, delegate)) {
+      var resolution =
+          group.getResolver(executor).resolve(InetSocketAddress.createUnresolved("fixture.example", 80));
+      var failure =
+          assertThrows(ExecutionException.class, () -> resolution.get(2, TimeUnit.SECONDS));
+      assertEquals(HttpFetchException.class, failure.getCause().getClass());
+      assertTrue(approved.isEmpty());
     } finally {
       executor.shutdownGracefully(0, 1, TimeUnit.SECONDS).sync();
     }

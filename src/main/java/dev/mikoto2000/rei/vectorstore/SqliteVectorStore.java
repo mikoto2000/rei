@@ -440,11 +440,9 @@ public final class SqliteVectorStore
         .toList();
   }
 
-  /** 関連文書の検索で参照するOSの機能クライアントを返す。 */
-  @Override
-  @SuppressWarnings("unchecked")
-  public <T> Optional<T> getNativeClient() {
-    return (Optional<T>) nativeClient.get();
+  /** Returns the configured SQLite DataSource with its concrete client type. */
+  public Optional<DataSource> nativeDataSource() {
+    return nativeClient.get();
   }
 
   /** 関連文書の検索に関する追加保存済み文書を処理する。 */

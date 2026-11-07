@@ -1724,16 +1724,16 @@ public class ChatExecutionService {
   }
 
   /** 会話の実行で用いる推論値を返す。 */
-  private String thinkingValue(Map<String, Object> metadata) {
+  private String thinkingValue(Map<?, ?> metadata) {
     if (metadata == null || metadata.isEmpty()) {
       return "";
     }
-    for (Map.Entry<String, Object> entry : metadata.entrySet()) {
-      if (isThinkingKey(entry.getKey())) {
+    for (var entry : metadata.entrySet()) {
+      if (entry.getKey() instanceof String key && isThinkingKey(key)) {
         return stringValue(entry.getValue());
       }
     }
-    for (Map.Entry<String, Object> entry : metadata.entrySet()) {
+    for (var entry : metadata.entrySet()) {
       String nested = thinkingValue(entry.getValue());
       if (!nested.isEmpty()) {
         return nested;
@@ -1743,10 +1743,9 @@ public class ChatExecutionService {
   }
 
   /** 会話の実行で用いる推論値を返す。 */
-  @SuppressWarnings("unchecked")
   private String thinkingValue(Object value) {
     if (value instanceof Map<?, ?> map) {
-      return thinkingValue((Map<String, Object>) map);
+      return thinkingValue(map);
     }
     return "";
   }

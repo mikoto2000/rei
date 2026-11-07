@@ -14,7 +14,11 @@ final class ReadingTestStores {
 
   static ReadingStateStore store(StorageDatabase database, Clock clock) {
     return new ReadingStateStore(
-        (write, work) -> write ? database.transaction(work::run) : database.read(work::run), clock);
+        (write, work) -> {
+          if (write) database.transaction(work::run);
+          else database.read(work::run);
+        },
+        clock);
   }
 
   static dev.mikoto2000.rei.tooldelivery.ReadingDelivery delivery(

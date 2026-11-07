@@ -33,7 +33,10 @@ public class ContextCompressionConfiguration {
       @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
     var database = new dev.mikoto2000.rei.storage.StorageDatabase(java.nio.file.Path.of(directory));
     return new dev.mikoto2000.rei.tooldelivery.ReadingStateStore(
-        (write, work) -> write ? database.transaction(work::run) : database.read(work::run));
+        (write, work) -> {
+          if (write) database.transaction(work::run);
+          else database.read(work::run);
+        });
   }
 
   /** モデルへ渡す文脈の管理で用いるレビュー対象範囲記録台帳を返す。 */

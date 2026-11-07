@@ -76,7 +76,7 @@ class VectorStoreConfigurationTest {
     LazySqliteVectorStore vectorStore =
         configuration.vectorStore(dataSource, embeddingModel, objectMapper);
 
-    assertSame(dataSource, vectorStore.<DataSource>getNativeClient().orElseThrow());
+    assertSame(dataSource, vectorStore.nativeDataSource().orElseThrow());
     Mockito.verify(dataSource).getConnection();
   }
 }

@@ -40,8 +40,7 @@ class HistoryReportControllerTest {
     doAnswer(
             call -> {
               assertEquals(selected.root(), projects.currentProject());
-              @SuppressWarnings("unchecked")
-              var output = (java.util.function.Consumer<String>) call.getArgument(3);
+              java.util.function.Consumer<String> output = call.getArgument(3);
               output.accept("fixture");
               return null;
             })

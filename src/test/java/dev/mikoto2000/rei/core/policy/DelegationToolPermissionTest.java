@@ -55,7 +55,6 @@ class DelegationToolPermissionTest {
 
   /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
-  @SuppressWarnings("unchecked")
   void setup() {
     registry = mock(SubAgentRegistry.class);
     when(registry.findById("reviewer"))
@@ -65,9 +64,9 @@ class DelegationToolPermissionTest {
     when(registry.findById("writer"))
         .thenReturn(Optional.of(definition("writer", List.of("writeMultiFile"))));
     when(registry.findById("judge")).thenReturn(Optional.of(definition("judge", List.of())));
-    ObjectProvider<SubAgentRegistry> registries = mock(ObjectProvider.class);
+    ObjectProvider<SubAgentRegistry> registries = mock();
     when(registries.getObject()).thenReturn(registry);
-    ObjectProvider<SubAgentToolPolicy> policies = mock(ObjectProvider.class);
+    ObjectProvider<SubAgentToolPolicy> policies = mock();
     when(policies.getObject())
         .thenReturn(new SubAgentToolPolicy(Set.of("readMultiFile", "webSearch", "writeMultiFile")));
     policy = new ToolPermissionPolicy(new ToolPermissionProperties(true, null, null, null));
