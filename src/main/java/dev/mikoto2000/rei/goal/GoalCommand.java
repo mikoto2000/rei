@@ -3,9 +3,8 @@ package dev.mikoto2000.rei.goal;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -20,11 +19,37 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   private final GoalRepository goals;
 
   /** 繰り返し。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared goal service to operate on the active goal lifecycle.")
-  private final GoalLoopService loop;
+  private final BiFunction<String, String, GoalCompletionProgress> readProgress;
+
+  private final BiFunction<String, String, GoalStageService.Progress> readStages;
+  private final BiFunction<String, String, GoalLoopService.Inspection> verifyGoal;
+  private final BiFunction<String, String, GoalRepository.Goal> runGoal;
+  private final BiFunction<String, String, GoalRepository.Goal> cancelGoal;
+  private final BiFunction<GoalKey, String, GoalRepository.Goal> reconcileGoal;
+
+  private record GoalKey(String project, String id) {}
+
+  private final BiFunction<GoalKey, StagePlan, java.util.List<GoalStageRepository.Stage>>
+      defineStagePlan;
+  private final BiFunction<GoalKey, StageEvidence, GoalStageService.Progress> attachStageProof;
+  private final BiFunction<AgentRunContext, CompletionChange, GoalRepository.Goal> changeCompletion;
+  private final BiFunction<AgentRunContext, Creation, GoalRepository.Goal> createGoal;
+
+  private record StagePlan(long version, java.util.List<GoalStageDefinition> plan) {}
+
+  private record StageEvidence(String stage, long version, GoalCompletionGate.Proof proof) {}
+
+  private record CompletionChange(
+      String goal, GoalCompletionGate.Definition definition, GoalCompletionGate.Proof proof) {}
+
+  private record Creation(
+      String objective,
+      String file,
+      String digest,
+      java.util.List<GoalRepository.FileCriterion> criteria,
+      GoalCompletionGate.Definition definition,
+      int runs,
+      int calls) {}
 
   /** プロジェクト一覧。 */
   private record SelectedProject(String id, java.nio.file.Path root) {}
@@ -153,7 +178,44 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   @org.springframework.beans.factory.annotation.Autowired
   public GoalCommand(GoalRepository goals, GoalLoopService loop, ProjectService projects) {
     this.goals = goals;
-    this.loop = loop;
+    this.readProgress = (project, id) -> loop.progress(project, id);
+    this.readStages = (project, id) -> loop.stageProgress(project, id);
+    this.verifyGoal = (project, id) -> loop.verify(project, id);
+    this.runGoal = (project, id) -> loop.run(project, id);
+    this.cancelGoal = (project, id) -> loop.cancel(project, id);
+    this.reconcileGoal = (key, run) -> loop.reconcile(key.project(), key.id(), run);
+    this.defineStagePlan =
+        (key, plan) -> loop.defineStages(key.project(), key.id(), plan.version(), plan.plan());
+    this.attachStageProof =
+        (key, evidence) ->
+            loop.attachStageEvidence(
+                key.project(), key.id(), evidence.stage(), evidence.version(), evidence.proof());
+    this.changeCompletion =
+        (owner, change) ->
+            change.definition() != null
+                ? loop.defineCompletion(owner, change.goal(), change.definition())
+                : loop.attachCompletion(owner, change.goal(), change.proof());
+    this.createGoal =
+        (owner, request) -> {
+          if (request.definition() != null)
+            return loop.create(
+                owner,
+                request.objective(),
+                request.criteria(),
+                request.definition(),
+                request.runs(),
+                request.calls());
+          if (request.criteria() == null)
+            return loop.create(
+                owner,
+                request.objective(),
+                request.file(),
+                request.digest(),
+                request.runs(),
+                request.calls());
+          return loop.create(
+              owner, request.objective(), request.criteria(), request.runs(), request.calls());
+        };
     this.selectedProject =
         () -> {
           var project = projects.currentContext();
@@ -177,16 +239,17 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
           switch (action) {
             case "list" -> goals.list(project.id());
             case "show" -> goals.get(project.id(), requiredValue());
-            case "progress" -> loop.progress(project.id(), requiredValue());
+            case "progress" -> readProgress.apply(project.id(), requiredValue());
             case "stages" -> {
-              if (stagesJson == null) yield loop.stageProgress(project.id(), requiredValue());
+              if (stagesJson == null) yield readStages.apply(project.id(), requiredValue());
               if (planVersion == null || planVersion < 0)
                 throw new IllegalArgumentException("Observed --plan-version required");
               var goal = goals.get(project.id(), requiredValue());
               if (!goal.sessionId().equals(currentSessionId.get()))
                 throw new IllegalArgumentException("Select owning Goal Session");
-              yield loop.defineStages(
-                  project.id(), goal.id(), planVersion, GoalStageRepository.parsePlan(stagesJson));
+              yield defineStagePlan.apply(
+                  new GoalKey(project.id(), goal.id()),
+                  new StagePlan(planVersion, GoalStageRepository.parsePlan(stagesJson)));
             }
             case "stage-evidence" -> {
               if (stageId == null || stageVersion == null || stageVersion < 1 || proofJson == null)
@@ -195,12 +258,10 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
               var goal = goals.get(project.id(), requiredValue());
               if (!goal.sessionId().equals(currentSessionId.get()))
                 throw new IllegalArgumentException("Select owning Goal Session");
-              yield loop.attachStageEvidence(
-                  project.id(),
-                  goal.id(),
-                  stageId,
-                  stageVersion,
-                  GoalRepository.parseCompletionProof(proofJson));
+              yield attachStageProof.apply(
+                  new GoalKey(project.id(), goal.id()),
+                  new StageEvidence(
+                      stageId, stageVersion, GoalRepository.parseCompletionProof(proofJson)));
             }
             case "history" ->
                 goals.history(project.id(), requiredValue())
@@ -217,18 +278,17 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
             case "wait-activate" -> waits().activate(project.id(), requiredValue(), waitVersion());
             case "wait-resume" -> waits().resume(project.id(), requiredValue(), waitVersion());
             case "wait-cancel" -> waits().cancel(project.id(), requiredValue(), waitVersion());
-            case "run" -> loop.run(project.id(), requiredValue());
-            case "verify" -> loop.verify(project.id(), requiredValue());
+            case "run" -> runGoal.apply(project.id(), requiredValue());
+            case "verify" -> verifyGoal.apply(project.id(), requiredValue());
             case "reconcile" -> {
               if (!acknowledgeUncertain || expectedRunId == null || expectedRunId.isBlank())
                 throw new IllegalArgumentException(
                     "Reconcile requires --run-id and --acknowledge-uncertain-side-effects; inspect current effects before resuming");
-              yield loop.reconcile(
-                  project.id(),
-                  requiredValue(),
+              yield reconcileGoal.apply(
+                  new GoalKey(project.id(), requiredValue()),
                   expectedRunId.equals("none") ? null : expectedRunId);
             }
-            case "cancel" -> loop.cancel(project.id(), requiredValue());
+            case "cancel" -> cancelGoal.apply(project.id(), requiredValue());
             case "completion" -> {
               var goal = goals.get(project.id(), requiredValue());
               var owner =
@@ -239,11 +299,13 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
                       project.id());
               if ((completionJson == null) == (proofJson == null))
                 throw new IllegalArgumentException("Use exactly --completion-json or --proof-json");
-              yield completionJson != null
-                  ? loop.defineCompletion(
-                      owner, goal.id(), GoalRepository.parseCompletion(completionJson))
-                  : loop.attachCompletion(
-                      owner, goal.id(), GoalRepository.parseCompletionProof(proofJson));
+              yield changeCompletion.apply(
+                  owner,
+                  completionJson != null
+                      ? new CompletionChange(
+                          goal.id(), GoalRepository.parseCompletion(completionJson), null)
+                      : new CompletionChange(
+                          goal.id(), null, GoalRepository.parseCompletionProof(proofJson)));
             }
             case "create" -> {
               String session = currentSessionId.get();
@@ -256,19 +318,18 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
               if (proofJson != null)
                 throw new IllegalArgumentException(
                     "Attach proof to an existing Goal with completion");
-              if (completionJson != null)
-                yield loop.create(
-                    owner,
-                    requiredValue(),
-                    criteriaJson == null
-                        ? java.util.List.of(new GoalRepository.FileCriterion(file, digest))
-                        : parseCriteria(),
-                    GoalRepository.parseCompletion(completionJson),
-                    maxRuns,
-                    maxCalls);
-              yield criteriaJson == null
-                  ? loop.create(owner, requiredValue(), file, digest, maxRuns, maxCalls)
-                  : loop.create(owner, requiredValue(), parseCriteria(), maxRuns, maxCalls);
+              String objective = requiredValue();
+              var criteria =
+                  criteriaJson != null
+                      ? parseCriteria()
+                      : completionJson == null
+                          ? null
+                          : java.util.List.of(new GoalRepository.FileCriterion(file, digest));
+              var definition =
+                  completionJson == null ? null : GoalRepository.parseCompletion(completionJson);
+              yield createGoal.apply(
+                  owner,
+                  new Creation(objective, file, digest, criteria, definition, maxRuns, maxCalls));
             }
             default ->
                 throw new IllegalArgumentException(

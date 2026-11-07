@@ -7,12 +7,11 @@ import dev.mikoto2000.rei.goal.GoalLoopService;
 import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.goal.GoalWaitRepository;
 import dev.mikoto2000.rei.goal.GoalWaitService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -35,25 +34,66 @@ public class GoalController {
   private final GoalRepository repository;
 
   /** 繰り返し。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared goal service to operate on the active goal lifecycle.")
-  private final GoalLoopService loop;
+  private final BiFunction<String, String, GoalCompletionProgress> readProgress;
+
+  private final BiFunction<String, String, dev.mikoto2000.rei.goal.GoalStageService.Progress>
+      readStages;
+  private final BiFunction<String, String, GoalLoopService.Inspection> verifyGoal;
+  private final BiFunction<String, String, GoalRepository.Goal> runGoal;
+  private final BiFunction<String, String, GoalRepository.Goal> cancelGoal;
+  private final BiFunction<GoalKey, String, GoalRepository.Goal> reconcileGoal;
+
+  private record GoalKey(String project, String id) {}
+
+  private final BiFunction<
+          GoalKey, StagePlanRequest, List<dev.mikoto2000.rei.goal.GoalStageRepository.Stage>>
+      defineStagePlan;
+  private final BiFunction<
+          GoalKey, StageEvidence, dev.mikoto2000.rei.goal.GoalStageService.Progress>
+      attachStageProof;
+  private final BiFunction<GoalKey, GoalCompletionGate.Definition, GoalRepository.Goal>
+      defineGoalCompletion;
+  private final BiFunction<GoalKey, GoalCompletionGate.Proof, GoalRepository.Goal>
+      attachGoalCompletion;
+  private final BiFunction<
+          dev.mikoto2000.rei.core.chat.AgentRunContext, Creation, GoalRepository.Goal>
+      createGoal;
+
+  private record StageEvidence(String stageId, StageEvidenceRequest request) {}
+
+  private record Creation(CreateRequest request, int runs, int calls) {}
 
   /** 指定された値や利用先を使って、GoalControllerを初期化する。 */
   public GoalController(GoalRepository repository, GoalLoopService loop) {
     this.repository = repository;
-    this.loop = loop;
+    this.readProgress = (project, id) -> loop.progress(project, id);
+    this.readStages = (project, id) -> loop.stageProgress(project, id);
+    this.verifyGoal = (project, id) -> loop.verify(project, id);
+    this.runGoal = (project, id) -> loop.run(project, id);
+    this.cancelGoal = (project, id) -> loop.cancel(project, id);
+    this.reconcileGoal = (key, run) -> loop.reconcile(key.project(), key.id(), run);
+    this.defineStagePlan =
+        (key, plan) ->
+            loop.defineStages(key.project(), key.id(), plan.expectedPlanVersion(), plan.stages());
+    this.attachStageProof =
+        (key, evidence) ->
+            loop.attachStageEvidence(
+                key.project(),
+                key.id(),
+                evidence.stageId(),
+                evidence.request().expectedVersion(),
+                evidence.request().proof());
+    this.defineGoalCompletion =
+        (key, definition) -> loop.defineCompletion(key.project(), key.id(), definition);
+    this.attachGoalCompletion =
+        (key, proof) -> loop.attachCompletion(key.project(), key.id(), proof);
+    this.createGoal = (owner, creation) -> createGoal(loop, owner, creation);
   }
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared project registry so lookups use the same registered projects.")
-  private dev.mikoto2000.rei.core.project.ProjectRegistry projects;
+  private java.util.function.Function<String, java.util.Optional<ProjectChoice>> findProject;
+
+  private record ProjectChoice(String id, java.nio.file.Path root) {}
 
   /** 会話一覧。 */
   private BiConsumer<String, String> validateSession;
@@ -63,7 +103,13 @@ public class GoalController {
   public void configureCreation(
       dev.mikoto2000.rei.core.project.ProjectRegistry projects,
       dev.mikoto2000.rei.application.session.SessionLifecycle sessions) {
-    this.projects = projects;
+    this.findProject =
+        projects == null
+            ? null
+            : id ->
+                projects
+                    .resolveById(id)
+                    .map(project -> new ProjectChoice(project.id(), project.root()));
     this.validateSession =
         sessions == null ? null : (id, project) -> sessions.validate(id, project);
   }
@@ -110,11 +156,11 @@ public class GoalController {
         calls = request.maxLlmCalls() == null ? 20 : request.maxLlmCalls();
     if (runs < 1 || runs > 10 || calls < 1 || calls > 100)
       throw new IllegalArgumentException("Goal budgets: 1..10 Runs and 1..100 LLM calls");
-    if (projects == null || validateSession == null)
+    if (findProject == null || validateSession == null)
       throw new IllegalStateException("Goal creation unavailable");
     var project =
-        projects
-            .resolveById(projectId)
+        findProject
+            .apply(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
     validateSession.accept(request.sessionId(), project.id());
@@ -125,6 +171,13 @@ public class GoalController {
             project.root(),
             project.id(),
             dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB);
+    return createGoal.apply(owner, new Creation(request, runs, calls));
+  }
+
+  private static GoalRepository.Goal createGoal(
+      GoalLoopService loop, dev.mikoto2000.rei.core.chat.AgentRunContext owner, Creation creation) {
+    var request = creation.request();
+    int runs = creation.runs(), calls = creation.calls();
     if (request.criteriaJson() == null && request.completionJson() == null)
       return control(
           () ->
@@ -156,14 +209,14 @@ public class GoalController {
   /** Web APIによる操作で用いる進捗を返す。 */
   @GetMapping("/{id}/completion-progress")
   public GoalCompletionProgress progress(@PathVariable String projectId, @PathVariable String id) {
-    return control(() -> loop.progress(projectId, id));
+    return control(() -> readProgress.apply(projectId, id));
   }
 
   /** Web APIによる操作で用いる段階一覧を返す。 */
   @GetMapping("/{id}/stages")
   public dev.mikoto2000.rei.goal.GoalStageService.Progress stages(
       @PathVariable String projectId, @PathVariable String id) {
-    return control(() -> loop.stageProgress(projectId, id));
+    return control(() -> readStages.apply(projectId, id));
   }
 
   /**
@@ -189,8 +242,7 @@ public class GoalController {
       @RequestBody StagePlanRequest request) {
     if (request == null || request.expectedPlanVersion() < 0 || request.stages() == null)
       throw new IllegalArgumentException("Stage plan and observed version required");
-    return control(
-        () -> loop.defineStages(projectId, id, request.expectedPlanVersion(), request.stages()));
+    return control(() -> defineStagePlan.apply(new GoalKey(projectId, id), request));
   }
 
   /**
@@ -213,8 +265,8 @@ public class GoalController {
       throw new IllegalArgumentException("Stage proof and observed version required");
     return control(
         () ->
-            loop.attachStageEvidence(
-                projectId, id, stageId, request.expectedVersion(), request.proof()));
+            attachStageProof.apply(
+                new GoalKey(projectId, id), new StageEvidence(stageId, request)));
   }
 
   /**
@@ -241,7 +293,7 @@ public class GoalController {
   @PostMapping("/{id}/verify")
   public GoalLoopService.Inspection verify(
       @PathVariable String projectId, @PathVariable String id) {
-    return control(() -> loop.verify(projectId, id));
+    return control(() -> verifyGoal.apply(projectId, id));
   }
 
   /** Web APIによる操作で用いる定義完了条件JSON変換を返す。 */
@@ -254,7 +306,7 @@ public class GoalController {
   /** Web APIによる操作で用いる定義完了条件を返す。 */
   public GoalRepository.Goal defineCompletion(
       String projectId, String id, GoalCompletionGate.Definition definition) {
-    return control(() -> loop.defineCompletion(projectId, id, definition));
+    return control(() -> defineGoalCompletion.apply(new GoalKey(projectId, id), definition));
   }
 
   /** Web APIによる操作で用いる関連付け完了条件JSON変換を返す。 */
@@ -267,19 +319,19 @@ public class GoalController {
   /** Web APIによる操作で用いる関連付け完了条件を返す。 */
   public GoalRepository.Goal attachCompletion(
       String projectId, String id, GoalCompletionGate.Proof proof) {
-    return control(() -> loop.attachCompletion(projectId, id, proof));
+    return control(() -> attachGoalCompletion.apply(new GoalKey(projectId, id), proof));
   }
 
   /** Web APIによる操作の操作を実行する。 */
   @PostMapping("/{id}/run")
   public GoalRepository.Goal run(@PathVariable String projectId, @PathVariable String id) {
-    return control(() -> loop.run(projectId, id));
+    return control(() -> runGoal.apply(projectId, id));
   }
 
   /** 対象の実行をキャンセルする。 */
   @PostMapping("/{id}/cancel")
   public GoalRepository.Goal cancel(@PathVariable String projectId, @PathVariable String id) {
-    return control(() -> loop.cancel(projectId, id));
+    return control(() -> cancelGoal.apply(projectId, id));
   }
 
   /**
@@ -304,9 +356,8 @@ public class GoalController {
           "Inspect effects and acknowledge the exact saved Run before reconciliation");
     return control(
         () ->
-            loop.reconcile(
-                projectId,
-                id,
+            reconcileGoal.apply(
+                new GoalKey(projectId, id),
                 request.expectedRunId().equals("none") ? null : request.expectedRunId()));
   }
 
