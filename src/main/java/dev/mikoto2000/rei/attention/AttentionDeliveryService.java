@@ -1,16 +1,17 @@
 package dev.mikoto2000.rei.attention;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import dev.mikoto2000.rei.attention.AttentionDeliveryRepository.Delivery;
+import dev.mikoto2000.rei.attention.AttentionDeliveryRepository.Lease;
 import dev.mikoto2000.rei.core.policy.PermissionDecision;
 import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.AttentionRequiredPayload;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -20,6 +21,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -65,11 +70,32 @@ public class AttentionDeliveryService {
   private final AttentionRepository inbox;
 
   /** 配信する通知の記録先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared delivery outbox for durable claims and transitions.")
-  private final AttentionDeliveryRepository outbox;
+  private final Runnable recoverOutbox;
+
+  private final EnqueueDelivery enqueueDelivery;
+  private final RetryDelivery retryDelivery;
+  private final Supplier<List<Delivery>> pendingDeliveries;
+  private final BiFunction<String, String, java.util.Optional<Delivery>> findDelivery;
+  private final SkipDelivery skipDelivery;
+  private final BiFunction<Delivery, Long, Lease> claimDelivery;
+  private final Consumer<Delivery> deferDelivery;
+  private final BiConsumer<Delivery, NotificationProvider.Receipt> finishDelivery;
+
+  @FunctionalInterface
+  private interface EnqueueDelivery {
+    Delivery enqueue(
+        AttentionRepository.Item item, String destination, String cause, String provider);
+  }
+
+  @FunctionalInterface
+  private interface RetryDelivery {
+    Delivery retry(String project, String id, String destination, boolean risk, String provider);
+  }
+
+  @FunctionalInterface
+  private interface SkipDelivery {
+    void skip(Delivery item, String status, String reason);
+  }
 
   /** 通知の連携先。 */
   private final AgentEventBus bus;
@@ -117,7 +143,18 @@ public class AttentionDeliveryService {
       JdkAttentionSender sender) {
     this.properties = properties;
     this.inbox = inbox;
-    this.outbox = outbox;
+    this.recoverOutbox = () -> outbox.recover();
+    this.enqueueDelivery =
+        (item, destination, cause, provider) -> outbox.enqueue(item, destination, cause, provider);
+    this.retryDelivery =
+        (project, id, destination, risk, provider) ->
+            outbox.retry(project, id, destination, risk, provider);
+    this.pendingDeliveries = () -> outbox.pending();
+    this.findDelivery = (project, id) -> outbox.find(project, id);
+    this.skipDelivery = (item, status, reason) -> outbox.skip(item, status, reason);
+    this.claimDelivery = (item, interval) -> outbox.claimActive(item, interval);
+    this.deferDelivery = item -> outbox.deferForLifePolicy(item);
+    this.finishDelivery = (item, receipt) -> outbox.finish(item, receipt);
     this.bus = bus;
     this.deliveryApproved =
         () -> policy.evaluate("deliverAttention") == PermissionDecision.AUTO_APPROVE;
@@ -128,7 +165,7 @@ public class AttentionDeliveryService {
   @PostConstruct
   public synchronized void start() {
     if (subscription != null || closed) return;
-    outbox.recover();
+    recoverOutbox.run();
     subscription = bus.subscribe(this::observe);
   }
 
@@ -146,7 +183,7 @@ public class AttentionDeliveryService {
           || !Objects.equals(item.sessionId(), event.sessionId())
           || !Objects.equals(item.runId(), event.runId())
           || !item.kind().equals(payload.kind())) return;
-      outbox.enqueue(item, destination(), "AUTOMATIC", provider().name());
+      enqueueDelivery.enqueue(item, destination(), "AUTOMATIC", provider().name());
     } catch (RuntimeException error) {
       LOG.debug("Attention delivery not queued: {}", error.getClass().getSimpleName());
     }
@@ -180,8 +217,8 @@ public class AttentionDeliveryService {
   /** 対象の現在の状態を、照会用の情報として返す。 */
   public AttentionDeliveryRepository.Delivery status(String project, String id) {
     var item = inbox.get(project, id);
-    return outbox
-        .find(project, id)
+    return findDelivery
+        .apply(project, id)
         .orElseGet(
             () ->
                 new AttentionDeliveryRepository.Delivery(
@@ -198,14 +235,15 @@ public class AttentionDeliveryService {
   /** 注意の管理で用いる要求を返す。 */
   public AttentionDeliveryRepository.Delivery request(String project, String id) {
     if (closed) throw new IllegalArgumentException("Delivery is closed");
-    return outbox.enqueue(eligible(project, id), destination(), "MANUAL", provider().name());
+    return enqueueDelivery.enqueue(
+        eligible(project, id), destination(), "MANUAL", provider().name());
   }
 
   /** 注意の管理で用いる再試行を返す。 */
   public AttentionDeliveryRepository.Delivery retry(String project, String id, boolean risk) {
     if (closed) throw new IllegalArgumentException("Delivery is closed");
     eligible(project, id);
-    return outbox.retry(project, id, destination(), risk, provider().name());
+    return retryDelivery.retry(project, id, destination(), risk, provider().name());
   }
 
   /** 注意の管理に関する定期確認を処理する。 */
@@ -236,7 +274,7 @@ public class AttentionDeliveryService {
    */
   public synchronized void dispatchOne() {
     if (closed || !properties.enabled()) return;
-    var pending = outbox.pending();
+    var pending = pendingDeliveries.get();
     if (pending.isEmpty()) return;
     if (life != null && !life.notificationAllowed("NORMAL", pending.getFirst().id())) return;
     var item = pending.getFirst();
@@ -244,29 +282,29 @@ public class AttentionDeliveryService {
     try {
       attention = inbox.get(item.projectId(), item.id());
     } catch (IllegalArgumentException missing) {
-      outbox.skip(item, "SUPPRESSED", "inbox_missing");
+      skipDelivery.skip(item, "SUPPRESSED", "inbox_missing");
       return;
     }
     if (!"OPEN".equals(attention.status())) {
-      outbox.skip(item, "SUPPRESSED", "inbox_acknowledged");
+      skipDelivery.skip(item, "SUPPRESSED", "inbox_acknowledged");
       return;
     }
     NotificationProvider selected;
     try {
       selected = provider();
     } catch (IllegalArgumentException disabled) {
-      outbox.skip(item, "BLOCKED", "provider_disabled");
+      skipDelivery.skip(item, "BLOCKED", "provider_disabled");
       return;
     }
     if (!properties.projects().contains(item.projectId())
         || ("AUTOMATIC".equals(item.cause()) && !properties.automatic())
         || !selected.destination().equals(item.destination())
         || !selected.name().equals(item.provider())) {
-      outbox.skip(item, "BLOCKED", "configuration_changed");
+      skipDelivery.skip(item, "BLOCKED", "configuration_changed");
       return;
     }
     if (!deliveryApproved.getAsBoolean()) {
-      outbox.skip(item, "BLOCKED", "policy_not_granted");
+      skipDelivery.skip(item, "BLOCKED", "policy_not_granted");
       return;
     }
     String json;
@@ -287,14 +325,14 @@ public class AttentionDeliveryService {
                       "createdAt",
                       attention.createdAt().toString()));
     } catch (JsonProcessingException | RuntimeException error) {
-      outbox.skip(item, "BLOCKED", "invalid_metadata");
+      skipDelivery.skip(item, "BLOCKED", "invalid_metadata");
       return;
     }
-    var lease = outbox.claimActive(item, selected.minimumIntervalMillis());
+    var lease = claimDelivery.apply(item, selected.minimumIntervalMillis());
     if (lease == null) return;
     if (life != null && !life.notificationAllowed("NORMAL", item.id())) {
       try {
-        outbox.deferForLifePolicy(lease.delivery());
+        deferDelivery.accept(lease.delivery());
       } finally {
         lease.close();
       }
@@ -316,7 +354,7 @@ public class AttentionDeliveryService {
     } finally {
       interrupted |= Thread.interrupted();
       try {
-        outbox.finish(lease.delivery(), receipt);
+        finishDelivery.accept(lease.delivery(), receipt);
       } finally {
         lease.close();
         if (interrupted) Thread.currentThread().interrupt();

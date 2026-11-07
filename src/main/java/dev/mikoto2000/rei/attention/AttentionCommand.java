@@ -1,9 +1,9 @@
 package dev.mikoto2000.rei.attention;
 
+import dev.mikoto2000.rei.attention.AttentionDeliveryRepository.Delivery;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -41,11 +41,17 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
   private CommandOutput output;
 
   /** 配信。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Routes shell operations through the shared attention delivery state.")
-  private AttentionDeliveryService delivery;
+  private record DeliveryOperations(
+      BiFunction<String, String, Delivery> status,
+      BiFunction<String, String, Delivery> request,
+      RetryDelivery retry) {}
+
+  @FunctionalInterface
+  private interface RetryDelivery {
+    Delivery request(String projectId, String id, boolean acknowledgeRisk);
+  }
+
+  private DeliveryOperations delivery;
 
   /** 重複の有無リスク。 */
   @Option(
@@ -56,7 +62,13 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
   /** 注意の管理で使用する配信を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setDelivery(AttentionDeliveryService delivery) {
-    this.delivery = delivery;
+    this.delivery =
+        delivery == null
+            ? null
+            : new DeliveryOperations(
+                (project, id) -> delivery.status(project, id),
+                (project, id) -> delivery.request(project, id),
+                (project, id, risk) -> delivery.retry(project, id, risk));
   }
 
   /** 注意の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -90,9 +102,10 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
               repository.acknowledge(project, requiredId());
               yield "Acknowledged. This does not approve, resume or execute the task.";
             }
-            case "delivery" -> requireDelivery().status(project, requiredId());
-            case "deliver" -> requireDelivery().request(project, requiredId());
-            case "retry-delivery" -> requireDelivery().retry(project, requiredId(), duplicateRisk);
+            case "delivery" -> requireDelivery().status().apply(project, requiredId());
+            case "deliver" -> requireDelivery().request().apply(project, requiredId());
+            case "retry-delivery" ->
+                requireDelivery().retry().request(project, requiredId(), duplicateRisk);
             default ->
                 throw new IllegalArgumentException(
                     "Use /attention list|show|ack|delivery|deliver|retry-delivery [attentionId]");
@@ -114,7 +127,7 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
   }
 
   /** 条件を満たさない操作を拒否するため、配信の前提条件を確認する。 */
-  private AttentionDeliveryService requireDelivery() {
+  private DeliveryOperations requireDelivery() {
     if (delivery == null) throw new IllegalArgumentException("Attention delivery is unavailable");
     return delivery;
   }
