@@ -4,10 +4,10 @@ import dev.mikoto2000.rei.conversation.HistorySearchRequest;
 import dev.mikoto2000.rei.conversation.HistorySearchScope;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.project.ProjectService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -16,11 +16,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class EpisodeTools {
   /** 検索。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the current shared episode search index and registered projects.")
-  private final EpisodeSearchService search;
+  private final BiFunction<HistorySearchRequest, String, List<EpisodeSearchService.Hit>>
+      findEpisodes;
+
+  private final Function<String, String> registeredProject;
+  private final Function<Revision, Map<String, Object>> readDetail;
+  private final BiFunction<Revision, Integer, Map<String, Object>> readSources;
 
   /** 保存と検索の窓口。 */
   private final EpisodeRepository repository;
@@ -36,7 +37,13 @@ public class EpisodeTools {
 
   /** 指定された値や利用先を使って、EpisodeToolsを初期化する。 */
   public EpisodeTools(EpisodeSearchService search, EpisodeRepository repository) {
-    this.search = search;
+    this.findEpisodes = (request, context) -> search.search(request, context);
+    this.registeredProject = project -> search.registeredProject(project);
+    this.readDetail =
+        revision -> search.detailPage(revision.id(), revision.project(), revision.version());
+    this.readSources =
+        (revision, offset) ->
+            search.sourcesPage(revision.id(), revision.project(), revision.version(), offset);
     this.repository = repository;
   }
 
@@ -58,7 +65,7 @@ public class EpisodeTools {
       @ToolParam(required = false) Integer limit,
       @ToolParam(required = false) String since,
       @ToolParam(required = false) String until) {
-    return search.search(
+    return findEpisodes.apply(
         new HistorySearchRequest(
             query, project(), null, retrievalScope, "all", null, since, until, limit),
         context);
@@ -73,10 +80,11 @@ public class EpisodeTools {
       @ToolParam(required = false) String sourceProjectId,
       @ToolParam(required = false, description = "nextCursor from previous page; omit for newest")
           String beforeRevision) {
-    return search.detailPage(
-        episodeId,
-        sourceProjectId == null ? project() : search.registeredProject(sourceProjectId),
-        beforeRevision);
+    return readDetail.apply(
+        new Revision(
+            episodeId,
+            sourceProjectId == null ? project() : registeredProject.apply(sourceProjectId),
+            beforeRevision));
   }
 
   /** 過去の経験の活用で用いる経験の記録取得元一覧を返す。 */
@@ -92,11 +100,12 @@ public class EpisodeTools {
               required = false,
               description = "nextOffset from previous page; keep returned revision ID")
           Integer offset) {
-    return search.sourcesPage(
-        episodeId,
-        sourceProjectId == null ? project() : search.registeredProject(sourceProjectId),
-        revision,
-        offset == null ? 0 : offset);
+    return readSources.apply(
+        new Revision(
+            episodeId,
+            sourceProjectId == null ? project() : registeredProject.apply(sourceProjectId),
+            revision),
+        offset == null ? Integer.valueOf(0) : offset);
   }
 
   /** 過去の経験の活用で用いる経験の記録Processing状態を返す。 */
@@ -116,4 +125,6 @@ public class EpisodeTools {
         "processedPosition",
         repository.checkpoint(run.conversationId()));
   }
+
+  private record Revision(String id, String project, String version) {}
 }
