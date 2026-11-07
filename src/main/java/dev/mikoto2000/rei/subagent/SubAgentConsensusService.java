@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.util.function.BooleanSupplier;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -104,11 +105,9 @@ public final class SubAgentConsensusService {
   public record Judged(Comparison comparison, SubAgentResult judge) {}
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound SubAgentProperties shared by consumers of these settings.")
-  private final SubAgentProperties properties;
+  private final BooleanSupplier consensusEnabled;
+
+  private final BooleanSupplier judgeEnabled;
 
   /** 保存と検索の窓口。 */
   private final DurableSubAgentRepository repository;
@@ -129,7 +128,8 @@ public final class SubAgentConsensusService {
       DurableSubAgentRepository repository,
       SubAgentRunner runner,
       SubAgentRegistry registry) {
-    this.properties = properties;
+    this.consensusEnabled = () -> properties.isDurableEnabled() && properties.isConsensusEnabled();
+    this.judgeEnabled = () -> properties.isConsensusJudgeEnabled();
     this.repository = repository;
     this.runner = runner;
     this.registry = registry;
@@ -137,8 +137,7 @@ public final class SubAgentConsensusService {
 
   /** 補助エージェントへの委譲で用いる比較を返す。 */
   public Comparison compare(AgentRunContext owner, List<Reference> references) {
-    if (!properties.isDurableEnabled()
-        || !properties.isConsensusEnabled()
+    if (!consensusEnabled.getAsBoolean()
         || owner == null
         || owner.conversationId().startsWith("subagent:"))
       throw new IllegalArgumentException("Opt-in consensus and human Project ownership required");
@@ -252,7 +251,7 @@ public final class SubAgentConsensusService {
 
   /** 補助エージェントへの委譲で用いる評価の判断を返す。 */
   public Judged judge(RunExecutionContext run, List<Reference> references, String agent) {
-    if (!properties.isConsensusJudgeEnabled()
+    if (!judgeEnabled.getAsBoolean()
         || run == null
         || run.runContext() == null
         || run.runContext().mode() != AgentRunContext.Mode.EXCLUSIVE)
