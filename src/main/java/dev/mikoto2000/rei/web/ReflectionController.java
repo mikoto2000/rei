@@ -11,11 +11,11 @@ import dev.mikoto2000.rei.reflection.ReflectionLessonService;
 import dev.mikoto2000.rei.reflection.RunReflectionRepository;
 import dev.mikoto2000.rei.reflection.RunReflectionService;
 import dev.mikoto2000.rei.reflection.VerifiedReflectionMemoryService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,12 +43,7 @@ public final class ReflectionController {
   private final GoalReflectionService service;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 会話一覧。 */
   private final SessionQueryService sessions;
@@ -123,7 +118,7 @@ public final class ReflectionController {
       SessionQueryService sessions) {
     this.repository = repository;
     this.service = service;
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
     this.sessions = sessions;
   }
 
@@ -294,7 +289,7 @@ public final class ReflectionController {
 
   /** Web APIによる操作で用いるプロジェクトを返す。 */
   private ProjectContext project(String id) {
-    return projects.resolveById(id).orElseThrow(() -> new ResourceNotFoundException("Project"));
+    return findProject.apply(id).orElseThrow(() -> new ResourceNotFoundException("Project"));
   }
 
   /** Web APIによる操作で用いる所有者を返す。 */

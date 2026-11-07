@@ -20,7 +20,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * Git連携先Webhook通知のユースケースを実現する。
@@ -67,11 +69,7 @@ public final class GitHubWebhookService {
   private final GitHubWebhookProperties properties;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 会話一覧。 */
   @SuppressFBWarnings(
@@ -119,7 +117,7 @@ public final class GitHubWebhookService {
     properties.validateMappings();
     this.decoder = new GitHubWebhookDecoder(properties, clock);
     this.properties = properties;
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
     this.sessions = sessions;
     this.facts = facts;
     this.scheduler = scheduler;
@@ -133,8 +131,7 @@ public final class GitHubWebhookService {
             .map(
                 mapping -> {
                   var project =
-                      projects
-                          .resolveById(mapping.projectId())
+                      findProject.apply(mapping.projectId())
                           .orElseThrow(
                               () ->
                                   new IllegalArgumentException(
@@ -174,8 +171,7 @@ public final class GitHubWebhookService {
             || rule.branch() != null && !rule.branch().equals(fact.branch())
             || rule.pullRequest() != null && !rule.pullRequest().equals(fact.pullRequest()))
           continue;
-        if (!projects
-            .resolveById(owner.project().id())
+        if (!findProject.apply(owner.project().id())
             .filter(current -> current.root().equals(owner.project().root()))
             .isPresent()) throw new ResourceNotFoundException("GitHub mapping");
         sessions.validate(rule.sessionId(), rule.projectId());
@@ -231,8 +227,7 @@ public final class GitHubWebhookService {
   /** GitHubとの連携で用いる自分が所有する対象を返す。 */
   private ProjectContext owned(String project, String session) {
     var registered =
-        projects
-            .resolveById(project)
+        findProject.apply(project)
             .orElseThrow(() -> new ResourceNotFoundException("GitHub mapping"));
     if (owners.stream()
         .noneMatch(

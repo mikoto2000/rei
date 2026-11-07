@@ -3,21 +3,19 @@ package dev.mikoto2000.rei.application.run;
 import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
+import java.util.Optional;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 /** チャット受付のユースケースを実現する。 */
 public final class ChatSubmitService {
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 会話一覧。 */
   private final SessionRegistry sessions;
@@ -97,7 +95,7 @@ public final class ChatSubmitService {
       SessionLifecycle lifecycle,
       BiConsumer<AgentRunContext, String> dispatch,
       boolean concurrentEnabled) {
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
     this.sessions = sessions;
     this.runs = runs;
     this.dispatch = dispatch;
@@ -139,7 +137,7 @@ public final class ChatSubmitService {
     if (message == null || message.isBlank() || projectId == null || projectId.isBlank())
       throw new IllegalArgumentException("message and projectId are required");
     var project =
-        projects.resolveById(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
+        findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
     String fingerprint = null;
     if (key != null)
       try {
@@ -194,7 +192,7 @@ public final class ChatSubmitService {
     if (!concurrentEnabled)
       throw new IllegalArgumentException("Concurrent conversations are disabled");
     var project =
-        projects.resolveById(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
+        findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
     return lifecycle.submit(
         project,
         sessionId,

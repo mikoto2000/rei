@@ -3,10 +3,13 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.command.StorageCommand;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -37,11 +40,7 @@ public final class StorageController {
   private final StorageCommand storage;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /**
    * Web APIによる操作で受け渡すテキストを表す。
@@ -118,7 +117,7 @@ public final class StorageController {
   /** 指定された値や利用先を使って、StorageControllerを初期化する。 */
   public StorageController(StorageCommand storage, ProjectRegistry projects) {
     this.storage = storage;
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
   }
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
@@ -279,8 +278,7 @@ public final class StorageController {
     }
     required(projectId);
     var project =
-        projects
-            .resolveById(projectId)
+        findProject.apply(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
     try (var scope =

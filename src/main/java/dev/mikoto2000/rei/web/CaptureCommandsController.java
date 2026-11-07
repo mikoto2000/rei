@@ -6,6 +6,7 @@ import dev.mikoto2000.rei.llm.capture.CaptureStore;
 import dev.mikoto2000.rei.llm.capture.LlmCaptureCommand;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Predicate;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -32,11 +33,7 @@ public final class CaptureCommandsController {
   private final CaptureStore store;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Predicate<String> projectExists;
 
   /** 会話一覧。 */
   @SuppressFBWarnings(
@@ -49,7 +46,7 @@ public final class CaptureCommandsController {
   public CaptureCommandsController(
       CaptureStore store, ProjectRegistry projects, SessionLifecycle sessions) {
     this.store = store;
-    this.projects = projects;
+    this.projectExists = id -> projects.resolveById(id).isPresent();
     this.sessions = sessions;
   }
 
@@ -173,10 +170,8 @@ public final class CaptureCommandsController {
     if (client == null
         || !client.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"))
       throw new IllegalArgumentException("Invalid CLI identity");
-    projects
-        .resolveById(project)
-        .orElseThrow(
-            () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
+    if (!projectExists.test(project))
+      throw new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project");
     sessions.validate(session, project);
     return new LlmCaptureCommand(store, () -> "cli:" + client, () -> session, () -> {});
   }
