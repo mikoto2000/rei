@@ -2,11 +2,13 @@ package dev.mikoto2000.rei.core.dependency;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.policy.ToolPermissionGuard;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.output.CommandOutput;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -25,12 +27,7 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
   private final DependencyObservationService service;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final Supplier<ProjectContext> currentProject;
 
   /** 利用条件の確認。 */
   @SuppressFBWarnings(
@@ -75,7 +72,7 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
       ToolPermissionGuard guard) {
     this.repo = repo;
     this.service = service;
-    this.projects = projects;
+    this.currentProject = () -> projects.currentContext();
     this.guard = guard;
   }
 
@@ -89,7 +86,7 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
   public Integer call() {
     var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
-      var project = projects.currentContext();
+      var project = currentProject.get();
       Object result;
       if (action.equals("list")) result = repo.list(project.id());
       else {

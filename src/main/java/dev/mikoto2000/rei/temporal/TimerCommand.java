@@ -4,6 +4,7 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -22,12 +23,7 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
   private final PersistentAgentScheduler scheduler;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final Supplier<String> currentProjectId;
 
   /** 実行先の振り分け。 */
   @SuppressFBWarnings(
@@ -82,7 +78,7 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
       ProjectService projects,
       AgentScheduleDispatcher dispatcher) {
     this.scheduler = scheduler;
-    this.projects = projects;
+    this.currentProjectId = () -> projects.currentContext().id();
     this.dispatcher = dispatcher;
   }
 
@@ -96,7 +92,7 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
   public Integer call() {
     var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
-      String project = projects.currentContext().id();
+      String project = currentProjectId.get();
       Object result =
           switch (action) {
             case "list" -> scheduler.list(project);

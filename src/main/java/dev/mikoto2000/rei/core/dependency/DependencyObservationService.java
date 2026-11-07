@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.core.dependency;
 import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.core.policy.PermissionDecision;
 import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
@@ -12,6 +13,8 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -45,12 +48,7 @@ public class DependencyObservationService {
   private final AgentEventPublisher publisher;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final Supplier<List<ProjectContext>> registeredProjects;
 
   /** 会話一覧。 */
   private final SessionRepository sessions;
@@ -83,7 +81,7 @@ public class DependencyObservationService {
     this.properties = properties;
     this.policy = policy;
     this.publisher = publisher;
-    this.projects = projects;
+    this.registeredProjects = projects == null ? null : () -> projects.registeredProjects();
     this.sessions = sessions;
   }
 
@@ -173,8 +171,8 @@ public class DependencyObservationService {
       var root = Path.of(entry.projectRoot());
       return Files.isDirectory(root)
           && root.toRealPath().equals(root)
-          && (projects == null
-              || projects.registeredProjects().stream()
+          && (registeredProjects == null
+              || registeredProjects.get().stream()
                   .anyMatch(p -> p.id().equals(entry.projectId()) && p.root().equals(root)))
           && (sessions == null
               || sessions

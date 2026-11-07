@@ -7,6 +7,7 @@ import dev.mikoto2000.rei.conversation.HistoryFormatter;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -31,12 +32,7 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
   private final SessionQueryService sessions;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final Supplier<String> currentProjectId;
 
   /** 形式。 */
   private final HistoryFormatter format = new HistoryFormatter();
@@ -57,7 +53,7 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
       ProjectService projects) {
     this.conversations = conversations;
     this.sessions = sessions;
-    this.projects = projects;
+    this.currentProjectId = () -> projects.currentContext().id();
   }
 
   /** 会話 Session の一覧・作成・選択を行う。 */
@@ -117,7 +113,7 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
           String cursor = null;
           boolean any = false;
           do {
-            var page = sessions.listSessions(projects.currentContext().id(), 100, cursor);
+            var page = sessions.listSessions(currentProjectId.get(), 100, cursor);
             for (var row : page.items()) {
               if (!any) {
                 out.println("Sessions:");
