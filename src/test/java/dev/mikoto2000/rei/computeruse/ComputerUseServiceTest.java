@@ -240,18 +240,22 @@ class ComputerUseServiceTest {
       var service =
           new ComputerUseService(
               () -> {
-                if (expected == ComputerUseResult.Status.CAPTURE_ERROR) throw new Exception();
+                if (expected == ComputerUseResult.Status.CAPTURE_ERROR)
+                  throw new java.io.IOException("fixture");
                 return screen();
               },
               o -> {
-                if (expected == ComputerUseResult.Status.MODEL_ERROR) throw new Exception();
+                if (expected == ComputerUseResult.Status.MODEL_ERROR)
+                  throw new java.io.IOException("fixture");
                 return new ComputerAction.TypeText("abc", ComputerAction.Risk.LOW);
               },
               (a, s) -> {
-                if (expected == ComputerUseResult.Status.ACTION_ERROR) throw new Exception();
+                if (expected == ComputerUseResult.Status.ACTION_ERROR)
+                  throw new java.awt.AWTException("fixture");
               },
               a -> {
-                if (expected == ComputerUseResult.Status.STABILIZATION_ERROR) throw new Exception();
+                if (expected == ComputerUseResult.Status.STABILIZATION_ERROR)
+                  throw new IllegalStateException("fixture");
               },
               SafetyPolicy.lowRiskOnly(),
               () -> false,

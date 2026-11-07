@@ -23,7 +23,11 @@ public final class RobotComputerInput implements ComputerInput {
   }
 
   /** 要求された処理を実行する。 */
-  public void execute(ComputerAction action, CapturedScreen screen) throws Exception {
+  public void execute(ComputerAction action, CapturedScreen screen)
+      throws java.awt.AWTException,
+          java.io.IOException,
+          java.awt.datatransfer.UnsupportedFlavorException,
+          InterruptedException {
     ActionValidator.validate(action, screen);
     if (action instanceof ComputerAction.Done
         || action instanceof ComputerAction.Failed

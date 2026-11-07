@@ -319,7 +319,10 @@ public final class ComputerUseService {
         return finish(CANCELLED, step, "Cancelled");
       } catch (java.util.concurrent.CancellationException error) {
         return finish(CANCELLED, step, "Cancelled");
-      } catch (Exception error) {
+      } catch (IOException
+          | java.awt.AWTException
+          | java.awt.datatransfer.UnsupportedFlavorException
+          | RuntimeException error) {
         if (failure == MODEL_ERROR && !isCancelled())
           org.slf4j.LoggerFactory.getLogger(ComputerUseService.class)
               .error("Computer Use task failed during screenshot analysis: step={}", step, error);

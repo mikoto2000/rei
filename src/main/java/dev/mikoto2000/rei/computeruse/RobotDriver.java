@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.computeruse;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 
@@ -12,30 +10,18 @@ import java.awt.image.BufferedImage;
  */
 public interface RobotDriver {
   /** 画面操作の支援で用いる画面上の位置と大きさを返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Desktop backends may report checked geometry lookup failures.")
-  ScreenGeometry geometry() throws Exception;
+  ScreenGeometry geometry() throws java.awt.AWTException;
 
   /** 画面操作の支援で用いる画面一覧を返す。 */
-  default java.util.List<ScreenGeometry> displays() throws Exception {
+  default java.util.List<ScreenGeometry> displays() throws java.awt.AWTException {
     return java.util.List.of(geometry());
   }
 
   /** 条件に合う対象を利用するため、表示を選択する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Forwards checked geometry failures from the selected desktop backend.")
-  default void selectDisplay(ScreenGeometry geometry) throws Exception {}
+  default void selectDisplay(ScreenGeometry geometry) throws java.awt.AWTException {}
 
   /** 後から状況を確認できるよう、Robot操作の実行先を記録する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Capture backends may report checked acquisition failures for the computer-use runner to classify.")
-  BufferedImage capture(Rectangle bounds) throws Exception;
+  BufferedImage capture(Rectangle bounds) throws java.awt.AWTException;
 
   /** 画面操作の支援に関するmoveを処理する。 */
   void move(int x, int y);
