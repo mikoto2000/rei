@@ -1,10 +1,10 @@
 package dev.mikoto2000.rei.topic;
 
+import dev.mikoto2000.rei.feed.FeedBriefingItem;
 import dev.mikoto2000.rei.feed.FeedService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.function.BiFunction;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 
@@ -13,15 +13,11 @@ import org.springframework.stereotype.Component;
 @ConditionalOnBean(FeedService.class)
 public class FeedDiscoverySource implements DiscoverySource {
   /** フィードサービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads briefing items through the shared feed service.")
-  private final FeedService feedService;
+  private final BiFunction<OffsetDateTime, OffsetDateTime, List<FeedBriefingItem>> readBriefing;
 
   /** 指定された値や利用先を使って、FeedDiscoverySourceを初期化する。 */
   public FeedDiscoverySource(FeedService feedService) {
-    this.feedService = feedService;
+    this.readBriefing = (from, to) -> feedService.listBriefingItems(from, to, 3);
   }
 
   /** 話題の管理で用いる利用先の検出を返す。 */
@@ -29,7 +25,7 @@ public class FeedDiscoverySource implements DiscoverySource {
   public List<DiscoveryItem> discover(DiscoveryContext context) {
     OffsetDateTime now = OffsetDateTime.ofInstant(context.currentTime(), java.time.ZoneOffset.UTC);
     OffsetDateTime from = now.minusDays(30);
-    return feedService.listBriefingItems(from, now, 3).stream()
+    return readBriefing.apply(from, now).stream()
         .flatMap(
             item ->
                 context.seeds().stream()

@@ -4,9 +4,9 @@ import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.llm.capture.CaptureStore;
 import dev.mikoto2000.rei.llm.capture.LlmCaptureCommand;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -27,11 +27,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/llm/capture")
 public final class CaptureCommandsController {
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared capture store and its active capture sessions.")
-  private final CaptureStore store;
+  private final Function<String, CaptureStore.AttemptInfo> findAttempt;
+
+  private final BiFunction<String, String, LlmCaptureCommand> captureCommand;
 
   /** プロジェクト一覧。 */
   private final Predicate<String> projectExists;
@@ -42,7 +40,9 @@ public final class CaptureCommandsController {
   /** 指定された値や利用先を使って、CaptureCommandsControllerを初期化する。 */
   public CaptureCommandsController(
       CaptureStore store, ProjectRegistry projects, SessionLifecycle sessions) {
-    this.store = store;
+    this.findAttempt = id -> store.attempt(id);
+    this.captureCommand =
+        (client, session) -> new LlmCaptureCommand(store, () -> client, () -> session, () -> {});
     this.projectExists = id -> projects.resolveById(id).isPresent();
     this.validateSession = (session, project) -> sessions.validate(session, project);
   }
@@ -116,7 +116,7 @@ public final class CaptureCommandsController {
   @GetMapping("/attempts/{attempt}")
   public CaptureStore.AttemptInfo attempt(@PathVariable String attempt) {
     id(attempt);
-    return store.attempt(attempt);
+    return findAttempt.apply(attempt);
   }
 
   /** 利用者が対象の情報を確認できるように表示する。 */
@@ -170,12 +170,12 @@ public final class CaptureCommandsController {
     if (!projectExists.test(project))
       throw new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project");
     validateSession.accept(session, project);
-    return new LlmCaptureCommand(store, () -> "cli:" + client, () -> session, () -> {});
+    return captureCommand.apply("cli:" + client, session);
   }
 
   /** Web APIによる操作で用いるコマンドを返す。 */
   private LlmCaptureCommand command() {
-    return new LlmCaptureCommand(store, () -> null, () -> null, () -> {});
+    return captureCommand.apply(null, null);
   }
 
   /** Web APIによる操作に関する承認済みを処理する。 */

@@ -13,6 +13,7 @@ import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 /**
  * タスク制御のユースケースを実現する。
@@ -38,24 +39,22 @@ public final class TaskControlService {
   private final RunService runs;
 
   /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
-  private final RunRegistry registry;
+  private final Predicate<String> ownsExecution;
 
   /** 入力一覧。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared input router so all operations use the same queue and active runs.")
+      justification =
+          "Uses the shared input router so all operations use the same queue and active runs.")
   private final ConversationInputRouter inputs;
 
   /** 再開用の記録一覧。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
+      justification =
+          "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService checkpoints;
 
   /** 目標一覧。 */
@@ -89,7 +88,7 @@ public final class TaskControlService {
     this.tasks = tasks;
     this.chats = chats;
     this.runs = runs;
-    this.registry = registry;
+    this.ownsExecution = run -> registry.ownsExecution(run);
     this.inputs = inputs;
     this.checkpoints = checkpoints;
     this.goals = goals;
@@ -204,6 +203,6 @@ public final class TaskControlService {
 
   /** 実行中タスクの操作に関する自分が所有する対象を処理する。 */
   private void owned(String run) {
-    if (run == null || !registry.ownsExecution(run)) throw new OperationConflictException();
+    if (run == null || !ownsExecution.test(run)) throw new OperationConflictException();
   }
 }

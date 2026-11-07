@@ -1,8 +1,7 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.RunService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.BiPredicate;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,11 +20,7 @@ public class RunController {
   private final RunService runs;
 
   /** 入力一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared input router so all operations use the same queue and active runs.")
-  private final dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs;
+  private final BiPredicate<String, InputRequest> offerInput;
 
   /** 並行有効状態。 */
   private final boolean concurrentEnabled;
@@ -44,7 +39,10 @@ public class RunController {
               "${rei.conversation.concurrent-enabled:false}")
           boolean concurrentEnabled) {
     this.runs = runs;
-    this.inputs = inputs;
+    this.offerInput =
+        (runId, request) ->
+            inputs.offerIntervention(
+                request.projectId(), request.sessionId(), runId, request.message());
     this.concurrentEnabled = concurrentEnabled;
   }
 
@@ -79,8 +77,7 @@ public class RunController {
     var stop = runs.cancellationDiagnostic(runId);
     if (stop != null && stop.requestedAt() != null
         || run.status() != dev.mikoto2000.rei.application.run.RunStatus.RUNNING
-        || !inputs.offerIntervention(
-            request.projectId(), request.sessionId(), runId, request.message()))
+        || !offerInput.test(runId, request))
       throw new org.springframework.web.server.ResponseStatusException(
           org.springframework.http.HttpStatus.CONFLICT);
     return org.springframework.http.ResponseEntity.accepted().build();
