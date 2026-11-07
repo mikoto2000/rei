@@ -73,3 +73,15 @@ Windows / OpenJDK 25 で Maven Wrapper の `full` プロファイルを使い、
 | `WorkingSetTest` | 20 |
 
 GitHub CI では初回の Windows 回帰 B で既存の `BackgroundProcessManagerTest#spawnReturnsImmediatelyAndCapturesOutput` が標準エラーのアサーションで失敗した。失敗ジョブの再実行で通過し、Windows 回帰 A・B、静的解析、集約チェックの成功を確認してからマージした。 [Windows 回帰の実行結果](https://github.com/mikoto2000/rei/actions/runs/42364944855) · [PR の全チェック](https://github.com/mikoto2000/rei/pull/499/checks)
+
+## L-1 の回帰テスト
+
+修正コミット `aecf8388` で、正常項目と除外項目が混在しても、正常な結果と除外項目の `PROJECT_PATH_EXCLUDED`、再試行の案内が返ることを確認した。 [修正 PR #505](https://github.com/mikoto2000/rei/pull/505)
+
+| 追加したテスト | 確認内容 |
+|---|---|
+| `ReadingSecurityTest#excludedFileHasRecoveryAlongsideSuccessfulRead` | `.env` と `../outside.txt` の各ケースで、正常なファイルの読み取り結果が残る。 |
+| `ReadingSecurityTest#excludedSearchInputsKeepResultsFromOtherQueries` | `grepMultiQuery` と `searchAndRead` は正常なクエリの結果を返す。`searchAndRead` は除外された優先パスのエラーも返す。 |
+| `PagedFileSearchTest#excludedQueriesKeepSuccessfulPagesAndOriginalQueryIndexes` | 除外クエリが混在してもページを継続でき、一致結果と除外クエリの番号が入力時の番号と一致する。 |
+
+Windows / OpenJDK 25 で Maven Wrapper の `full` プロファイルを使い、追加分を含む検索・読み取り関連の147件が通過した。失敗・エラー・スキップは0件だった。GitHub CI でも Windows 回帰 A・B、静的解析、集約チェックがすべて通過した。 [PR の全チェック](https://github.com/mikoto2000/rei/pull/505/checks)

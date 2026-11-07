@@ -113,6 +113,8 @@ messages.add(
 
 **対象**: `src/main/java/dev/mikoto2000/rei/core/Tools.java`
 
+**状態**: 対応済み
+
 **根拠**
 
 ```java
@@ -132,9 +134,9 @@ List<String> listFile(String baseDir) throws IOException, InterruptedException {
 
 `StagnationChatModel` の修正フィードバックは `ToolReadRejectedException` を条件にしているため、`listFile` 以外の経路では「引数を直して再試行」の案内が出ず、汎用エラーとして扱われる。
 
-**推奨対応**
+**対応結果**
 
-変換を `resolveInventoryPath` の呼び出し境界（`FileSnapshots` 側）へ寄せるか、`listFile` の2引数版にも同じ変換を入れる。
+`grepMultiQuery`、`searchAndRead`、`readMultiFile` は成功した項目を返しつつ、除外された項目に `PROJECT_PATH_EXCLUDED` と、許可された Project 内の相対パスで再試行する案内を返す。ページ付き検索でも有効なクエリの結果を返し、除外クエリと一致結果を入力時のクエリ番号で参照できる。 [修正 PR #505](https://github.com/mikoto2000/rei/pull/505) · [回帰テスト結果](./test-evidence.md#l-1-の回帰テスト)
 
 ---
 
