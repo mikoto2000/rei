@@ -1,25 +1,5 @@
 # Rei
 
-日本の祝日・休日を内閣府CSVで確認できます。配置・対応年設定・更新方法とLLMツールは
-[日本の祝日ガイド](docs/japanese-holidays.md)を参照してください。
-
-本人専用のMCPサーバーは既定OFFです。[MCP設定と6ツール](docs/mcp-server.md)、[安全境界](docs/mcp-server-security.md)、[運用](docs/mcp-server-operations.md)、[検証](docs/mcp-server-testing.md)を参照してください。
-
-軽量 CLI は `rei.bat` / `rei.sh` から起動できます。単一 Backend、Session 排他・永続 receipt、HTTP/SSE、detached 起動を実装し、音声を除く既存 Shell コマンドを接続しました。実 Windows Terminal の複数ペイン・GUI close と対話型 ConPTY を検証しています。[起動方法・制約](docs/lightweight-cli-client.md) と [全47コマンドの対応表](docs/lightweight-cli-command-matrix.md) を参照してください。既存 Shell と `start.bat` / `start.sh` は維持しています。
-
-Web API 向けの Tauri 2 クライアント（Phase 1 / 2）は [client/README.md](client/README.md) を参照してください。Windows での開発・ビルド、Conversation / Run UI、SSE 再接続、モバイルの検証状況を記載しています。
-
-Codex による read-only 外部レビューは `/agent codex review [target]` または明示的な自然言語依頼で利用できます。Claude Code CLI のサブスクリプション認証レビューも、明示opt-inで `/agent claude review [target]` に対応します（[利用準備・範囲](docs/claude-code-reviews.md)）。
-
-`/timing [last|RUN_ID] [--details]` で現在のProject/SessionのテキストRunを照会できます。計測範囲・集計・保持設定は [時間計測ガイド](docs/run-timing.md) を参照してください。
-
-現在の設定とファイルの状態は `/doctor` でPassive診断できます。明示的な `--check` で、既存権限に従う接続・推論・CLI・マイク取得のActive診断も実行できます（[診断状態・設定・制約](docs/environment-doctor.md)）。
-
-初学者の学習順に沿う静的レビューは `/material-review beginner --root training --entry intro.md` を使用できます（[利用方法・LLMモード・制約](docs/beginner-material-review.md)）。
-
-技術系の勉強会・研修・ハンズオン資料には `/agent codex material-review [target]` を利用できます。技術的正確性・教育設計・説明品質・横断的一貫性・実務適合性を評価する教材専用レビューで、自動修正は行いません（[使い方・制約](docs/material-review.md)）。
-必要な CLI capability、設定、安全境界は [External Agent Delegation](docs/external-agent-delegation.md) を参照してください。
-
 Rei は、ターミナルで使う AI 秘書シェルです。OpenAI 互換 API を使った対話を中心に、調査、文書検索、予定・タスク管理などを一つの CLI で行えます。
 
 アプリは手元の PC で動作し、AI の処理には設定した API サーバーを利用します。ローカルのモデルサーバーにも接続できます。
@@ -30,6 +10,7 @@ Rei は、ターミナルで使う AI 秘書シェルです。OpenAI 互換 API 
 - [論文検索・日本語要約・翻訳・Paper Library](docs/paper-research.md)（`/paper`）
 - Web 検索、URL の要約、登録した文書を参照した回答
 - プロジェクトごとの会話管理、履歴の検索、複数プロジェクトでの同時実行
+- 永続 Goal と工程の管理、保存済みチェックポイントからの再開、条件や時刻を指定した継続
 - Google Calendar の予定操作、Google Tasks のタスク管理
 - RSS/Atom の購読、日次ブリーフィング、リマインド
 - MCP による外部ツール連携、SubAgent への作業の委譲、Windows の画面操作
@@ -44,25 +25,25 @@ Rei は、ターミナルで使う AI 秘書シェルです。OpenAI 互換 API 
 
 以下はソースから起動する手順です。リポジトリのルートで実行してください。Maven は同梱の Maven Wrapper を使用できます。初回は依存ファイルのダウンロードにネットワーク接続が必要です。
 
-従来 Shell の Backend JAR と軽量 CLI をまとめてビルドする場合は、Windows で `build.bat`、Linux/macOS で `sh ./build.sh` を実行します。既定では両方のテストを実行し、`-DskipTests` を付けると省略できます。Maven の追加引数は両方のビルドに渡します。更新先の JAR を使う Rei と軽量 CLI は、ビルド前に通常終了してください。
+Backend JAR と軽量 CLI をまとめてビルドする場合は、次のスクリプトを実行します。既定では両方のテスト実行を省略します。テストも実行する場合は `-DskipTests=false` を渡します。Maven の追加引数は両方のビルドに渡ります。更新先の JAR を使用中のプロセスは、ビルド前に通常終了してください。
 
 ```powershell
 .\build.bat
-# テストを省略する場合
-.\build.bat -DskipTests
+# テストも実行する場合
+.\build.bat -DskipTests=false
 ```
 
 ```sh
 sh ./build.sh
-# テストを省略する場合
-sh ./build.sh -DskipTests
+# テストも実行する場合
+sh ./build.sh -DskipTests=false
 ```
 
 ### 2. AI の接続先を設定する
 
 次の例は、同じ PC の `http://localhost:11434` で公開されている `qwen3.5:9b` に接続します。URL・モデル名・キーを実際の接続先に置き換えてください。キーが不要なローカルサーバーでは `dummy-key` を指定できます。
 
-Windows（PowerShell）:
+Windows（PowerShell）
 
 ```powershell
 $env:REI_OPENAI_BASE_URL = 'http://localhost:11434'
@@ -71,7 +52,7 @@ $env:REI_OPENAI_CHAT_MODEL = 'qwen3.5:9b'
 $env:REI_EMBEDDING_ENABLED = 'false'
 ```
 
-Linux / macOS（Bash）:
+Linux / macOS（Bash）
 
 ```bash
 export REI_OPENAI_BASE_URL=http://localhost:11434
@@ -86,13 +67,15 @@ export REI_EMBEDDING_ENABLED=false
 
 ### 3. 起動して話しかける
 
-Windows（PowerShell）:
+従来 Shell をソースから起動するには、次のコマンドを使います。ビルド済み JAR からは Windows で `start.bat`、Linux / macOS で `sh ./start.sh` を使えます。
+
+Windows（PowerShell）
 
 ```powershell
 .\mvnw.cmd spring-boot:run
 ```
 
-Linux / macOS:
+Linux / macOS
 
 ```bash
 ./mvnw spring-boot:run
@@ -107,16 +90,18 @@ Rei の入力プロンプトが表示されたら、文章をそのまま入力�
 
 操作コマンドは `/` で始めます。`/help` でヘルプを表示し、`/exit` で終了できます。
 
-起動時に作業するプロジェクトのディレクトリを指定できます。
+### 軽量 CLI と Native Client
 
-```sh
-rei --project F:\project\rei
-rei -p ../other-project
-rei --project .
-```
+| クライアント | 起動・接続 |
+| --- | --- |
+| 軽量 CLI | ビルド後、`REI_API_KEY` を設定して Windows では `.\rei.bat`、Linux では `sh ./rei.sh` を実行します。既定の `auto` は同じデータディレクトリの Backend に接続するか、Backend を別プロセスで起動します。`--mode=client` は接続のみ、`--mode=server` は Backend の起動、`--mode=legacy-shell` は従来 Shell の起動です。[起動・停止と OS ごとの制約](docs/lightweight-cli-client.md) |
+| Native Client | Tauri 2 のクライアントを起動し、`REI_API_KEY` を設定した Rei の Web API に接続します。Web API Phase 1〜4 に対応し、会話履歴・Run・SSE の再接続・Workspace 操作を提供します。[起動・ビルド](client/README.md)・[API と対応機能](docs/native-web-api.md) |
 
-Maven Wrapper から起動する場合は `./mvnw spring-boot:run -Dspring-boot.run.arguments="--project ../other-project"`（Windows は `mvnw.cmd`）を使用します。
-相対パスは起動時のカレントディレクトリが基準です。`/project cd` と同じ正規化・登録処理を使い、会話などの状態も指定プロジェクトを使用します。存在しないパスやファイルを指定すると、ディレクトリを作成せずエラー終了します。未指定時の動作は従来どおりです。`rei --help` で起動オプションを確認できます。
+`REI_API_KEY` は Rei のクライアントと Backend の間の認証に使います。モデル接続用のキーは `REI_OPENAI_API_KEY` に設定します。
+
+音声入力と `/chatgpt` の認証・利用枠操作には従来 Shell を使います。[コマンド対応表](docs/lightweight-cli-command-matrix.md)
+
+起動時の作業ディレクトリは、軽量 CLI では `.\rei.bat --project F:\project\rei` や `sh ./rei.sh --project .`、従来 Shell では `./mvnw spring-boot:run '-Dspring-boot.run.arguments=--project ../other-project'`（Windows では `.\mvnw.cmd`）のように指定します。相対パスの基準は起動時のカレントディレクトリです。指定先には既存のディレクトリを使ってください。
 
 ## 基本操作
 
@@ -139,7 +124,10 @@ Maven Wrapper から起動する場合は `./mvnw spring-boot:run -Dspring-boot.
 | 会話履歴を検索する | `/history search 検索したい言葉` |
 | 現在のプロジェクトの再開候補を再表示する | `/resume overview` |
 | 実行中の処理を確認する | `/runs` |
-| 選択中プロジェクトの AI の実行を中止する | `/cancel` |
+| 選択中プロジェクトの実行に停止を要求する | `/cancel` |
+| 特定の Run に停止を要求する | `/cancel RUN_ID` |
+| テキスト Run の時間計測を見る | `/timing last --details` または `/timing RUN_ID --details` |
+| 現在の設定と環境を診断する | `/doctor` |
 
 `/search` は Web と登録済み文書を検索して回答します。OpenAI 検索プロバイダの追加設定は [Web 検索設定](docs/web-search-optimization.md#openai-responses-api-を検索プロバイダとして追加する) を参照してください。文書の埋め込みが無効な場合は Web 検索だけを使います。`/models` は接続先がモデル一覧の取得に対応している場合に利用できます。
 
@@ -160,13 +148,17 @@ AI の実行中も入力できます。同じプロジェクトへの追加入�
 
 タスク実行中は、環境変数 `REI_DEBUG` が設定されている場合だけ、この行の直上に全体進捗を表示します。値の内容は問いません。軽量CLIではCLIプロセス自身の環境変数を参照します。各 Run の目的、記録された完了工程（✓）・残り工程（○）、完了数を工程一覧として表示し、更新時は入力中の文字とカーソル位置を維持します。工程が未登録の間は「工程を確認中」と表示し、Run が終了すると入力欄から取り除きます。完了数は `updateTaskState` に記録された工程に基づく目安で、処理時間の割合や実行回数ではありません。軽量CLIも同じ表示を約1秒間隔で更新し、切断時には古い進捗を消去します。
 
-`/cancel` が中止するのは選択中プロジェクトの AI の実行です。URL 要約や画像生成は対象外です。実行中の処理はアプリを再起動しても再開されません。
+`/cancel` は選択中の Project で停止対象に登録された実行に、`/cancel RUN_ID` は指定した Run に停止を要求します。`/runs` に `CANCEL_REQUESTED` が出た場合は終了通知を待ってください。停止要求から 30 秒以上経過しても処理が残っている場合は `CANCEL_STALLED`、停止処理で失敗した場合は `CANCEL_FAILED` が表示されます。軽量 CLI の Ctrl+C は表示の購読を解除します。[停止状態と対象範囲](docs/run-cancellation-lifecycle.md)
+
+再起動後に保存済みの作業を継続する場合は、チェックポイントを確認して明示的に Resume します。[チェックポイントと Resume](docs/persistent-checkpoint-resume.md)
 
 ### 会話履歴を検索する
 
 `/history` は永続 Session 一覧を更新日時順に表示し、`/history show <sessionId>` で詳細と会話を確認できます。再起動後も利用でき、一覧・Turn とも cursor pagination に対応します。従来の選択中プロジェクトの直近50メッセージは `/history show` で表示します。検索は現在のプロジェクトを優先し、結果が不十分なら他のプロジェクトも検索します。現在のプロジェクトだけに絞るには `/history search --current "検索語"` を使ってください。
 
 Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId}`、`GET /api/v1/sessions/{sessionId}/turns` を利用できます。[仕様・Shell 操作・既存データの扱い](docs/session-history.md)を参照してください。
+
+Shell と Native Client は同じ Backend の Session History を利用します。Session は作成時の Project に属し、Shell では同じ Project の Session を選択できます。従来 Shell の起動直後は Session 未選択です。Session 台帳に登録されていない旧 Shell 履歴は、従来の履歴として保存されます。[Shell Session の操作](docs/shell-session-commands.md)
 
 ## 機能別ガイド
 
@@ -180,21 +172,27 @@ Web では認証付き `GET /api/v1/sessions`、`GET /api/v1/sessions/{sessionId
 | 画像生成 | [生成・保存先の指定](docs/usage.md#画像生成) |
 | 別会話の並行実行 | [会話・読み取り・作業Runの使い分け](docs/concurrent-conversation-runs.md) |
 | Agent Task Manager | [Project横断の状態一覧と明示操作](docs/task-manager.md) |
+| Goal・工程・継続 | [Goal と工程の管理](docs/goal-stage-implementation.md#api--cli)・[タイマーの登録と操作](docs/persistent-agent-scheduler.md) |
 | 生成物の受取 | [Artifact一覧・preview・Downloads保存](docs/artifact-delivery.md) |
 | Google Calendar | [認証設定](docs/configuration.md#google-calendar-と-google-tasks) → [予定の一覧・追加](docs/usage.md#google-calendar) |
 | Google Tasks | [認証設定](docs/configuration.md#google-calendar-と-google-tasks) → [タスクの追加・完了・削除](docs/usage.md#タスク管理) |
+| 日本の祝日・休日 | [内閣府 CSV の配置・対応年設定・更新](docs/japanese-holidays.md) |
 | RSS/Atom | [購読・OPML 取り込み・記事要約](docs/usage.md#rss-feed) / [認証付きフィード](docs/private-feeds.md) |
 | 日次ブリーフィング | [予定・タスク・新着記事の確認](docs/usage.md#日次ブリーフィング) |
 | リマインド | [日時指定・一覧・削除](docs/usage.md#リマインド) |
 | 文書検索 | [文書の登録・検索・削除](docs/usage.md#文書の埋め込み) |
-| 記憶・会話履歴 | [記憶の管理](docs/usage.md#記憶管理)・[履歴の表示と検索](docs/usage.md#会話履歴) |
+| 記憶・会話履歴 | [記憶の管理](docs/usage.md#記憶管理)・[履歴の表示と検索](docs/usage.md#会話履歴)・[手動 Sleep と Auto Sleep](docs/memory-lifecycle-guide.md) |
 | Web 検索 | [検索の使い方](docs/usage.md#検索)・[検索サービスの設定](docs/configuration.md#web-検索) |
 | URL 要約 | [要約の実行・再表示](docs/usage.md#url-の要約) |
 | 通知 | [興味に応じた情報の定期通知](docs/configuration.md#興味に応じた通知) |
 | Bluesky | [投稿・自動返信の設定](docs/configuration.md#bluesky-投稿自動返信) |
-| MCP | [外部ツールの接続設定](docs/configuration.md#mcp) |
+| MCP | [外部 MCP ツールへの接続](docs/configuration.md#mcp)・[本人専用 MCP サーバーの設定と 6 ツール](docs/mcp-server.md)（サーバーは既定で無効） |
 | SubAgent | [作業を委譲する設定と使い方](docs/subagents.md) |
+| 外部レビュー | `/agent codex review [target]` または明示的な自然言語依頼で読み取り専用レビューを実行します。Claude Code CLI を使う場合は明示的に有効化して `/agent claude review [target]` を使います。[Codex・Claude の設定と権限](docs/external-agent-delegation.md)・[Claude Code の利用準備](docs/claude-code-reviews.md) |
+| 教材レビュー | `/material-review beginner --root training --entry intro.md` で学習順に沿う静的レビュー、`/agent codex material-review [target]` で技術教材の読み取り専用レビューを実行します。[初学者向け教材](docs/beginner-material-review.md)・[技術教材](docs/material-review.md) |
 | Windows の画面操作 | [Computer Use の有効化と設定](docs/computer-use.md) |
+
+本人専用 MCP サーバーの詳細は [安全境界](docs/mcp-server-security.md)、[運用](docs/mcp-server-operations.md)、[検証](docs/mcp-server-testing.md)を参照してください。
 
 ## 設定とデータの保存先
 
@@ -224,6 +222,8 @@ Slack で会話する場合は [Slack Bot ガイド](docs/slack-bot.md)を参照
 
 ## 困ったときは
 
+`/doctor` は設定とファイルの状態を確認します。接続・推論・外部 CLI・マイク取得まで調べるには、対象を指定して `--check` を使います。Run の遅延やモデルの応答は `/timing last --details` で確認できます。[環境診断](docs/environment-doctor.md)・[時間計測と保持設定](docs/run-timing.md)
+
 | 症状 | 確認すること |
 | --- | --- |
 | 起動できない | `java -version` が 25 以上か、リポジトリのルートで実行しているかを確認してください。 |
@@ -250,12 +250,6 @@ GitHubからのReview通知、CI失敗trigger、PR merge待ちは [GitHub Event 
 新規開発者向けの [図解付きプログラム構造ガイド](docs/program-structure.md) では、Shell・Web API・Native Client の関係と、会話処理・状態管理・ソースコードの読み進め方を説明しています。
 
 [MIT ライセンス](LICENSE)で提供しています。作者: mikoto2000 <mikoto2000@gmail.com>
-
-### Shell / Native Client 共通の会話
-
-今回の機能導入後に Shell から受理した会話も Session History に登録され、同じ Rei の Web API に接続した Native Client から表示・再開できます。`/session list` で ID を確認し、Shell では `/session switch <sessionId>`（`resume` も利用可）で明示的に選択できます。Session の project は作成時に固定され、異なる project の Session への切替はエラーになります。`/project cd` は移動先の最新 Session を選択し、Session がなければ次の送信で新規作成します。通常の起動では未選択で始まります。操作と状態の境界は [Shell Session commands](docs/shell-session-commands.md) を参照してください。
-
-**旧 Shell 履歴は migration / backfill せず、変更・削除しません。** 台帳にない旧履歴は Native Client の一覧・再開対象外です。受付・FIFO・保存の契約は [Session History 仕様](docs/session-history.md) を参照してください。
 
 自然言語による Codex 隔離実装と詳細要件・承認・条件別評価は[要件付き隔離実装ガイド](docs/llm-codex-implementation-delegation.md)を参照してください。対象だけの /agent codex implement は要件確認から進みます。
 
