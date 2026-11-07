@@ -272,6 +272,24 @@ class WorkingSetTest {
     assertTrue(prompt.contains(abs("src/fooTest.java").toString()));
   }
 
+  @Test
+  void promptOrderIsStableWhileRecencyStillControlsEviction() {
+    WorkingSet ws = new WorkingSet(2, new AdvancingClock(new AtomicLong()));
+    ws.recordRead(Path.of("a.java"));
+    ws.recordRead(Path.of("z.java"));
+    String before = ws.renderForPrompt();
+    assertTrue(before.indexOf(abs("a.java").toString()) < before.indexOf(abs("z.java").toString()));
+    ws.recordRead(Path.of("a.java"));
+    assertEquals(before, ws.renderForPrompt());
+    assertEquals(abs("a.java").toString(), ws.getFiles().getFirst().path());
+    ws.recordRead(Path.of("b.java"));
+    assertTrue(ws.contains(Path.of("a.java")));
+    assertFalse(ws.contains(Path.of("z.java")));
+    assertFalse(ws.renderForPrompt().contains(abs("z.java").toString()));
+    ws.recordWrite(Path.of("c.java"));
+    assertTrue(ws.renderForPrompt().contains(abs("c.java") + " [write]"));
+  }
+
   /** 作業中の情報管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void emptyWorkingSetRendersBlank() {

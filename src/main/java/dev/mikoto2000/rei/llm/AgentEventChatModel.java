@@ -65,18 +65,20 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   public ChatResponse call(Prompt prompt) {
     // Activity polling must not produce Shell or Web API notifications.
     if (LlmFeature.ACTIVITY.equals(feature)) return delegate.call(prompt);
+    var owner = owner(prompt);
+    var publisher = publisher(owner);
+    String runId = owner == null ? null : owner.runId();
     String requestId = UUID.randomUUID().toString();
-    var measured = measurement(prompt, requestId);
+    var measured = measurement(prompt, runId, requestId, null);
     long startedAtNanos = System.nanoTime();
-    publisher(prompt)
-        .publish(eventFactory.llmRequestStarted(null, requestId, observedFeature(prompt)));
+    publisher.publish(eventFactory.llmRequestStarted(runId, requestId, observedFeature(prompt)));
     try {
       ChatResponse response = delegate.call(prompt);
       var metrics = new ResponseMetrics();
       metrics.observe(response);
-      publisher(prompt)
+      publisher
           .publish(
-              eventFactory.llmResponseCompleted(null, requestId, elapsedMillis(startedAtNanos),
+              eventFactory.llmResponseCompleted(runId, requestId, elapsedMillis(startedAtNanos),
                   null, metrics.promptTokens, metrics.completionTokens));
       observeUsage(measured, response);
       if (measured != null)
@@ -84,9 +86,9 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
       return response;
     } catch (RuntimeException | Error e) {
       if (measured != null) measured.finish(dev.mikoto2000.rei.timing.TimingExecution.status(e));
-      publisher(prompt)
+      publisher
           .publish(
-              eventFactory.llmRequestFailed(null, requestId, elapsedMillis(startedAtNanos), e));
+              eventFactory.llmRequestFailed(runId, requestId, elapsedMillis(startedAtNanos), e));
       throw e;
     }
   }
@@ -95,50 +97,54 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
     if (LlmFeature.ACTIVITY.equals(feature)) return Flux.defer(() -> delegate.stream(prompt));
+    // Retain the caller before subscribeOn or provider callbacks can lose its lexical scope.
+    var invocationOwner = owner(prompt);
     return Flux.deferContextual(
         context -> {
+          var owner = invocationOwner == null ? owner(prompt) : invocationOwner;
+          var publisher = publisher(owner);
+          String runId = owner == null ? null : owner.runId();
           String requestId = UUID.randomUUID().toString();
           dev.mikoto2000.rei.timing.TimingAttempt trace =
               context.getOrDefault(dev.mikoto2000.rei.timing.TimingAttempt.KEY, null);
-          var measured = measurement(prompt, requestId, trace);
+          var measured = measurement(prompt, runId, requestId, trace);
           long startedAtNanos = System.nanoTime();
           var metrics = new ResponseMetrics();
           java.util.concurrent.atomic.AtomicBoolean firstTokenPublished =
               new java.util.concurrent.atomic.AtomicBoolean();
-          publisher(prompt)
-              .publish(eventFactory.llmRequestStarted(null, requestId, observedFeature(prompt)));
+          publisher.publish(eventFactory.llmRequestStarted(runId, requestId, observedFeature(prompt)));
           return Flux.defer(() -> delegate.stream(prompt))
               .doOnNext(
                   response -> {
                     metrics.observe(response);
-                    observeChunk(prompt, measured, response);
+                    observeChunk(runId, measured, response);
                     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
                     if (firstTokenPublished.compareAndSet(false, true)) {
                       metrics.firstResponseMillis = elapsedMillis(startedAtNanos);
-                      publisher(prompt)
+                      publisher
                           .publish(
                               eventFactory.llmResponseFirstToken(
-                                  null, requestId, elapsedMillis(startedAtNanos)));
+                                  runId, requestId, elapsedMillis(startedAtNanos)));
                     }
                   })
               .doOnComplete(
                   () -> {
                     if (measured != null)
                       measured.finish(dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS);
-                    publisher(prompt)
+                    publisher
                         .publish(
                             eventFactory.llmResponseCompleted(
-                                null, requestId, elapsedMillis(startedAtNanos), metrics.firstResponseMillis,
+                                runId, requestId, elapsedMillis(startedAtNanos), metrics.firstResponseMillis,
                                 metrics.promptTokens, metrics.completionTokens));
                   })
               .doOnError(
                   error -> {
                     if (measured != null)
                       measured.finish(dev.mikoto2000.rei.timing.TimingExecution.status(error));
-                    publisher(prompt)
+                    publisher
                         .publish(
                             eventFactory.llmRequestFailed(
-                                null, requestId, elapsedMillis(startedAtNanos), error));
+                                runId, requestId, elapsedMillis(startedAtNanos), error));
                   })
               .doOnCancel(
                   () -> {
@@ -195,25 +201,14 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
 
   /** 用途に応じたモデル利用で用いる計測値を返す。 */
   private dev.mikoto2000.rei.timing.TimingExecution.SpanLease measurement(
-      Prompt prompt, String request) {
-    if (timing == null || !timing.enabled()) return null;
-    var owner = owner(prompt);
-    if (owner == null) return null;
-    return measurement(prompt, request, null);
-  }
-
-  /** 用途に応じたモデル利用で用いる計測値を返す。 */
-  private dev.mikoto2000.rei.timing.TimingExecution.SpanLease measurement(
-      Prompt prompt, String request, dev.mikoto2000.rei.timing.TimingAttempt trace) {
-    if (timing == null || !timing.enabled()) return null;
-    var owner = owner(prompt);
-    if (owner == null) return null;
+      Prompt prompt, String runId, String request, dev.mikoto2000.rei.timing.TimingAttempt trace) {
+    if (timing == null || !timing.enabled() || runId == null) return null;
     if (trace != null) trace.setPhysicalSpan(request);
     var span =
         timing.startSpanWithId(
-            owner.runId(),
+            runId,
             request,
-            owner.runId(),
+            runId,
             trace == null ? request : trace.requestId(),
             trace == null ? request : Integer.toString(trace.number()),
             dev.mikoto2000.rei.timing.TimingRecorder.Category.LLM);
@@ -231,27 +226,22 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
 
   /** 状況を判断する根拠を得るため、文書の分割単位を観測する。 */
   private void observeChunk(
-      Prompt prompt,
+      String runId,
       dev.mikoto2000.rei.timing.TimingExecution.SpanLease measured,
       ChatResponse response) {
     if (measured == null) return;
     timing.safely(
         () -> {
           measured.mark(dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_FRAMEWORK_CHUNK);
-          var owner = owner(prompt);
-          if (owner != null)
-            timing.markRun(
-                owner.runId(),
-                dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_FRAMEWORK_CHUNK);
+          timing.markRun(
+              runId, dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_FRAMEWORK_CHUNK);
           var generation = response == null ? null : response.getResult();
           var output = generation == null ? null : generation.getOutput();
           var content = output == null ? null : output.getText();
           if (content != null && !content.isEmpty()) {
             measured.mark(dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_GENERATION_TEXT);
-            if (owner != null)
-              timing.markRun(
-                  owner.runId(),
-                  dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_GENERATION_TEXT);
+            timing.markRun(
+                runId, dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_GENERATION_TEXT);
           }
           observeUsage(measured, response);
         });
@@ -287,19 +277,8 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   }
 
   /** 用途に応じたモデル利用で用いる通知先を返す。 */
-  private AgentEventPublisher publisher(Prompt prompt) {
-    dev.mikoto2000.rei.core.chat.AgentRunContext owner = null;
-    var toolContext = toolContext(prompt);
-    if (toolContext.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
-            instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
-      owner = execution.runContext();
-    var captured = owner;
-    if (captured == null
-        && toolContext.get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())
-            instanceof dev.mikoto2000.rei.core.chat.AgentRunContext context) {
-      return event -> eventPublisher.publish(event.withOwnership(context));
-    }
-    return event -> eventPublisher.publish(event.withOwnership(captured));
+  private AgentEventPublisher publisher(dev.mikoto2000.rei.core.chat.AgentRunContext owner) {
+    return event -> eventPublisher.publish(event.withOwnership(owner));
   }
 
   /** 用途に応じたモデル利用で用いる経過時間ミリ秒数を返す。 */

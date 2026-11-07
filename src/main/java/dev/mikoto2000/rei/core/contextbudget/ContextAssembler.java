@@ -216,7 +216,7 @@ public class ContextAssembler {
               .toList();
       var projected =
           fitToolResults.apply(
-              restoreSuppressed(new Prompt(messages, raw.getOptions())),
+              withWorkingSetSnapshot(restoreSuppressed(new Prompt(messages, raw.getOptions()))),
               conversation,
               run,
               hardLimit(raw));
@@ -643,13 +643,7 @@ public class ContextAssembler {
           messages.add(runObservations);
           runObservations = null;
         }
-        if (Boolean.TRUE.equals(message.getMetadata().get("rei.workingSet")) && workingSet != null)
-          messages.add(
-              SystemMessage.builder()
-                  .text(workingSet.get())
-                  .metadata(message.getMetadata())
-                  .build());
-        else messages.add(message);
+        messages.add(message);
       } else {
         Message retained = activeBySequence.get(++sequence);
         if (retained != null) {
@@ -660,7 +654,24 @@ public class ContextAssembler {
       }
     }
     if (runObservations != null) messages.add(runObservations);
-    return new Prompt(messages, original.getOptions());
+    return withWorkingSetSnapshot(new Prompt(messages, original.getOptions()));
+  }
+
+  /** Keep changing working state after complete exchanges, outside the loop's raw history. */
+  private Prompt withWorkingSetSnapshot(Prompt prompt) {
+    var messages = new ArrayList<Message>();
+    Message marker = null;
+    for (var message : prompt.getInstructions()) {
+      if (Boolean.TRUE.equals(message.getMetadata().get("rei.workingSet"))) marker = message;
+      else messages.add(message);
+    }
+    if (marker == null) return prompt;
+    String snapshot = workingSet == null ? marker.getText() : workingSet.get();
+    if (snapshot == null || snapshot.isBlank())
+      snapshot = "## Current Working Set\n\nThe current working set is empty.";
+    messages.add(
+        SystemMessage.builder().text(snapshot).metadata(marker.getMetadata()).build());
+    return new Prompt(messages, prompt.getOptions());
   }
 
   /** モデルへ渡す文脈の管理で用いる発生順序開始位置を返す。 */

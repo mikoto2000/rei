@@ -81,7 +81,7 @@ public final class RunCancellation {
   }
 
   /** 会話の実行で用いる原因一覧を返す。 */
-  private static java.util.List<Throwable> causes(Throwable error) {
+  static java.util.List<Throwable> causes(Throwable error) {
     var causes = new java.util.ArrayList<Throwable>();
     var seen =
         java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());

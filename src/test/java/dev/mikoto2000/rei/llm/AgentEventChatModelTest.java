@@ -24,6 +24,60 @@ import reactor.core.publisher.Flux;
 
 /** エージェントイベント応答生成に使うモデルの結果と状態の契約を検証するテスト。 */
 class AgentEventChatModelTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "invocation,true", "invocation,false", "subscription,true", "subscription,false",
+    "prompt,true", "prompt,false"
+  })
+  void asyncSignalsKeepTheCallingRunEvenOnAnotherClientsThread(String binding, boolean failing) {
+    var caller = new dev.mikoto2000.rei.core.chat.AgentRunContext(
+        "cli-run", "cli-session", java.nio.file.Path.of(".").toAbsolutePath(), "project");
+    var other = new dev.mikoto2000.rei.core.chat.AgentRunContext(
+        "other-run", "other-session", caller.projectRoot(), "other-project");
+    var prompt = binding.equals("prompt")
+        ? new Prompt("request", org.springframework.ai.openai.OpenAiChatOptions.builder()
+            .toolContext(java.util.Map.of(
+                dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName(), caller)).build())
+        : new Prompt("request");
+    var delegate = mock(ChatModel.class);
+    var response = mock(ChatResponse.class);
+    when(delegate.stream(prompt)).thenReturn(Flux.<ChatResponse>create(sink -> {
+      try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(other)) {
+        if (failing) sink.error(new java.net.ConnectException("PRIVATE_HOST"));
+        else {
+          sink.next(response);
+          sink.complete();
+        }
+      }
+    }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic()));
+    var events = new java.util.concurrent.CopyOnWriteArrayList<AgentEvent>();
+    var bus = new InMemoryAgentEventBus();
+    bus.subscribe(events::add);
+    var model = new AgentEventChatModel(LlmFeature.CHAT, delegate,
+        new AgentEventFactory(Clock.systemUTC()), bus);
+    Flux<ChatResponse> stream;
+    if (binding.equals("subscription")) {
+      stream = model.stream(prompt);
+      try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(caller)) {
+        stream.onErrorComplete().blockLast(java.time.Duration.ofSeconds(5));
+      }
+    } else {
+      try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(
+          binding.equals("prompt") ? other : caller)) {
+        stream = model.stream(prompt);
+      }
+      stream.subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
+          .onErrorComplete().blockLast(java.time.Duration.ofSeconds(5));
+    }
+    assertThat(events).hasSize(failing ? 2 : 3).allSatisfy(event -> {
+      assertThat(event.runId()).isEqualTo(caller.runId());
+      assertThat(event.sessionId()).isEqualTo(caller.conversationId());
+      assertThat(event.projectId()).isEqualTo(caller.projectId());
+    });
+    assertThat(events.getLast().type()).isEqualTo(failing
+        ? AgentEventType.LLM_REQUEST_FAILED : AgentEventType.LLM_RESPONSE_COMPLETED);
+    assertThat(dev.mikoto2000.rei.core.chat.AgentRunScope.current()).isNull();
+  }
 
   @Test
   void completionMetricsKeepCumulativeUsageAndDistinguishMissingUsage() {

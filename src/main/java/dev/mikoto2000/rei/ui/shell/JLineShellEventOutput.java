@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.ui.shell;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.PrintWriter;
 import org.jline.reader.LineReader;
 
@@ -12,11 +10,12 @@ import org.jline.reader.LineReader;
  */
 public final class JLineShellEventOutput implements ShellEventOutput {
   /** 読み取り元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the live JLine reader for the current terminal session.")
-  private final LineReader reader;
+  private final java.util.function.BooleanSupplier reading;
+
+  private final java.util.function.BooleanSupplier interactive;
+  private final java.util.function.IntSupplier terminalWidth;
+  private final java.util.function.Consumer<org.jline.utils.AttributedString> displayBlock;
+  private final java.util.function.Consumer<String> displayLine;
 
   /** 書き込み先。 */
   private final PrintWriter writer;
@@ -45,14 +44,21 @@ public final class JLineShellEventOutput implements ShellEventOutput {
 
   /** 指定された値や利用先を使って、JLineShellEventOutputを初期化する。 */
   public JLineShellEventOutput(LineReader reader) {
-    this.reader = reader;
+    this.reading = () -> reader.isReading();
+    this.interactive =
+        () ->
+            dev.mikoto2000.rei.core.completion.ApprovalDisplayState.interactive(
+                reader.getTerminal());
+    this.terminalWidth = () -> reader.getTerminal().getWidth();
+    this.displayBlock = value -> reader.printAbove(value);
+    this.displayLine = value -> reader.printAbove(value);
     this.writer = reader.getTerminal().writer();
   }
 
   /** ターミナルでの対話に関する承認必須を処理する。 */
   @Override
   public synchronized void approvalRequired(String message) {
-    if (dev.mikoto2000.rei.core.completion.ApprovalDisplayState.interactive(reader.getTerminal()))
+    if (interactive.getAsBoolean())
       printBlock(dev.mikoto2000.rei.core.completion.ApprovalNotice.format(message));
     else {
       // Do not ask JLine to redraw a forced terminal type when actual streams are redirected.
@@ -73,13 +79,13 @@ public final class JLineShellEventOutput implements ShellEventOutput {
     // readLine-start race. Do not count ANSI bytes as columns in flushCompleteLines().
     var combined = new org.jline.utils.AttributedStringBuilder().append(pending).append(block);
     pending.setLength(0);
-    reader.printAbove(combined.toAttributedString());
+    displayBlock.accept(combined.toAttributedString());
   }
 
   /** 利用者に結果を伝えるため、JLineシェルイベント出力を出力する。 */
   @Override
   public synchronized void print(String text) {
-    if (reader.isReading()) {
+    if (reading.getAsBoolean()) {
       pending.append(text);
     } else {
       flushPendingToWriter();
@@ -90,7 +96,7 @@ public final class JLineShellEventOutput implements ShellEventOutput {
   /** ターミナルでの対話に関する改行付きの出力を処理する。 */
   @Override
   public synchronized void println(String text) {
-    if (reader.isReading()) {
+    if (reading.getAsBoolean()) {
       pending.append(text).append('\n');
       flushCompleteLines();
     } else {
@@ -102,7 +108,7 @@ public final class JLineShellEventOutput implements ShellEventOutput {
   /** ターミナルでの対話に関する保存の確定を処理する。 */
   @Override
   public synchronized void flush() {
-    if (!reader.isReading()) {
+    if (!reading.getAsBoolean()) {
       flushPendingToWriter();
       writer.flush();
     } else {
@@ -112,7 +118,7 @@ public final class JLineShellEventOutput implements ShellEventOutput {
 
   /** ターミナルでの対話に関する保存の確定完了行一覧を処理する。 */
   private void flushCompleteLines() {
-    int width = reader.getTerminal().getWidth();
+    int width = terminalWidth.getAsInt();
     if (width <= 0) width = 80;
     while (!pending.isEmpty()) {
       int newline = pending.indexOf("\n");
@@ -133,12 +139,12 @@ public final class JLineShellEventOutput implements ShellEventOutput {
         offset += Character.charCount(codePoint);
       }
       if (wrap > 0) {
-        reader.printAbove(pending.substring(0, wrap));
+        displayLine.accept(pending.substring(0, wrap));
         pending.delete(0, wrap);
       } else if (newline >= 0) {
         // printAbove supplies the newline. Never include the next incomplete line.
         int lineEnd = end > 0 && pending.charAt(end - 1) == '\r' ? end - 1 : end;
-        reader.printAbove(pending.substring(0, lineEnd));
+        displayLine.accept(pending.substring(0, lineEnd));
         pending.delete(0, newline + 1);
       } else {
         break; // Retain the incomplete physical line until more text or println arrives.

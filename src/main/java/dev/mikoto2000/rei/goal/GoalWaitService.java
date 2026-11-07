@@ -14,8 +14,6 @@ import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.DependencyStatusPayload;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -45,11 +43,13 @@ public class GoalWaitService {
   private final GoalRepository goals;
 
   /** 繰り返し。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared goal service to operate on the active goal lifecycle.")
-  private final GoalLoopService loop;
+  private final BiFunction<String, String, GoalCompletionProgress> goalProgress;
+
+  private final BiFunction<GoalRepository.Goal, WaitingContinuation, GoalRepository.Goal>
+      resumeGoal;
+
+  private record WaitingContinuation(
+      GoalWaitRepository.Wait waitState, String checkpointTask, long checkpointRevision) {}
 
   /** 依存条件一覧。 */
   private final PersistentDependencyRepository dependencies;
@@ -65,12 +65,10 @@ public class GoalWaitService {
   private final BiConsumer<String, String> cancelSchedule;
 
   /** 再開用の記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared checkpoint service for save, inspect, and resume operations.")
-  private final PersistentCheckpointService checkpoints;
+  private final BiFunction<String, String, PersistentCheckpoint> findCheckpoint;
+
+  private final BiFunction<String, String, Boolean> automaticResumeSafe;
+  private final Consumer<String> abortContinuation;
 
   /** 再開用の記録保存と検索の窓口。 */
   private final BiFunction<String, String, Optional<PersistentCheckpoint>> checkpointForRun;
@@ -95,7 +93,20 @@ public class GoalWaitService {
       GoalEvents events) {
     this.waits = waits;
     this.goals = goals;
-    this.loop = loop;
+    this.goalProgress = (project, id) -> loop.progress(project, id);
+    this.resumeGoal =
+        (goal, continuation) ->
+            loop.resumeWaiting(
+                goal,
+                continuation.waitState(),
+                owner -> {
+                  if (continuation.checkpointTask() != null)
+                    checkpoints.prepareGoalContinuation(
+                        owner,
+                        continuation.checkpointTask(),
+                        continuation.waitState().runId(),
+                        continuation.checkpointRevision());
+                });
     this.dependencies = dependencies;
     this.observations = observations;
     this.scheduleDependencyWait =
@@ -113,7 +124,10 @@ public class GoalWaitService {
     this.findSchedule = (project, id) -> schedules.get(project, id);
     this.activeClaim = claim -> schedules.activeClaim(claim);
     this.cancelSchedule = (project, id) -> schedules.cancel(project, id);
-    this.checkpoints = checkpoints;
+    this.findCheckpoint = (project, task) -> checkpoints.get(project, task);
+    this.automaticResumeSafe =
+        (project, task) -> checkpoints.inspect(project, task).automaticResumeSafe();
+    this.abortContinuation = run -> checkpoints.abortPreparedGoalContinuation(run);
     this.checkpointForRun = (project, run) -> checkpointRepository.findByRun(project, run);
     this.clock = clock;
     this.events = events;
@@ -131,7 +145,7 @@ public class GoalWaitService {
     if (reason == null || !reason.matches("[a-z_]{1,80}"))
       throw new IllegalArgumentException("Structured wait reason required");
     var goal = goals.get(project, id);
-    var progress = loop.progress(project, id);
+    var progress = goalProgress.apply(project, id);
     if (!Set.of("READY", "PAUSED", "FAILED", "WAITING_APPROVAL", "BLOCKED").contains(goal.status()))
       throw new IllegalStateException("Stop or reconcile the owning Goal Run first");
     var entry = dependencies.get(project, dependency);
@@ -197,7 +211,7 @@ public class GoalWaitService {
   public GoalWaitRepository.Wait activate(String project, String id, long version) {
     var wait = expected(project, id, version);
     requireWaiting(wait);
-    loop.progress(project, id);
+    goalProgress.apply(project, id);
     activateSchedule.accept(project, wait.scheduleId());
     var fresh = observations.recheckForResume(project, wait.dependencyId());
     // A condition that was already met at activation needs a current observation, not an old event.
@@ -251,7 +265,7 @@ public class GoalWaitService {
       GoalWaitRepository.Wait wait, PersistentAgentScheduler.Entry scheduled) {
     requireWaiting(wait);
     var goal = goals.get(wait.project(), wait.goalId());
-    loop.progress(wait.project(), wait.goalId());
+    goalProgress.apply(wait.project(), wait.goalId());
     String blocked = null;
     if (!goal.status().equals("PAUSED")
         || !Objects.equals(goal.currentRunId(), wait.runId())
@@ -280,10 +294,10 @@ public class GoalWaitService {
     PersistentCheckpoint saved = null;
     if (wait.runId() != null) {
       try {
-        saved = checkpoints.get(wait.project(), wait.snapshot().checkpointTask());
+        saved = findCheckpoint.apply(wait.project(), wait.snapshot().checkpointTask());
         validateCheckpoint(goal, saved);
-        var reconciliation = checkpoints.inspect(wait.project(), saved.taskId());
-        if (!reconciliation.automaticResumeSafe()) blocked = "checkpoint_reconciliation_required";
+        if (!automaticResumeSafe.apply(wait.project(), saved.taskId()))
+          blocked = "checkpoint_reconciliation_required";
       } catch (RuntimeException unavailable) {
         RunCancellation.propagate(unavailable);
         blocked = "checkpoint_reconciliation_required";
@@ -299,19 +313,16 @@ public class GoalWaitService {
       if (scheduled == null && !Set.of("COMPLETED", "FAILED", "CANCELLED").contains(timer.status()))
         cancelSchedule.accept(wait.project(), wait.scheduleId());
       var resumed =
-          loop.resumeWaiting(
+          resumeGoal.apply(
               goal,
-              claimed,
-              owner -> {
-                if (checkpoint != null)
-                  checkpoints.prepareGoalContinuation(
-                      owner, checkpoint.taskId(), wait.runId(), checkpoint.revision());
-              });
+              new WaitingContinuation(
+                  claimed,
+                  checkpoint == null ? null : checkpoint.taskId(),
+                  checkpoint == null ? 0 : checkpoint.revision()));
       return waits.transition(claimed, "RESUMED", "goal_resume_admitted", resumed.currentRunId());
     } catch (RuntimeException | Error error) {
       var current = goals.get(wait.project(), wait.goalId());
-      if (current.currentRunId() != null)
-        checkpoints.abortPreparedGoalContinuation(current.currentRunId());
+      if (current.currentRunId() != null) abortContinuation.accept(current.currentRunId());
       waits.transition(claimed, "RESUMING", "resume_admission_unknown", null);
       RunCancellation.propagate(error);
       throw error;

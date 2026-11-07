@@ -14,8 +14,6 @@ import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
 import dev.mikoto2000.rei.workcontext.WorkContext;
 import dev.mikoto2000.rei.workcontext.WorkContextRepository;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -222,11 +220,11 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
   private final List<ProjectContext> allowed;
 
   /** タスク一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common task service for current task and execution state.")
-  private final TaskManagerService tasks;
+  private final java.util.function.Function<
+          PlanningTaskPage, dev.mikoto2000.rei.application.session.HistoryPage<TaskView>>
+      readTaskPage;
+
+  private record PlanningTaskPage(String project, int limit, String cursor) {}
 
   /** 文脈一覧。 */
   private final WorkContextRepository contexts;
@@ -265,7 +263,7 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
     this.clock = clock;
     this.zone = ZoneId.of(properties.getZone());
     this.findProject = id -> projects.resolveById(id);
-    this.tasks = tasks;
+    this.readTaskPage = page -> tasks.list(page.project(), null, page.limit(), page.cursor());
     this.contexts = contexts;
     this.goals = goals;
     this.dependencies = dependencies;
@@ -311,7 +309,9 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
           warnings.add("collection_budget_reached");
           break;
         }
-        var page = tasks.list(owner.id(), null, Math.min(100, taskLimit - scanned), cursor);
+        var page =
+            readTaskPage.apply(
+                new PlanningTaskPage(owner.id(), Math.min(100, taskLimit - scanned), cursor));
         for (var task : page.items()) {
           scanned++;
           if (Set.of("COMPLETED", "CANCELLED").contains(task.status())) continue;

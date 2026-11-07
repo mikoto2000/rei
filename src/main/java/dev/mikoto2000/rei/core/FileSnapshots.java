@@ -234,7 +234,7 @@ final class FileSnapshots {
     if (input.toString().length() > 1024) throw new IOException("Path exceeds 1024 characters");
     var path = (input.isAbsolute() ? input : root.resolve(input)).normalize();
     if (!path.startsWith(root) || RepositoryMapService.sensitive(root.relativize(path)))
-      throw new IOException("Excluded or outside Project path");
+      throw new ExcludedInventoryPathException();
     var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     if (owner != null
         && owner.requestSource()
@@ -249,6 +249,15 @@ final class FileSnapshots {
         throw new IOException("MCP excludes private or outside Project paths");
     }
     return path;
+  }
+
+  /** The requested inventory path was rejected before any files were listed. */
+  static final class ExcludedInventoryPathException extends IOException {
+    private static final long serialVersionUID = 1L;
+
+    ExcludedInventoryPathException() {
+      super("Excluded or outside Project path");
+    }
   }
 
   /** 共通の実行基盤において、MCP非公開に該当するか判定する。 */

@@ -3,12 +3,12 @@ package dev.mikoto2000.rei.episode;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.BiConsumer;
+import java.util.function.ToIntFunction;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
 
@@ -28,11 +28,7 @@ public class EpisodeSleepService {
       readRange;
 
   /** 記録された経験を整理する処理の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Processes pending episodes through the shared processor.")
-  private final EpisodeProcessor processor;
+  private final ProcessBatch<ConversationTurnStore.Turn, ModelCallBudget> processBatch;
 
   /** この機能の動作設定。 */
   private final EpisodeProperties properties;
@@ -41,16 +37,15 @@ public class EpisodeSleepService {
   private final MemoryProperties memory;
 
   /** ベクトルによる。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Queries or updates the shared dense episode index.")
-  private EpisodeDenseIndex dense;
+  private BiConsumer<String, ModelCallBudget> indexPending = (session, budget) -> {};
+
+  private ToIntFunction<String> pendingIndex = session -> 0;
 
   /** 過去の経験の活用で使用するベクトルによるを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setDense(EpisodeDenseIndex dense) {
-    this.dense = dense;
+    this.indexPending = dense == null ? (session, budget) -> {} : dense::indexPending;
+    this.pendingIndex = dense == null ? session -> 0 : dense::pending;
   }
 
   /** 作業。 */
@@ -77,7 +72,10 @@ public class EpisodeSleepService {
     this.repository = repository;
     this.turnCount = session -> turns.turnCount(session);
     this.readRange = range -> turns.readRange(range.session(), range.from(), range.limit());
-    this.processor = processor;
+    this.processBatch =
+        (range, batch, budget) ->
+            processor.process(
+                range.session(), range.project(), range.from(), range.to(), batch, budget);
     this.properties = properties;
     this.memory = memory;
   }
@@ -117,8 +115,10 @@ public class EpisodeSleepService {
         tokens += size;
         batch.add(turn);
       }
-      if (to > from) processor.process(session, project, from, to, List.copyOf(batch), budget);
-      if (dense != null) dense.indexPending(session, budget);
+      if (to > from)
+        processBatch.process(
+            new ProcessRange(session, project, from, to), List.copyOf(batch), budget);
+      indexPending.accept(session, budget);
       if (work != null && work.getIfAvailable() != null)
         work.getObject()
             .current(project)
@@ -139,7 +139,14 @@ public class EpisodeSleepService {
     return properties.enabled()
         ? Math.max(
             Math.max(0, turnCount.applyAsLong(session) - repository.checkpoint(session)),
-            dense == null ? 0 : dense.pending(session))
+            pendingIndex.applyAsInt(session))
         : 0;
+  }
+
+  private record ProcessRange(String session, String project, long from, long to) {}
+
+  @FunctionalInterface
+  private interface ProcessBatch<T, B> {
+    void process(ProcessRange range, List<T> turns, B budget);
   }
 }

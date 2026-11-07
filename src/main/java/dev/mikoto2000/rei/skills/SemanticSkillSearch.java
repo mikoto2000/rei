@@ -198,7 +198,10 @@ public final class SemanticSkillSearch {
               .toList();
     } catch (RuntimeException error) {
       RunCancellation.propagate(error);
-      if (error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)
+      Throwable providerFailure =
+          error instanceof java.util.concurrent.CompletionException ? error.getCause() : error;
+      if (providerFailure
+          instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)
         throw stopped;
       cache = Map.of();
       failureAt = nanos.getAsLong();

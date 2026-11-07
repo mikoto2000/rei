@@ -29,7 +29,8 @@ public class AgentSkillPromptRenderer {
             .append('\n');
         builder.append(
             """
-            このスキルの相対参照は Skill directory を基準に解決してください（Project の作業ディレクトリ基準ではありません）。
+            Instructions 欄には選択済みの SKILL.md の本文が含まれています。
+            スキルの参照資料のパスは Skill directory を基準に解決してください。Project 用の listFile で Skill directory を列挙しないでください。
             必要な参照資料は readSkillResource を使い、この Skill の名前を skillName、
             スキルフォルダ基準の相対パスを files の各要素の path に指定し、既知の複数資料はまとめて読み込んでください。
             参照資料内の相対リンクは、その参照資料の親フォルダ基準で解決し、スキルフォルダ基準のパスに直してください。

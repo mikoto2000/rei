@@ -8,8 +8,6 @@ import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.ui.shell.HistoryCommand;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -33,12 +31,10 @@ public final class HistoryReportController {
   private final SessionQueryService sessions;
 
   /** 選択内容。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService selection;
+  private final java.util.function.BiFunction<java.nio.file.Path, SelectedReport, String>
+      selectedReport;
+
+  private record SelectedReport(String sessionId, Supplier<String> action) {}
 
   /** プロジェクト一覧。 */
   private final Function<String, Optional<ProjectContext>> findProject;
@@ -58,7 +54,14 @@ public final class HistoryReportController {
       ProjectRegistry projects) {
     this.report = new HistoryCommand(history, sessions, selection);
     this.sessions = sessions;
-    this.selection = selection;
+    this.selectedReport =
+        (root, request) -> {
+          try (var scope = selection.newClient().open()) {
+            selection.cd(root.toString());
+            selection.selectSession(request.sessionId());
+            return request.action().get();
+          }
+        };
     this.findProject = id -> projects.resolveById(id);
   }
 
@@ -71,11 +74,7 @@ public final class HistoryReportController {
         findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
     if (sessionId != null && !sessions.getSession(sessionId).projectId().equals(project.id()))
       throw new IllegalArgumentException("Session belongs to another Project");
-    try (var scope = selection.newClient().open()) {
-      selection.cd(project.root().toString());
-      selection.selectSession(sessionId);
-      return new Text(action.get());
-    }
+    return new Text(selectedReport.apply(project.root(), new SelectedReport(sessionId, action)));
   }
 
   /** Web APIによる操作で用いる会話一覧を返す。 */

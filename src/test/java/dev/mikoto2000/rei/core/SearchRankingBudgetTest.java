@@ -89,12 +89,17 @@ class SearchRankingBudgetTest {
   }
 
   private org.springframework.ai.chat.model.ChatResponse searchCall(String id, int maxFiles) {
-    String args = "{\"request\":{\"queries\":[{\"pattern\":\"class\",\"baseDir\":\".\",\"fixedString\":true,"
-        + "\"ignoreCase\":false,\"invertMatch\":false,\"fileNamesOnly\":false,"
-        + "\"beforeContext\":0,\"afterContext\":0,\"maxMatches\":100,"
-        + "\"includeLineNumber\":true,\"excludeGlob\":\"\",\"charset\":\"UTF-8\","
-        + "\"includeGlob\":\"" + (maxFiles == 1 ? "Target.java" : "*.java") + "\"}],"
-        + "\"maxFiles\":" + maxFiles + ",\"contextLines\":0,\"maxBytes\":768,\"maxTokens\":1000}}";
+    String args =
+        "{\"request\":{\"queries\":[{\"pattern\":\"class\",\"baseDir\":\".\",\"fixedString\":true,"
+            + "\"ignoreCase\":false,\"invertMatch\":false,\"fileNamesOnly\":false,"
+            + "\"beforeContext\":0,\"afterContext\":0,\"maxMatches\":100,"
+            + "\"includeLineNumber\":true,\"excludeGlob\":\"\",\"charset\":\"UTF-8\","
+            + "\"includeGlob\":\""
+            + (maxFiles == 1 ? "Target.java" : "*.java")
+            + "\"}],"
+            + "\"maxFiles\":"
+            + maxFiles
+            + ",\"contextLines\":0,\"maxBytes\":768,\"maxTokens\":1000}}";
     return new org.springframework.ai.chat.model.ChatResponse(
         List.of(
             new org.springframework.ai.chat.model.Generation(
@@ -113,18 +118,29 @@ class SearchRankingBudgetTest {
     var bus = new dev.mikoto2000.rei.event.InMemoryAgentEventBus();
     var events = new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
     bus.subscribe(events::add);
-    var working = new dev.mikoto2000.rei.core.working.WorkingSet(10, clock,
-        new dev.mikoto2000.rei.event.AgentEventFactory(clock), bus);
-    var tools = new Tools(null, null, null, clock, working) {
-      @Override
-      List<String> listFile(String base, Path directory) { return List.of("Target.java"); }
-    };
+    var working =
+        new dev.mikoto2000.rei.core.working.WorkingSet(
+            10, clock, new dev.mikoto2000.rei.event.AgentEventFactory(clock), bus);
+    var tools =
+        new Tools(null, null, null, clock, working) {
+          @Override
+          List<String> listFile(String base, Path directory) {
+            return List.of("Target.java");
+          }
+        };
     var request = new Tools.SearchAndReadRequest(List.of(query("Target")), 0, 1);
     tools.searchAndRead(request, root);
     tools.searchAndRead(request, root);
-    var completed = events.stream()
-        .filter(event -> event.type() == dev.mikoto2000.rei.event.AgentEventType.WORKING_SET_SEARCH_COMPLETED)
-        .map(event -> (dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload) event.payload()).toList();
+    var completed =
+        events.stream()
+            .filter(
+                event ->
+                    event.type()
+                        == dev.mikoto2000.rei.event.AgentEventType.WORKING_SET_SEARCH_COMPLETED)
+            .map(
+                event ->
+                    (dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload) event.payload())
+            .toList();
     assertEquals(0, completed.getFirst().alreadyPresentCount());
     assertEquals(1, completed.getLast().alreadyPresentCount());
   }
@@ -201,7 +217,17 @@ class SearchRankingBudgetTest {
 
   /** {@code tools} の条件を再現するための補助情報を返す。 */
   Tools tools(List<String> paths) {
-    return new Tools() {
+    return tools(paths, new dev.mikoto2000.rei.core.working.WorkingSet());
+  }
+
+  Tools tools(List<String> paths, dev.mikoto2000.rei.core.working.WorkingSet working) {
+    var shell = new dev.mikoto2000.rei.core.service.SystemShellService();
+    return new Tools(
+        null,
+        shell,
+        new dev.mikoto2000.rei.core.process.BackgroundProcessManager(shell),
+        java.time.Clock.systemDefaultZone(),
+        working) {
       /** {@code listFile} の条件を再現するための補助情報を返す。 */
       @Override
       List<String> listFile(String base, Path directory) {
@@ -306,8 +332,9 @@ class SearchRankingBudgetTest {
     assertEquals(
         List.of("a.txt", "z.txt"),
         tools.searchAndRead(request, root).stream().map(Tools.SearchAndReadResult::path).toList());
-    var active = tools(List.of("a.txt", "z.txt"));
-    active.workingSet().recordRead(root.resolve("z.txt"));
+    var working = new dev.mikoto2000.rei.core.working.WorkingSet();
+    var active = tools(List.of("a.txt", "z.txt"), working);
+    working.recordRead(root.resolve("z.txt"));
     assertEquals("z.txt", active.searchAndRead(request, root).getFirst().path());
   }
 

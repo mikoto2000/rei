@@ -14,8 +14,6 @@ import dev.mikoto2000.rei.secretary.SecretaryProvider.Item;
 import dev.mikoto2000.rei.secretary.SecretaryProvider.Outcome;
 import dev.mikoto2000.rei.secretary.SecretaryProvider.Page;
 import dev.mikoto2000.rei.secretary.SecretaryProvider.Service;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -43,18 +41,44 @@ public class GoogleCalendarService {
   private final GoogleCalendarProperties properties;
 
   /** GoogleO認証サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared OAuth service and its current credential state.")
-  private final GoogleOAuthService googleOAuthService;
+  private final AuthorizeCredential authorizeCredential;
+
+  private final RefreshCredential refreshCredential;
+  private final java.util.function.Supplier<com.google.api.client.http.HttpRequestInitializer>
+      secretaryInitializer;
+  private final java.util.function.Function<Boolean, Auth> secretaryStatus;
+  private final java.util.function.Supplier<String> secretaryIdentity;
+  private final java.util.function.Function<Boolean, Auth> authorizeSecretaryCalendar;
+  private final java.util.function.Function<java.util.concurrent.Callable<Page>, Page> readPage;
+  private final java.util.function.Function<java.util.concurrent.Callable<Event>, Event> readEvent;
+  private final java.util.function.Consumer<java.util.concurrent.Callable<Void>> writeEvent;
+
+  @FunctionalInterface
+  private interface AuthorizeCredential {
+    com.google.api.client.auth.oauth2.Credential authorize(
+        NetHttpTransport transport, boolean force) throws java.io.IOException;
+  }
+
+  @FunctionalInterface
+  private interface RefreshCredential {
+    void refresh() throws java.io.IOException, java.security.GeneralSecurityException;
+  }
 
   /** 指定された値や利用先を使って、GoogleCalendarServiceを初期化する。 */
   @Autowired
   public GoogleCalendarService(
       GoogleCalendarProperties properties, GoogleOAuthService googleOAuthService) {
     this.properties = properties;
-    this.googleOAuthService = googleOAuthService;
+    this.authorizeCredential = (transport, force) -> googleOAuthService.authorize(transport, force);
+    this.refreshCredential = () -> googleOAuthService.refreshToken();
+    this.secretaryInitializer = () -> googleOAuthService.secretaryInitializer();
+    this.secretaryStatus = enabled -> googleOAuthService.secretaryGoogleStatus(enabled);
+    this.secretaryIdentity = () -> googleOAuthService.secretaryIdentity();
+    this.authorizeSecretaryCalendar =
+        force -> googleOAuthService.authorizeConnection(Service.CALENDAR, force);
+    this.readPage = operation -> googleOAuthService.secretaryNetwork(operation, false);
+    this.readEvent = operation -> googleOAuthService.secretaryNetwork(operation, false);
+    this.writeEvent = operation -> googleOAuthService.secretaryNetwork(operation, true);
   }
 
   /** 予定の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -68,12 +92,13 @@ public class GoogleCalendarService {
   }
 
   /** 予定の管理に関する権限の確認を処理する。 */
-  public void authorize(boolean forceReauthorize) throws java.io.IOException, java.security.GeneralSecurityException {
+  public void authorize(boolean forceReauthorize)
+      throws java.io.IOException, java.security.GeneralSecurityException {
     if (!properties.calendar().enabled()) {
       throw new IllegalStateException("Google Calendar integration is disabled");
     }
     NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
-    googleOAuthService.authorize(httpTransport, forceReauthorize);
+    authorizeCredential.authorize(httpTransport, forceReauthorize);
   }
 
   /** 予定の管理に関する認証を更新するトークンを処理する。 */
@@ -82,11 +107,12 @@ public class GoogleCalendarService {
       throw new IllegalStateException("Google Calendar integration is disabled");
     }
 
-    googleOAuthService.refreshToken();
+    refreshCredential.refresh();
   }
 
   /** 利用可能な対象を確認できるよう、イベント一覧を一覧にする。 */
-  public List<GoogleCalendarEventSummary> listEvents(Instant from, Instant to) throws java.io.IOException, java.security.GeneralSecurityException {
+  public List<GoogleCalendarEventSummary> listEvents(Instant from, Instant to)
+      throws java.io.IOException, java.security.GeneralSecurityException {
     Calendar client = getCalendarClient();
 
     return client
@@ -125,7 +151,8 @@ public class GoogleCalendarService {
   }
 
   /** 利用可能な対象を確認できるよう、イベント一覧対象日付を一覧にする。 */
-  public List<GoogleCalendarEventSummary> listEventsForDate(LocalDate date) throws java.io.IOException, java.security.GeneralSecurityException {
+  public List<GoogleCalendarEventSummary> listEventsForDate(LocalDate date)
+      throws java.io.IOException, java.security.GeneralSecurityException {
     ZonedDateTime from = date.atStartOfDay(zoneId());
     ZonedDateTime to = date.plusDays(1).atStartOfDay(zoneId());
     return listEvents(from.toInstant(), to.toInstant());
@@ -162,14 +189,15 @@ public class GoogleCalendarService {
   }
 
   /** 予定の管理で参照する予定表クライアントを返す。 */
-  private Calendar getCalendarClient() throws java.io.IOException, java.security.GeneralSecurityException {
+  private Calendar getCalendarClient()
+      throws java.io.IOException, java.security.GeneralSecurityException {
     if (!properties.calendar().enabled()) {
       throw new IllegalStateException("Google Calendar integration is disabled");
     }
 
     NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
     return new Calendar.Builder(
-            httpTransport, JSON_FACTORY, googleOAuthService.authorize(httpTransport, false))
+            httpTransport, JSON_FACTORY, authorizeCredential.authorize(httpTransport, false))
         .setApplicationName(properties.applicationName())
         .build();
   }
@@ -228,9 +256,7 @@ public class GoogleCalendarService {
     if (properties.calendar() == null || !properties.calendar().enabled())
       throw new Failure("CALENDAR_DISABLED", 0, false);
     return new Calendar.Builder(
-            GoogleNetHttpTransport.newTrustedTransport(),
-            JSON_FACTORY,
-            googleOAuthService.secretaryInitializer())
+            GoogleNetHttpTransport.newTrustedTransport(), JSON_FACTORY, secretaryInitializer.get())
         .setApplicationName(properties.applicationName())
         .build();
   }
@@ -240,18 +266,17 @@ public class GoogleCalendarService {
   }
 
   public Auth status(Service service) {
-    return googleOAuthService.secretaryGoogleStatus(
-        properties.calendar() != null && properties.calendar().enabled());
+    return secretaryStatus.apply(properties.calendar() != null && properties.calendar().enabled());
   }
 
   public String identity(dev.mikoto2000.rei.secretary.SecretaryConnections.Connection connection) {
-    return googleOAuthService.secretaryIdentity();
+    return secretaryIdentity.get();
   }
 
   public Auth authorizeConnection(Service service, boolean force) {
     if (properties.calendar() == null || !properties.calendar().enabled())
       throw new Failure("CALENDAR_DISABLED", 0, false);
-    return googleOAuthService.authorizeConnection(Service.CALENDAR, force);
+    return authorizeSecretaryCalendar.apply(force);
   }
 
   private static void secretaryFields(java.util.Map<String, String> args, String... fields) {
@@ -334,7 +359,7 @@ public class GoogleCalendarService {
     var zone = ZoneId.of(connection.config().zone());
     if (operation.equals("DETAIL")) {
       secretaryFields(args, "id");
-      return googleOAuthService.secretaryNetwork(
+      return readPage.apply(
           () ->
               new Page(
                   List.of(
@@ -346,15 +371,14 @@ public class GoogleCalendarService {
                           connection,
                           true)),
                   "",
-                  false),
-          false);
+                  false));
     }
     if (operation.equals("FREEBUSY")) {
       secretaryFields(args, "from", "to");
       var from = secretaryDate(args.get("from"), zone).toInstant();
       var to = secretaryDate(args.get("to"), zone).toInstant();
       secretaryRange(from, to);
-      return googleOAuthService.secretaryNetwork(
+      return readPage.apply(
           () -> {
             var request =
                 new com.google.api.services.calendar.model.FreeBusyRequest()
@@ -399,8 +423,7 @@ public class GoogleCalendarService {
             }
             if (position.isBefore(to)) items.add(secretarySlot(position, to, zone));
             return new Page(items, "", false);
-          },
-          false);
+          });
     }
     if (!java.util.Set.of("LIST", "TODAY").contains(operation))
       throw new IllegalArgumentException("Unknown Calendar read operation");
@@ -416,7 +439,7 @@ public class GoogleCalendarService {
             ? date.plusDays(1).atStartOfDay(zone).toInstant()
             : secretaryDate(args.get("to"), zone).toInstant();
     secretaryRange(from, to);
-    return googleOAuthService.secretaryNetwork(
+    return readPage.apply(
         () -> {
           var request =
               secretaryCalendarClient()
@@ -440,8 +463,7 @@ public class GoogleCalendarService {
               items,
               Objects.toString(response.getNextPageToken(), ""),
               response.getNextPageToken() != null);
-        },
-        false);
+        });
   }
 
   private static Item secretarySlot(Instant from, Instant to, ZoneId zone) {
@@ -529,13 +551,12 @@ public class GoogleCalendarService {
     var desired =
         operation.equals("CALENDAR_CREATE")
             ? new Event().setId(eventId)
-            : googleOAuthService.secretaryNetwork(
+            : readEvent.apply(
                 () ->
                     secretaryCalendarClient()
                         .events()
                         .get(connection.config().resource(), eventId)
-                        .execute(),
-                false);
+                        .execute());
     if (!operation.equals("CALENDAR_CREATE") && !etag.equals(desired.getEtag()))
       throw new Failure("PRECONDITION_FAILED", 0, false);
     if (!operation.equals("CALENDAR_CANCEL")) {
@@ -554,7 +575,7 @@ public class GoogleCalendarService {
       if (desired.getSummary() == null || from == null || to == null || !to.isAfter(from))
         throw new IllegalArgumentException("Calendar title/start/end required");
     }
-    googleOAuthService.secretaryNetwork(
+    writeEvent.accept(
         () -> {
           if (operation.equals("CALENDAR_CREATE")) {
             try {
@@ -578,20 +599,18 @@ public class GoogleCalendarService {
             request.getRequestHeaders().setIfMatch(etag);
             request.execute();
           }
-          return true;
-        },
-        true);
+          return null;
+        });
     try {
       Event actual;
       try {
         actual =
-            googleOAuthService.secretaryNetwork(
+            readEvent.apply(
                 () ->
                     secretaryCalendarClient()
                         .events()
                         .get(connection.config().resource(), eventId)
-                        .execute(),
-                false);
+                        .execute());
       } catch (Failure missing) {
         if (operation.equals("CALENDAR_CANCEL")
             && java.util.Set.of("NOT_FOUND", "GONE").contains(missing.code()))
@@ -643,9 +662,8 @@ public class GoogleCalendarService {
     Event actual;
     try {
       actual =
-          googleOAuthService.secretaryNetwork(
-              () -> secretaryCalendarClient().events().get(c.config().resource(), id).execute(),
-              false);
+          readEvent.apply(
+              () -> secretaryCalendarClient().events().get(c.config().resource(), id).execute());
     } catch (Failure missing) {
       if (operation.equals("CALENDAR_CANCEL")
           && java.util.Set.of("NOT_FOUND", "GONE").contains(missing.code()))
