@@ -7,9 +7,9 @@ import dev.mikoto2000.rei.core.dependency.DependencyState;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.goal.FileGoalVerifier;
 import dev.mikoto2000.rei.goal.GoalRepository;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.nio.file.Path;
 import java.time.Duration;
+import java.util.function.BiFunction;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
@@ -22,11 +22,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class FileDependencyTools {
   /** 確認の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared verifier and its configured completion and evidence policy.")
-  private final FileGoalVerifier verifier;
+  private final BiFunction<Path, GoalRepository.FileCriterion, FileGoalVerifier.Verification>
+      verifyFile;
 
   /** 依存条件が満たされるまでの待機を管理する窓口。 */
   private DependencyAwaiter awaiter =
@@ -35,7 +32,7 @@ public class FileDependencyTools {
 
   /** 指定された値や利用先を使って、FileDependencyToolsを初期化する。 */
   public FileDependencyTools(FileGoalVerifier verifier) {
-    this.verifier = verifier;
+    this.verifyFile = (path, criterion) -> verifier.verify(path, criterion);
   }
 
   /** 共通の実行基盤で使用する依存条件Awaiterを設定する。 */
@@ -74,7 +71,7 @@ public class FileDependencyTools {
     var observation =
         awaiter.await(
             () -> {
-              var checked = verifier.verify(owner.projectRoot(), criterion);
+              var checked = verifyFile.apply(owner.projectRoot(), criterion);
               var state =
                   checked.satisfied()
                       ? DependencyState.COMPLETED
