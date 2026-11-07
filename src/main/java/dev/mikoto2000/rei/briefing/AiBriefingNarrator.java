@@ -3,13 +3,13 @@ package dev.mikoto2000.rei.briefing;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -18,11 +18,9 @@ import org.springframework.stereotype.Component;
 public class AiBriefingNarrator implements BriefingNarrator {
 
   /** モデル提供元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider modelProvider;
+  private final Supplier<ChatModel> featureModel;
+
+  private final Function<String, OpenAiChatOptions> optionsForModel;
 
   /** モデル保持先サービス。 */
   private final Supplier<String> readSelectedModel;
@@ -35,7 +33,8 @@ public class AiBriefingNarrator implements BriefingNarrator {
   /** 指定された値や利用先を使って、AiBriefingNarratorを初期化する。 */
   @Autowired
   public AiBriefingNarrator(LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
-    this.modelProvider = modelProvider;
+    this.featureModel = () -> modelProvider.chatModel(LlmFeature.BRIEFING);
+    this.optionsForModel = selected -> modelProvider.chatOptions(LlmFeature.BRIEFING, selected);
     this.readSelectedModel = () -> modelHolderService.get();
   }
 
@@ -45,9 +44,9 @@ public class AiBriefingNarrator implements BriefingNarrator {
     Prompt prompt =
         new Prompt(
             buildPrompt(context),
-            modelProvider.chatOptions(LlmFeature.BRIEFING, readSelectedModel.get()));
+            optionsForModel.apply(readSelectedModel.get()));
 
-    var response = modelProvider.chatModel(LlmFeature.BRIEFING).call(prompt);
+    var response = featureModel.get().call(prompt);
     var generation = response == null ? null : response.getResult();
     var output = generation == null ? null : generation.getOutput();
     var text = output == null ? null : output.getText();

@@ -3,10 +3,11 @@ package dev.mikoto2000.rei.image;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Component;
 
 /** 言語モデル画像プロンプトの内容を補強する。 */
@@ -14,11 +15,9 @@ import org.springframework.stereotype.Component;
 public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
 
   /** モデル提供元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider modelProvider;
+  private final Supplier<ChatModel> featureModel;
+
+  private final Function<String, OpenAiChatOptions> optionsForModel;
 
   /** モデル保持先サービス。 */
   private final Supplier<String> readSelectedModel;
@@ -26,7 +25,8 @@ public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
   /** 指定された値や利用先を使って、LlmImagePromptEnhancerを初期化する。 */
   public LlmImagePromptEnhancer(
       LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
-    this.modelProvider = modelProvider;
+    this.featureModel = () -> modelProvider.chatModel(LlmFeature.IMAGE_PROMPT);
+    this.optionsForModel = selected -> modelProvider.chatOptions(LlmFeature.IMAGE_PROMPT, selected);
     this.readSelectedModel = () -> modelHolderService.get();
   }
 
@@ -36,8 +36,8 @@ public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
     Prompt prompt =
         new Prompt(
             buildPrompt(userRequest),
-            modelProvider.chatOptions(LlmFeature.IMAGE_PROMPT, readSelectedModel.get()));
-    var response = modelProvider.chatModel(LlmFeature.IMAGE_PROMPT).call(prompt);
+            optionsForModel.apply(readSelectedModel.get()));
+    var response = featureModel.get().call(prompt);
     var generation = response == null ? null : response.getResult();
     var output = generation == null ? null : generation.getOutput();
     String content = output == null ? null : output.getText();

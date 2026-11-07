@@ -1,40 +1,43 @@
 package dev.mikoto2000.rei.paper;
 
 import dev.mikoto2000.rei.llm.LlmModelProvider;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Component;
 
 /** 論文の調査と整理に必要なSpring論文文章を生成するモデルを扱う。 */
 @Component
 public class SpringPaperLanguageModel implements PaperLanguageModel {
   /** 提供元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider provider;
+  private final Supplier<ChatModel> subAgentModel;
+
+  private final Function<String, String> configuredModel;
+
+  private final Function<String, OpenAiChatOptions> optionsForModel;
 
   /** 設定。 */
   private final Supplier<Duration> llmTimeout;
 
   /** 指定された値や利用先を使って、SpringPaperLanguageModelを初期化する。 */
   public SpringPaperLanguageModel(LlmModelProvider provider, PaperProperties config) {
-    this.provider = provider;
+    this.subAgentModel = () -> provider.subAgentChatModel();
+    this.configuredModel = fallback -> provider.model("chat", fallback);
+    this.optionsForModel = selected -> provider.chatOptions("chat", selected);
     this.llmTimeout = () -> config.getLlmTimeout();
   }
 
   /** 論文の調査と整理で用いるモデルを返す。 */
   public String model() {
-    var model = provider.subAgentChatModel();
+    var model = subAgentModel.get();
     String name =
-        provider.model("chat", model.getOptions() == null ? null : model.getOptions().getModel());
+        configuredModel.apply(model.getOptions() == null ? null : model.getOptions().getModel());
     return name == null ? "configured-default" : name;
   }
 
@@ -42,14 +45,13 @@ public class SpringPaperLanguageModel implements PaperLanguageModel {
   public String generate(String system, String input, PaperOperation op) {
     op.check();
     var options =
-        provider
-            .chatOptions("chat", model())
+        optionsForModel.apply(model())
             .mutate()
             .toolCallbacks(List.of())
             .toolChoice("none")
             .build();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
-    var chatModel = provider.subAgentChatModel();
+    var chatModel = subAgentModel.get();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(chatModel);
     var prompt = new Prompt(List.of(new SystemMessage(system), new UserMessage(input)), options);
     // Streaming allows disposal to reach the HTTP subscription when the owning run is cancelled.
