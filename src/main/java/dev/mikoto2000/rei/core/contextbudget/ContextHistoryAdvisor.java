@@ -3,13 +3,12 @@ package dev.mikoto2000.rei.core.contextbudget;
 import dev.mikoto2000.rei.conversation.ConversationLogEntry;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -38,11 +37,10 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   private final Function<String, List<ConversationTurnStore.Turn>> readTurns;
 
   /** 記憶。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared conversation memory for the current history.")
-  private final ChatMemory memory;
+  private final Function<String, List<Message>> readLegacyMemory;
+
+  private final BiConsumer<String, List<Message>> rememberInput;
+  private final BiConsumer<String, Message> rememberOutput;
 
   /** 要約一覧。 */
   private final ConversationSummaryRepository summaries;
@@ -63,7 +61,9 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       ConversationSummaryRepository summaries,
       dev.mikoto2000.rei.conversation.ConversationLogStore logs) {
     this.readTurns = conversation -> turns.read(conversation);
-    this.memory = memory;
+    this.readLegacyMemory = id -> memory.get(id);
+    this.rememberInput = (id, messages) -> memory.add(id, messages);
+    this.rememberOutput = (id, message) -> memory.add(id, message);
     this.summaries = summaries;
     this.readHistory = id -> logs == null ? List.of() : logs.readConversation(id);
   }
@@ -162,7 +162,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     } else if (history.isEmpty()) {
       // Legacy bounded memory is a compatibility source only; do not persist positional summary
       // cursors for it.
-      for (var message : memory.get(id)) {
+      for (var message : readLegacyMemory.apply(id)) {
         if (message instanceof UserMessage user) {
           var metadata = new HashMap<>(user.getMetadata());
           metadata.put(LEGACY_HISTORY, true);
@@ -204,7 +204,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         .forEach(messages::add);
     // Preserve existing bounded memory consumers, storing the raw user input before context
     // advisors decorate it.
-    memory.add(
+    rememberInput.accept(
         id,
         request.prompt().getInstructions().stream().filter(m -> m instanceof UserMessage).toList());
     var context = new HashMap<>(request.context());
@@ -235,7 +235,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     var generation = chat == null ? null : chat.getResult();
     var output = generation == null ? null : generation.getOutput();
     if (output != null)
-      memory.add(
+      rememberOutput.accept(
           java.util.Objects.toString(response.context().get(ChatMemory.CONVERSATION_ID), "default"),
           output);
     return response;

@@ -120,8 +120,7 @@ class DeliveryPolicyTest {
     int offset = page.path("nextOffset").asInt();
     while (offset < raw.length()) {
       String continuation =
-          new RawToolResultTools(store, estimator)
-              .pageText(ref, store.read("chat", ref), offset, 16000, 2048);
+          RawToolResultTools.pageText(estimator, ref, store.read("chat", ref), offset, 16000, 2048);
       String[] parts = continuation.split("\n", 8);
       assertThat(parts[3]).isEqualTo("offset: " + offset);
       int next = Integer.parseInt(parts[5].substring("nextOffset: ".length()));
