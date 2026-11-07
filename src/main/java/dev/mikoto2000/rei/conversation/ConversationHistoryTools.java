@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.conversation;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -12,15 +10,30 @@ import org.springframework.stereotype.Component;
 public class ConversationHistoryTools {
 
   /** サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured search service for shared conversation history.")
-  private final ConversationHistorySearchService service;
+  private final java.util.function.Function<HistorySearchRequest, List<ConversationSearchResult>>
+      scopedSearch;
+
+  private final java.util.function.Function<UnscopedSearch, List<ConversationSearchResult>>
+      compatibilitySearch;
+  private final java.util.function.BiFunction<String, Integer, ConversationHistoryDetail>
+      readDetail;
+
+  private record UnscopedSearch(
+      String query, String scope, String speaker, String since, String until, Integer limit) {}
 
   /** 指定された値や利用先を使って、ConversationHistoryToolsを初期化する。 */
   public ConversationHistoryTools(ConversationHistorySearchService service) {
-    this.service = service;
+    this.scopedSearch = request -> service.search(request);
+    this.compatibilitySearch =
+        request ->
+            service.search(
+                request.query(),
+                request.scope(),
+                request.speaker(),
+                request.since(),
+                request.until(),
+                request.limit());
+    this.readDetail = (conversation, limit) -> service.detail(conversation, limit);
   }
 
   /** 依頼に関連する情報を得るため、会話履歴を検索する。 */
@@ -50,7 +63,7 @@ public class ConversationHistoryTools {
       @ToolParam(required = false) HistorySearchScope retrievalScope,
       @ToolParam(required = false) String referencedProject) {
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
-    return service.search(
+    return scopedSearch.apply(
         new HistorySearchRequest(
             query,
             project == null ? null : project.id(),
@@ -70,7 +83,8 @@ public class ConversationHistoryTools {
    */
   public List<ConversationSearchResult> searchConversationHistory(
       String query, String scope, String speaker, String since, String until, Integer limit) {
-    return service.search(query, scope, speaker, since, until, limit);
+    return compatibilitySearch.apply(
+        new UnscopedSearch(query, scope, speaker, since, until, limit));
   }
 
   /** 会話履歴と受付記録の管理で参照する会話履歴を返す。 */
@@ -86,6 +100,6 @@ public class ConversationHistoryTools {
       """)
   public ConversationHistoryDetail getConversationHistory(
       String conversationId, @ToolParam(required = false) Integer limit) {
-    return service.detail(conversationId, limit);
+    return readDetail.apply(conversationId, limit);
   }
 }
