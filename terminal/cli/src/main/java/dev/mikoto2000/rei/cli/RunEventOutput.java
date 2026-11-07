@@ -111,9 +111,11 @@ final class RunEventOutput {
       }
       return;
     }
+    boolean llmFailure = type.equals("llm.request.failed");
     if (active != null
         && !type.startsWith("tool.")
         && !type.equals("attention.required")
+        && !llmFailure
         && !Set.of(
                 "agent.run.completed",
                 "agent.run.failed",
@@ -123,7 +125,8 @@ final class RunEventOutput {
       notices.add(new Notice(type, payload.deepCopy(), timestamp, projectId));
       return;
     }
-    flush();
+    if (llmFailure) flushOutput();
+    else flush();
     renderNotice(type, payload, timestamp, projectId);
   }
 
@@ -404,11 +407,16 @@ final class RunEventOutput {
 
   /** 軽量CLIでの対話に関する保存の確定を処理する。 */
   void flush() {
+    active = null;
+    flushOutput();
+  }
+
+  /** Emit buffered output while leaving the current stream open for later events. */
+  private void flushOutput() {
     if (!pending.isEmpty()) {
       output.accept(pending.toString());
       pending.setLength(0);
     }
-    active = null;
     for (var notice : notices)
       renderNotice(notice.type(), notice.payload(), notice.timestamp(), notice.project());
     notices.clear();
