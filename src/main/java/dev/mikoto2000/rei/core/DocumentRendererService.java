@@ -4,8 +4,6 @@ import dev.mikoto2000.rei.artifact.Artifact;
 import dev.mikoto2000.rei.artifact.ArtifactStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,6 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -110,6 +110,21 @@ public final class DocumentRendererService {
     public Receipt {
       warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
     }
+
+    private Receipt withPublication(Artifact published, Instant created) {
+      return new Receipt(
+          id,
+          status,
+          sourceSha256,
+          rendererIdentity,
+          exitCode,
+          parseError,
+          size,
+          outputSha256,
+          published,
+          created,
+          warnings);
+    }
   }
 
   /**
@@ -141,11 +156,7 @@ public final class DocumentRendererService {
   private final Renderer renderer;
 
   /** 成果物一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared artifact store for publication and retrieval.")
-  private final ArtifactStore artifacts;
+  private final Function<AgentRunContext, BiFunction<Receipt, byte[], Receipt>> diagramPublisher;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final com.fasterxml.jackson.databind.ObjectMapper json =
@@ -179,7 +190,15 @@ public final class DocumentRendererService {
     this.clock = clock;
     this.enabled = enabled;
     this.renderer = renderer;
-    this.artifacts = artifacts;
+    this.diagramPublisher =
+        artifacts == null
+            ? null
+            : owner ->
+                (receipt, png) ->
+                    receipt.withPublication(
+                        artifacts.publish(
+                            owner, "renderer:" + receipt.id(), "image/png", "diagram.png", png),
+                        clock.instant());
     db.sql(
             "CREATE TABLE IF NOT EXISTS document_renderer_receipts(id TEXT PRIMARY KEY,project TEXT NOT NULL,root TEXT NOT NULL,session TEXT NOT NULL,run TEXT NOT NULL,request_key TEXT NOT NULL,source_sha TEXT NOT NULL,status TEXT NOT NULL,payload TEXT,pid INTEGER NOT NULL,process_start TEXT NOT NULL,created TEXT NOT NULL,UNIQUE(project,root,session,run,request_key))")
         .update();
@@ -253,15 +272,8 @@ public final class DocumentRendererService {
           throw new IOException("Invalid renderer identity");
         byte[] png = output.png();
         boolean valid = output.exitCode() == 0 && !output.parseError() && validPng(png);
-        Artifact artifact = null;
-        var warnings = new ArrayList<String>();
-        String sha = valid ? hash(png) : null;
-        if (valid) {
-          if (artifacts == null) warnings.add("ARTIFACT_DELIVERY_DISABLED");
-          else
-            artifact = artifacts.publish(owner, "renderer:" + id, "image/png", "diagram.png", png);
-        }
-        return save(
+        boolean publish = valid && diagramPublisher != null;
+        var receipt =
             new Receipt(
                 id,
                 valid ? "RENDERED" : "INVALID",
@@ -270,10 +282,11 @@ public final class DocumentRendererService {
                 output.exitCode(),
                 output.parseError(),
                 valid ? png.length : 0,
-                sha,
-                artifact,
-                clock.instant(),
-                List.copyOf(warnings)));
+                valid ? hash(png) : null,
+                null,
+                publish ? null : clock.instant(),
+                valid && !publish ? List.of("ARTIFACT_DELIVERY_DISABLED") : List.of());
+        return save(publish ? diagramPublisher.apply(owner).apply(receipt, png) : receipt);
       } catch (TimeoutException timeout) {
         return save(
             new Receipt(

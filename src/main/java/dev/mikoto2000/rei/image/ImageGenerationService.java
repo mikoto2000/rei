@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.image;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
@@ -13,16 +11,23 @@ import org.springframework.stereotype.Service;
 @Service
 public class ImageGenerationService {
   /** 成果物一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared artifact store for publication or lookup.")
-  private dev.mikoto2000.rei.artifact.ArtifactStore artifacts;
+  private PublishImage publishImage = (filename, bytes) -> null;
 
   /** 画像の生成で使用する成果物保存先を設定する。 */
   @Autowired(required = false)
   public void setArtifactStore(dev.mikoto2000.rei.artifact.ArtifactStore artifacts) {
-    this.artifacts = artifacts;
+    this.publishImage =
+        (filename, bytes) -> {
+          var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+          if (artifacts == null || owner == null || owner.projectId() == null) return null;
+          var key =
+              "image:"
+                  + java.util.HexFormat.of()
+                      .formatHex(
+                          java.security.MessageDigest.getInstance("SHA-256")
+                              .digest(filename.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+          return artifacts.publish(owner, key, "image/png", filename, bytes).artifactId();
+        };
   }
 
   /** クライアント。 */
@@ -118,24 +123,7 @@ public class ImageGenerationService {
       String outputFilename =
           java.util.Objects.requireNonNull(outputPath.getFileName(), "Image filename required")
               .toString();
-      var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
-      String artifact =
-          artifacts != null && owner != null && owner.projectId() != null
-              ? artifacts
-                  .publish(
-                      owner,
-                      "image:"
-                          + java.util.HexFormat.of()
-                              .formatHex(
-                                  java.security.MessageDigest.getInstance("SHA-256")
-                                      .digest(
-                                          outputFilename.getBytes(
-                                              java.nio.charset.StandardCharsets.UTF_8))),
-                      "image/png",
-                      outputFilename,
-                      bytes)
-                  .artifactId()
-              : null;
+      String artifact = publishImage.publish(outputFilename, bytes);
       return ImageGenerationResult.success(outputPath, effectiveRequest.prompt(), artifact);
     } catch (IllegalArgumentException e) {
       return ImageGenerationResult.failure("画像データのデコードに失敗しました");
@@ -173,5 +161,10 @@ public class ImageGenerationService {
   private boolean isCancellationRequested() {
     return Thread.currentThread().isInterrupted()
         || cancellationService != null && cancellationService.isCancellationRequested();
+  }
+
+  @FunctionalInterface
+  private interface PublishImage {
+    String publish(String filename, byte[] bytes) throws java.security.NoSuchAlgorithmException;
   }
 }
