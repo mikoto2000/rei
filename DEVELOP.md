@@ -73,6 +73,13 @@ Episode の経緯・根拠・差分整理・横断検索は [Episode Memory](doc
 変更を完了する前に全テストを実行してください。分類、計測結果、再計測手順は
 [テスト性能レポート](docs/test-performance.md) を参照してください。
 
+CI の Java 全件回帰は Windows の2ジョブで実行します。Shard A は
+[`.github/ci/java-shard-a.txt`](.github/ci/java-shard-a.txt) にあるクラスを実行し、
+Shard B は Surefire の既定対象からそのクラスを除いた残りを実行します。
+新規クラスは既定で Shard B に入り、Shard A のクラスを改名・削除する場合は一覧も更新します。
+両ジョブの成功後、`test` ジョブがクラスの割り当て、テスト ID の重複、
+および [想定スキップ](config/test-expected-skips.json) の ID と理由を照合します。
+
 ## ローカルデータ
 
 OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%\Rei`、他 OS と移行方法は [設計メモ](docs/agent-run-project-state.md) を参照してください。`REI_DATA_DIR` で上書きできます。
