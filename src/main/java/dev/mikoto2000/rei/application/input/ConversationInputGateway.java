@@ -36,7 +36,8 @@ public final class ConversationInputGateway {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
+      justification =
+          "Uses the shared lifecycle service so session validation and submission use the same session state.")
   private final SessionLifecycle lifecycle;
 
   /** 実行先への引き渡し。 */
@@ -46,7 +47,8 @@ public final class ConversationInputGateway {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared input router so all operations use the same queue and active runs.")
+      justification =
+          "Uses the shared input router so all operations use the same queue and active runs.")
   private final ConversationInputRouter router;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
@@ -124,10 +126,6 @@ public final class ConversationInputGateway {
   }
 
   /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original dispatch failure after rolling back the accepted input.")
   public synchronized AgentRunContext submit(
       ConversationInput input,
       AgentRunContext.Mode mode,
@@ -174,7 +172,7 @@ public final class ConversationInputGateway {
                 beforeDispatch.accept(run);
                 try {
                   dispatch.accept(run, input.text());
-                } catch (RuntimeException failed) {
+                } catch (RuntimeException | Error failed) {
                   failedDispatch.accept(run);
                   throw failed;
                 }

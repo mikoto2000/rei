@@ -50,7 +50,8 @@ public final class DotResumeService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
+      justification =
+          "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService checkpointService;
 
   /** 予約されたエージェント実行を管理する窓口。 */
@@ -238,14 +239,10 @@ public final class DotResumeService {
   }
 
   /** 利用者の状態表示で用いる実行先への引き渡しを返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original resume failure after recording the durable outcome.")
   public ChatExecutionResult dispatch(PersistentAgentScheduler.Entry entry) {
     try {
       return dispatchChecked(entry);
-    } catch (RuntimeException failure) {
+    } catch (RuntimeException | Error failure) {
       String id = entry.task().action().substring("dot-resume:".length());
       try {
         repo.finishResume(
@@ -257,10 +254,6 @@ public final class DotResumeService {
   }
 
   /** 利用者の状態表示で用いる実行先への引き渡し確認済みを返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original admission failure after recording the uncertain resume outcome.")
   private ChatExecutionResult dispatchChecked(PersistentAgentScheduler.Entry entry) {
     String id = entry.task().action().substring("dot-resume:".length());
     var owner = repo.owner(entry.projectId(), id);
@@ -291,7 +284,7 @@ public final class DotResumeService {
       repo.finishResume(owner.project(), id, "ADMITTED");
       return ChatExecutionResult.success(
           "Checkpoint continuation admitted; completion is tracked separately", false);
-    } catch (RuntimeException failure) {
+    } catch (RuntimeException | Error failure) {
       repo.finishResume(owner.project(), id, "UNKNOWN");
       throw failure;
     }

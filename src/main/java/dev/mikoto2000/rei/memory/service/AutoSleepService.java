@@ -176,10 +176,6 @@ public final class AutoSleepService implements AutoCloseable {
    * <p>Periodic persistent reads catch metadata added after startup, without an unbounded candidate
    * queue.
    */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original scan failure after resetting the cursor and retry schedule.")
   private void discoverSaved(Instant now) {
     discoverStartup();
     if (!startupCaptured || startup.hasNext() || sessions.size() >= 256) return;
@@ -212,7 +208,7 @@ public final class AutoSleepService implements AutoCloseable {
           throw new IllegalStateException("Session metadata cursor did not advance");
         metadataCursor = next;
       }
-    } catch (RuntimeException error) {
+    } catch (RuntimeException | Error error) {
       metadataScanning = false;
       metadataCursor = null;
       nextMetadataScan = now.plus(properties.retryInterval());
