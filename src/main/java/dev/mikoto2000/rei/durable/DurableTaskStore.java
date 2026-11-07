@@ -19,7 +19,7 @@ public final class DurableTaskStore {
 
   @FunctionalInterface
   public interface Access {
-    Object run(boolean write, Work<?> work);
+    <T> T run(boolean write, Work<T> work);
   }
 
   public record Scope(String project, String session, String root) {
@@ -377,18 +377,16 @@ public final class DurableTaskStore {
     }
   }
 
-  @SuppressWarnings("unchecked")
   <T> T read(Work<T> work) {
     try {
-      return (T) database.run(false, work);
+      return database.run(false, work);
     } catch (IllegalStateException error) {
       if (error.getCause() instanceof IllegalArgumentException invalid) throw invalid;
       throw error;
     }
   }
 
-  @SuppressWarnings("unchecked")
   <T> T write(Work<T> work) {
-    return (T) database.run(true, work);
+    return database.run(true, work);
   }
 }

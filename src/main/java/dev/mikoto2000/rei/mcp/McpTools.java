@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.mcp;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import dev.mikoto2000.rei.application.run.ChatSubmitService;
 import dev.mikoto2000.rei.application.run.IdempotencyConflictException;
 import dev.mikoto2000.rei.application.run.IdempotencyExpiredException;
@@ -570,7 +571,6 @@ public final class McpTools {
   }
 
   /** MCPによる機能の提供で用いる結果を返す。 */
-  @SuppressWarnings("unchecked")
   private Map<String, Object> result(Map<String, Object> a) {
     var r = owned(a, false);
     snapshot.accept(r);
@@ -582,7 +582,8 @@ public final class McpTools {
           readStatus.apply(r) == RunStatus.UNKNOWN ? "RUN_STATE_UNKNOWN" : "RESULT_NOT_READY");
     if (r.result() == null) throw new McpError("RESULT_EXPIRED");
     try {
-      var saved = StorageDatabase.JSON.readValue(r.result(), Map.class);
+      Map<String, Object> saved =
+          StorageDatabase.JSON.readValue(r.result(), new TypeReference<>() {});
       String content = (String) saved.get("content");
       String cursor = text(a, "cursor", false, 2000);
       int offset =

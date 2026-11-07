@@ -75,9 +75,8 @@ class AgentSkillSelectionServiceTest {
 
     AgentSkillSelection selection = service.select("target request");
 
-    @SuppressWarnings("unchecked")
     org.mockito.ArgumentCaptor<List<AgentSkill>> captor =
-        org.mockito.ArgumentCaptor.forClass(List.class);
+        org.mockito.ArgumentCaptor.captor();
     Mockito.verify(implicitSelector)
         .select(Mockito.eq("target request"), Mockito.eq(Set.of()), captor.capture());
     assertThat(captor.getValue()).hasSize(5);

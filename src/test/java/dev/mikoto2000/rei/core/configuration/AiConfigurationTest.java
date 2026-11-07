@@ -37,7 +37,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -432,7 +431,6 @@ class AiConfigurationTest {
   }
 
   /** 検証用に、機能の組み立てで参照する既定ツール完了時の処理提供元一覧を返す。 */
-  @SuppressWarnings("unchecked")
   private List<?> getDefaultToolCallbackProviders(ChatClient chatClient) throws Exception {
     Object defaultRequest = getDefaultChatClientRequest(chatClient);
 
@@ -443,13 +441,12 @@ class AiConfigurationTest {
   }
 
   /** 検証用に、機能の組み立てで参照する既定Advisorsを返す。 */
-  @SuppressWarnings("unchecked")
   private List<?> getDefaultAdvisors(ChatClient chatClient) throws Exception {
     Object defaultRequest = getDefaultChatClientRequest(chatClient);
 
     Field advisorsField = defaultRequest.getClass().getDeclaredField("advisors");
     advisorsField.setAccessible(true);
-    return (List<Advisor>) advisorsField.get(defaultRequest);
+    return (List<?>) advisorsField.get(defaultRequest);
   }
 
   /** 検証用に、機能の組み立てで参照する既定チャット選択可能な設定を返す。 */
@@ -469,8 +466,7 @@ class AiConfigurationTest {
 
   /** {@code mockProviderReturning} の条件を再現するための補助情報を返す。 */
   private <T> ObjectProvider<T> mockProviderReturning(T value) {
-    @SuppressWarnings("unchecked")
-    ObjectProvider<T> provider = Mockito.mock(ObjectProvider.class);
+    ObjectProvider<T> provider = Mockito.mock();
     when(provider.getIfAvailable()).thenReturn(value);
     return provider;
   }

@@ -24,7 +24,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 class ResumeFileInventoryTest {
   @TempDir Path root;
 
-  @SuppressWarnings("unchecked")
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -167,8 +166,8 @@ class ResumeFileInventoryTest {
             null,
             null,
             null)) {
-      ((Map<String, PersistentCheckpoint>) ReflectionTestUtils.getField(service, "active"))
-          .put("resumed", saved);
+      ReflectionTestUtils.setField(
+          service, "active", new java.util.concurrent.ConcurrentHashMap<>(Map.of("resumed", saved)));
       ReflectionTestUtils.setField(service, "rawResults", raw);
       String before = json.writeValueAsString(saved);
       long writes = raw.bodyWriteCount();

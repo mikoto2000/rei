@@ -8,6 +8,7 @@ import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.Promise;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -26,23 +27,18 @@ public class ValidatingResolverGroup extends AddressResolverGroup<InetSocketAddr
   private final Consumer<InetAddress> recordApprovedAddress;
 
   /** 委譲先。 */
-  private final AddressResolverGroup<InetSocketAddress> delegate;
+  private final AddressResolverGroup<?> delegate;
 
   /** 外部情報の取得を利用するため、指定を補って共通の初期化へ引き渡す。 */
-  @SuppressWarnings("unchecked")
   public ValidatingResolverGroup(Predicate<InetAddress> allowed, Set<InetAddress> approved) {
-    this(
-        allowed,
-        approved,
-        (AddressResolverGroup<InetSocketAddress>)
-            reactor.netty.http.HttpResources.get().getOrCreateDefaultResolver());
+    this(allowed, approved, reactor.netty.http.HttpResources.get().getOrCreateDefaultResolver());
   }
 
   /** 指定された値や利用先を使って、ValidatingResolverGroupを初期化する。 */
   public ValidatingResolverGroup(
       Predicate<InetAddress> allowed,
       Set<InetAddress> approved,
-      AddressResolverGroup<InetSocketAddress> delegate) {
+      AddressResolverGroup<?> delegate) {
     this.allowed = allowed;
     recordApprovedAddress = address -> approved.add(address);
     this.delegate = delegate;
@@ -115,20 +111,28 @@ public class ValidatingResolverGroup extends AddressResolverGroup<InetSocketAddr
 
       /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
       private void validate(
-          List<InetSocketAddress> answers, Promise<List<InetSocketAddress>> result) {
-        if (answers == null
-            || answers.isEmpty()
-            || answers.stream().anyMatch(a -> a.isUnresolved() || !allowed.test(a.getAddress()))) {
+          List<?> answers, Promise<List<InetSocketAddress>> result) {
+        if (answers == null || answers.isEmpty()) {
           result.tryFailure(new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED));
           return;
+        }
+        var validated = new ArrayList<InetSocketAddress>(answers.size());
+        for (Object answer : answers) {
+          if (!(answer instanceof InetSocketAddress address)
+              || address.isUnresolved()
+              || !allowed.test(address.getAddress())) {
+            result.tryFailure(new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED));
+            return;
+          }
+          validated.add(address);
         }
         if (closed.get()) {
           result.cancel(false);
           return;
         }
         if (result.isCancelled()) return;
-        answers.forEach(answer -> recordApprovedAddress.accept(answer.getAddress()));
-        result.trySuccess(List.copyOf(answers));
+        validated.forEach(answer -> recordApprovedAddress.accept(answer.getAddress()));
+        result.trySuccess(List.copyOf(validated));
       }
     };
   }

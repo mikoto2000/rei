@@ -79,10 +79,9 @@ public class LazySqliteVectorStore
     return delegate().bm25Search(request);
   }
 
-  /** 関連文書の検索で参照するOSの機能クライアントを返す。 */
-  @Override
-  public <T> Optional<T> getNativeClient() {
-    return delegate().getNativeClient();
+  /** Initializes the store on demand and returns its configured SQLite DataSource. */
+  public Optional<DataSource> nativeDataSource() {
+    return delegate().nativeDataSource();
   }
 
   /** 指定された内容へ切り替えるため、別取得元を置き換える。 */

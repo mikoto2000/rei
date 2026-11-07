@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 /** Bounded SQLite state using the existing serialized writer and startup migration. */
 public final class ReadingStateStore {
@@ -14,7 +15,8 @@ public final class ReadingStateStore {
 
   @FunctionalInterface
   public interface Access {
-    Object run(boolean write, Work<?> work);
+    /** Runs work synchronously and propagates database failures to the caller. */
+    void run(boolean write, Work<Void> work);
   }
 
   private final Access database;
@@ -112,13 +114,22 @@ public final class ReadingStateStore {
         });
   }
 
-  @SuppressWarnings("unchecked")
   private <T> T read(Work<T> work) {
-    return (T) database.run(false, work);
+    return access(false, work);
   }
 
-  @SuppressWarnings("unchecked")
   private <T> T transaction(Work<T> work) {
-    return (T) database.run(true, work);
+    return access(true, work);
+  }
+
+  private <T> T access(boolean write, Work<T> work) {
+    var result = new AtomicReference<T>();
+    database.run(
+        write,
+        connection -> {
+          result.set(work.run(connection));
+          return null;
+        });
+    return result.get();
   }
 }

@@ -57,9 +57,8 @@ class DotMcpToolsTest {
   }
 
   /** {@code data} の条件を再現するための補助情報を返す。 */
-  @SuppressWarnings("unchecked")
-  Map<String, Object> data(io.modelcontextprotocol.spec.McpSchema.CallToolResult r) {
-    return (Map<String, Object>) r.structuredContent();
+  Map<?, ?> data(io.modelcontextprotocol.spec.McpSchema.CallToolResult r) {
+    return (Map<?, ?>) r.structuredContent();
   }
 
   /** 利用者の状態表示で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */

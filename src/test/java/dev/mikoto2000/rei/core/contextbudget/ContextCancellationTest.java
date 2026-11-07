@@ -53,8 +53,7 @@ class ContextCancellationTest {
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(summaryModel);
     when(models.chatOptions(eq(LlmFeature.CHAT), any()))
         .thenReturn(OpenAiChatOptions.builder().build());
-    @SuppressWarnings("unchecked")
-    var provider = (ObjectProvider<LlmModelProvider>) mock(ObjectProvider.class);
+    ObjectProvider<LlmModelProvider> provider = mock();
     when(provider.getObject()).thenReturn(models);
     var props = new ContextCompressionProperties();
     props.setThreshold(300);

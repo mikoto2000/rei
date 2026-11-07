@@ -66,8 +66,7 @@ class LlmConversationCompressorTest {
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(model);
     when(models.chatOptions(LlmFeature.CHAT, "configured")).thenReturn(source);
-    @SuppressWarnings("unchecked")
-    var provider = (ObjectProvider<LlmModelProvider>) mock(ObjectProvider.class);
+    ObjectProvider<LlmModelProvider> provider = mock();
     when(provider.getObject()).thenReturn(models);
     var compressor = new LlmConversationCompressor(provider, new ContextCompressionProperties());
     assertThat(compressor.summarize("", List.of(), 100, new Prompt("owner", source)))
@@ -94,8 +93,7 @@ class LlmConversationCompressorTest {
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(model);
     when(models.chatOptions(eq(LlmFeature.CHAT), any()))
         .thenReturn(OpenAiChatOptions.builder().build());
-    @SuppressWarnings("unchecked")
-    var provider = (ObjectProvider<LlmModelProvider>) mock(ObjectProvider.class);
+    ObjectProvider<LlmModelProvider> provider = mock();
     when(provider.getObject()).thenReturn(models);
     return new LlmConversationCompressor(provider, properties);
   }
@@ -319,8 +317,8 @@ class LlmConversationCompressorTest {
             .usage(new org.springframework.ai.chat.metadata.DefaultUsage(20, 0))
             .build();
     when(model.stream(any(Prompt.class)))
+        .thenReturn(Flux.just(response("summary", "stop")))
         .thenReturn(
-            Flux.just(response("summary", "stop")),
             Flux.just(
                 new ChatResponse(List.of(new Generation(new AssistantMessage("summary"))), zero)));
     var compressor = compressor(model, new ContextCompressionProperties());
@@ -375,8 +373,7 @@ class LlmConversationCompressorTest {
   /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void setupErrorsDoNotCarryProviderText() {
-    @SuppressWarnings("unchecked")
-    var provider = (ObjectProvider<LlmModelProvider>) mock(ObjectProvider.class);
+    ObjectProvider<LlmModelProvider> provider = mock();
     when(provider.getObject()).thenThrow(new IllegalStateException(PRIVATE));
     var compressor = new LlmConversationCompressor(provider, new ContextCompressionProperties());
     assertThatThrownBy(() -> compressor.summarize("", List.of(), 100, new Prompt("owner")))

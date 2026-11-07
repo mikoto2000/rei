@@ -672,8 +672,7 @@ class LlmChatClientProviderTest {
 
   /** {@code optional} の条件を再現するための補助情報を返す。 */
   private static <T> ObjectProvider<T> optional(T value) {
-    @SuppressWarnings("unchecked")
-    ObjectProvider<T> provider = mock(ObjectProvider.class);
+    ObjectProvider<T> provider = mock();
     when(provider.getIfAvailable()).thenReturn(value);
     return provider;
   }

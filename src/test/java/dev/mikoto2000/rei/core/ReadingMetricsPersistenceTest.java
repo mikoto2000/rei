@@ -41,8 +41,13 @@ class ReadingMetricsPersistenceTest {
     } while (Math.floorMod(first.hashCode(), 64) == Math.floorMod(second.hashCode(), 64));
   }
 
-  private Object access(boolean write, ReadingStateStore.Work<?> work) {
-    return write ? db.transaction(work::run) : db.read(work::run);
+  private ReadingStateStore store(java.util.function.Consumer<Boolean> beforeAccess) {
+    return new ReadingStateStore(
+        (write, work) -> {
+          beforeAccess.accept(write);
+          if (write) db.transaction(work::run);
+          else db.read(work::run);
+        });
   }
 
   private static void await(CountDownLatch latch) {
@@ -60,13 +65,12 @@ class ReadingMetricsPersistenceTest {
     var release = new CountDownLatch(1);
     var writes = new AtomicInteger();
     var store =
-        new ReadingStateStore(
-            (write, work) -> {
+        store(
+            write -> {
               if (write && writes.incrementAndGet() == 1) {
                 entered.countDown();
                 await(release);
               }
-              return access(write, work);
             });
     ReadingMetrics.add(first, "count", 1);
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -106,13 +110,12 @@ class ReadingMetricsPersistenceTest {
     var entered = new CountDownLatch(1);
     var release = new CountDownLatch(1);
     var store =
-        new ReadingStateStore(
-            (write, work) -> {
+        store(
+            write -> {
               if (!write) {
                 entered.countDown();
                 await(release);
               }
-              return access(write, work);
             });
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
       var restore = executor.submit(() -> ReadingMetrics.restore(first, store));
@@ -141,10 +144,9 @@ class ReadingMetricsPersistenceTest {
   void nestedOperationsSaveOnceAndKeepEveryCounter() throws Exception {
     var writes = new AtomicInteger();
     var store =
-        new ReadingStateStore(
-            (write, work) -> {
+        store(
+            write -> {
               if (write) writes.incrementAndGet();
-              return access(write, work);
             });
     try (var scope = AgentRunScope.open(first)) {
       try (var outer = ReadingMetrics.operation("outer")) {
@@ -168,8 +170,8 @@ class ReadingMetricsPersistenceTest {
   void exceptionAndPersistenceFailureReleaseOperationScope() {
     var writes = new AtomicInteger();
     var failed =
-        new ReadingStateStore(
-            (write, work) -> {
+        store(
+            write -> {
               if (write) writes.incrementAndGet();
               throw new IllegalStateException("unavailable");
             });

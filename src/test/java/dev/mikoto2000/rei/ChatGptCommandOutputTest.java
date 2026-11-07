@@ -32,8 +32,7 @@ class ChatGptCommandOutputTest {
   /** 終端書き込み先を保持することを確認する。 */
   @Test
   void sharedCommandSpecRebindingPreservesTerminalWriter() {
-    @SuppressWarnings("unchecked")
-    var provider = (ObjectProvider<PlanOAuth>) mock(ObjectProvider.class);
+    ObjectProvider<PlanOAuth> provider = mock();
     var oauth = mock(PlanOAuth.class);
     when(provider.getIfAvailable()).thenReturn(oauth);
     when(oauth.status()).thenReturn(List.of("日本語の登録状態"));
@@ -90,8 +89,7 @@ class ChatGptCommandOutputTest {
 
   /** {@code inferOutput} の条件を再現するための補助情報を返す。 */
   private String inferOutput(PlanSseAssembler.Result result) {
-    @SuppressWarnings("unchecked")
-    var provider = (ObjectProvider<PlanClient>) mock(ObjectProvider.class);
+    ObjectProvider<PlanClient> provider = mock();
     var client = mock(PlanClient.class);
     when(provider.getIfAvailable()).thenReturn(client);
     when(client.infer(

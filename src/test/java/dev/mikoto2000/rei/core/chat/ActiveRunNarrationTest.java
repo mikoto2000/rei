@@ -39,11 +39,8 @@ class ActiveRunNarrationTest {
     var playback = mock(dev.mikoto2000.rei.voice.VoicePlaybackService.class);
     when(playback.enabledFor(any())).thenReturn(true);
     when(playback.offer(any(), anyString())).thenReturn(false);
-    @SuppressWarnings("unchecked")
-    var provider =
-        (org.springframework.beans.factory.ObjectProvider<
-                dev.mikoto2000.rei.voice.VoicePlaybackService>)
-            mock(org.springframework.beans.factory.ObjectProvider.class);
+    org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.voice.VoicePlaybackService>
+        provider = mock();
     when(provider.getIfAvailable()).thenReturn(playback);
     var config = new AgentRunConfiguration();
     config.setVoicePlayback(provider);

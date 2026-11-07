@@ -19,7 +19,7 @@ public final class DotPayload {
   private DotPayload() {}
 
   /** 表示や受け渡しに用いるテキストを返す。 */
-  public static String text(Map<String, Object> a, String key, boolean required, int max) {
+  public static String text(Map<?, ?> a, String key, boolean required, int max) {
     Object v = a.get(key);
     if (v == null && !required) return "";
     if (!(v instanceof String s)
@@ -116,7 +116,6 @@ public final class DotPayload {
   }
 
   /** 利用者の状態表示で用いる結果を返す。 */
-  @SuppressWarnings("unchecked")
   public static Map<String, Object> result(Map<String, Object> a, List<?> criteria) {
     keys(
         a,
@@ -144,8 +143,7 @@ public final class DotPayload {
       throw new DotException("INVALID_ARGUMENT");
     var facts = new ArrayList<Map<String, Object>>();
     for (Object v : evidence) {
-      if (!(v instanceof Map<?, ?>)) throw new DotException("INVALID_ARGUMENT");
-      var fact = (Map<String, Object>) v;
+      if (!(v instanceof Map<?, ?> fact)) throw new DotException("INVALID_ARGUMENT");
       keys(fact, Set.of("title", "url", "description"));
       String url = text(fact, "url", true, 2048);
       URI uri;
@@ -175,15 +173,14 @@ public final class DotPayload {
     var normalized = new ArrayList<Map<String, Object>>();
     var seen = new HashSet<Integer>();
     for (Object v : results) {
-      if (!(v instanceof Map<?, ?>)) throw new DotException("INVALID_ARGUMENT");
-      var check = (Map<String, Object>) v;
+      if (!(v instanceof Map<?, ?> check)) throw new DotException("INVALID_ARGUMENT");
       keys(check, Set.of("criterion_index", "status", "evidence_indices"));
       int index = integer(check.get("criterion_index"), -1, 0, criteria.size() - 1);
       if (index < 0 || !seen.add(index)) throw new DotException("INVALID_ARGUMENT");
       String state = text(check, "status", true, 30);
       if (!Set.of("SATISFIED", "UNSATISFIED", "UNKNOWN").contains(state))
         throw new DotException("INVALID_ARGUMENT");
-      Object refs = check.getOrDefault("evidence_indices", List.of());
+      Object refs = check.containsKey("evidence_indices") ? check.get("evidence_indices") : List.of();
       if (!(refs instanceof List<?> indices) || indices.size() > 20)
         throw new DotException("INVALID_ARGUMENT");
       var indicesOut = new ArrayList<Integer>();
@@ -200,7 +197,9 @@ public final class DotPayload {
   }
 
   /** 利用者の状態表示に関するキー一覧を処理する。 */
-  public static void keys(Map<String, Object> a, Set<String> keys) {
-    if (a == null || !keys.containsAll(a.keySet())) throw new DotException("INVALID_ARGUMENT");
+  public static void keys(Map<?, ?> a, Set<String> keys) {
+    if (a == null
+        || a.keySet().stream().anyMatch(key -> !(key instanceof String name) || !keys.contains(name)))
+      throw new DotException("INVALID_ARGUMENT");
   }
 }

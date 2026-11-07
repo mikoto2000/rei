@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.AdvisorSpec;
@@ -37,14 +38,14 @@ class BlueskyReplyTextGeneratorTest {
   @Test
   void generateUsesChatClientWithCurrentModel() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock(ObjectProvider.class);
+    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock();
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class);
     StreamResponseSpec streamSpec = Mockito.mock(StreamResponseSpec.class);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     when(modelHolderService.get()).thenReturn("qwen-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse()).thenReturn(Flux.just(response("  返信"), response("本文  ")));
     BlueskyReplyTextGenerator generator =
@@ -100,7 +101,7 @@ class BlueskyReplyTextGeneratorTest {
         .thenReturn(configured);
     when(clients.chatClient(dev.mikoto2000.rei.llm.LlmFeature.BLUESKY_REPLY)).thenReturn(client);
     when(client.prompt(any(Prompt.class))).thenReturn(request);
-    when(request.advisors(any(Consumer.class))).thenReturn(request);
+    when(request.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(request);
     when(request.stream()).thenReturn(stream);
     when(stream.chatResponse()).thenReturn(Flux.just(response("返信")));
     var generator = new BlueskyReplyTextGenerator(clients, holder, models, new BlueskyProperties());
@@ -146,7 +147,7 @@ class BlueskyReplyTextGeneratorTest {
   @Test
   void generateSetsBlueskyReplyConversationId() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock(ObjectProvider.class);
+    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock();
     ChatClientRequestSpec requestSpec =
         Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     StreamResponseSpec streamSpec = Mockito.mock(StreamResponseSpec.class);
@@ -154,7 +155,7 @@ class BlueskyReplyTextGeneratorTest {
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     when(modelHolderService.get()).thenReturn("qwen-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse()).thenReturn(Flux.just(response("返信")));
     BlueskyReplyTextGenerator generator =
@@ -162,10 +163,7 @@ class BlueskyReplyTextGeneratorTest {
 
     generator.generate("alice.bsky.social", "投稿本文", List.of());
 
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Consumer<AdvisorSpec>> consumerCaptor =
-        (ArgumentCaptor<Consumer<AdvisorSpec>>)
-            (ArgumentCaptor<?>) ArgumentCaptor.forClass(Consumer.class);
+    ArgumentCaptor<Consumer<AdvisorSpec>> consumerCaptor = ArgumentCaptor.captor();
     verify(requestSpec).advisors(consumerCaptor.capture());
     AdvisorSpec spec = Mockito.mock(AdvisorSpec.class);
     consumerCaptor.getValue().accept(spec);
@@ -176,7 +174,7 @@ class BlueskyReplyTextGeneratorTest {
   @Test
   void generateForManualReplySetsBlueskyManualConversationId() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock(ObjectProvider.class);
+    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock();
     ChatClientRequestSpec requestSpec =
         Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     StreamResponseSpec streamSpec = Mockito.mock(StreamResponseSpec.class);
@@ -184,7 +182,7 @@ class BlueskyReplyTextGeneratorTest {
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     when(modelHolderService.get()).thenReturn("qwen-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse()).thenReturn(Flux.just(response("返信")));
     BlueskyReplyTextGenerator generator =
@@ -192,10 +190,7 @@ class BlueskyReplyTextGeneratorTest {
 
     generator.generateForManualReply("元投稿", "at://did:plc:xxx/app.bsky.feed.post/abc");
 
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Consumer<AdvisorSpec>> consumerCaptor =
-        (ArgumentCaptor<Consumer<AdvisorSpec>>)
-            (ArgumentCaptor<?>) ArgumentCaptor.forClass(Consumer.class);
+    ArgumentCaptor<Consumer<AdvisorSpec>> consumerCaptor = ArgumentCaptor.captor();
     verify(requestSpec).advisors(consumerCaptor.capture());
     AdvisorSpec spec = Mockito.mock(AdvisorSpec.class);
     consumerCaptor.getValue().accept(spec);
@@ -208,14 +203,14 @@ class BlueskyReplyTextGeneratorTest {
   @Test
   void generateForManualReplyUsesChatClient() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock(ObjectProvider.class);
+    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock();
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class);
     StreamResponseSpec streamSpec = Mockito.mock(StreamResponseSpec.class);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     when(modelHolderService.get()).thenReturn("qwen-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse()).thenReturn(Flux.just(response("ありが"), response("とうございます")));
     BlueskyReplyTextGenerator generator =
@@ -231,14 +226,14 @@ class BlueskyReplyTextGeneratorTest {
   @Test
   void generateThrowsWhenReplyContentIsBlank() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock(ObjectProvider.class);
+    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock();
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class);
     StreamResponseSpec streamSpec = Mockito.mock(StreamResponseSpec.class);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     when(modelHolderService.get()).thenReturn("qwen-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse()).thenReturn(Flux.just(response(" "), response("")));
     BlueskyReplyTextGenerator generator =
@@ -253,7 +248,7 @@ class BlueskyReplyTextGeneratorTest {
   @Test
   void generateThrowsWhenTargetPostTextIsBlank() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock(ObjectProvider.class);
+    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock();
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     BlueskyReplyTextGenerator generator =
@@ -427,14 +422,14 @@ class BlueskyReplyTextGeneratorTest {
   /** {@code generatorStreaming} の条件を再現するための補助情報を返す。 */
   private BlueskyReplyTextGenerator generatorStreaming(Flux<ChatResponse> responses) {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock(ObjectProvider.class);
+    ObjectProvider<ChatClient> chatClientProvider = Mockito.mock();
     ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class);
     StreamResponseSpec streamSpec = Mockito.mock(StreamResponseSpec.class);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     when(modelHolderService.get()).thenReturn("qwen-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse()).thenReturn(responses);
     return new BlueskyReplyTextGenerator(chatClientProvider, modelHolderService);

@@ -22,7 +22,12 @@ class TaskSnapshotTest {
     }
     var database = new StorageDatabase(temporary.resolve("data"));
     return new DurableTaskStore(
-        (write, work) -> write ? database.transaction(work::run) : database.read(work::run));
+        new DurableTaskStore.Access() {
+          @Override
+          public <T> T run(boolean write, DurableTaskStore.Work<T> work) {
+            return write ? database.transaction(work::run) : database.read(work::run);
+          }
+        });
   }
 
   @Test

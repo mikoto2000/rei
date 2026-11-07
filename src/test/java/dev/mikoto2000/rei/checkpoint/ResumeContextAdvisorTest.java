@@ -37,7 +37,6 @@ class ResumeContextAdvisorTest {
         + " を明示的に再開してください。まず現在の状態を確認し、未完了・未検証の工程を再計画してください。結果不明の副作用を再実行する前に、その項目だけをユーザーに確認してください。";
   }
 
-  @SuppressWarnings("unchecked")
   private PersistentCheckpointService service(PersistentCheckpoint state) {
     var service =
         new PersistentCheckpointService(
@@ -52,8 +51,8 @@ class ResumeContextAdvisorTest {
             null,
             null,
             null);
-    ((Map<String, PersistentCheckpoint>) ReflectionTestUtils.getField(service, "active"))
-        .put(state.runId(), state);
+    ReflectionTestUtils.setField(
+          service, "active", new java.util.concurrent.ConcurrentHashMap<>(Map.of(state.runId(), state)));
     return service;
   }
 
