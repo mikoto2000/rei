@@ -8,8 +8,6 @@ import com.google.api.client.util.DateTime;
 import com.google.api.services.tasks.Tasks;
 import dev.mikoto2000.rei.google.GoogleOAuthService;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -32,18 +30,28 @@ public class TaskService {
   private final GoogleCalendarProperties googleCalendarProperties;
 
   /** GoogleO認証サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared OAuth service and its current credential state.")
-  private final GoogleOAuthService googleOAuthService;
+  private final AuthorizeCredential authorizeCredential;
+
+  private final RefreshCredential refreshCredential;
+
+  @FunctionalInterface
+  private interface AuthorizeCredential {
+    com.google.api.client.auth.oauth2.Credential authorize(
+        NetHttpTransport transport, boolean force) throws java.io.IOException;
+  }
+
+  @FunctionalInterface
+  private interface RefreshCredential {
+    void refresh() throws java.io.IOException, java.security.GeneralSecurityException;
+  }
 
   /** 指定された値や利用先を使って、TaskServiceを初期化する。 */
   @Autowired
   public TaskService(
       GoogleCalendarProperties googleCalendarProperties, GoogleOAuthService googleOAuthService) {
     this.googleCalendarProperties = googleCalendarProperties;
-    this.googleOAuthService = googleOAuthService;
+    this.authorizeCredential = (transport, force) -> googleOAuthService.authorize(transport, force);
+    this.refreshCredential = () -> googleOAuthService.refreshToken();
   }
 
   /** タスクの管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -174,8 +182,9 @@ public class TaskService {
   }
 
   /** タスクの管理に関する再確認Googleトークンを処理する。 */
-  public void refreshGoogleToken() throws java.io.IOException, java.security.GeneralSecurityException {
-    googleOAuthService.refreshToken();
+  public void refreshGoogleToken()
+      throws java.io.IOException, java.security.GeneralSecurityException {
+    refreshCredential.refresh();
   }
 
   /** タスクの管理に関する権限の確認を処理する。 */
@@ -183,7 +192,7 @@ public class TaskService {
     if (!googleCalendarProperties.task().enabled()) {
       throw new IllegalStateException("Google Task integration is disabled");
     }
-    googleOAuthService.authorize(GoogleNetHttpTransport.newTrustedTransport(), true);
+    authorizeCredential.authorize(GoogleNetHttpTransport.newTrustedTransport(), true);
   }
 
   /** 外部の情報を利用できるよう、別ハッシュ値識別子を取得する。 */
@@ -236,13 +245,14 @@ public class TaskService {
   }
 
   /** タスクの管理で参照するタスク一覧クライアントを返す。 */
-  private Tasks getTasksClient() throws java.io.IOException, java.security.GeneralSecurityException {
+  private Tasks getTasksClient()
+      throws java.io.IOException, java.security.GeneralSecurityException {
     if (!googleCalendarProperties.task().enabled()) {
       throw new IllegalStateException("Google Task integration is disabled");
     }
     NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
     return new Tasks.Builder(
-            httpTransport, JSON_FACTORY, googleOAuthService.authorize(httpTransport, false))
+            httpTransport, JSON_FACTORY, authorizeCredential.authorize(httpTransport, false))
         .setApplicationName(googleCalendarProperties.applicationName())
         .build();
   }
