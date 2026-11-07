@@ -20,6 +20,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.BooleanSupplier;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
@@ -128,11 +130,10 @@ public class ImplementationRequestService {
   private final ImplementationRequestRepository requests;
 
   /** 承認一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common approval state to coordinate requests and decisions.")
-  private final ToolApprovalRepository approvals;
+  private final BiFunction<String, AgentRunContext, ToolApprovalRepository.Request> requestApproval;
+
+  private final BiPredicate<String, AgentRunContext> consumeApproval;
+  private final BiPredicate<String, String> approvalDenied;
 
   /** 判断基準。 */
   private final java.util.function.Supplier<PermissionDecision> implementationPermission;
@@ -174,7 +175,9 @@ public class ImplementationRequestService {
       ExternalAgentDelegationService delegation,
       Clock clock) {
     this.requests = requests;
-    this.approvals = approvals;
+    this.requestApproval = (input, owner) -> approvals.request(TOOL, input, owner);
+    this.consumeApproval = (input, owner) -> approvals.consume(TOOL, input, owner);
+    this.approvalDenied = (project, id) -> approvals.get(project, id).status().equals("DENIED");
     this.implementationPermission =
         () -> {
           var result = policy.evaluate(TOOL);
@@ -369,7 +372,7 @@ public class ImplementationRequestService {
             now);
     requests.save(request);
     if (!automatic) {
-      var approval = approvals.request(TOOL, approvalInput, owner);
+      var approval = requestApproval.apply(approvalInput, owner);
       requests.authorization(id, request.policyDecision(), approval.id(), "AWAITING_APPROVAL");
     }
     return prepared(requests.get(id));
@@ -402,7 +405,7 @@ public class ImplementationRequestService {
       return pending(saved, saved.executionStatus(), "Request is not executable");
     if (saved.authorizationId() != null
         && !saved.authorizationId().startsWith("policy:")
-        && approvals.get(owner.projectId(), saved.authorizationId()).status().equals("DENIED")) {
+        && approvalDenied.test(owner.projectId(), saved.authorizationId())) {
       requests.authorization(id, saved.policyDecision(), saved.authorizationId(), "REJECTED");
       return pending(
           saved,
@@ -433,8 +436,8 @@ public class ImplementationRequestService {
     String authorization = "policy:" + authorityFingerprint.get();
     if (explicit) {
       String input = approvalInput(id, saved.canonicalSpecification(), saved.executionEnvelope());
-      if (!approvals.consume(TOOL, input, owner)) {
-        var approval = approvals.request(TOOL, input, owner);
+      if (!consumeApproval.test(input, owner)) {
+        var approval = requestApproval.apply(input, owner);
         String state = approval.status().equals("DENIED") ? "REJECTED" : "AWAITING_APPROVAL";
         requests.authorization(
             id, decision.name() + ":" + authorityFingerprint.get(), approval.id(), state);
