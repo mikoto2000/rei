@@ -6,9 +6,9 @@ import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
+import java.util.function.IntSupplier;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -50,11 +50,11 @@ public final class VoiceCorrectionLlm {
   private final Supplier<OpenAiChatOptions> correctionOptions;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound VoiceCorrectionProperties shared by consumers of these settings.")
-  private final VoiceCorrectionProperties properties;
+  private final IntSupplier timeoutMs;
+
+  private final IntSupplier maxOutputTokens;
+
+  private final LongSupplier maxTotalTokens;
 
   /** 指定された値や利用先を使って、VoiceCorrectionLlmを初期化する。 */
   public VoiceCorrectionLlm(
@@ -63,7 +63,9 @@ public final class VoiceCorrectionLlm {
       VoiceCorrectionProperties properties) {
     this.correctionClient = () -> clients.chatClient(LlmFeature.VOICE_CORRECTION);
     this.correctionOptions = () -> models.chatOptions(LlmFeature.VOICE_CORRECTION, null);
-    this.properties = properties;
+    this.timeoutMs = () -> properties.getTimeoutMs();
+    this.maxOutputTokens = () -> properties.getMaxOutputTokens();
+    this.maxTotalTokens = () -> properties.getMaxTotalTokens();
   }
 
   /** 音声による対話の要求を実行し、呼び出し元へ結果を返す。 */
@@ -75,22 +77,23 @@ public final class VoiceCorrectionLlm {
             .toolCallbacks(List.of())
             .toolChoice("none")
             .maxRetries(0)
-            .timeout(java.time.Duration.ofMillis(properties.getTimeoutMs()));
+            .timeout(java.time.Duration.ofMillis(timeoutMs.getAsInt()));
     if (base.getMaxCompletionTokens() != null)
       builder
           .maxCompletionTokens(null)
           .maxTokens(null)
-          .maxCompletionTokens(properties.getMaxOutputTokens());
-    else builder.maxTokens(properties.getMaxOutputTokens());
+          .maxCompletionTokens(maxOutputTokens.getAsInt());
+    else builder.maxTokens(maxOutputTokens.getAsInt());
     var options = builder.build();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
-    var budget = new OutputLimitRunBudget(0, 1, null, properties.getMaxTotalTokens());
+    var budget = new OutputLimitRunBudget(0, 1, null, maxTotalTokens.getAsLong());
     if (!budget.tryConsumeLlmCall()) throw new IllegalStateException("correction_budget");
     String data =
         new ObjectMapper()
             .writeValueAsString(java.util.Map.of("asr", original, "references", context));
     var response =
-        correctionClient.get()
+        correctionClient
+            .get()
             .prompt()
             .system(SYSTEM)
             .user(data)
