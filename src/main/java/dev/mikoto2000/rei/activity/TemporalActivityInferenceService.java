@@ -87,15 +87,17 @@ public final class TemporalActivityInferenceService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ActivityProperties shared by consumers of these settings.")
+      justification =
+          "Reads the application-bound ActivityProperties shared by consumers of these settings.")
   private final ActivityProperties p;
 
   /** 記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common timeline store for activity observations.")
-  private final ActivityStore records;
+  @FunctionalInterface
+  private interface RecentObservations {
+    java.util.List<ActivityRecord> find(Instant start, Instant end, int maximum);
+  }
+
+  private final RecentObservations recentObservations;
 
   /** 保存先。 */
   private final WorkActivityInferenceStore store;
@@ -163,7 +165,8 @@ public final class TemporalActivityInferenceService {
       Supplier<List<WorkActivityInference.Execution>> executions,
       BooleanSupplier paused) {
     this.p = p;
-    this.records = records;
+    this.recentObservations =
+        (start, end, maximum) -> records.findObservationsBetweenBounded(start, end, maximum);
     this.store = store;
     this.model = model;
     this.clock = clock;
@@ -189,7 +192,7 @@ public final class TemporalActivityInferenceService {
     try {
       var input =
           TemporalActivityEvidence.build(
-              records.findObservationsBetweenBounded(
+              recentObservations.find(
                   now.minusSeconds(settings.getWindowSeconds()),
                   now.plusMillis(1),
                   settings.getMaxRecords()),

@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.workcontext.WorkContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -108,11 +106,10 @@ public final class ActivityWorkContextService {
   }
 
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common timeline store for activity observations.")
-  private final ActivityStore store;
+  private final java.util.function.BiFunction<Instant, Instant, List<ActivityRecord>> observations;
+
+  private final java.util.function.BiFunction<Instant, Instant, List<ActivityRecord>>
+      boundedObservations;
 
   /** 文脈一覧。 */
   private final SavedContexts contexts;
@@ -122,7 +119,8 @@ public final class ActivityWorkContextService {
 
   /** 指定された値や利用先を使って、ActivityWorkContextServiceを初期化する。 */
   public ActivityWorkContextService(ActivityStore store, SavedContexts contexts, Clock clock) {
-    this.store = store;
+    this.observations = (from, to) -> store.findRecordsBetween(from, to);
+    this.boundedObservations = (from, to) -> store.findRecordsBetweenBounded(from, to, 5000);
     this.contexts = contexts;
     this.clock = clock;
   }
@@ -163,7 +161,7 @@ public final class ActivityWorkContextService {
     if (range.fromInclusive().equals(range.toExclusive()))
       return new ObservationLinks(date, snapshot.getZone().toString(), links, false, 0);
     long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
-    var records = store.findRecordsBetweenBounded(range.fromInclusive(), range.toExclusive(), 5000);
+    var records = boundedObservations.apply(range.fromInclusive(), range.toExclusive());
     if (System.nanoTime() - deadline >= 0) throw new ActivityQueryLimitException();
     for (var record : records) {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
@@ -268,7 +266,7 @@ public final class ActivityWorkContextService {
             .toList();
     var result = new ArrayList<Link>();
     var seen = new HashSet<String>();
-    for (var record : store.findRecordsBetween(range.fromInclusive(), range.toExclusive())) {
+    for (var record : observations.apply(range.fromInclusive(), range.toExclusive())) {
       var detection = record.detection();
       if (detection == null || detection.evidence() == null) continue;
       var saved = detection.evidence().workContext();
