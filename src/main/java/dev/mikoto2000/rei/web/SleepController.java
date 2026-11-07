@@ -4,10 +4,9 @@ import dev.mikoto2000.rei.application.run.MemoryRunSubmitService;
 import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.memory.command.MemoryCommandSupport;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -28,11 +27,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/projects/{projectId}/memory")
 public final class SleepController {
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits memory operations through the shared run service.")
-  private final MemoryRunSubmitService runs;
+  private final Function<MemoryRunRequest, ResponseEntity<ChatResponse>> submitSleep;
+
+  private final Function<MemoryRunRequest, ResponseEntity<ChatResponse>> submitSummary;
+  private final Function<MemoryRunRequest, ResponseEntity<ChatResponse>> submitConsolidation;
 
   /** 補助。 */
   private final MemoryCommandSupport support;
@@ -95,7 +93,20 @@ public final class SleepController {
       MemoryCommandSupport support,
       ProjectRegistry projects,
       SessionLifecycle sessions) {
-    this.runs = runs;
+    this.submitSleep =
+        request ->
+            accepted(
+                runs.sleep(request.project(), request.session(), request.option(), request.key()));
+    this.submitSummary =
+        request ->
+            accepted(
+                runs.summarize(
+                    request.project(), request.session(), request.option(), request.key()));
+    this.submitConsolidation =
+        request ->
+            accepted(
+                runs.consolidate(
+                    request.project(), request.session(), request.option(), request.key()));
     this.support = support;
     this.projectExists = id -> projects.resolveById(id).isPresent();
     this.validateSession = (session, project) -> sessions.validate(session, project);
@@ -108,10 +119,8 @@ public final class SleepController {
       @RequestBody SleepRequest request,
       @RequestHeader("Idempotency-Key") String key) {
     if (request == null) throw new IllegalArgumentException("Sleep request required");
-    var run = runs.sleep(projectId, request.sessionId(), request.preview(), key);
-    return ResponseEntity.accepted()
-        .location(URI.create("/api/v1/runs/" + run.runId()))
-        .body(new ChatResponse(run.runId(), run.conversationId(), run.runId()));
+    return submitSleep.apply(
+        new MemoryRunRequest(projectId, request.sessionId(), request.preview(), key));
   }
 
   /** 対象の内容を、要点が分かる形にまとめる。 */
@@ -121,7 +130,8 @@ public final class SleepController {
       @RequestBody Maintenance request,
       @RequestHeader("Idempotency-Key") String key) {
     if (request == null) throw new IllegalArgumentException("Memory request required");
-    return accepted(runs.summarize(projectId, request.sessionId(), request.approve(), key));
+    return submitSummary.apply(
+        new MemoryRunRequest(projectId, request.sessionId(), request.approve(), key));
   }
 
   /** Web APIによる操作で用いるconsolidateを返す。 */
@@ -131,7 +141,8 @@ public final class SleepController {
       @RequestBody Maintenance request,
       @RequestHeader("Idempotency-Key") String key) {
     if (request == null) throw new IllegalArgumentException("Memory request required");
-    return accepted(runs.consolidate(projectId, request.sessionId(), request.approve(), key));
+    return submitConsolidation.apply(
+        new MemoryRunRequest(projectId, request.sessionId(), request.approve(), key));
   }
 
   /** Web APIによる操作で用いる書き出しを返す。 */
@@ -198,4 +209,6 @@ public final class SleepController {
     if (!projectExists.test(id))
       throw new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project");
   }
+
+  private record MemoryRunRequest(String project, String session, boolean option, String key) {}
 }

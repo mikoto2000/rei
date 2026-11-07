@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.feed;
 
 import dev.mikoto2000.rei.websearch.WebSearchPage;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -10,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.LongFunction;
 import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,11 +25,9 @@ public class FeedSummaryService {
   private static final int MAX_FEED_CONTENT_LENGTH = 2000;
 
   /** フィードサービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads briefing items through the shared feed service.")
-  private final FeedService feedService;
+  private final Function<BriefingWindow, List<FeedBriefingItem>> listBriefingItems;
+
+  private final LongFunction<FeedBriefingItem> findBriefingItem;
 
   /** フィード記事ページ情報の取得元。 */
   private final Function<FeedBriefingItem, WebSearchPage> feedArticlePageFetcher;
@@ -47,7 +44,9 @@ public class FeedSummaryService {
       Function<FeedBriefingItem, WebSearchPage> feedArticlePageFetcher,
       FeedSummaryGenerator feedSummaryGenerator,
       FeedProperties feedProperties) {
-    this.feedService = feedService;
+    this.listBriefingItems =
+        window -> feedService.listBriefingItems(window.from(), window.to(), window.limit());
+    this.findBriefingItem = id -> feedService.findBriefingItem(id);
     this.feedArticlePageFetcher = feedArticlePageFetcher;
     this.feedSummaryGenerator = feedSummaryGenerator;
     this.feedProperties = feedProperties;
@@ -64,7 +63,7 @@ public class FeedSummaryService {
   /** 利用者が要点を把握できるよう、日次案内を要約する。 */
   public String summarizeBriefing(OffsetDateTime from, OffsetDateTime to) {
     List<FeedBriefingItem> items =
-        feedService.listBriefingItems(from, to, feedProperties.briefingMaxItems());
+        listBriefingItems.apply(new BriefingWindow(from, to, feedProperties.briefingMaxItems()));
     if (items.isEmpty()) {
       return "昨日 00:00 以降の新着記事はありませんでした";
     }
@@ -82,7 +81,7 @@ public class FeedSummaryService {
 
   /** 利用者が要点を把握できるよう、項目Detailedを要約する。 */
   public FeedItemSummaryResult summarizeItemDetailed(long itemId) {
-    FeedBriefingItem item = feedService.findBriefingItem(itemId);
+    FeedBriefingItem item = findBriefingItem.apply(itemId);
     ResolvedContent resolved = resolveContent(item);
     if (resolved.content().isBlank() && isBlank(item.title())) {
       return new FeedItemSummaryResult("要約可能な記事情報がありません。", "feed", resolved.fetchStatus());
@@ -282,4 +281,6 @@ public class FeedSummaryService {
    * @param truncated 省略の有無
    */
   private record ArticleFetch(String content, boolean success, boolean truncated) {}
+
+  private record BriefingWindow(OffsetDateTime from, OffsetDateTime to, int limit) {}
 }

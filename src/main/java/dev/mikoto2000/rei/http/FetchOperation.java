@@ -73,12 +73,24 @@ public record FetchOperation(Runnable cancellationCheck, long deadlineNanos) {
 
   /** 外部情報の取得に関するpropagateControlsを処理する。 */
   public static void propagateControls(Throwable failure) {
+    propagateControls(failure, () -> {});
+  }
+
+  /** Report an execution stop before it leaves the operation boundary. */
+  public static void propagateControls(Throwable failure, Runnable onStop) {
     for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
-      if (cause instanceof ExecutionStoppedException stopped) throw stopped;
-      if (cause instanceof CancellationException cancelled) throw cancelled;
+      if (cause instanceof ExecutionStoppedException stopped) {
+        onStop.run();
+        throw stopped;
+      }
+      if (cause instanceof CancellationException cancelled) {
+        onStop.run();
+        throw cancelled;
+      }
       if (cause instanceof InterruptedException) {
         // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
+        onStop.run();
         throw new CancellationException();
       }
     }

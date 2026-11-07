@@ -1,11 +1,16 @@
 package dev.mikoto2000.rei.core.taskstate;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.client.ChatClientRequest;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -35,18 +40,22 @@ class TaskStateSessionTest {
 
   /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
-  void advisorAndToolsShareSameTaskStateInstance() {
-    try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
-      context.register(
-          TaskStateConfiguration.class,
-          TaskStateAdvisor.class,
-          TaskStateTools.class,
-          TestConfiguration.class);
-      context.refresh();
-      TaskStateAdvisor advisor = context.getBean(TaskStateAdvisor.class);
-      TaskStateTools tools = context.getBean(TaskStateTools.class);
-      assertSame(advisor.taskState(), tools.taskState());
-    }
+  void advisorRendersTaskStateUpdatedThroughTools() {
+    TaskState state = new TaskState();
+    TaskStateAdvisor advisor = new TaskStateAdvisor(state);
+    TaskStateTools tools = new TaskStateTools(state);
+    assertEquals(
+        "updated",
+        tools.updateTaskState(
+            "Verify shared task state",
+            TaskState.STATUS_IN_PROGRESS,
+            List.of(),
+            List.of("Validate")));
+    assertEquals("Verify shared task state", state.goal());
+    var request = ChatClientRequest.builder().prompt(new Prompt("Continue the task")).build();
+    assertTrue(
+        advisor.before(request, null).prompt().getUserMessage().getText()
+            .contains("Verify shared task state"));
   }
 
   /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */

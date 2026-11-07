@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.paper;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -101,10 +99,6 @@ public final class PaperOperation {
   }
 
   /** 必要な状態が整ってから先へ進むため、論文操作を待つ。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves unchecked provider failures and operation control signals from the future.")
   public <T> T await(CompletableFuture<T> future, java.time.Duration timeout) {
     long deadline = Math.min(deadlineNanos, System.nanoTime() + timeout.toNanos());
     try {
@@ -122,10 +116,16 @@ public final class PaperOperation {
       Thread.currentThread().interrupt();
       throw new CancellationException();
     } catch (ExecutionException e) {
+      var cause = reactor.core.Exceptions.unwrap(e.getCause());
+      if (cause instanceof Error fatal) throw fatal;
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(e);
-      if (e.getCause() instanceof java.util.concurrent.TimeoutException)
+      if (cause instanceof TimeoutException)
         throw new PaperException(PaperException.Code.PROVIDER_TIMEOUT, "処理がタイムアウトしました", e);
-      if (e.getCause() instanceof RuntimeException r) throw r;
+      if (cause instanceof PaperException paper) throw paper;
+      if (RunExecutionContext.isControlFailure(cause))
+        dev.mikoto2000.rei.http.FetchOperation.propagateControls(cause);
+      if (cause instanceof RuntimeException runtime)
+        throw new IllegalStateException("Paper provider execution failed", runtime);
       throw new PaperException(PaperException.Code.SEARCH_FAILED, "通信に失敗しました", e);
     } finally {
       if (!future.isDone()) future.cancel(true);

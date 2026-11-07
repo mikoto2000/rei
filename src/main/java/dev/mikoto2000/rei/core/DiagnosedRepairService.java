@@ -6,8 +6,6 @@ import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.service.SystemShellService;
 import dev.mikoto2000.rei.event.CredentialRedactor;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -113,11 +111,10 @@ public final class DiagnosedRepairService {
   private final TransactionTemplate transaction;
 
   /** 変更一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Operates on the shared change proposal lifecycle and its receipts.")
-  private final TextChangeSetService changes;
+  private final RepairQuery<ProjectContext, TextChangeSetService.Request> proposeProtected;
+
+  private final RepairQuery<ProjectContext, String> inspectRepair;
+  private final RepairQuery<ProjectContext, ApplyRepair> applyRepair;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -165,7 +162,16 @@ public final class DiagnosedRepairService {
       boolean enabled,
       SelfPatchReviewService.Capture capture,
       SelfPatchRepairService.Cycle cycle) {
-    this.changes = changes;
+    this.proposeProtected =
+        (project, request) -> {
+          var proposal = changes.propose(project, request);
+          changes.protectDiagnosed(project, proposal.id());
+          return proposal;
+        };
+    this.inspectRepair = (project, id) -> changes.inspect(project, id);
+    this.applyRepair =
+        (project, request) ->
+            changes.applyDiagnosed(project, request.id(), request.proposalHash(), request.writer());
     this.clock = clock;
     this.enabled = enabled;
     this.capture = capture;
@@ -207,8 +213,7 @@ public final class DiagnosedRepairService {
                   >= 128)
                 throw new IllegalStateException("Diagnosed repair history capacity reached (128)");
               try {
-                var proposal = changes.propose(project(owner, root), request.change());
-                changes.protectDiagnosed(project(owner, root), proposal.id());
+                var proposal = proposeProtected.run(project(owner, root), request.change());
                 String hash =
                     hash(
                         proposal.id()
@@ -291,7 +296,7 @@ public final class DiagnosedRepairService {
     var snapshot = capture.capture(root, deadline);
     if (!snapshot.complete() || !snapshot.version().equals(saved.patchVersion()))
       throw new IllegalStateException("Patch changed since diagnosis; propose again");
-    var proposal = changes.inspect(project(owner, root), id);
+    var proposal = inspectRepair.run(project(owner, root), id);
     if (!proposal.status().equals("PROPOSED")
         || !proposal.proposalSha256().equals(saved.changeHash())
         || !Objects.equals(proposal.baselineSha256(), proposal.currentSha256()))
@@ -323,8 +328,9 @@ public final class DiagnosedRepairService {
                 if (!failureIdentities(reproduced).equals(failureIdentities(saved.diagnosis())))
                   throw new IOException("Failure identities changed; diagnose before applying");
                 var receipt =
-                    changes.applyDiagnosed(
-                        project(owner, path), repair.id(), repair.proposalSha256(), writer);
+                    applyRepair.run(
+                        project(owner, path),
+                        new ApplyRepair(repair.id(), repair.proposalSha256(), writer));
                 return new SelfPatchRepairService.Receipt(
                     receipt.id(),
                     receipt.status(),
@@ -406,7 +412,7 @@ public final class DiagnosedRepairService {
         saved.receiptHash(),
         saved.diagnosis(),
         saved.patchVersion(),
-        changes.inspect(project(owner, Path.of(saved.root())), saved.id()),
+        inspectRepair.run(project(owner, Path.of(saved.root())), saved.id()),
         saved.testCommand(),
         saved.timeoutSeconds(),
         stored.result());
@@ -513,4 +519,11 @@ public final class DiagnosedRepairService {
       throw new IllegalStateException(impossible);
     }
   }
+
+  @FunctionalInterface
+  private interface RepairQuery<P, R> {
+    TextChangeSetService.View run(P project, R request) throws IOException;
+  }
+
+  private record ApplyRepair(String id, String proposalHash, TextChangeSetService.Writer writer) {}
 }

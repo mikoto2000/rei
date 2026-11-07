@@ -1,9 +1,10 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.core.policy.ToolApprovalRepository;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,29 +25,37 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/projects/{projectId}/approvals")
 public class ApprovalController {
   /** 保存と検索の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common approval state to coordinate requests and decisions.")
-  private final ToolApprovalRepository repository;
+  private final Function<String, List<ToolApprovalRepository.Request>> listPending;
+
+  private final BiFunction<String, String, ToolApprovalRepository.Request> findApproval;
+  private final Function<DecisionTarget, ToolApprovalRepository.Request> decideApproval;
 
   /** 継続入力一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared coordinator for pending approval continuations.")
-  private dev.mikoto2000.rei.core.policy.ApprovalContinuationService continuations;
+  private Function<String, List<ToolApprovalRepository.Request>> listContinuations;
+
+  private Function<DecisionTarget, ToolApprovalRepository.Request> decideContinuation;
+  private Function<String, Optional<String>> continuationState = id -> Optional.empty();
 
   /** Web APIによる操作で使用する継続入力一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setContinuations(
       dev.mikoto2000.rei.core.policy.ApprovalContinuationService continuations) {
-    this.continuations = continuations;
+    this.listContinuations = continuations == null ? null : continuations::list;
+    this.decideContinuation =
+        continuations == null
+            ? null
+            : decision ->
+                continuations.decide(
+                    decision.project(), decision.id(), decision.approved(), decision.continueRun());
+    this.continuationState = continuations == null ? id -> Optional.empty() : continuations::state;
   }
 
   /** 指定された値や利用先を使って、ApprovalControllerを初期化する。 */
   public ApprovalController(ToolApprovalRepository repository) {
-    this.repository = repository;
+    this.listPending = project -> repository.list(project);
+    this.findApproval = (project, id) -> repository.get(project, id);
+    this.decideApproval =
+        decision -> repository.decide(decision.project(), decision.id(), decision.approved());
   }
 
   /**
@@ -85,22 +94,22 @@ public class ApprovalController {
         request.argumentsPreview(),
         request.status(),
         request.expiresAt(),
-        continuations == null
-            ? "UNAVAILABLE"
-            : continuations.state(request.id()).orElse("UNAVAILABLE"));
+        continuationState.apply(request.id()).orElse("UNAVAILABLE"));
   }
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @GetMapping
   public List<View> list(@PathVariable String projectId) {
-    return (continuations == null ? repository.list(projectId) : continuations.list(projectId))
+    return (listContinuations == null
+            ? listPending.apply(projectId)
+            : listContinuations.apply(projectId))
         .stream().map(this::view).toList();
   }
 
   /** 利用者が対象の情報を確認できるように表示する。 */
   @GetMapping("/{id}")
   public View show(@PathVariable String projectId, @PathVariable String id) {
-    return view(repository.get(projectId, id));
+    return view(findApproval.apply(projectId, id));
   }
 
   /**
@@ -123,27 +132,28 @@ public class ApprovalController {
     if (decision.approved() == null)
       throw new org.springframework.web.server.ResponseStatusException(
           org.springframework.http.HttpStatus.BAD_REQUEST, "approved is required");
-    if (Boolean.TRUE.equals(decision.continueRun()) && continuations == null)
+    var operation = decideContinuation;
+    boolean continueRequested = Boolean.TRUE.equals(decision.continueRun());
+    if (continueRequested && operation == null)
       throw new org.springframework.web.server.ResponseStatusException(
           org.springframework.http.HttpStatus.CONFLICT, "Approval continuation unavailable");
-    return view(
-        continuations == null
-            ? repository.decide(projectId, id, decision.approved())
-            : continuations.decide(
-                projectId, id, decision.approved(), Boolean.TRUE.equals(decision.continueRun())));
+    var target = new DecisionTarget(projectId, id, decision.approved(), continueRequested);
+    return view(operation == null ? decideApproval.apply(target) : operation.apply(target));
   }
 
   /** Web APIによる操作で用いる継続入力を返す。 */
   @GetMapping("/{id}/continuation")
   public java.util.Map<String, String> continuation(
       @PathVariable String projectId, @PathVariable String id) {
-    var request = repository.get(projectId, id);
+    var request = findApproval.apply(projectId, id);
     return java.util.Map.of(
         "approvalId",
         request.id(),
         "runId",
         request.runId(),
         "state",
-        continuations == null ? "UNAVAILABLE" : continuations.state(id).orElse("UNAVAILABLE"));
+        continuationState.apply(id).orElse("UNAVAILABLE"));
   }
+
+  private record DecisionTarget(String project, String id, boolean approved, boolean continueRun) {}
 }

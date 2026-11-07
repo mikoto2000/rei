@@ -20,6 +20,8 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.databind.ObjectWriter;
 import tools.jackson.databind.json.JsonMapper;
 
 /** SQLiteベクトルの記録を保持し、後続の処理で参照できるようにする。 */
@@ -39,18 +41,17 @@ public final class SqliteVectorStore
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the configured source for both SQL connections and the native client API.")
+      justification =
+          "Preserves the configured source for both SQL connections and the native client API.")
   private final DataSource dataSource;
 
   /** 埋め込み表現モデル。 */
   private final EmbeddingModel embeddingModel;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Jackson 3 mappers retain their configuration after construction.")
-  private final JsonMapper objectMapper;
+  private final ObjectWriter metadataWriter;
+
+  private final ObjectReader metadataReader;
 
   /** 埋め込み表現次元数。 */
   private final int embeddingDimensions;
@@ -72,7 +73,8 @@ public final class SqliteVectorStore
       boolean bm25Enabled) {
     this.dataSource = dataSource;
     this.embeddingModel = embeddingModel;
-    this.objectMapper = objectMapper;
+    this.metadataWriter = objectMapper.writer();
+    this.metadataReader = objectMapper.readerFor(new TypeReference<Map<String, Object>>() {});
     this.bm25Enabled = bm25Enabled;
     this.embeddingDimensions = embeddingModel.dimensions();
     initializeSchema();
@@ -672,7 +674,7 @@ public final class SqliteVectorStore
   /** 指定された内容を保存先へ反映するため、保存・受け渡しに使うJSON変換を書き込む。 */
   private String writeJson(Object value) {
     try {
-      return objectMapper.writeValueAsString(value);
+      return metadataWriter.writeValueAsString(value);
     } catch (Exception e) {
       throw new IllegalStateException("JSON 変換に失敗しました", e);
     }
@@ -681,7 +683,7 @@ public final class SqliteVectorStore
   /** 必要な内容を参照できるよう、付随情報を読み取る。 */
   private Map<String, Object> readMetadata(String value) {
     try {
-      return objectMapper.readValue(value, new TypeReference<Map<String, Object>>() {});
+      return metadataReader.readValue(value);
     } catch (Exception e) {
       throw new IllegalStateException("metadata の読み込みに失敗しました", e);
     }

@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.application.session.CursorCodec;
 import dev.mikoto2000.rei.application.session.CursorKey;
 import dev.mikoto2000.rei.application.session.HistoryPage;
 import dev.mikoto2000.rei.application.session.Pagination;
+import dev.mikoto2000.rei.artifact.Artifact;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository;
 import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
@@ -74,16 +75,15 @@ public final class TaskManagerService {
   private final CursorCodec cursors = new CursorCodec();
 
   /** 成果物一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared artifact store for publication or lookup.")
-  private dev.mikoto2000.rei.artifact.ArtifactStore artifacts;
+  private Function<ArtifactPage, HistoryPage<Artifact>> listArtifacts;
 
   /** 実行中タスクの操作で使用する成果物保存先を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setArtifactStore(dev.mikoto2000.rei.artifact.ArtifactStore store) {
-    artifacts = store;
+    listArtifacts =
+        store == null
+            ? null
+            : page -> store.list(page.project(), page.session(), page.run(), 100, page.cursor());
   }
 
   /** 指定された値や利用先を使って、TaskManagerServiceを初期化する。 */
@@ -562,14 +562,15 @@ public final class TaskManagerService {
       }
     }
     var references = new LinkedHashSet<>(task.results());
-    if (artifacts != null && task.runId() != null) {
+    if (listArtifacts != null && task.runId() != null) {
       var lineage = new LinkedHashSet<String>();
       lineage.add(task.runId());
       if (task.kind().equals("CHECKPOINT")) lineage.add(task.id().substring(4));
       for (String run : lineage) {
         String cursor = null;
         do {
-          var page = artifacts.list(project.id(), task.sessionId(), run, 100, cursor);
+          var page =
+              listArtifacts.apply(new ArtifactPage(project.id(), task.sessionId(), run, cursor));
           for (var artifact : page.items())
             if (Objects.equals(task.sessionId(), artifact.sessionId()))
               references.add(new TaskView.Reference("ARTIFACT", artifact.artifactId()));
@@ -670,6 +671,8 @@ public final class TaskManagerService {
     String text = dev.mikoto2000.rei.event.CredentialRedactor.redact(value);
     return text.substring(0, Math.min(1024, text.length()));
   }
+
+  private record ArtifactPage(String project, String session, String run, String cursor) {}
 
   private record CheckpointPage(
       String project, String root, String session, String after, int limit) {}

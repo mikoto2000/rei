@@ -1,10 +1,9 @@
 package dev.mikoto2000.rei.core.chat;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -302,27 +301,53 @@ public final class ProjectRunQueue {
   }
 
   /** 予約した作業を実行先へ渡し、今回の受付に関係する拒否を呼び出し元へ伝える。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Propagates the first dispatch failure after attempting all ready entries.")
   private void dispatchAll(List<Job> selected, Job submitting) {
-    RuntimeException failure = null;
-    Error fatal = null;
-    for (var job : selected)
+    var remaining = selected.iterator();
+    while (remaining.hasNext()) {
+      var job = remaining.next();
       try {
         dispatch(job);
-      } catch (RuntimeException error) {
-        if (job == submitting || submitting == null && failure == null) failure = error;
-        else
-          org.slf4j.LoggerFactory.getLogger(ProjectRunQueue.class)
-              .warn("Queued Run dispatch rejected: {}", error.getClass().getSimpleName());
-      } catch (Error error) {
-        if (fatal == null) fatal = error;
-        else if (fatal != error) fatal.addSuppressed(error);
+      } catch (RuntimeException | Error failure) {
+        if (failure instanceof Error || job == submitting || submitting == null) {
+          var fatal = drainAfterFailure(remaining, submitting, failure);
+          if (fatal != null) throw fatal;
+          throw failure;
+        }
+        logDispatchRejection(failure);
       }
-    if (fatal != null) throw fatal;
-    if (failure != null) throw failure;
+    }
+  }
+
+  /** Release or dispatch the remaining reservations before reporting the primary failure. */
+  private Error drainAfterFailure(Iterator<Job> remaining, Job submitting, Throwable first) {
+    Error fatal = first instanceof Error error ? error : null;
+    boolean recordedRejection = first instanceof RuntimeException;
+    while (remaining.hasNext()) {
+      var job = remaining.next();
+      try {
+        dispatch(job);
+      } catch (RuntimeException rejection) {
+        if (job == submitting || (submitting == null && !recordedRejection)) {
+          if (rejection != first) first.addSuppressed(rejection);
+          recordedRejection = true;
+        } else {
+          logDispatchRejection(rejection);
+        }
+      } catch (Error error) {
+        if (fatal == null) {
+          fatal = error;
+          fatal.addSuppressed(first);
+        } else if (error != fatal) {
+          fatal.addSuppressed(error);
+        }
+      }
+    }
+    return fatal;
+  }
+
+  private void logDispatchRejection(Throwable error) {
+    org.slf4j.LoggerFactory.getLogger(ProjectRunQueue.class)
+        .warn("Queued Run dispatch rejected: {}", error.getClass().getSimpleName());
   }
 
   /** 予約がまだ有効な作業だけを開始し、完了または拒否の後に実行枠を解放する。 */

@@ -26,8 +26,6 @@ import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.OpenAiCompatibleEndpoint;
 import dev.mikoto2000.rei.voice.VoiceProperties;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
@@ -94,11 +92,9 @@ public class DoctorActiveService {
   }
 
   /** 外部操作を行わず環境を診断する窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured diagnostic service for passive inspection.")
-  private final DoctorService passive;
+  private final Supplier<String> configuredEndpoint;
+
+  private final Function<Boolean, String> passiveReport;
 
   /** 実行環境。 */
   private final Environment environment;
@@ -179,7 +175,8 @@ public class DoctorActiveService {
       DoctorMicrophoneProbe microphone,
       ExternalAgentProcessRunner processes,
       Clock clock) {
-    this.passive = passive;
+    this.configuredEndpoint = () -> passive.endpoint();
+    this.passiveReport = details -> DoctorService.render(passive.passive(details));
     this.environment = environment;
     this.subAgentModel = () -> models.subAgentChatModel();
     this.optionsForModel = selected -> models.chatOptions(LlmFeature.CHAT, selected);
@@ -242,7 +239,7 @@ public class DoctorActiveService {
           };
       String target =
           switch (check) {
-            case CONNECTIVITY -> passive.endpoint();
+            case CONNECTIVITY -> configuredEndpoint.get();
             case INFERENCE -> readSelectedModel.get();
             case CODEX -> codexCommand.get();
             case CLAUDE -> claudeCommand.get();
@@ -262,7 +259,7 @@ public class DoctorActiveService {
         if (defaults == null) inferenceBuilder.model(target);
         inferenceOptions = inferenceBuilder.build();
         connectionIdentity =
-            Objects.toString(passive.endpoint(), "")
+            Objects.toString(configuredEndpoint.get(), "")
                 + "|"
                 + Objects.toString(inferenceOptions.getBaseUrl(), "")
                 + "|"
@@ -584,7 +581,7 @@ public class DoctorActiveService {
   /** 要求された処理を実行する。 */
   public String execute(String text, RunExecutionContext run) {
     var request = DoctorRequest.parseText(text);
-    if (request.checks().isEmpty()) return DoctorService.render(passive.passive(request.details()));
+    if (request.checks().isEmpty()) return passiveReport.apply(request.details());
     return request.plan() + "\n" + active(run, request).render();
   }
 }

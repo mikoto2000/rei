@@ -245,7 +245,11 @@ public final class ReviewTools {
           "Claim one pending frozen review range at a semantic boundary. Omit tokenBudget for the host-selected budget (up to 100000 estimated tokens, at most 1/8 of the input window and current free space). Prefer readNextReviewWorkItem to claim and read in one call. Read with readReviewWorkItem and assess with submitReviewWorkItem using IDs; a claim is not review completion.")
   public dev.mikoto2000.rei.durable.WorkItemStore.Claim claimReviewWorkItem(
       String taskId, @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer tokenBudget) {
-    int budget = readingBudget(tokenBudget);
+    return claimReviewWorkItemWithinBudget(taskId, readingBudget(tokenBudget));
+  }
+
+  private dev.mikoto2000.rei.durable.WorkItemStore.Claim claimReviewWorkItemWithinBudget(
+      String taskId, int budget) {
     if (budget < 256) throw new ToolReadRejectedException("CONTEXT_BUDGET_INSUFFICIENT",
         "No work was claimed. Reduce the active prompt before reading another review unit.");
     var owner = AgentRunScope.current();
@@ -254,12 +258,12 @@ public final class ReviewTools {
             taskScope(owner),
             taskId,
             owner.runId(),
-            (item, source) -> {
+            (item, source, attempt) -> {
               var positions = new SourcePositions(source);
               int low = item.start(), high = Math.min(item.end(), item.start() + budget * 4);
               while (low < high) {
                 int middle = low + (high - low + 1) / 2;
-                if (estimate(durablePage(item, "0".repeat(36), source, middle, positions))
+                if (estimate(durablePage(item, attempt, source, middle, positions))
                     <= budget) low = middle;
                 else high = middle - 1;
               }
@@ -269,7 +273,7 @@ public final class ReviewTools {
                   && Character.isLowSurrogate(source.charAt(low))) low--;
               low = SemanticReviewSplitter.end(source, item.start(), low, item.end());
               if (low == item.start() && low < item.end()
-                  || estimate(durablePage(item, "0".repeat(36), source, low, positions))
+                  || estimate(durablePage(item, attempt, source, low, positions))
                       > budget)
                 throw new IllegalArgumentException("REVIEW_PAGE_BUDGET_TOO_SMALL");
               return low;
@@ -288,7 +292,7 @@ public final class ReviewTools {
     if (tasks.status(taskScope(AgentRunScope.current()), taskId).state().equals("COMPLETE")) return null;
     var owner = AgentRunScope.current();
     var claim = workItems().running(taskScope(owner), taskId, owner.runId());
-    if (claim == null) claim = claimReviewWorkItem(taskId, tokenBudget);
+    if (claim == null) claim = claimReviewWorkItemWithinBudget(taskId, budget);
     if (claim == null) return null;
     var page = readReviewWorkItem(claim.item().id(), claim.attempt());
     if (estimate(page) > budget)

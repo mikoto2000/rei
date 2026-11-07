@@ -107,17 +107,24 @@ public final class WorkItemStore {
   }
 
   public Claim claim(DurableTaskStore.Scope scope, String task, String run) {
-    return claim(scope, task, run, (item, source) -> item.end());
+    return claim(scope, task, run, (item, source, attempt) -> item.end());
+  }
+
+  /** Selects an end offset using the same attempt ID that will be committed with the claim. */
+  @FunctionalInterface
+  public interface ClaimSizer {
+    int end(Item item, String source, String attempt);
   }
 
   public Claim claim(DurableTaskStore.Scope scope, String task, String run,
-      java.util.function.ToIntBiFunction<Item, String> split) {
+      ClaimSizer sizer) {
     return store.write(db -> {
       requireRun(db, scope, task, run);
       Item pending = pending(db, task);
       if (pending == null) return null;
       String source = source(db, pending);
-      int end = split.applyAsInt(pending, source);
+      String attempt = UUID.randomUUID().toString();
+      int end = sizer.end(pending, source, attempt);
       if (end < pending.start() || end > pending.end() || !boundary(source, end)
           || end == pending.start() && end < pending.end()) throw new IllegalArgumentException("WORK_SPLIT_INVALID");
       if (end < pending.end()) {
@@ -125,7 +132,6 @@ public final class WorkItemStore {
         DurableTaskStore.execute(db, "INSERT INTO durable_work(id,task,snapshot,path,start,end,version,kind,criterion,state,required) VALUES(?,?,?,?,?,?,?,?,?,'PENDING',?)",
             UUID.randomUUID().toString(), task, pending.snapshot(), pending.path(), end, pending.end(), pending.version(), pending.kind(), pending.criterion(), pending.required());
       }
-      String attempt = UUID.randomUUID().toString();
       if (DurableTaskStore.execute(db, "UPDATE durable_work SET state='RUNNING',active_attempt=?,last_step='CLAIMED' WHERE id=? AND state='PENDING'", attempt, pending.id()) != 1)
         throw new IllegalStateException("WORK_CLAIM_CONFLICT");
       DurableTaskStore.execute(db, "INSERT INTO durable_item_attempts(id,work,run,started,state) VALUES(?,?,?,?,'ACTIVE')", attempt, pending.id(), run, System.currentTimeMillis());

@@ -3,8 +3,9 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.application.run.IntegrationRunSubmitService;
 import dev.mikoto2000.rei.reminder.ReminderService;
 import dev.mikoto2000.rei.reminder.command.ReminderCommand;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Function;
+import java.util.function.LongFunction;
+import java.util.function.Supplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
@@ -23,11 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public final class UtilityCommandsController {
   /** リマインダー一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared reminder service and the same persisted reminders.")
-  private final ReminderService reminders;
+  private final Supplier<String> listReminders;
+
+  private final Function<Reminder, String> addReminder;
+  private final LongFunction<String> deleteReminder;
 
   /** 実行一覧。 */
   private final java.util.function.Function<
@@ -40,7 +40,16 @@ public final class UtilityCommandsController {
 
   /** 指定された値や利用先を使って、UtilityCommandsControllerを初期化する。 */
   public UtilityCommandsController(ReminderService reminders, IntegrationRunSubmitService runs) {
-    this.reminders = reminders;
+    this.listReminders = () -> ReminderCommand.reportList(reminders);
+    this.addReminder =
+        request ->
+            ReminderCommand.reportAdd(
+                reminders,
+                request.message(),
+                request.at() == null ? null : java.time.OffsetDateTime.parse(request.at()),
+                request.target() == null ? null : java.time.OffsetDateTime.parse(request.target()),
+                request.minutesBefore());
+    this.deleteReminder = id -> ReminderCommand.reportDelete(reminders, id);
     this.submitBriefing =
         request -> accepted(runs.briefing(request.projectId(), request.sessionId()));
     this.submitUpdateWork =
@@ -76,7 +85,7 @@ public final class UtilityCommandsController {
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @GetMapping("/reminders/commands")
   public Text list() {
-    return text(ReminderCommand.reportList(reminders));
+    return text(listReminders.get());
   }
 
   /** 新たな対象を登録し、後から利用できるようにする。 */
@@ -88,19 +97,13 @@ public final class UtilityCommandsController {
         || request.message().length() > 16384
         || request.message().indexOf('\0') >= 0)
       throw new IllegalArgumentException("Reminder required");
-    return text(
-        ReminderCommand.reportAdd(
-            reminders,
-            request.message(),
-            request.at() == null ? null : java.time.OffsetDateTime.parse(request.at()),
-            request.target() == null ? null : java.time.OffsetDateTime.parse(request.target()),
-            request.minutesBefore()));
+    return text(addReminder.apply(request));
   }
 
   /** 指定された対象を削除する。 */
   @DeleteMapping("/reminders/commands/{id}")
   public Text delete(@PathVariable long id) {
-    return text(ReminderCommand.reportDelete(reminders, id));
+    return text(deleteReminder.apply(id));
   }
 
   /** Web APIによる操作で用いる日次案内を返す。 */
