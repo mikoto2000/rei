@@ -11,4 +11,24 @@ public interface ModelCallBudget extends Runnable {
 
   /** 使用したトークン数を実行予算へ記録する。 */
   void recordTotalTokens(Integer tokens);
+
+  /** Keeps existing accounting when a callback already implements the budget contract. */
+  static ModelCallBudget fromCallback(Runnable beforeModelCall) {
+    if (beforeModelCall == null || beforeModelCall instanceof ModelCallBudget)
+      return (ModelCallBudget) beforeModelCall;
+    return new ModelCallBudget() {
+      @Override
+      public void run() {
+        beforeModelCall.run();
+      }
+
+      @Override
+      public boolean tokenLimitEnabled() {
+        return false;
+      }
+
+      @Override
+      public void recordTotalTokens(Integer tokens) {}
+    };
+  }
 }
