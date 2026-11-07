@@ -46,6 +46,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -55,9 +56,11 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
@@ -151,21 +154,15 @@ public class ChatExecutionService {
   private static final Logger log = LoggerFactory.getLogger(ChatExecutionService.class);
 
   /** モデルへ対話を依頼する窓口提供元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the application provider for the configured chat clients.")
-  private final LlmChatClientProvider chatClientProvider;
+  private final Function<AgentRunContext.Mode, ChatClient> clientForMode;
 
   /** 現在モデル保持先。 */
   private final Supplier<String> readSelectedModel;
 
   /** モデル提供元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider modelProvider;
+  private final Function<String, ChatModel> privateSecretaryModel;
+
+  private final Function<String, OpenAiChatOptions> optionsForModel;
 
   /** 言語モデル設定。 */
   @SuppressFBWarnings(
@@ -370,9 +367,14 @@ public class ChatExecutionService {
       Optional<AgentActivityTracker> activityTracker,
       AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher) {
-    this.chatClientProvider = chatClientProvider;
+    this.clientForMode =
+        mode ->
+            mode == AgentRunContext.Mode.EXCLUSIVE
+            ? chatClientProvider.chatClient(LlmFeature.CHAT)
+            : chatClientProvider.parallelChatClient(mode);
     this.readSelectedModel = () -> currentModelHolder.get();
-    this.modelProvider = modelProvider;
+    this.privateSecretaryModel = expected -> modelProvider.privateSecretaryModel(expected);
+    this.optionsForModel = selected -> modelProvider.chatOptions(LlmFeature.CHAT, selected, true);
     this.llmProperties = llmProperties;
     this.cancellationService = cancellationService;
     this.memoryConsolidatorService = memoryConsolidatorService;
@@ -439,7 +441,7 @@ public class ChatExecutionService {
       Disposable stream = null;
       try {
         if (cancellationService.isCancellationRequested()) return ChatExecutionResult.cancelled();
-        var model = modelProvider.privateSecretaryModel(expectedModel);
+        var model = privateSecretaryModel.apply(expectedModel);
         if (reservation == null || !reservation.tryReserve())
           return ChatExecutionResult.failed(
               "Private draft budget or consent unavailable", "private_draft_denied");
@@ -1192,7 +1194,7 @@ public class ChatExecutionService {
       log.warn("Prompt attachment warning: {}", warning);
     }
 
-    var baseOptions = modelProvider.chatOptions(LlmFeature.CHAT, readSelectedModel.get(), true);
+    var baseOptions = optionsForModel.apply(readSelectedModel.get());
     if (mode != AgentRunContext.Mode.EXCLUSIVE) ToolLoopSupport.requireNoRawTools(baseOptions);
     var optionsBuilder = baseOptions.mutate();
     optionsBuilder.toolContext(
@@ -1233,9 +1235,7 @@ public class ChatExecutionService {
     messages.add(
         UserMessage.builder().text(resolvedPrompt.prompt()).media(resolvedPrompt.media()).build());
     ChatClientRequestSpec requestSpec =
-        (mode == AgentRunContext.Mode.EXCLUSIVE
-                ? chatClientProvider.chatClient(LlmFeature.CHAT)
-                : chatClientProvider.parallelChatClient(mode))
+        clientForMode.apply(mode)
             .prompt(new Prompt(messages, options))
             .advisors(
                 advisor ->

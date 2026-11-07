@@ -13,8 +13,6 @@ import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.subagent.SubAgentResultParser;
 import dev.mikoto2000.rei.subagent.SubAgentResultSchema;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -27,8 +25,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
@@ -204,11 +204,9 @@ public class BeginnerReviewService {
   private boolean enabled = true;
 
   /** モデル一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider models;
+  private final Supplier<ChatModel> modelForCalls;
+
+  private final Supplier<OpenAiChatOptions> optionsForCalls;
 
   /** 権限一覧。 */
   private final BiConsumer<String, AgentRunContext> authorizeReviewRead;
@@ -243,7 +241,8 @@ public class BeginnerReviewService {
 
   /** 指定された値や利用先を使って、BeginnerReviewServiceを初期化する。 */
   public BeginnerReviewService(LlmModelProvider models, ToolPermissionGuard permissions) {
-    this.models = models;
+    this.modelForCalls = () -> models.subAgentChatModel();
+    this.optionsForCalls = () -> models.chatOptions(LlmFeature.CHAT, null);
     this.authorizeReviewRead = (input, owner) -> permissions.check("readMultiFile", input, owner);
   }
 
@@ -345,9 +344,9 @@ public class BeginnerReviewService {
               }
             reviewed.add(chapter.file());
           } else {
-            var model = models.subAgentChatModel();
+            var model = modelForCalls.get();
             ToolLoopSupport.requireNoDefaultTools(model);
-            var defaults = models.chatOptions(LlmFeature.CHAT, null);
+            var defaults = optionsForCalls.get();
             var options = defaults == null ? OpenAiChatOptions.builder() : defaults.mutate();
             options.toolCallbacks(List.of());
             options.toolChoice("none");

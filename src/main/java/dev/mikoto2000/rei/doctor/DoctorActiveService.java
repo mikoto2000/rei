@@ -44,6 +44,7 @@ import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.core.env.Environment;
@@ -102,11 +103,9 @@ public class DoctorActiveService {
   private final Environment environment;
 
   /** モデル一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider models;
+  private final Supplier<ChatModel> subAgentModel;
+
+  private final Function<String, OpenAiChatOptions> optionsForModel;
 
   /** 選択中モデル。 */
   private final Supplier<String> readSelectedModel;
@@ -184,7 +183,8 @@ public class DoctorActiveService {
       Clock clock) {
     this.passive = passive;
     this.environment = environment;
-    this.models = models;
+    this.subAgentModel = () -> models.subAgentChatModel();
+    this.optionsForModel = selected -> models.chatOptions(LlmFeature.CHAT, selected);
     this.readSelectedModel = () -> selectedModel.get();
     this.connectivityProbe =
         request -> http.connectivity(request.endpoint(), request.timeout(), request.checkActive());
@@ -257,7 +257,7 @@ public class DoctorActiveService {
       OpenAiChatOptions inferenceOptions = null;
       String connectionIdentity = "";
       if (check == DoctorRequest.Check.INFERENCE) {
-        var defaults = models.chatOptions(LlmFeature.CHAT, target);
+        var defaults = optionsForModel.apply(target);
         var inferenceBuilder = defaults == null ? OpenAiChatOptions.builder() : defaults.mutate();
         if (defaults == null) inferenceBuilder.model(target);
         inferenceOptions = inferenceBuilder.build();
@@ -427,7 +427,7 @@ public class DoctorActiveService {
       justification = "Preserves the original inference failure when it is not classified as a timeout.")
   private DoctorResult inference(
       RunExecutionContext run, OpenAiChatOptions captured, Duration timeout) {
-    var model = models.subAgentChatModel();
+    var model = subAgentModel.get();
     ToolLoopSupport.requireNoDefaultTools(model);
     var options = captured.mutate();
     var bounded =

@@ -15,9 +15,12 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
 
 /**
@@ -29,11 +32,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResolutionModel {
   /** モデル一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider models;
+  private final Supplier<ChatModel> modelForCalls;
+
+  private final Supplier<OpenAiChatOptions> optionsForCalls;
 
   /** この機能の動作設定。 */
   private final MemoryProperties properties;
@@ -47,7 +48,8 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
 
   /** 指定された値や利用先を使って、LlmMemoryProcessorを初期化する。 */
   public LlmMemoryProcessor(LlmModelProvider models, MemoryProperties properties) {
-    this.models = models;
+    this.modelForCalls = () -> models.memoryChatModel();
+    this.optionsForCalls = () -> models.chatOptions(LlmFeature.MEMORY, null);
     this.properties = properties;
   }
 
@@ -151,11 +153,10 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
       matchType = SuppressMatchType.EXACT,
       justification = "Preserves typed execution failures and accounting failures during the memory model call.")
   public String call(String system, String data, ModelCallBudget budget) {
-    var model = models.memoryChatModel();
+    var model = modelForCalls.get();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
     var options =
-        models
-            .chatOptions(LlmFeature.MEMORY, null)
+        optionsForCalls.get()
             .mutate()
             .toolCallbacks(List.of())
             .toolChoice("none")
