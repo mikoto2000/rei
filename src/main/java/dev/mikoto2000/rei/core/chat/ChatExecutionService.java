@@ -835,6 +835,9 @@ public class ChatExecutionService {
             ? ChatExecutionResult.waiting("tool_approval_waiting")
             : ChatExecutionResult.waiting();
       }
+      if (beginnerReview
+          && context.mode() == AgentRunContext.Mode.CONVERSATION
+          && error instanceof IllegalArgumentException rejected) throw rejected;
       ErrorInformation knownFailure = checkpointError(error);
       if (knownFailure == null)
         knownFailure = dev.mikoto2000.rei.chatgpt.ChatGptRunFailure.find(error);
