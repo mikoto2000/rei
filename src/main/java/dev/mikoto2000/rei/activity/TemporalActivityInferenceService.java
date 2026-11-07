@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.activity;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
@@ -84,12 +82,19 @@ public final class TemporalActivityInferenceService {
       long inputChars) {}
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Reads the application-bound ActivityProperties shared by consumers of these settings.")
-  private final ActivityProperties p;
+  private record InferenceLimits(
+      int intervalSeconds,
+      int windowSeconds,
+      int maxRecords,
+      int maxRetries,
+      int maxInputChars,
+      int maxTotalTokens,
+      int maxOutputTokens,
+      int timeoutSeconds) {}
+
+  private final java.util.function.BooleanSupplier inferenceEnabled;
+  private final java.util.function.BooleanSupplier llmEnabled;
+  private final java.util.function.Supplier<InferenceLimits> inferenceLimits;
 
   /** 記録一覧。 */
   @FunctionalInterface
@@ -164,7 +169,21 @@ public final class TemporalActivityInferenceService {
       Clock clock,
       Supplier<List<WorkActivityInference.Execution>> executions,
       BooleanSupplier paused) {
-    this.p = p;
+    this.inferenceEnabled = () -> p.isEnabled() && p.getTemporal().isEnabled();
+    this.llmEnabled = () -> p.getTemporal().isLlmEnabled();
+    this.inferenceLimits =
+        () -> {
+          var temporal = p.getTemporal();
+          return new InferenceLimits(
+              temporal.getIntervalSeconds(),
+              temporal.getWindowSeconds(),
+              temporal.getMaxRecords(),
+              temporal.getMaxRetries(),
+              temporal.getMaxInputChars(),
+              temporal.getMaxTotalTokens(),
+              temporal.getMaxOutputTokens(),
+              temporal.getTimeoutSeconds());
+        };
     this.recentObservations =
         (start, end, maximum) -> records.findObservationsBetweenBounded(start, end, maximum);
     this.store = store;
@@ -181,23 +200,23 @@ public final class TemporalActivityInferenceService {
 
   /** 作業状況の把握に関する定期確認を処理する。 */
   public synchronized void tick() {
-    if (!p.isEnabled() || !p.getTemporal().isEnabled() || paused.getAsBoolean()) return;
+    if (!inferenceEnabled.getAsBoolean() || paused.getAsBoolean()) return;
     var now = clock.instant();
     var lifeLease = life == null ? null : life.begin();
-    var settings = p.getTemporal();
+    var settings = inferenceLimits.get();
     if (lastAttempt != null
         && !now.isBefore(lastAttempt)
-        && now.isBefore(lastAttempt.plusSeconds(settings.getIntervalSeconds()))) return;
+        && now.isBefore(lastAttempt.plusSeconds(settings.intervalSeconds()))) return;
     lastAttempt = now;
     try {
       var input =
           TemporalActivityEvidence.build(
               recentObservations.find(
-                  now.minusSeconds(settings.getWindowSeconds()),
+                  now.minusSeconds(settings.windowSeconds()),
                   now.plusMillis(1),
-                  settings.getMaxRecords()),
+                  settings.maxRecords()),
               executions.get(),
-              now.minusSeconds(settings.getWindowSeconds()),
+              now.minusSeconds(settings.windowSeconds()),
               now);
       if (input.observationIds().isEmpty()) {
         fingerprint = null;
@@ -218,7 +237,7 @@ public final class TemporalActivityInferenceService {
         var latest = store.latest();
         if (latest.isPresent()
             && !latest.get().windowEnd().isAfter(now)
-            && !latest.get().windowEnd().isBefore(now.minusSeconds(settings.getWindowSeconds())))
+            && !latest.get().windowEnd().isBefore(now.minusSeconds(settings.windowSeconds())))
           fingerprint = latest.get().inputHash();
       }
       if (!input.fingerprint().equals(fingerprint)) {
@@ -233,7 +252,7 @@ public final class TemporalActivityInferenceService {
         }
       } else if (!savePending
           && (candidate == null
-              || attempts > settings.getMaxRetries()
+              || attempts > settings.maxRetries()
               || !candidate.method().equals("LLM_FAILED_RULES"))) {
         skipped++;
         return;
@@ -241,15 +260,15 @@ public final class TemporalActivityInferenceService {
       var result = candidate;
       boolean retry = false;
       if (!savePending
-          && settings.isLlmEnabled()
+          && llmEnabled.getAsBoolean()
           && model != null
           && candidate.confidence() > 0
           && input.groups().stream().anyMatch(g -> !g.facts().content().isBlank())) {
         try {
           if (paused.getAsBoolean() || life != null && !life.valid(lifeLease)) return;
-          String structured = candidateEvidence.structuredInput(settings.getMaxInputChars());
+          String structured = candidateEvidence.structuredInput(settings.maxInputChars());
           inputChars += structured.length();
-          if (tokens >= settings.getMaxTotalTokens()) throw new BudgetFailure();
+          if (tokens >= settings.maxTotalTokens()) throw new BudgetFailure();
           lastAttempt = clock.instant();
           attempts++;
           candidateCalls++;
@@ -257,11 +276,11 @@ public final class TemporalActivityInferenceService {
           var output =
               model.infer(
                   structured,
-                  settings.getMaxOutputTokens(),
-                  settings.getTimeoutSeconds(),
-                  settings.getMaxTotalTokens() - tokens);
+                  settings.maxOutputTokens(),
+                  settings.timeoutSeconds(),
+                  settings.maxTotalTokens() - tokens);
           if (output == null || output.totalTokens() <= 0) throw new BudgetFailure();
-          if (output.totalTokens() > settings.getMaxTotalTokens() - tokens)
+          if (output.totalTokens() > settings.maxTotalTokens() - tokens)
             throw new BudgetFailure(output.totalTokens());
           tokens += output.totalTokens();
           totalTokens += output.totalTokens();
@@ -289,7 +308,7 @@ public final class TemporalActivityInferenceService {
           if (e instanceof BudgetFailure
               || (e instanceof ModelFailure m
                   ? !m.retryable
-                  : e instanceof IllegalArgumentException)) attempts = settings.getMaxRetries() + 1;
+                  : e instanceof IllegalArgumentException)) attempts = settings.maxRetries() + 1;
           retry = true;
           failed++;
           result =
@@ -306,7 +325,7 @@ public final class TemporalActivityInferenceService {
         }
       }
       candidate = result;
-      if (!retry && !savePending) attempts = settings.getMaxRetries() + 1;
+      if (!retry && !savePending) attempts = settings.maxRetries() + 1;
       savePending = true;
       if (paused.getAsBoolean() || life != null && !life.valid(lifeLease)) return;
       store.save(result);
