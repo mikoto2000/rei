@@ -39,16 +39,18 @@ public final class VectorDocumentController {
   private final Consumer<List<String>> addDocuments;
 
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits embedding runs through the shared integration lifecycle.")
-  private dev.mikoto2000.rei.application.run.IntegrationRunSubmitService runs;
+  private java.util.function.Function<Ingestion, String> submitIngestion;
 
   /** Web APIによる操作で使用する実行一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setRuns(dev.mikoto2000.rei.application.run.IntegrationRunSubmitService runs) {
-    this.runs = runs;
+    this.submitIngestion =
+        runs == null
+            ? null
+            : request ->
+                runs.ingestVectors(
+                        request.projectId(), request.sessionId(), List.copyOf(request.documents()))
+                    .runId();
   }
 
   /**
@@ -107,13 +109,12 @@ public final class VectorDocumentController {
                   || path.indexOf('[') >= 0)
                 throw new IllegalArgumentException("Expand file globs in the client");
             });
-    var run =
-        java.util.Objects.requireNonNull(runs, "Embedding runtime unavailable")
-            .ingestVectors(
-                request.projectId(), request.sessionId(), List.copyOf(request.documents()));
+    String runId =
+        java.util.Objects.requireNonNull(submitIngestion, "Embedding runtime unavailable")
+            .apply(request);
     return org.springframework.http.ResponseEntity.accepted()
-        .location(java.net.URI.create("/api/v1/runs/" + run.runId()))
-        .body(new BackgroundRunController.AcceptedRunResponse(run.runId()));
+        .location(java.net.URI.create("/api/v1/runs/" + runId))
+        .body(new BackgroundRunController.AcceptedRunResponse(runId));
   }
 
   /**

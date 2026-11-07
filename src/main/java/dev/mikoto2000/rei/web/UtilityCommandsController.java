@@ -30,16 +30,21 @@ public final class UtilityCommandsController {
   private final ReminderService reminders;
 
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits operations through the shared integration run entry point.")
-  private final IntegrationRunSubmitService runs;
+  private final java.util.function.Function<
+          Scope, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitBriefing;
+
+  private final java.util.function.BiFunction<
+          Scope, String, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitUpdateWork;
 
   /** 指定された値や利用先を使って、UtilityCommandsControllerを初期化する。 */
   public UtilityCommandsController(ReminderService reminders, IntegrationRunSubmitService runs) {
     this.reminders = reminders;
-    this.runs = runs;
+    this.submitBriefing =
+        request -> accepted(runs.briefing(request.projectId(), request.sessionId()));
+    this.submitUpdateWork =
+        (request, projectId) -> accepted(runs.updateWork(projectId, request.sessionId()));
   }
 
   /**
@@ -103,7 +108,7 @@ public final class UtilityCommandsController {
   public ResponseEntity<BackgroundRunController.AcceptedRunResponse> briefing(
       @RequestBody Scope request) {
     scope(request);
-    return accepted(runs.briefing(request.projectId(), request.sessionId()));
+    return submitBriefing.apply(request);
   }
 
   /** Web APIによる操作で用いる作業を返す。 */
@@ -113,7 +118,7 @@ public final class UtilityCommandsController {
     scope(request);
     if (!projectId.equals(request.projectId()))
       throw new IllegalArgumentException("Project ownership mismatch");
-    return accepted(runs.updateWork(projectId, request.sessionId()));
+    return submitUpdateWork.apply(request, projectId);
   }
 
   /** Web APIによる操作に関する対象範囲を処理する。 */

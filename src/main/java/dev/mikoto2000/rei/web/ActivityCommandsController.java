@@ -47,11 +47,13 @@ public final class ActivityCommandsController {
   private final ProjectService projects;
 
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits operations through the shared integration run entry point.")
-  private final IntegrationRunSubmitService runs;
+  private final java.util.function.Function<
+          Scope, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitSuggestBehaviorRules;
+
+  private final java.util.function.Function<
+          Scope, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitSuggestClassificationRules;
 
   /**
    * Web APIによる操作で受け渡すテキストを表す。
@@ -101,7 +103,11 @@ public final class ActivityCommandsController {
     this.activity = activity;
     this.findProject = id -> registry.resolveById(id);
     this.projects = projects;
-    this.runs = runs;
+    this.submitSuggestBehaviorRules =
+        request -> accepted(runs.suggestBehaviorRules(request.projectId(), request.sessionId()));
+    this.submitSuggestClassificationRules =
+        request ->
+            accepted(runs.suggestClassificationRules(request.projectId(), request.sessionId()));
   }
 
   /** Web APIによる操作で用いる時系列の記録を返す。 */
@@ -152,7 +158,8 @@ public final class ActivityCommandsController {
       @RequestParam String projectId, @RequestParam(defaultValue = "today") String date) {
     date(date);
     var project =
-        findProject.apply(projectId)
+        findProject
+            .apply(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
     try (var scope = ProjectClientScope.open(projects.newClient())) {
@@ -232,7 +239,7 @@ public final class ActivityCommandsController {
   public ResponseEntity<BackgroundRunController.AcceptedRunResponse> suggestBehavior(
       @RequestBody Scope request) {
     scope(request);
-    return accepted(runs.suggestBehaviorRules(request.projectId(), request.sessionId()));
+    return submitSuggestBehaviorRules.apply(request);
   }
 
   /** Web APIによる操作で用いる分類状態を返す。 */
@@ -264,7 +271,7 @@ public final class ActivityCommandsController {
   public ResponseEntity<BackgroundRunController.AcceptedRunResponse> suggestClassification(
       @RequestBody Scope request) {
     scope(request);
-    return accepted(runs.suggestClassificationRules(request.projectId(), request.sessionId()));
+    return submitSuggestClassificationRules.apply(request);
   }
 
   /** Web APIによる操作に関する対象範囲を処理する。 */
