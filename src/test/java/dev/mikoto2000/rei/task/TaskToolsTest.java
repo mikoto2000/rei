@@ -184,6 +184,26 @@ class TaskToolsTest {
     assertTrue(!failed.error().message().contains("private"));
   }
 
+  @Test
+  void fatalCompletionFailurePublishesFailedAndPreservesTheError() {
+    var service = Mockito.mock(TaskService.class);
+    var tools = new TaskTools(service);
+    var events = new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
+    tools.setEvents(
+        events::add,
+        new dev.mikoto2000.rei.event.AgentEventFactory(
+            java.time.Clock.fixed(java.time.Instant.EPOCH, java.time.ZoneOffset.UTC)));
+    var fatal = new AssertionError("task completion failed");
+    when(service.complete(7L)).thenThrow(fatal);
+
+    assertSame(fatal, assertThrows(AssertionError.class, () -> tools.taskComplete(7L)));
+    assertEquals(
+        List.of(
+            dev.mikoto2000.rei.event.AgentEventType.TASK_STARTED,
+            dev.mikoto2000.rei.event.AgentEventType.TASK_FAILED),
+        events.stream().map(dev.mikoto2000.rei.event.AgentEvent::type).toList());
+  }
+
   /** タスクの管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   @org.junit.jupiter.api.Tag("integration")
