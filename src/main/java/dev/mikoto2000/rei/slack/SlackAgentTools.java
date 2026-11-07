@@ -3,11 +3,12 @@ package dev.mikoto2000.rei.slack;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.policy.ToolPermissionGuard;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.IntSupplier;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.Tool;
@@ -30,11 +31,10 @@ public final class SlackAgentTools {
   public record Receipt(String requestId, String status, String agent) {}
 
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared Slack agent settings for admission and tool operations.")
-  private final SlackAgentProperties settings;
+  private final Function<String, SlackAgentProperties.Agent> configuredAgent;
+
+  private final IntSupplier defaultTimeout;
+  private final BiFunction<AgentRunContext, NewRequest, SlackAgentRepository.Request> createRequest;
 
   /** 保存と検索の窓口。 */
   private final SlackAgentRepository repository;
@@ -55,9 +55,22 @@ public final class SlackAgentTools {
       SlackAgentProperties settings,
       SlackAgentRepository repository,
       ToolPermissionGuard permissions) {
-    this.settings = settings;
+    this.configuredAgent = name -> settings.agent(name);
+    this.defaultTimeout = () -> settings.getTimeoutSeconds();
     this.repository = repository;
-    this.authorizeDelegation = (input, owner) -> permissions.check("askExternalAgent", input, owner);
+    this.createRequest =
+        (owner, request) ->
+            repository.create(
+                owner,
+                request.call(),
+                request.agent(),
+                request.question(),
+                request.expected(),
+                request.timeout(),
+                request.followUp(),
+                settings);
+    this.authorizeDelegation =
+        (input, owner) -> permissions.check("askExternalAgent", input, owner);
   }
 
   /** Slackとの連携で用いるask外部エージェントを返す。 */
@@ -76,7 +89,7 @@ public final class SlackAgentTools {
     if (e.sharedLlmReservation().remaining() < 1)
       throw new IllegalStateException(
           "No remaining Run/Goal model budget for external result integration");
-    var a = settings.agent(agent);
+    var a = configuredAgent.apply(agent);
     if (question == null
         || question.isBlank()
         || question.length() > 2048
@@ -106,15 +119,15 @@ public final class SlackAgentTools {
     return repository.transaction(
         () -> {
           var q =
-              repository.create(
+              createRequest.apply(
                   e.runContext(),
-                  Objects.toString(context.getContext().get("toolCallId"), ""),
-                  agent,
-                  safe,
-                  expected,
-                  timeoutSeconds == null ? settings.getTimeoutSeconds() : timeoutSeconds,
-                  followUpRequestId,
-                  settings);
+                  new NewRequest(
+                      Objects.toString(context.getContext().get("toolCallId"), ""),
+                      agent,
+                      safe,
+                      expected,
+                      timeoutSeconds == null ? defaultTimeout.getAsInt() : timeoutSeconds,
+                      followUpRequestId));
           registered.accept(q);
           return new Receipt(q.id(), q.state(), q.agent());
         });
@@ -151,4 +164,7 @@ public final class SlackAgentTools {
         .map(SlackAgentToolCallback::new)
         .toArray(ToolCallback[]::new);
   }
+
+  private record NewRequest(
+      String call, String agent, String question, String expected, int timeout, String followUp) {}
 }

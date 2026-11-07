@@ -4,21 +4,19 @@ import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.goal.FileGoalVerifier;
 import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.workcontext.WorkContextGit;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.function.BiFunction;
 import org.springframework.stereotype.Component;
 
 /** 外部条件の待機に必要な依存条件取得元利用可否の確認を扱う。 */
 @Component
 public class DependencySourceProbe implements DependencyProbe {
   /** ファイル一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared verifier and its configured completion and evidence policy.")
-  private final FileGoalVerifier files;
+  private final BiFunction<Path, String, FileGoalVerifier.Fingerprint> fingerprint;
+
+  private final BiFunction<Path, GoalRepository.FileCriterion, FileGoalVerifier.Verification>
+      verifyCriterion;
 
   /** Gitの情報。 */
   private final WorkContextGit git;
@@ -69,7 +67,8 @@ public class DependencySourceProbe implements DependencyProbe {
       BackgroundProcessManager processes,
       DependencyHttpProbe http,
       Clock clock) {
-    this.files = files;
+    this.fingerprint = (root, file) -> files.fingerprint(root, file);
+    this.verifyCriterion = (root, criterion) -> files.verify(root, criterion);
     this.git = git;
     this.processes = processes;
     this.http = http;
@@ -78,7 +77,7 @@ public class DependencySourceProbe implements DependencyProbe {
 
   /** 外部条件の待機で用いるファイル比較の基準を返す。 */
   public String fileBaseline(Path root, String file) {
-    var snapshot = files.fingerprint(root, file);
+    var snapshot = fingerprint.apply(root, file);
     if (snapshot.available()) return snapshot.sha256();
     if (snapshot.reason().equals("file_missing_or_not_regular")) return "missing";
     if (snapshot.reason().equals("verification_cancelled"))
@@ -102,7 +101,8 @@ public class DependencySourceProbe implements DependencyProbe {
     return switch (spec.kind()) {
       case FILE_EXISTS, FILE_SHA256 -> {
         var result =
-            files.verify(root, new GoalRepository.FileCriterion(spec.target(), spec.expected()));
+            verifyCriterion.apply(
+                root, new GoalRepository.FileCriterion(spec.target(), spec.expected()));
         if (result.reason().equals("verification_cancelled"))
           throw new java.util.concurrent.CancellationException();
         var state =
@@ -128,7 +128,7 @@ public class DependencySourceProbe implements DependencyProbe {
       }
       case FILE_JSON_PREDICATE -> {
         var result =
-            files.verify(
+            verifyCriterion.apply(
                 root,
                 new GoalRepository.FileCriterion(spec.target(), null, null, null, spec.expected()));
         if (Thread.currentThread().isInterrupted())

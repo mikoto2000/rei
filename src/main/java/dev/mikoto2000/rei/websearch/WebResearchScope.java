@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.websearch;
 import dev.mikoto2000.rei.http.FetchScope;
 import dev.mikoto2000.rei.http.TransferBudget;
 import dev.mikoto2000.rei.http.TransferScope;
-import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
@@ -27,7 +26,7 @@ final class WebResearchScope implements AutoCloseable {
   private final WebResearchScope root;
 
   /** この機能の動作設定。 */
-  private final WebSearchProperties properties;
+  private final int maxQueries;
 
   /** 検索条件一覧。 */
   private final Set<String> queries = new LinkedHashSet<>();
@@ -42,24 +41,19 @@ final class WebResearchScope implements AutoCloseable {
   private final SearchRequestBudget api;
 
   /** 指定された値や利用先を使って、WebResearchScopeを初期化する。 */
-  private WebResearchScope(WebSearchProperties properties) {
-    properties.validateSelection();
-    this.properties = properties;
+  private WebResearchScope(WebResearchLimits limits) {
+    this.maxQueries = limits.maxQueries();
     owner = CURRENT.get() == null;
     root = owner ? this : CURRENT.get();
     if (owner) {
       CURRENT.set(this);
-      fetch =
-          FetchScope.enter(
-              FetchScope.current()
-                  .withTimeout(Duration.ofSeconds(properties.getResearchTimeoutSeconds())));
+      fetch = FetchScope.enter(FetchScope.current().withTimeout(limits.timeout()));
       transfer =
           TransferScope.enter(
               TransferScope.current() == null
-                  ? new TransferBudget(
-                      properties.getTotalWireBytes(), properties.getTotalDecodedBytes())
+                  ? new TransferBudget(limits.totalWireBytes(), limits.totalDecodedBytes())
                   : TransferScope.current());
-      api = SearchRequestBudget.enter(properties.getMaxSearchApiCalls());
+      api = SearchRequestBudget.enter(limits.maxApiCalls());
     } else {
       fetch = null;
       transfer = null;
@@ -69,15 +63,18 @@ final class WebResearchScope implements AutoCloseable {
 
   /** Web上の情報の調査で用いる利用開始を返す。 */
   static WebResearchScope enter(WebSearchProperties properties) {
-    return new WebResearchScope(properties);
+    return enter(WebResearchLimits.capture(properties));
+  }
+
+  static WebResearchScope enter(WebResearchLimits limits) {
+    return new WebResearchScope(limits);
   }
 
   /** Web上の情報の調査において、登録検索条件に該当するか判定する。 */
   static boolean registerQuery(String query) {
     var scope = CURRENT.get();
     if (scope == null) return true;
-    if (scope.queries.contains(query)
-        || scope.queries.size() >= scope.properties.getMaxSearchQueries()) return false;
+    if (scope.queries.contains(query) || scope.queries.size() >= scope.maxQueries) return false;
     scope.queries.add(query);
     return true;
   }

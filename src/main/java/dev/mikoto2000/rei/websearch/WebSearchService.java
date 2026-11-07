@@ -113,10 +113,6 @@ public class WebSearchService {
   }
 
   /** 設定済みの検索先を順に利用し、URLの重複と情報の充足度を考慮して候補を集める。 */
-  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      justification =
-          "Rethrow original cancellation and provider failures after safe logging; wrapping changes their semantics.")
   private List<WebSearchResult> searchObserved(String query, Integer limit, SearchSettings settings)
       throws IOException, InterruptedException {
     if (!settings.enabled()) {
@@ -188,20 +184,18 @@ public class WebSearchService {
         }
       } catch (IOException | InterruptedException | RuntimeException e) {
         // 中断や取得制限は継続させず、通常の検索先の障害だけを次の候補で補う。
-        try {
-          dev.mikoto2000.rei.http.FetchOperation.propagateControls(e);
-        } catch (RuntimeException stopped) {
-          log.info(
-              "Web search provider stopped; searchId={}, provider={}, reason=EXECUTION_STOPPED,"
-                  + " httpStatus={}, networkRequest={}, durationMs={}",
-              searchId,
-              providerLogName(provider),
-              attempt.httpStatus,
-              attempt.networkRequest,
-              java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
-                  System.nanoTime() - providerStarted));
-          throw stopped;
-        }
+        dev.mikoto2000.rei.http.FetchOperation.propagateControls(
+            e,
+            () ->
+                log.info(
+                    "Web search provider stopped; searchId={}, provider={}, reason=EXECUTION_STOPPED,"
+                        + " httpStatus={}, networkRequest={}, durationMs={}",
+                    searchId,
+                    providerLogName(provider),
+                    attempt.httpStatus,
+                    attempt.networkRequest,
+                    java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                        System.nanoTime() - providerStarted)));
         log.warn(
             "Web search provider failed; searchId={}, provider={}, causeType={}, code={}, httpStatus={},"
                 + " networkRequest={}, durationMs={}",
@@ -237,15 +231,7 @@ public class WebSearchService {
     if (!resultsByUrl.isEmpty()) {
       return new ArrayList<>(resultsByUrl.values());
     }
-    if (firstError instanceof IOException ioException) {
-      throw ioException;
-    }
-    if (firstError instanceof InterruptedException interruptedException) {
-      throw interruptedException;
-    }
-    if (firstError instanceof RuntimeException runtimeException) {
-      throw runtimeException;
-    }
+    if (firstError != null) WebSearchSelection.propagateProviderFailure(firstError);
     return List.of();
   }
 
