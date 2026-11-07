@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.llm;
 
+import dev.mikoto2000.rei.context.RunCancellationStatus;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import io.micrometer.observation.ObservationRegistry;
@@ -21,6 +22,13 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   @Autowired(required = false)
   void setTiming(dev.mikoto2000.rei.timing.TimingExecution timing) {
     this.timing = timing;
+  }
+
+  private RunCancellationStatus runCancellation = runId -> false;
+
+  @Autowired(required = false)
+  void setRunCancellationStatus(RunCancellationStatus runCancellation) {
+    this.runCancellation = runCancellation;
   }
 
   /** 取得記録保存先。 */
@@ -182,7 +190,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     }
     return eventFactory == null || eventPublisher == null
         ? model
-        : new AgentEventChatModel(feature, model, eventFactory, eventPublisher, timing);
+        : new AgentEventChatModel(feature, model, eventFactory, eventPublisher, timing, runCancellation);
   }
 
   /** 用途に応じたモデル利用で用いるモデルを返す。 */

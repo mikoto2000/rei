@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.service;
 
+import dev.mikoto2000.rei.context.RunCancellationStatus;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import java.time.Clock;
@@ -14,7 +15,7 @@ import reactor.core.Disposable;
 
 /** Run の所有期間と停止要求を管理し、終了確認までキャンセル情報を保持する。 */
 @Component
-public class CommandCancellationService {
+public class CommandCancellationService implements RunCancellationStatus {
   /** 停止要求の受付と実際の終了を区別する照会情報。 */
   public record Diagnostic(
       String runId,
@@ -322,6 +323,11 @@ public class CommandCancellationService {
     synchronized (state) {
       return state.requestedAt != null;
     }
+  }
+
+  @Override
+  public boolean isCancellationRequested(String runId) {
+    return diagnostic(runId).requestedAt() != null;
   }
 
   /** Run の停止は sticky。旧単独コマンドだけ消費 API の互換動作を残す。 */

@@ -17,7 +17,10 @@ import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.service.CommandCancellationService;
+import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.timing.TimingExecution;
 import dev.mikoto2000.rei.timing.TimingStore;
@@ -25,9 +28,12 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
@@ -37,6 +43,7 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
@@ -248,6 +255,63 @@ class AgentEventChatModelTimingTest {
     assertEquals(
         Status.DISCONNECTED,
         store.latest("project", "session").orElseThrow().spans().getFirst().status());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"false, true", "true, true", "false, false"})
+  void streamDisposalUsesTheOwningRunsCancellationRequest(
+      boolean includeExecution, boolean cancelOwner) {
+    var cancellation = new CommandCancellationService();
+    var unrelated = new AgentRunContext("other-run", "other-session", owner.projectRoot(), "project");
+    cancellation.prepare(owner);
+    cancellation.prepare(unrelated);
+    var execution = new RunExecutionContext(owner.runId(), null, null, null, null);
+    execution.setRunContext(owner);
+    cancellation.onCancel(owner.runId(), execution::cancel);
+    var request =
+        includeExecution
+            ? new Prompt(
+                "stream",
+                OpenAiChatOptions.builder()
+                    .toolContext(Map.of(RunExecutionContext.KEY, execution))
+                    .build())
+            : new Prompt("stream");
+    var delegate = mock(ChatModel.class);
+    when(delegate.stream(request)).thenReturn(Flux.never());
+    store.beginRun(owner.runId(), owner.projectId(), owner.conversationId());
+
+    new ApplicationContextRunner()
+        .withUserConfiguration(LlmModelProvider.class)
+        .withBean(ChatModel.class, () -> delegate)
+        .withBean(LlmProperties.class, LlmProperties::new)
+        .withBean(AgentEventFactory.class, () -> new AgentEventFactory(Clock.systemUTC()))
+        .withBean(AgentEventPublisher.class, InMemoryAgentEventBus::new)
+        .withBean(TimingExecution.class, () -> new TimingExecution(store))
+        .withBean(CommandCancellationService.class, () -> cancellation)
+        .run(
+            app -> {
+              var model = app.getBean(LlmModelProvider.class).chatModel(LlmFeature.CHAT);
+              Flux<ChatResponse> stream;
+              var scope = AgentRunScope.open(owner);
+              try (scope) {
+                stream = model.stream(request);
+              }
+              var subscription = stream.subscribe();
+              var stop = cancellation.requestRun((cancelOwner ? owner : unrelated).runId());
+              try {
+                assertTrue(stop.accepted());
+                assertFalse(execution.isCancelled());
+                // Disposal can arrive on another thread before cancellation hooks are dispatched.
+                CompletableFuture.runAsync(subscription::dispose)
+                    .orTimeout(5, TimeUnit.SECONDS)
+                    .join();
+                var span = store.latest("project", "session").orElseThrow().spans().getFirst();
+                assertEquals(cancelOwner ? Status.CANCELLED : Status.DISCONNECTED, span.status());
+              } finally {
+                stop.dispatch().run();
+                subscription.dispose();
+              }
+            });
   }
 
   /** 用途に応じたモデル利用で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */

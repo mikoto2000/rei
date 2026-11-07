@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.llm;
 
+import dev.mikoto2000.rei.context.RunCancellationStatus;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import java.util.Map;
@@ -37,6 +38,8 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   /** 時間計測。 */
   private final dev.mikoto2000.rei.timing.TimingExecution timing;
 
+  private final RunCancellationStatus runCancellation;
+
   /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   AgentEventChatModel(
       String feature,
@@ -53,11 +56,22 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
       AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher,
       dev.mikoto2000.rei.timing.TimingExecution timing) {
+    this(feature, delegate, eventFactory, eventPublisher, timing, runId -> false);
+  }
+
+  AgentEventChatModel(
+      String feature,
+      ChatModel delegate,
+      AgentEventFactory eventFactory,
+      AgentEventPublisher eventPublisher,
+      dev.mikoto2000.rei.timing.TimingExecution timing,
+      RunCancellationStatus runCancellation) {
     this.timing = timing;
     this.feature = feature;
     this.delegate = delegate;
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
+    this.runCancellation = runCancellation;
   }
 
   /** 用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
@@ -152,7 +166,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
                   () -> {
                     if (measured != null)
                       measured.finish(
-                          cancelled(prompt)
+                          cancelled(prompt, runId)
                               ? dev.mikoto2000.rei.timing.TimingRecorder.Status.CANCELLED
                               : dev.mikoto2000.rei.timing.TimingRecorder.Status.DISCONNECTED);
                   });
@@ -193,8 +207,9 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   }
 
   /** 用途に応じたモデル利用で判断に用いるキャンセル済みの条件を確認する。 */
-  private boolean cancelled(Prompt prompt) {
+  private boolean cancelled(Prompt prompt, String runId) {
     return Thread.currentThread().isInterrupted()
+        || (runId != null && runCancellation.isCancellationRequested(runId))
         || toolContext(prompt)
                 .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
                 instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext run
