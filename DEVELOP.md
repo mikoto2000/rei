@@ -63,6 +63,8 @@ Episode の経緯・根拠・差分整理・横断検索は [Episode Memory](doc
 
 Maven は `generate-sources` で `src/main/java` から Lombok のメンバーを生成し、
 `target/delombok` のソースを `javac` でコンパイルします。編集は `src/main/java` で行います。
+Maven の JVM では `sun.misc.Unsafe` によるメモリアクセスを拒否します。
+Lombok は `.mvn/jvm.config` で開放したコンパイラのパッケージに、Java のリフレクションでアクセスします。
 Picocli のコマンドや引数を変更した場合は、対応する GraalVM リフレクション設定も更新してください。
 [本番用](src/main/resources/META-INF/native-image/dev.mikoto2000/rei-picocli/reflect-config.json)と
 [テスト用](src/test/resources/META-INF/native-image/dev.mikoto2000/rei-picocli/reflect-config.json)に分かれています。
