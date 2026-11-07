@@ -5,8 +5,6 @@ import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.util.Optional;
 import java.util.function.BiConsumer;
@@ -18,7 +16,6 @@ public final class ChatSubmitService {
   private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 会話一覧。 */
-  private final SessionRegistry sessions;
 
   /** 実行一覧。 */
   private final java.util.function.Consumer<AgentRunContext> registerRun;
@@ -26,15 +23,22 @@ public final class ChatSubmitService {
   private final java.util.function.Consumer<String> forgetRun;
 
   /** 受付から終了までの管理。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared lifecycle service so session validation and submission use the same session state.")
-  private final SessionLifecycle lifecycle;
+  private final Function<
+          AgentRunContext.Mode,
+          java.util.function.BiFunction<ProjectContext, WebAdmission, AgentRunContext>>
+      webAdmission;
+
+  private final Function<
+          dev.mikoto2000.rei.mcp.McpAdmission,
+          java.util.function.BiFunction<ProjectContext, McpMessage, AgentRunContext>>
+      mcpAdmission;
+
+  private record WebAdmission(
+      String session, String message, String key, String fingerprint, String client) {}
+
+  private record McpMessage(String session, String message) {}
 
   /** 実行先への引き渡し。 */
-  private final BiConsumer<AgentRunContext, String> dispatch;
 
   /** 並行有効状態。 */
   private final boolean concurrentEnabled;
@@ -99,11 +103,68 @@ public final class ChatSubmitService {
       BiConsumer<AgentRunContext, String> dispatch,
       boolean concurrentEnabled) {
     this.findProject = id -> projects.resolveById(id);
-    this.sessions = sessions;
     this.registerRun = context -> runs.register(context);
     this.forgetRun = run -> runs.forget(run);
-    this.dispatch = dispatch;
-    this.lifecycle = lifecycle;
+    this.webAdmission =
+        mode ->
+            (project, request) ->
+                lifecycle.submit(
+                    project,
+                    request.session(),
+                    request.message(),
+                    AgentRunContext.RequestSource.WEB,
+                    mode,
+                    false,
+                    request.key(),
+                    request.fingerprint(),
+                    context -> {
+                      var capture = captureHooks;
+                      sessions.remember(context.conversationId(), project.id());
+                      try {
+                        registerRun.accept(context);
+                        if (dotDelegations != null)
+                          dotDelegations.ifAvailable(
+                              dot -> dot.authoriseHumanInput(context, request.message()));
+                        if (capture != null && request.client() != null)
+                          capture
+                              .accept()
+                              .record(
+                                  "cli:" + request.client(),
+                                  context.conversationId(),
+                                  request.key() == null ? context.runId() : request.key(),
+                                  context.runId());
+                        dispatch.accept(context, request.message());
+                      } catch (RuntimeException | Error error) {
+                        if (capture != null) capture.startFailed().accept(context.runId());
+                        forgetRun.accept(context.runId());
+                        sessions.forget(context.conversationId());
+                        throw error;
+                      }
+                    });
+    this.mcpAdmission =
+        admission ->
+            (project, request) ->
+                lifecycle.submit(
+                    project,
+                    request.session(),
+                    request.message(),
+                    AgentRunContext.RequestSource.MCP,
+                    AgentRunContext.Mode.READ_ONLY,
+                    false,
+                    null,
+                    null,
+                    admission,
+                    context -> {
+                      sessions.remember(context.conversationId(), project.id());
+                      try {
+                        registerRun.accept(context);
+                        dispatch.accept(context, request.message());
+                      } catch (RuntimeException | Error error) {
+                        forgetRun.accept(context.runId());
+                        sessions.forget(context.conversationId());
+                        throw error;
+                      }
+                    });
     this.concurrentEnabled = concurrentEnabled;
   }
 
@@ -152,38 +213,9 @@ public final class ChatSubmitService {
       } catch (java.io.IOException error) {
         throw new IllegalStateException("Cannot fingerprint request", error);
       }
-    return lifecycle.submit(
-        project,
-        sessionId,
-        message,
-        AgentRunContext.RequestSource.WEB,
-        mode,
-        false,
-        key,
-        fingerprint,
-        context -> {
-          var capture = captureHooks;
-          sessions.remember(context.conversationId(), project.id());
-          try {
-            registerRun.accept(context);
-            if (dotDelegations != null)
-              dotDelegations.ifAvailable(dot -> dot.authoriseHumanInput(context, message));
-            if (capture != null && clientId != null)
-              capture
-                  .accept()
-                  .record(
-                      "cli:" + clientId,
-                      context.conversationId(),
-                      key == null ? context.runId() : key,
-                      context.runId());
-            dispatch.accept(context, message);
-          } catch (RuntimeException | Error error) {
-            if (capture != null) capture.startFailed().accept(context.runId());
-            forgetRun.accept(context.runId());
-            sessions.forget(context.conversationId());
-            throw error;
-          }
-        });
+    return webAdmission
+        .apply(mode)
+        .apply(project, new WebAdmission(sessionId, message, key, fingerprint, clientId));
   }
 
   /**
@@ -200,26 +232,6 @@ public final class ChatSubmitService {
       throw new IllegalArgumentException("Concurrent conversations are disabled");
     var project =
         findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
-    return lifecycle.submit(
-        project,
-        sessionId,
-        message,
-        AgentRunContext.RequestSource.MCP,
-        AgentRunContext.Mode.READ_ONLY,
-        false,
-        null,
-        null,
-        admission,
-        context -> {
-          sessions.remember(context.conversationId(), project.id());
-          try {
-            registerRun.accept(context);
-            dispatch.accept(context, message);
-          } catch (RuntimeException | Error error) {
-            forgetRun.accept(context.runId());
-            sessions.forget(context.conversationId());
-            throw error;
-          }
-        });
+    return mcpAdmission.apply(admission).apply(project, new McpMessage(sessionId, message));
   }
 }

@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.application.input;
 import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -33,23 +31,22 @@ public final class ConversationInputGateway {
   private record Accepted(ConversationInput input, AgentRunContext context, Instant acceptedAt) {}
 
   /** 受付から終了までの管理。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared lifecycle service so session validation and submission use the same session state.")
-  private final SessionLifecycle lifecycle;
+  private final java.util.function.Function<
+          AgentRunContext.Mode,
+          java.util.function.BiFunction<
+              ConversationInput, Consumer<AgentRunContext>, AgentRunContext>>
+      admitInput;
 
   /** 実行先への引き渡し。 */
   private final BiConsumer<AgentRunContext, String> dispatch;
 
   /** 入力の振り分け。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared input router so all operations use the same queue and active runs.")
-  private final ConversationInputRouter router;
+  private final java.util.function.BiFunction<
+          String, Runnable, ConversationInputRouter.Subscription>
+      beforeExecution;
+
+  private final java.util.function.BiPredicate<String, String> isQueued;
+  private final java.util.function.BiPredicate<String, String> containsRun;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -83,9 +80,23 @@ public final class ConversationInputGateway {
       Clock clock,
       int ledgerLimit,
       Duration retention) {
-    this.lifecycle = Objects.requireNonNull(lifecycle);
+    Objects.requireNonNull(lifecycle);
+    this.admitInput =
+        mode ->
+            (input, enqueue) ->
+                lifecycle.submit(
+                    input.target().project(),
+                    input.target().sessionId(),
+                    input.text(),
+                    AgentRunContext.RequestSource.SHELL,
+                    mode,
+                    input.source() == InputSource.VOICE,
+                    enqueue);
     this.dispatch = Objects.requireNonNull(dispatch);
-    this.router = router;
+    this.beforeExecution =
+        router == null ? null : (run, listener) -> router.beforeExecution(run, listener);
+    this.isQueued = (project, run) -> router != null && router.isQueued(project, run);
+    this.containsRun = (project, run) -> router != null && router.containsRun(project, run);
     this.clock = Objects.requireNonNull(clock);
     if (ledgerLimit < 1 || retention == null || retention.isNegative() || retention.isZero())
       throw new IllegalArgumentException("Positive ledger bounds required");
@@ -137,7 +148,7 @@ public final class ConversationInputGateway {
     if (mode == null) mode = AgentRunContext.Mode.EXCLUSIVE;
     if (input.source() == InputSource.VOICE && mode != AgentRunContext.Mode.EXCLUSIVE)
       throw new IllegalArgumentException("Voice uses exclusive agent execution");
-    if (input.source() == InputSource.VOICE && router == null)
+    if (input.source() == InputSource.VOICE && beforeExecution == null)
       throw new IllegalStateException("Voice requires the existing Run queue");
     prune();
     var prior = accepted.get(input.inputId());
@@ -157,27 +168,24 @@ public final class ConversationInputGateway {
       throw new IllegalArgumentException("Input has expired");
     var notifyAccepted = acceptanceNotification(afterAccepted);
     var context =
-        lifecycle.submit(
-            input.target().project(),
-            input.target().sessionId(),
-            input.text(),
-            AgentRunContext.RequestSource.SHELL,
-            mode,
-            input.source() == InputSource.VOICE,
-            run -> {
-              try (var observer =
-                  router == null
-                      ? (ConversationInputRouter.Subscription) () -> {}
-                      : router.beforeExecution(run.runId(), notifyAccepted)) {
-                beforeDispatch.accept(run);
-                try {
-                  dispatch.accept(run, input.text());
-                } catch (RuntimeException | Error failed) {
-                  failedDispatch.accept(run);
-                  throw failed;
-                }
-              }
-            });
+        admitInput
+            .apply(mode)
+            .apply(
+                input,
+                run -> {
+                  try (var observer =
+                      beforeExecution == null
+                          ? (ConversationInputRouter.Subscription) () -> {}
+                          : beforeExecution.apply(run.runId(), notifyAccepted)) {
+                    beforeDispatch.accept(run);
+                    try {
+                      dispatch.accept(run, input.text());
+                    } catch (RuntimeException | Error failed) {
+                      failedDispatch.accept(run);
+                      throw failed;
+                    }
+                  }
+                });
     accepted.put(input.inputId(), new Accepted(input, context, clock.instant()));
     notifyAccepted.run();
     return context;
@@ -251,7 +259,7 @@ public final class ConversationInputGateway {
 
   /** 会話入力の受付において、待機中に該当するか判定する。 */
   private boolean queued(Accepted entry) {
-    return router != null && router.isQueued(entry.context().projectId(), entry.context().runId());
+    return isQueued.test(entry.context().projectId(), entry.context().runId());
   }
 
   /** 会話入力の受付に関する不要な情報の整理を処理する。 */
@@ -262,8 +270,6 @@ public final class ConversationInputGateway {
         .removeIf(
             entry ->
                 !entry.acceptedAt().isAfter(cutoff)
-                    && (router == null
-                        || !router.containsRun(
-                            entry.context().projectId(), entry.context().runId())));
+                    && !containsRun.test(entry.context().projectId(), entry.context().runId()));
   }
 }
