@@ -101,9 +101,13 @@ public class ProjectRunStateStore implements AgentEventListener {
   }
 
   /** プロジェクトごとの作業環境を利用するため、指定を補って共通の初期化へ引き渡す。 */
-  @Autowired
-  public ProjectRunStateStore(AgentEventBus bus) {
+  public ProjectRunStateStore() {
     this(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current());
+  }
+
+  /** Starts event delivery after Spring has constructed the listener. */
+  @Autowired
+  void subscribe(AgentEventBus bus) {
     subscription = bus.subscribe(this);
   }
 
