@@ -116,198 +116,201 @@ final class PagedFileSearch {
   }
 
   Page read(Request input, Path root) {
-    try (var measurement = ReadingMetrics.operation("search", store)) {
-      if (input == null) throw ReadingProblem.fail("INVALID_ARGUMENT");
-      int tokens = value(input.maxTokens(), 2048, 256, 8000);
-      int bytes = value(input.maxBytes(), 16384, 1024, 65536);
-      int scanLimit = value(input.scanLimit(), 128, 1, 1024);
-      int maxLines = value(input.maxLines(), 1000, 1, 5000);
-      var owner = ReadingRuntime.current();
-      ReadingStateStore.scope(owner);
-      var realRoot = root.toRealPath();
-      if (!realRoot.equals(owner.projectRoot().toRealPath()))
-        throw ReadingProblem.fail("INVALID_CURSOR");
-      State state;
-      List<Prepared> prepared;
-      if (input.cursor() == null) {
-        validate(input);
-        state = new State();
-        state.request =
-            new Request(
-                input.queries(),
-                value(input.contextLines(), 25, 0, 1000),
-                null,
-                null,
-                null,
-                null,
-                null);
-        prepared = prepare(state, root);
-        if (prepared.isEmpty())
-          return paused(state, List.of(), "FAILED", ReadingProblem.projectPathExcluded());
-        state.inventory = inventory(prepared, root);
-      } else {
-        if (!input.cursor().matches("(?:RESULT|SCAN):[0-9a-f-]{36}"))
+    try {
+      var measurement = ReadingMetrics.operation("search", store);
+      try (measurement) {
+        if (input == null) throw ReadingProblem.fail("INVALID_ARGUMENT");
+        int tokens = value(input.maxTokens(), 2048, 256, 8000);
+        int bytes = value(input.maxBytes(), 16384, 1024, 65536);
+        int scanLimit = value(input.scanLimit(), 128, 1, 1024);
+        int maxLines = value(input.maxLines(), 1000, 1, 5000);
+        var owner = ReadingRuntime.current();
+        ReadingStateStore.scope(owner);
+        var realRoot = root.toRealPath();
+        if (!realRoot.equals(owner.projectRoot().toRealPath()))
           throw ReadingProblem.fail("INVALID_CURSOR");
-        state = store.load(owner, "search", input.cursor(), State.class);
-        if (state.inventoryId != null)
-          state.inventory =
-              store.load(owner, "search_inventory", state.inventoryId, Manifest.class).files();
-        if (input.queries() != null && !input.queries().equals(state.request.queries()))
-          throw ReadingProblem.fail("INVALID_CURSOR");
-        prepared = prepare(state, root);
-        ReadingMetrics.add("continuations", 1);
-        long verificationStarted = System.nanoTime();
-        verifyInventory(realRoot, state.inventory);
-        if (!realRoot.equals(root.toRealPath())) throw ReadingProblem.fail("FILE_CHANGED");
-        ReadingMetrics.add(
-            "resumeInventoryVerificationNanos", System.nanoTime() - verificationStarted);
-        ReadingMetrics.add("resumeVerifiedCandidates", state.inventory.size());
-      }
-      int scanned = 0, readBytes = 0;
-      while (state.file < state.inventory.size()) {
-        Tools.checkReadingCancellation(null);
-        var item = state.inventory.get(state.file);
-        if (item.size() > FileSnapshots.MAX_FILE_BYTES) {
-          state.file++;
-          return paused(
-              state,
-              List.of(),
-              "FILE_SIZE_LIMIT",
-              ReadingProblem.from(ReadingProblem.fail("FILE_SIZE_LIMIT")));
+        State state;
+        List<Prepared> prepared;
+        if (input.cursor() == null) {
+          validate(input);
+          state = new State();
+          state.request =
+              new Request(
+                  input.queries(),
+                  value(input.contextLines(), 25, 0, 1000),
+                  null,
+                  null,
+                  null,
+                  null,
+                  null);
+          prepared = prepare(state, root);
+          if (prepared.isEmpty())
+            return paused(state, List.of(), "FAILED", ReadingProblem.projectPathExcluded());
+          state.inventory = inventory(prepared, root);
+        } else {
+          if (!input.cursor().matches("(?:RESULT|SCAN):[0-9a-f-]{36}"))
+            throw ReadingProblem.fail("INVALID_CURSOR");
+          state = store.load(owner, "search", input.cursor(), State.class);
+          if (state.inventoryId != null)
+            state.inventory =
+                store.load(owner, "search_inventory", state.inventoryId, Manifest.class).files();
+          if (input.queries() != null && !input.queries().equals(state.request.queries()))
+            throw ReadingProblem.fail("INVALID_CURSOR");
+          prepared = prepare(state, root);
+          ReadingMetrics.add("continuations", 1);
+          long verificationStarted = System.nanoTime();
+          verifyInventory(realRoot, state.inventory);
+          if (!realRoot.equals(root.toRealPath())) throw ReadingProblem.fail("FILE_CHANGED");
+          ReadingMetrics.add(
+              "resumeInventoryVerificationNanos", System.nanoTime() - verificationStarted);
+          ReadingMetrics.add("resumeVerifiedCandidates", state.inventory.size());
         }
-        if (scanned >= scanLimit) return paused(state, List.of(), "FILE_ENUMERATION_LIMIT", null);
-        if (readBytes + item.size() > FileSnapshots.MAX_REQUEST_BYTES)
-          return paused(state, List.of(), "SNAPSHOT_BUDGET", null);
-        var snapshots = tools.newSnapshots();
-        var snapshot = snapshots.get(root, Path.of(item.path()));
-        readBytes += snapshot.bytes().length;
-        if (state.version != null && !state.version.equals(snapshot.version()))
-          throw ReadingProblem.fail("FILE_CHANGED");
-        state.version = snapshot.version();
-        String charset = state.request.queries().getFirst().charset();
-        var lines =
-            snapshots.lines(snapshot, charset, () -> tools.snapshotLines(snapshot, charset));
-        if (state.ranges.isEmpty()) {
-          ReadingMetrics.add("scannedFiles", 1);
-          scanned++;
-          scan(state, lines, root, item.path(), prepared);
-        }
-        if (!state.ranges.isEmpty()) {
-          var sections = new ArrayList<Tools.ReadSection>();
-          var matches = new ArrayList<Tools.SearchMatch>();
-          int count = 0;
-          while (state.rangeIndex < state.ranges.size() && count < maxLines) {
-            var range = state.ranges.get(state.rangeIndex);
-            int start = range.start();
-            int stop = Math.min(range.end(), start + maxLines - count);
-            // Select an exact source prefix and fit its serialized envelope before advancing state.
-            var budget = new TextReadBudget(Math.max(0, bytes - 1024));
-            var slice = budget.take(lines, start, stop, state.offset, maxLines - count);
-            if (slice.lines().isEmpty()) break;
-            int keep = slice.lines().size();
-            Tools.SearchAndReadResult candidate;
-            while (true) {
-              var pending = new ArrayList<>(sections);
-              pending.add(
-                  new Tools.ReadSection(
-                      start + 1,
-                      start + keep,
-                      slice.lines().subList(0, keep),
-                      slice.nextOffset() > 0));
-              candidate =
-                  new Tools.SearchAndReadResult(
-                      item.path(),
-                      matches(pending, lines, root, item.path(), prepared),
-                      pending,
-                      null,
-                      true,
-                      false,
-                      state.version,
-                      null);
-              if (FileResultBudget.fits(
-                  candidate, Math.max(256, bytes - 768), Math.max(128, tokens - 256))) break;
-              if (keep <= 1) {
-                String text = slice.lines().getFirst();
-                int end = text.length();
-                while (end > 0
-                    && !FileResultBudget.fits(
-                        new Tools.SearchAndReadResult(
-                            item.path(),
-                            List.of(),
-                            List.of(
-                                new Tools.ReadSection(
-                                    start + 1, start + 1, List.of(text.substring(0, end)), true)),
-                            null,
-                            true,
-                            false,
-                            state.version,
-                            null),
-                        Math.max(256, bytes - 768),
-                        Math.max(128, tokens - 256))) {
-                  end /= 2;
-                  if (end > 0 && Character.isLowSurrogate(text.charAt(end))) end--;
-                }
-                if (end == 0 || !sections.isEmpty())
+        int scanned = 0, readBytes = 0;
+        while (state.file < state.inventory.size()) {
+          Tools.checkReadingCancellation(null);
+          var item = state.inventory.get(state.file);
+          if (item.size() > FileSnapshots.MAX_FILE_BYTES) {
+            state.file++;
+            return paused(
+                state,
+                List.of(),
+                "FILE_SIZE_LIMIT",
+                ReadingProblem.from(ReadingProblem.fail("FILE_SIZE_LIMIT")));
+          }
+          if (scanned >= scanLimit) return paused(state, List.of(), "FILE_ENUMERATION_LIMIT", null);
+          if (readBytes + item.size() > FileSnapshots.MAX_REQUEST_BYTES)
+            return paused(state, List.of(), "SNAPSHOT_BUDGET", null);
+          var snapshots = tools.newSnapshots();
+          var snapshot = snapshots.get(root, Path.of(item.path()));
+          readBytes += snapshot.bytes().length;
+          if (state.version != null && !state.version.equals(snapshot.version()))
+            throw ReadingProblem.fail("FILE_CHANGED");
+          state.version = snapshot.version();
+          String charset = state.request.queries().getFirst().charset();
+          var lines =
+              snapshots.lines(snapshot, charset, () -> tools.snapshotLines(snapshot, charset));
+          if (state.ranges.isEmpty()) {
+            ReadingMetrics.add("scannedFiles", 1);
+            scanned++;
+            scan(state, lines, root, item.path(), prepared);
+          }
+          if (!state.ranges.isEmpty()) {
+            var sections = new ArrayList<Tools.ReadSection>();
+            var matches = new ArrayList<Tools.SearchMatch>();
+            int count = 0;
+            while (state.rangeIndex < state.ranges.size() && count < maxLines) {
+              var range = state.ranges.get(state.rangeIndex);
+              int start = range.start();
+              int stop = Math.min(range.end(), start + maxLines - count);
+              // Select an exact source prefix and fit its serialized envelope before advancing state.
+              var budget = new TextReadBudget(Math.max(0, bytes - 1024));
+              var slice = budget.take(lines, start, stop, state.offset, maxLines - count);
+              if (slice.lines().isEmpty()) break;
+              int keep = slice.lines().size();
+              Tools.SearchAndReadResult candidate;
+              while (true) {
+                var pending = new ArrayList<>(sections);
+                pending.add(
+                    new Tools.ReadSection(
+                        start + 1,
+                        start + keep,
+                        slice.lines().subList(0, keep),
+                        slice.nextOffset() > 0));
+                candidate =
+                    new Tools.SearchAndReadResult(
+                        item.path(),
+                        matches(pending, lines, root, item.path(), prepared),
+                        pending,
+                        null,
+                        true,
+                        false,
+                        state.version,
+                        null);
+                if (FileResultBudget.fits(
+                    candidate, Math.max(256, bytes - 768), Math.max(128, tokens - 256))) break;
+                if (keep <= 1) {
+                  String text = slice.lines().getFirst();
+                  int end = text.length();
+                  while (end > 0
+                      && !FileResultBudget.fits(
+                          new Tools.SearchAndReadResult(
+                              item.path(),
+                              List.of(),
+                              List.of(
+                                  new Tools.ReadSection(
+                                      start + 1, start + 1, List.of(text.substring(0, end)), true)),
+                              null,
+                              true,
+                              false,
+                              state.version,
+                              null),
+                          Math.max(256, bytes - 768),
+                          Math.max(128, tokens - 256))) {
+                    end /= 2;
+                    if (end > 0 && Character.isLowSurrogate(text.charAt(end))) end--;
+                  }
+                  if (end == 0 || !sections.isEmpty())
+                    return paused(
+                        state,
+                        List.of(result(item.path(), state, sections, matches)),
+                        "RESULT_OUTPUT_BUDGET",
+                        null);
+                  sections.add(
+                      new Tools.ReadSection(
+                          start + 1, start + 1, List.of(text.substring(0, end)), true));
+                  state.offset += end;
                   return paused(
                       state,
                       List.of(result(item.path(), state, sections, matches)),
                       "RESULT_OUTPUT_BUDGET",
                       null);
-                sections.add(
-                    new Tools.ReadSection(
-                        start + 1, start + 1, List.of(text.substring(0, end)), true));
-                state.offset += end;
-                return paused(
-                    state,
-                    List.of(result(item.path(), state, sections, matches)),
-                    "RESULT_OUTPUT_BUDGET",
-                    null);
+                }
+                keep = Math.max(1, keep / 2);
               }
-              keep = Math.max(1, keep / 2);
-            }
-            sections.add(candidate.sections().getLast());
-            matches.clear();
-            matches.addAll(candidate.matches());
-            count += keep;
-            if (keep < slice.lines().size()) {
-              state.ranges =
-                  replaceRange(
-                      state.ranges, state.rangeIndex, new Range(start + keep, range.end()));
+              sections.add(candidate.sections().getLast());
+              matches.clear();
+              matches.addAll(candidate.matches());
+              count += keep;
+              if (keep < slice.lines().size()) {
+                state.ranges =
+                    replaceRange(
+                        state.ranges, state.rangeIndex, new Range(start + keep, range.end()));
+                state.offset = 0;
+                break;
+              }
+              if (slice.nextOffset() > 0) {
+                state.ranges =
+                    replaceRange(
+                        state.ranges, state.rangeIndex, new Range(slice.nextLine() - 1, range.end()));
+                state.offset = slice.nextOffset();
+                break;
+              }
+              int nextLine = start + keep;
               state.offset = 0;
-              break;
+              if (nextLine < range.end()) {
+                state.ranges =
+                    replaceRange(state.ranges, state.rangeIndex, new Range(nextLine, range.end()));
+                break;
+              }
+              state.rangeIndex++;
             }
-            if (slice.nextOffset() > 0) {
-              state.ranges =
-                  replaceRange(
-                      state.ranges, state.rangeIndex, new Range(slice.nextLine() - 1, range.end()));
-              state.offset = slice.nextOffset();
-              break;
+            var result = result(item.path(), state, sections, matches);
+            if (state.rangeIndex >= state.ranges.size()) {
+              state.ranges = List.of();
+              state.rangeIndex = 0;
+              if (state.scanLine >= lines.size()) advance(state);
             }
-            int nextLine = start + keep;
-            state.offset = 0;
-            if (nextLine < range.end()) {
-              state.ranges =
-                  replaceRange(state.ranges, state.rangeIndex, new Range(nextLine, range.end()));
-              break;
-            }
-            state.rangeIndex++;
+            result = result.withTruncated(state.file < state.inventory.size());
+            return paused(
+                state,
+                List.of(result),
+                state.file < state.inventory.size() ? "RESULT_OUTPUT_BUDGET" : "COMPLETE",
+                null);
           }
-          var result = result(item.path(), state, sections, matches);
-          if (state.rangeIndex >= state.ranges.size()) {
-            state.ranges = List.of();
-            state.rangeIndex = 0;
-            if (state.scanLine >= lines.size()) advance(state);
-          }
-          result = result.withTruncated(state.file < state.inventory.size());
-          return paused(
-              state,
-              List.of(result),
-              state.file < state.inventory.size() ? "RESULT_OUTPUT_BUDGET" : "COMPLETE",
-              null);
+          if (state.scanLine >= lines.size()) advance(state);
         }
-        if (state.scanLine >= lines.size()) advance(state);
+        return paused(state, List.of(), "COMPLETE", null);
       }
-      return paused(state, List.of(), "COMPLETE", null);
     } catch (IOException | InterruptedException | ExecutionException | RuntimeException error) {
       var failure = error;
       if (error instanceof ExecutionException && error.getCause() instanceof Exception cause)

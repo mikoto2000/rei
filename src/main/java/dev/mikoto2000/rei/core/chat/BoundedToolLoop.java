@@ -383,10 +383,13 @@ public final class BoundedToolLoop {
                       checkActive.run();
                     }
                   };
-              try (var scope = AgentRunScope.open(owner);
-                  var budget = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(summaryBudget)) {
-                return assemblePrompt.apply(
-                    prompt, new Assembly(owner.conversationId(), owner.runId(), checkActive));
+              var scope = AgentRunScope.open(owner);
+              try (scope) {
+                var budget = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(summaryBudget);
+                try (budget) {
+                  return assemblePrompt.apply(
+                      prompt, new Assembly(owner.conversationId(), owner.runId(), checkActive));
+                }
               }
             })
         .subscribeOn(Schedulers.boundedElastic())
@@ -442,7 +445,8 @@ public final class BoundedToolLoop {
                                     }
                                   return Mono.fromCallable(
                                           () -> {
-                                            try (var scope = AgentRunScope.open(owner)) {
+                                            var scope = AgentRunScope.open(owner);
+                                            try (scope) {
                                               checkActive.run();
                                               return tools.execute(
                                                   dev.mikoto2000.rei.tooldelivery.FileReadContext

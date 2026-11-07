@@ -56,7 +56,8 @@ class SubAgentParentApprovalTest {
                           : fixture.answer(SubAgentResultParserTest.VALID)),
               "2s");
       runner.setToolPermissionGuard(guard);
-      try (var scope = AgentRunScope.open(parent)) {
+      var scope = AgentRunScope.open(parent);
+      try (scope) {
         var result = runner.run("reviewer", "inspect", null);
         assertThat(result.status())
             .isEqualTo(

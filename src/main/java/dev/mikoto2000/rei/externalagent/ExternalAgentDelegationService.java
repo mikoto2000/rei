@@ -914,7 +914,8 @@ public class ExternalAgentDelegationService implements AutoCloseable {
       return ExternalAgentResult.rejected("No current project is available");
     if (fixProposal && (changes == null || history == null))
       return ExternalAgentResult.rejected("Saved review and Change Set services required");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       Path root;
       Path selected;
       ExternalReviewRepository.Review previous = null;

@@ -75,7 +75,8 @@ public class Tools {
       java.util.concurrent.Callable<T> task) {
     var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     return () -> {
-      try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+      var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+      try (scope) {
         return task.call();
       }
     };
@@ -85,7 +86,8 @@ public class Tools {
       throws IOException {
     if (!(owner instanceof dev.mikoto2000.rei.core.chat.AgentRunContext captured))
       throw new IOException("Unknown reading authority");
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(captured)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(captured);
+    try (scope) {
       var root = owner.projectRoot().toRealPath();
       return root.relativize(FileSnapshots.resolve(root, java.nio.file.Path.of(input)))
           .toString()
@@ -450,7 +452,8 @@ public class Tools {
           "保存複数file案の正確なid/proposalSha256と全baseline一致を確認し、一回だけlogical transactionでApplyします。全fileの再検証後だけAPPLIED。通常失敗はrollback、外部編集/結果不明はUNKNOWNを保持し自動再送しません。EXCLUSIVE/LOCAL_WRITE/DESTRUCTIVEが必要です。簡潔な結果のcurrentMatches、新SHA、changesの変更範囲は保存bytesの確認です。直後の全文再読は不要ですが構文/意味/testの検証は別途必要です。失敗時はerror.codeとstagingを確認してください。")
   TextDocumentChangeSetService.View applyTextDocumentChangeSet(String id, String proposalSha256)
       throws IOException {
-    try (var workingSetBatch = batchWorkingSetChanges.get()) {
+    var workingSetBatch = batchWorkingSetChanges.get();
+    try (workingSetBatch) {
       return changeSets()
           .applyDocuments(
               diagnosedOwner(),
@@ -1640,7 +1643,8 @@ public class Tools {
   /** 共通の実行基盤で用いる内容検索複数検索条件を返す。 */
   List<GrepQueryResult> grepMultiQuery(List<GrepQuery> queries, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
-    try (var measurement = ReadingMetrics.operation("search", readingStateStore)) {
+    var measurement = ReadingMetrics.operation("search", readingStateStore);
+    try (measurement) {
       return boundedFileResult(grepMultiQuery(queries, workingDirectory, newSnapshots()));
     }
   }
@@ -2157,7 +2161,8 @@ public class Tools {
   List<SearchAndReadResult> searchAndRead(
       SearchAndReadRequest request, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
-    try (var measurement = ReadingMetrics.operation("search", readingStateStore)) {
+    var measurement = ReadingMetrics.operation("search", readingStateStore);
+    try (measurement) {
       if (request == null) {
         throw new IllegalArgumentException("request must not be null");
       }
@@ -2959,135 +2964,138 @@ public class Tools {
   /** 必要な内容を参照できるよう、複数ファイルを読み取る。 */
   List<ReadFileResult> readMultiFile(
       List<ReadFileRequest> files, java.nio.file.Path workingDirectory) throws IOException {
-    try (var measurement = ReadingMetrics.operation("read", readingStateStore);
-        var workingSetBatch = batchWorkingSetChanges.get()) {
-      if (files == null || files.isEmpty()) {
-        throw new IllegalArgumentException("files must not be empty");
-      }
-      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-      if (files.size() > MAX_READ_FILES) {
-        throw new IllegalArgumentException(
-            "too many files: " + files.size() + " (max " + MAX_READ_FILES + ")");
-      }
-      for (var request : files)
-        if (request == null || request.path() != null && request.path().length() > 1024)
-          throw new IllegalArgumentException("File request/path limit exceeded");
-      boolean whole =
-          files.stream()
-              .allMatch(
-                  request ->
-                      request.symbol() == null
-                          && !MarkdownSectionReads.selected(request)
-                          && (request.purpose() == ReadPurpose.FULL
-                              || (request.purpose() == null
-                                      || request.purpose() == ReadPurpose.AUTO)
-                                  && request.startLine() == null
-                                  && request.endLine() == null
-                                  && request.offset() == null));
-      var limits = fileDeliveryLimits.get();
-      int bulkTokens =
-          whole && readInputLimit != null
-              ? dev.mikoto2000.rei.tooldelivery.FileReadContext.bulkBudget(
-                  limits.bulkTokens(),
-                  readInputLimit,
-                  prompt ->
-                      prompt.getInstructions().stream().mapToLong(deliveryEstimator::message).sum(),
-                  deliveryEstimator::text)
-              : 0;
-      if (whole
-          && readInputLimit != null
-          && dev.mikoto2000.rei.tooldelivery.FileReadContext.active()
-          && bulkTokens < limits.minTokens())
-        throw new IOException(
-            "CONTEXT_BUDGET_INSUFFICIENT: no room for a file page; reduce the active prompt");
-      boolean bulk = bulkTokens > limits.maxTokens();
-      int resultTokens = bulkTokens > 0 ? bulkTokens : limits.maxTokens();
-      if (!whole && files.stream().anyMatch(request -> request.purpose() == ReadPurpose.OVERVIEW))
-        resultTokens = Math.min(resultTokens, limits.targetTokens());
-      int totalLineLimit = bulk ? 100_000 : MAX_READ_TOTAL_LINES;
-      dev.mikoto2000.rei.tooldelivery.FileReadContext.selected(
-          bulk ? "BULK" : "PAGED", resultTokens);
-      if (whole && bulkTokens > 0)
-        files = files.stream().map(request -> request.withPurpose(ReadPurpose.FULL)).toList();
-      if (bulk) {
-        dev.mikoto2000.rei.tooldelivery.FileReadContext.used(resultTokens);
-      }
-      List<ReadFileResult> results = new ArrayList<>();
-      FileSnapshots snapshots = newSnapshots();
-      TextReadBudget budget = bulk ? TextReadBudget.bulk(512 * 1024) : new TextReadBudget();
-      int totalLines = 0;
-      for (int index = 0; index < files.size(); index++) {
-        ReadFileRequest request = files.get(index);
-        if (request.expectedVersion() != null) ReadingMetrics.add("continuations", 1);
-        int remainingRequests = files.size() - index;
-        int byteBudget = budget.remaining() / remainingRequests;
-        TextReadBudget fileBudget =
-            bulk ? TextReadBudget.bulk(byteBudget) : new TextReadBudget(byteBudget);
-        int lineBudget = readLineBudget(files, index, totalLineLimit - totalLines);
-        try {
-          ReadFileResult result =
-              MarkdownSectionReads.selected(request)
-                  ? MarkdownSectionReads.read(
-                      this, request, workingDirectory, snapshots, fileBudget, lineBudget)
-                  : request.symbol() != null
-                      ? JavaSymbolReads.read(
-                          request,
-                          workingDirectory,
-                          snapshots,
-                          repositoryMaps,
-                          fileBudget,
-                          lineBudget,
-                          (dev.mikoto2000.rei.core.chat.AgentRunScope.current() == null
-                                      ? 8000
-                                      : limits.targetTokens())
-                                  / files.size()
-                              - 16)
-                      : readSingleFile(
-                          request,
-                          workingDirectory,
-                          snapshots,
-                          fileBudget,
-                          lineBudget,
-                          bulk ? 100_000 : MAX_READ_LINES_PER_FILE);
-          if (request.symbol() != null && result.error() == null)
-            observeRead.accept(workingDirectory.resolve(result.path()));
-          if (readingDelivery != null) result = applyReadingDelivery(request, result);
-          int remaining = totalLineLimit - totalLines;
-          if (result.content().size() > remaining) {
-            result =
-                new ReadFileResult(
-                    result.path(),
-                    result.startLine(),
-                    result.endLine(),
-                    result.content().subList(0, Math.max(0, remaining)),
-                    true,
-                    null);
-          }
-          totalLines += result.content().size();
-          results.add(result);
-        } catch (IllegalArgumentException | IOException e) {
-          String error =
-              e instanceof FileSnapshots.ExcludedInventoryPathException
-                  ? e.getMessage()
-                  : ReadingProblem.from(e).code() + ": " + e.getMessage();
-          results.add(
-              new ReadFileResult(
-                  request.path(),
-                  null,
-                  null,
-                  List.of(),
-                  false,
-                  error));
-        } finally {
-          budget.reserve(byteBudget - fileBudget.remaining());
+    var measurement = ReadingMetrics.operation("read", readingStateStore);
+    try (measurement) {
+      var workingSetBatch = batchWorkingSetChanges.get();
+      try (workingSetBatch) {
+        if (files == null || files.isEmpty()) {
+          throw new IllegalArgumentException("files must not be empty");
         }
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
+        if (files.size() > MAX_READ_FILES) {
+          throw new IllegalArgumentException(
+              "too many files: " + files.size() + " (max " + MAX_READ_FILES + ")");
+        }
+        for (var request : files)
+          if (request == null || request.path() != null && request.path().length() > 1024)
+            throw new IllegalArgumentException("File request/path limit exceeded");
+        boolean whole =
+            files.stream()
+                .allMatch(
+                    request ->
+                        request.symbol() == null
+                            && !MarkdownSectionReads.selected(request)
+                            && (request.purpose() == ReadPurpose.FULL
+                                || (request.purpose() == null
+                                        || request.purpose() == ReadPurpose.AUTO)
+                                    && request.startLine() == null
+                                    && request.endLine() == null
+                                    && request.offset() == null));
+        var limits = fileDeliveryLimits.get();
+        int bulkTokens =
+            whole && readInputLimit != null
+                ? dev.mikoto2000.rei.tooldelivery.FileReadContext.bulkBudget(
+                    limits.bulkTokens(),
+                    readInputLimit,
+                    prompt ->
+                        prompt.getInstructions().stream().mapToLong(deliveryEstimator::message).sum(),
+                    deliveryEstimator::text)
+                : 0;
+        if (whole
+            && readInputLimit != null
+            && dev.mikoto2000.rei.tooldelivery.FileReadContext.active()
+            && bulkTokens < limits.minTokens())
+          throw new IOException(
+              "CONTEXT_BUDGET_INSUFFICIENT: no room for a file page; reduce the active prompt");
+        boolean bulk = bulkTokens > limits.maxTokens();
+        int resultTokens = bulkTokens > 0 ? bulkTokens : limits.maxTokens();
+        if (!whole && files.stream().anyMatch(request -> request.purpose() == ReadPurpose.OVERVIEW))
+          resultTokens = Math.min(resultTokens, limits.targetTokens());
+        int totalLineLimit = bulk ? 100_000 : MAX_READ_TOTAL_LINES;
+        dev.mikoto2000.rei.tooldelivery.FileReadContext.selected(
+            bulk ? "BULK" : "PAGED", resultTokens);
+        if (whole && bulkTokens > 0)
+          files = files.stream().map(request -> request.withPurpose(ReadPurpose.FULL)).toList();
+        if (bulk) {
+          dev.mikoto2000.rei.tooldelivery.FileReadContext.used(resultTokens);
+        }
+        List<ReadFileResult> results = new ArrayList<>();
+        FileSnapshots snapshots = newSnapshots();
+        TextReadBudget budget = bulk ? TextReadBudget.bulk(512 * 1024) : new TextReadBudget();
+        int totalLines = 0;
+        for (int index = 0; index < files.size(); index++) {
+          ReadFileRequest request = files.get(index);
+          if (request.expectedVersion() != null) ReadingMetrics.add("continuations", 1);
+          int remainingRequests = files.size() - index;
+          int byteBudget = budget.remaining() / remainingRequests;
+          TextReadBudget fileBudget =
+              bulk ? TextReadBudget.bulk(byteBudget) : new TextReadBudget(byteBudget);
+          int lineBudget = readLineBudget(files, index, totalLineLimit - totalLines);
+          try {
+            ReadFileResult result =
+                MarkdownSectionReads.selected(request)
+                    ? MarkdownSectionReads.read(
+                        this, request, workingDirectory, snapshots, fileBudget, lineBudget)
+                    : request.symbol() != null
+                        ? JavaSymbolReads.read(
+                            request,
+                            workingDirectory,
+                            snapshots,
+                            repositoryMaps,
+                            fileBudget,
+                            lineBudget,
+                            (dev.mikoto2000.rei.core.chat.AgentRunScope.current() == null
+                                        ? 8000
+                                        : limits.targetTokens())
+                                    / files.size()
+                                - 16)
+                        : readSingleFile(
+                            request,
+                            workingDirectory,
+                            snapshots,
+                            fileBudget,
+                            lineBudget,
+                            bulk ? 100_000 : MAX_READ_LINES_PER_FILE);
+            if (request.symbol() != null && result.error() == null)
+              observeRead.accept(workingDirectory.resolve(result.path()));
+            if (readingDelivery != null) result = applyReadingDelivery(request, result);
+            int remaining = totalLineLimit - totalLines;
+            if (result.content().size() > remaining) {
+              result =
+                  new ReadFileResult(
+                      result.path(),
+                      result.startLine(),
+                      result.endLine(),
+                      result.content().subList(0, Math.max(0, remaining)),
+                      true,
+                      null);
+            }
+            totalLines += result.content().size();
+            results.add(result);
+          } catch (IllegalArgumentException | IOException e) {
+            String error =
+                e instanceof FileSnapshots.ExcludedInventoryPathException
+                    ? e.getMessage()
+                    : ReadingProblem.from(e).code() + ": " + e.getMessage();
+            results.add(
+                new ReadFileResult(
+                    request.path(),
+                    null,
+                    null,
+                    List.of(),
+                    false,
+                    error));
+          } finally {
+            budget.reserve(byteBudget - fileBudget.remaining());
+          }
+        }
+        if (files.stream().anyMatch(request -> request.symbol() != null))
+          FileResultBudget.require(results, 65536, 8000);
+        return boundedFileResult(
+            dev.mikoto2000.rei.core.chat.AgentRunScope.current() == null
+                ? results
+                : new FileResultTokenPager(deliveryEstimator).page(results, files, resultTokens));
       }
-      if (files.stream().anyMatch(request -> request.symbol() != null))
-        FileResultBudget.require(results, 65536, 8000);
-      return boundedFileResult(
-          dev.mikoto2000.rei.core.chat.AgentRunScope.current() == null
-              ? results
-              : new FileResultTokenPager(deliveryEstimator).page(results, files, resultTokens));
     }
   }
 
@@ -3751,7 +3759,8 @@ public class Tools {
       validated.add(request);
     }
     List<WriteFileResult> results = new ArrayList<>();
-    try (var workingSetBatch = batchWorkingSetChanges.get()) {
+    var workingSetBatch = batchWorkingSetChanges.get();
+    try (workingSetBatch) {
       for (WriteFileRequest request : validated) {
         try {
           writeSingleFile(request, workingDirectory);

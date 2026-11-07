@@ -49,7 +49,8 @@ class TextDocumentChangeSetToolTest {
             publisher);
     tools.setTextChangeSets(single);
     Files.writeString(root.resolve("A.md"), "old");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var proposal =
           tools.proposeTextDocumentChangeSet(
               new TextDocumentChangeSetService.Request(

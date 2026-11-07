@@ -12,11 +12,15 @@ class FileReadContextTest {
 
   @Test
   void reviewFractionHonorsWindowAndDividesActualFreeSpaceAmongSiblingCalls() {
-    try (var scope = FileReadContext.open(new Prompt("x".repeat(700000)), 2, "")) {
-      assertThat(FileReadContext.bulkBudget(100000, p -> 800000,
-          p -> 700000L, s -> 0, 8)).isEqualTo(49488);
+    {
+      var scope = FileReadContext.open(new Prompt("x".repeat(700000)), 2, "");
+      try (scope) {
+        assertThat(FileReadContext.bulkBudget(100000, p -> 800000,
+            p -> 700000L, s -> 0, 8)).isEqualTo(49488);
+      }
     }
-    try (var scope = FileReadContext.open(new Prompt("small"), 1, "")) {
+    var scope = FileReadContext.open(new Prompt("small"), 1, "");
+    try (scope) {
       assertThat(FileReadContext.bulkBudget(100000, p -> 800000, p -> 0L, s -> 0, 8)).isEqualTo(100000);
       assertThat(FileReadContext.bulkBudget(100000, p -> 32000, p -> 0L, s -> 0, 8)).isEqualTo(4000);
       assertThat(FileReadContext.bulkBudget(100000, p -> 32000, p -> 32000L, s -> 0, 8)).isZero();
@@ -37,11 +41,13 @@ class FileReadContextTest {
     var options = OpenAiChatOptions.builder().model("small").build();
     var raw = new Prompt("x".repeat(500000), options);
     var projected = new Prompt("current request", options);
-    try (var outer = FileReadContext.open(FileReadContext.withProjection(raw, projected), 1, "")) {
+    var outer = FileReadContext.open(FileReadContext.withProjection(raw, projected), 1, "");
+    try (outer) {
       int budget = budget(properties);
       assertThat(budget).isEqualTo(64000);
       FileReadContext.used(budget);
-      try (var inner = FileReadContext.open(raw, 1, "")) {
+      var inner = FileReadContext.open(raw, 1, "");
+      try (inner) {
         assertThat(FileReadContext.grant()).isNull();
         assertThat(budget(properties)).isZero();
       }
@@ -60,11 +66,15 @@ class FileReadContextTest {
             "review",
             OpenAiChatOptions.builder().model("small").maxCompletionTokens(10000).build());
     int one;
-    try (var scope = FileReadContext.open(prompt, 1, "")) {
-      one = budget(properties);
+    {
+      var scope = FileReadContext.open(prompt, 1, "");
+      try (scope) {
+        one = budget(properties);
+      }
     }
     assertThat(one).isPositive().isLessThan(6000);
-    try (var scope = FileReadContext.open(prompt, 2, "")) {
+    var scope = FileReadContext.open(prompt, 2, "");
+    try (scope) {
       assertThat(budget(properties)).isLessThan(one / 2);
     }
   }
@@ -74,7 +84,8 @@ class FileReadContextTest {
     var options =
         org.mockito.Mockito.mock(org.springframework.ai.model.tool.ToolCallingChatOptions.class);
     org.mockito.Mockito.when(options.getToolContext()).thenReturn(java.util.Map.of(), null);
-    try (var scope = FileReadContext.open(new Prompt("read", options), 1, "")) {
+    var scope = FileReadContext.open(new Prompt("read", options), 1, "");
+    try (scope) {
       assertThat(FileReadContext.active()).isTrue();
     }
     org.mockito.Mockito.verify(options).getToolContext();

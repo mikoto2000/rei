@@ -40,7 +40,8 @@ class ReviewToolsTest {
             new Tools(),
             TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", dir, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = tools.beginReview(List.of("lesson.md"), "correctness", "v1");
       var page =
           tools.readReviewFile(job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
@@ -116,8 +117,9 @@ class ReviewToolsTest {
         assertThat(rebuilt.ranges().getFirst().stale()).isTrue();
       } else {
         if (kind.equals("foreign")) {
-          try (var other =
-              AgentRunScope.open(new AgentRunContext("foreign", "chat", dir, "project"))) {
+          var other =
+              AgentRunScope.open(new AgentRunContext("foreign", "chat", dir, "project"));
+          try (other) {
             assertThatThrownBy(dismiss).hasMessage("REVIEW_ACCESS_DENIED");
           }
         } else assertThatThrownBy(dismiss).isInstanceOf(ReviewResultRejectedException.class);
@@ -146,7 +148,8 @@ class ReviewToolsTest {
             new Tools(),
             TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", dir, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = tools.beginReview(paths, "correctness", "v1");
       for (int i = 0; i < paths.size(); i++) {
         var target = job.targets().get(i);
@@ -186,8 +189,9 @@ class ReviewToolsTest {
       assertThat(tools.reviewFindings(job.id(), Integer.MAX_VALUE, 5).findings()).isEmpty();
       assertThat(tools.continuationSummary(owner))
           .contains(job.id(), "reviewFindings", "findingJobs");
-      try (var foreign =
-          AgentRunScope.open(new AgentRunContext("foreign", "chat", dir, "project"))) {
+      var foreign =
+          AgentRunScope.open(new AgentRunContext("foreign", "chat", dir, "project"));
+      try (foreign) {
         assertThatThrownBy(() -> tools.reviewFindings(job.id(), 0, 5))
             .hasMessage("REVIEW_ACCESS_DENIED");
       }
@@ -219,7 +223,8 @@ class ReviewToolsTest {
             new Tools(),
             TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", dir, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = tools.beginReview(List.of("lesson.md"), "correctness", "v1");
       var page =
           tools.readReviewFile(job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
@@ -261,8 +266,9 @@ class ReviewToolsTest {
             .isEqualTo(finding.evidence());
       } else {
         if (kind.equals("foreign")) {
-          try (var other =
-              AgentRunScope.open(new AgentRunContext("foreign", "chat", dir, "project"))) {
+          var other =
+              AgentRunScope.open(new AgentRunContext("foreign", "chat", dir, "project"));
+          try (other) {
             assertThatThrownBy(submit)
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("REVIEW_ACCESS_DENIED");
@@ -291,7 +297,8 @@ class ReviewToolsTest {
             new Tools(),
             TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", dir, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = tools.beginReview(List.of("lesson.md"), "correctness", "v1");
       var page =
           tools.readReviewFile(job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
@@ -322,7 +329,8 @@ class ReviewToolsTest {
             new Tools(),
             TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", dir, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = tools.beginReview(List.of("lesson.md"), "correctness", "v1");
       var page =
           tools.readReviewFile(job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
@@ -352,7 +360,8 @@ class ReviewToolsTest {
     var tools = new ReviewTools(ledger, new RawToolResultStore(dir.resolve("data")),
         new Tools(), TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", dir, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = tools.beginReview(List.of("lesson.md", "remaining.md"), "correctness", "v1");
       String version = job.targets().getFirst().version();
       var page = tools.readReviewFile(job.id(), "lesson.md", version, 0, 512);
@@ -400,7 +409,8 @@ class ReviewToolsTest {
             new Tools(),
             TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", dir, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = tools.beginReview(List.of("lesson.md"), "correctness", "v1");
       String version = job.targets().getFirst().version();
       int offset = 0;
@@ -442,16 +452,20 @@ class ReviewToolsTest {
     var next = new AgentRunContext("next", "chat", dir, "project");
     String id;
     int nextOffset;
-    try (var scope = AgentRunScope.open(old)) {
-      var job = tools.beginReview(List.of("lesson.md"), "correctness", "v1");
-      id = job.id();
-      var page = tools.readReviewFile(id, "lesson.md", job.targets().getFirst().version(), 0, 256);
-      nextOffset = page.nextOffset();
-      tools.confirmed(old, List.of(page));
-      tools.submitReviewResult(id, page.range(), "Checked this delivered range", List.of());
+    {
+      var scope = AgentRunScope.open(old);
+      try (scope) {
+        var job = tools.beginReview(List.of("lesson.md"), "correctness", "v1");
+        id = job.id();
+        var page = tools.readReviewFile(id, "lesson.md", job.targets().getFirst().version(), 0, 256);
+        nextOffset = page.nextOffset();
+        tools.confirmed(old, List.of(page));
+        tools.submitReviewResult(id, page.range(), "Checked this delivered range", List.of());
+      }
     }
     ledger.resume(id, ReviewTools.scope(old), ReviewTools.scope(next));
-    try (var scope = AgentRunScope.open(next)) {
+    var scope = AgentRunScope.open(next);
+    try (scope) {
       var summary = StorageDatabase.JSON.readTree(tools.continuationSummary(next));
       assertThat(summary.path("incompleteJobs").asInt()).isEqualTo(1);
       var saved = summary.path("savedPendingSample").get(0);

@@ -30,7 +30,8 @@ class ProjectBeanScopeTest extends dev.mikoto2000.rei.core.project.ProjectClient
             AgentRunContext.RequestSource.WEB,
             AgentRunContext.Mode.READ_ONLY);
     Object transientState;
-    try (var binding = AgentRunScope.open(reader)) {
+    var binding = AgentRunScope.open(reader);
+    try (binding) {
       transientState = scope.get("state", Object::new);
       assertThat(transientState).isNotSameAs(original);
       assertThat(scope.get("state", Object::new)).isSameAs(transientState);
@@ -54,7 +55,8 @@ class ProjectBeanScopeTest extends dev.mikoto2000.rei.core.project.ProjectClient
     var run = new AgentRunContext("run", service.currentContext(), "chat:main");
     service.cd(b.toString());
     assertThat(((WorkingSet) scope.get("workingSet", WorkingSet::new)).getFiles()).isEmpty();
-    try (var binding = AgentRunScope.open(run)) {
+    var binding = AgentRunScope.open(run);
+    try (binding) {
       assertThat(scope.get("workingSet", WorkingSet::new)).isSameAs(first);
     }
     service.cd(a.toString());

@@ -548,7 +548,8 @@ public final class IntegrationRunSubmitService {
   /** 要求された処理を実行する。 */
   private void execute(
       AgentRunContext context, String operation, java.util.function.Supplier<String> report) {
-    try (var scope = AgentRunScope.open(context)) {
+    var scope = AgentRunScope.open(context);
+    try (scope) {
       Runnable clearCancellation = beginCommand.get();
       try {
         if (cancellationRequested.getAsBoolean()) {

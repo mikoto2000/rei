@@ -81,7 +81,8 @@ class ConversationInputGatewayTest {
   @Test
   void keyboardAndMockVoiceUseSameSessionRunnerAndShellAuthority() {
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       shell.submit("keyboard");
       target = shell.captureTarget();
     }
@@ -106,7 +107,8 @@ class ConversationInputGatewayTest {
   @Test
   void capturedSessionDoesNotFollowLaterSelectionOrWorkerThreadLocal() {
     ConversationTarget old;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       old = shell.captureTarget();
       shell.newConversation();
       assertThat(shell.currentSessionId()).isNotEqualTo(old.sessionId());
@@ -120,7 +122,8 @@ class ConversationInputGatewayTest {
   @Test
   void voiceCannotExecuteSlashCommandsEvenWithLeadingWhitespace() {
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
     }
     assertThatThrownBy(() -> shell.submit(voice(target, "  /voice off")))
@@ -132,7 +135,8 @@ class ConversationInputGatewayTest {
   @Test
   void voicePendingIsBoundedAndCancellationReleasesCapacity() {
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       shell.submit("blocking keyboard");
       target = shell.captureTarget();
     }
@@ -162,7 +166,8 @@ class ConversationInputGatewayTest {
   @Test
   void cancellationCannotCrossSessionBoundary() {
     ConversationTarget first, second;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       shell.submit("block");
       first = shell.captureTarget();
       shell.newConversation();
@@ -178,7 +183,8 @@ class ConversationInputGatewayTest {
   @Test
   void reusedIdWithChangedPayloadIsRejected() {
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
     }
     var input = voice(target, "first");
@@ -206,7 +212,8 @@ class ConversationInputGatewayTest {
             router,
             clock);
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
     }
     var input = voice(target, "retry");
@@ -231,7 +238,8 @@ class ConversationInputGatewayTest {
             router,
             clock);
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
     }
     var input = voice(target, "retry after Error");
@@ -245,7 +253,8 @@ class ConversationInputGatewayTest {
   @Test
   void foreignProjectSessionIsRejectedBeforeDispatch() {
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
     }
     var foreign =
@@ -265,7 +274,8 @@ class ConversationInputGatewayTest {
         new ConversationInputGateway(
             lifecycle, router::submit, router, mutableClock, 2, Duration.ofMinutes(30));
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
     }
     var first = voice(target, "first");
@@ -290,7 +300,8 @@ class ConversationInputGatewayTest {
   @Test
   void concurrentDuplicateEventsHaveOnlyOneAdmission() throws Exception {
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
     }
     var input = voice(target, "once");
@@ -307,7 +318,8 @@ class ConversationInputGatewayTest {
   @Test
   void mockVoiceAndKeyboardKeepToolApprovalRequired() {
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       shell.submit("keyboard");
       target = shell.captureTarget();
     }
@@ -336,7 +348,8 @@ class ConversationInputGatewayTest {
   @Test
   void voiceIsRejectedWhenExistingRunQueueIsUnavailable() {
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
     }
     var gateway = new ConversationInputGateway(lifecycle, (owner, prompt) -> {}, null, clock);
@@ -370,7 +383,8 @@ class ConversationInputGatewayTest {
               clock);
       registered.onPendingCancellation(owner -> runs.cancelQueuedOnly(owner.runId()).accepted());
       ConversationTarget target;
-      try (var scope = projects.newClient().open()) {
+      var scope = projects.newClient().open();
+      try (scope) {
         registered.submit("block");
         target = registered.captureTarget();
       }
@@ -393,7 +407,8 @@ class ConversationInputGatewayTest {
         new ConversationInputGateway(
             lifecycle, router::submit, router, mutableClock, 1, Duration.ofMinutes(30));
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
     }
     var input = voice(target, "once");
@@ -409,7 +424,8 @@ class ConversationInputGatewayTest {
   @Test
   void keyboardInputCanAlsoCancelThroughCommonGateway() {
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
     }
     var input =
@@ -430,7 +446,8 @@ class ConversationInputGatewayTest {
     var gateway =
         new ConversationInputGateway(lifecycle, immediateRouter::submit, immediateRouter, clock);
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
     }
     var input = voice(target, "voice");
@@ -457,7 +474,8 @@ class ConversationInputGatewayTest {
       var gateway =
           new ConversationInputGateway(lifecycle, startedRouter::submit, startedRouter, clock);
       ConversationTarget target;
-      try (var scope = projects.newClient().open()) {
+      var scope = projects.newClient().open();
+      try (scope) {
         target = shell.captureTarget();
       }
       gateway.submit(
@@ -486,7 +504,8 @@ class ConversationInputGatewayTest {
     var gateway =
         new ConversationInputGateway(lifecycle, delayedRouter::submit, delayedRouter, clock);
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
     }
     var input = voice(target, "voice");

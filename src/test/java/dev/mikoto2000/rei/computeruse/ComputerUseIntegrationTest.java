@@ -48,7 +48,8 @@ class ComputerUseIntegrationTest {
             20,
             5);
     var owner = new AgentRunContext("cancel-run", "chat", java.nio.file.Path.of("."));
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       cancellation.begin(null);
       try {
         var tools = new ComputerUseTools(service, cancellation, factory, e -> {});

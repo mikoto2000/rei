@@ -174,7 +174,8 @@ class ResumeFileInventoryTest {
       var request =
           ChatClientRequest.builder().prompt(new Prompt(new UserMessage("Continue"))).build();
       Prompt sent;
-      try (var scope = AgentRunScope.open(new AgentRunContext("resumed", "chat", root, "A"))) {
+      var scope = AgentRunScope.open(new AgentRunContext("resumed", "chat", root, "A"));
+      try (scope) {
         sent = new ResumeContextAdvisor(service).before(request, null).prompt();
       }
       var handoff =

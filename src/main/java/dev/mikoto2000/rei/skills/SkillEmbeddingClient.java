@@ -51,7 +51,8 @@ public final class SkillEmbeddingClient implements SkillMetadataEmbedding, AutoC
     var future =
         executor.submit(
             () -> {
-              try (var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(budget)) {
+              var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(budget);
+              try (scope) {
                 var model = provider.get();
                 if (model == null)
                   throw new IllegalStateException("Embedding provider unavailable");

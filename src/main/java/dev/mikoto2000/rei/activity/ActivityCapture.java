@@ -609,7 +609,8 @@ public final class ActivityCapture implements AutoCloseable {
       ForegroundWindow foreground,
       String scope)
       throws IOException {
-    try (var ignored = org.slf4j.MDC.putCloseable("activityScope", scope)) {
+    var ignored = org.slf4j.MDC.putCloseable("activityScope", scope);
+    try (ignored) {
       return extractor.extract(screen, foreground);
     }
   }

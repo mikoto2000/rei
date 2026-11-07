@@ -340,7 +340,8 @@ class DotResumeIntegrationTest {
   @Test
   void forgedScheduledActionCannotGrantAuthority() {
     verify();
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var task = scheduler.scheduleAt(clock.instant(), "dot-resume:" + id, "session");
       scheduler.activate("b2fdbeaa-58b1-4929-b0b3-1f54094181ec", task.id());
     }

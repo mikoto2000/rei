@@ -58,7 +58,8 @@ class TaskControlCasTest {
         .isEqualTo(DependencyState.CANCELLED);
     var schedules = new PersistentAgentScheduler(data, clock);
     String id;
-    try (var binding = AgentRunScope.open(owner)) {
+    var binding = AgentRunScope.open(owner);
+    try (binding) {
       id = schedules.scheduleAfter(Duration.ofMinutes(5), "next", "session").id();
     }
     schedules.activate("project", id);

@@ -319,7 +319,8 @@ class SemanticPatchReviewServiceTest {
   void toolEntryKeepsArbitraryCommandAuthorityAndReadOnlyReceiptLookup() throws Exception {
     var tools = new Tools();
     tools.setPatchReviews(service(false, false, "value", "class A {}"));
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner())) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner());
+    try (scope) {
       var receipt = tools.reviewPatchRequirements(request(false), null);
       assertEquals(receipt, tools.getPatchRequirementReview(receipt.id(), receipt.sha256()));
       assertTrue(tools.inspectPatchRequirementReview(receipt.id()).completed());

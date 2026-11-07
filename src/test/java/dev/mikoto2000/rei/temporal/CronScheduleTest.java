@@ -33,7 +33,8 @@ class CronScheduleTest {
 
   /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   String create(PersistentAgentScheduler scheduler, String cron, String zone, int occurrences) {
-    try (var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, "project"));
+    try (scope) {
       return scheduler.scheduleCron(cron, zone, occurrences, "Check project", "session").id();
     }
   }
@@ -112,7 +113,8 @@ class CronScheduleTest {
   void toolRegistrationKeepsExactSessionOwnershipAndPendingState() {
     var scheduler = scheduler(now);
     var tools = new SchedulerTools(scheduler);
-    try (var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, "project"));
+    try (scope) {
       assertThrows(
           IllegalArgumentException.class,
           () -> tools.scheduleCron("0 * * * * *", "UTC", 2, "Check", "other"));

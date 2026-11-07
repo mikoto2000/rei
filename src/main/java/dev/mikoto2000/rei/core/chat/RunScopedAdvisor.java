@@ -117,24 +117,30 @@ public final class RunScopedAdvisor implements BaseAdvisor {
 
   /** 会話の実行の本処理へ渡す文脈を準備する。 */
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
-    try (var scope =
-            AgentRunScope.open(
-                (AgentRunContext) request.context().get(AgentRunContext.class.getName()));
-        var lease = RunCancellation.enterChild(request.prompt())) {
-      RunCancellation.checkActive(request.prompt());
-      var result = delegate.before(request, chain);
-      RunCancellation.checkActive(result.prompt());
-      return result;
+    var scope =
+        AgentRunScope.open(
+            (AgentRunContext) request.context().get(AgentRunContext.class.getName()));
+    try (scope) {
+      var lease = RunCancellation.enterChild(request.prompt());
+      try (lease) {
+        RunCancellation.checkActive(request.prompt());
+        var result = delegate.before(request, chain);
+        RunCancellation.checkActive(result.prompt());
+        return result;
+      }
     }
   }
 
   /** 会話の実行の実行結果を受け取り、後続の処理へ反映する。 */
   public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
-    try (var scope =
-            AgentRunScope.open(
-                (AgentRunContext) response.context().get(AgentRunContext.class.getName()));
-        var lease = RunCancellation.enterChild(response.context())) {
-      return delegate.after(response, chain);
+    var scope =
+        AgentRunScope.open(
+            (AgentRunContext) response.context().get(AgentRunContext.class.getName()));
+    try (scope) {
+      var lease = RunCancellation.enterChild(response.context());
+      try (lease) {
+        return delegate.after(response, chain);
+      }
     }
   }
 

@@ -89,7 +89,8 @@ class RerankServiceTest {
       var run =
           new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
               "run", budget, null, null, null);
-      try (var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget())) {
+      var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget());
+      try (scope) {
         assertTrue(
             assertThrows(
                     RuntimeException.class,
@@ -106,26 +107,30 @@ class RerankServiceTest {
   void unavailableEndpointUsageStopsButKnownInvalidResultsStillChargeBeforeFallback() {
     status = 500;
     var budget = new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0, 10, null, 100);
-    try (var scope =
-        dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(
-            new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
-                    "run", budget, null, null, null)
-                .modelCallBudget())) {
-      assertTrue(
-          assertThrows(
-                  RuntimeException.class,
-                  () -> budgetedService().rerank("q", List.of("a", "b"), s -> s))
-              .getMessage()
-              .contains("TOKEN_USAGE_UNKNOWN"));
+    {
+      var scope =
+          dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(
+              new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+                      "run", budget, null, null, null)
+                  .modelCallBudget());
+      try (scope) {
+        assertTrue(
+            assertThrows(
+                    RuntimeException.class,
+                    () -> budgetedService().rerank("q", List.of("a", "b"), s -> s))
+                .getMessage()
+                .contains("TOKEN_USAGE_UNKNOWN"));
+      }
     }
     status = 200;
     response = "{\"usage\":{\"total_tokens\":2},\"results\":[]}";
     var valid = new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0, 10, null, 100);
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(
             new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
                     "run", valid, null, null, null)
-                .modelCallBudget())) {
+                .modelCallBudget());
+    try (scope) {
       assertEquals(List.of("a", "b"), budgetedService().rerank("q", List.of("a", "b"), s -> s));
       assertEquals(2, valid.totalTokens());
       assertEquals(9, valid.remainingLlmCalls());
@@ -138,20 +143,24 @@ class RerankServiceTest {
     var empty =
         new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
             "run", new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0, 0), null, null, null);
-    try (var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(empty.modelCallBudget())) {
-      assertTrue(
-          assertThrows(
-                  RuntimeException.class,
-                  () -> budgetedService().rerank("q", List.of("a", "b"), s -> s))
-              .getMessage()
-              .contains("LLM_CALL_BUDGET_EXCEEDED"));
+    {
+      var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(empty.modelCallBudget());
+      try (scope) {
+        assertTrue(
+            assertThrows(
+                    RuntimeException.class,
+                    () -> budgetedService().rerank("q", List.of("a", "b"), s -> s))
+                .getMessage()
+                .contains("LLM_CALL_BUDGET_EXCEEDED"));
+      }
     }
     var cancelled =
         new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
             "run", new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0, 10), null, null, null);
     cancelled.cancel();
-    try (var scope =
-        dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(cancelled.modelCallBudget())) {
+    var scope =
+        dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(cancelled.modelCallBudget());
+    try (scope) {
       assertThrows(
           java.util.concurrent.CancellationException.class,
           () -> budgetedService().rerank("q", List.of("a", "b"), s -> s));
@@ -182,10 +191,11 @@ class RerankServiceTest {
     var id = goals.beginAttempt(claim);
     var budget =
         new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0, 10, goals.modelBudget(claim, id));
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(
             new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(id, budget, null, null, null)
-                .modelCallBudget())) {
+                .modelCallBudget());
+    try (scope) {
       assertTrue(
           assertThrows(
                   RuntimeException.class, () -> budgetedService().rerank("q", List.of("a"), s -> s))
@@ -201,11 +211,12 @@ class RerankServiceTest {
   @Test
   void defaultDisabledAndEmptyRequestsPreserveLegacyAccounting() {
     var budget = new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0, 10, null, 100);
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(
             new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
                     "run", budget, null, null, null)
-                .modelCallBudget())) {
+                .modelCallBudget());
+    try (scope) {
       assertEquals(List.of("b", "a"), service().rerank("q", List.of("a", "b"), s -> s));
       assertTrue(budgetedService().rerank("q", List.<String>of(), s -> s).isEmpty());
     }
@@ -248,7 +259,8 @@ class RerankServiceTest {
     var budget = new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0, 10, null, 5);
     var run =
         new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("run", budget, null, null, null);
-    try (var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget())) {
+    var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget());
+    try (scope) {
       assertTrue(
           assertThrows(
                   RuntimeException.class,
@@ -278,7 +290,8 @@ class RerankServiceTest {
     var budget = new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0, 10, null, 5);
     var run =
         new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("run", budget, null, null, null);
-    try (var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget())) {
+    var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(run.modelCallBudget());
+    try (scope) {
       assertEquals(List.of("b", "a"), service.rerank("q", List.of("a", "b"), s -> s));
       assertEquals(5, budget.totalTokens());
       body.set(null);

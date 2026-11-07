@@ -219,32 +219,34 @@ class SecretaryOrchestratorTest {
     var stopped = new java.util.concurrent.CountDownLatch(1);
     var blocker = new java.util.concurrent.CountDownLatch(1);
     var calls = new java.util.concurrent.atomic.AtomicInteger();
-    try (var followups = new SecretaryFollowups(db, ledger, clock, received::add, false);
-        var service = new SecretaryOrchestrator(db, ledger, reports(followups), clock, true)) {
-      var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory();
-      beans.addBean(
-          "context",
-          (SecretaryContext)
-              (p, day, zone) -> {
-                calls.incrementAndGet();
-                entered.countDown();
-                try {
-                  blocker.await(5, java.util.concurrent.TimeUnit.SECONDS);
-                } catch (InterruptedException interrupted) {
-                  Thread.currentThread().interrupt();
-                } finally {
-                  stopped.countDown();
-                }
-                return List.of();
-              });
-      followups.setContexts(beans.getBeanProvider(SecretaryContext.class));
-      service.configure(settings(true, false, null));
-      service.tick();
-      assertTrue(entered.await(3, java.util.concurrent.TimeUnit.SECONDS));
-      for (int i = 0; i < 100; i++) service.tick();
-      assertEquals(1, calls.get());
-      service.close();
-      assertTrue(stopped.await(1, java.util.concurrent.TimeUnit.SECONDS));
+    try (var followups = new SecretaryFollowups(db, ledger, clock, received::add, false)) {
+      var service = new SecretaryOrchestrator(db, ledger, reports(followups), clock, true);
+      try (service) {
+        var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory();
+        beans.addBean(
+            "context",
+            (SecretaryContext)
+                (p, day, zone) -> {
+                  calls.incrementAndGet();
+                  entered.countDown();
+                  try {
+                    blocker.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                  } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                  } finally {
+                    stopped.countDown();
+                  }
+                  return List.of();
+                });
+        followups.setContexts(beans.getBeanProvider(SecretaryContext.class));
+        service.configure(settings(true, false, null));
+        service.tick();
+        assertTrue(entered.await(3, java.util.concurrent.TimeUnit.SECONDS));
+        for (int i = 0; i < 100; i++) service.tick();
+        assertEquals(1, calls.get());
+        service.close();
+        assertTrue(stopped.await(1, java.util.concurrent.TimeUnit.SECONDS));
+      }
     } finally {
       blocker.countDown();
     }

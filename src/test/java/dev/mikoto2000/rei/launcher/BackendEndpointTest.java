@@ -124,9 +124,11 @@ class BackendEndpointTest {
     Path lock = root.resolve(".storage/instance.lock");
     Files.createFile(lock);
     assertFalse(BackendOwnership.isOwned(root));
-    try (var channel = java.nio.channels.FileChannel.open(lock, StandardOpenOption.WRITE);
-        var lease = channel.lock()) {
-      assertTrue(BackendOwnership.isOwned(root));
+    try (var channel = java.nio.channels.FileChannel.open(lock, StandardOpenOption.WRITE)) {
+      var lease = channel.lock();
+      try (lease) {
+        assertTrue(BackendOwnership.isOwned(root));
+      }
     }
     assertFalse(BackendOwnership.isOwned(root));
   }

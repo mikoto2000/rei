@@ -80,11 +80,12 @@ public final class ClipboardPaste {
             }
           };
       board.setContents(inserted, null);
-      try (ClipboardRestore restore =
+      ClipboardRestore restore =
           () -> {
             if (owns(board, token))
               board.setContents(original == null ? new StringSelection("") : original, null);
-          }) {
+          };
+      try (restore) {
         if (!owns(board, token)) throw new IllegalStateException("Clipboard changed before paste");
         if (Thread.currentThread().isInterrupted()) throw new InterruptedException();
         gesture.run();

@@ -170,13 +170,14 @@ class WebFetchBatchTest {
       var future =
           caller.submit(
               () -> {
-                try (var scope =
+                var scope =
                     FetchScope.enter(
                         new FetchOperation(
                             () -> {
                               if (stop.get()) throw new CancellationException();
                             },
-                            Long.MAX_VALUE))) {
+                            Long.MAX_VALUE));
+                try (scope) {
                   return batch.fetch(
                       candidates("a.example", "b.example"),
                       Duration.ofSeconds(5),
@@ -273,21 +274,23 @@ class WebFetchBatchTest {
   /** Web上の情報の調査で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void inheritedDeadlineProducesPartialResultsRatherThanLosingSuccess() {
-    try (var batch = new WebFetchBatch(2, 2, 32);
-        var scope = FetchScope.enter(FetchOperation.active().withTimeout(Duration.ofMillis(150)))) {
-      var results =
-          batch.fetch(
-              candidates("a.example", "b.example"),
-              Duration.ofSeconds(5),
-              candidate -> {
-                if (candidate.rank() == 0) {
-                  Thread.sleep(5000);
-                  return "slow";
-                }
-                return "quick";
-              });
-      assertEquals("quick", results.get(1).value());
-      assertEquals(WebFetchBatch.Status.TIMEOUT, results.getFirst().status());
+    try (var batch = new WebFetchBatch(2, 2, 32)) {
+      var scope = FetchScope.enter(FetchOperation.active().withTimeout(Duration.ofMillis(150)));
+      try (scope) {
+        var results =
+            batch.fetch(
+                candidates("a.example", "b.example"),
+                Duration.ofSeconds(5),
+                candidate -> {
+                  if (candidate.rank() == 0) {
+                    Thread.sleep(5000);
+                    return "slow";
+                  }
+                  return "quick";
+                });
+        assertEquals("quick", results.get(1).value());
+        assertEquals(WebFetchBatch.Status.TIMEOUT, results.getFirst().status());
+      }
     }
   }
 

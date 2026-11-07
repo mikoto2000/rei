@@ -99,7 +99,8 @@ class VoiceSubmittedInputTest {
             clock);
     delivery = new VoiceDeliveryService(shell, clock, new VoiceEventPublisher());
     client = projects.newClient();
-    try (var scope = client.open()) {
+    var scope = client.open();
+    try (scope) {
       target = shell.captureTarget();
       delivery.bind(shell.captureClient(), target);
     }
@@ -185,7 +186,8 @@ class VoiceSubmittedInputTest {
     delivery.accept(pending);
     assertThatThrownBy(() -> delivery.confirm(pending.inputId(), "/exit"))
         .isInstanceOf(IllegalArgumentException.class);
-    try (var scope = client.open()) {
+    var scope = client.open();
+    try (scope) {
       shell.newConversation();
     }
     assertThatThrownBy(() -> delivery.confirm(pending.inputId(), null))

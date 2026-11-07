@@ -52,7 +52,8 @@ class MemoryCliTest {
             new MemoryResolver(mock(MemoryResolutionModel.class), props),
             props);
     var support = new MemoryCommandSupport(repo, service, projects, props);
-    try (var scope = ProjectClientScope.open(projects.newClient())) {
+    var scope = ProjectClientScope.open(projects.newClient());
+    try (scope) {
       projects.selectSession("s");
       var sleep =
           new CommandLine(

@@ -233,7 +233,8 @@ class SubAgentReadToolRetryTest {
             f.events::add);
     guard.setApprovals(repository);
     runner.setToolPermissionGuard(guard);
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(parent)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(parent);
+    try (scope) {
       var result = runner.run("reviewer", "task", null);
       assertEquals(1, reads.get());
       assertEquals(0, result.toolRetryAttempts());
@@ -378,7 +379,8 @@ class SubAgentReadToolRetryTest {
                           throw new TransientDataAccessResourceException("temporary");
                         })));
     configure(runner, f, 1, Set.of(ActionCapability.READ));
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(parent)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(parent);
+    try (scope) {
       var result = runner.run("reviewer", "task", null, goals.modelBudget(claim, runId));
       assertEquals(SubAgentResult.Status.FAILED, result.status());
       assertTrue(result.output().contains("SHARED_LLM_BUDGET_EXHAUSTED"));

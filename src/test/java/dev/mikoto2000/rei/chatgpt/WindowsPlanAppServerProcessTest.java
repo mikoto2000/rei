@@ -50,7 +50,8 @@ class WindowsPlanAppServerProcessTest {
             Instant.now().plusSeconds(60).getEpochSecond());
     var started = launcher.start(token, Duration.ofSeconds(1), () -> false);
     long pid = ((AppServerProcessSession) started.session()).pid();
-    try (var session = started.session()) {
+    var session = started.session();
+    try (session) {
       ProcessHandle.of(pid).orElseThrow().onExit().get(4, java.util.concurrent.TimeUnit.SECONDS);
       assertFalse(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false));
     }

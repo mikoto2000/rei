@@ -81,26 +81,29 @@ public class SoundNotificationService {
   private void executeCommand(List<String> command, String message) {
     Process process = null;
     var gate = voiceAudioGate;
-    try (var playback =
-        gate == null
-            ? (dev.mikoto2000.rei.voice.VoiceAudioGate.Playback) () -> {}
-            : gate.playback(java.time.Duration.ofMillis(800))) {
-      process = createProcessBuilder(command).start();
-      boolean finished = process.waitFor(getTimeoutSeconds(), TimeUnit.SECONDS);
-      if (!finished) {
-        process.destroyForcibly();
-        log.warn(
-            "Sound notification command timed out after {} seconds. Falling back to console output.",
-            getTimeoutSeconds());
-        fallbackToConsole(message);
-        return;
-      }
-      int exitCode = process.exitValue();
-      if (exitCode != 0) {
-        log.warn(
-            "Sound notification command failed with exit code {}. Falling back to console output.",
-            exitCode);
-        fallbackToConsole(message);
+    try {
+      var playback =
+          gate == null
+              ? (dev.mikoto2000.rei.voice.VoiceAudioGate.Playback) () -> {}
+              : gate.playback(java.time.Duration.ofMillis(800));
+      try (playback) {
+        process = createProcessBuilder(command).start();
+        boolean finished = process.waitFor(getTimeoutSeconds(), TimeUnit.SECONDS);
+        if (!finished) {
+          process.destroyForcibly();
+          log.warn(
+              "Sound notification command timed out after {} seconds. Falling back to console output.",
+              getTimeoutSeconds());
+          fallbackToConsole(message);
+          return;
+        }
+        int exitCode = process.exitValue();
+        if (exitCode != 0) {
+          log.warn(
+              "Sound notification command failed with exit code {}. Falling back to console output.",
+              exitCode);
+          fallbackToConsole(message);
+        }
       }
     } catch (IOException | InterruptedException | RuntimeException e) {
       log.warn(

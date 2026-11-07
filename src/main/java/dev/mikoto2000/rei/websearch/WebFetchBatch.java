@@ -210,14 +210,23 @@ public final class WebFetchBatch implements AutoCloseable {
       boolean refresh,
       TransferBudget transferBudget,
       String query) {
-    try (var lease = loaderAdmission.acquire(host, operation);
+    try {
+      var lease = loaderAdmission.acquire(host, operation);
+      try (lease) {
         var scope = FetchScope.enter(operation, transferAdmission, refresh);
-        var transfer = TransferScope.enter(transferBudget);
-        var extraction = WebExtractionScope.enter(query)) {
-      operation.check();
-      T value = loader.fetch(candidate);
-      operation.check();
-      return new Outcome<>(Status.SUCCESS, value, null);
+        try (scope) {
+          var transfer = TransferScope.enter(transferBudget);
+          try (transfer) {
+            var extraction = WebExtractionScope.enter(query);
+            try (extraction) {
+              operation.check();
+              T value = loader.fetch(candidate);
+              operation.check();
+              return new Outcome<>(Status.SUCCESS, value, null);
+            }
+          }
+        }
+      }
     } catch (IOException | InterruptedException | RuntimeException failure) {
       FetchOperation.propagateControls(failure);
       if (failure instanceof HttpFetchException http)

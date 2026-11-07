@@ -81,7 +81,8 @@ class VoiceCorrectionGatewayTest {
     var delivery = new VoiceDeliveryService(shell, clock, events);
     var client = projects.newClient();
     ConversationTarget target;
-    try (var scope = client.open()) {
+    var scope = client.open();
+    try (scope) {
       target = shell.captureTarget();
       delivery.bind(client, target);
     }

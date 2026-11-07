@@ -32,12 +32,16 @@ class RawResultReuseTest {
     var store = new RawToolResultStore(dir);
     String ref = store.save("chat", "run", "reader", "one", "本文🙂".repeat(200));
     Object first;
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir))) {
-      first = store.read("chat", ref);
-      assertThat(store.read("chat", ref)).isSameAs(first);
-      assertThat(store.bodyReadCount()).isEqualTo(1);
+    {
+      var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir));
+      try (scope) {
+        first = store.read("chat", ref);
+        assertThat(store.read("chat", ref)).isSameAs(first);
+        assertThat(store.bodyReadCount()).isEqualTo(1);
+      }
     }
-    try (var scope = AgentRunScope.open(new AgentRunContext("another", "chat", dir))) {
+    var scope = AgentRunScope.open(new AgentRunContext("another", "chat", dir));
+    try (scope) {
       assertThat(store.read("chat", ref)).isNotSameAs(first);
       assertThat(store.bodyReadCount()).isEqualTo(2);
     }

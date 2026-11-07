@@ -64,7 +64,8 @@ class AdaptiveFileReadTest {
                     new AssistantMessage.ToolCall(
                         "call-" + i, "function", "readMultiFile", arguments[i]))
             .toList();
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"));
+    try (scope) {
       return new ToolLoopSupport()
           .execute(
               new Prompt(user, options),

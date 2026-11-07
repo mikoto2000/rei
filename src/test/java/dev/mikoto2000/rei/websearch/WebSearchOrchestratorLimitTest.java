@@ -50,13 +50,14 @@ class WebSearchOrchestratorLimitTest {
               cancelled.set(true);
               return List.of(new WebSearchResult("Java", "https://example.com/", "Java", null));
             });
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.http.FetchScope.enter(
             new dev.mikoto2000.rei.http.FetchOperation(
                 () -> {
                   if (cancelled.get()) throw new java.util.concurrent.CancellationException();
                 },
-                Long.MAX_VALUE))) {
+                Long.MAX_VALUE));
+    try (scope) {
       assertThrows(
           java.util.concurrent.CancellationException.class,
           () ->

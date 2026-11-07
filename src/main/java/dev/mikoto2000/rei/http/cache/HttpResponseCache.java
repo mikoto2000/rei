@@ -514,57 +514,62 @@ public final class HttpResponseCache implements AutoCloseable {
                 Long.MAX_VALUE)
             .withTimeout(request.policy().totalTimeout());
     Instant started = clock.instant();
-    try (var scope = FetchScope.enter(operation, flight.admission, request.forceRefresh());
-        var transfer = TransferScope.enter(flight.transferBudget)) {
-      event(request.namespace(), "load");
-      var response =
-          transfer(
-              flight.fetcher,
-              request,
-              request.uri(),
-              flight.headers,
-              request.policy(),
-              operation,
-              flight.observer);
-      Instant received = clock.instant();
-      if (response.status() == 304) {
-        event(request.namespace(), "revalidation");
-        response =
-            HttpCacheRules.validated(
-                flight.old == null ? null : flight.old.response(),
-                response,
-                flight.headers,
-                received);
-        TransferScope.decoded(response.bodyLength());
-      } else if (response.status() == 200)
-        response =
-            new SafeHttpFetcher.Response(
-                response.status(),
-                response.headers(),
-                response.body(),
-                response.finalUri(),
-                received,
-                received);
-      boolean shareable =
-          weight(response) <= maximumBytes
-              && HttpCacheRules.shareable(request, response, sensitive);
-      operation.check();
-      synchronized (mutex) {
-        operation.check();
-        if (!flight.superseded && response.status() == 200 && shareable && flight.waiters > 0) {
-          Duration ttl =
-              HttpCacheRules.freshTtl(
+    try {
+      var scope = FetchScope.enter(operation, flight.admission, request.forceRefresh());
+      try (scope) {
+        var transfer = TransferScope.enter(flight.transferBudget);
+        try (transfer) {
+          event(request.namespace(), "load");
+          var response =
+              transfer(
+                  flight.fetcher,
                   request,
-                  response,
-                  request.namespace() == Namespace.SEARCH ? searchTtl : pageTtl,
-                  started,
-                  received);
-          entries.put(
-              flight.key,
-              new Cached(response, received.plus(ttl), System.nanoTime(), ttl.toNanos()));
-        } else if (!flight.superseded) entries.remove(flight.key);
-        flight.result.complete(new Loaded(response, shareable));
-        flights.remove(flight.id, flight);
+                  request.uri(),
+                  flight.headers,
+                  request.policy(),
+                  operation,
+                  flight.observer);
+          Instant received = clock.instant();
+          if (response.status() == 304) {
+            event(request.namespace(), "revalidation");
+            response =
+                HttpCacheRules.validated(
+                    flight.old == null ? null : flight.old.response(),
+                    response,
+                    flight.headers,
+                    received);
+            TransferScope.decoded(response.bodyLength());
+          } else if (response.status() == 200)
+            response =
+                new SafeHttpFetcher.Response(
+                    response.status(),
+                    response.headers(),
+                    response.body(),
+                    response.finalUri(),
+                    received,
+                    received);
+          boolean shareable =
+              weight(response) <= maximumBytes
+                  && HttpCacheRules.shareable(request, response, sensitive);
+          operation.check();
+          synchronized (mutex) {
+            operation.check();
+            if (!flight.superseded && response.status() == 200 && shareable && flight.waiters > 0) {
+              Duration ttl =
+                  HttpCacheRules.freshTtl(
+                      request,
+                      response,
+                      request.namespace() == Namespace.SEARCH ? searchTtl : pageTtl,
+                      started,
+                      received);
+              entries.put(
+                  flight.key,
+                  new Cached(response, received.plus(ttl), System.nanoTime(), ttl.toNanos()));
+            } else if (!flight.superseded) entries.remove(flight.key);
+            flight.result.complete(new Loaded(response, shareable));
+            flights.remove(flight.id, flight);
+          }
+        }
       }
     } catch (Throwable failure) {
       synchronized (mutex) {

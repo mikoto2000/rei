@@ -75,7 +75,8 @@ class VoiceDeliveryServiceTest {
   void correctionReviewIsNotToolApprovalAndCannotDispatchWithoutExplicitConfirmation() {
     var client = projects.newClient();
     ConversationTarget target;
-    try (var scope = client.open()) {
+    var scope = client.open();
+    try (scope) {
       target = shell.captureTarget();
       delivery.bind(client, target);
     }
@@ -94,7 +95,8 @@ class VoiceDeliveryServiceTest {
   void switchingAwayAndBackInvalidatesCapturedBinding() {
     var client = projects.newClient();
     ConversationTarget target;
-    try (var scope = client.open()) {
+    var scope = client.open();
+    try (scope) {
       target = shell.captureTarget();
       delivery.bind(client, target);
       shell.newConversation();
@@ -115,7 +117,8 @@ class VoiceDeliveryServiceTest {
                 false, "れい", true, false, VoiceAdvancedOptions.defaults().ttsVoice(), 800));
     delivery = new VoiceDeliveryService(shell, clock, new VoiceEventPublisher(), options::get);
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
       delivery.bind(shell.captureClient(), target);
     }
@@ -142,7 +145,8 @@ class VoiceDeliveryServiceTest {
             false, "れい", true, false, VoiceAdvancedOptions.defaults().ttsVoice(), 800);
     delivery = new VoiceDeliveryService(shell, clock, new VoiceEventPublisher(), () -> options);
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
       delivery.bind(shell.captureClient(), target);
     }
@@ -193,25 +197,32 @@ class VoiceDeliveryServiceTest {
     var first = projects.newClient();
     ConversationTarget target;
     AgentRunContext run;
-    try (var scope = first.open()) {
-      target = shell.captureTarget();
-      delivery.bind(first, target);
-      run = shell.submit("work");
+    {
+      var scope = first.open();
+      try (scope) {
+        target = shell.captureTarget();
+        delivery.bind(first, target);
+        run = shell.submit("work");
+      }
     }
     var thread = new Thread(tasks.removeFirst());
     thread.start();
     try {
       assertThat(entered.await(2, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
       var other = projects.newClient();
-      try (var scope = other.open()) {
-        shell.resume(target.sessionId());
-        delivery.bind(other, target);
+      {
+        var scope = other.open();
+        try (scope) {
+          shell.resume(target.sessionId());
+          delivery.bind(other, target);
+        }
       }
       delivery.accept(
           new ConversationInput(
               UUID.randomUUID(), InputSource.VOICE, target, "実行を停止", clock.instant()));
       assertThat(cancelled).isEmpty();
-      try (var scope = first.open()) {
+      var scope = first.open();
+      try (scope) {
         delivery.bind(first, target);
       }
       var stop =
@@ -244,15 +255,19 @@ class VoiceDeliveryServiceTest {
     delivery = new VoiceDeliveryService(shell, clock, new VoiceEventPublisher());
     var first = projects.newClient();
     ConversationTarget target;
-    try (var scope = first.open()) {
-      target = shell.captureTarget();
-      delivery.bind(first, target);
+    {
+      var scope = first.open();
+      try (scope) {
+        target = shell.captureTarget();
+        delivery.bind(first, target);
+      }
     }
     delivery.accept(input(target));
     tasks.removeFirst().run();
     assertThat(delivery.ownsRun(owners.getFirst())).isTrue();
     var other = projects.newClient();
-    try (var scope = other.open()) {
+    var scope = other.open();
+    try (scope) {
       shell.resume(target.sessionId());
       delivery.bind(other, target);
     }
@@ -264,14 +279,18 @@ class VoiceDeliveryServiceTest {
   void capturedClientAllowsWorkerWithoutThreadLocalButNotAfterSessionChange() {
     var client = projects.newClient();
     ConversationTarget target;
-    try (var scope = client.open()) {
-      target = shell.captureTarget();
-      delivery.bind(client, target);
+    {
+      var scope = client.open();
+      try (scope) {
+        target = shell.captureTarget();
+        delivery.bind(client, target);
+      }
     }
     delivery.accept(input(target));
     tasks.removeFirst().run();
     assertThat(prompts).containsExactly("recognized");
-    try (var scope = client.open()) {
+    var scope = client.open();
+    try (scope) {
       shell.newConversation();
     }
     assertThat(delivery.targetIsCurrent(target)).isFalse();
@@ -284,11 +303,15 @@ class VoiceDeliveryServiceTest {
   void anotherClientSelectionCannotRedirectOrStopCapturedVoiceClient() {
     var first = projects.newClient();
     ConversationTarget target;
-    try (var scope = first.open()) {
-      target = shell.captureTarget();
-      delivery.bind(first, target);
+    {
+      var scope = first.open();
+      try (scope) {
+        target = shell.captureTarget();
+        delivery.bind(first, target);
+      }
     }
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       shell.newConversation();
     }
     assertThat(delivery.targetIsCurrent(target)).isTrue();
@@ -306,7 +329,8 @@ class VoiceDeliveryServiceTest {
     delivery = new VoiceDeliveryService(shell, clock, publisher);
     delivery.setConfirmation(true);
     ConversationTarget target;
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       target = shell.captureTarget();
       delivery.bind(shell.captureClient(), target);
     }

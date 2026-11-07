@@ -47,7 +47,8 @@ class WebPageFetcherProvenanceTest {
       assertEquals(retrieved, item.retrievedAt());
       assertEquals(validated, item.validatedAt());
       assertFalse(item.excerpts().isEmpty());
-      try (var scope = WebExtractionScope.enter("Java streams")) {
+      var scope = WebExtractionScope.enter("Java streams");
+      try (scope) {
         var page = new WebPageFetcher(props, new WebPageExtractor(props), transport).fetch(source);
         assertEquals(retrieved, page.retrievedAt());
         assertEquals(validated, page.validatedAt());

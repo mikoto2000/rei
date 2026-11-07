@@ -114,75 +114,77 @@ class ShellWebHistoryIntegrationTest {
     var lifecycle = new SessionLifecycle(repo, clock);
     var shell = new ShellConversationService(service, lifecycle, router::submit);
     var registry = new RunRegistry(clock);
-    try (var runs = new RunService(registry, events, factory, cancellation, router::cancelQueued);
-        var scope = service.newClient().open()) {
-      var web =
-          new ChatSubmitService(
-              projects,
-              new SessionRegistry(clock),
-              registry,
-              lifecycle,
-              (c, p) -> router.submit(c, p, work -> runs.execute(c, work)));
-      var mvc =
-          MockMvcBuilders.standaloneSetup(
-                  new SessionController(new SessionQueryService(repo, turns)),
-                  new ChatController(web))
-              .setControllerAdvice(new ApiExceptionHandler())
-              .build();
-      var first = shell.submit("shell-one");
-      mvc.perform(get("/api/v1/sessions"))
-          .andExpect(status().isOk())
-          .andExpect(jsonPath("$.items[0].sessionId").value(first.conversationId()));
-      mvc.perform(get("/api/v1/sessions/{id}", first.conversationId()))
-          .andExpect(status().isOk())
-          .andExpect(jsonPath("$.projectId").value(project.id()));
-      tasks.removeFirst().run();
-      mvc.perform(get("/api/v1/sessions/{id}/turns", first.conversationId()))
-          .andExpect(status().isOk())
-          .andExpect(jsonPath("$.items[0].turnId").value(first.runId()))
-          .andExpect(jsonPath("$.items[0].userMessage").value("shell-one"))
-          .andExpect(jsonPath("$.items[0].assistantMessage").value("answer 1"));
-      mvc.perform(
-              post("/api/v1/chat")
-                  .contentType("application/json")
-                  .content(
-                      new com.fasterxml.jackson.databind.ObjectMapper()
-                          .writeValueAsString(
-                              Map.of(
-                                  "message",
-                                  "web-two",
-                                  "projectId",
-                                  project.id(),
-                                  "sessionId",
-                                  first.conversationId()))))
-          .andExpect(status().isAccepted())
-          .andExpect(jsonPath("$.sessionId").value(first.conversationId()));
-      var third = shell.submit("shell-three");
-      assertThat(tasks).hasSize(1);
-      while (!tasks.isEmpty()) tasks.removeFirst().run();
-      assertThat(executed)
-          .extracting(AgentRunContext::conversationId)
-          .containsOnly(first.conversationId());
-      assertThat(executed)
-          .extracting(AgentRunContext::requestSource)
-          .containsExactly(
-              AgentRunContext.RequestSource.SHELL,
-              AgentRunContext.RequestSource.WEB,
-              AgentRunContext.RequestSource.SHELL);
-      assertThat(modelInputs.getLast().toString()).contains("shell-one", "web-two", "shell-three");
-      mvc.perform(get("/api/v1/sessions/{id}/turns", first.conversationId()))
-          .andExpect(status().isOk())
-          .andExpect(jsonPath("$.items.length()").value(3))
-          .andExpect(jsonPath("$.items[0].userMessage").value("shell-one"))
-          .andExpect(jsonPath("$.items[1].userMessage").value("web-two"))
-          .andExpect(jsonPath("$.items[2].runId").value(third.runId()));
-      assertThat(new ConversationTurnStore(directory).read(first.conversationId())).hasSize(3);
-      var fromWeb = web.submit("web-origin", project.id(), null);
-      shell.resume(fromWeb.conversationId());
-      assertThat(shell.submit("shell continuation").conversationId())
-          .isEqualTo(fromWeb.conversationId());
-      while (!tasks.isEmpty()) tasks.removeFirst().run();
-      assertThat(turns.read(fromWeb.conversationId())).hasSize(2);
+    try (var runs = new RunService(registry, events, factory, cancellation, router::cancelQueued)) {
+      var scope = service.newClient().open();
+      try (scope) {
+        var web =
+            new ChatSubmitService(
+                projects,
+                new SessionRegistry(clock),
+                registry,
+                lifecycle,
+                (c, p) -> router.submit(c, p, work -> runs.execute(c, work)));
+        var mvc =
+            MockMvcBuilders.standaloneSetup(
+                    new SessionController(new SessionQueryService(repo, turns)),
+                    new ChatController(web))
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+        var first = shell.submit("shell-one");
+        mvc.perform(get("/api/v1/sessions"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[0].sessionId").value(first.conversationId()));
+        mvc.perform(get("/api/v1/sessions/{id}", first.conversationId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.projectId").value(project.id()));
+        tasks.removeFirst().run();
+        mvc.perform(get("/api/v1/sessions/{id}/turns", first.conversationId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items[0].turnId").value(first.runId()))
+            .andExpect(jsonPath("$.items[0].userMessage").value("shell-one"))
+            .andExpect(jsonPath("$.items[0].assistantMessage").value("answer 1"));
+        mvc.perform(
+                post("/api/v1/chat")
+                    .contentType("application/json")
+                    .content(
+                        new com.fasterxml.jackson.databind.ObjectMapper()
+                            .writeValueAsString(
+                                Map.of(
+                                    "message",
+                                    "web-two",
+                                    "projectId",
+                                    project.id(),
+                                    "sessionId",
+                                    first.conversationId()))))
+            .andExpect(status().isAccepted())
+            .andExpect(jsonPath("$.sessionId").value(first.conversationId()));
+        var third = shell.submit("shell-three");
+        assertThat(tasks).hasSize(1);
+        while (!tasks.isEmpty()) tasks.removeFirst().run();
+        assertThat(executed)
+            .extracting(AgentRunContext::conversationId)
+            .containsOnly(first.conversationId());
+        assertThat(executed)
+            .extracting(AgentRunContext::requestSource)
+            .containsExactly(
+                AgentRunContext.RequestSource.SHELL,
+                AgentRunContext.RequestSource.WEB,
+                AgentRunContext.RequestSource.SHELL);
+        assertThat(modelInputs.getLast().toString()).contains("shell-one", "web-two", "shell-three");
+        mvc.perform(get("/api/v1/sessions/{id}/turns", first.conversationId()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items.length()").value(3))
+            .andExpect(jsonPath("$.items[0].userMessage").value("shell-one"))
+            .andExpect(jsonPath("$.items[1].userMessage").value("web-two"))
+            .andExpect(jsonPath("$.items[2].runId").value(third.runId()));
+        assertThat(new ConversationTurnStore(directory).read(first.conversationId())).hasSize(3);
+        var fromWeb = web.submit("web-origin", project.id(), null);
+        shell.resume(fromWeb.conversationId());
+        assertThat(shell.submit("shell continuation").conversationId())
+            .isEqualTo(fromWeb.conversationId());
+        while (!tasks.isEmpty()) tasks.removeFirst().run();
+        assertThat(turns.read(fromWeb.conversationId())).hasSize(2);
+      }
     }
   }
 }

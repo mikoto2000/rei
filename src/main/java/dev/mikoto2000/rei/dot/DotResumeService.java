@@ -230,12 +230,15 @@ public final class DotResumeService {
     var state = checked(owner);
     repo.result(project, id);
     if (!repo.requestResume(project, id, state.revision())) return status(project, id);
-    try (var scope =
-        AgentRunScope.open(
-            new AgentRunContext(owner.run(), owner.session(), Path.of(owner.root()), project))) {
-      var scheduleId = scheduleResume.apply(id, owner.session());
-      repo.attachSchedule(project, id, scheduleId);
-      activateSchedule.accept(project, scheduleId);
+    try {
+      var scope =
+          AgentRunScope.open(
+              new AgentRunContext(owner.run(), owner.session(), Path.of(owner.root()), project));
+      try (scope) {
+        var scheduleId = scheduleResume.apply(id, owner.session());
+        repo.attachSchedule(project, id, scheduleId);
+        activateSchedule.accept(project, scheduleId);
+      }
     } catch (RuntimeException failure) {
       repo.finishResume(project, id, "UNKNOWN");
       throw new DotException("RESUME_ADMISSION_UNKNOWN");

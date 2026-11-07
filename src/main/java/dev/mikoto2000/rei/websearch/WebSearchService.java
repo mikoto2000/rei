@@ -101,12 +101,19 @@ public class WebSearchService {
       throws IOException, InterruptedException {
     long started = System.nanoTime();
     var settings = searchSettings.get();
-    try (var refresh =
-            dev.mikoto2000.rei.http.FetchScope.withForceRefresh(
-                query != null && WebSearchSelection.needsFreshness(query));
+    try {
+      var refresh =
+          dev.mikoto2000.rei.http.FetchScope.withForceRefresh(
+              query != null && WebSearchSelection.needsFreshness(query));
+      try (refresh) {
         var research = enterResearch.get();
-        var budget = SearchRequestBudget.enter(settings.maxApiCalls())) {
-      return searchObserved(query, limit, settings);
+        try (research) {
+          var budget = SearchRequestBudget.enter(settings.maxApiCalls());
+          try (budget) {
+            return searchObserved(query, limit, settings);
+          }
+        }
+      }
     } finally {
       WebSearchMetrics.OBSERVED.duration("search", System.nanoTime() - started);
     }

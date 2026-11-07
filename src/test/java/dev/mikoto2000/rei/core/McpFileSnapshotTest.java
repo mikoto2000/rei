@@ -41,7 +41,8 @@ class McpFileSnapshotTest {
               "project",
               AgentRunContext.RequestSource.MCP,
               AgentRunContext.Mode.READ_ONLY);
-      try (var scope = AgentRunScope.open(owner)) {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
         try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
           executor
               .submit(

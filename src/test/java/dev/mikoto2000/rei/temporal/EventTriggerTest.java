@@ -47,7 +47,8 @@ class EventTriggerTest {
 
   /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   String create(PersistentAgentScheduler scheduler) {
-    try (var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, project))) {
+    var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, project));
+    try (scope) {
       return new SchedulerTools(scheduler)
           .scheduleOnEvent("source", "AGENT_RUN_COMPLETED", "1h", "Continue", "session")
           .id();
@@ -176,7 +177,8 @@ class EventTriggerTest {
   @Test
   void invalidConfigurationIsRejectedWithoutPartialRows() {
     var scheduler = scheduler(now);
-    try (var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, project))) {
+    var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, project));
+    try (scope) {
       assertThrows(
           IllegalArgumentException.class,
           () ->
@@ -347,7 +349,8 @@ class EventTriggerTest {
     first.activate(project, id);
     String other = UUID.randomUUID().toString();
     String otherId;
-    try (var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, other))) {
+    var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, other));
+    try (scope) {
       otherId =
           first
               .scheduleOnEvent(
@@ -384,7 +387,8 @@ class EventTriggerTest {
   void dependencyEventMustHaveMatchingTypedTerminalStateWithoutPretendingToBeARun() {
     var scheduler = scheduler(now.plusSeconds(2));
     String id;
-    try (var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, project))) {
+    var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, project));
+    try (scope) {
       id =
           scheduler
               .scheduleOnEvent(

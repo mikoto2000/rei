@@ -25,7 +25,8 @@ class ProjectCancellationTest extends dev.mikoto2000.rei.core.project.ProjectCli
         connect(new ProjectService(a, new ProjectRegistry(temp.resolve("projects.json"))));
     var run = new AgentRunContext("run", projects.currentContext(), "chat:main");
     var cancellation = new CommandCancellationService();
-    try (var scope = AgentRunScope.open(run)) {
+    var scope = AgentRunScope.open(run);
+    try (scope) {
       cancellation.begin(Thread.currentThread());
     }
     projects.cd(b.toString());

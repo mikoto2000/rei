@@ -51,7 +51,8 @@ class EmbeddingRunModelBudgetTest {
     var model = new BudgetedEmbeddingModel(provider);
     var budget = new OutputLimitRunBudget(0, 10, null, 5);
     var run = new RunExecutionContext("run", budget, null, null, null);
-    try (var scope = ModelCallBudgetScope.open(run.modelCallBudget())) {
+    var scope = ModelCallBudgetScope.open(run.modelCallBudget());
+    try (scope) {
       assertArrayEquals(new float[] {1, 0}, model.embed("query"));
       assertEquals(5, budget.totalTokens());
       assertTrue(
@@ -71,7 +72,8 @@ class EmbeddingRunModelBudgetTest {
       when(provider.call(any(EmbeddingRequest.class))).thenReturn(response(tokens));
       var budget = new OutputLimitRunBudget(0, 10, null, 5);
       var run = new RunExecutionContext("run", budget, null, null, null);
-      try (var scope = ModelCallBudgetScope.open(run.modelCallBudget())) {
+      var scope = ModelCallBudgetScope.open(run.modelCallBudget());
+      try (scope) {
         assertTrue(
             assertThrows(
                     RuntimeException.class,
@@ -87,9 +89,10 @@ class EmbeddingRunModelBudgetTest {
     when(provider.call(any(EmbeddingRequest.class)))
         .thenThrow(new IllegalStateException("offline"));
     var budget = new OutputLimitRunBudget(0, 10, null, 5);
-    try (var scope =
+    var scope =
         ModelCallBudgetScope.open(
-            new RunExecutionContext("run", budget, null, null, null).modelCallBudget())) {
+            new RunExecutionContext("run", budget, null, null, null).modelCallBudget());
+    try (scope) {
       assertTrue(
           assertThrows(
                   RuntimeException.class, () -> new BudgetedEmbeddingModel(provider).embed("query"))
@@ -108,9 +111,10 @@ class EmbeddingRunModelBudgetTest {
     when(provider.getEmbeddingContent(document)).thenReturn("formatted text");
     var model = new BudgetedEmbeddingModel(provider);
     var budget = new OutputLimitRunBudget(0, 10, null, 10);
-    try (var scope =
+    var scope =
         ModelCallBudgetScope.open(
-            new RunExecutionContext("run", budget, null, null, null).modelCallBudget())) {
+            new RunExecutionContext("run", budget, null, null, null).modelCallBudget());
+    try (scope) {
       assertEquals(2, model.dimensions());
       assertEquals(2, model.dimensions());
       model.embed(document);
@@ -132,9 +136,10 @@ class EmbeddingRunModelBudgetTest {
     try (var client =
         new dev.mikoto2000.rei.skills.SkillEmbeddingClient(
             () -> model::embed, java.time.Duration.ofSeconds(2))) {
-      try (var scope =
+      var scope =
           ModelCallBudgetScope.open(
-              new RunExecutionContext("run", budget, null, null, null).modelCallBudget())) {
+              new RunExecutionContext("run", budget, null, null, null).modelCallBudget());
+      try (scope) {
         assertEquals(1, client.embed(List.of("first")).size());
         assertTrue(
             assertThrows(RuntimeException.class, () -> client.embed(List.of("second")))
@@ -212,9 +217,10 @@ class EmbeddingRunModelBudgetTest {
     var budget = new OutputLimitRunBudget(0, 10, goals.modelBudget(claim, id));
     var provider = mock(EmbeddingModel.class);
     when(provider.call(any(EmbeddingRequest.class))).thenReturn(response(4));
-    try (var scope =
+    var scope =
         ModelCallBudgetScope.open(
-            new RunExecutionContext(id, budget, null, null, null).modelCallBudget())) {
+            new RunExecutionContext(id, budget, null, null, null).modelCallBudget());
+    try (scope) {
       assertTrue(
           assertThrows(
                   RuntimeException.class, () -> new BudgetedEmbeddingModel(provider).embed("query"))
@@ -231,8 +237,10 @@ class EmbeddingRunModelBudgetTest {
   void nestedBudgetScopesAndDefaultBeanConfigurationPreserveLegacyModel() {
     var outer = mock(ModelCallBudget.class);
     var inner = mock(ModelCallBudget.class);
-    try (var first = ModelCallBudgetScope.open(outer)) {
-      try (var second = ModelCallBudgetScope.open(inner)) {
+    var first = ModelCallBudgetScope.open(outer);
+    try (first) {
+      var second = ModelCallBudgetScope.open(inner);
+      try (second) {
         assertSame(inner, ModelCallBudgetScope.current());
       }
       assertSame(outer, ModelCallBudgetScope.current());

@@ -70,7 +70,8 @@ class PlanAppServerClientTest {
             },
             guard);
     var owner = new AgentRunContext("run", "session", root, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       assertEquals(
           PlanSseAssembler.State.COMPLETED,
           client
@@ -108,7 +109,8 @@ class PlanAppServerClientTest {
               return new PlanAppServerClient.Started(s, "/isolated/workspace");
             },
             mock(ToolPermissionGuard.class));
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"));
+    try (scope) {
       assertEquals(
           ChatGptException.Code.CANCELLED,
           assertThrows(
@@ -148,7 +150,8 @@ class PlanAppServerClientTest {
         () ->
             client.inferHistory(
                 "a", "m", "i", input, Duration.ofSeconds(1), 10, 4096, () -> false, () -> {}));
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"));
+    try (scope) {
       assertEquals(
           ChatGptException.Code.SEND_LIMIT,
           assertThrows(
@@ -216,7 +219,8 @@ class PlanAppServerClientTest {
     var budget = mock(dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation.class);
     when(budget.tryReserve()).thenReturn(true);
     client.nativeBudget(budget, 2);
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"));
+    try (scope) {
       assertEquals(
           34,
           client
@@ -257,7 +261,8 @@ class PlanAppServerClientTest {
     var budget = mock(dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation.class);
     when(budget.tryReserve()).thenReturn(false);
     client.nativeBudget(budget, 2);
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"));
+    try (scope) {
       assertEquals(
           ChatGptException.Code.PERMISSION_DENIED,
           client
@@ -312,7 +317,8 @@ class PlanAppServerClientTest {
               accounts,
               (own, t, c) -> new PlanAppServerClient.Started(session, "/isolated/workspace"),
               mock(ToolPermissionGuard.class));
-      try (var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"))) {
+      var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"));
+      try (scope) {
         var result =
             client.inferHistory(
                 "account",

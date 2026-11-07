@@ -63,7 +63,8 @@ class LlmTemporalActivityModelTest {
       var model =
           new LlmTemporalActivityModel(() -> chat, () -> OpenAiChatOptions.builder().build());
       var parent = mock(dev.mikoto2000.rei.llm.ModelCallBudget.class);
-      try (var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(parent)) {
+      var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(parent);
+      try (scope) {
         assertThrows(
             TemporalActivityInferenceService.BudgetFailure.class,
             () -> model.infer("{}", 128, 1, 200));

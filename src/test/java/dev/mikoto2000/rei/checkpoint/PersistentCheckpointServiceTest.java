@@ -222,40 +222,43 @@ class PersistentCheckpointServiceTest {
     java.nio.file.Files.writeString(root.resolve("remaining.md"), "unfinished next target\n");
     dev.mikoto2000.rei.review.ReviewCoverageLedger.Job job;
     dev.mikoto2000.rei.review.ReviewTools.Page pending;
-    try (var scope = AgentRunScope.open(owner)) {
-      job =
-          tools.beginReview(
-              List.of("assessed.md", "pending.md", "remaining.md"), "correctness", "v1");
-      var first =
-          tools.readReviewFile(job.id(), "assessed.md", job.targets().getFirst().version(), 0, 512);
-      tools.confirmed(owner, List.of(first));
-      tools.submitReviewPage(
-          job.id(),
-          "assessed.md",
-          first.offset(),
-          first.nextOffset(),
-          "Saved assessment before stopping",
-          List.of());
-      pending =
-          tools.readReviewFile(
-              job.id(),
-              "pending.md",
-              job.targets().stream()
-                  .filter(t -> t.path().equals("pending.md"))
-                  .findFirst()
-                  .orElseThrow()
-                  .version(),
-              0,
-              512);
-      tools.confirmed(owner, List.of(pending));
-      if (alreadyAssessed)
+    {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
+        job =
+            tools.beginReview(
+                List.of("assessed.md", "pending.md", "remaining.md"), "correctness", "v1");
+        var first =
+            tools.readReviewFile(job.id(), "assessed.md", job.targets().getFirst().version(), 0, 512);
+        tools.confirmed(owner, List.of(first));
         tools.submitReviewPage(
             job.id(),
-            "pending.md",
-            pending.offset(),
-            pending.nextOffset(),
-            "Previously saved pending-page assessment",
+            "assessed.md",
+            first.offset(),
+            first.nextOffset(),
+            "Saved assessment before stopping",
             List.of());
+        pending =
+            tools.readReviewFile(
+                job.id(),
+                "pending.md",
+                job.targets().stream()
+                    .filter(t -> t.path().equals("pending.md"))
+                    .findFirst()
+                    .orElseThrow()
+                    .version(),
+                0,
+                512);
+        tools.confirmed(owner, List.of(pending));
+        if (alreadyAssessed)
+          tools.submitReviewPage(
+              job.id(),
+              "pending.md",
+              pending.offset(),
+              pending.nextOffset(),
+              "Previously saved pending-page assessment",
+              List.of());
+      }
     }
     var json = new com.fasterxml.jackson.databind.ObjectMapper();
     String arguments =
@@ -331,62 +334,65 @@ class PersistentCheckpointServiceTest {
     assertTrue(execution.needsResumeContentWork());
     assertTrue(execution.resumeAcquisitionBlocked("readMultiFile"));
     assertFalse(execution.resumeAcquisitionBlocked("readReviewFile", arguments));
-    try (var scope = AgentRunScope.open(next)) {
-      execution.beginIteration();
-      var before = execution.beforeTool("readReviewFile", arguments);
-      var page = tools.readReviewFile(job.id(), "pending.md", pending.range().version(), 0, 512);
-      tools.confirmed(next, List.of(page));
-      execution.recordTool("readReviewFile", arguments, json.writeValueAsString(page), before);
-      execution.endIteration();
-      assertNull(execution.requestReplan());
-      execution.beginIteration();
-      before = execution.beforeTool("submitReviewPage", "{}");
-      var receipt =
-          tools.submitReviewPage(
-              job.id(),
-              "pending.md",
-              page.offset(),
-              page.nextOffset(),
-              "Assessment saved after resuming the same task",
-              List.of());
-      execution.recordTool("submitReviewPage", "{}", json.writeValueAsString(receipt), before);
-      execution.endIteration();
-      assertFalse(execution.hasPendingResumeContentWork());
-      if (alreadyAssessed) {
-        assertEquals(0, execution.progressVersion());
-        assertEquals(2, execution.detector().stagnationCount());
+    {
+      var scope = AgentRunScope.open(next);
+      try (scope) {
+        execution.beginIteration();
+        var before = execution.beforeTool("readReviewFile", arguments);
+        var page = tools.readReviewFile(job.id(), "pending.md", pending.range().version(), 0, 512);
+        tools.confirmed(next, List.of(page));
+        execution.recordTool("readReviewFile", arguments, json.writeValueAsString(page), before);
+        execution.endIteration();
+        assertNull(execution.requestReplan());
+        execution.beginIteration();
+        before = execution.beforeTool("submitReviewPage", "{}");
+        var receipt =
+            tools.submitReviewPage(
+                job.id(),
+                "pending.md",
+                page.offset(),
+                page.nextOffset(),
+                "Assessment saved after resuming the same task",
+                List.of());
+        execution.recordTool("submitReviewPage", "{}", json.writeValueAsString(receipt), before);
+        execution.endIteration();
+        assertFalse(execution.hasPendingResumeContentWork());
+        if (alreadyAssessed) {
+          assertEquals(0, execution.progressVersion());
+          assertEquals(2, execution.detector().stagnationCount());
+        }
+        assertFalse(
+            execution.resumeAcquisitionBlocked("readReviewFile", "{\"path\":\"remaining.md\"}"));
+        execution.beginIteration();
+        before = execution.beforeTool("readReviewFile", "{}");
+        var remaining =
+            tools.readReviewFile(
+                job.id(),
+                "remaining.md",
+                job.targets().stream()
+                    .filter(t -> t.path().equals("remaining.md"))
+                    .findFirst()
+                    .orElseThrow()
+                    .version(),
+                0,
+                512);
+        tools.confirmed(next, List.of(remaining));
+        execution.recordTool("readReviewFile", "{}", json.writeValueAsString(remaining), before);
+        execution.endIteration();
+        assertNull(execution.requestReplan());
+        execution.beginIteration();
+        before = execution.beforeTool("submitReviewPage", "{}");
+        receipt =
+            tools.submitReviewPage(
+                job.id(),
+                "remaining.md",
+                remaining.offset(),
+                remaining.nextOffset(),
+                "Reviewed the next unfinished target",
+                List.of());
+        execution.recordTool("submitReviewPage", "{}", json.writeValueAsString(receipt), before);
+        execution.endIteration();
       }
-      assertFalse(
-          execution.resumeAcquisitionBlocked("readReviewFile", "{\"path\":\"remaining.md\"}"));
-      execution.beginIteration();
-      before = execution.beforeTool("readReviewFile", "{}");
-      var remaining =
-          tools.readReviewFile(
-              job.id(),
-              "remaining.md",
-              job.targets().stream()
-                  .filter(t -> t.path().equals("remaining.md"))
-                  .findFirst()
-                  .orElseThrow()
-                  .version(),
-              0,
-              512);
-      tools.confirmed(next, List.of(remaining));
-      execution.recordTool("readReviewFile", "{}", json.writeValueAsString(remaining), before);
-      execution.endIteration();
-      assertNull(execution.requestReplan());
-      execution.beginIteration();
-      before = execution.beforeTool("submitReviewPage", "{}");
-      receipt =
-          tools.submitReviewPage(
-              job.id(),
-              "remaining.md",
-              remaining.offset(),
-              remaining.nextOffset(),
-              "Reviewed the next unfinished target",
-              List.of());
-      execution.recordTool("submitReviewPage", "{}", json.writeValueAsString(receipt), before);
-      execution.endIteration();
     }
     assertFalse(execution.hasPendingResumeContentWork());
     assertEquals(saved.budget().forExplicitResume(), execution.budgetSnapshot());
@@ -426,20 +432,23 @@ class PersistentCheckpointServiceTest {
     java.nio.file.Files.writeString(
         root.resolve("lesson.md"), "original evidence\ncounterevidence\n");
     dev.mikoto2000.rei.review.ReviewCoverageLedger.Job job;
-    try (var scope = AgentRunScope.open(owner)) {
-      job = tools.beginReview(List.of("lesson.md"), "correctness", "v1");
-      var page =
-          tools.readReviewFile(job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
-      tools.confirmed(owner, List.of(page));
-      tools.submitReviewPage(
-          job.id(),
-          "lesson.md",
-          page.offset(),
-          page.nextOffset(),
-          "reviewed",
-          List.of(
-              new dev.mikoto2000.rei.review.ReviewTools.PageFinding(
-                  "SEC1-01", "P2", "original evidence", "original candidate")));
+    {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
+        job = tools.beginReview(List.of("lesson.md"), "correctness", "v1");
+        var page =
+            tools.readReviewFile(job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
+        tools.confirmed(owner, List.of(page));
+        tools.submitReviewPage(
+            job.id(),
+            "lesson.md",
+            page.offset(),
+            page.nextOffset(),
+            "reviewed",
+            List.of(
+                new dev.mikoto2000.rei.review.ReviewTools.PageFinding(
+                    "SEC1-01", "P2", "original evidence", "original candidate")));
+      }
     }
     var before = ledger.get(job.id(), dev.mikoto2000.rei.review.ReviewTools.scope(owner));
     assertEquals("COMPLETE", before.status());
@@ -994,7 +1003,8 @@ class PersistentCheckpointServiceTest {
             return "deployed";
           }
         };
-    try (var scope = AgentRunScope.open(next)) {
+    var scope = AgentRunScope.open(next);
+    try (scope) {
       assertThrows(
           IllegalStateException.class,
           () -> new ToolEventCallbackDecorator(callback, events, bus).call("{}"));
@@ -1206,7 +1216,8 @@ class PersistentCheckpointServiceTest {
             }
           }
         };
-    try (var scope = AgentRunScope.open(context)) {
+    var scope = AgentRunScope.open(context);
+    try (scope) {
       assertEquals("after", new ToolEventCallbackDecorator(callback, events, bus).call("{}"));
     }
     assertDoesNotThrow(
@@ -1380,7 +1391,8 @@ class PersistentCheckpointServiceTest {
                 new dev.mikoto2000.rei.core.contextbudget.RawToolResultTools(raw))
             .getToolCallbacks();
     String page;
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       page =
           callbacks[0].call(
               "{\"rawResultRef\":\"" + reference + "\",\"offset\":0,\"limit\":16000}");
@@ -1502,7 +1514,8 @@ class PersistentCheckpointServiceTest {
       s.execute(
           "CREATE TRIGGER inject_result_failure BEFORE INSERT ON checkpoint_revisions WHEN NEW.revision=3 BEGIN SELECT RAISE(ABORT,'crash after side effect'); END");
     }
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       assertThrows(
           RuntimeException.class,
           () ->
@@ -1705,8 +1718,11 @@ class PersistentCheckpointServiceTest {
     task.start("review and repair docs");
     task.addCompleted("reviewed introduction");
     task.addPending("repair examples");
-    try (var scope = AgentRunScope.open(owner)) {
-      service.saveCurrent("A", "session");
+    {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
+        service.saveCurrent("A", "session");
+      }
     }
     service.finish(owner, "INTERRUPTED");
     String id = state().taskId();
@@ -1729,32 +1745,36 @@ class PersistentCheckpointServiceTest {
     task.addCompleted("unrelated result");
     var resumed = service.resume("A", id, AgentRunContext.RequestSource.SHELL);
     var next = new AgentRunContext(resumed.runId(), "session", root, "A");
-    try (var scope = AgentRunScope.open(next)) {
-      service.start(next, "resume");
-      assertEquals("review and repair docs", task.goal());
-      assertEquals(List.of("reviewed introduction"), task.completed());
-      assertEquals(List.of("repair examples"), task.pending());
-      assertEquals(resumed.runId(), task.ownerRunId());
-      String handoff = service.context(resumed.runId());
-      assertTrue(handoff.contains("reviewed introduction"));
-      assertTrue(handoff.contains("repair examples"));
-      var request =
-          org.springframework.ai.chat.client.ChatClientRequest.builder()
-              .prompt(new org.springframework.ai.chat.prompt.Prompt("resume"))
-              .build();
-      var taskContext =
-          new dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor(task).before(request, null);
-      var sent = new ResumeContextAdvisor(service).before(taskContext, null).prompt();
-      String user = sent.getUserMessage().getText();
-      assertTrue(user.contains("Completed:\n- reviewed introduction"));
-      assertTrue(user.contains("Pending:\n- repair examples"));
-      assertFalse(user.contains("unrelated"));
-      service.saveCurrent("A", "session");
+    {
+      var scope = AgentRunScope.open(next);
+      try (scope) {
+        service.start(next, "resume");
+        assertEquals("review and repair docs", task.goal());
+        assertEquals(List.of("reviewed introduction"), task.completed());
+        assertEquals(List.of("repair examples"), task.pending());
+        assertEquals(resumed.runId(), task.ownerRunId());
+        String handoff = service.context(resumed.runId());
+        assertTrue(handoff.contains("reviewed introduction"));
+        assertTrue(handoff.contains("repair examples"));
+        var request =
+            org.springframework.ai.chat.client.ChatClientRequest.builder()
+                .prompt(new org.springframework.ai.chat.prompt.Prompt("resume"))
+                .build();
+        var taskContext =
+            new dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor(task).before(request, null);
+        var sent = new ResumeContextAdvisor(service).before(taskContext, null).prompt();
+        String user = sent.getUserMessage().getText();
+        assertTrue(user.contains("Completed:\n- reviewed introduction"));
+        assertTrue(user.contains("Pending:\n- repair examples"));
+        assertFalse(user.contains("unrelated"));
+        service.saveCurrent("A", "session");
+      }
     }
     service.finish(next, "INTERRUPTED");
     var again = service.resume("A", id, AgentRunContext.RequestSource.SHELL);
     var againOwner = new AgentRunContext(again.runId(), "session", root, "A");
-    try (var scope = AgentRunScope.open(againOwner)) {
+    var scope = AgentRunScope.open(againOwner);
+    try (scope) {
       service.start(againOwner, "resume again");
       assertEquals(List.of("reviewed introduction"), task.completed());
       assertEquals(List.of("repair examples"), task.pending());
@@ -1802,7 +1822,8 @@ class PersistentCheckpointServiceTest {
     service.finish(owner, "INTERRUPTED");
     var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
     var next = new AgentRunContext(resumed.runId(), "session", root, "A");
-    try (var scope = AgentRunScope.open(next)) {
+    var scope = AgentRunScope.open(next);
+    try (scope) {
       service.start(next, "resume");
       assertEquals(List.of("reviewed introduction"), task.completed());
       assertEquals(List.of("repair examples", "validate repaired examples"), task.pending());
@@ -1818,7 +1839,8 @@ class PersistentCheckpointServiceTest {
     task.start("review docs");
     task.addCompleted("introduction assessment saved");
     task.addPending("repair the remaining examples");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       service.saveCurrent("A", "session");
     }
     var fields = repository.fields(state());

@@ -37,7 +37,8 @@ class ReviewContinuationTest {
             new Tools(),
             TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", dir, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = tools.beginReview(List.of("source.md"), "review", "v1");
       assertThat(tools.reviewPending(job.id()).getFirst().start()).isZero();
       var page =

@@ -164,7 +164,8 @@ public final class BackgroundRunSubmitService {
                   dev.mikoto2000.rei.core.execution.ExecutionType.IMAGE,
                   prompt,
                   registeredRun.apply(context.runId()).startedAt());
-          try (var scope = dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution)) {
+          var scope = dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution);
+          try (scope) {
             var result =
                 generateImage.apply(
                     new ImageGenerationRequest(
@@ -315,7 +316,8 @@ public final class BackgroundRunSubmitService {
 
   /** 要求された処理を実行する。 */
   private void execute(AgentRunContext context, Function<AgentRunContext, String> operation) {
-    try (var scope = AgentRunScope.open(context)) {
+    var scope = AgentRunScope.open(context);
+    try (scope) {
       Runnable clearCancellation = beginCommand.get();
       try {
         if (cancellationRequested.getAsBoolean()) return;

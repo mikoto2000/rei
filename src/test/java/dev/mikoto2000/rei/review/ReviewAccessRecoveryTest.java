@@ -91,7 +91,8 @@ class ReviewAccessRecoveryTest {
             .filter(t -> t.getToolDefinition().name().equals("reviewStatus"))
             .findFirst()
             .orElseThrow();
-    try (var scope = AgentRunScope.open(current)) {
+    var scope = AgentRunScope.open(current);
+    try (scope) {
       String result =
           callback.call(
               StorageDatabase.JSON.writeValueAsString(Map.of("reviewJobId", original.id())));
@@ -155,7 +156,8 @@ class ReviewAccessRecoveryTest {
                                     "beginReview",
                                     "{\"paths\":[\"current.md\"],\"criteria\":\"correctness\",\"criteriaVersion\":\"v1\"}")))
                         .build())));
-    try (var scope = AgentRunScope.open(current)) {
+    var scope = AgentRunScope.open(current);
+    try (scope) {
       var result = new ToolLoopSupport().execute(prompt, response);
       var feedback = (ToolResponseMessage) result.conversationHistory().getLast();
       assertThat(feedback.getResponses()).hasSize(2);

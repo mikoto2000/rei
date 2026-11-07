@@ -35,7 +35,8 @@ class FileDependencyToolsTest {
   @Test
   void existenceDigestAndMissingAreIndependentFacts() throws Exception {
     Files.writeString(dir.resolve("result.txt"), "hello");
-    try (var scope = AgentRunScope.open(new AgentRunContext("r", "s", dir, "p"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("r", "s", dir, "p"));
+    try (scope) {
       var tools = tools();
       assertEquals(
           DependencyState.COMPLETED, tools.waitForFile("result.txt", null, 0, null).state());
@@ -60,7 +61,8 @@ class FileDependencyToolsTest {
   void boundaryAndMalformedInputsCannotClaimCompletion() {
     var tools = tools();
     assertThrows(IllegalArgumentException.class, () -> tools.waitForFile("x", null, 0, null));
-    try (var scope = AgentRunScope.open(new AgentRunContext("r", "s", dir, "p"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("r", "s", dir, "p"));
+    try (scope) {
       assertEquals(DependencyState.BLOCKED, tools.waitForFile("../outside", null, 0, null).state());
       assertEquals(
           DependencyState.BLOCKED,
@@ -95,7 +97,8 @@ class FileDependencyToolsTest {
     assertFalse(required.contains("expectedSha256"));
     assertFalse(required.contains("timeoutSeconds"));
     execution.beginIteration();
-    try (var scope = AgentRunScope.open(new AgentRunContext("r", "s", dir, "p"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("r", "s", dir, "p"));
+    try (scope) {
       var before = execution.beforeTool("waitForFile", "{}");
       var result =
           callback.call(
@@ -135,7 +138,8 @@ class FileDependencyToolsTest {
                 throw new IllegalStateException(error);
               }
             }));
-    try (var scope = AgentRunScope.open(new AgentRunContext("r", "s", dir, "p"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("r", "s", dir, "p"));
+    try (scope) {
       assertEquals(DependencyState.COMPLETED, tools.waitForFile("created", null, 1, null).state());
       Files.write(dir.resolve("large"), new byte[1_048_577]);
       assertEquals(DependencyState.BLOCKED, tools.waitForFile("large", null, 0, null).state());

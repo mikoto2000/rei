@@ -60,7 +60,8 @@ class SessionCommandsTest {
                 return picocli.CommandLine.defaultFactory().create(type);
               }
             });
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       var first = shell.submit("first");
       assertThat(command.execute("new")).isZero();
       assertThat(shell.currentSessionId()).isNotNull().isNotEqualTo(first.conversationId());

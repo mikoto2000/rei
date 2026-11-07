@@ -52,7 +52,8 @@ class ResumeSessionCommandTest {
     var conversations =
         new ShellConversationService(
             projects, new SessionLifecycle(repository, Clock.systemUTC()), (context, prompt) -> {});
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       String target = conversations.newConversation("target").sessionId();
       String previous = unselected ? null : conversations.newConversation("previous").sessionId();
       projects.selectSession(previous);

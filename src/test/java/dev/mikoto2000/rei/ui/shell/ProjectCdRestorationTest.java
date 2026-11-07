@@ -44,7 +44,8 @@ class ProjectCdRestorationTest extends dev.mikoto2000.rei.core.project.ProjectCl
       assertThat(worker.submit(ProjectService::contextForOperation).get()).isNull();
     }
     verify(activity, times(1)).restore(any());
-    try (var scope = client.open()) {
+    var scope = client.open();
+    try (scope) {
       assertThat(projects.currentProject()).isEqualTo(b);
     }
   }

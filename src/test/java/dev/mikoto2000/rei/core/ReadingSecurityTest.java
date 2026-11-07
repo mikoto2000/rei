@@ -188,22 +188,29 @@ class ReadingSecurityTest {
         ReadingTestStores.store(new StorageDatabase(data), Clock.fixed(now, ZoneOffset.UTC));
     var owner = new AgentRunContext("secure", "chat", root, "project");
     String cursor;
-    try (var scope = AgentRunScope.open(owner)) {
-      var query =
-          new Tools.GrepQuery(
-              "hit", "a.txt", false, true, false, false, 0, 0, null, true, null, null);
-      cursor =
-          new PagedFileSearch(new Tools(), store)
-              .read(new PagedFileSearch.Request(List.of(query), 0, 512, 2048, 1, 1, null), root)
-              .resultCursor();
+    {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
+        var query =
+            new Tools.GrepQuery(
+                "hit", "a.txt", false, true, false, false, 0, 0, null, true, null, null);
+        cursor =
+            new PagedFileSearch(new Tools(), store)
+                .read(new PagedFileSearch.Request(List.of(query), 0, 512, 2048, 1, 1, null), root)
+                .resultCursor();
+      }
     }
-    try (var scope = AgentRunScope.open(new AgentRunContext("other", "chat", root, "project"))) {
-      var result =
-          new PagedFileSearch(new Tools(), store)
-              .read(new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, cursor), root);
-      assertEquals("INVALID_CURSOR", result.error().code());
+    {
+      var scope = AgentRunScope.open(new AgentRunContext("other", "chat", root, "project"));
+      try (scope) {
+        var result =
+            new PagedFileSearch(new Tools(), store)
+                .read(new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, cursor), root);
+        assertEquals("INVALID_CURSOR", result.error().code());
+      }
     }
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var expiredStore =
           ReadingTestStores.store(
               new StorageDatabase(data),

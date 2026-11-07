@@ -22,9 +22,11 @@ class FetchScopeTest {
     var run = mock(RunExecutionContext.class);
     doThrow(new CancellationException()).when(run).checkActive();
     var outer = FetchScope.current();
-    try (var scope = FetchScope.enter(new ToolContext(Map.of(RunExecutionContext.KEY, run)))) {
+    var scope = FetchScope.enter(new ToolContext(Map.of(RunExecutionContext.KEY, run)));
+    try (scope) {
       assertThrows(CancellationException.class, () -> FetchScope.current().check());
-      try (var nested = FetchScope.enter(FetchOperation.active())) {
+      var nested = FetchScope.enter(FetchOperation.active());
+      try (nested) {
         assertDoesNotThrow(() -> FetchScope.current().check());
       }
       assertThrows(CancellationException.class, () -> FetchScope.current().check());

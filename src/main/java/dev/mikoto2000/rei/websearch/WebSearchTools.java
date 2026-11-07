@@ -50,12 +50,15 @@ public class WebSearchTools {
           Boolean forceRefresh,
       org.springframework.ai.chat.model.ToolContext context)
       throws IOException, InterruptedException {
-    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
-        var refresh =
-            dev.mikoto2000.rei.http.FetchScope.withForceRefresh(
-                Boolean.TRUE.equals(forceRefresh))) {
-      resultBudget.requireAvailable(context);
-      return resultBudget.fitMetadata(webSearch(query, limit), context);
+    var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
+    try (scope) {
+      var refresh =
+          dev.mikoto2000.rei.http.FetchScope.withForceRefresh(
+              Boolean.TRUE.equals(forceRefresh));
+      try (refresh) {
+        resultBudget.requireAvailable(context);
+        return resultBudget.fitMetadata(webSearch(query, limit), context);
+      }
     }
   }
 
@@ -92,7 +95,8 @@ public class WebSearchTools {
   public WebSearchAndReadResponse webSearchAndRead(
       WebSearchAndReadRequest request, org.springframework.ai.chat.model.ToolContext context)
       throws IOException, InterruptedException {
-    try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context)) {
+    var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
+    try (scope) {
       resultBudget.requireAvailable(context);
       return resultBudget.fit(webSearchAndRead(request), context);
     }

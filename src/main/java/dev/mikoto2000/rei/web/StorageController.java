@@ -318,14 +318,15 @@ public final class StorageController {
             .apply(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
-    try (var scope =
+    var scope =
         AgentRunScope.open(
             new AgentRunContext(
                 UUID.randomUUID().toString(),
                 "",
                 project.root(),
                 project.id(),
-                AgentRunContext.RequestSource.WEB))) {
+                AgentRunContext.RequestSource.WEB));
+    try (scope) {
       return text(operation.get());
     }
   }

@@ -133,39 +133,42 @@ class CheckpointHttpSmokeTest {
       return new ConversationInputRouter(
           executor,
           (owner, prompt, input) -> {
-            try (var scope = AgentRunScope.open(owner)) {
-              turns.start(owner, prompt);
-              checkpoints.start(owner, prompt);
-              bus.publish(events.runStarted(owner.runId(), "smoke", null));
-              if (checkpoints.context(owner.runId()).isEmpty()) {
-                bus.publishBoundary(events.toolStarted("write", "writeMultiFile", "artifact"));
-                try {
-                  Files.writeString(
-                      owner.projectRoot().resolve("artifact.txt"), "before interruption");
-                } catch (java.io.IOException e) {
-                  throw new RuntimeException(e);
+            try {
+              var scope = AgentRunScope.open(owner);
+              try (scope) {
+                turns.start(owner, prompt);
+                checkpoints.start(owner, prompt);
+                bus.publish(events.runStarted(owner.runId(), "smoke", null));
+                if (checkpoints.context(owner.runId()).isEmpty()) {
+                  bus.publishBoundary(events.toolStarted("write", "writeMultiFile", "artifact"));
+                  try {
+                    Files.writeString(
+                        owner.projectRoot().resolve("artifact.txt"), "before interruption");
+                  } catch (java.io.IOException e) {
+                    throw new RuntimeException(e);
+                  }
+                  working.recordRead(owner.projectRoot().resolve("artifact.txt"));
+                  bus.publishBoundary(
+                      events.toolCompleted("write", "writeMultiFile", 0, "artifact saved"));
+                  bus.publishBoundary(
+                      events.toolStarted(
+                          "external", "deploy", "simulated in-flight operation; no real deployment"));
+                  turns.finish(
+                      owner, dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.CANCELLED);
+                  checkpoints.finish(owner, "CANCELLED");
+                  bus.publish(events.runCancelled(owner.runId(), null));
+                } else {
+                  // Resume's safe inspection path, with no repeat of the unknown operation.
+                  bus.publishBoundary(events.toolStarted("read", "readMultiFile", "artifact"));
+                  bus.publishBoundary(
+                      events.toolCompleted("read", "readMultiFile", 0, "artifact inspected"));
+                  turns.finish(
+                      owner, dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED);
+                  checkpoints.finish(owner, "COMPLETED");
+                  bus.publish(events.runCompleted(owner.runId(), 0));
                 }
-                working.recordRead(owner.projectRoot().resolve("artifact.txt"));
-                bus.publishBoundary(
-                    events.toolCompleted("write", "writeMultiFile", 0, "artifact saved"));
-                bus.publishBoundary(
-                    events.toolStarted(
-                        "external", "deploy", "simulated in-flight operation; no real deployment"));
-                turns.finish(
-                    owner, dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.CANCELLED);
-                checkpoints.finish(owner, "CANCELLED");
-                bus.publish(events.runCancelled(owner.runId(), null));
-              } else {
-                // Resume's safe inspection path, with no repeat of the unknown operation.
-                bus.publishBoundary(events.toolStarted("read", "readMultiFile", "artifact"));
-                bus.publishBoundary(
-                    events.toolCompleted("read", "readMultiFile", 0, "artifact inspected"));
-                turns.finish(
-                    owner, dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED);
-                checkpoints.finish(owner, "COMPLETED");
-                bus.publish(events.runCompleted(owner.runId(), 0));
+                terminal.complete(owner.runId());
               }
-              terminal.complete(owner.runId());
             } catch (Throwable error) {
               terminal.completeExceptionally(error);
               throw error;

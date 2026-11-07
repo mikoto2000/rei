@@ -53,7 +53,8 @@ class UrlContentCacheIntegrationTest {
       assertEquals("evidence", service.fetch("https://example.com/page").content());
       assertEquals(1, calls.get());
       clock.advance(Duration.ofSeconds(5));
-      try (var refresh = FetchScope.withForceRefresh(true)) {
+      var refresh = FetchScope.withForceRefresh(true);
+      try (refresh) {
         var updated = service.fetch("https://example.com/page");
         assertEquals(first.retrievedAt(), updated.retrievedAt());
         assertEquals(clock.instant(), updated.validatedAt());

@@ -41,7 +41,8 @@ class DurableReviewProtocolTest {
             new Tools(),
             estimator);
     var owner = new AgentRunContext("run", "session", root, "project");
-    try (var active = AgentRunScope.open(owner)) {
+    var active = AgentRunScope.open(owner);
+    try (active) {
       String task = tools.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L).id();
       tools.scanReviewSnapshot(task, 100);
       var page = tools.readNextReviewWorkItem(task, 256);
@@ -65,22 +66,26 @@ class DurableReviewProtocolTest {
     var owner = new AgentRunContext("run", "session", root, "project");
     String task;
     ReviewTools.Page firstPage;
-    try (var active = AgentRunScope.open(owner)) {
-      task = tools.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L).id();
-      tools.scanReviewSnapshot(task, 100);
-      var claim = tools.claimReviewWorkItem(task, 256);
-      firstPage = tools.readReviewWorkItem(claim.item().id(), claim.attempt());
-      assertThat(firstPage.content()).isEqualTo(source.substring(0, firstPage.nextOffset()));
-      assertThat(TokenEstimator.conservative().text(firstPage.content())).isLessThanOrEqualTo(256);
-      assertThatThrownBy(() -> tools.submitReviewWorkItem(claim.item().id(), claim.attempt(), "checked", List.of()))
-          .hasMessageContaining("SOURCE_NOT_DELIVERED");
-      tools.confirmed(owner, List.of(firstPage));
-      tools.submitReviewWorkItem(claim.item().id(), claim.attempt(), "checked", List.of());
-      assertThat(tools.reviewTaskStatus(task).state()).isEqualTo("ACTIVE");
+    {
+      var active = AgentRunScope.open(owner);
+      try (active) {
+        task = tools.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L).id();
+        tools.scanReviewSnapshot(task, 100);
+        var claim = tools.claimReviewWorkItem(task, 256);
+        firstPage = tools.readReviewWorkItem(claim.item().id(), claim.attempt());
+        assertThat(firstPage.content()).isEqualTo(source.substring(0, firstPage.nextOffset()));
+        assertThat(TokenEstimator.conservative().text(firstPage.content())).isLessThanOrEqualTo(256);
+        assertThatThrownBy(() -> tools.submitReviewWorkItem(claim.item().id(), claim.attempt(), "checked", List.of()))
+            .hasMessageContaining("SOURCE_NOT_DELIVERED");
+        tools.confirmed(owner, List.of(firstPage));
+        tools.submitReviewWorkItem(claim.item().id(), claim.attempt(), "checked", List.of());
+        assertThat(tools.reviewTaskStatus(task).state()).isEqualTo("ACTIVE");
+      }
     }
     Files.writeString(root.resolve("a.java"), "changed live file");
     var resumed = new AgentRunContext("next-run", "session", root, "project");
-    try (var active = AgentRunScope.open(resumed)) {
+    var active = AgentRunScope.open(resumed);
+    try (active) {
       assertThat(tools.listReviewTasks(null, 100).entries()).extracting(t -> t.id()).containsExactly(task);
       tools.resumeRepositoryReview(task);
       tools.confirmed(resumed, List.of(firstPage)); // retired receipt cannot poison replayed prompt history

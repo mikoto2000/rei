@@ -26,7 +26,8 @@ class GoalCompletionToolTest {
     tools.setGoalCompletionGate(gate);
     var owner = new AgentRunContext("run", "session", Path.of("."), "project");
     var proof = new GoalCompletionGate.Proof(null, List.of());
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       tools.getGoalCompletionDefinition("goal");
       tools.attachGoalCompletionEvidence("goal", proof);
     }

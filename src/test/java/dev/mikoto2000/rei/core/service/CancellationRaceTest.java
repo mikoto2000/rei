@@ -44,7 +44,8 @@ class CancellationRaceTest {
                 });
         start.get(5, TimeUnit.SECONDS);
         assertThat(stop.get(5, TimeUnit.SECONDS)).isTrue();
-        try (var scope = AgentRunScope.open(owner)) {
+        var scope = AgentRunScope.open(owner);
+        try (scope) {
           service.begin(mock(Thread.class));
           assertThat(service.isCancellationRequested()).isTrue();
           assertThat(service.consumeCancellationRequested()).isTrue();

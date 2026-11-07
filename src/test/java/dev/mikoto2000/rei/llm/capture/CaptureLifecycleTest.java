@@ -29,7 +29,8 @@ class CaptureLifecycleTest {
               listener.set(invocation.getArgument(0));
               return (AgentEventBus.Subscription) () -> {};
             });
-    try (var lifecycle = new CaptureLifecycle(store, bus)) {
+    var lifecycle = new CaptureLifecycle(store, bus);
+    try (lifecycle) {
       listener
           .get()
           .onEvent(

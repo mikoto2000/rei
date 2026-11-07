@@ -200,7 +200,8 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
     router.submit(b.root(), b.conversationId("chat:main"), "B work");
     var before = router.activeRuns();
     projects.cd(b.root().toString());
-    try (var scope = AgentRunScope.open(new AgentRunContext("run-a", a, "chat:main"))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run-a", a, "chat:main"));
+    try (scope) {
       for (String text : List.of("/history show chat:main", "/history search --current needle")) {
         var input = new UserInputService(new UserInputParser()).interpret(text);
         assertThat(input.kind()).isEqualTo(UserInputService.Kind.COMMAND);

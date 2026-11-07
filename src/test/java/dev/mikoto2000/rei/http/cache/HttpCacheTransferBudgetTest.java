@@ -45,7 +45,8 @@ class HttpCacheTransferBudgetTest {
     try (var cache = cache()) {
       get(cache);
       var budget = new TransferBudget(10, 3);
-      try (var scope = TransferScope.enter(budget)) {
+      var scope = TransferScope.enter(budget);
+      try (scope) {
         var forced =
             new HttpResponseCache.Request(
                 uri, Map.of(), request.policy(), HttpResponseCache.Namespace.PAGE, true);
@@ -102,16 +103,18 @@ class HttpCacheTransferBudgetTest {
         .when(raw)
         .fetch(any(), anyMap(), any(), any(), any());
     var budget = new TransferBudget(10, 7);
-    try (var cache = cache();
-        var scope = TransferScope.enter(budget)) {
-      get(cache);
-      assertEquals(3, budget.wireBytes());
-      assertEquals(4, budget.decodedBytes());
-      assertEquals(
-          HttpFetchException.Code.TRANSFER_BUDGET,
-          assertThrows(HttpFetchException.class, () -> get(cache)).code());
-      assertEquals(1, calls.get());
-      assertEquals(3, budget.wireBytes());
+    try (var cache = cache()) {
+      var scope = TransferScope.enter(budget);
+      try (scope) {
+        get(cache);
+        assertEquals(3, budget.wireBytes());
+        assertEquals(4, budget.decodedBytes());
+        assertEquals(
+            HttpFetchException.Code.TRANSFER_BUDGET,
+            assertThrows(HttpFetchException.class, () -> get(cache)).code());
+        assertEquals(1, calls.get());
+        assertEquals(3, budget.wireBytes());
+      }
     }
   }
 
@@ -138,7 +141,8 @@ class HttpCacheTransferBudgetTest {
         var first =
             pool.submit(
                 () -> {
-                  try (var scope = TransferScope.enter(new TransferBudget(1, 10))) {
+                  var scope = TransferScope.enter(new TransferBudget(1, 10));
+                  try (scope) {
                     return get(cache);
                   }
                 });
@@ -148,7 +152,8 @@ class HttpCacheTransferBudgetTest {
         var second =
             pool.submit(
                 () -> {
-                  try (var scope = TransferScope.enter(new TransferBudget(10, 10))) {
+                  var scope = TransferScope.enter(new TransferBudget(10, 10));
+                  try (scope) {
                     return get(cache);
                   }
                 });

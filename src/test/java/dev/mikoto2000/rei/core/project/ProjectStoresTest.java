@@ -40,7 +40,8 @@ class ProjectStoresTest extends dev.mikoto2000.rei.core.project.ProjectClientTes
               .withOwnership(run));
       assertThat(activity.readAll()).isEmpty();
       store.append(other.conversationId("chat:main"), "user", "only B");
-      try (var scope = AgentRunScope.open(run)) {
+      var scope = AgentRunScope.open(run);
+      try (scope) {
         store.append(run.conversationId(), "user", "only A");
         assertThat(store.readAll())
             .extracting(ConversationLogEntry::content)

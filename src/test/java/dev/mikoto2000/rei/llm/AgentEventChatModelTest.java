@@ -42,7 +42,8 @@ class AgentEventChatModelTest {
     var delegate = mock(ChatModel.class);
     var response = mock(ChatResponse.class);
     when(delegate.stream(prompt)).thenReturn(Flux.<ChatResponse>create(sink -> {
-      try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(other)) {
+      var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(other);
+      try (scope) {
         if (failing) sink.error(new java.net.ConnectException("PRIVATE_HOST"));
         else {
           sink.next(response);
@@ -58,12 +59,14 @@ class AgentEventChatModelTest {
     Flux<ChatResponse> stream;
     if (binding.equals("subscription")) {
       stream = model.stream(prompt);
-      try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(caller)) {
+      var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(caller);
+      try (scope) {
         stream.onErrorComplete().blockLast(java.time.Duration.ofSeconds(5));
       }
     } else {
-      try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-          binding.equals("prompt") ? other : caller)) {
+      var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(
+          binding.equals("prompt") ? other : caller);
+      try (scope) {
         stream = model.stream(prompt);
       }
       stream.subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())

@@ -61,7 +61,8 @@ class ShellTaskTrackingTest {
                 todayEnabled,
                 beans.getBeanProvider(RunRegistry.class),
                 beans.getBeanProvider(RunService.class));
-    try (var scope = ProjectClientScope.open(projects.newClient())) {
+    var scope = ProjectClientScope.open(projects.newClient());
+    try (scope) {
       var run = shell.submit("work");
       assertThat(registry.get(run.runId()).status()).isEqualTo(RunStatus.QUEUED);
       assertThatThrownBy(() -> shell.submit("consult", AgentRunContext.Mode.CONVERSATION))

@@ -59,23 +59,25 @@ class WebResearchLimitsTest {
   void parentDeadlineStopsResearchBeforeSearchAndScopeIsRestored() throws Exception {
     var search = mock(WebSearchService.class);
     var props = new WebSearchProperties();
-    try (var batch = new WebFetchBatch(1, 1, 4);
-        var operation = FetchScope.enter(new FetchOperation(() -> {}, System.nanoTime() - 1))) {
-      var result =
-          WebResearchPipeline.run(
-              search,
-              new WebSearchQueryPlanner(),
-              props,
-              batch,
-              "topic",
-              1,
-              1,
-              candidate -> WebResearchPipeline.PAGES.failed(candidate.result(), "unused"),
-              WebResearchPipeline.PAGES);
-      assertEquals("unknown", result.assessment().status());
-      assertTrue(result.omissions().contains("TOTAL_TIMEOUT"));
-      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
-      verifyNoInteractions(search);
+    try (var batch = new WebFetchBatch(1, 1, 4)) {
+      var operation = FetchScope.enter(new FetchOperation(() -> {}, System.nanoTime() - 1));
+      try (operation) {
+        var result =
+            WebResearchPipeline.run(
+                search,
+                new WebSearchQueryPlanner(),
+                props,
+                batch,
+                "topic",
+                1,
+                1,
+                candidate -> WebResearchPipeline.PAGES.failed(candidate.result(), "unused"),
+                WebResearchPipeline.PAGES);
+        assertEquals("unknown", result.assessment().status());
+        assertTrue(result.omissions().contains("TOTAL_TIMEOUT"));
+        // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
+        verifyNoInteractions(search);
+      }
     }
     assertNull(TransferScope.current());
     assertEquals(0, WebResearchScope.queryCount());

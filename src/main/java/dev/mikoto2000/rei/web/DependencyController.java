@@ -115,7 +115,8 @@ public class DependencyController {
             projectId,
             dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB);
     authorizeCheck.accept(entry, owner);
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+    try (scope) {
       var result = observations.inspect(projectId, id, network);
       observations.flushFacts();
       return result;

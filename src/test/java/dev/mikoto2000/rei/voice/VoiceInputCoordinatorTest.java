@@ -503,7 +503,8 @@ class VoiceInputCoordinatorTest {
       voice.start(target, device, VoiceSettings.defaults());
       source.speech(1);
       assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
-      try (var playback = gate.playback(Duration.ofMillis(800))) {
+      var playback = gate.playback(Duration.ofMillis(800));
+      try (playback) {
         source.speech(2);
         release.countDown();
         await().atMost(Duration.ofSeconds(3)).until(() -> source.reads.get() >= 228);

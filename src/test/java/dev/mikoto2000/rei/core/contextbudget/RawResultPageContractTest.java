@@ -49,7 +49,8 @@ class RawResultPageContractTest {
     var response =
         new ChatResponse(
             List.of(new Generation(AssistantMessage.builder().toolCalls(List.of(call)).build())));
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir));
+    try (scope) {
       var history = new ToolLoopSupport().execute(prompt, response).conversationHistory();
       var result = (ToolResponseMessage) history.getLast();
       String data = result.getResponses().getFirst().responseData();
@@ -71,7 +72,8 @@ class RawResultPageContractTest {
     var store = new RawToolResultStore(dir);
     String raw = "original🙂\r\nrawResultRef: body-is-not-provenance\n";
     String ref = store.save("chat", "run", "delegateTask", "child-call", raw);
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir));
+    try (scope) {
       var plain = new RawToolResultTools(store).readRawToolResult(ref, 0, 16000);
       assertThat(RawResultPage.parse(json.writeValueAsString(plain)).text()).isEqualTo(plain);
       assertThat(RawResultPage.parse(plain).content()).isEqualTo(raw);
@@ -103,7 +105,8 @@ class RawResultPageContractTest {
     var estimator = TokenEstimator.conservative();
     String raw = "x".repeat(10) + "指摘🙂\\\"\r\n".repeat(4000);
     String ref = store.save("chat", "run", "delegateTask", "child-call", raw);
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir));
+    try (scope) {
       String legacy =
           json.writeValueAsString(new RawToolResultTools(store).readRawToolResult(ref, 10, 16000));
       var response = new ToolResponseMessage.ToolResponse("page-call", "readRawToolResult", legacy);
@@ -139,7 +142,8 @@ class RawResultPageContractTest {
     var estimator = TokenEstimator.conservative();
     String raw = "\\".repeat(10000);
     String ref = store.save("chat", "run", "delegateTask", "child-call", raw);
-    try (var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir))) {
+    var scope = AgentRunScope.open(new AgentRunContext("run", "chat", dir));
+    try (scope) {
       String original = new RawToolResultTools(store).readRawToolResult(ref, 0, 1200);
       String legacy = json.writeValueAsString(original);
       var message =

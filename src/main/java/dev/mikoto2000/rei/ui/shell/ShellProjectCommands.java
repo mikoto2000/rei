@@ -24,7 +24,8 @@ public final class ShellProjectCommands {
     var delegate = command.getExecutionStrategy();
     command.setExecutionStrategy(
         parsed -> {
-          try (var scope = client.open()) {
+          var scope = client.open();
+          try (scope) {
             int result = delegate.execute(parsed);
             var leaf = parsed;
             while (leaf.hasSubcommand()) leaf = leaf.subcommand();

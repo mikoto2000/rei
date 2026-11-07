@@ -384,174 +384,177 @@ public final class SemanticPatchReviewService {
     Verdict verdict = null;
     String status = "CHECKS_INCOMPLETE";
     Instant started = clock.instant();
-    try (var lease = leases.activate(id)) {
-      if (!snapshot.complete()
-          || snapshot.changedFiles().isEmpty()
-          || snapshot.changedFiles().size() > 32) checks.add(new Check("PATCH_INCOMPLETE", "", ""));
-      else {
-        for (String path : snapshot.changedFiles())
-          if (!request.allowedFiles().contains(path))
-            checks.add(new Check("EXTRA_CHANGE", "", path));
-        for (String path : snapshot.changedFiles())
-          if (request.requirements().stream()
-              .noneMatch(requirement -> requirement.files().contains(path)))
-            checks.add(new Check("UNASSIGNED_CHANGE", "", path));
-        if (checks.isEmpty()) {
-          verification =
-              cycle.verify(
-                  root,
-                  new SelfPatchReviewService.Request(
-                      request.testCommand(), request.timeoutSeconds()),
-                  deadline);
-          if (!"VERIFIED_CHECKS".equals(verification.status())
-              || !snapshot.version().equals(verification.patchVersion())
-              || !snapshot.version().equals(verification.currentVersion()))
-            checks.add(new Check("TEST_STATIC_CHECKS_NOT_VERIFIED", "", ""));
-          else {
-            var material = materials.read(root, snapshot, deadline);
-            validateMaterial(snapshot, material);
-            for (String path : snapshot.changedFiles()) {
-              String text = material.sources().get(path);
-              files.add(
-                  new FileFact(path, text == null ? hash("DELETED") : hash(text), text != null));
-            }
-            hygiene(material.diff(), snapshot.changedFiles(), checks);
-            var needed = new TreeSet<String>();
-            request.requirements().forEach(requirement -> needed.addAll(requirement.tests()));
-            for (String path : request.testReports()) {
-              SelfPatchReviewService.remaining(deadline, 1);
-              try {
-                var report = new TestReportDiagnosisService().read(root, path);
-                boolean fresh =
-                    !report.modifiedAt().isBefore(started.minusSeconds(1))
-                        && !report.modifiedAt().isAfter(clock.instant().plusSeconds(60));
-                boolean complete =
-                    !report.partial()
-                        && report.reported() != null
-                        && report.observed().tests() > 0
-                        && report.observed().failures() == 0
-                        && report.observed().errors() == 0
-                        && report.observed().skipped() == 0
-                        && fresh;
-                var passed =
-                    report.testCases().stream()
-                        .filter(
-                            item -> item.outcome().equals("PASSED") && needed.contains(item.test()))
-                        .map(TestReportDiagnosisService.TestCase::test)
-                        .distinct()
-                        .sorted()
-                        .toList();
-                tests.add(
-                    new TestFact(
-                        report.path(),
-                        report.sha256(),
-                        report.modifiedAt(),
-                        passed,
-                        report.observed(),
-                        complete));
-                if (!complete)
-                  checks.add(new Check("TEST_REPORT_INCOMPLETE_OR_NOT_CURRENT", "", path));
-              } catch (IOException invalid) {
-                checks.add(new Check("TEST_REPORT_UNAVAILABLE", "", path));
+    try {
+      var lease = leases.activate(id);
+      try (lease) {
+        if (!snapshot.complete()
+            || snapshot.changedFiles().isEmpty()
+            || snapshot.changedFiles().size() > 32) checks.add(new Check("PATCH_INCOMPLETE", "", ""));
+        else {
+          for (String path : snapshot.changedFiles())
+            if (!request.allowedFiles().contains(path))
+              checks.add(new Check("EXTRA_CHANGE", "", path));
+          for (String path : snapshot.changedFiles())
+            if (request.requirements().stream()
+                .noneMatch(requirement -> requirement.files().contains(path)))
+              checks.add(new Check("UNASSIGNED_CHANGE", "", path));
+          if (checks.isEmpty()) {
+            verification =
+                cycle.verify(
+                    root,
+                    new SelfPatchReviewService.Request(
+                        request.testCommand(), request.timeoutSeconds()),
+                    deadline);
+            if (!"VERIFIED_CHECKS".equals(verification.status())
+                || !snapshot.version().equals(verification.patchVersion())
+                || !snapshot.version().equals(verification.currentVersion()))
+              checks.add(new Check("TEST_STATIC_CHECKS_NOT_VERIFIED", "", ""));
+            else {
+              var material = materials.read(root, snapshot, deadline);
+              validateMaterial(snapshot, material);
+              for (String path : snapshot.changedFiles()) {
+                String text = material.sources().get(path);
+                files.add(
+                    new FileFact(path, text == null ? hash("DELETED") : hash(text), text != null));
               }
-            }
-            var passed = new HashSet<String>();
-            tests.stream()
-                .filter(TestFact::complete)
-                .forEach(test -> passed.addAll(test.passedTests()));
-            for (var requirement : request.requirements()) {
-              for (String path : requirement.files())
-                if (files.stream().noneMatch(file -> file.path().equals(path)))
-                  checks.add(
-                      new Check("REQUIREMENT_FILE_EVIDENCE_MISSING", requirement.id(), path));
-              for (String test : requirement.tests())
-                if (!passed.contains(test))
-                  checks.add(
-                      new Check("REQUIRED_TEST_NOT_OBSERVED_PASSED", requirement.id(), test));
-            }
-            var current = capture.capture(root, deadline);
-            if (!current.complete() || !snapshot.version().equals(current.version()))
-              checks.add(new Check("PATCH_CHANGED", "", ""));
-            if (checks.isEmpty()) {
-              status = "DETERMINISTIC_CHECKS_ONLY";
-              if (request.semantic()) {
-                if (!semanticEnabled
-                    || run == null
-                    || !owner.equals(run.runContext())
-                    || run.sharedLlmReservation().remaining() < 1) status = "SEMANTIC_UNAVAILABLE";
-                else {
-                  run.checkActive();
-                  var safeSources = new TreeMap<String, String>();
-                  material
-                      .sources()
-                      .forEach(
-                          (path, text) -> safeSources.put(path, CredentialRedactor.redact(text)));
-                  verdict =
-                      reviewer.judge(
-                          new Input(
-                              CredentialRedactor.redact(run.userRequest()),
-                              request.requirements(),
-                              snapshot.version(),
-                              CredentialRedactor.redact(material.diff()),
-                              Map.copyOf(safeSources),
-                              List.copyOf(tests)),
-                          run,
-                          deadline);
-                  if (valid(verdict, request))
-                    status =
-                        verdict.status().equals("MATCH")
-                            ? "REVIEWED_CHECKS"
-                            : verdict.status().equals("FAIL") ? "FIX_REQUIRED" : "SEMANTIC_UNKNOWN";
-                  else {
-                    status = "SEMANTIC_UNKNOWN";
-                    var requirementUnknown = new TreeMap<String, String>();
-                    request
-                        .requirements()
-                        .forEach(item -> requirementUnknown.put(item.id(), "UNKNOWN"));
-                    var dimensionsUnknown = new TreeMap<String, String>();
-                    DIMENSIONS.forEach(item -> dimensionsUnknown.put(item, "UNKNOWN"));
-                    verdict = new Verdict("UNKNOWN", requirementUnknown, dimensionsUnknown);
-                  }
+              hygiene(material.diff(), snapshot.changedFiles(), checks);
+              var needed = new TreeSet<String>();
+              request.requirements().forEach(requirement -> needed.addAll(requirement.tests()));
+              for (String path : request.testReports()) {
+                SelfPatchReviewService.remaining(deadline, 1);
+                try {
+                  var report = new TestReportDiagnosisService().read(root, path);
+                  boolean fresh =
+                      !report.modifiedAt().isBefore(started.minusSeconds(1))
+                          && !report.modifiedAt().isAfter(clock.instant().plusSeconds(60));
+                  boolean complete =
+                      !report.partial()
+                          && report.reported() != null
+                          && report.observed().tests() > 0
+                          && report.observed().failures() == 0
+                          && report.observed().errors() == 0
+                          && report.observed().skipped() == 0
+                          && fresh;
+                  var passed =
+                      report.testCases().stream()
+                          .filter(
+                              item -> item.outcome().equals("PASSED") && needed.contains(item.test()))
+                          .map(TestReportDiagnosisService.TestCase::test)
+                          .distinct()
+                          .sorted()
+                          .toList();
+                  tests.add(
+                      new TestFact(
+                          report.path(),
+                          report.sha256(),
+                          report.modifiedAt(),
+                          passed,
+                          report.observed(),
+                          complete));
+                  if (!complete)
+                    checks.add(new Check("TEST_REPORT_INCOMPLETE_OR_NOT_CURRENT", "", path));
+                } catch (IOException invalid) {
+                  checks.add(new Check("TEST_REPORT_UNAVAILABLE", "", path));
                 }
               }
-              current = capture.capture(root, deadline);
-              if (!current.complete() || !snapshot.version().equals(current.version())) {
+              var passed = new HashSet<String>();
+              tests.stream()
+                  .filter(TestFact::complete)
+                  .forEach(test -> passed.addAll(test.passedTests()));
+              for (var requirement : request.requirements()) {
+                for (String path : requirement.files())
+                  if (files.stream().noneMatch(file -> file.path().equals(path)))
+                    checks.add(
+                        new Check("REQUIREMENT_FILE_EVIDENCE_MISSING", requirement.id(), path));
+                for (String test : requirement.tests())
+                  if (!passed.contains(test))
+                    checks.add(
+                        new Check("REQUIRED_TEST_NOT_OBSERVED_PASSED", requirement.id(), test));
+              }
+              var current = capture.capture(root, deadline);
+              if (!current.complete() || !snapshot.version().equals(current.version()))
                 checks.add(new Check("PATCH_CHANGED", "", ""));
-                status = "FIX_REQUIRED";
+              if (checks.isEmpty()) {
+                status = "DETERMINISTIC_CHECKS_ONLY";
+                if (request.semantic()) {
+                  if (!semanticEnabled
+                      || run == null
+                      || !owner.equals(run.runContext())
+                      || run.sharedLlmReservation().remaining() < 1) status = "SEMANTIC_UNAVAILABLE";
+                  else {
+                    run.checkActive();
+                    var safeSources = new TreeMap<String, String>();
+                    material
+                        .sources()
+                        .forEach(
+                            (path, text) -> safeSources.put(path, CredentialRedactor.redact(text)));
+                    verdict =
+                        reviewer.judge(
+                            new Input(
+                                CredentialRedactor.redact(run.userRequest()),
+                                request.requirements(),
+                                snapshot.version(),
+                                CredentialRedactor.redact(material.diff()),
+                                Map.copyOf(safeSources),
+                                List.copyOf(tests)),
+                            run,
+                            deadline);
+                    if (valid(verdict, request))
+                      status =
+                          verdict.status().equals("MATCH")
+                              ? "REVIEWED_CHECKS"
+                              : verdict.status().equals("FAIL") ? "FIX_REQUIRED" : "SEMANTIC_UNKNOWN";
+                    else {
+                      status = "SEMANTIC_UNKNOWN";
+                      var requirementUnknown = new TreeMap<String, String>();
+                      request
+                          .requirements()
+                          .forEach(item -> requirementUnknown.put(item.id(), "UNKNOWN"));
+                      var dimensionsUnknown = new TreeMap<String, String>();
+                      DIMENSIONS.forEach(item -> dimensionsUnknown.put(item, "UNKNOWN"));
+                      verdict = new Verdict("UNKNOWN", requirementUnknown, dimensionsUnknown);
+                    }
+                  }
+                }
+                current = capture.capture(root, deadline);
+                if (!current.complete() || !snapshot.version().equals(current.version())) {
+                  checks.add(new Check("PATCH_CHANGED", "", ""));
+                  status = "FIX_REQUIRED";
+                }
               }
             }
           }
         }
+        if (!checks.isEmpty()) status = "FIX_REQUIRED";
+        SelfPatchReviewService.remaining(deadline, 1);
+        var detail =
+            new Detail(
+                owner.projectId(),
+                root.toString(),
+                owner.conversationId(),
+                owner.runId(),
+                status,
+                clock.instant(),
+                hash(request.testCommand()),
+                request.requirements(),
+                List.copyOf(files),
+                List.copyOf(tests),
+                checks.stream().limit(64).toList(),
+                verification,
+                verdict,
+                false,
+                List.of(
+                    "Requirement traceability and explicit command/static observations only; no universal semantic correctness or coverage proof",
+                    "Saved reports may not independently establish command-to-report provenance; semantic judgement is probabilistic"));
+        String payload = encode(detail), sha = hash(payload);
+        leases.heartbeat(id);
+        if (db.sql(
+                    "UPDATE patch_requirement_reviews SET status=?,payload=?,sha=? WHERE id=? AND status='STARTED'")
+                .params(status, payload, sha, id)
+                .update()
+            != 1) throw new IOException("Review receipt unavailable");
+        return new Receipt(id, status, sha, detail);
       }
-      if (!checks.isEmpty()) status = "FIX_REQUIRED";
-      SelfPatchReviewService.remaining(deadline, 1);
-      var detail =
-          new Detail(
-              owner.projectId(),
-              root.toString(),
-              owner.conversationId(),
-              owner.runId(),
-              status,
-              clock.instant(),
-              hash(request.testCommand()),
-              request.requirements(),
-              List.copyOf(files),
-              List.copyOf(tests),
-              checks.stream().limit(64).toList(),
-              verification,
-              verdict,
-              false,
-              List.of(
-                  "Requirement traceability and explicit command/static observations only; no universal semantic correctness or coverage proof",
-                  "Saved reports may not independently establish command-to-report provenance; semantic judgement is probabilistic"));
-      String payload = encode(detail), sha = hash(payload);
-      leases.heartbeat(id);
-      if (db.sql(
-                  "UPDATE patch_requirement_reviews SET status=?,payload=?,sha=? WHERE id=? AND status='STARTED'")
-              .params(status, payload, sha, id)
-              .update()
-          != 1) throw new IOException("Review receipt unavailable");
-      return new Receipt(id, status, sha, detail);
     } catch (IOException | RuntimeException error) {
       try {
         db.sql(

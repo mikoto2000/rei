@@ -34,7 +34,8 @@ class CurrentConversationHistoryAppenderTest {
             dev.mikoto2000.rei.core.execution.ExecutionType.SUMMARIZE,
             "source",
             java.time.Instant.now());
-    try (var scope = dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution)) {
+    var scope = dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution);
+    try (scope) {
       appender.appendUserMessage("request");
       appender.appendAssistantMessage("summary A");
     }

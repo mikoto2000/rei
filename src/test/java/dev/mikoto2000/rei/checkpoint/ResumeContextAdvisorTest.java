@@ -114,7 +114,8 @@ class ResumeContextAdvisorTest {
                   source.equals("log") ? logs : null)
               .before(request, null);
       Prompt sent;
-      try (var scope = AgentRunScope.open(new AgentRunContext("current", "chat", root, "A"))) {
+      var scope = AgentRunScope.open(new AgentRunContext("current", "chat", root, "A"));
+      try (scope) {
         sent = new ResumeContextAdvisor(service).before(history, null).prompt();
       }
       assertThat(
@@ -135,20 +136,22 @@ class ResumeContextAdvisorTest {
     var state =
         PersistentCheckpoint.initial("task", "A", "chat", "old", root, "review docs")
             .resume("current");
-    try (var service = service(state);
-        var scope = AgentRunScope.open(new AgentRunContext("current", "chat", root, "A"))) {
-      var current = new UserMessage(legacy("task"));
-      var request =
-          ChatClientRequest.builder()
-              .prompt(
-                  new Prompt(
-                      List.of(
-                          ContextHistoryAdvisor.historical(new UserMessage(legacy("task")), 1),
-                          current)))
-              .build();
-      var result = new ResumeContextAdvisor(service).before(request, null).prompt();
-      assertThat(result.getInstructions().stream().filter(UserMessage.class::isInstance))
-          .containsExactly(current);
+    try (var service = service(state)) {
+      var scope = AgentRunScope.open(new AgentRunContext("current", "chat", root, "A"));
+      try (scope) {
+        var current = new UserMessage(legacy("task"));
+        var request =
+            ChatClientRequest.builder()
+                .prompt(
+                    new Prompt(
+                        List.of(
+                            ContextHistoryAdvisor.historical(new UserMessage(legacy("task")), 1),
+                            current)))
+                .build();
+        var result = new ResumeContextAdvisor(service).before(request, null).prompt();
+        assertThat(result.getInstructions().stream().filter(UserMessage.class::isInstance))
+            .containsExactly(current);
+      }
     }
   }
 
@@ -164,35 +167,39 @@ class ResumeContextAdvisorTest {
                 .resume("current"));
     ((com.fasterxml.jackson.databind.node.ObjectNode) tree).put("mode", mode.name());
     var state = json.treeToValue(tree, PersistentCheckpoint.class);
-    try (var service = service(state);
-        var scope =
-            AgentRunScope.open(
-                new AgentRunContext(
-                    "current",
-                    "chat",
-                    root,
-                    "A",
-                    AgentRunContext.RequestSource.SHELL,
-                    mode,
-                    false))) {
-      var messages = List.<Message>of(new UserMessage(legacy("task")), new UserMessage("next"));
-      var request = ChatClientRequest.builder().prompt(new Prompt(messages)).build();
-      var result = new ResumeContextAdvisor(service).before(request, null).prompt();
-      assertThat(result.getInstructions().stream().filter(UserMessage.class::isInstance))
-          .containsExactlyElementsOf(messages);
+    try (var service = service(state)) {
+      var scope =
+          AgentRunScope.open(
+              new AgentRunContext(
+                  "current",
+                  "chat",
+                  root,
+                  "A",
+                  AgentRunContext.RequestSource.SHELL,
+                  mode,
+                  false));
+      try (scope) {
+        var messages = List.<Message>of(new UserMessage(legacy("task")), new UserMessage("next"));
+        var request = ChatClientRequest.builder().prompt(new Prompt(messages)).build();
+        var result = new ResumeContextAdvisor(service).before(request, null).prompt();
+        assertThat(result.getInstructions().stream().filter(UserMessage.class::isInstance))
+            .containsExactlyElementsOf(messages);
+      }
     }
   }
 
   @Test
   void ordinaryRunsKeepPriorRequests() {
     var state = PersistentCheckpoint.initial("task", "A", "chat", "current", root, "review docs");
-    try (var service = service(state);
-        var scope = AgentRunScope.open(new AgentRunContext("current", "chat", root, "A"))) {
-      var messages = List.<Message>of(new UserMessage(legacy("task")), new UserMessage("next"));
-      var request = ChatClientRequest.builder().prompt(new Prompt(messages)).build();
-      var result = new ResumeContextAdvisor(service).before(request, null).prompt();
-      assertThat(result.getInstructions().stream().filter(UserMessage.class::isInstance))
-          .containsExactlyElementsOf(messages);
+    try (var service = service(state)) {
+      var scope = AgentRunScope.open(new AgentRunContext("current", "chat", root, "A"));
+      try (scope) {
+        var messages = List.<Message>of(new UserMessage(legacy("task")), new UserMessage("next"));
+        var request = ChatClientRequest.builder().prompt(new Prompt(messages)).build();
+        var result = new ResumeContextAdvisor(service).before(request, null).prompt();
+        assertThat(result.getInstructions().stream().filter(UserMessage.class::isInstance))
+            .containsExactlyElementsOf(messages);
+      }
     }
   }
 }

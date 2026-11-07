@@ -107,7 +107,8 @@ class FileReadContinuationIntegrationTest {
             event -> {});
     context.setRunContext(owner);
     var loop = new ToolLoopSupport();
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var first =
           loop.execute(
               new Prompt("review", options),

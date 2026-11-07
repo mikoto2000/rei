@@ -234,32 +234,34 @@ class AutoSleepEndRequestTest {
     var saved = new FileSessionRepository(dir.resolve("sessions.json"));
     var lifecycle = new SessionLifecycle(saved, Clock.fixed(now, ZoneOffset.UTC));
     var sleep = sleep();
-    try (var auto = auto(sleep, false);
-        var client = projects.newClient().open()) {
-      lifecycle.onEnded(auto::afterSessionEnd);
-      var shell =
-          new ShellConversationService(
-              projects, lifecycle, (owner, prompt) -> fail("end must not dispatch"));
-      var session = shell.newConversation("ended");
-      var command =
-          new dev.mikoto2000.rei.ui.shell.SessionCommand(
-              shell,
-              new SessionQueryService(saved, new ConversationTurnStore(dir.resolve("turns"))),
-              projects);
-      var cli = new picocli.CommandLine(command);
-      cli.setOut(new java.io.PrintWriter(new java.io.StringWriter()));
-      assertEquals(0, cli.execute("end"));
-      assertNull(shell.currentSessionId());
-      assertEquals(1, sleep.pendingAutoSleepRequests().size());
-      assertEquals(session.projectId(), sleep.pendingAutoSleepRequests().getFirst().projectId());
-      assertEquals(Optional.of(session), saved.findById(session.sessionId()));
-      shell.resume(session.sessionId());
-      assertEquals(session.sessionId(), shell.currentSessionId());
-      assertThrows(
-          dev.mikoto2000.rei.application.run.SessionConflictException.class,
-          () -> lifecycle.end(session.sessionId(), "other"));
-      assertEquals(1, sleep.pendingAutoSleepRequests().size());
-      verify(extractor, never()).extract(anyList());
+    try (var auto = auto(sleep, false)) {
+      var client = projects.newClient().open();
+      try (client) {
+        lifecycle.onEnded(auto::afterSessionEnd);
+        var shell =
+            new ShellConversationService(
+                projects, lifecycle, (owner, prompt) -> fail("end must not dispatch"));
+        var session = shell.newConversation("ended");
+        var command =
+            new dev.mikoto2000.rei.ui.shell.SessionCommand(
+                shell,
+                new SessionQueryService(saved, new ConversationTurnStore(dir.resolve("turns"))),
+                projects);
+        var cli = new picocli.CommandLine(command);
+        cli.setOut(new java.io.PrintWriter(new java.io.StringWriter()));
+        assertEquals(0, cli.execute("end"));
+        assertNull(shell.currentSessionId());
+        assertEquals(1, sleep.pendingAutoSleepRequests().size());
+        assertEquals(session.projectId(), sleep.pendingAutoSleepRequests().getFirst().projectId());
+        assertEquals(Optional.of(session), saved.findById(session.sessionId()));
+        shell.resume(session.sessionId());
+        assertEquals(session.sessionId(), shell.currentSessionId());
+        assertThrows(
+            dev.mikoto2000.rei.application.run.SessionConflictException.class,
+            () -> lifecycle.end(session.sessionId(), "other"));
+        assertEquals(1, sleep.pendingAutoSleepRequests().size());
+        verify(extractor, never()).extract(anyList());
+      }
     }
   }
 
@@ -273,7 +275,8 @@ class AutoSleepEndRequestTest {
         session -> {
           throw new IllegalStateException("storage unavailable");
         });
-    try (var client = projects.newClient().open()) {
+    var client = projects.newClient().open();
+    try (client) {
       var shell = new ShellConversationService(projects, lifecycle, (owner, prompt) -> {});
       var session = shell.newConversation("keep");
       assertThrows(IllegalStateException.class, shell::end);

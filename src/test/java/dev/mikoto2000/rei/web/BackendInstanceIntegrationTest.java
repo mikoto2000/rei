@@ -52,12 +52,12 @@ class BackendInstanceIntegrationTest {
     for (int restart = 0; restart < 2; restart++) {
       var app = new SpringApplication(Config.class);
       WebApplication.configure(app, "integration-secret");
-      try (var context =
-              app.run(
-                  "--rei.data-dir=" + root,
-                  "--rei.web.port=0",
-                  "--logging.config=classpath:web-test-logback.xml");
-          var client = HttpClient.newHttpClient()) {
+      var context =
+          app.run(
+              "--rei.data-dir=" + root,
+              "--rei.web.port=0",
+              "--logging.config=classpath:web-test-logback.xml");
+      try (context; var client = HttpClient.newHttpClient()) {
         var endpoint = store.read().orElseThrow();
         assertTrue(BackendOwnership.isOwned(root));
         assertEquals(

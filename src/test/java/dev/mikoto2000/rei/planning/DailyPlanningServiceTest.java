@@ -139,8 +139,9 @@ class DailyPlanningServiceTest {
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("state.db"));
     var schedules = new PersistentAgentScheduler(ds, CLOCK);
     String today, tomorrow;
-    try (var scope =
-        AgentRunScope.open(new AgentRunContext("creator", "session", root, project.id()))) {
+    var scope =
+        AgentRunScope.open(new AgentRunContext("creator", "session", root, project.id()));
+    try (scope) {
       today = schedules.scheduleAfter(Duration.ofHours(1), "Inspect today", "session").id();
       tomorrow = schedules.scheduleAfter(Duration.ofDays(1), "Inspect tomorrow", "session").id();
     }
@@ -327,8 +328,9 @@ class DailyPlanningServiceTest {
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("state.db"));
     var schedules = new PersistentAgentScheduler(ds, clock);
     String lateToday, tomorrow;
-    try (var scope =
-        AgentRunScope.open(new AgentRunContext("creator", "session", root, project.id()))) {
+    var scope =
+        AgentRunScope.open(new AgentRunContext("creator", "session", root, project.id()));
+    try (scope) {
       lateToday = schedules.scheduleAfter(Duration.ofHours(23), "late today", "session").id();
       tomorrow = schedules.scheduleAfter(Duration.ofHours(24), "tomorrow", "session").id();
     }
