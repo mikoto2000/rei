@@ -77,7 +77,7 @@ class SkillSelectionTokenLimitTest {
     feature.setModel("skill-model");
     feature.setMaxOutputTokens(128);
     feature.setTemperature(0.25);
-    properties.getFeatures().put(dev.mikoto2000.rei.llm.LlmFeature.AGENT_SKILLS, feature);
+    properties.setFeature(dev.mikoto2000.rei.llm.LlmFeature.AGENT_SKILLS, feature);
     var provider = new dev.mikoto2000.rei.llm.LlmModelProvider(model, properties);
     var skill =
         new AgentSkill(

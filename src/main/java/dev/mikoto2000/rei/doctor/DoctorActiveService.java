@@ -224,10 +224,6 @@ public class DoctorActiveService {
       OpenAiChatOptions inferenceOptions) {}
 
   /** 実行環境の診断で用いる活動中を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the execution stop signal after checking for cancellation.")
   public Report active(RunExecutionContext run, DoctorRequest request) {
     run.checkActive();
     if (!environment.getProperty("rei.doctor.enabled", Boolean.class, true))
@@ -342,7 +338,7 @@ public class DoctorActiveService {
         if (begun) run.failDurableTool(call, plan.tool(), exhausted);
       } catch (RuntimeException failure) {
         RunCancellation.propagate(failure);
-        if (failure instanceof ExecutionStoppedException) throw failure;
+        if (failure instanceof ExecutionStoppedException stopped) throw stopped;
         results.add(
             result(
                 plan.check().name().toLowerCase(Locale.ROOT),

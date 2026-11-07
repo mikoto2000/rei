@@ -159,7 +159,7 @@ class SlackAgentChatIntegrationTest {
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
     var llm = new LlmProperties();
-    llm.getOutputLimit().setMaxLlmCallsPerRun(2);
+    llm.updateOutputLimit(limits -> limits.setMaxLlmCallsPerRun(2));
     var client =
         ChatClient.builder(new StagnationChatModel(model))
             .defaultAdvisors(new RunAwareToolCallingAdvisor())

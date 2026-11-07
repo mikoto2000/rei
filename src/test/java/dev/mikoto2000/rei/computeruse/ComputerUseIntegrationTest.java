@@ -157,7 +157,7 @@ class ComputerUseIntegrationTest {
     var server = new LlmProperties.Server();
     server.setBaseUrl("https://example.invalid");
     server.setModel("vision");
-    properties.getFeatures().put("computer-use", server);
+    properties.setFeature("computer-use", server);
     assertThrows(
         IllegalArgumentException.class,
         () -> new LlmModelProvider(model, properties).computerUseChatModel());

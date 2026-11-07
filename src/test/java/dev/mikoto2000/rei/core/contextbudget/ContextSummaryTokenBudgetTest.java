@@ -417,7 +417,7 @@ class ContextSummaryTokenBudgetTest {
           new org.springframework.jdbc.datasource.DriverManagerDataSource(
               "jdbc:sqlite:" + dir.resolve("goal-" + usage + ".db"));
       var properties = new LlmProperties();
-      properties.getOutputLimit().setMaxTotalTokensPerGoal(5);
+      properties.updateOutputLimit(limits -> limits.setMaxTotalTokensPerGoal(5));
       var goals =
           new dev.mikoto2000.rei.goal.GoalRepository(
               source, java.time.Clock.systemUTC(), properties);

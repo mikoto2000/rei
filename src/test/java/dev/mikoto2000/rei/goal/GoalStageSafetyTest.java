@@ -92,7 +92,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
   void stagesCannotExceedWholeGoalTokenLimit() {
     setup();
     var properties = new dev.mikoto2000.rei.llm.LlmProperties();
-    properties.getOutputLimit().setMaxTotalTokensPerGoal(10);
+    properties.updateOutputLimit(limits -> limits.setMaxTotalTokensPerGoal(10));
     var data =
         new org.springframework.jdbc.datasource.DriverManagerDataSource(
             "jdbc:sqlite:" + dir.resolve("limited.db"));

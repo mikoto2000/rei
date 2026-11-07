@@ -37,9 +37,9 @@ class LlmArgumentCorrectionPropertiesTest {
   void defaultAndNullUseFiveWithoutTreatingZeroAsMissing() {
     var properties = new LlmProperties();
     assertThat(properties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun()).isEqualTo(5);
-    properties.getOutputLimit().setMaxToolArgumentCorrectionsPerRun(0);
+    properties.updateOutputLimit(limits -> limits.setMaxToolArgumentCorrectionsPerRun(0));
     assertThat(properties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun()).isZero();
-    properties.getOutputLimit().setMaxToolArgumentCorrectionsPerRun(null);
+    properties.updateOutputLimit(limits -> limits.setMaxToolArgumentCorrectionsPerRun(null));
     assertThat(properties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun()).isEqualTo(5);
   }
 

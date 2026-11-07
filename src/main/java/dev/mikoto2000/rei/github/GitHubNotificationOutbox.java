@@ -1,9 +1,12 @@
 package dev.mikoto2000.rei.github;
 
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * GitHubとの連携に必要なGit連携先通知Outboxを扱う。
@@ -19,11 +22,7 @@ public final class GitHubNotificationOutbox {
   private final GitHubFactRepository facts;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 通知先。 */
   private final AgentEventPublisher publisher;
@@ -32,7 +31,7 @@ public final class GitHubNotificationOutbox {
   public GitHubNotificationOutbox(
       GitHubFactRepository facts, ProjectRegistry projects, AgentEventPublisher publisher) {
     this.facts = facts;
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
     this.publisher = publisher;
   }
 
@@ -41,8 +40,7 @@ public final class GitHubNotificationOutbox {
       fixedDelayString = "${rei.github.webhook.notification-poll-ms:5000}")
   public synchronized void flush() {
     for (var notice : facts.pendingNotifications()) {
-      if (projects
-          .resolveById(notice.projectId())
+      if (findProject.apply(notice.projectId())
           .filter(project -> project.root().toString().equals(notice.root()))
           .isEmpty()) {
         facts.notificationSuppressed(notice.id());

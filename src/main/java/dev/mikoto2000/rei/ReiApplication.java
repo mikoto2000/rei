@@ -327,9 +327,8 @@ public class ReiApplication {
     dev.mikoto2000.rei.ui.shell.ShellProjectCommands.configure(
         cmd, projects, client, projectShellActivity);
 
-    ReiLineReaderFactory.Session inputSession =
-        ReiLineReaderFactory.create(terminal, cmd, completionEngine);
-    LineReader reader = inputSession.reader();
+    Completer inputCompleter = ReiLineReaderFactory.completer(cmd, completionEngine);
+    LineReader reader = ReiLineReaderFactory.create(terminal, inputCompleter);
     var llm = cmd.getSubcommands().get("llm");
     if (llm != null
         && llm.getCommand() instanceof dev.mikoto2000.rei.llm.capture.LlmCaptureCommand capture)
@@ -466,7 +465,7 @@ public class ReiApplication {
               printUserInputIfNeeded(input.text(), terminal, commandArgs);
               if (isInteractiveShellCommand(commandArgs)) {
                 executeInteractiveShellCommand(
-                    cmd, reader, terminal, inputSession.completer(), commandArgs);
+                    cmd, reader, terminal, inputCompleter, commandArgs);
               } else {
                 executeInterruptibly(cmd, terminal, commandExecutor, commandArgs);
               }

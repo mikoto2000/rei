@@ -453,7 +453,6 @@ wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.checkpoint.Check
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.checkpoint.ResumeCommand
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.chat.ConversationInputRouter
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.command.ReiLineReaderFactory
-wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.command.ReiLineReaderFactory$Session
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.command.UserInputParser
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.command.UserInputService
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.command.UserInputService$Input

@@ -1,9 +1,10 @@
 package dev.mikoto2000.rei.web;
 
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.memory.command.MemoryCommandSupport;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.Optional;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,11 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/projects/{projectId}/memory")
 public final class ScopedMemoryController {
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 記憶。 */
   private final MemoryCommandSupport memory;
@@ -42,7 +39,7 @@ public final class ScopedMemoryController {
 
   /** 指定された値や利用先を使って、ScopedMemoryControllerを初期化する。 */
   public ScopedMemoryController(ProjectRegistry projects, MemoryCommandSupport memory) {
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
     this.memory = memory;
   }
 
@@ -51,8 +48,7 @@ public final class ScopedMemoryController {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (id == null || id.isBlank() || id.length() > 128)
       throw new IllegalArgumentException("Project ID required");
-    return projects
-        .resolveById(id)
+    return findProject.apply(id)
         .orElseThrow(
             () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"))
         .id();

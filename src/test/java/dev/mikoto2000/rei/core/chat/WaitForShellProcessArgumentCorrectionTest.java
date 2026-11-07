@@ -230,7 +230,7 @@ class WaitForShellProcessArgumentCorrectionTest {
             .defaultToolCallbacks(callback)
             .build();
     var properties = new LlmProperties();
-    properties.getOutputLimit().setMaxToolArgumentCorrectionsPerRun(correctionLimit);
+    properties.updateOutputLimit(limits -> limits.setMaxToolArgumentCorrectionsPerRun(correctionLimit));
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
     var events = new ArrayList<AgentEvent>();

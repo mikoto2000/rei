@@ -1,9 +1,8 @@
 package dev.mikoto2000.rei.llm;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /** 言語モデルの設定値をまとめ、利用環境に応じた動作を指定できるようにする。 */
@@ -48,40 +47,63 @@ public class LlmProperties {
   }
 
   /** 用途に応じたモデル利用で参照する出力上限を返す。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Spring JavaBean binding and programmatic setup populate the nested output limits.")
   public OutputLimit getOutputLimit() {
-    return outputLimit;
+    return outputLimit.copy();
   }
 
   /** 用途に応じたモデル利用で使用する出力上限を設定する。 */
   public void setOutputLimit(OutputLimit outputLimit) {
-    this.outputLimit = outputLimit == null ? new OutputLimit() : outputLimit;
+    this.outputLimit = outputLimit == null ? new OutputLimit() : outputLimit.copy();
+  }
+
+  /** 現在の出力上限をもとに設定を更新する。 */
+  public void updateOutputLimit(Consumer<OutputLimit> update) {
+    var next = getOutputLimit();
+    update.accept(next);
+    setOutputLimit(next);
   }
 
   /** 用途に応じたモデル利用で参照するFeaturesを返す。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP",
-      matchType = SuppressMatchType.EXACT,
-      justification = "The JavaBean settings map supports binding and programmatic feature configuration.")
   public Map<String, Server> getFeatures() {
-    return features;
+    return copyFeatures(features);
   }
 
   /** 用途に応じたモデル利用で使用するFeaturesを設定する。 */
   public void setFeatures(Map<String, Server> features) {
-    this.features = features == null ? new LinkedHashMap<>() : features;
+    this.features = features == null ? new LinkedHashMap<>() : copyFeatures(features);
+  }
+
+  /** 指定された機能の設定を更新する。 */
+  public void setFeature(String name, Server server) {
+    features.put(name, server == null ? null : server.copy());
+  }
+
+  /** 機能設定と対応するサーバー設定をコピーする。 */
+  private static Map<String, Server> copyFeatures(Map<String, Server> source) {
+    var copy = new LinkedHashMap<String, Server>();
+    source.forEach((name, server) -> copy.put(name, server == null ? null : server.copy()));
+    return copy;
   }
 
   /** 用途に応じたモデル利用で用いる機能を返す。 */
   public Server feature(String name) {
-    return features.get(name);
+    var server = features.get(name);
+    return server == null ? null : server.copy();
   }
 
   /** 用途に応じたモデル利用に必要なサーバーを扱う。 */
   public static class Server {
+    /** 現在の設定値のコピーを返す。 */
+    private Server copy() {
+      var copy = new Server();
+      copy.maxOutputTokens = maxOutputTokens;
+      copy.baseUrl = baseUrl;
+      copy.apiKey = apiKey;
+      copy.model = model;
+      copy.temperature = temperature;
+      return copy;
+    }
+
     /** 最大出力トークン数。 */
     private Integer maxOutputTokens;
 
@@ -157,6 +179,19 @@ public class LlmProperties {
 
   /** 用途に応じたモデル利用に必要な出力上限を扱う。 */
   public static class OutputLimit {
+    /** 現在の設定値のコピーを返す。 */
+    private OutputLimit copy() {
+      var copy = new OutputLimit();
+      copy.maxReplansPerGoal = maxReplansPerGoal;
+      copy.maxSubgoalsPerReplan = maxSubgoalsPerReplan;
+      copy.maxLlmCallsPerRun = maxLlmCallsPerRun;
+      copy.llmCallBudgetEnabled = llmCallBudgetEnabled;
+      copy.maxToolArgumentCorrectionsPerRun = maxToolArgumentCorrectionsPerRun;
+      copy.maxTotalTokensPerRun = maxTotalTokensPerRun;
+      copy.maxTotalTokensPerGoal = maxTotalTokensPerGoal;
+      return copy;
+    }
+
     /** 既定最大計画の見直し回数ごとの目標。 */
     private static final int DEFAULT_MAX_REPLANS_PER_GOAL = 2;
 

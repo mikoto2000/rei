@@ -233,7 +233,7 @@ class CodexRunModelBudgetTest {
         new org.springframework.jdbc.datasource.DriverManagerDataSource(
             "jdbc:sqlite:" + root.resolve("goal.db"));
     var props = new dev.mikoto2000.rei.llm.LlmProperties();
-    props.getOutputLimit().setMaxTotalTokensPerGoal(4);
+    props.updateOutputLimit(limits -> limits.setMaxTotalTokensPerGoal(4));
     var goals = new dev.mikoto2000.rei.goal.GoalRepository(source, Clock.systemUTC(), props);
     var goal =
         goals.create(

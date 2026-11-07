@@ -4,11 +4,14 @@ import dev.mikoto2000.rei.activity.ActivityCommand;
 import dev.mikoto2000.rei.activity.PeriodCoaching;
 import dev.mikoto2000.rei.application.run.IntegrationRunSubmitService;
 import dev.mikoto2000.rei.core.project.ProjectClientScope;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
+import java.util.Optional;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
@@ -33,11 +36,7 @@ public final class ActivityCommandsController {
   private final ActivityCommand activity;
 
   /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
-  private final ProjectRegistry registry;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /** プロジェクト一覧。 */
   @SuppressFBWarnings(
@@ -100,7 +99,7 @@ public final class ActivityCommandsController {
       ProjectService projects,
       IntegrationRunSubmitService runs) {
     this.activity = activity;
-    this.registry = registry;
+    this.findProject = id -> registry.resolveById(id);
     this.projects = projects;
     this.runs = runs;
   }
@@ -153,8 +152,7 @@ public final class ActivityCommandsController {
       @RequestParam String projectId, @RequestParam(defaultValue = "today") String date) {
     date(date);
     var project =
-        registry
-            .resolveById(projectId)
+        findProject.apply(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
     try (var scope = ProjectClientScope.open(projects.newClient())) {

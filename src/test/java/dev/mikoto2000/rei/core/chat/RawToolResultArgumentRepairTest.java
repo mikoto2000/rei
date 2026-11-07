@@ -436,7 +436,7 @@ class RawToolResultArgumentRepairTest {
             .defaultToolCallbacks(callback)
             .build();
     var properties = new LlmProperties();
-    properties.getOutputLimit().setMaxToolArgumentCorrectionsPerRun(2);
+    properties.updateOutputLimit(limits -> limits.setMaxToolArgumentCorrectionsPerRun(2));
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
     var events = new ArrayList<AgentEvent>();
