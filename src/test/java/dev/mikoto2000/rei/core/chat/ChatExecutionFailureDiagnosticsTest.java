@@ -239,6 +239,25 @@ class ChatExecutionFailureDiagnosticsTest {
   }
 
   @Test
+  void unexpectedStructuredCommandFailureProducesOneSanitizedRunFailure() {
+    var chat = service(new AssertionError("model should not run"));
+    var doctor = mock(dev.mikoto2000.rei.doctor.DoctorActiveService.class);
+    when(doctor.execute(
+            org.mockito.ArgumentMatchers.eq("/doctor"), org.mockito.ArgumentMatchers.any()))
+        .thenThrow(new IllegalStateException("PRIVATE_DIAGNOSTIC"));
+    chat.setDoctor(doctor);
+
+    var result = chat.execute(owner, "/doctor", new UserInterventionQueue());
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.errorMessage()).doesNotContain("PRIVATE_DIAGNOSTIC");
+    assertThat(modelCalls).hasValue(0);
+    assertThat(terminals()).hasSize(1);
+    assertThat(((AgentRunFailedPayload) terminals().getFirst().payload()).error().code())
+        .isEqualTo(result.stopCode());
+  }
+
+  @Test
   void exhaustedResumeCommitExposesItsOwnCauseAndRecovery() {
     var result =
         service(
@@ -255,9 +274,11 @@ class ChatExecutionFailureDiagnosticsTest {
 
   @Test
   void repairExhaustionHasSafeSpecificResumeGuidanceInsteadOfOperationFailed() {
-    var result = service(new ExecutionStoppedException(
-        ExecutionStoppedException.Reason.TOOL_ARGUMENT_REPAIR_EXHAUSTED))
-        .execute(owner, "work", new UserInterventionQueue());
+    var result =
+        service(
+                new ExecutionStoppedException(
+                    ExecutionStoppedException.Reason.TOOL_ARGUMENT_REPAIR_EXHAUSTED))
+            .execute(owner, "work", new UserInterventionQueue());
     assertThat(result.stopCode()).isEqualTo("tool_argument_repair_exhausted");
     var dto = dev.mikoto2000.rei.web.WebApiEventDto.from(terminals().getFirst(), false, "");
     assertThat(dto.payload().get("error").toString())
