@@ -28,22 +28,23 @@ public class ResumeCommand implements Callable<Integer> {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
+      justification =
+          "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService service;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final java.util.function.Supplier<String> currentProjectId;
+
+  private final java.util.function.Supplier<String> currentSessionId;
+
+  private final java.util.function.Consumer<String> selectSession;
 
   /** キャンセル。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
+      justification =
+          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final dev.mikoto2000.rei.core.service.CommandCancellationService cancellation;
 
   /** 仕様。 */
@@ -82,7 +83,9 @@ public class ResumeCommand implements Callable<Integer> {
       ProjectService projects,
       dev.mikoto2000.rei.core.service.CommandCancellationService cancellation) {
     this.service = service;
-    this.projects = projects;
+    this.currentProjectId = () -> projects.currentContext().id();
+    this.currentSessionId = () -> projects.currentSessionId();
+    this.selectSession = session -> projects.selectSession(session);
     this.cancellation = cancellation;
   }
 
@@ -110,7 +113,7 @@ public class ResumeCommand implements Callable<Integer> {
 
   /** 作業の中断と再開で用いるプロジェクトを返す。 */
   String project() {
-    return projects.currentContext().id();
+    return currentProjectId.get();
   }
 
   /** 保存タスクの一覧・照合・明示再開・除外を行う。 */
@@ -121,18 +124,18 @@ public class ResumeCommand implements Callable<Integer> {
 
   /** 再開した実行の出力と後続の入力を同じ会話へ向ける。 */
   private PersistentCheckpointService.ResumeResult resumeTask() {
-    String previousSession = projects.currentSessionId();
+    String previousSession = currentSessionId.get();
     boolean[] selected = {false};
     try {
       return service.resumeForShell(
           project(),
           task,
           sessionId -> {
-            projects.selectSession(sessionId);
+            selectSession.accept(sessionId);
             selected[0] = true;
           });
     } catch (RuntimeException | Error error) {
-      if (selected[0]) projects.selectSession(previousSession);
+      if (selected[0]) selectSession.accept(previousSession);
       throw error;
     }
   }

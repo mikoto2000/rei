@@ -507,10 +507,6 @@ business: dev.mikoto2000.rei.memory.command.SleepCommand -> dev.mikoto2000.rei.c
 business: dev.mikoto2000.rei.memory.command.SleepCommand -> dev.mikoto2000.rei.core.project.ProjectContext
 business: dev.mikoto2000.rei.memory.command.SleepCommand -> dev.mikoto2000.rei.core.project.ProjectService
 business: dev.mikoto2000.rei.memory.command.SleepCommand -> dev.mikoto2000.rei.core.service.CommandCancellationService
-business: dev.mikoto2000.rei.memory.command.SleepCommand$AutoResume -> dev.mikoto2000.rei.core.project.ProjectContext
-business: dev.mikoto2000.rei.memory.command.SleepCommand$AutoResume -> dev.mikoto2000.rei.core.project.ProjectService
-business: dev.mikoto2000.rei.memory.command.SleepCommand$AutoStatus -> dev.mikoto2000.rei.core.project.ProjectContext
-business: dev.mikoto2000.rei.memory.command.SleepCommand$AutoStatus -> dev.mikoto2000.rei.core.project.ProjectService
 business: dev.mikoto2000.rei.memory.service.AutoSleepService -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.memory.service.AutoSleepService -> dev.mikoto2000.rei.core.chat.RunCancellation
 business: dev.mikoto2000.rei.memory.service.AutoSleepService -> dev.mikoto2000.rei.core.project.ProjectContext

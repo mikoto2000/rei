@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.reflection;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -21,12 +19,11 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
   private final GoalReflectionService service;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private record SelectedProject(String id, java.nio.file.Path root) {}
+
+  private final java.util.function.Supplier<SelectedProject> selectedProject;
+
+  private final java.util.function.Supplier<String> currentSessionId;
 
   /** 実行振り返り一覧。 */
   private RunReflectionRepository runReflections;
@@ -122,7 +119,12 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
       GoalReflectionRepository repository, GoalReflectionService service, ProjectService projects) {
     this.repository = repository;
     this.service = service;
-    this.projects = projects;
+    this.selectedProject =
+        () -> {
+          var project = projects.currentContext();
+          return new SelectedProject(project.id(), project.root());
+        };
+    this.currentSessionId = () -> projects.currentSessionId();
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -135,7 +137,7 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
   public Integer call() {
     var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
-      String project = projects.currentContext().id();
+      String project = selectedProject.get().id();
       Object result =
           switch (action) {
             case "list" -> repository.list(project);
@@ -143,8 +145,7 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
             case "collect" -> service.collect(project, requiredId());
             case "runs" -> runReflections.list(project);
             case "run" -> runReflections.get(project, requiredId());
-            case "collect-run" ->
-                runService.collect(project, projects.currentSessionId(), requiredId());
+            case "collect-run" -> runService.collect(project, currentSessionId.get(), requiredId());
             case "promote" -> {
               if (promotion == null)
                 throw new IllegalStateException("Verified memory promotion is unavailable");
@@ -194,9 +195,9 @@ public class ReflectionCommand implements java.util.concurrent.Callable<Integer>
 
   /** 作業の振り返りで用いる教訓所有者を返す。 */
   private dev.mikoto2000.rei.core.chat.AgentRunContext lessonOwner() {
-    var project = projects.currentContext();
+    var project = selectedProject.get();
     return new dev.mikoto2000.rei.core.chat.AgentRunContext(
-        "human-reflection", projects.currentSessionId(), project.root(), project.id());
+        "human-reflection", currentSessionId.get(), project.root(), project.id());
   }
 
   /** 操作で利用できる入力候補を提供する。 */

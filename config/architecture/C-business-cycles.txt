@@ -1834,10 +1834,6 @@ dev.mikoto2000.rei.memory.command.SleepCommand -> dev.mikoto2000.rei.core.projec
 dev.mikoto2000.rei.memory.command.SleepCommand -> dev.mikoto2000.rei.core.project.ProjectService
 dev.mikoto2000.rei.memory.command.SleepCommand -> dev.mikoto2000.rei.core.service.CommandCancellationService
 dev.mikoto2000.rei.memory.command.SleepCommand -> dev.mikoto2000.rei.event.FailureMessages
-dev.mikoto2000.rei.memory.command.SleepCommand$AutoResume -> dev.mikoto2000.rei.core.project.ProjectContext
-dev.mikoto2000.rei.memory.command.SleepCommand$AutoResume -> dev.mikoto2000.rei.core.project.ProjectService
-dev.mikoto2000.rei.memory.command.SleepCommand$AutoStatus -> dev.mikoto2000.rei.core.project.ProjectContext
-dev.mikoto2000.rei.memory.command.SleepCommand$AutoStatus -> dev.mikoto2000.rei.core.project.ProjectService
 dev.mikoto2000.rei.memory.service.AutoSleepExecution -> dev.mikoto2000.rei.llm.ModelCallBudget
 dev.mikoto2000.rei.memory.service.AutoSleepService -> dev.mikoto2000.rei.application.session.CursorKey
 dev.mikoto2000.rei.memory.service.AutoSleepService -> dev.mikoto2000.rei.application.session.SessionMetadata
