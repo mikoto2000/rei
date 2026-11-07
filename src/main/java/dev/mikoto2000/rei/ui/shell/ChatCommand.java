@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.ui.shell;
 
+import dev.mikoto2000.rei.core.chat.AgentRunContext.Mode;
 import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
 import dev.mikoto2000.rei.core.chat.ChatExecutionService;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
@@ -12,9 +13,10 @@ import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.llm.OutputLimitReplanner;
 import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Optional;
+import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
+import java.util.function.Function;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -27,32 +29,35 @@ import picocli.CommandLine.Parameters;
 public class ChatCommand implements Runnable {
 
   /** チャット実行サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Runs operations through the shared chat execution service.")
-  private final ChatExecutionService chatExecutionService;
+  private final Function<String, ChatExecutionResult> executeChat;
 
   /** チャット応答読み上げの案内。 */
   private final ChatResponseNarrator chatResponseNarrator;
 
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shell service for its current conversation and run state.")
-  private dev.mikoto2000.rei.application.session.ShellConversationService conversations;
+  private BiConsumer<String, Mode> submitConversation;
+
+  private BiPredicate<String, String> intervene;
 
   /** ターミナルでの対話で使用するシェル会話一覧を設定する。 */
   @Autowired
   public void setShellConversations(
       dev.mikoto2000.rei.application.session.ShellConversationService conversations) {
-    this.conversations = conversations;
+    this.intervene =
+        conversations == null ? null : (run, text) -> conversations.intervene(run, text);
+    this.submitConversation =
+        conversations == null
+            ? null
+            : (text, requestedMode) -> {
+              if (requestedMode == null || requestedMode == Mode.EXCLUSIVE)
+                conversations.submit(text);
+              else conversations.submit(text, requestedMode);
+            };
   }
 
   /** ターミナルでの対話で判断に用いるacceptsAsynchronouslyの条件を確認する。 */
   public boolean acceptsAsynchronously() {
-    return conversations != null;
+    return submitConversation != null;
   }
 
   /** プロンプト一覧。 */
@@ -64,7 +69,7 @@ public class ChatCommand implements Runnable {
       names = "--mode",
       defaultValue = "EXCLUSIVE",
       description = "実行モード（EXCLUSIVE / CONVERSATION / READ_ONLY）")
-  private dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode;
+  private Mode mode;
 
   /** 対象実行。 */
   @picocli.CommandLine.Option(names = "--run", description = "指定Runへ追加指示を送る（独立Runは作成しない）")
@@ -129,29 +134,24 @@ public class ChatCommand implements Runnable {
   @Autowired
   public ChatCommand(
       ChatExecutionService chatExecutionService, ChatResponseNarrator chatResponseNarrator) {
-    this.chatExecutionService = chatExecutionService;
+    this.executeChat = text -> chatExecutionService.execute(text);
     this.chatResponseNarrator = chatResponseNarrator;
   }
 
   /** AI と会話しますを行う。 */
   @Override
   public void run() {
-    if (conversations != null) {
+    if (submitConversation != null) {
       if (targetRun != null) {
-        if (mode != dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE
-            || !conversations.intervene(targetRun, String.join(" ", prompts)))
+        if (mode != Mode.EXCLUSIVE || !intervene.test(targetRun, String.join(" ", prompts)))
           throw new IllegalArgumentException("Target Run is unavailable for guidance");
-      } else if (mode == null
-          || mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)
-        conversations.submit(String.join(" ", prompts));
-      else conversations.submit(String.join(" ", prompts), mode);
+      } else submitConversation.accept(String.join(" ", prompts), mode);
       return;
     }
-    if (targetRun != null
-        || mode != null && mode != dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)
+    if (targetRun != null || mode != null && mode != Mode.EXCLUSIVE)
       throw new IllegalArgumentException("Concurrent conversation router is unavailable");
     chatResponseNarrator.reset();
-    ChatExecutionResult result = chatExecutionService.execute(String.join(" ", prompts));
+    ChatExecutionResult result = executeChat.apply(String.join(" ", prompts));
     if (result.success()) {
       chatResponseNarrator.narrateIfCompleted(result.text());
     }

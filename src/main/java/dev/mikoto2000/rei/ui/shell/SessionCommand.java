@@ -1,12 +1,11 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
+import dev.mikoto2000.rei.application.session.SessionMetadata;
 import dev.mikoto2000.rei.application.session.SessionQueryService;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
 import dev.mikoto2000.rei.conversation.HistoryFormatter;
 import dev.mikoto2000.rei.core.project.ProjectService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -22,11 +21,9 @@ import picocli.CommandLine.Spec;
     subcommands = {NewConversationCommand.class, ResumeConversationCommand.class})
 public final class SessionCommand implements java.util.concurrent.Callable<Integer> {
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Shares the shell session and routes operations for its selected conversation.")
-  private final ShellConversationService conversations;
+  private final Supplier<SessionMetadata> endSession;
+
+  private final Supplier<String> selectedSessionId;
 
   /** 会話一覧。 */
   private final SessionQueryService sessions;
@@ -51,7 +48,8 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
       ShellConversationService conversations,
       SessionQueryService sessions,
       ProjectService projects) {
-    this.conversations = conversations;
+    this.endSession = () -> conversations.end();
+    this.selectedSessionId = () -> conversations == null ? null : conversations.currentSessionId();
     this.sessions = sessions;
     this.currentProjectId = () -> projects.currentContext().id();
   }
@@ -70,7 +68,7 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
   public int end() {
     return display(
         () -> {
-          var session = conversations.end();
+          var session = endSession.get();
           spec.commandLine()
               .getOut()
               .println(
@@ -85,7 +83,7 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
   public int show() {
     return display(
         () -> {
-          String id = conversations == null ? null : conversations.currentSessionId();
+          String id = selectedSessionId.get();
           var out = spec.commandLine().getOut();
           if (id == null) {
             out.println("No active session.");
@@ -120,7 +118,7 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
                 any = true;
               }
               out.println(
-                  (row.sessionId().equals(conversations.currentSessionId()) ? "* " : "  ")
+                  (row.sessionId().equals(selectedSessionId.get()) ? "* " : "  ")
                       + format.label(row.sessionId())
                       + "  "
                       + format.label(row.title()));

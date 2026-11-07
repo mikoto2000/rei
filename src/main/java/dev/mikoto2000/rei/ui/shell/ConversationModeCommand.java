@@ -1,9 +1,10 @@
 package dev.mikoto2000.rei.ui.shell;
 
+import dev.mikoto2000.rei.application.session.SessionMetadata;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
 import dev.mikoto2000.rei.core.chat.ResponseStyle;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -18,11 +19,9 @@ import picocli.CommandLine.Spec;
     mixinStandardHelpOptions = true)
 public final class ConversationModeCommand implements java.util.concurrent.Callable<Integer> {
   /** シェル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Shares the shell session and routes operations for its selected conversation.")
-  private final ShellConversationService shell;
+  private final BiConsumer<ResponseStyle, Boolean> setStyle;
+
+  private final Supplier<SessionMetadata> sessionMetadata;
 
   /** 仕様。 */
   @Spec private CommandSpec spec;
@@ -35,7 +34,8 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
   /** 指定された値や利用先を使って、ConversationModeCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public ConversationModeCommand(ShellConversationService shell) {
-    this.shell = shell;
+    this.setStyle = (style, voiceOnly) -> shell.responseStyle(style, voiceOnly);
+    this.sessionMetadata = () -> shell.currentMetadata();
   }
 
   /** Sessionごとの応答スタイル。実行能力・承認は維持しますを行う。 */
@@ -48,7 +48,7 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
   public int auto() {
     return display(
         () -> {
-          shell.responseStyle(ResponseStyle.AUTO, false);
+          setStyle.accept(ResponseStyle.AUTO, false);
           show();
         });
   }
@@ -61,7 +61,7 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
   public int normal() {
     return display(
         () -> {
-          shell.responseStyle(ResponseStyle.NORMAL, false);
+          setStyle.accept(ResponseStyle.NORMAL, false);
           show();
         });
   }
@@ -81,7 +81,7 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
           boolean voiceOnly) {
     return display(
         () -> {
-          shell.responseStyle(ResponseStyle.CONVERSATION, voiceOnly);
+          setStyle.accept(ResponseStyle.CONVERSATION, voiceOnly);
           show();
         });
   }
@@ -94,7 +94,7 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
 
   /** 利用者が対象の情報を確認できるように表示する。 */
   private void show() {
-    var metadata = shell.currentMetadata();
+    var metadata = sessionMetadata.get();
     var style = metadata == null ? ResponseStyle.AUTO : metadata.responseStyle();
     spec.commandLine()
         .getOut()
