@@ -102,11 +102,11 @@ public class AgentScheduleDispatcher {
   }
 
   /** 実行登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so operations see the same lifecycle state.")
-  private dev.mikoto2000.rei.application.run.RunRegistry runRegistry;
+  private java.util.function.Consumer<AgentRunContext> registerRun;
+
+  private java.util.function.Consumer<String> forgetRun;
+
+  private java.util.function.Predicate<String> runCancelled;
 
   /** 実行受付から終了までの管理。 */
   private dev.mikoto2000.rei.application.run.RunService runLifecycle;
@@ -116,7 +116,10 @@ public class AgentScheduleDispatcher {
   public void configureRunTracking(
       dev.mikoto2000.rei.application.run.RunRegistry registry,
       dev.mikoto2000.rei.application.run.RunService lifecycle) {
-    this.runRegistry = registry;
+    this.forgetRun = id -> registry.forget(id);
+    this.runCancelled =
+        id -> registry.get(id).status() == dev.mikoto2000.rei.application.run.RunStatus.CANCELLED;
+    this.registerRun = registry == null ? null : registry::register;
     this.runLifecycle = lifecycle;
   }
 
@@ -156,8 +159,8 @@ public class AgentScheduleDispatcher {
                   AgentRunContext.RequestSource.WEB);
           boolean registered = false;
           try {
-            if (runRegistry != null) {
-              runRegistry.register(owner);
+            if (registerRun != null) {
+              registerRun.accept(owner);
               registered = true;
               runLifecycle.onQueuedCancellation(
                   entry.runId(), () -> completed.accept(ChatExecutionResult.cancelled()));
@@ -198,9 +201,7 @@ public class AgentScheduleDispatcher {
                                 ? dev.mikoto2000.rei.application.run.RunStatus.COMPLETED
                                 : dev.mikoto2000.rei.application.run.RunStatus.FAILED;
                     runLifecycle.finishMissingTerminal(owner, terminal);
-                    if (runRegistry.get(entry.runId()).status()
-                        == dev.mikoto2000.rei.application.run.RunStatus.CANCELLED)
-                      result = ChatExecutionResult.cancelled();
+                    if (runCancelled.test(entry.runId())) result = ChatExecutionResult.cancelled();
                   }
                   completed.accept(result);
                 },
@@ -220,7 +221,7 @@ public class AgentScheduleDispatcher {
           } catch (RuntimeException | Error error) {
             if (registered) {
               runLifecycle.forgetQueuedCancellation(entry.runId());
-              runRegistry.forget(entry.runId());
+              forgetRun.accept(entry.runId());
             }
             throw error;
           }
