@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.activity;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -36,12 +34,10 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
   private final java.util.function.BooleanSupplier automaticCoachingEnabled;
 
   /** 作業習慣。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Routes reporting commands through the shared behavior service and its current state.")
-  private final dev.mikoto2000.rei.activity.behavior.BehaviorService behavior;
+  private final java.util.function.Consumer<Boolean> setBehaviorEnabled;
+
+  private final java.util.function.Supplier<String> behaviorStatus;
+  private final java.util.function.Consumer<java.io.PrintWriter> printBehaviorEvaluation;
 
   /** 補助操作。 */
   private ClassificationToolkit toolkit;
@@ -138,7 +134,28 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     this.captureEnabled = () -> properties.isEnabled();
     this.automaticCoachingEnabled =
         () -> properties != null && properties.getCoaching().isAutomaticEnabled();
-    this.behavior = behavior;
+    this.setBehaviorEnabled = enabled -> behavior.setEnabled(enabled);
+    this.behaviorStatus = () -> behavior.status();
+    this.printBehaviorEvaluation =
+        out -> {
+          var a = behavior.evaluate();
+          out.println(
+              "通知しない手動評価: severity="
+                  + a.severity()
+                  + "; reason="
+                  + a.reason()
+                  + "; continuousObservedMinutes="
+                  + a.continuousEntertainmentSeconds() / 60.0);
+          for (var w : a.windows())
+            out.printf(
+                java.util.Locale.ROOT,
+                "%d分窓: 観測成功=%.1f分 / 評価対象観測=%.1f分 / 娯楽観測=%.1f分 (評価対象の%.1f%%)%n",
+                w.durationMinutes(),
+                w.observedSeconds() / 60.0,
+                w.eligibleObservedSeconds() / 60.0,
+                w.entertainmentObservedSeconds() / 60.0,
+                w.entertainmentRatio() * 100);
+        };
     this.presentation = new ActivityTimelinePresentationService(timeline, null);
   }
 
@@ -147,7 +164,9 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     this.capture = source.capture;
     this.captureEnabled = source.captureEnabled;
     this.automaticCoachingEnabled = source.automaticCoachingEnabled;
-    this.behavior = source.behavior;
+    this.setBehaviorEnabled = source.setBehaviorEnabled;
+    this.behaviorStatus = source.behaviorStatus;
+    this.printBehaviorEvaluation = source.printBehaviorEvaluation;
     this.toolkit = source.toolkit;
     this.suggestions = source.suggestions;
     this.presentation = source.presentation;
@@ -694,46 +713,23 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     @Override
     public Integer call() {
       try {
-        var service = parent.behavior;
         switch (action) {
           case "uncertain" ->
               spec.commandLine().getOut().println(parent.toolkit.listCandidates("uncertain", top));
           case "suggest-rules" ->
               spec.commandLine().getOut().println(parent.suggestions.suggest(true));
           case "on" -> {
-            service.setEnabled(true);
+            parent.setBehaviorEnabled.accept(true);
             spec.commandLine()
                 .getOut()
                 .println("Behavior を有効にしました（この起動中のみ）。Activity Capture が有効・稼働中の場合に評価します。");
           }
           case "off" -> {
-            service.setEnabled(false);
+            parent.setBehaviorEnabled.accept(false);
             spec.commandLine().getOut().println("Behavior を無効にしました。");
           }
-          case "status" -> spec.commandLine().getOut().println(service.status());
-          case "evaluate" -> {
-            var a = service.evaluate();
-            spec.commandLine()
-                .getOut()
-                .println(
-                    "通知しない手動評価: severity="
-                        + a.severity()
-                        + "; reason="
-                        + a.reason()
-                        + "; continuousObservedMinutes="
-                        + a.continuousEntertainmentSeconds() / 60.0);
-            for (var w : a.windows())
-              spec.commandLine()
-                  .getOut()
-                  .printf(
-                      java.util.Locale.ROOT,
-                      "%d分窓: 観測成功=%.1f分 / 評価対象観測=%.1f分 / 娯楽観測=%.1f分 (評価対象の%.1f%%)%n",
-                      w.durationMinutes(),
-                      w.observedSeconds() / 60.0,
-                      w.eligibleObservedSeconds() / 60.0,
-                      w.entertainmentObservedSeconds() / 60.0,
-                      w.entertainmentRatio() * 100);
-          }
+          case "status" -> spec.commandLine().getOut().println(parent.behaviorStatus.get());
+          case "evaluate" -> parent.printBehaviorEvaluation.accept(spec.commandLine().getOut());
           default -> {
             spec.commandLine()
                 .getErr()

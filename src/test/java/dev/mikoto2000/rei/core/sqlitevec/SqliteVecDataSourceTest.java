@@ -26,4 +26,25 @@ class SqliteVecDataSourceTest {
     assertSame(connection, dataSource.getConnection());
     verify(loader).load(connection);
   }
+
+  @Test
+  void failedExtensionLoadClosesAuthenticatedConnectionAndRetainsBothFailures() throws Exception {
+    DataSource delegate = mock(DataSource.class);
+    Connection connection = mock(Connection.class);
+    when(delegate.getConnection("reader", "password")).thenReturn(connection);
+    var loadFailure = new IllegalStateException("extension load failed");
+    var closeFailure = new java.sql.SQLException("close failed");
+    SqliteVecExtensionLoader loader = mock(SqliteVecExtensionLoader.class);
+    org.mockito.Mockito.doThrow(loadFailure).when(loader).load(connection);
+    org.mockito.Mockito.doThrow(closeFailure).when(connection).close();
+    var source = new SqliteVecDataSource(delegate, loader);
+
+    var actual =
+        org.junit.jupiter.api.Assertions.assertThrows(
+            IllegalStateException.class, () -> source.getConnection("reader", "password"));
+
+    assertSame(loadFailure, actual);
+    assertSame(closeFailure, actual.getSuppressed()[0]);
+    verify(connection).close();
+  }
 }

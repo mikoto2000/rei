@@ -9,8 +9,6 @@ import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.core.chat.UserInterventionQueue;
 import dev.mikoto2000.rei.core.policy.ToolPermissionProperties;
 import dev.mikoto2000.rei.core.project.ProjectService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -67,11 +65,33 @@ public class AgentScheduleDispatcher {
   }
 
   /** 予約されたエージェント実行を管理する窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent schedule and claim state.")
-  private final PersistentAgentScheduler schedules;
+  private final ScheduleOperations scheduleOperations;
+
+  private record ScheduleOperations(
+      java.util.function.Supplier<java.util.Optional<PersistentAgentScheduler.Entry>> claimDue,
+      java.util.function.Predicate<PersistentAgentScheduler.Entry> activeClaim,
+      FinishSchedule finish,
+      java.util.function.BiFunction<String, String, PersistentAgentScheduler.Entry> find,
+      ReconcileSchedule reconcile) {
+    static ScheduleOperations from(PersistentAgentScheduler schedules) {
+      return new ScheduleOperations(
+          () -> schedules.claimDue(),
+          claim -> schedules.activeClaim(claim),
+          (claim, status, detail) -> schedules.finish(claim, status, detail),
+          (project, id) -> schedules.get(project, id),
+          (project, id, run) -> schedules.reconcile(project, id, run));
+    }
+  }
+
+  @FunctionalInterface
+  private interface FinishSchedule {
+    void finish(PersistentAgentScheduler.Entry claim, String status, String detail);
+  }
+
+  @FunctionalInterface
+  private interface ReconcileSchedule {
+    PersistentAgentScheduler.Entry reconcile(String project, String id, String run);
+  }
 
   /** この機能の動作設定。 */
   private final AgentSchedulerProperties properties;
@@ -102,11 +122,10 @@ public class AgentScheduleDispatcher {
   }
 
   /** 実行登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so operations see the same lifecycle state.")
-  private dev.mikoto2000.rei.application.run.RunRegistry runRegistry;
+  private Consumer<AgentRunContext> registerRun;
+
+  private java.util.function.Predicate<String> cancelledRun;
+  private Consumer<String> forgetRun;
 
   /** 実行受付から終了までの管理。 */
   private dev.mikoto2000.rei.application.run.RunService runLifecycle;
@@ -116,7 +135,10 @@ public class AgentScheduleDispatcher {
   public void configureRunTracking(
       dev.mikoto2000.rei.application.run.RunRegistry registry,
       dev.mikoto2000.rei.application.run.RunService lifecycle) {
-    this.runRegistry = registry;
+    this.registerRun = registry == null ? null : owner -> registry.register(owner);
+    this.cancelledRun =
+        id -> registry.get(id).status() == dev.mikoto2000.rei.application.run.RunStatus.CANCELLED;
+    this.forgetRun = id -> registry.forget(id);
     this.runLifecycle = lifecycle;
   }
 
@@ -130,7 +152,7 @@ public class AgentScheduleDispatcher {
       SessionRepository sessions,
       ConversationInputRouter router,
       ChatExecutionService chat) {
-    this.schedules = schedules;
+    this.scheduleOperations = ScheduleOperations.from(schedules);
     this.properties = properties;
     this.permissions = permissions;
     this.inFlight = entry -> router.containsRun(entry.projectId(), entry.runId());
@@ -156,8 +178,8 @@ public class AgentScheduleDispatcher {
                   AgentRunContext.RequestSource.WEB);
           boolean registered = false;
           try {
-            if (runRegistry != null) {
-              runRegistry.register(owner);
+            if (registerRun != null) {
+              registerRun.accept(owner);
               registered = true;
               runLifecycle.onQueuedCancellation(
                   entry.runId(), () -> completed.accept(ChatExecutionResult.cancelled()));
@@ -167,7 +189,8 @@ public class AgentScheduleDispatcher {
                 () -> {
                   ChatExecutionResult result;
                   try {
-                    if (!schedules.activeClaim(entry)) result = ChatExecutionResult.cancelled();
+                    if (!scheduleOperations.activeClaim().test(entry))
+                      result = ChatExecutionResult.cancelled();
                     else {
                       if (!validProject(entry, projects))
                         throw new IllegalStateException(
@@ -198,9 +221,7 @@ public class AgentScheduleDispatcher {
                                 ? dev.mikoto2000.rei.application.run.RunStatus.COMPLETED
                                 : dev.mikoto2000.rei.application.run.RunStatus.FAILED;
                     runLifecycle.finishMissingTerminal(owner, terminal);
-                    if (runRegistry.get(entry.runId()).status()
-                        == dev.mikoto2000.rei.application.run.RunStatus.CANCELLED)
-                      result = ChatExecutionResult.cancelled();
+                    if (cancelledRun.test(entry.runId())) result = ChatExecutionResult.cancelled();
                   }
                   completed.accept(result);
                 },
@@ -220,7 +241,7 @@ public class AgentScheduleDispatcher {
           } catch (RuntimeException | Error error) {
             if (registered) {
               runLifecycle.forgetQueuedCancellation(entry.runId());
-              runRegistry.forget(entry.runId());
+              forgetRun.accept(entry.runId());
             }
             throw error;
           }
@@ -243,7 +264,7 @@ public class AgentScheduleDispatcher {
       ToolPermissionProperties permissions,
       Gateway gateway,
       java.util.function.Predicate<PersistentAgentScheduler.Entry> inFlight) {
-    this.schedules = schedules;
+    this.scheduleOperations = ScheduleOperations.from(schedules);
     this.properties = properties;
     this.permissions = permissions;
     this.gateway = gateway;
@@ -279,7 +300,7 @@ public class AgentScheduleDispatcher {
     if (!properties.enabled() || !permissions.enabled() || !busy.compareAndSet(false, true)) return;
     PersistentAgentScheduler.Entry claim = null;
     try {
-      var next = schedules.claimDue();
+      var next = scheduleOperations.claimDue().get();
       if (next.isEmpty()) {
         busy.set(false);
         return;
@@ -291,17 +312,20 @@ public class AgentScheduleDispatcher {
           result -> {
             if (result.status() == ChatExecutionResult.Status.WAITING) return;
             try {
-              if (schedules.activeClaim(owned))
-                schedules.finish(
-                    owned,
-                    switch (result.status()) {
-                      case SUCCESS -> "COMPLETED";
-                      case FAILED -> "FAILED";
-                      case CANCELLED -> "CANCELLED";
-                      case WAITING ->
-                          throw new IllegalStateException("Waiting is not a schedule completion");
-                    },
-                    result.success() ? result.text() : result.errorMessage());
+              if (scheduleOperations.activeClaim().test(owned))
+                scheduleOperations
+                    .finish()
+                    .finish(
+                        owned,
+                        switch (result.status()) {
+                          case SUCCESS -> "COMPLETED";
+                          case FAILED -> "FAILED";
+                          case CANCELLED -> "CANCELLED";
+                          case WAITING ->
+                              throw new IllegalStateException(
+                                  "Waiting is not a schedule completion");
+                        },
+                        result.success() ? result.text() : result.errorMessage());
             } finally {
               release(owned);
             }
@@ -315,8 +339,8 @@ public class AgentScheduleDispatcher {
       else gateway.dispatch(owned, completed);
     } catch (RuntimeException error) {
       try {
-        if (claim != null && schedules.activeClaim(claim))
-          schedules.finish(claim, "FAILED", error.getMessage());
+        if (claim != null && scheduleOperations.activeClaim().test(claim))
+          scheduleOperations.finish().finish(claim, "FAILED", error.getMessage());
       } finally {
         if (claim == null) busy.set(false);
         else release(claim);
@@ -329,11 +353,11 @@ public class AgentScheduleDispatcher {
   /** 現在の状態と記録を照合し、差異に応じて管理状態を整える。 */
   public synchronized PersistentAgentScheduler.Entry reconcile(
       String project, String id, String expectedRunId) {
-    var entry = schedules.get(project, id);
+    var entry = scheduleOperations.find().apply(project, id);
     if (inFlight.test(entry))
       throw new IllegalStateException(
           "Schedule Run is queued or executing; stop it through normal Run controls");
-    var result = schedules.reconcile(project, id, expectedRunId);
+    var result = scheduleOperations.reconcile().reconcile(project, id, expectedRunId);
     var owned = currentClaim.get();
     if (owned != null
         && owned.task().id().equals(id)

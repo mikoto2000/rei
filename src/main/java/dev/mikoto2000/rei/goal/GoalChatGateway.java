@@ -81,12 +81,9 @@ public class GoalChatGateway
   private final ChatExecutionService chat;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final java.util.function.Consumer<String> forgetPendingCancellation;
+
+  private final java.util.function.Consumer<String> cancelRegisteredRun;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -151,7 +148,8 @@ public class GoalChatGateway
     this.sessions = sessions;
     this.router = router;
     this.chat = chat;
-    this.cancellation = cancellation;
+    this.forgetPendingCancellation = run -> cancellation.forgetPendingCancellation(run);
+    this.cancelRegisteredRun = run -> cancellation.cancelRegisteredRun(run);
     this.events = events;
     this.publisher = publisher;
   }
@@ -219,7 +217,7 @@ public class GoalChatGateway
                   GoalLoopService.Outcome outcome;
                   try {
                     if (!goals.active(claim)) {
-                      cancellation.forgetPendingCancellation(run);
+                      forgetPendingCancellation.accept(run);
                       outcome = new GoalLoopService.Outcome(ChatExecutionResult.cancelled());
                     } else {
                       validate(goal);
@@ -404,9 +402,9 @@ public class GoalChatGateway
         /* Restored/expired Run has no live registry entry. */
       }
     if (router.cancelQueued(goal.currentRunId())) {
-      cancellation.forgetPendingCancellation(goal.currentRunId());
+      forgetPendingCancellation.accept(goal.currentRunId());
       // Queued operations never enter ChatExecutionService; the durable Goal is already CANCELLED.
-    } else cancellation.cancelRegisteredRun(goal.currentRunId());
+    } else cancelRegisteredRun.accept(goal.currentRunId());
   }
 
   @org.springframework.beans.factory.annotation.Value(
@@ -555,7 +553,7 @@ public class GoalChatGateway
     try {
       runLifecycle.cancel(run);
     } catch (dev.mikoto2000.rei.application.run.RunNotFoundException absent) {
-      if (!router.cancelQueued(run)) cancellation.cancelRegisteredRun(run);
+      if (!router.cancelQueued(run)) cancelRegisteredRun.accept(run);
     }
   }
 

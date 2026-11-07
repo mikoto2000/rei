@@ -6,8 +6,6 @@ import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.memory.model.LongTermMemory;
 import dev.mikoto2000.rei.memory.model.MemoryCandidate;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
@@ -30,12 +28,30 @@ public class SleepService {
   private static final Set<String> RUNNING = ConcurrentHashMap.newKeySet();
 
   /** 保存と検索の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the common repository for persisted memory and its transaction boundaries.")
-  private final MemoryRepository repository;
+  private final java.util.function.ToLongFunction<String> lastProcessed;
+
+  private final java.util.function.BiFunction<MemoryCandidate, String, List<LongTermMemory>>
+      candidatesForResolution;
+  private final java.util.function.Function<String, LongTermMemory> currentMemory;
+  private final java.util.function.BiFunction<String, Runnable, PersistentSleepModelBudget>
+      persistentBudget;
+  private final java.util.function.Consumer<SleepRun> saveRun;
+  private final java.util.function.BiConsumer<CommitRequest, Runnable> commitSleep;
+  private final java.util.function.Consumer<AutoRequest> requestAutoSleep;
+  private final java.util.function.Supplier<List<MemoryRepository.AutoSleepRequest>>
+      pendingRequests;
+  private final java.util.function.Predicate<MemoryRepository.AutoSleepRequest> completeRequest;
+  private final java.util.function.BiFunction<String, String, MemoryRepository.AutoState>
+      readAutoState;
+  private final java.util.function.BiFunction<
+          MemoryRepository.AutoState, AutoStateChange, MemoryRepository.AutoState>
+      updateAutoState;
+
+  private record CommitRequest(SleepRun run, long previousCheckpoint, List<Plan> plans) {}
+
+  private record AutoRequest(String session, String project, String cause) {}
+
+  private record AutoStateChange(String code, String description, String timestamp, int limit) {}
 
   /** やり取り一覧。 */
   private final java.util.function.ToLongFunction<String> turnCount;
@@ -126,7 +142,41 @@ public class SleepService {
       MemoryCandidateExtractor extractor,
       MemoryResolver resolver,
       MemoryProperties properties) {
-    this.repository = repository;
+    this.lastProcessed = session -> repository.lastProcessed(session);
+    this.candidatesForResolution =
+        (candidate, project) -> {
+          var pool = new LinkedHashMap<String, LongTermMemory>();
+          repository.exact(candidate, project).ifPresent(m -> pool.put(m.id(), m));
+          repository
+              .search(
+                  candidate.content()
+                      + " "
+                      + candidate.summary()
+                      + " "
+                      + String.join(" ", candidate.tags()),
+                  project,
+                  50)
+              .forEach(m -> pool.put(m.id(), m));
+          // Include recent facts even when a semantic paraphrase shares no lexical terms.
+          repository.list(project, 50, 0).forEach(m -> pool.putIfAbsent(m.id(), m));
+          return List.copyOf(pool.values());
+        };
+    this.currentMemory = id -> repository.find(id).orElseThrow();
+    this.persistentBudget =
+        (project, check) ->
+            new PersistentSleepModelBudget(repository, properties.sleep(), project, check);
+    this.saveRun = run -> repository.saveRun(run);
+    this.commitSleep = (request, check) -> commitSleep(repository, request, check);
+    this.requestAutoSleep =
+        request ->
+            repository.requestAutoSleep(request.session(), request.project(), request.cause());
+    this.pendingRequests = () -> repository.pendingAutoSleepRequests();
+    this.completeRequest = request -> repository.completeAutoSleepRequest(request);
+    this.readAutoState = (session, project) -> repository.autoState(session, project);
+    this.updateAutoState =
+        (state, change) ->
+            repository.updateAutoState(
+                state, change.code(), change.description(), change.timestamp(), change.limit());
     this.turnCount = session -> turns.turnCount(session);
     this.readTurns = session -> turns.read(session);
     this.extractor = extractor;
@@ -186,7 +236,7 @@ public class SleepService {
             0,
             0,
             "STARTED");
-      from = repository.lastProcessed(session);
+      from = lastProcessed.applyAsLong(session);
       to = from;
       var snapshot = readTurns.apply(session);
       if (from > snapshot.size())
@@ -217,7 +267,7 @@ public class SleepService {
       dev.mikoto2000.rei.llm.ModelCallBudget budget =
           properties.sleep().maxLlmCallsPerProject() > 0
                   || properties.sleep().maxTotalTokensPerProject() > 0
-              ? new PersistentSleepModelBudget(repository, properties.sleep(), project, check)
+              ? persistentBudget.apply(project, check)
               : properties.sleep().maxLlmCalls() > 0 || properties.sleep().maxTotalTokens() > 0
                   ? new SleepModelBudget(properties.sleep(), check)
                   : null;
@@ -243,23 +293,9 @@ public class SleepService {
         if (!sourceIds.containsAll(candidate.sourceTurnIds()))
           throw new IllegalArgumentException(
               "Candidate references a turn outside the selected range");
-        var pool = new LinkedHashMap<String, LongTermMemory>();
-        repository.exact(candidate, project).ifPresent(m -> pool.put(m.id(), m));
-        repository
-            .search(
-                candidate.content()
-                    + " "
-                    + candidate.summary()
-                    + " "
-                    + String.join(" ", candidate.tags()),
-                project,
-                50)
-            .forEach(m -> pool.put(m.id(), m));
-        // Include recent facts even when a semantic paraphrase shares no lexical terms.
-        repository.list(project, 50, 0).forEach(m -> pool.putIfAbsent(m.id(), m));
         var existing = new ArrayList<LongTermMemory>();
         int existingTokens = TokenEstimator.conservative().text(candidate.content()) + 512;
-        for (var m : pool.values()) {
+        for (var m : candidatesForResolution.apply(candidate, project)) {
           int size = TokenEstimator.conservative().text(m.content() + m.summary() + m.id()) + 64;
           if (existingTokens + size > properties.sleep().maxInputTokens()) break;
           existing.add(m);
@@ -271,10 +307,7 @@ public class SleepService {
                 : budget == null
                     ? resolver.resolve(candidate, existing, project)
                     : resolver.resolve(candidate, existing, project, budget);
-        var targets =
-            resolution.targetIds().stream()
-                .map(target -> repository.find(target).orElseThrow())
-                .toList();
+        var targets = resolution.targetIds().stream().map(currentMemory).toList();
         if (resolution.targetIds().stream().anyMatch(usedTargets::contains))
           throw new IllegalArgumentException(
               "Ambiguous batch: multiple changes to the same memory; retry with fewer turns");
@@ -294,24 +327,7 @@ public class SleepService {
               plans,
               0);
       if (!preview && processed > 0) {
-        final long checkpoint = from;
-        repository.transaction(
-            () -> {
-              check.run();
-              if (repository.lastProcessed(session) != checkpoint)
-                throw new IllegalStateException("Sleep checkpoint changed; retry");
-              for (var plan : plans) {
-                check.run();
-                for (var target : plan.targets())
-                  if (!repository.find(target.id()).orElseThrow().equals(target))
-                    throw new IllegalStateException("Memory changed during Sleep; retry");
-                apply(plan, project, session);
-              }
-              check.run();
-              repository.saveRun(run);
-              check.run();
-              return null;
-            });
+        commitSleep.accept(new CommitRequest(run, from, plans), check);
       }
       if (events != null)
         events.publish(
@@ -360,7 +376,7 @@ public class SleepService {
         // Clear interrupt only around the failure audit; restore before propagating cancellation.
         boolean interrupted = Thread.interrupted();
         try {
-          repository.saveRun(
+          saveRun.accept(
               run(
                   id,
                   session,
@@ -386,8 +402,29 @@ public class SleepService {
     }
   }
 
+  private void commitSleep(MemoryRepository repository, CommitRequest request, Runnable check) {
+    repository.transaction(
+        () -> {
+          check.run();
+          var run = request.run();
+          if (repository.lastProcessed(run.sessionId()) != request.previousCheckpoint())
+            throw new IllegalStateException("Sleep checkpoint changed; retry");
+          for (var plan : request.plans()) {
+            check.run();
+            for (var target : plan.targets())
+              if (!repository.find(target.id()).orElseThrow().equals(target))
+                throw new IllegalStateException("Memory changed during Sleep; retry");
+            apply(repository, plan, run.projectId(), run.sessionId());
+          }
+          check.run();
+          repository.saveRun(run);
+          check.run();
+          return null;
+        });
+  }
+
   /** 指定された内容を、現在の対象へ反映する。 */
-  private void apply(Plan plan, String project, String session) {
+  private void apply(MemoryRepository repository, Plan plan, String project, String session) {
     var c = plan.candidate();
     var r = plan.resolution();
     switch (r.action()) {
@@ -458,24 +495,24 @@ public class SleepService {
     return session == null
         ? 0
         : Math.max(
-            Math.max(0, turnCount.applyAsLong(session) - repository.lastProcessed(session)),
+            Math.max(0, turnCount.applyAsLong(session) - lastProcessed.applyAsLong(session)),
             episodes == null ? 0 : episodes.pending().applyAsLong(session));
   }
 
   /** 長期記憶の保存と検索に関する要求自動待機を処理する。 */
   public void requestAutoSleep(String session, String project, String cause) {
     if (!properties.enabled()) throw new IllegalStateException("Memory is disabled");
-    repository.requestAutoSleep(session, project, cause);
+    requestAutoSleep.accept(new AutoRequest(session, project, cause));
   }
 
   /** 長期記憶の保存と検索で用いる待機中自動待機要求一覧を返す。 */
   public List<MemoryRepository.AutoSleepRequest> pendingAutoSleepRequests() {
-    return repository.pendingAutoSleepRequests();
+    return pendingRequests.get();
   }
 
   /** 長期記憶の保存と検索において、完了自動待機要求に該当するか判定する。 */
   public boolean completeAutoSleepRequest(MemoryRepository.AutoSleepRequest request) {
-    return repository.completeAutoSleepRequest(request);
+    return completeRequest.test(request);
   }
 
   /** 長期記憶の保存と検索において、実行中かどうかを判定する。 */
@@ -493,7 +530,7 @@ public class SleepService {
 
   /** 長期記憶の保存と検索で用いる自動状態を返す。 */
   public MemoryRepository.AutoState autoState(String session, String project) {
-    return repository.autoState(session, project);
+    return readAutoState.apply(session, project);
   }
 
   /** 最新の内容を後続の処理に反映するため、自動状態を更新する。 */
@@ -503,7 +540,7 @@ public class SleepService {
       String description,
       String timestamp,
       int limit) {
-    return repository.updateAutoState(state, code, description, timestamp, limit);
+    return updateAutoState.apply(state, new AutoStateChange(code, description, timestamp, limit));
   }
 
   /** 後続の処理を進められるか、現在の条件を確認する。 */
