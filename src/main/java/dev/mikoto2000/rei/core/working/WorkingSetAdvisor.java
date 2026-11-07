@@ -5,7 +5,6 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
-import java.util.List;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -64,28 +63,17 @@ public class WorkingSetAdvisor implements BaseAdvisor {
       return request;
     }
     String workingSetContext = workingSet.renderForPrompt();
-    if (Boolean.TRUE.equals(request.context().get("rei.contextProjection"))) {
-      if (!workingSetContext.isBlank()) publishContextInjected(workingSetContext);
-      var messages = new ArrayList<Message>(request.prompt().getInstructions());
-      messages.add(
-          org.springframework.ai.chat.messages.SystemMessage.builder()
-              .text(workingSetContext)
-              .metadata(java.util.Map.of("rei.workingSet", true))
-              .build());
-      return request.mutate().prompt(new Prompt(messages, request.prompt().getOptions())).build();
-    }
-    if (workingSetContext.isBlank()) return request;
-    publishContextInjected(workingSetContext);
-    UserMessage contextualMessage =
-        userMessage.mutate().text(workingSetContext + "\n\n" + userMessage.getText()).build();
-    Prompt prompt = request.prompt();
-    return request
-        .mutate()
-        .prompt(
-            new Prompt(
-                replaceUserMessage(prompt.getInstructions(), userMessage, contextualMessage),
-                prompt.getOptions()))
-        .build();
+    if (workingSetContext.isBlank()
+        && !Boolean.TRUE.equals(request.context().get("rei.contextProjection"))) return request;
+    if (!workingSetContext.isBlank()) publishContextInjected(workingSetContext);
+    var messages = new ArrayList<Message>(request.prompt().getInstructions());
+    messages.removeIf(m -> Boolean.TRUE.equals(m.getMetadata().get("rei.workingSet")));
+    messages.add(
+        org.springframework.ai.chat.messages.SystemMessage.builder()
+            .text(workingSetContext)
+            .metadata(java.util.Map.of("rei.workingSet", true))
+            .build());
+    return request.mutate().prompt(new Prompt(messages, request.prompt().getOptions())).build();
   }
 
   /** 作業中の情報管理の実行結果を受け取り、後続の処理へ反映する。 */
@@ -98,22 +86,6 @@ public class WorkingSetAdvisor implements BaseAdvisor {
   @Override
   public int getOrder() {
     return -90;
-  }
-
-  /** 指定された内容へ切り替えるため、利用者メッセージを置き換える。 */
-  private List<Message> replaceUserMessage(
-      List<Message> messages, UserMessage original, UserMessage replacement) {
-    List<Message> replaced = new ArrayList<>(messages.size());
-    boolean replacedFirst = false;
-    for (Message message : messages) {
-      if (!replacedFirst && message == original) {
-        replaced.add(replacement);
-        replacedFirst = true;
-      } else {
-        replaced.add(message);
-      }
-    }
-    return List.copyOf(replaced);
   }
 
   /** 実行状況を利用先で把握できるよう、文脈追加されたを通知する。 */

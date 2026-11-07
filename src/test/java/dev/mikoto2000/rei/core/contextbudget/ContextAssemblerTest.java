@@ -11,9 +11,12 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
@@ -227,6 +230,44 @@ class ContextAssemblerTest {
         .contains("deleted old path, moved new path")
         .doesNotContain("latest revision", "policy-v1");
     assertThat(raw.getContents()).contains("Working Set: old");
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void workingSetChangesOnlyTheTailAfterCompleteToolExchanges(boolean compressionEnabled) {
+    var properties = config();
+    properties.setEnabled(compressionEnabled);
+    var a = new ContextAssembler(
+        properties, estimator, new ConversationSummaryRepository(dir),
+        new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
+        (p, m, b, r) -> { throw new AssertionError("Short history must not be summarized"); },
+        null, null);
+    var current = new java.util.concurrent.atomic.AtomicReference<>("Working Set: a.java");
+    a.setWorkingSet(current::get);
+    var policy = new SystemMessage("policy");
+    var request = new UserMessage("request");
+    var marker = SystemMessage.builder().text("obsolete snapshot")
+        .metadata(Map.of("rei.workingSet", true)).build();
+    var call = AssistantMessage.builder().content("").toolCalls(
+        List.of(new AssistantMessage.ToolCall("id", "function", "readFile", "{}"))).build();
+    var result = ToolResponseMessage.builder().responses(
+        List.of(new ToolResponseMessage.ToolResponse("id", "readFile", "contents"))).build();
+    var raw = new Prompt(List.of(policy, request, marker, call, result));
+    var first = a.assemble(raw, "conversation", "run", () -> {});
+    current.set("Working Set: b.java");
+    var next = a.assemble(raw, "conversation", "run", () -> {});
+    assertThat(first.getInstructions().subList(0, 4)).containsExactly(policy, request, call, result);
+    assertThat(next.getInstructions().subList(0, 4))
+        .containsExactlyElementsOf(first.getInstructions().subList(0, 4));
+    assertThat(next.getInstructions()).hasSize(5);
+    assertThat(next.getInstructions().getLast().getText()).isEqualTo("Working Set: b.java");
+    assertThat(next.getContents()).doesNotContain("a.java", "obsolete snapshot");
+    current.set("");
+    var cleared = a.assemble(next, "conversation", "run", () -> {});
+    assertThat(cleared.getInstructions()).hasSize(5);
+    assertThat(cleared.getInstructions().getLast().getText()).contains("working set is empty");
+    assertThat(cleared.getContents()).doesNotContain("b.java");
+    assertThat(raw.getInstructions()).containsExactly(policy, request, marker, call, result);
   }
 
   /** 未満判定の境界値について、元のメッセージ一覧を維持することを確認する。 */

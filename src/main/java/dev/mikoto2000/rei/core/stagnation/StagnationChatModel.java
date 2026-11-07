@@ -641,7 +641,13 @@ public class StagnationChatModel implements ChatModel {
                     dev.mikoto2000.rei.toolcontract.ToolResultRejectedException.find(error);
                 if (rejected
                         instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read
-                    && java.util.Set.of("readReviewPages", "readRawToolResult", "claimReviewWorkItem", "readNextReviewWorkItem").contains(name))
+                    && java.util.Set.of(
+                            "readReviewPages",
+                            "readRawToolResult",
+                            "claimReviewWorkItem",
+                            "readNextReviewWorkItem",
+                            "listFile")
+                        .contains(name))
                   return context.toolReadCorrection(read.code(), read.getMessage());
                 if (rejected != null
                     && java.util.Set.of(
