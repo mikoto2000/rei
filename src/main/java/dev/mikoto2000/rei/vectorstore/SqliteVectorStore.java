@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.vectorstore;
 
 import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -38,12 +36,20 @@ public final class SqliteVectorStore
       """;
 
   /** データ取得元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Preserves the configured source for both SQL connections and the native client API.")
-  private final DataSource dataSource;
+  private final ConnectionAccess connections;
+
+  private final NativeClientAccess nativeClient;
+
+  @FunctionalInterface
+  private interface ConnectionAccess {
+    Connection open() throws SQLException;
+  }
+
+  /** Exposes the configured JDBC client for callers of the VectorStore native API. */
+  @FunctionalInterface
+  private interface NativeClientAccess {
+    Optional<DataSource> get();
+  }
 
   /** 埋め込み表現モデル。 */
   private final EmbeddingModel embeddingModel;
@@ -71,7 +77,8 @@ public final class SqliteVectorStore
       EmbeddingModel embeddingModel,
       JsonMapper objectMapper,
       boolean bm25Enabled) {
-    this.dataSource = dataSource;
+    this.connections = () -> dataSource.getConnection();
+    this.nativeClient = () -> Optional.of(dataSource);
     this.embeddingModel = embeddingModel;
     this.metadataWriter = objectMapper.writer();
     this.metadataReader = objectMapper.readerFor(new TypeReference<Map<String, Object>>() {});
@@ -106,7 +113,7 @@ public final class SqliteVectorStore
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @Override
   public List<VectorDocumentEntry> list() {
-    try (Connection connection = dataSource.getConnection();
+    try (Connection connection = connections.open();
         var statement =
             connection.prepareStatement(
                 """
@@ -227,7 +234,7 @@ public final class SqliteVectorStore
     }
     sql.append(" ORDER BY score DESC, v.chunk_id ASC");
     var results = new ArrayList<Document>();
-    try (var connection = dataSource.getConnection();
+    try (var connection = connections.open();
         var statement = connection.prepareStatement(sql.toString())) {
       statement.setQueryTimeout(5);
       bindParams(statement, params);
@@ -300,7 +307,7 @@ public final class SqliteVectorStore
     }
 
     List<ScoredDocument> scoredDocuments = new ArrayList<>();
-    try (Connection connection = dataSource.getConnection();
+    try (Connection connection = connections.open();
         var statement = connection.prepareStatement(sql.toString());
         var adjacentStatement = connection.prepareStatement(ADJACENT_LEXICAL_SCORE_SQL)) {
       bindParams(statement, params);
@@ -365,7 +372,7 @@ public final class SqliteVectorStore
     }
     String termsJson = writeJson(queryTerms);
     List<ScoredDocument> scoredDocuments = new ArrayList<>();
-    try (Connection connection = dataSource.getConnection();
+    try (Connection connection = connections.open();
         var statement =
             connection.prepareStatement(
                 """
@@ -437,7 +444,7 @@ public final class SqliteVectorStore
   @Override
   @SuppressWarnings("unchecked")
   public <T> Optional<T> getNativeClient() {
-    return Optional.of((T) dataSource);
+    return (Optional<T>) nativeClient.get();
   }
 
   /** 関連文書の検索に関する追加保存済み文書を処理する。 */
@@ -625,7 +632,7 @@ public final class SqliteVectorStore
 
   /** 関連文書の検索に関する初期化データ形式を処理する。 */
   private void initializeSchema() {
-    try (Connection connection = dataSource.getConnection();
+    try (Connection connection = connections.open();
         var statement = connection.createStatement()) {
       statement.executeUpdate("PRAGMA foreign_keys = ON");
       if (embeddingDimensions <= 0) {
@@ -803,7 +810,7 @@ public final class SqliteVectorStore
 
   /** 指定された一連の更新を反映した情報を作成する。 */
   private <T> T withTransaction(SqliteWork<T> work) {
-    try (Connection connection = dataSource.getConnection()) {
+    try (Connection connection = connections.open()) {
       connection.setAutoCommit(false);
       try {
         T result = work.run(connection);

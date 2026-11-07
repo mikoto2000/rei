@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
 import dev.mikoto2000.rei.vectorstore.LazySqliteVectorStore;
-import dev.mikoto2000.rei.vectorstore.SqliteVectorStore;
 import java.sql.Connection;
 import java.sql.Statement;
 import javax.sql.DataSource;
@@ -77,22 +76,7 @@ class VectorStoreConfigurationTest {
     LazySqliteVectorStore vectorStore =
         configuration.vectorStore(dataSource, embeddingModel, objectMapper);
 
-    vectorStore.getNativeClient();
-
-    assertSame(dataSource, extractDataSource(vectorStore));
-  }
-
-  /** {@code extractDataSource} の条件を再現するための補助情報を返す。 */
-  private DataSource extractDataSource(LazySqliteVectorStore vectorStore) {
-    try {
-      var delegateField = LazySqliteVectorStore.class.getDeclaredField("delegate");
-      delegateField.setAccessible(true);
-      SqliteVectorStore delegate = (SqliteVectorStore) delegateField.get(vectorStore);
-      var field = SqliteVectorStore.class.getDeclaredField("dataSource");
-      field.setAccessible(true);
-      return (DataSource) field.get(delegate);
-    } catch (ReflectiveOperationException e) {
-      throw new AssertionError(e);
-    }
+    assertSame(dataSource, vectorStore.<DataSource>getNativeClient().orElseThrow());
+    Mockito.verify(dataSource).getConnection();
   }
 }
