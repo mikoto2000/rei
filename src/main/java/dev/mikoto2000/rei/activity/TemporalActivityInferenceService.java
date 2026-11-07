@@ -32,6 +32,8 @@ public final class TemporalActivityInferenceService {
 
   /** 作業状況の把握に必要な予算失敗情報を扱う。 */
   public static final class BudgetFailure extends RuntimeException {
+    @java.io.Serial private static final long serialVersionUID = -7603892732009851504L;
+
     /** トークン数。 */
     final long tokens;
 
@@ -49,6 +51,8 @@ public final class TemporalActivityInferenceService {
 
   /** 作業状況の把握に必要なモデル失敗情報を扱う。 */
   public static final class ModelFailure extends IllegalArgumentException {
+    @java.io.Serial private static final long serialVersionUID = 896302713937212619L;
+
     /** トークン数。 */
     final long tokens;
 

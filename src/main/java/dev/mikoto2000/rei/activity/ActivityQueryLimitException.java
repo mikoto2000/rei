@@ -6,6 +6,8 @@ package dev.mikoto2000.rei.activity;
  * <p>No partial statistics are published after exceeding the query's evidence budget.
  */
 public class ActivityQueryLimitException extends RuntimeException {
+  @java.io.Serial private static final long serialVersionUID = -641438524938389927L;
+
   /** 既定の状態でActivityQueryLimitExceptionを初期化する。 */
   public ActivityQueryLimitException() {
     super("Activity analysis evidence limit exceeded");

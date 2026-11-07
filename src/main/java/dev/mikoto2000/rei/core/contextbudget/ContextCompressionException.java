@@ -11,6 +11,8 @@ import java.util.Objects;
  * text.
  */
 public final class ContextCompressionException extends RuntimeException {
+  @java.io.Serial private static final long serialVersionUID = -971115354147900606L;
+
   /** モデルへ渡す文脈の管理における理由の選択肢。 */
   public enum Reason {
     /** 入力に使える予算。 */

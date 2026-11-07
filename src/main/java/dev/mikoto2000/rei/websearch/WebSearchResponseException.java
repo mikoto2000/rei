@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.websearch;
 /** 検索結果の代わりに返された認証ページを、本文を含めずに通知する。 */
 public final class WebSearchResponseException extends IllegalStateException
     implements dev.mikoto2000.rei.toolcontract.ExternalReadFailure {
+  @java.io.Serial private static final long serialVersionUID = -5286037107127052442L;
+
   /** 検索先から返されたHTTPステータス。 */
   private final int status;
 

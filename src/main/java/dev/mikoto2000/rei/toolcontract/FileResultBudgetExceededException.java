@@ -4,6 +4,8 @@ import java.io.IOException;
 
 /** A bounded file result cannot retain its required metadata; the caller may narrow the request. */
 public final class FileResultBudgetExceededException extends IOException {
+  @java.io.Serial private static final long serialVersionUID = 7108371609297714309L;
+
   public static final String CODE = "file_result_budget_exceeded";
   public static final String MESSAGE =
       "検索・読み取り結果が出力上限を超えました。baseDir・includeGlob・検索語で対象を絞り、maxFiles・contextLinesを減らして再試行してください。";

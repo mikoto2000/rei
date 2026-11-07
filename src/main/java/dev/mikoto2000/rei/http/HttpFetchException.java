@@ -7,6 +7,8 @@ package dev.mikoto2000.rei.http;
  */
 public class HttpFetchException extends IllegalStateException
     implements dev.mikoto2000.rei.toolcontract.ExternalReadFailure {
+  @java.io.Serial private static final long serialVersionUID = 170070702826991801L;
+
   /** 外部情報の取得におけるコードの選択肢。 */
   public enum Code {
     /** URL否定許可。 */

@@ -604,6 +604,8 @@ public final class OperationalRules {
    * <p>Diagnostics contain only fixed text and validated field names, never rule values.
    */
   static final class InvalidDefinition extends IllegalArgumentException {
+    @java.io.Serial private static final long serialVersionUID = -3206397619695402522L;
+
     /** 指定された値や利用先を使って、InvalidDefinitionを初期化する。 */
     InvalidDefinition(String detail) {
       super(detail);

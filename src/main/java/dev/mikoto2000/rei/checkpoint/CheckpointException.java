@@ -5,6 +5,8 @@ import java.util.List;
 
 /** 作業の中断と再開を継続できない再開用の記録の状況を伝える例外。 */
 public class CheckpointException extends IllegalStateException {
+  @java.io.Serial private static final long serialVersionUID = 7743781050018747781L;
+
   /** 作業の中断と再開におけるコードの選択肢。 */
   public enum Code {
     /** 無効状態。 */

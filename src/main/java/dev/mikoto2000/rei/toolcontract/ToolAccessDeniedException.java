@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.toolcontract;
 
 /** アクセスを許可せず、安全な理由と復旧手順だけをモデルへ返す失敗。 */
 public final class ToolAccessDeniedException extends IllegalArgumentException {
+  @java.io.Serial private static final long serialVersionUID = 3285693904808510549L;
+
   private final String code;
   private final String diagnosticMessage;
   private final String guidance;

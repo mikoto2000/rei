@@ -19,6 +19,8 @@ class ConversationHistoryCacheTest {
   @TempDir Path root;
 
   private static final class CountingMapper extends ObjectMapper {
+    @java.io.Serial private static final long serialVersionUID = 936626646924548435L;
+
     final AtomicInteger reads = new AtomicInteger();
 
     CountingMapper() {

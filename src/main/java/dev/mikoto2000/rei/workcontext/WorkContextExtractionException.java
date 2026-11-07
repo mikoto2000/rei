@@ -8,6 +8,8 @@ import dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics;
  * <p>Controlled extraction diagnostics contain no supplied evidence or model output.
  */
 public final class WorkContextExtractionException extends IllegalArgumentException {
+  @java.io.Serial private static final long serialVersionUID = -3600503345069945635L;
+
   /** 作業文脈の引き継ぎにおける理由の選択肢。 */
   public enum Reason {
     /** 入力TOOLARGE。 */

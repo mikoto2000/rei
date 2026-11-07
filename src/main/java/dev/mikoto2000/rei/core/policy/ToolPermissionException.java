@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.core.policy;
 
 /** ツール利用の権限制御を継続できないツール権限の状況を伝える例外。 */
 public class ToolPermissionException extends SecurityException {
+  @java.io.Serial private static final long serialVersionUID = 391522595812323989L;
+
   /** 承認識別子。 */
   private String approvalId;
 

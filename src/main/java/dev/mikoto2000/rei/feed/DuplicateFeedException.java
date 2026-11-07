@@ -6,6 +6,8 @@ package dev.mikoto2000.rei.feed;
  * <p>Allows callers to distinguish duplicates from other registration failures.
  */
 public class DuplicateFeedException extends IllegalArgumentException {
+  @java.io.Serial private static final long serialVersionUID = -7341344645177866668L;
+
   /** 既定の状態でDuplicateFeedExceptionを初期化する。 */
   public DuplicateFeedException() {
     super("同じフィード URL は登録できません");

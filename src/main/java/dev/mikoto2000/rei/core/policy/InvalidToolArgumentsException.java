@@ -6,6 +6,8 @@ package dev.mikoto2000.rei.core.policy;
  * <p>Raised only by pure argument preflight, before approval or tool execution.
  */
 public final class InvalidToolArgumentsException extends IllegalArgumentException {
+  @java.io.Serial private static final long serialVersionUID = -5789073081601226960L;
+
   /** ツール利用の権限制御における種類の選択肢。 */
   public enum Kind {
     /** 検証。 */

@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.feed;
 
 /** フィードの購読と収集を継続できないフィード取得の状況を伝える例外。 */
 public class FeedFetchException extends RuntimeException {
+  @java.io.Serial private static final long serialVersionUID = 966535006471147515L;
+
 
   /** HTTP通信状態。 */
   private final Integer httpStatus;

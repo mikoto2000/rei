@@ -56,10 +56,14 @@ public final class BoundedToolLoop {
   }
 
   /** 会話の実行に必要な共有予算上限超過を扱う。 */
-  public static final class SharedBudgetExceeded extends RuntimeException {}
+  public static final class SharedBudgetExceeded extends RuntimeException {
+    @java.io.Serial private static final long serialVersionUID = 3639427452732658341L;
+  }
 
   /** 会話の実行に必要な最大手順一覧上限超過を扱う。 */
-  public static final class MaxStepsExceeded extends RuntimeException {}
+  public static final class MaxStepsExceeded extends RuntimeException {
+    @java.io.Serial private static final long serialVersionUID = 983093870818370120L;
+  }
 
   /** 会話の実行において、一時的なモデル失敗情報かどうかを判定する。 */
   private static boolean isTransientModelFailure(Throwable error) {

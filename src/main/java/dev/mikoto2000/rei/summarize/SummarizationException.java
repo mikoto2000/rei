@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.summarize;
 
 /** 情報の要約を継続できないSummarizationの状況を伝える例外。 */
 public class SummarizationException extends RuntimeException {
+  @java.io.Serial private static final long serialVersionUID = -8514079404255970433L;
+
 
   /** コード。 */
   private final String code;

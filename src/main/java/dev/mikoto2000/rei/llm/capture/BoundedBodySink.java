@@ -18,7 +18,9 @@ import okio.Timeout;
  */
 final class BoundedBodySink implements InvocationHandler {
   /** モデル応答の記録に必要なTooLargeを扱う。 */
-  static final class TooLarge extends IOException {}
+  static final class TooLarge extends IOException {
+    @java.io.Serial private static final long serialVersionUID = -785170235825669697L;
+  }
 
   /** 一時保持領域。 */
   private final Buffer buffer = new Buffer();

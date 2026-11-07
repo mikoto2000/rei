@@ -6,6 +6,8 @@ package dev.mikoto2000.rei.core.chat;
  * <p>Control flow after the tool batch is durably saved; never a failed or replayable tool.
  */
 public final class RunWaitingException extends RuntimeException {
+  @java.io.Serial private static final long serialVersionUID = -3046036717245041299L;
+
   /** 既定の状態でRunWaitingExceptionを初期化する。 */
   public RunWaitingException() {
     super("Run suspended for a saved continuation", null, false, false);

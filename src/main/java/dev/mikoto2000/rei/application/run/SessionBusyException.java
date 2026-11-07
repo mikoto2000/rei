@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.application.run;
 
 /** 実行の受付と状態管理を継続できない会話使用中の状況を伝える例外。 */
 public final class SessionBusyException extends RuntimeException {
+  @java.io.Serial private static final long serialVersionUID = -649168454270476171L;
+
   /** 所属プロジェクトの識別子／会話の識別子／実行の識別子。 */
   private final String projectId, sessionId, runId;
 

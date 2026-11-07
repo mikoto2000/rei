@@ -51,6 +51,8 @@ public interface SecretaryProvider {
   }
 
   final class Failure extends RuntimeException {
+    @java.io.Serial private static final long serialVersionUID = -5297793847430372968L;
+
     private final String code;
     private final int retry;
     private final boolean uncertain;

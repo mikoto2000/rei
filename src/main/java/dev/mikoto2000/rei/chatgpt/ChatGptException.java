@@ -6,6 +6,8 @@ package dev.mikoto2000.rei.chatgpt;
  * <p>Diagnostics carry only app-defined codes, never remote bodies, URLs or exception causes.
  */
 public final class ChatGptException extends RuntimeException {
+  @java.io.Serial private static final long serialVersionUID = -190890705976300918L;
+
   /** ChatGPTとの連携におけるコードの選択肢。 */
   public enum Code {
     /** 認証必須。 */

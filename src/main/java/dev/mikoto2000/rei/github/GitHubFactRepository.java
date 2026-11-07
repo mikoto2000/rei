@@ -379,6 +379,8 @@ public final class GitHubFactRepository {
 
   /** GitHubとの連携に必要な許容件数上限超過を扱う。 */
   public static final class CapacityExceeded extends RuntimeException {
+    @java.io.Serial private static final long serialVersionUID = -4022615689979518597L;
+
     /** 既定の状態でCapacityExceededを初期化する。 */
     public CapacityExceeded() {
       super("GitHub receipt capacity reached");
