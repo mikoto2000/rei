@@ -35,19 +35,23 @@ class ReviewReadingEfficiencyTest {
     var before = new AgentRunContext("before", "session", root, "project");
     String id;
     int offset;
-    try (var scope = AgentRunScope.open(before)) {
-      var job = reviews.beginReview(List.of("lesson.md"), "correctness", "v1");
-      id = job.id();
-      var first = reviews.readReviewFile(id, "lesson.md", job.targets().getFirst().version(), 0, 512);
-      offset = first.nextOffset();
-      reviews.confirmed(before, List.of(first));
-      reviews.submitReviewPage(id, "lesson.md", 0, offset, "saved assessment",
-          List.of(new ReviewTools.PageFinding("F1", "P2", "# Lesson", "saved finding")));
-      ledger.stop(id, ReviewTools.scope(before), true);
+    {
+      var scope = AgentRunScope.open(before);
+      try (scope) {
+        var job = reviews.beginReview(List.of("lesson.md"), "correctness", "v1");
+        id = job.id();
+        var first = reviews.readReviewFile(id, "lesson.md", job.targets().getFirst().version(), 0, 512);
+        offset = first.nextOffset();
+        reviews.confirmed(before, List.of(first));
+        reviews.submitReviewPage(id, "lesson.md", 0, offset, "saved assessment",
+            List.of(new ReviewTools.PageFinding("F1", "P2", "# Lesson", "saved finding")));
+        ledger.stop(id, ReviewTools.scope(before), true);
+      }
     }
     var resumed = new AgentRunContext("after", "session", root, "project");
     ledger.resume(id, ReviewTools.scope(before), ReviewTools.scope(resumed));
-    try (var scope = AgentRunScope.open(resumed)) {
+    var scope = AgentRunScope.open(resumed);
+    try (scope) {
       var page = reviews.readNextReviewWorkItem("legacy:" + id, null);
       assertThat(page.offset()).isEqualTo(offset);
       assertThat(page.content()).isEqualTo(lesson.substring(offset));
@@ -87,35 +91,39 @@ class ReviewReadingEfficiencyTest {
         prompt -> ContextBudgetManager.inputLimit(context, TokenEstimator.conservative(), prompt),
         100000);
     var owner = new AgentRunContext("run", "session", root, "project");
-    try (var active = AgentRunScope.open(owner)) {
-      var task = reviews.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L);
-      reviews.scanReviewSnapshot(task.id(), 100);
-      var page = reviews.readNextReviewWorkItem(task.id(), null);
-      assertThat(page.content()).isEqualTo(lesson);
-      assertThat(page.workItemId()).isNotBlank();
-      assertThat(page.attempt()).isNotBlank();
-      String wire = StorageDatabase.JSON.writeValueAsString(page);
-      assertThat(TokenEstimator.conservative().text(wire)).isGreaterThan(16000);
-      assertThat(StorageDatabase.JSON.readValue(wire, ReviewTools.Page.class)).isEqualTo(page);
-      assertThat(ReviewTools.receipt(wire).job()).isEqualTo(page.reviewJobId());
-      // Registered large review pages remain exact through context compression.
-      var compressor = new ToolResultCompressor(new RawToolResultStore(data), TokenEstimator.conservative(), 8000, 2000);
-      var message = org.springframework.ai.chat.messages.ToolResponseMessage.builder()
-          .responses(List.of(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse("read", "readNextReviewWorkItem", wire)))
-          .metadata(Map.of("rei.reviewReceipts", Map.of("read", ReviewTools.receipt(wire)),
-              "rei.deliveryPolicies", Map.of("read", ResultDelivery.Kind.FILE_CONTENT))).build();
-      assertThat(compressor.compact(message, "session", "run")).isEqualTo(message);
-      assertThatThrownBy(() -> reviews.submitReviewWorkItem(page.workItemId(), page.attempt(), "checked", List.of()))
-          .hasMessageContaining("SOURCE_NOT_DELIVERED");
-      reviews.confirmed(owner, List.of(page));
-      reviews.submitReviewWorkItem(page.workItemId(), page.attempt(), "checked", List.of());
-      assertThat(reviews.reviewTaskStatus(task.id()).state()).isEqualTo("COMPLETE");
-      reviews.requireComplete(owner);
-      assertThat(reviews.readNextReviewWorkItem(task.id(), null)).isNull();
+    {
+      var active = AgentRunScope.open(owner);
+      try (active) {
+        var task = reviews.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L);
+        reviews.scanReviewSnapshot(task.id(), 100);
+        var page = reviews.readNextReviewWorkItem(task.id(), null);
+        assertThat(page.content()).isEqualTo(lesson);
+        assertThat(page.workItemId()).isNotBlank();
+        assertThat(page.attempt()).isNotBlank();
+        String wire = StorageDatabase.JSON.writeValueAsString(page);
+        assertThat(TokenEstimator.conservative().text(wire)).isGreaterThan(16000);
+        assertThat(StorageDatabase.JSON.readValue(wire, ReviewTools.Page.class)).isEqualTo(page);
+        assertThat(ReviewTools.receipt(wire).job()).isEqualTo(page.reviewJobId());
+        // Registered large review pages remain exact through context compression.
+        var compressor = new ToolResultCompressor(new RawToolResultStore(data), TokenEstimator.conservative(), 8000, 2000);
+        var message = org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+            .responses(List.of(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse("read", "readNextReviewWorkItem", wire)))
+            .metadata(Map.of("rei.reviewReceipts", Map.of("read", ReviewTools.receipt(wire)),
+                "rei.deliveryPolicies", Map.of("read", ResultDelivery.Kind.FILE_CONTENT))).build();
+        assertThat(compressor.compact(message, "session", "run")).isEqualTo(message);
+        assertThatThrownBy(() -> reviews.submitReviewWorkItem(page.workItemId(), page.attempt(), "checked", List.of()))
+            .hasMessageContaining("SOURCE_NOT_DELIVERED");
+        reviews.confirmed(owner, List.of(page));
+        reviews.submitReviewWorkItem(page.workItemId(), page.attempt(), "checked", List.of());
+        assertThat(reviews.reviewTaskStatus(task.id()).state()).isEqualTo("COMPLETE");
+        reviews.requireComplete(owner);
+        assertThat(reviews.readNextReviewWorkItem(task.id(), null)).isNull();
+      }
     }
     // Same immutable lesson through the previous 2048-token acquisition budget.
     int oldReads = 0;
-    try (var active = AgentRunScope.open(new AgentRunContext("baseline", "baseline", root, "project"))) {
+    var active = AgentRunScope.open(new AgentRunContext("baseline", "baseline", root, "project"));
+    try (active) {
       var task = reviews.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L);
       reviews.scanReviewSnapshot(task.id(), 100);
       var joined = new StringBuilder();

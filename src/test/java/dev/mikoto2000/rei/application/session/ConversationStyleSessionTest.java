@@ -101,7 +101,8 @@ class ConversationStyleSessionTest {
             },
             false,
             router);
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       assertThat(shell.currentMetadata()).isNull();
       shell.responseStyle(ResponseStyle.CONVERSATION, false);
       var id = shell.currentSessionId();

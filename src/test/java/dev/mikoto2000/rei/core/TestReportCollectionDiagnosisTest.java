@@ -176,9 +176,10 @@ class TestReportCollectionDiagnosisTest {
             .filter(c -> c.getToolDefinition().name().equals("diagnoseTestReports"))
             .findFirst()
             .orElseThrow();
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-            new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", root))) {
+            new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", root));
+    try (scope) {
       var response = callback.call("{}");
       assertTrue(response.contains("STANDARD_DISCOVERY"));
       assertTrue(response.contains("FAILURE"));

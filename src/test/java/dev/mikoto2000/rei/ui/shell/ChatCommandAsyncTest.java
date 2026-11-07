@@ -52,7 +52,8 @@ class ChatCommandAsyncTest {
         new ChatCommand(mock(ChatExecutionService.class), mock(ChatResponseNarrator.class));
     command.setShellConversations(shell);
     var cli = new picocli.CommandLine(command);
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       var task = shell.submit("long task");
       assertThat(cli.execute("--mode", "CONVERSATION", "question")).isZero();
       assertThat(cli.execute("--run", task.runId(), "guidance")).isZero();
@@ -90,7 +91,8 @@ class ChatCommandAsyncTest {
                 repository, java.time.Clock.systemUTC()),
             router::submit));
     var cli = new picocli.CommandLine(command);
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       assertThat(cli.execute("start")).isZero();
       assertThat(cli.execute("guidance")).isZero();
       // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。

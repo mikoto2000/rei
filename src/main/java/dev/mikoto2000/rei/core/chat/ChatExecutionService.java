@@ -439,7 +439,8 @@ public class ChatExecutionService {
       String objective,
       OutputLimitRunBudget.LlmCallReservation reservation,
       String expectedModel) {
-    try (var scope = AgentRunScope.open(context)) {
+    var scope = AgentRunScope.open(context);
+    try (scope) {
       beginCancellation.run();
       Disposable stream = null;
       try {
@@ -517,7 +518,8 @@ public class ChatExecutionService {
       String promptText,
       UserInterventionQueue interventions,
       OutputLimitRunBudget.LlmCallReservation reservation) {
-    try (var scope = AgentRunScope.open(context)) {
+    var scope = AgentRunScope.open(context);
+    try (scope) {
       var terminalEvents = new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
       ChatExecutionResult result;
       boolean stopped;
@@ -1290,7 +1292,8 @@ public class ChatExecutionService {
               .chatResponse()
               .subscribe(
                   response -> {
-                    try (var scope = AgentRunScope.open(execution.runContext())) {
+                    var scope = AgentRunScope.open(execution.runContext());
+                    try (scope) {
                       var generation = response.getResult();
                       var metadata = generation == null ? null : generation.getMetadata();
                       var finishReason = metadata == null ? null : metadata.getFinishReason();

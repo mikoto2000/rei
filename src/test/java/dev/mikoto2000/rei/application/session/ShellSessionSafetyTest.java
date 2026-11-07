@@ -63,7 +63,8 @@ class ShellSessionSafetyTest {
     var shell =
         new ShellConversationService(
             projects, new SessionLifecycle(repo, Clock.systemUTC()), (c, p) -> {});
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       shell.submit("new input");
     }
     assertThat(query.listSessions(null, null, null).items())
@@ -109,7 +110,8 @@ class ShellSessionSafetyTest {
             projects,
             new SessionLifecycle(repo, Clock.systemUTC()),
             (c, p) -> calls.incrementAndGet());
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       assertThatThrownBy(() -> shell.submit("first")).isInstanceOf(IllegalStateException.class);
       assertThat(shell.currentSessionId()).isNull();
       assertThat(calls).hasValue(0);
@@ -140,7 +142,8 @@ class ShellSessionSafetyTest {
             (c, p) -> {
               if (reject.get()) throw new RejectedExecutionException();
             });
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       assertThatThrownBy(() -> shell.submit("first"))
           .isInstanceOf(RejectedExecutionException.class);
       assertThat(repo.findPage(null, null, 100)).isEmpty();
@@ -177,8 +180,11 @@ class ShellSessionSafetyTest {
     var shell = new ShellConversationService(projects, lifecycle, enqueue);
     var client = projects.newClient();
     String id;
-    try (var scope = client.open()) {
-      id = shell.submit("first").conversationId();
+    {
+      var scope = client.open();
+      try (scope) {
+        id = shell.submit("first").conversationId();
+      }
     }
     var web =
         new ChatSubmitService(
@@ -191,8 +197,11 @@ class ShellSessionSafetyTest {
             workers.submit(
                 () -> {
                   if (n % 2 == 0)
-                    try (var scope = client.open()) {
-                      shell.submit("shell " + n);
+                    {
+                      var scope = client.open();
+                      try (scope) {
+                        shell.submit("shell " + n);
+                      }
                     }
                   else web.submit("web " + n, project.id(), id);
                 }));

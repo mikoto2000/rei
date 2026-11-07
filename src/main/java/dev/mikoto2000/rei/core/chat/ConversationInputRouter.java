@@ -246,8 +246,11 @@ public final class ConversationInputRouter {
       registered.accept(execution);
       executor.execute(
           () -> {
-            try (var scope = ExecutionScope.open(execution)) {
-              work.accept(execution);
+            try {
+              var scope = ExecutionScope.open(execution);
+              try (scope) {
+                work.accept(execution);
+              }
             } finally {
               background.remove(execution.id());
               changed();
@@ -488,7 +491,8 @@ public final class ConversationInputRouter {
   /** 予約済みの停止要求を実行スレッドへ結び付け、子処理の開始前に確認する。 */
   private void executeCancellable(
       AgentRunContext context, Runnable operation, Consumer<Runnable> lifecycle) {
-    try (var scope = AgentRunScope.open(context)) {
+    var scope = AgentRunScope.open(context);
+    try (scope) {
       beginCancellation.run();
       try {
         lifecycle.accept(

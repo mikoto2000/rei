@@ -70,10 +70,13 @@ class ScheduleHttpTest {
       var repo = context.getBean(PersistentAgentScheduler.class);
       var dispatcher = context.getBean(AgentScheduleDispatcher.class);
       String id, cancelId;
-      try (var scope = AgentRunScope.open(new AgentRunContext("source", "session", dir, "p"))) {
-        id =
-            repo.scheduleInterval(Duration.ofMinutes(1), 2, "Inspect saved result", "session").id();
-        cancelId = repo.scheduleAfter(Duration.ZERO, "Do not execute", "session").id();
+      {
+        var scope = AgentRunScope.open(new AgentRunContext("source", "session", dir, "p"));
+        try (scope) {
+          id =
+              repo.scheduleInterval(Duration.ofMinutes(1), 2, "Inspect saved result", "session").id();
+          cancelId = repo.scheduleAfter(Duration.ZERO, "Do not execute", "session").id();
+        }
       }
       String path = "/projects/p/schedules/" + id;
       assertEquals(401, ReadHttpTest.send(client, port, path, "GET", null, false).statusCode());
@@ -127,7 +130,8 @@ class ScheduleHttpTest {
           409, ReadHttpTest.send(client, port, cancelPath, "POST", "{}", true).statusCode());
       // An actual persisted one-shot claim stands in for a run interrupted by restart.
       String uncertain;
-      try (var scope = AgentRunScope.open(new AgentRunContext("source", "session", dir, "p"))) {
+      var scope = AgentRunScope.open(new AgentRunContext("source", "session", dir, "p"));
+      try (scope) {
         uncertain = repo.scheduleAfter(Duration.ZERO, "Inspect uncertain effects", "session").id();
       }
       repo.activate("p", uncertain);

@@ -44,10 +44,12 @@ class SummaryToolsTest {
     var run =
         new AgentRunContext(
             "run", project.conversationId("chat:new-session"), project.root(), project.id());
-    try (var client = ProjectClientScope.open(projects.newClient())) {
+    var client = ProjectClientScope.open(projects.newClient());
+    try (client) {
       projects.cd(java.nio.file.Files.createDirectory(directory.resolve("other")).toString());
       assertThat(tools.getLastSummary().found()).isFalse();
-      try (var scope = AgentRunScope.open(run)) {
+      var scope = AgentRunScope.open(run);
+      try (scope) {
         var result = tools.getLastSummary();
         assertThat(result.found()).isTrue();
         assertThat(result.url()).isEqualTo("https://example.com/article");
@@ -63,7 +65,8 @@ class SummaryToolsTest {
     var tools = new SummaryTools(new ProjectRunStateStore(directory));
     assertThat(tools.getLastSummary().found()).isFalse();
     var run = new AgentRunContext("run", "chat:test", directory, UUID.randomUUID().toString());
-    try (var scope = AgentRunScope.open(run)) {
+    var scope = AgentRunScope.open(run);
+    try (scope) {
       assertThat(tools.getLastSummary().found()).isFalse();
       assertThat(tools.getLastSummary().url()).isNull();
     }

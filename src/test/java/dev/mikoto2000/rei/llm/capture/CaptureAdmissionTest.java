@@ -38,7 +38,8 @@ class CaptureAdmissionTest {
                 java.time.Clock.systemUTC()),
             router::submit);
     shell.setCaptures(store);
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       shell.submit("first");
       store.reserve(projects.currentClient(), shell.currentSessionId());
       var captured = shell.submit("second");
@@ -74,7 +75,8 @@ class CaptureAdmissionTest {
                 java.time.Clock.systemUTC()),
             router::submit);
     shell.setCaptures(store);
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       shell.submit("first");
       store.reserve(projects.currentClient(), shell.currentSessionId());
       shell.submit("second");

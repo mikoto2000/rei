@@ -149,7 +149,8 @@ class ExternalAgentEvaluationIntegrationTest {
                         MessageChatMemoryAdvisor.builder(memory).build(),
                         new ExternalAgentReviewAdvisor(service, memory))))
             .build();
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var options =
           OpenAiChatOptions.builder().toolContext(Map.of(RunExecutionContext.KEY, run)).build();
       var response =

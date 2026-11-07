@@ -174,9 +174,10 @@ class TestReportDiagnosisTest {
             .filter(c -> c.getToolDefinition().name().equals("diagnoseTestReport"))
             .findFirst()
             .orElseThrow();
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-            new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", root))) {
+            new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", root));
+    try (scope) {
       String response = callback.call("{\"path\":\"target/surefire-reports/TEST.xml\"}");
       assertTrue(response.contains("FAILURE"));
       assertTrue(response.contains("target/surefire-reports/TEST.xml"));

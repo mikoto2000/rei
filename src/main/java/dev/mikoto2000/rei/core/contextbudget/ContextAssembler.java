@@ -86,7 +86,8 @@ public class ContextAssembler {
   public void requireReviewed(dev.mikoto2000.rei.core.chat.AgentRunContext owner) {
     if (!requireReviewCoverage || reviewTools == null || owner == null || owner.projectId() == null)
       return;
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+    try (scope) {
       reviewTools.requireComplete(owner);
     }
   }

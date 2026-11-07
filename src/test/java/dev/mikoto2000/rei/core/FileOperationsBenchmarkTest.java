@@ -190,11 +190,11 @@ class FileOperationsBenchmarkTest {
     tools.setTextChangeSets(service);
     var times = new ArrayList<Long>();
     long input = 0, output = 0, reads = 0, readBytes = 0, writes = 0, writeBytes = 0;
-    try (var owner =
-            dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-                new dev.mikoto2000.rei.core.chat.AgentRunContext(
-                    "benchmark", "session", root, UUID.randomUUID().toString()));
-        var recording = new Recording()) {
+    var owner =
+        dev.mikoto2000.rei.core.chat.AgentRunScope.open(
+            new dev.mikoto2000.rei.core.chat.AgentRunContext(
+                "benchmark", "session", root, UUID.randomUUID().toString()));
+    try (owner; var recording = new Recording()) {
       recording.enable("jdk.FileRead").withThreshold(java.time.Duration.ZERO);
       recording.enable("jdk.FileWrite").withThreshold(java.time.Duration.ZERO);
       recording.start();

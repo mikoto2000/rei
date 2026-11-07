@@ -78,7 +78,8 @@ class ReviewValidationReuseTest {
             files,
             TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", root, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = tools.beginReview(List.of("source.pdf"), "correctness", "v1");
       var page =
           tools.readReviewFile(job.id(), "source.pdf", job.targets().getFirst().version(), 0, 512);
@@ -112,7 +113,8 @@ class ReviewValidationReuseTest {
     var tools =
         new ReviewTools(ledger, new RawToolResultStore(data), files, TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", root, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = tools.beginReview(List.of("a.md", "b.md"), "correctness", "v1");
       var page = tools.readReviewFile(job.id(), "a.md", job.targets().getFirst().version(), 0, 512);
       tools.confirmed(owner, List.of(page));

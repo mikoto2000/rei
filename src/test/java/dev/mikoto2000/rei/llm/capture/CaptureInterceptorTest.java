@@ -108,7 +108,7 @@ class CaptureInterceptorTest {
         new OkHttpClient.Builder().addInterceptor(new CaptureInterceptor(store, call)).build();
     try {
       byte[] bytes = "{\"model\":\"test\",\"messages\":[]}".getBytes(StandardCharsets.UTF_8);
-      try (var response =
+      var response =
           client
               .newCall(
                   new Request.Builder()
@@ -116,7 +116,8 @@ class CaptureInterceptorTest {
                           "http://127.0.0.1:" + server.getAddress().getPort() + "/chat/completions")
                       .post(RequestBody.create(bytes, MediaType.get("application/json")))
                       .build())
-              .execute()) {}
+              .execute();
+      try (response) {}
       var attempt = store.attempts("r").getFirst();
       assertThat(attempt.sendState()).isEqualTo("HTTP_RESPONSE");
       assertThat(attempt.httpStatus()).isEqualTo(200);
@@ -179,14 +180,15 @@ class CaptureInterceptorTest {
                           .body(ResponseBody.create("", null))
                           .build())
               .build();
-      try (var response =
+      var response =
           client
               .newCall(
                   new Request.Builder()
                       .url("http://example.invalid/chat/completions")
                       .post(body)
                       .build())
-              .execute()) {}
+              .execute();
+      try (response) {}
       assertThat(writes.get()).isZero();
       assertThat(store.attempts("r").getFirst().captureState()).startsWith("SKIPPED_");
       assertThatThrownBy(() -> store.body(store.attempts("r").getFirst().attemptId()))

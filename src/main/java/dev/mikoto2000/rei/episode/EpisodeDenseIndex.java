@@ -66,42 +66,45 @@ public class EpisodeDenseIndex {
     if (pending.isEmpty()) return;
     String worker = UUID.randomUUID().toString();
     if (!repository.acquire("__episode_dense_index", worker, 600)) return;
-    try (var scope = ModelCallBudgetScope.open(budget)) {
-      for (var e : repository.pendingDense(session, 50, generation)) {
-        if (Thread.currentThread().isInterrupted())
-          throw new java.util.concurrent.CancellationException();
-        if (!sourceAvailable.test(e)) continue;
-        String content =
-            e.title()
-                + " "
-                + e.summary()
-                + " "
-                + e.claims().stream()
-                    .map(c -> c.kind() + " " + c.evidence() + " " + c.text())
-                    .collect(java.util.stream.Collectors.joining(" "));
-        var document =
-            Document.builder()
-                .id(e.id())
-                .text(content.substring(0, Math.min(4000, content.length())))
-                .metadata(
-                    Map.of(
-                        "docId",
-                        e.projectId(),
-                        "source",
-                        e.id(),
-                        "chunkIndex",
-                        0,
-                        "ingestedAt",
-                        e.occurredAt(),
-                        "episodeId",
-                        e.id(),
-                        "revision",
-                        e.revision()))
-                .build();
-        replaceVector.accept(e, document);
-        if (!repository.markDense(e, generation)) repository.invalidateDense(e.id());
-        else if (budget instanceof dev.mikoto2000.rei.memory.service.AutoSleepExecution auto)
-          auto.progressSaved();
+    try {
+      var scope = ModelCallBudgetScope.open(budget);
+      try (scope) {
+        for (var e : repository.pendingDense(session, 50, generation)) {
+          if (Thread.currentThread().isInterrupted())
+            throw new java.util.concurrent.CancellationException();
+          if (!sourceAvailable.test(e)) continue;
+          String content =
+              e.title()
+                  + " "
+                  + e.summary()
+                  + " "
+                  + e.claims().stream()
+                      .map(c -> c.kind() + " " + c.evidence() + " " + c.text())
+                      .collect(java.util.stream.Collectors.joining(" "));
+          var document =
+              Document.builder()
+                  .id(e.id())
+                  .text(content.substring(0, Math.min(4000, content.length())))
+                  .metadata(
+                      Map.of(
+                          "docId",
+                          e.projectId(),
+                          "source",
+                          e.id(),
+                          "chunkIndex",
+                          0,
+                          "ingestedAt",
+                          e.occurredAt(),
+                          "episodeId",
+                          e.id(),
+                          "revision",
+                          e.revision()))
+                  .build();
+          replaceVector.accept(e, document);
+          if (!repository.markDense(e, generation)) repository.invalidateDense(e.id());
+          else if (budget instanceof dev.mikoto2000.rei.memory.service.AutoSleepExecution auto)
+            auto.progressSaved();
+        }
       }
     } finally {
       repository.release("__episode_dense_index", worker);

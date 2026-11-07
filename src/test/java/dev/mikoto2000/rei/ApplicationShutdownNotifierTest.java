@@ -70,7 +70,8 @@ class ApplicationShutdownNotifierTest {
     var bus = new InMemoryAgentEventBus();
     var received = new ArrayList<AgentEvent>();
     bus.subscribe(received::add);
-    try (var context = new GenericApplicationContext()) {
+    var context = new GenericApplicationContext();
+    try (context) {
       var notifier =
           new ApplicationShutdownNotifier(bus, new AgentEventFactory(Clock.systemUTC()), context);
       context.addApplicationListener(notifier);

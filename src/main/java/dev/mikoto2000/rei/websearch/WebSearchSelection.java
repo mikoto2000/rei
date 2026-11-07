@@ -111,7 +111,8 @@ public final class WebSearchSelection {
     properties.validateSelection();
     Map<String, Candidate> unique = new LinkedHashMap<>();
     int calls = 0, rank = 0, observations = 0;
-    try (var budget = SearchRequestBudget.enter(properties.getMaxSearchApiCalls())) {
+    var budget = SearchRequestBudget.enter(properties.getMaxSearchApiCalls());
+    try (budget) {
       for (String planned : planner.plan(query)) {
         if (calls >= properties.getMaxSearchQueries() || SearchRequestBudget.exhausted()) break;
         FetchScope.current().check();

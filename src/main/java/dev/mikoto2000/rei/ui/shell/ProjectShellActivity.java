@@ -234,7 +234,8 @@ public class ProjectShellActivity implements AgentEventListener {
     if (client == null || renderer == null) return;
     String selected;
     ProjectContext selectedProject;
-    try (var scope = client.open()) {
+    var scope = client.open();
+    try (scope) {
       selected = currentSessionId.get();
       selectedProject = currentProject.get();
     }

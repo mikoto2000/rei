@@ -63,9 +63,12 @@ public final class ToolLoopSupport {
   /** 要求された処理を実行する。 */
   public ToolExecutionResult execute(Prompt prompt, ChatResponse response) {
     response = inheritFileContinuations(prompt, response);
-    try (var lease = RunCancellation.enterChild(prompt);
-        var readBudget = dev.mikoto2000.rei.tooldelivery.FileReadContext.open(prompt, response)) {
-      return deliveryMetadata(prompt, manager.executeToolCalls(prompt, response));
+    var lease = RunCancellation.enterChild(prompt);
+    try (lease) {
+      var readBudget = dev.mikoto2000.rei.tooldelivery.FileReadContext.open(prompt, response);
+      try (readBudget) {
+        return deliveryMetadata(prompt, manager.executeToolCalls(prompt, response));
+      }
     }
   }
 
@@ -229,9 +232,10 @@ public final class ToolLoopSupport {
       RunContinuation.PendingTools pending,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context,
       boolean replay) {
-    try (var readBudget =
+    var readBudget =
         dev.mikoto2000.rei.tooldelivery.FileReadContext.open(
-            prompt, pending.calls().size(), pending.text() + pending.calls())) {
+            prompt, pending.calls().size(), pending.text() + pending.calls());
+    try (readBudget) {
       return executePendingWithinBudget(prompt, pending, context, replay);
     }
   }
@@ -298,17 +302,20 @@ public final class ToolLoopSupport {
         context.reportToolPermissionFailure(call.id(), call.name(), denied);
         throw denied;
       }
-      try (var lease = RunCancellation.enterChild(prompt)) {
-        var values = new java.util.HashMap<String, Object>();
-        if (options.getToolContext() != null) values.putAll(options.getToolContext());
-        values.put("toolCallId", call.id());
-        String result =
-            callbacks
-                .get(call.name())
-                .call(call.arguments(), new org.springframework.ai.chat.model.ToolContext(values));
-        completed.add(
-            new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
-                call.id(), call.name(), result));
+      try {
+        var lease = RunCancellation.enterChild(prompt);
+        try (lease) {
+          var values = new java.util.HashMap<String, Object>();
+          if (options.getToolContext() != null) values.putAll(options.getToolContext());
+          values.put("toolCallId", call.id());
+          String result =
+              callbacks
+                  .get(call.name())
+                  .call(call.arguments(), new org.springframework.ai.chat.model.ToolContext(values));
+          completed.add(
+              new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                  call.id(), call.name(), result));
+        }
       } catch (RuntimeException error) {
         for (Throwable cause : RunCancellation.causes(error)) {
           if (cause instanceof dev.mikoto2000.rei.core.policy.ToolPermissionException permission

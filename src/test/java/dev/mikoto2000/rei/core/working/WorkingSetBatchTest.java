@@ -21,9 +21,11 @@ class WorkingSetBatchTest {
     var file = root.resolve("working.json");
     var set = new WorkingSet(50, Clock.systemUTC());
     set.enablePersistence(file);
-    try (var outer = set.batchPersistence()) {
+    var outer = set.batchPersistence();
+    try (outer) {
       for (int i = 0; i < 50; i++) {
-        try (var inner = set.batchPersistence()) {
+        var inner = set.batchPersistence();
+        try (inner) {
           set.recordRead(root.resolve("file-" + i));
         }
         assertEquals(i + 1, set.getFiles().size());
@@ -48,7 +50,8 @@ class WorkingSetBatchTest {
     assertThrows(
         IllegalStateException.class,
         () -> {
-          try (var batch = set.batchPersistence()) {
+          var batch = set.batchPersistence();
+          try (batch) {
             set.recordRead(root.resolve("one"));
             set.recordRead(root.resolve("two"));
             assertFalse(set.contains(root.resolve("one")));
@@ -66,8 +69,8 @@ class WorkingSetBatchTest {
     var file = root.resolve("working.json");
     var set = new WorkingSet();
     set.enablePersistence(file);
-    try (var batch = set.batchPersistence();
-        var pool = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+    var batch = set.batchPersistence();
+    try (batch; var pool = java.util.concurrent.Executors.newSingleThreadExecutor()) {
       set.recordRead(root.resolve("one"));
       pool.submit(() -> set.recordRead(root.resolve("two")))
           .get(5, java.util.concurrent.TimeUnit.SECONDS);

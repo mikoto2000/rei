@@ -307,53 +307,56 @@ public final class DiagnosedRepairService {
             .params(id, owner.projectId())
             .update()
         != 1) throw new IllegalStateException("Repair already claimed");
-    try (var lease = leases.activate(id)) {
-      SelfPatchRepairService.Cycle bounded =
-          (path, request, budget) -> {
-            var observed = capture.capture(path, budget);
-            // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-            if (!observed.complete() || observed.changedFiles().size() > 32)
-              throw new IOException("Repair patch exceeds 32 files or is incomplete");
-            return cycle.verify(path, request, Math.min(deadline, budget));
-          };
-      var verifier =
-          new SelfPatchRepairService(
-              bounded,
-              capture,
-              (path, repair, budget) -> {
-                SelfPatchReviewService.remaining(Math.min(deadline, budget), 1);
-                var reproduced =
-                    new TestReportDiagnosisService().read(path, saved.diagnosis().path());
-                requireFailure(reproduced);
-                if (!failureIdentities(reproduced).equals(failureIdentities(saved.diagnosis())))
-                  throw new IOException("Failure identities changed; diagnose before applying");
-                var receipt =
-                    applyRepair.run(
-                        project(owner, path),
-                        new ApplyRepair(repair.id(), repair.proposalSha256(), writer));
-                return new SelfPatchRepairService.Receipt(
-                    receipt.id(),
-                    receipt.status(),
-                    receipt.proposedSha256(),
-                    receipt.currentSha256());
-              });
-      var result =
-          verifier.verify(
-              root,
-              new SelfPatchRepairService.Request(
-                  saved.testCommand(),
-                  saved.timeoutSeconds(),
-                  List.of(new SelfPatchRepairService.Repair(id, saved.changeHash()))),
-              deadline);
-      RunCancellation.propagate(null);
-      SelfPatchReviewService.remaining(deadline, 1);
-      leases.heartbeat(id);
-      if (db.sql(
-                  "UPDATE diagnosed_repairs SET status=?,result=? WHERE id=? AND project=? AND status='STARTED'")
-              .params(result.status(), encode(result), id, owner.projectId())
-              .update()
-          != 1) throw new IOException("Repair receipt unavailable");
-      return view(owner, new Stored(saved, result.status(), result));
+    try {
+      var lease = leases.activate(id);
+      try (lease) {
+        SelfPatchRepairService.Cycle bounded =
+            (path, request, budget) -> {
+              var observed = capture.capture(path, budget);
+              // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
+              if (!observed.complete() || observed.changedFiles().size() > 32)
+                throw new IOException("Repair patch exceeds 32 files or is incomplete");
+              return cycle.verify(path, request, Math.min(deadline, budget));
+            };
+        var verifier =
+            new SelfPatchRepairService(
+                bounded,
+                capture,
+                (path, repair, budget) -> {
+                  SelfPatchReviewService.remaining(Math.min(deadline, budget), 1);
+                  var reproduced =
+                      new TestReportDiagnosisService().read(path, saved.diagnosis().path());
+                  requireFailure(reproduced);
+                  if (!failureIdentities(reproduced).equals(failureIdentities(saved.diagnosis())))
+                    throw new IOException("Failure identities changed; diagnose before applying");
+                  var receipt =
+                      applyRepair.run(
+                          project(owner, path),
+                          new ApplyRepair(repair.id(), repair.proposalSha256(), writer));
+                  return new SelfPatchRepairService.Receipt(
+                      receipt.id(),
+                      receipt.status(),
+                      receipt.proposedSha256(),
+                      receipt.currentSha256());
+                });
+        var result =
+            verifier.verify(
+                root,
+                new SelfPatchRepairService.Request(
+                    saved.testCommand(),
+                    saved.timeoutSeconds(),
+                    List.of(new SelfPatchRepairService.Repair(id, saved.changeHash()))),
+                deadline);
+        RunCancellation.propagate(null);
+        SelfPatchReviewService.remaining(deadline, 1);
+        leases.heartbeat(id);
+        if (db.sql(
+                    "UPDATE diagnosed_repairs SET status=?,result=? WHERE id=? AND project=? AND status='STARTED'")
+                .params(result.status(), encode(result), id, owner.projectId())
+                .update()
+            != 1) throw new IOException("Repair receipt unavailable");
+        return view(owner, new Stored(saved, result.status(), result));
+      }
     } catch (IOException | RuntimeException error) {
       try {
         db.sql(

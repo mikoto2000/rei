@@ -45,7 +45,8 @@ class ReviewDeliveryBoundaryTest {
             new Tools(),
             TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", dir, "project");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var job = reviews.beginReview(List.of("lesson.md"), "correctness", "v1");
       var callbacks = DeliveryToolRegistration.provider(reviews).getToolCallbacks();
       var options = OpenAiChatOptions.builder().toolCallbacks(callbacks).build();

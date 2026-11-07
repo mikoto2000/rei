@@ -169,10 +169,11 @@ class EpisodeFederatedSearchTest {
             null,
             null,
             8);
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.core.chat.AgentRunScope.open(
             new dev.mikoto2000.rei.core.chat.AgentRunContext(
-                "current", "s", java.nio.file.Path.of("."), project))) {
+                "current", "s", java.nio.file.Path.of("."), project));
+    try (scope) {
       service.search(request, null);
     }
     verify(history, atLeastOnce()).search(argThat(r -> r.query().contains("CLI")));

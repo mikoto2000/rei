@@ -106,7 +106,8 @@ public class AgentRunConfiguration {
               try {
                 agentRunExecutor.execute(
                     () -> {
-                      try (var scope = AgentRunScope.open(context)) {
+                      var scope = AgentRunScope.open(context);
+                      try (scope) {
                         narrator.narrateCompletedRun(result.text());
                       }
                     });

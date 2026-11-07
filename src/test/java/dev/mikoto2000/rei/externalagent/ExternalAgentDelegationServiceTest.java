@@ -233,8 +233,8 @@ class ExternalAgentDelegationServiceTest {
             events::add,
             Optional.empty());
     var run = run("Codex にレビューさせて");
-    try (var scope = AgentRunScope.open(run.runContext());
-        var pool = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+    var scope = AgentRunScope.open(run.runContext());
+    try (scope; var pool = java.util.concurrent.Executors.newSingleThreadExecutor()) {
       cancellation.begin(null);
       var future = pool.submit(() -> service.review(run, "review", null, ""));
       assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS));

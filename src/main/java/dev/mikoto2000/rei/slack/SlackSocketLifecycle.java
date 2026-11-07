@@ -19,6 +19,10 @@ import org.springframework.context.SmartLifecycle;
 public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable {
   /** Slackとの連携に必要な接続を扱う。 */
   public interface Connection extends AutoCloseable {
+    /** Closes the connection without a checked interruption contract. */
+    @Override
+    void close();
+
     /** Slackとの連携に関するpumpを処理する。 */
     void pump();
   }

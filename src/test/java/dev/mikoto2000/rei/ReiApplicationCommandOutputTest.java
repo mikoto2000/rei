@@ -42,7 +42,8 @@ class ReiApplicationCommandOutputTest {
     root.addSubcommand("feed", new dev.mikoto2000.rei.feed.command.FeedCommand());
     var output = configureOutput(root, encoding);
     var writer = root.getErr();
-    try (var console = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession()) {
+    var console = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession();
+    try (console) {
       assertEquals(2, root.execute("feed"));
       org.assertj.core.api.Assertions.assertThat(output.toString(Charset.forName(encoding)))
           .contains("RSS/Atom フィードを操作します", "フィードを追加します");

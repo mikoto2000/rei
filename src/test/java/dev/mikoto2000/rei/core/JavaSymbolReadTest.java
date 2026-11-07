@@ -208,10 +208,11 @@ class JavaSymbolReadTest {
             .filter(tool -> tool.getToolDefinition().name().equals("readMultiFile"))
             .findFirst()
             .orElseThrow();
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.core.chat.AgentRunScope.open(
             new dev.mikoto2000.rei.core.chat.AgentRunContext(
-                "symbol", "session", root, UUID.randomUUID().toString()))) {
+                "symbol", "session", root, UUID.randomUUID().toString()));
+    try (scope) {
       var value =
           new com.fasterxml.jackson.databind.ObjectMapper()
               .readTree(

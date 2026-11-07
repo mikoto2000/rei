@@ -47,14 +47,15 @@ class StorageReportsTest {
             mock(RetentionExecutor.class),
             mock(StorageMaintenance.class),
             mock(AutomaticRetention.class));
-    try (var scope =
+    var scope =
         AgentRunScope.open(
             new AgentRunContext(
                 "run",
                 "session",
                 java.nio.file.Path.of("."),
                 project,
-                AgentRunContext.RequestSource.WEB))) {
+                AgentRunContext.RequestSource.WEB));
+    try (scope) {
       assertTrue(
           command.reportPlan("raw-results", "current", 100, 16777216).contains("scope=" + project));
     }

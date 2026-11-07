@@ -128,7 +128,8 @@ class TimingIntegrationAdaptersTest {
     var bus = new InMemoryAgentEventBus();
     var events = new AgentEventFactory(Clock.systemUTC());
     store.beginRun("run", "project", "session");
-    try (var observer = new TimingEventObserver(store, bus)) {
+    var observer = new TimingEventObserver(store, bus);
+    try (observer) {
       bus.publish(events.toolStarted("call", tool, "ARGUMENT-SECRET").withOwnership(owner));
       tick.set(8);
       bus.publish(events.toolCompleted("call", tool, 99999, "RESULT-SECRET").withOwnership(owner));

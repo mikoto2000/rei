@@ -28,23 +28,26 @@ class CancelledActiveStateTest {
     var task = new TaskState();
     var plan = new ActionPlan();
     var checkpoint = new CheckpointStore();
-    try (var scope = AgentRunScope.open(old)) {
-      task.start("abandoned goal");
-      task.addPending("abandoned pending");
-      plan.addStep("abandoned step");
-      checkpoint.save(
-          new TurnCheckpoint(
-              "task",
-              "abandoned goal",
-              null,
-              List.of(),
-              List.of(),
-              List.of("changed-file.txt"),
-              null,
-              null,
-              "abandoned resume hint",
-              "test",
-              "now"));
+    {
+      var scope = AgentRunScope.open(old);
+      try (scope) {
+        task.start("abandoned goal");
+        task.addPending("abandoned pending");
+        plan.addStep("abandoned step");
+        checkpoint.save(
+            new TurnCheckpoint(
+                "task",
+                "abandoned goal",
+                null,
+                List.of(),
+                List.of(),
+                List.of("changed-file.txt"),
+                null,
+                null,
+                "abandoned resume hint",
+                "test",
+                "now"));
+      }
     }
     turns.start(old, "abandoned goal");
     turns.finish(old, ConversationTurnStore.Status.CANCELLED);
@@ -62,7 +65,8 @@ class CancelledActiveStateTest {
     assertThat(task.pending()).containsExactly("abandoned pending");
     assertThat(plan.steps()).hasSize(1);
     assertThat(checkpoint.latest()).isPresent();
-    try (var scope = AgentRunScope.open(current)) {
+    var scope = AgentRunScope.open(current);
+    try (scope) {
       task.reset();
       task.start("new user task");
       plan.restore(List.of());

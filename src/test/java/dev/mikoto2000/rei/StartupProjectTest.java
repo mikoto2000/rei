@@ -34,10 +34,13 @@ class StartupProjectTest {
     var root = Files.createDirectory(temp.resolve("project with spaces"));
     var service = new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json")));
     ProjectContext expected;
-    try (var scope = service.newClient().open()) {
-      assertThat(new CommandLine(new ProjectCommand.CdCommand(service)).execute(root.toString()))
-          .isZero();
-      expected = service.currentContext();
+    {
+      var scope = service.newClient().open();
+      try (scope) {
+        assertThat(new CommandLine(new ProjectCommand.CdCommand(service)).execute(root.toString()))
+            .isZero();
+        expected = service.currentContext();
+      }
     }
     for (String option : new String[] {"--project", "-p"}) {
       var app = mock(ReiApplication.class, CALLS_REAL_METHODS);
@@ -58,7 +61,8 @@ class StartupProjectTest {
       app.run(new String[] {option, root.toString()});
       verify(app).runShell(any(), any());
       assertThat(ProjectService.contextForOperation()).isNull();
-      try (var scope = service.newClient().open()) {
+      var scope = service.newClient().open();
+      try (scope) {
         assertThat(service.currentProject()).isEqualTo(temp);
       }
     }
@@ -105,7 +109,8 @@ class StartupProjectTest {
   void invalidPathsDoNotStartShellOrChangeRegistryOrSelection() throws Exception {
     var file = temp.resolve("projects.json");
     var service = new ProjectService(temp, new ProjectRegistry(file));
-    try (var scope = service.newClient().open()) {
+    var scope = service.newClient().open();
+    try (scope) {
       service.cd(temp.toString());
       var before = Files.readString(file);
       var regular = Files.writeString(temp.resolve("README.md"), "text");

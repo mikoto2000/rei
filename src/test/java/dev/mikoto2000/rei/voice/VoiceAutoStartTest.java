@@ -309,24 +309,27 @@ class VoiceAutoStartTest {
                 }
               return Path.of("unused");
             });
-    try (var voice = coordinator()) {
-      var command = command(voice);
-      command.autoStart(true, writer::println);
-      assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
-      if (close) {
-        command.closeAutoStart();
-        voice.close();
-      } else assertThat(command.off()).isZero();
-      release.countDown();
-      command.autoStart(true, writer::println);
-      // Wait for the worker scope to close rather than relying on a sleep.
-      await()
-          .atMost(Duration.ofSeconds(3))
-          .untilAsserted(() -> assertThat(command.autoStartRunning()).isFalse());
-      assertThat(captureOpens).hasValue(0);
-      assertThat(backendOpens).hasValue(0);
-      assertThat(voice.state())
-          .isEqualTo(close ? VoiceInputCoordinator.State.CLOSED : VoiceInputCoordinator.State.OFF);
+    try {
+      var voice = coordinator();
+      try (voice) {
+        var command = command(voice);
+        command.autoStart(true, writer::println);
+        assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();
+        if (close) {
+          command.closeAutoStart();
+          voice.close();
+        } else assertThat(command.off()).isZero();
+        release.countDown();
+        command.autoStart(true, writer::println);
+        // Wait for the worker scope to close rather than relying on a sleep.
+        await()
+            .atMost(Duration.ofSeconds(3))
+            .untilAsserted(() -> assertThat(command.autoStartRunning()).isFalse());
+        assertThat(captureOpens).hasValue(0);
+        assertThat(backendOpens).hasValue(0);
+        assertThat(voice.state())
+            .isEqualTo(close ? VoiceInputCoordinator.State.CLOSED : VoiceInputCoordinator.State.OFF);
+      }
     } finally {
       release.countDown();
     }
@@ -418,13 +421,14 @@ class VoiceAutoStartTest {
   void offOrCloseDuringNativeStartupCancelsItAndCannotReopenMicrophone(boolean close)
       throws Exception {
     var entered = new CountDownLatch(1);
-    try (var voice =
+    var voice =
         coordinator(
             settings -> {
               entered.countDown();
               Thread.sleep(60000);
               throw new AssertionError();
-            })) {
+            });
+    try (voice) {
       var command = command(voice);
       command.autoStart(true, writer::println);
       assertThat(entered.await(3, TimeUnit.SECONDS)).isTrue();

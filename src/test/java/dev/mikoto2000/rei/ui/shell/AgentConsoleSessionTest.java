@@ -27,8 +27,9 @@ class AgentConsoleSessionTest {
       var run =
           executor.submit(
               () -> {
-                try (var scope =
-                    AgentRunScope.open(new AgentRunContext("run", "chat:main", Path.of(".")))) {
+                var scope =
+                    AgentRunScope.open(new AgentRunContext("run", "chat:main", Path.of(".")));
+                try (scope) {
                   entered.countDown();
                   release.await();
                   routed.println("raw tool output");

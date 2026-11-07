@@ -187,7 +187,8 @@ public class GoalWaitService {
             reason,
             snapshot,
             () -> {
-              try (var scope = AgentRunScope.open(owner)) {
+              var scope = AgentRunScope.open(owner);
+              try (scope) {
                 return scheduleDependencyWait.apply(
                     new DependencyWait(
                         dependency, remaining, "Resume verified Goal " + id, goal.sessionId()));

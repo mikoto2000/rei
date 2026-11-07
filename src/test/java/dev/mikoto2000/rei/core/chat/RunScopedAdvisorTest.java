@@ -104,7 +104,8 @@ class RunScopedAdvisorTest {
             .defaultOptions(org.springframework.ai.model.tool.ToolCallingChatOptions.builder())
             .defaultAdvisors(new RunScopedAdvisor(delegate))
             .build();
-    try (var scope = AgentRunScope.open(run)) {
+    var scope = AgentRunScope.open(run);
+    try (scope) {
       assertThat(client.prompt("nested").stream().content().blockLast()).isEqualTo("ok");
     }
   }

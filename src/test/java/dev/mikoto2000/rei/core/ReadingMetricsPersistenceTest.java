@@ -148,9 +148,12 @@ class ReadingMetricsPersistenceTest {
             write -> {
               if (write) writes.incrementAndGet();
             });
-    try (var scope = AgentRunScope.open(first)) {
-      try (var outer = ReadingMetrics.operation("outer")) {
-        try (var inner = ReadingMetrics.operation("inner", store)) {
+    var scope = AgentRunScope.open(first);
+    try (scope) {
+      var outer = ReadingMetrics.operation("outer");
+      try (outer) {
+        var inner = ReadingMetrics.operation("inner", store);
+        try (inner) {
           ReadingMetrics.add("count", 4);
         }
         assertThat(writes.get()).isZero();
@@ -161,7 +164,8 @@ class ReadingMetricsPersistenceTest {
           .containsEntry("toolCalls", 2L)
           .containsEntry("count", 4L)
           .containsKeys("innerNanos", "outerNanos");
-      try (var next = ReadingMetrics.operation("next", store)) {}
+      var next = ReadingMetrics.operation("next", store);
+      try (next) {}
       assertThat(writes.get()).isEqualTo(2);
     }
   }
@@ -175,18 +179,23 @@ class ReadingMetricsPersistenceTest {
               if (write) writes.incrementAndGet();
               throw new IllegalStateException("unavailable");
             });
-    try (var scope = AgentRunScope.open(first)) {
+    var scope = AgentRunScope.open(first);
+    try (scope) {
       assertThatThrownBy(
               () -> {
-                try (var outer = ReadingMetrics.operation("outer", failed);
-                    var inner = ReadingMetrics.operation("inner", failed)) {
-                  throw new IllegalArgumentException("operation failed");
+                var outer = ReadingMetrics.operation("outer", failed);
+                try (outer) {
+                  var inner = ReadingMetrics.operation("inner", failed);
+                  try (inner) {
+                    throw new IllegalArgumentException("operation failed");
+                  }
                 }
               })
           .isInstanceOf(IllegalArgumentException.class);
       assertThat(writes.get()).isEqualTo(1);
       assertThat(ReadingMetrics.snapshot(first)).containsEntry("metricsPersistenceFailures", 1L);
-      try (var next = ReadingMetrics.operation("next", failed)) {}
+      var next = ReadingMetrics.operation("next", failed);
+      try (next) {}
       assertThat(writes.get()).isEqualTo(2);
       assertThat(ReadingMetrics.snapshot(first)).containsEntry("metricsPersistenceFailures", 2L);
     }
@@ -207,12 +216,15 @@ class ReadingMetricsPersistenceTest {
     var saved = store.load(first, "metrics", "totals", ReadingMetrics.Saved.class);
     assertThat(saved.values()).containsEntry("count", 13L);
     assertThat(saved.bodies()).containsExactly("old-body");
-    try (var scope = AgentRunScope.open(first);
-        var operation = ReadingMetrics.operation("outer", store)) {
-      ReadingMetrics.add("count", 1);
-      ReadingMetrics.flush(first, store);
-      assertThat(store.load(first, "metrics", "totals", ReadingMetrics.Saved.class).values())
-          .containsEntry("count", 14L);
+    var scope = AgentRunScope.open(first);
+    try (scope) {
+      var operation = ReadingMetrics.operation("outer", store);
+      try (operation) {
+        ReadingMetrics.add("count", 1);
+        ReadingMetrics.flush(first, store);
+        assertThat(store.load(first, "metrics", "totals", ReadingMetrics.Saved.class).values())
+            .containsEntry("count", 14L);
+      }
     }
   }
 }

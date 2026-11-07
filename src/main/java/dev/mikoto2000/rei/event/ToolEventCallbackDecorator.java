@@ -106,81 +106,84 @@ public class ToolEventCallbackDecorator
         && toolContext.getContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
             instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
       modelBudget = execution.modelCallBudget();
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
-        var budgetScope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(modelBudget)) {
-      String toolName = delegate.getToolDefinition().name();
-      String toolCallId = resolveToolCallId(toolContext);
-      long startedAtNanos = System.nanoTime();
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+    try (scope) {
+      var budgetScope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(modelBudget);
+      try (budgetScope) {
+        String toolName = delegate.getToolDefinition().name();
+        String toolCallId = resolveToolCallId(toolContext);
+        long startedAtNanos = System.nanoTime();
 
-      eventPublisher.publishBoundary(
-          eventFactory.toolStarted(toolCallId, toolName, summarize(toolInput)));
-      String result;
-      try {
-        // Cancellation can arrive while the durable STARTED boundary is being written.
-        if (Thread.currentThread().isInterrupted())
-          throw new java.util.concurrent.CancellationException();
-        if (toolContext != null
-            && toolContext
-                    .getContext()
-                    .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
-                instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
-          execution.checkActive();
-        result = caller.get();
-      } catch (RuntimeException | Error e) {
-        String searchFailure =
-            e instanceof RuntimeException runtime ? searchFailureResult(toolName, runtime) : null;
-        String structuredFailure =
-            e instanceof RuntimeException
-                    && !Thread.currentThread().isInterrupted()
-                    && !dev.mikoto2000.rei.core.stagnation.RunExecutionContext.isControlFailure(e)
-                ? dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.toolFailureResult(e)
-                : null;
+        eventPublisher.publishBoundary(
+            eventFactory.toolStarted(toolCallId, toolName, summarize(toolInput)));
+        String result;
         try {
-          eventPublisher.publishBoundary(
-              eventFactory.toolFailed(
-                  toolCallId,
-                  toolName,
-                  searchFailure != null || structuredFailure != null
-                      ? dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(e)
-                      : new ErrorInformation(
-                          e.getClass().getSimpleName(), summarize(e.getMessage()), null)));
-        } catch (RuntimeException | Error recording) {
-          if (e instanceof Error) {
-            if (recording != e) e.addSuppressed(recording);
-            throw e;
+          // Cancellation can arrive while the durable STARTED boundary is being written.
+          if (Thread.currentThread().isInterrupted())
+            throw new java.util.concurrent.CancellationException();
+          if (toolContext != null
+              && toolContext
+                      .getContext()
+                      .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+                  instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
+            execution.checkActive();
+          result = caller.get();
+        } catch (RuntimeException | Error e) {
+          String searchFailure =
+              e instanceof RuntimeException runtime ? searchFailureResult(toolName, runtime) : null;
+          String structuredFailure =
+              e instanceof RuntimeException
+                      && !Thread.currentThread().isInterrupted()
+                      && !dev.mikoto2000.rei.core.stagnation.RunExecutionContext.isControlFailure(e)
+                  ? dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.toolFailureResult(e)
+                  : null;
+          try {
+            eventPublisher.publishBoundary(
+                eventFactory.toolFailed(
+                    toolCallId,
+                    toolName,
+                    searchFailure != null || structuredFailure != null
+                        ? dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(e)
+                        : new ErrorInformation(
+                            e.getClass().getSimpleName(), summarize(e.getMessage()), null)));
+          } catch (RuntimeException | Error recording) {
+            if (e instanceof Error) {
+              if (recording != e) e.addSuppressed(recording);
+              throw e;
+            }
+            throw recording;
           }
-          throw recording;
-        }
-        if (searchFailure != null) return searchFailure;
-        if (structuredFailure != null) return structuredFailure;
-        if (e instanceof RuntimeException
-            && FILE_TOOLS.contains(toolName)
-            && !Thread.currentThread().isInterrupted()) {
-          var diagnostic = dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(e);
-          if (diagnostic.code().equals("source_missing")
-              || diagnostic.code().equals("file_unavailable")) {
-            // Return an explicit failure to the model, never a successful/empty read.
-            // Keep TOOL_FAILED above; do not emit TOOL_COMPLETED for this invocation.
-            return "{\"success\":false,\"error\":\""
-                + diagnostic.code()
-                + "\",\"message\":\""
-                + diagnostic.message()
-                + "\",\"guidance\":\"findFile または listFile で実際のパスを確認してください。同じ存在しないパスへの再試行を繰り返さず、見つからない場合は未確認として記録し、他の対象の作業を続けてください。操作が成功したとは扱わないでください。\"}\n";
+          if (searchFailure != null) return searchFailure;
+          if (structuredFailure != null) return structuredFailure;
+          if (e instanceof RuntimeException
+              && FILE_TOOLS.contains(toolName)
+              && !Thread.currentThread().isInterrupted()) {
+            var diagnostic = dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(e);
+            if (diagnostic.code().equals("source_missing")
+                || diagnostic.code().equals("file_unavailable")) {
+              // Return an explicit failure to the model, never a successful/empty read.
+              // Keep TOOL_FAILED above; do not emit TOOL_COMPLETED for this invocation.
+              return "{\"success\":false,\"error\":\""
+                  + diagnostic.code()
+                  + "\",\"message\":\""
+                  + diagnostic.message()
+                  + "\",\"guidance\":\"findFile または listFile で実際のパスを確認してください。同じ存在しないパスへの再試行を繰り返さず、見つからない場合は未確認として記録し、他の対象の作業を続けてください。操作が成功したとは扱わないでください。\"}\n";
+            }
           }
+          throw e;
         }
-        throw e;
+        long duration = Duration.ofNanos(System.nanoTime() - startedAtNanos).toMillis();
+        // Storage failure after the side effect must leave STARTED, never falsely record FAILED.
+        eventPublisher.publishBoundary(
+            eventFactory.toolCompleted(
+                toolCallId,
+                toolName,
+                duration,
+                toolName.equals("readMultiFile")
+                    ? ReadMultiFileLogSummary.summarize(toolInput, result)
+                    : summarize(result)));
+        return result;
       }
-      long duration = Duration.ofNanos(System.nanoTime() - startedAtNanos).toMillis();
-      // Storage failure after the side effect must leave STARTED, never falsely record FAILED.
-      eventPublisher.publishBoundary(
-          eventFactory.toolCompleted(
-              toolCallId,
-              toolName,
-              duration,
-              toolName.equals("readMultiFile")
-                  ? ReadMultiFileLogSummary.summarize(toolInput, result)
-                  : summarize(result)));
-      return result;
     }
   }
 

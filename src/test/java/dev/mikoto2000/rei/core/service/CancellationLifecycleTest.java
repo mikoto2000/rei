@@ -17,12 +17,15 @@ class CancellationLifecycleTest {
     var service = new CommandCancellationService();
     var owner = new AgentRunContext("child-owner", "session", Path.of("."), "project");
     service.prepare(owner);
-    try (var lease = service.enterChild(owner.runId())) {
-      assertThat(service.hasActiveChildren(owner.runId())).isTrue();
-      assertThat(service.cancelProject("project")).isTrue();
-      org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.enterChild(owner.runId()))
-          .isInstanceOf(java.util.concurrent.CancellationException.class);
-      assertThat(service.hasActiveChildren(owner.runId())).isTrue();
+    try {
+      var lease = service.enterChild(owner.runId());
+      try (lease) {
+        assertThat(service.hasActiveChildren(owner.runId())).isTrue();
+        assertThat(service.cancelProject("project")).isTrue();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.enterChild(owner.runId()))
+            .isInstanceOf(java.util.concurrent.CancellationException.class);
+        assertThat(service.hasActiveChildren(owner.runId())).isTrue();
+      }
     } finally {
       Thread.interrupted();
     }
@@ -37,7 +40,8 @@ class CancellationLifecycleTest {
     var thread = mock(Thread.class);
     var disposed = new AtomicInteger();
     var child = new AtomicInteger();
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       service.begin(thread);
       service.register(disposed::incrementAndGet);
       service.onCancel("run", child::incrementAndGet);
@@ -79,7 +83,8 @@ class CancellationLifecycleTest {
     var service = new CommandCancellationService();
     var owner = new AgentRunContext("run", "session", Path.of("."), "project");
     var thread = mock(Thread.class);
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       service.begin(thread);
       service.begin(thread);
       service.clear();

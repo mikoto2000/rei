@@ -173,10 +173,11 @@ public final class ConversationInputGateway {
             .apply(
                 input,
                 run -> {
-                  try (var observer =
+                  var observer =
                       beforeExecution == null
                           ? (ConversationInputRouter.Subscription) () -> {}
-                          : beforeExecution.apply(run.runId(), notifyAccepted)) {
+                          : beforeExecution.apply(run.runId(), notifyAccepted);
+                  try (observer) {
                     beforeDispatch.accept(run);
                     try {
                       dispatch.accept(run, input.text());

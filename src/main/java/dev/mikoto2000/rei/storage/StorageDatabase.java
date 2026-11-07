@@ -251,7 +251,8 @@ public final class StorageDatabase {
         boolean retained = state.keepOpen;
         if (retained && state.retained == null) state.retained = open(false);
         var connection = retained ? state.retained : open(false);
-        try (var owned = retained ? null : connection) {
+        var owned = retained ? null : connection;
+        try (owned) {
           try {
             connection.setAutoCommit(false);
             if (retained) requireCurrentSchema(connection);
@@ -297,7 +298,8 @@ public final class StorageDatabase {
     var commit =
         new java.util.concurrent.FutureTask<T>(
             () -> {
-              try (var scope = observation == null ? null : observation.observe()) {
+              var scope = observation == null ? null : observation.observe();
+              try (scope) {
                 return transaction(work);
               }
             });

@@ -38,7 +38,8 @@ class ShellSessionLifecycleTest {
               assertThat(repository.findById(context.conversationId())).isPresent();
               accepted.add(context);
             });
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       var first = shell.submit("😀".repeat(81));
       assertThat(first.requestSource()).isEqualTo(AgentRunContext.RequestSource.SHELL);
       assertThat(first.conversationId()).doesNotEndWith("chat:main");
@@ -71,7 +72,8 @@ class ShellSessionLifecycleTest {
       assertThat(accepted).hasSize(2);
       assertThat(shell.submit("new").conversationId()).isNotEqualTo(first.conversationId());
     }
-    try (var restarted = projects.newClient().open()) {
+    var restarted = projects.newClient().open();
+    try (restarted) {
       assertThat(shell.currentSessionId()).isNull();
       shell.submit("restart");
     }

@@ -41,19 +41,22 @@ class TaskProgressStoreTest {
     var tool = new TaskStateTools(state);
     tool.setProgress(store);
     var changes = new AtomicInteger();
-    try (var subscription = store.onChange(changes::incrementAndGet)) {
-      RunIdentity.setCurrentRunId("run-a");
-      tool.updateTaskState("目的", "IN_PROGRESS", List.of(), List.of("調査", "実装", "検証"));
-      var initial = store.get("run-a");
-      tool.updateTaskState(null, "IN_PROGRESS", List.of("調査"), List.of());
-      assertEquals(List.of("調査", "実装", "検証"), initial.pending());
-      assertEquals(List.of("調査"), store.get("run-a").completed());
-      assertEquals(List.of("実装", "検証"), store.get("run-a").pending());
-      store.update("run-b", new TaskStateSnapshot("別の目的", "BLOCKED", List.of(), List.of("確認")));
-      tool.updateTaskState(null, "IDLE", List.of(), List.of());
-      assertNull(store.get("run-a"));
-      assertEquals("BLOCKED", store.get("run-b").status());
-      assertEquals(4, changes.get());
+    try {
+      var subscription = store.onChange(changes::incrementAndGet);
+      try (subscription) {
+        RunIdentity.setCurrentRunId("run-a");
+        tool.updateTaskState("目的", "IN_PROGRESS", List.of(), List.of("調査", "実装", "検証"));
+        var initial = store.get("run-a");
+        tool.updateTaskState(null, "IN_PROGRESS", List.of("調査"), List.of());
+        assertEquals(List.of("調査", "実装", "検証"), initial.pending());
+        assertEquals(List.of("調査"), store.get("run-a").completed());
+        assertEquals(List.of("実装", "検証"), store.get("run-a").pending());
+        store.update("run-b", new TaskStateSnapshot("別の目的", "BLOCKED", List.of(), List.of("確認")));
+        tool.updateTaskState(null, "IDLE", List.of(), List.of());
+        assertNull(store.get("run-a"));
+        assertEquals("BLOCKED", store.get("run-b").status());
+        assertEquals(4, changes.get());
+      }
     } finally {
       RunIdentity.setCurrentRunId(null);
     }

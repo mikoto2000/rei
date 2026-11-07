@@ -235,9 +235,10 @@ class BackgroundProcessManagerTest {
   @Test
   void ownedObservationRejectsAnotherProjectSessionOrRoot() throws Exception {
     BackgroundProcessSnapshot spawned;
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-            new dev.mikoto2000.rei.core.chat.AgentRunContext("r", "session", tempDir, "project"))) {
+            new dev.mikoto2000.rei.core.chat.AgentRunContext("r", "session", tempDir, "project"));
+    try (scope) {
       spawned = manager.spawnCommandLine(javaCommand("exit", "0"), tempDir);
     }
     awaitStatus(spawned.processId(), BackgroundProcessStatus.EXITED);

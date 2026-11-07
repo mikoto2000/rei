@@ -79,9 +79,10 @@ class GitChangeTestImpactTest {
             .filter(c -> c.getToolDefinition().name().equals("changeTestImpact"))
             .findFirst()
             .orElseThrow();
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-            new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", root))) {
+            new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", root));
+    try (scope) {
       var json =
           tools.jackson.databind.json.JsonMapper.builder()
               .build()
@@ -300,9 +301,10 @@ class GitChangeTestImpactTest {
     assertTrue(
         schema.get("required") == null
             || !schema.get("required").toString().contains("changedFiles"));
-    try (var scope =
+    var scope =
         dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-            new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", root))) {
+            new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", root));
+    try (scope) {
       String response = callback.call("{}");
       var result = tools.jackson.databind.json.JsonMapper.builder().build().readTree(response);
       assertEquals("A.java", result.get("changedFiles").get(0).asString());

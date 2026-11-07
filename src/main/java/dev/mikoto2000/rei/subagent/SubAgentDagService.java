@@ -278,94 +278,97 @@ public final class SubAgentDagService {
         };
     long deadline = System.nanoTime() + dagTimeout.get().toNanos();
     String forced = null;
-    try (var scope = AgentRunScope.open(owner)) {
-      for (int wave = 0; wave < 16; wave++) {
-        run.checkActive();
-        var inventory = results(owner, plan, false);
-        var completed = new HashSet<String>();
-        var failed = new HashSet<String>();
-        for (var node : inventory) {
-          if (node.status().equals("COMPLETED")) completed.add(node.id());
-          else if (node.status().equals("FAILED")) failed.add(node.id());
+    try {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
+        for (int wave = 0; wave < 16; wave++) {
+          run.checkActive();
+          var inventory = results(owner, plan, false);
+          var completed = new HashSet<String>();
+          var failed = new HashSet<String>();
+          for (var node : inventory) {
+            if (node.status().equals("COMPLETED")) completed.add(node.id());
+            else if (node.status().equals("FAILED")) failed.add(node.id());
+          }
+          if (inventory.stream()
+              .anyMatch(
+                  node ->
+                      node.status().equals("RUNNING")
+                          || !resuming && node.status().equals("UNKNOWN"))) {
+            forced = "UNKNOWN";
+            break;
+          }
+          var ready = plan.spec().ready(completed, failed);
+          if (ready.isEmpty()) break;
+          if (budget.remaining() <= 0 || budget.tokenExhausted()) {
+            forced = "BUDGET_EXHAUSTED";
+            break;
+          }
+          long left = deadline - System.nanoTime();
+          if (left <= 0) {
+            forced = "TIMEOUT";
+            break;
+          }
+          var requests = new ArrayList<ParallelSubAgentDelegator.Request>();
+          for (String nodeId : ready) {
+            var node =
+                plan.spec().nodes().stream()
+                    .filter(value -> value.id().equals(nodeId))
+                    .findFirst()
+                    .orElseThrow();
+            requests.add(
+                new ParallelSubAgentDelegator.Request(
+                    nodeId, node.agent(), node.task(), context(owner, node, plan)));
+          }
+          var batch =
+              runGraphWave
+                  .apply(owner)
+                  .apply(
+                      budget,
+                      new GraphWave(
+                          requests,
+                          saved.id(),
+                          plan.children(),
+                          Duration.ofNanos(Math.min(left, Duration.ofSeconds(120).toNanos())),
+                          plan.spec().failurePolicy() == SubAgentDagSpec.FailurePolicy.FAIL_FAST));
+          if (batch.status() == ParallelSubAgentDelegator.Status.REJECTED) {
+            forced = "BUSY";
+            break;
+          }
+          if (batch.status() == ParallelSubAgentDelegator.Status.CANCELLED
+              || batch.status() == ParallelSubAgentDelegator.Status.TIMEOUT) {
+            forced = batch.status().name();
+            break;
+          }
+          var after = results(owner, plan, false);
+          if (after.equals(inventory)) {
+            forced = "UNKNOWN";
+            break;
+          }
         }
-        if (inventory.stream()
-            .anyMatch(
-                node ->
-                    node.status().equals("RUNNING")
-                        || !resuming && node.status().equals("UNKNOWN"))) {
-          forced = "UNKNOWN";
-          break;
-        }
-        var ready = plan.spec().ready(completed, failed);
-        if (ready.isEmpty()) break;
-        if (budget.remaining() <= 0 || budget.tokenExhausted()) {
-          forced = "BUDGET_EXHAUSTED";
-          break;
-        }
-        long left = deadline - System.nanoTime();
-        if (left <= 0) {
-          forced = "TIMEOUT";
-          break;
-        }
-        var requests = new ArrayList<ParallelSubAgentDelegator.Request>();
-        for (String nodeId : ready) {
-          var node =
-              plan.spec().nodes().stream()
-                  .filter(value -> value.id().equals(nodeId))
-                  .findFirst()
-                  .orElseThrow();
-          requests.add(
-              new ParallelSubAgentDelegator.Request(
-                  nodeId, node.agent(), node.task(), context(owner, node, plan)));
-        }
-        var batch =
-            runGraphWave
-                .apply(owner)
-                .apply(
-                    budget,
-                    new GraphWave(
-                        requests,
-                        saved.id(),
-                        plan.children(),
-                        Duration.ofNanos(Math.min(left, Duration.ofSeconds(120).toNanos())),
-                        plan.spec().failurePolicy() == SubAgentDagSpec.FailurePolicy.FAIL_FAST));
-        if (batch.status() == ParallelSubAgentDelegator.Status.REJECTED) {
-          forced = "BUSY";
-          break;
-        }
-        if (batch.status() == ParallelSubAgentDelegator.Status.CANCELLED
-            || batch.status() == ParallelSubAgentDelegator.Status.TIMEOUT) {
-          forced = batch.status().name();
-          break;
-        }
-        var after = results(owner, plan, false);
-        if (after.equals(inventory)) {
-          forced = "UNKNOWN";
-          break;
-        }
+        var nodes = results(owner, plan, true);
+        String status =
+            forced != null
+                ? forced
+                : nodes.stream().allMatch(node -> node.status().equals("COMPLETED"))
+                    ? "COMPLETED"
+                    : nodes.stream().anyMatch(node -> node.status().equals("COMPLETED"))
+                        ? "PARTIAL"
+                        : "FAILED";
+        var state = repository.get(owner, saved.id());
+        if (nodes.stream()
+                .anyMatch(node -> node.status().equals("UNKNOWN") || node.status().equals("RUNNING"))
+            || state.maxTokens() > 0 && state.usageUnknown()) status = "UNKNOWN";
+        var outcome = new Outcome(saved.id(), status, nodes, state.revision());
+        repository.complete(
+            saved.id(),
+            execution,
+            Set.of("COMPLETED", "CANCELLED", "TIMEOUT", "UNKNOWN").contains(status)
+                ? status
+                : "FAILED",
+            encode(outcome));
+        return get(owner, saved.id());
       }
-      var nodes = results(owner, plan, true);
-      String status =
-          forced != null
-              ? forced
-              : nodes.stream().allMatch(node -> node.status().equals("COMPLETED"))
-                  ? "COMPLETED"
-                  : nodes.stream().anyMatch(node -> node.status().equals("COMPLETED"))
-                      ? "PARTIAL"
-                      : "FAILED";
-      var state = repository.get(owner, saved.id());
-      if (nodes.stream()
-              .anyMatch(node -> node.status().equals("UNKNOWN") || node.status().equals("RUNNING"))
-          || state.maxTokens() > 0 && state.usageUnknown()) status = "UNKNOWN";
-      var outcome = new Outcome(saved.id(), status, nodes, state.revision());
-      repository.complete(
-          saved.id(),
-          execution,
-          Set.of("COMPLETED", "CANCELLED", "TIMEOUT", "UNKNOWN").contains(status)
-              ? status
-              : "FAILED",
-          encode(outcome));
-      return get(owner, saved.id());
     } catch (java.util.concurrent.CancellationException cancelled) {
       if (repository.get(owner, saved.id()).status().equals("RUNNING"))
         repository.ownerLost(saved.id(), execution);

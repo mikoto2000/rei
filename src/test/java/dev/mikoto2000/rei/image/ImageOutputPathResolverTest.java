@@ -32,7 +32,8 @@ class ImageOutputPathResolverTest {
             dev.mikoto2000.rei.core.execution.ExecutionType.IMAGE,
             "picture",
             Instant.now());
-    try (var scope = dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution)) {
+    var scope = dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution);
+    try (scope) {
       assertThat(resolver.resolve(Path.of("out.png"))).isEqualTo(root.resolve("out.png"));
       assertThat(resolver.resolve(null))
           .isEqualTo(root.resolve("images/image-20260814-123456-unique-id.png"));

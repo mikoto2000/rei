@@ -60,8 +60,9 @@ class TaskSourcePaginationTest {
 
   /** Creates the same retained source rows independently of pagination assertions. */
   private TaskFixture retainedGoalSources() {
-    try (var timing =
-        dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("task-source-fixture")) {
+    var timing =
+        dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("task-source-fixture");
+    try (timing) {
       var projects = new ProjectRegistry(root.resolve("projects.json"));
       var project = projects.resolve(root);
       var data = new SQLiteDataSource();
@@ -76,7 +77,8 @@ class TaskSourcePaginationTest {
             for (int i = 0; i < 270; i++) {
               var goal = goals.create(owner, "objective", "output.txt", "b".repeat(64), 1, 1);
               goals.verifiedWithoutRun(project.id(), goal.id());
-              try (var binding = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+              var binding = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+              try (binding) {
                 var schedule = schedules.scheduleAfter(Duration.ofMinutes(5), "action", "session");
                 schedules.cancel(project.id(), schedule.id());
               }
@@ -111,8 +113,9 @@ class TaskSourcePaginationTest {
 
   /** Creates the same retained source rows independently of pagination assertions. */
   private TaskFixture retainedDependencySources() {
-    try (var timing =
-        dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("task-source-fixture")) {
+    var timing =
+        dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("task-source-fixture");
+    try (timing) {
       var projects = new ProjectRegistry(root.resolve("projects.json"));
       var project = projects.resolve(root);
       var data = new SQLiteDataSource();

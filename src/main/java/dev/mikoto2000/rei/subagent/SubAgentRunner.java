@@ -635,212 +635,215 @@ public final class SubAgentRunner {
     }
     active.put(runId, cancel);
     if (claimed != null) durableChildren.put(runId, claimed.id());
-    try (var scope = AgentRunScope.open(owner)) {
-      if (tracked) {
-        beginCancellation.run();
-        subscriptions.add(onCancel.apply(runId, cancel));
-        if (!taskRuns.transition(runId, dev.mikoto2000.rei.application.run.RunStatus.RUNNING, null))
-          cancel.run();
-      }
-      publisher.publish(
-          events.subAgentLifecycle(
-              AgentEventType.SUBAGENT_STARTED, parentId, runId, agent, task, "RUNNING", 0, null));
-      subscriptions.add(onCancel.apply(parentId, cancel));
-      var definition = registry.findById(agent);
-      if (parent != null && parent.conversationId().startsWith("subagent:")) {
-        finish.accept(SubAgentResult.Status.FAILED, "Recursive delegation is prohibited");
-      } else if (definition.isEmpty()) {
-        finish.accept(SubAgentResult.Status.UNKNOWN_AGENT, "Unknown SubAgent");
-      } else if (task == null || task.isBlank()) {
-        finish.accept(SubAgentResult.Status.FAILED, "Task is required");
-      } else if (!stopped.get()) {
-        try {
-          var d = definition.get();
-          policy.validate(d.requestedTools());
-          var effective = policy.effectiveTools(d.requestedTools());
-          var evidence = d.evidenceTools().isEmpty() ? null : new SubAgentEvidence();
-          List<ToolCallback> callbacks =
-              toolFactory.get().stream()
-                  .filter(callback -> effective.contains(callback.getToolDefinition().name()))
-                  .map(
-                      callback ->
-                          guarded(
-                              callback,
-                              owner,
-                              check,
-                              evidence,
-                              d.inheritApprovals() ? parent : null,
-                              toolRetries,
-                              auxiliaryBudget))
-                  .toList();
-          if (callbacks.size() != effective.size())
-            throw new IllegalStateException("Tool unavailable");
-          ToolCallingChatOptions runOptions =
-              options
-                  .apply(d.model())
-                  .mutate()
-                  .toolCallbacks(callbacks)
-                  // The builder merges maps, so discard inherited context before adding child
-                  // ownership.
-                  .toolContext(null)
-                  .toolContext(Map.of(AgentRunContext.class.getName(), owner))
-                  .build();
-          ToolLoopSupport.requireNoRawTools(runOptions);
-          String input =
-              context == null || context.isBlank() ? task : task + "\n\nContext:\n" + context;
-          var prompt =
-              new Prompt(
-                  List.of(
-                      new SystemMessage(
-                          dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(
-                                  d.systemPrompt())
-                              + SubAgentOutputPrompt.instructions(d)),
-                      new UserMessage(input)),
-                  runOptions);
-          ChatModel model = models.apply(d.model());
-          ToolLoopSupport.requireNoDefaultTools(model);
-          subscriptions.add(
-              validatedRun(
-                      model,
-                      prompt,
-                      d,
-                      owner,
-                      check,
-                      evidence,
-                      new AtomicInteger(d.maxSteps()),
-                      repairAttempts,
-                      validationHistory,
-                      effectiveReservation,
-                      modelRetries)
-                  .map(
-                      output ->
-                          new SubAgentResult(
-                              agent,
-                              runId,
-                              SubAgentResult.Status.COMPLETED,
-                              output.raw(),
-                              started,
-                              clock.instant(),
-                              output.structured(),
-                              List.of(),
-                              repairAttempts.get(),
-                              validationHistory))
-                  .subscribeOn(Schedulers.boundedElastic())
-                  .timeout(d.timeout())
-                  .subscribe(
-                      complete,
-                      error -> {
-                        if (error instanceof SubAgentValidationException invalid) {
-                          log.warn(
-                              "SubAgent {} result validation failed: {} errors",
-                              d.id(),
-                              invalid.errors().size());
-                          complete.accept(
-                              new SubAgentResult(
-                                  agent,
-                                  runId,
-                                  SubAgentResult.Status.FAILED,
-                                  LocalDelegationFailure.validation(invalid.errors()),
-                                  started,
-                                  clock.instant(),
-                                  null,
-                                  invalid.errors(),
-                                  repairAttempts.get(),
-                                  validationHistory));
-                          return;
-                        }
-                        if (error instanceof BoundedToolLoop.SharedBudgetExceeded) {
-                          finish.accept(
-                              SubAgentResult.Status.FAILED,
-                              "SubAgent stopped: SHARED_LLM_BUDGET_EXHAUSTED");
-                          return;
-                        }
-                        if (error
-                            instanceof
-                            dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException
-                                budgetStopped) {
-                          finish.accept(
-                              SubAgentResult.Status.FAILED,
-                              "SubAgent stopped: " + budgetStopped.reason());
-                          return;
-                        }
-                        var status =
-                            error instanceof TimeoutException
-                                ? SubAgentResult.Status.TIMEOUT
-                                : error instanceof BoundedToolLoop.MaxStepsExceeded
-                                    ? SubAgentResult.Status.MAX_STEPS_EXCEEDED
-                                    : error instanceof CancellationException
-                                        ? SubAgentResult.Status.CANCELLED
-                                        : SubAgentResult.Status.FAILED;
-                        finish.accept(status, LocalDelegationFailure.describe(error, false));
-                      }));
-        } catch (RuntimeException error) {
-          finish.accept(SubAgentResult.Status.FAILED, LocalDelegationFailure.describe(error, true));
+    try {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
+        if (tracked) {
+          beginCancellation.run();
+          subscriptions.add(onCancel.apply(runId, cancel));
+          if (!taskRuns.transition(runId, dev.mikoto2000.rei.application.run.RunStatus.RUNNING, null))
+            cancel.run();
         }
-      }
-      SubAgentResult result;
-      try {
-        result = completion.get();
-      } catch (InterruptedException error) {
-        cancel.run();
-        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
-        Thread.currentThread().interrupt();
-        result = completion.join();
-      } catch (ExecutionException error) {
-        throw new IllegalStateException(error);
-      }
-      var terminalEvent =
-          events.subAgentLifecycle(
-              result.status() == SubAgentResult.Status.COMPLETED
-                  ? AgentEventType.SUBAGENT_COMPLETED
-                  : AgentEventType.SUBAGENT_FAILED,
-              parentId,
+        publisher.publish(
+            events.subAgentLifecycle(
+                AgentEventType.SUBAGENT_STARTED, parentId, runId, agent, task, "RUNNING", 0, null));
+        subscriptions.add(onCancel.apply(parentId, cancel));
+        var definition = registry.findById(agent);
+        if (parent != null && parent.conversationId().startsWith("subagent:")) {
+          finish.accept(SubAgentResult.Status.FAILED, "Recursive delegation is prohibited");
+        } else if (definition.isEmpty()) {
+          finish.accept(SubAgentResult.Status.UNKNOWN_AGENT, "Unknown SubAgent");
+        } else if (task == null || task.isBlank()) {
+          finish.accept(SubAgentResult.Status.FAILED, "Task is required");
+        } else if (!stopped.get()) {
+          try {
+            var d = definition.get();
+            policy.validate(d.requestedTools());
+            var effective = policy.effectiveTools(d.requestedTools());
+            var evidence = d.evidenceTools().isEmpty() ? null : new SubAgentEvidence();
+            List<ToolCallback> callbacks =
+                toolFactory.get().stream()
+                    .filter(callback -> effective.contains(callback.getToolDefinition().name()))
+                    .map(
+                        callback ->
+                            guarded(
+                                callback,
+                                owner,
+                                check,
+                                evidence,
+                                d.inheritApprovals() ? parent : null,
+                                toolRetries,
+                                auxiliaryBudget))
+                    .toList();
+            if (callbacks.size() != effective.size())
+              throw new IllegalStateException("Tool unavailable");
+            ToolCallingChatOptions runOptions =
+                options
+                    .apply(d.model())
+                    .mutate()
+                    .toolCallbacks(callbacks)
+                    // The builder merges maps, so discard inherited context before adding child
+                    // ownership.
+                    .toolContext(null)
+                    .toolContext(Map.of(AgentRunContext.class.getName(), owner))
+                    .build();
+            ToolLoopSupport.requireNoRawTools(runOptions);
+            String input =
+                context == null || context.isBlank() ? task : task + "\n\nContext:\n" + context;
+            var prompt =
+                new Prompt(
+                    List.of(
+                        new SystemMessage(
+                            dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(
+                                    d.systemPrompt())
+                                + SubAgentOutputPrompt.instructions(d)),
+                        new UserMessage(input)),
+                    runOptions);
+            ChatModel model = models.apply(d.model());
+            ToolLoopSupport.requireNoDefaultTools(model);
+            subscriptions.add(
+                validatedRun(
+                        model,
+                        prompt,
+                        d,
+                        owner,
+                        check,
+                        evidence,
+                        new AtomicInteger(d.maxSteps()),
+                        repairAttempts,
+                        validationHistory,
+                        effectiveReservation,
+                        modelRetries)
+                    .map(
+                        output ->
+                            new SubAgentResult(
+                                agent,
+                                runId,
+                                SubAgentResult.Status.COMPLETED,
+                                output.raw(),
+                                started,
+                                clock.instant(),
+                                output.structured(),
+                                List.of(),
+                                repairAttempts.get(),
+                                validationHistory))
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .timeout(d.timeout())
+                    .subscribe(
+                        complete,
+                        error -> {
+                          if (error instanceof SubAgentValidationException invalid) {
+                            log.warn(
+                                "SubAgent {} result validation failed: {} errors",
+                                d.id(),
+                                invalid.errors().size());
+                            complete.accept(
+                                new SubAgentResult(
+                                    agent,
+                                    runId,
+                                    SubAgentResult.Status.FAILED,
+                                    LocalDelegationFailure.validation(invalid.errors()),
+                                    started,
+                                    clock.instant(),
+                                    null,
+                                    invalid.errors(),
+                                    repairAttempts.get(),
+                                    validationHistory));
+                            return;
+                          }
+                          if (error instanceof BoundedToolLoop.SharedBudgetExceeded) {
+                            finish.accept(
+                                SubAgentResult.Status.FAILED,
+                                "SubAgent stopped: SHARED_LLM_BUDGET_EXHAUSTED");
+                            return;
+                          }
+                          if (error
+                              instanceof
+                              dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException
+                                  budgetStopped) {
+                            finish.accept(
+                                SubAgentResult.Status.FAILED,
+                                "SubAgent stopped: " + budgetStopped.reason());
+                            return;
+                          }
+                          var status =
+                              error instanceof TimeoutException
+                                  ? SubAgentResult.Status.TIMEOUT
+                                  : error instanceof BoundedToolLoop.MaxStepsExceeded
+                                      ? SubAgentResult.Status.MAX_STEPS_EXCEEDED
+                                      : error instanceof CancellationException
+                                          ? SubAgentResult.Status.CANCELLED
+                                          : SubAgentResult.Status.FAILED;
+                          finish.accept(status, LocalDelegationFailure.describe(error, false));
+                        }));
+          } catch (RuntimeException error) {
+            finish.accept(SubAgentResult.Status.FAILED, LocalDelegationFailure.describe(error, true));
+          }
+        }
+        SubAgentResult result;
+        try {
+          result = completion.get();
+        } catch (InterruptedException error) {
+          cancel.run();
+          // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
+          Thread.currentThread().interrupt();
+          result = completion.join();
+        } catch (ExecutionException error) {
+          throw new IllegalStateException(error);
+        }
+        var terminalEvent =
+            events.subAgentLifecycle(
+                result.status() == SubAgentResult.Status.COMPLETED
+                    ? AgentEventType.SUBAGENT_COMPLETED
+                    : AgentEventType.SUBAGENT_FAILED,
+                parentId,
+                runId,
+                agent,
+                task,
+                result.status().name(),
+                (System.nanoTime() - nanos) / 1_000_000,
+                result.status() == SubAgentResult.Status.COMPLETED ? null : result.output());
+        if (parent != null && result.status() != SubAgentResult.Status.COMPLETED) {
+          terminalEvent = terminalEvent.withOwnership(parent);
+          terminalEvent =
+              new dev.mikoto2000.rei.event.AgentEvent(
+                  terminalEvent.id(),
+                  terminalEvent.sequence(),
+                  terminalEvent.timestamp(),
+                  terminalEvent.type(),
+                  terminalEvent.version(),
+                  terminalEvent.sessionId(),
+                  terminalEvent.turnId(),
+                  parent.runId(),
+                  terminalEvent.correlationId(),
+                  terminalEvent.parentEventId(),
+                  terminalEvent.payload(),
+                  terminalEvent.projectId());
+        }
+        publisher.publish(terminalEvent);
+        if (claimed != null)
+          durable.complete(
+              claimed.id(),
               runId,
-              agent,
-              task,
-              result.status().name(),
-              (System.nanoTime() - nanos) / 1_000_000,
-              result.status() == SubAgentResult.Status.COMPLETED ? null : result.output());
-      if (parent != null && result.status() != SubAgentResult.Status.COMPLETED) {
-        terminalEvent = terminalEvent.withOwnership(parent);
-        terminalEvent =
-            new dev.mikoto2000.rei.event.AgentEvent(
-                terminalEvent.id(),
-                terminalEvent.sequence(),
-                terminalEvent.timestamp(),
-                terminalEvent.type(),
-                terminalEvent.version(),
-                terminalEvent.sessionId(),
-                terminalEvent.turnId(),
-                parent.runId(),
-                terminalEvent.correlationId(),
-                terminalEvent.parentEventId(),
-                terminalEvent.payload(),
-                terminalEvent.projectId());
+              switch (result.status()) {
+                case COMPLETED -> "COMPLETED";
+                case CANCELLED -> "CANCELLED";
+                case TIMEOUT -> "TIMEOUT";
+                default -> "FAILED";
+              },
+              result.output());
+        if (tracked)
+          taskLifecycle.finishMissingTerminal(
+              owner,
+              claimed != null && durable.get(parent, claimed.id()).status().equals("UNKNOWN")
+                  ? dev.mikoto2000.rei.application.run.RunStatus.UNKNOWN
+                  : switch (result.status()) {
+                    case COMPLETED -> dev.mikoto2000.rei.application.run.RunStatus.COMPLETED;
+                    case CANCELLED -> dev.mikoto2000.rei.application.run.RunStatus.CANCELLED;
+                    default -> dev.mikoto2000.rei.application.run.RunStatus.FAILED;
+                  });
+        return claimed == null ? result : result.withDurableTask(claimed.id());
       }
-      publisher.publish(terminalEvent);
-      if (claimed != null)
-        durable.complete(
-            claimed.id(),
-            runId,
-            switch (result.status()) {
-              case COMPLETED -> "COMPLETED";
-              case CANCELLED -> "CANCELLED";
-              case TIMEOUT -> "TIMEOUT";
-              default -> "FAILED";
-            },
-            result.output());
-      if (tracked)
-        taskLifecycle.finishMissingTerminal(
-            owner,
-            claimed != null && durable.get(parent, claimed.id()).status().equals("UNKNOWN")
-                ? dev.mikoto2000.rei.application.run.RunStatus.UNKNOWN
-                : switch (result.status()) {
-                  case COMPLETED -> dev.mikoto2000.rei.application.run.RunStatus.COMPLETED;
-                  case CANCELLED -> dev.mikoto2000.rei.application.run.RunStatus.CANCELLED;
-                  default -> dev.mikoto2000.rei.application.run.RunStatus.FAILED;
-                });
-      return claimed == null ? result : result.withDurableTask(claimed.id());
     } finally {
       subscriptions.dispose();
       awaitChildren.accept(runId);
@@ -851,7 +854,8 @@ public final class SubAgentRunner {
       if (tracked) {
         taskLifecycle.finishMissingTerminal(
             owner, dev.mikoto2000.rei.application.run.RunStatus.FAILED);
-        try (var scope = AgentRunScope.open(owner)) {
+        var scope = AgentRunScope.open(owner);
+        try (scope) {
           clearCancellation.run();
         }
       }
@@ -1013,51 +1017,58 @@ public final class SubAgentRunner {
 
           /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input, ToolContext context) {
-            try (var scope = AgentRunScope.open(owner);
-                var lease = enterChild.apply(owner.runId());
+            var scope = AgentRunScope.open(owner);
+            try (scope) {
+              var lease = enterChild.apply(owner.runId());
+              try (lease) {
                 var parentLease =
                     enterChild.apply(approvalParent == null ? null : approvalParent.runId());
-                var budgetScope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(modelBudget)) {
-              check.run();
-              Runnable authorize =
-                  () -> {
-                    if (authorizeChildTool != null)
-                      authorizeChildTool
-                          .apply(owner, approvalParent)
-                          .accept(callback.getToolDefinition().name(), input);
-                  };
-              String result =
-                  retries.call(
-                      () -> {
-                        String child = durableChildren.get(owner.runId());
-                        if (child == null) return observed.call(input, context);
-                        String operation = UUID.randomUUID().toString();
-                        durable.toolStarted(
-                            child,
-                            owner.runId(),
-                            operation,
-                            callback.getToolDefinition().name(),
-                            DurableSubAgentRepository.hash(Objects.toString(input, "")));
-                        try {
-                          String output = observed.call(input, context);
-                          durable.toolCompleted(child, owner.runId(), operation, true);
-                          return output;
-                        } catch (RuntimeException | Error failure) {
-                          durable.toolCompleted(child, owner.runId(), operation, false);
-                          throw failure;
-                        }
-                      },
-                      authorize,
-                      check,
-                      () ->
-                          !durableChildren.containsKey(owner.runId())
-                              && automaticallyApprovedChildRead != null
-                              && automaticallyApprovedChildRead.test(
-                                  callback.getToolDefinition().name()));
-              check.run();
-              return evidence == null
-                  ? result
-                  : evidence.capture(callback.getToolDefinition().name(), input, result);
+                try (parentLease) {
+                  var budgetScope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(modelBudget);
+                  try (budgetScope) {
+                    check.run();
+                    Runnable authorize =
+                        () -> {
+                          if (authorizeChildTool != null)
+                            authorizeChildTool
+                                .apply(owner, approvalParent)
+                                .accept(callback.getToolDefinition().name(), input);
+                        };
+                    String result =
+                        retries.call(
+                            () -> {
+                              String child = durableChildren.get(owner.runId());
+                              if (child == null) return observed.call(input, context);
+                              String operation = UUID.randomUUID().toString();
+                              durable.toolStarted(
+                                  child,
+                                  owner.runId(),
+                                  operation,
+                                  callback.getToolDefinition().name(),
+                                  DurableSubAgentRepository.hash(Objects.toString(input, "")));
+                              try {
+                                String output = observed.call(input, context);
+                                durable.toolCompleted(child, owner.runId(), operation, true);
+                                return output;
+                              } catch (RuntimeException | Error failure) {
+                                durable.toolCompleted(child, owner.runId(), operation, false);
+                                throw failure;
+                              }
+                            },
+                            authorize,
+                            check,
+                            () ->
+                                !durableChildren.containsKey(owner.runId())
+                                    && automaticallyApprovedChildRead != null
+                                    && automaticallyApprovedChildRead.test(
+                                        callback.getToolDefinition().name()));
+                    check.run();
+                    return evidence == null
+                        ? result
+                        : evidence.capture(callback.getToolDefinition().name(), input, result);
+                  }
+                }
+              }
             }
           }
         });

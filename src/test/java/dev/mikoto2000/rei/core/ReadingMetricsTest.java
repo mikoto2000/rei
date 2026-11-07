@@ -18,7 +18,8 @@ class ReadingMetricsTest {
   void generatedAndDeliveredAreSeparateAndRunsAreIsolated() throws Exception {
     Files.writeString(root.resolve("a.txt"), "one\ntwo\n");
     var owner = new AgentRunContext("metrics-one", "chat", root);
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       new Tools().readMultiFile(List.of(new Tools.ReadFileRequest("a.txt", 1, 2)), root);
       var values = ReadingMetrics.snapshot(owner);
       assertEquals(1, values.getOrDefault("physicalReads", 0L));
@@ -49,7 +50,8 @@ class ReadingMetricsTest {
           }
         };
     var owner = new AgentRunContext("metrics-baseline", "chat", root);
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var result = tools.searchAndRead(new Tools.SearchAndReadRequest(queries, 0, 1), root);
       assertEquals(2, result.getFirst().sections().size());
       assertEquals(16, result.getFirst().matches().size());
@@ -74,7 +76,8 @@ class ReadingMetricsTest {
     var file =
         new Tools.SearchAndReadResult(
             "a.txt", List.of(match), List.of(section), null, false, false);
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       var converter = new SearchReadResultConverter();
       converter.convert(List.of(file.withCompact()), List.class);
       assertEquals(0, ReadingMetrics.snapshot(owner).getOrDefault("wireDuplicateBodyBytes", 0L));

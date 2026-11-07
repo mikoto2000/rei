@@ -48,8 +48,9 @@ class SubAgentEventTest {
             });
     var projection = new DefaultAgentUiProjection();
     projection.apply(factory.runStarted("parent", "task", null));
-    try (var scope =
-        AgentRunScope.open(new AgentRunContext("child", "subagent:child", directory))) {
+    var scope =
+        AgentRunScope.open(new AgentRunContext("child", "subagent:child", directory));
+    try (scope) {
       var start =
           factory.subAgentLifecycle(
               AgentEventType.SUBAGENT_STARTED,
@@ -141,7 +142,8 @@ class SubAgentEventTest {
     renderer.onEvent(factory.messageStarted("parent-message", "assistant"));
     renderer.onEvent(factory.messageDelta("parent-message", "parent-before"));
     for (String run : java.util.List.of("first", "second")) {
-      try (var scope = AgentRunScope.open(new AgentRunContext(run, "subagent:" + run, directory))) {
+      var scope = AgentRunScope.open(new AgentRunContext(run, "subagent:" + run, directory));
+      try (scope) {
         renderer.onEvent(
             factory.subAgentLifecycle(
                 AgentEventType.SUBAGENT_STARTED,
@@ -156,7 +158,8 @@ class SubAgentEventTest {
       }
     }
     for (String run : java.util.List.of("first", "second", "unknown")) {
-      try (var scope = AgentRunScope.open(new AgentRunContext(run, "subagent:" + run, directory))) {
+      var scope = AgentRunScope.open(new AgentRunContext(run, "subagent:" + run, directory));
+      try (scope) {
         renderer.onEvent(factory.llmResponseFirstToken(run, "request", 10));
         renderer.onEvent(factory.llmResponseCompleted(run, "request", 20));
         renderer.onEvent(
@@ -176,7 +179,8 @@ class SubAgentEventTest {
     renderer.onEvent(
         factory.messageCompleted("parent-message", "assistant", "parent-beforeparent-after"));
     for (String run : java.util.List.of("first", "second", "unknown")) {
-      try (var scope = AgentRunScope.open(new AgentRunContext(run, "subagent:" + run, directory))) {
+      var scope = AgentRunScope.open(new AgentRunContext(run, "subagent:" + run, directory));
+      try (scope) {
         renderer.onRecentEvent(factory.toolStarted("tool", "webSearch", "{}"));
       }
       String prefix = "[subagent:" + (run.equals("unknown") ? "" : "reviewer/") + run + "] ";

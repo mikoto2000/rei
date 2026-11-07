@@ -51,7 +51,8 @@ class SafeHttpFetcherTest {
           }
         });
     var budget = new TransferBudget(1000, 5000);
-    try (var scope = TransferScope.enter(budget)) {
+    var scope = TransferScope.enter(budget);
+    try (scope) {
       assertEquals(4096, get("/aggregate", policy(128, 5000, 2, 2000, 1000)).body().length);
       assertEquals(
           HttpFetchException.Code.TRANSFER_BUDGET,
@@ -87,7 +88,8 @@ class SafeHttpFetcherTest {
           }
         });
     var budget = new TransferBudget(1000, 100000);
-    try (var scope = TransferScope.enter(budget)) {
+    var scope = TransferScope.enter(budget);
+    try (scope) {
       assertEquals(
           HttpFetchException.Code.TRANSFER_BUDGET,
           assertThrows(

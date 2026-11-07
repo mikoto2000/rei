@@ -298,10 +298,13 @@ public class ReiApplication {
     var options = StartupOptions.parse(args, projects.startupDirectory());
     if (options.printHelpIfRequested()) return;
     var client = projects.newClient();
-    try (var scope = client.open();
-        var notifications = projects.notificationsFollow(client)) {
-      if (options.project() != null) projects.cd(options.project().toString());
-      runShell(args, client);
+    var scope = client.open();
+    try (scope) {
+      var notifications = projects.notificationsFollow(client);
+      try (notifications) {
+        if (options.project() != null) projects.cd(options.project().toString());
+        runShell(args, client);
+      }
     }
   }
 
@@ -336,7 +339,8 @@ public class ReiApplication {
         new dev.mikoto2000.rei.core.completion.ApprovalActionMenu(
             reader,
             () -> {
-              try (var scope = client.open()) {
+              var scope = client.open();
+              try (scope) {
                 return new dev.mikoto2000.rei.core.completion.ApprovalActionMenu.Owner(
                     projects.currentContext().id(), projects.currentSessionId());
               }
@@ -388,89 +392,94 @@ public class ReiApplication {
 
     ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
     UserInputService inputService = new UserInputService(new UserInputParser());
-    try (var commandHistory =
+    try (
+        var commandHistory =
             new dev.mikoto2000.rei.ui.shell.ProjectCommandHistory(
                 () -> (org.jline.reader.impl.LineReaderImpl) reader,
                 projects::currentContext,
-                dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current());
-        var consoleSession = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession();
-        var runPrompt =
-            new dev.mikoto2000.rei.ui.shell.ActiveRunPrompt(
-                reader,
-                activeRuns,
-                () -> {
-                  try (var scope = client.open()) {
-                    return buildPrompt();
-                  }
-                },
-                activeRunDisplay)) {
-      startVoiceAutomatically(
-          cmd,
-          terminal,
-          line -> eventOutput.printBlock(new org.jline.utils.AttributedString(line)));
-      shellLoop:
-      while (true) {
-        try {
-          commandHistory.refresh();
-          String line;
-          approvalMenu.enabled(true);
+                dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current())) {
+      var consoleSession = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession();
+      try (
+          consoleSession;
+          var runPrompt =
+              new dev.mikoto2000.rei.ui.shell.ActiveRunPrompt(
+                  reader,
+                  activeRuns,
+                  () -> {
+                    var scope = client.open();
+                    try (scope) {
+                      return buildPrompt();
+                    }
+                  },
+                  activeRunDisplay)) {
+        startVoiceAutomatically(
+            cmd,
+            terminal,
+            line -> eventOutput.printBlock(new org.jline.utils.AttributedString(line)));
+        shellLoop:
+        while (true) {
           try {
-            line = runPrompt.readLine();
-          } finally {
-            approvalMenu.enabled(false);
-          }
-          if (line == null) {
+            commandHistory.refresh();
+            String line;
+            approvalMenu.enabled(true);
+            try {
+              line = runPrompt.readLine();
+            } finally {
+              approvalMenu.enabled(false);
+            }
+            if (line == null) {
+              break;
+            }
+            agentActivityTracker.recordUserActivity(java.time.Instant.now());
+            line = readPossiblyMultilineInput(line, reader);
+
+            UserInputService.Input input = inputService.interpret(line);
+            switch (input.kind()) {
+              case EMPTY -> {}
+              case EXIT -> {
+                if (confirmExitIfNeeded(prompt -> reader.readLine(prompt))) {
+                  break shellLoop;
+                }
+              }
+              case HELP -> {
+                printUserInput(input.text(), terminal);
+                executeInterruptibly(cmd, terminal, commandExecutor, "--help");
+              }
+              case VERSION -> {
+                printUserInput(input.text(), terminal);
+                executeInterruptibly(cmd, terminal, commandExecutor, "--version");
+              }
+              case PASTE -> {
+                String pasted = readPasteBlock(reader);
+                if (!pasted.isBlank()) {
+                  printUserInput(pasted, terminal);
+                  executeInterruptibly(cmd, terminal, commandExecutor, "chat", pasted);
+                }
+              }
+              case COMMAND -> {
+                String[] commandArgs = input.arguments();
+                printUserInputIfNeeded(input.text(), terminal, commandArgs);
+                if (isInteractiveShellCommand(commandArgs)) {
+                  executeInteractiveShellCommand(
+                      cmd, reader, terminal, inputCompleter, commandArgs);
+                } else {
+                  executeInterruptibly(cmd, terminal, commandExecutor, commandArgs);
+                }
+              }
+              case CHAT -> {
+                printUserInput(input.text(), terminal);
+                executeInterruptibly(cmd, terminal, commandExecutor, "chat", input.text());
+              }
+            }
+
+          } catch (UserInterruptException e) {
+            if (environment != null
+                && environment.getProperty(ForegroundConsole.PROPERTY, Boolean.class, false)) break;
+            // Ctrl-C でその行だけキャンセル
+          } catch (EndOfFileException e) {
+            // Ctrl-D (EOF) は即時終了する
             break;
           }
-          agentActivityTracker.recordUserActivity(java.time.Instant.now());
-          line = readPossiblyMultilineInput(line, reader);
-
-          UserInputService.Input input = inputService.interpret(line);
-          switch (input.kind()) {
-            case EMPTY -> {}
-            case EXIT -> {
-              if (confirmExitIfNeeded(prompt -> reader.readLine(prompt))) {
-                break shellLoop;
-              }
-            }
-            case HELP -> {
-              printUserInput(input.text(), terminal);
-              executeInterruptibly(cmd, terminal, commandExecutor, "--help");
-            }
-            case VERSION -> {
-              printUserInput(input.text(), terminal);
-              executeInterruptibly(cmd, terminal, commandExecutor, "--version");
-            }
-            case PASTE -> {
-              String pasted = readPasteBlock(reader);
-              if (!pasted.isBlank()) {
-                printUserInput(pasted, terminal);
-                executeInterruptibly(cmd, terminal, commandExecutor, "chat", pasted);
-              }
-            }
-            case COMMAND -> {
-              String[] commandArgs = input.arguments();
-              printUserInputIfNeeded(input.text(), terminal, commandArgs);
-              if (isInteractiveShellCommand(commandArgs)) {
-                executeInteractiveShellCommand(
-                    cmd, reader, terminal, inputCompleter, commandArgs);
-              } else {
-                executeInterruptibly(cmd, terminal, commandExecutor, commandArgs);
-              }
-            }
-            case CHAT -> {
-              printUserInput(input.text(), terminal);
-              executeInterruptibly(cmd, terminal, commandExecutor, "chat", input.text());
-            }
-          }
-
-        } catch (UserInterruptException e) {
-          if (environment != null
-              && environment.getProperty(ForegroundConsole.PROPERTY, Boolean.class, false)) break;
-          // Ctrl-C でその行だけキャンセル
-        } catch (EndOfFileException e) {
-          // Ctrl-D (EOF) は即時終了する
-          break;
         }
       }
     } finally {

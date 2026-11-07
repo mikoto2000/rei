@@ -232,7 +232,8 @@ public final class MemoryRunSubmitService {
   /** 依頼された操作を進めるため、レポートを実行する。 */
   private void executeReport(
       AgentRunContext context, String operation, java.util.function.Supplier<String> report) {
-    try (var scope = AgentRunScope.open(context)) {
+    var scope = AgentRunScope.open(context);
+    try (scope) {
       Runnable clearCancellation = beginCommand.get();
       try {
         if (cancellationRequested.getAsBoolean()) return;
@@ -254,7 +255,8 @@ public final class MemoryRunSubmitService {
 
   /** 依頼された操作を進めるため、待機を実行する。 */
   private void executeSleep(AgentRunContext context, boolean preview) {
-    try (var scope = AgentRunScope.open(context)) {
+    var scope = AgentRunScope.open(context);
+    try (scope) {
       Runnable clearCancellation = beginCommand.get();
       try {
         if (cancellationRequested.getAsBoolean()) return;

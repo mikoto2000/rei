@@ -147,119 +147,121 @@ final class WebResearchPipeline {
             maximumReads == 0 ? "body_not_requested" : "no_readable_verified_body");
     List<WebSearchPage> evidence = List.of();
     var scope = WebResearchScope.enter(limits);
-    try (scope;
-        var extraction = WebExtractionScope.enter(query)) {
-      add(query, candidates, selection.search(query, limit));
-      boolean first = true;
-      boolean triedUnreadBeforeSearch = false;
-      // 根拠が十分になるか本文取得の予算に達するまで、追加調査を行う。
-      while (attempts < maximumReads && !"sufficient".equals(assessment.status())) {
-        FetchScope.current().check();
-        var previousKeys = Set.copyOf(candidates.keySet());
-        var pending = unread(query, candidates, attempted);
-        int remainingReads = maximumReads - attempts;
-        boolean canSearchAgain =
-            WebResearchScope.queryCount() < limits.maxQueries() && !SearchRequestBudget.exhausted();
-        int parallelReads = Math.min(remainingReads, limits.fetchParallelism());
-        // 可能なら、並列取得でも不足した場合に追加検索の候補を読む枠を1件残す。
-        if (canSearchAgain && remainingReads > 2)
-          parallelReads = Math.min(parallelReads, remainingReads - 1);
-        var independent = assessment.independentCandidates(query, evidence, pending, parallelReads);
-        var promising =
-            first || triedUnreadBeforeSearch || !independent.isEmpty()
-                ? null
-                : assessment.promisingCandidate(query, evidence, pending);
-        boolean supplement =
-            !first
-                && canSearchAgain
-                && (triedUnreadBeforeSearch || (promising == null && independent.isEmpty()));
-        if (supplement) {
-          try {
-            add(query, candidates, selection.search(query, limit));
-          } catch (IOException failed) {
-            FetchOperation.propagateControls(failed);
-            WebSearchSelection.recordSearchFailure(failed);
-          } catch (RuntimeException failed) {
-            FetchOperation.propagateControls(failed);
-            if (failed instanceof HttpFetchException http
-                && Set.of(
-                        HttpFetchException.Code.TOTAL_TIMEOUT,
-                        HttpFetchException.Code.TRANSFER_BUDGET,
-                        HttpFetchException.Code.REQUEST_BUDGET)
-                    .contains(http.code())) throw http;
-            WebSearchSelection.recordSearchFailure(failed);
+    try (scope) {
+      var extraction = WebExtractionScope.enter(query);
+      try (extraction) {
+        add(query, candidates, selection.search(query, limit));
+        boolean first = true;
+        boolean triedUnreadBeforeSearch = false;
+        // 根拠が十分になるか本文取得の予算に達するまで、追加調査を行う。
+        while (attempts < maximumReads && !"sufficient".equals(assessment.status())) {
+          FetchScope.current().check();
+          var previousKeys = Set.copyOf(candidates.keySet());
+          var pending = unread(query, candidates, attempted);
+          int remainingReads = maximumReads - attempts;
+          boolean canSearchAgain =
+              WebResearchScope.queryCount() < limits.maxQueries() && !SearchRequestBudget.exhausted();
+          int parallelReads = Math.min(remainingReads, limits.fetchParallelism());
+          // 可能なら、並列取得でも不足した場合に追加検索の候補を読む枠を1件残す。
+          if (canSearchAgain && remainingReads > 2)
+            parallelReads = Math.min(parallelReads, remainingReads - 1);
+          var independent = assessment.independentCandidates(query, evidence, pending, parallelReads);
+          var promising =
+              first || triedUnreadBeforeSearch || !independent.isEmpty()
+                  ? null
+                  : assessment.promisingCandidate(query, evidence, pending);
+          boolean supplement =
+              !first
+                  && canSearchAgain
+                  && (triedUnreadBeforeSearch || (promising == null && independent.isEmpty()));
+          if (supplement) {
+            try {
+              add(query, candidates, selection.search(query, limit));
+            } catch (IOException failed) {
+              FetchOperation.propagateControls(failed);
+              WebSearchSelection.recordSearchFailure(failed);
+            } catch (RuntimeException failed) {
+              FetchOperation.propagateControls(failed);
+              if (failed instanceof HttpFetchException http
+                  && Set.of(
+                          HttpFetchException.Code.TOTAL_TIMEOUT,
+                          HttpFetchException.Code.TRANSFER_BUDGET,
+                          HttpFetchException.Code.REQUEST_BUDGET)
+                      .contains(http.code())) throw http;
+              WebSearchSelection.recordSearchFailure(failed);
+            }
+            pending =
+                unread(query, candidates, attempted).stream()
+                    .sorted(
+                        Comparator.comparing(
+                            candidate ->
+                                previousKeys.contains(
+                                    WebSearchSelection.normalizeUrl(candidate.result().url()))))
+                    .toList();
+            independent = assessment.independentCandidates(query, evidence, pending, parallelReads);
           }
-          pending =
-              unread(query, candidates, attempted).stream()
-                  .sorted(
-                      Comparator.comparing(
-                          candidate ->
-                              previousKeys.contains(
-                                  WebSearchSelection.normalizeUrl(candidate.result().url()))))
+          if (pending.isEmpty()) break;
+          int window = Math.min(remainingReads, first ? limits.initialPageFetches() : 1);
+          var selected =
+              !independent.isEmpty()
+                  ? independent
+                  : promising == null ? pending.stream().limit(window).toList() : List.of(promising);
+          triedUnreadBeforeSearch = !supplement && (promising != null || !independent.isEmpty());
+          first = false;
+          for (var candidate : selected)
+            attempted.add(WebSearchSelection.normalizeUrl(candidate.result().url()));
+          // 取得が失敗した候補も試行回数に含め、失敗の繰り返しで予算を超えないようにする。
+          attempts += selected.size();
+          var outcomes = batch.fetch(selected, limits.fetchBatchTimeout(), loader);
+          for (int i = 0; i < outcomes.size(); i++) {
+            var candidate = selected.get(i);
+            var outcome = outcomes.get(i);
+            T value =
+                outcome.success()
+                    ? outcome.value()
+                    : adapter.failed(candidate.result(), outcome.errorType());
+            loaded.put(
+                WebSearchSelection.normalizeUrl(candidate.result().url()),
+                adapter.aliases(value, candidate.aliases()));
+          }
+          if (outcomes.stream().anyMatch(outcome -> "TRANSFER_BUDGET".equals(outcome.errorType())))
+            throw new HttpFetchException(HttpFetchException.Code.TRANSFER_BUDGET);
+          evidence =
+              adapter.deduplicate(new ArrayList<>(loaded.values())).stream()
+                  .map(adapter::evidence)
                   .toList();
-          independent = assessment.independentCandidates(query, evidence, pending, parallelReads);
+          assessment = WebRetrievalAssessment.assess(query, evidence);
         }
-        if (pending.isEmpty()) break;
-        int window = Math.min(remainingReads, first ? limits.initialPageFetches() : 1);
-        var selected =
-            !independent.isEmpty()
-                ? independent
-                : promising == null ? pending.stream().limit(window).toList() : List.of(promising);
-        triedUnreadBeforeSearch = !supplement && (promising != null || !independent.isEmpty());
-        first = false;
-        for (var candidate : selected)
-          attempted.add(WebSearchSelection.normalizeUrl(candidate.result().url()));
-        // 取得が失敗した候補も試行回数に含め、失敗の繰り返しで予算を超えないようにする。
-        attempts += selected.size();
-        var outcomes = batch.fetch(selected, limits.fetchBatchTimeout(), loader);
-        for (int i = 0; i < outcomes.size(); i++) {
-          var candidate = selected.get(i);
-          var outcome = outcomes.get(i);
-          T value =
-              outcome.success()
-                  ? outcome.value()
-                  : adapter.failed(candidate.result(), outcome.errorType());
-          loaded.put(
-              WebSearchSelection.normalizeUrl(candidate.result().url()),
-              adapter.aliases(value, candidate.aliases()));
+        if (scope.searchFailed()) omissions.add("additional_search_failed");
+        var rows = new ArrayList<T>();
+        for (var candidate :
+            WebSearchSelection.choose(
+                query, new ArrayList<>(candidates.values()), candidates.size())) {
+          T value = loaded.get(WebSearchSelection.normalizeUrl(candidate.result().url()));
+          rows.add(
+              adapter.aliases(
+                  value == null ? adapter.notRequested(candidate.result()) : value,
+                  candidate.aliases()));
         }
-        if (outcomes.stream().anyMatch(outcome -> "TRANSFER_BUDGET".equals(outcome.errorType())))
-          throw new HttpFetchException(HttpFetchException.Code.TRANSFER_BUDGET);
-        evidence =
-            adapter.deduplicate(new ArrayList<>(loaded.values())).stream()
-                .map(adapter::evidence)
-                .toList();
-        assessment = WebRetrievalAssessment.assess(query, evidence);
+        var deduplicated = adapter.deduplicate(rows);
+        var chosen = new HashSet<T>();
+        // 本文を取得できた根拠を優先して返し、残りの枠に未取得や失敗の候補を残す。
+        for (T value : deduplicated)
+          if ("success".equals(adapter.evidence(value).fetchStatus()) && chosen.size() < limit)
+            chosen.add(value);
+        for (T value : deduplicated) if (chosen.size() < limit) chosen.add(value);
+        var result = deduplicated.stream().filter(chosen::contains).toList();
+        if (result.size() < deduplicated.size()) omissions.add("result_limit");
+        assessment =
+            omissions.contains("additional_search_failed")
+                ? WebRetrievalAssessment.unknown("additional_search_failed")
+                : maximumReads == 0
+                    ? WebRetrievalAssessment.unknown("body_not_requested")
+                    : WebRetrievalAssessment.assess(
+                        query, result.stream().map(adapter::evidence).toList());
+        return new Research<>(
+            result, assessment, List.copyOf(omissions), WebResearchScope.queryCount(), attempts);
       }
-      if (scope.searchFailed()) omissions.add("additional_search_failed");
-      var rows = new ArrayList<T>();
-      for (var candidate :
-          WebSearchSelection.choose(
-              query, new ArrayList<>(candidates.values()), candidates.size())) {
-        T value = loaded.get(WebSearchSelection.normalizeUrl(candidate.result().url()));
-        rows.add(
-            adapter.aliases(
-                value == null ? adapter.notRequested(candidate.result()) : value,
-                candidate.aliases()));
-      }
-      var deduplicated = adapter.deduplicate(rows);
-      var chosen = new HashSet<T>();
-      // 本文を取得できた根拠を優先して返し、残りの枠に未取得や失敗の候補を残す。
-      for (T value : deduplicated)
-        if ("success".equals(adapter.evidence(value).fetchStatus()) && chosen.size() < limit)
-          chosen.add(value);
-      for (T value : deduplicated) if (chosen.size() < limit) chosen.add(value);
-      var result = deduplicated.stream().filter(chosen::contains).toList();
-      if (result.size() < deduplicated.size()) omissions.add("result_limit");
-      assessment =
-          omissions.contains("additional_search_failed")
-              ? WebRetrievalAssessment.unknown("additional_search_failed")
-              : maximumReads == 0
-                  ? WebRetrievalAssessment.unknown("body_not_requested")
-                  : WebRetrievalAssessment.assess(
-                      query, result.stream().map(adapter::evidence).toList());
-      return new Research<>(
-          result, assessment, List.copyOf(omissions), WebResearchScope.queryCount(), attempts);
     } catch (HttpFetchException limitReached) {
       if (!Set.of(
               HttpFetchException.Code.TOTAL_TIMEOUT,

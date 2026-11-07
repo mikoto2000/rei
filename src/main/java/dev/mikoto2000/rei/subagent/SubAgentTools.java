@@ -355,7 +355,8 @@ public class SubAgentTools {
                         && ("chatgpt-plan".equals(r.backendId())
                             || "codex-app-server".equals(r.backendId())))) {
       var run = execution(toolContext);
-      try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(run.runContext())) {
+      var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(run.runContext());
+      try (scope) {
         return parallel.delegate(requests, run.sharedLlmReservation());
       }
     }

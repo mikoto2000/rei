@@ -365,9 +365,12 @@ public class VoiceCommand {
                 .name("voice-auto-start")
                 .unstarted(
                     () -> {
-                      try (var scope = client.open()) {
-                        startInput(
-                            generation, selected, initialTarget, client, false, output, true);
+                      try {
+                        var scope = client.open();
+                        try (scope) {
+                          startInput(
+                              generation, selected, initialTarget, client, false, output, true);
+                        }
                       } catch (RuntimeException | LinkageError failure) {
                         synchronized (startGuard) {
                           if (generation == startGeneration && !shellClosed) {

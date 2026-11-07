@@ -164,8 +164,11 @@ class TaskToolsTest {
     var owner =
         new dev.mikoto2000.rei.core.chat.AgentRunContext(
             "run", "session", java.nio.file.Path.of("."), "project");
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
-      assertSame(completed, tools.taskComplete(7L));
+    {
+      var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+      try (scope) {
+        assertSame(completed, tools.taskComplete(7L));
+      }
     }
     assertEquals(
         List.of(
@@ -176,7 +179,8 @@ class TaskToolsTest {
         events.stream()
             .allMatch(e -> "project".equals(e.projectId()) && "session".equals(e.sessionId())));
     when(service.complete(8L)).thenThrow(new IllegalStateException("token=private"));
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+    try (scope) {
       assertThrows(IllegalStateException.class, () -> tools.taskComplete(8L));
     }
     var failed = (dev.mikoto2000.rei.event.TaskFailedPayload) events.getLast().payload();
@@ -225,15 +229,19 @@ class TaskToolsTest {
       when(service.complete(9L)).thenReturn(done);
       var owner =
           new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", dir, "project");
-      try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
-        tools.taskComplete(9L);
+      {
+        var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+        try (scope) {
+          tools.taskComplete(9L);
+        }
       }
       var item = repo.list("project").getFirst();
       assertEquals("TASK", item.sourceKind());
       assertEquals("9", item.sourceId());
       assertEquals("TASK_COMPLETION_REPORTED", item.gap());
       when(service.complete(10L)).thenReturn(task(10L, "unfinished", null, 3, TaskStatus.OPEN));
-      try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+      var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+      try (scope) {
         assertThrows(IllegalStateException.class, () -> tools.taskComplete(10L));
       }
       assertEquals(

@@ -61,13 +61,16 @@ public final class ProtectedCredentialStore {
       if (Files.isSymbolicLink(directory.resolve("credentials.lock"))
           || Files.isSymbolicLink(directory.resolve("host-id")))
         throw ChatGptException.of(STORE_UNAVAILABLE);
-      try (var channel =
+      try (
+          var channel =
               FileChannel.open(
                   directory.resolve("credentials.lock"),
                   StandardOpenOption.CREATE,
-                  StandardOpenOption.WRITE);
-          var lock = acquire(channel)) {
-        return action.apply(new Transaction());
+                  StandardOpenOption.WRITE)) {
+        var lock = acquire(channel);
+        try (lock) {
+          return action.apply(new Transaction());
+        }
       }
     } catch (ChatGptException error) {
       throw error;

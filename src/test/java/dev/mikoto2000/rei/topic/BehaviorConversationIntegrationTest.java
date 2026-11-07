@@ -159,79 +159,85 @@ class BehaviorConversationIntegrationTest {
   @Test
   void scheduledWorkerUsesActiveShellSessionAndRestartReplayKeepsOriginalProject()
       throws Exception {
-    try (var scope = client.open();
-        var binding = projects.notificationsFollow(client)) {
-      var lifecycle = new SessionLifecycle(sessions, clock);
-      var shell = new ShellConversationService(projects, lifecycle, (c, p) -> {});
-      var active = shell.submit("start");
-      var userActivity = tracker.lastUserActivityAt();
-      try (var worker = Executors.newSingleThreadExecutor()) {
-        worker.submit(() -> publisher.publish(notice("b-1"))).get(5, TimeUnit.SECONDS);
+    var scope = client.open();
+    try (scope) {
+      var binding = projects.notificationsFollow(client);
+      try (binding) {
+        var lifecycle = new SessionLifecycle(sessions, clock);
+        var shell = new ShellConversationService(projects, lifecycle, (c, p) -> {});
+        var active = shell.submit("start");
+        var userActivity = tracker.lastUserActivityAt();
+        try (var worker = Executors.newSingleThreadExecutor()) {
+          worker.submit(() -> publisher.publish(notice("b-1"))).get(5, TimeUnit.SECONDS);
+        }
+        assertThat(events)
+            .hasSize(3)
+            .allSatisfy(
+                e -> {
+                  assertThat(e.sessionId()).isEqualTo(active.conversationId());
+                  assertThat(e.projectId()).isEqualTo(project.id());
+                });
+        assertThat(tracker.lastUserActivityAt()).isEqualTo(userActivity);
+        assertThat(logs.readConversation(active.conversationId()))
+            .singleElement()
+            .satisfies(
+                e -> {
+                  assertThat(e.source()).isEqualTo("BEHAVIOR_NOTIFICATION");
+                  assertThat(e.sourceId()).isEqualTo("b-1");
+                  assertThat(e.metadata()).containsOnlyKeys("severity", "triggerType");
+                });
+        projects.cd(Files.createDirectory(dir.resolve("other")).toString());
+        var restarted =
+            publisher(
+                new ConversationLogStore(null, clock, mapper),
+                new ConversationTurnStore(dir),
+                new FileSessionRepository(dir.resolve("sessions.json")));
+        restarted.publish(notice("b-1"));
+        assertThat(events).hasSize(3);
+        assertThat(new ConversationTurnStore(dir).findTurns(active.conversationId(), null, 10))
+            .singleElement()
+            .satisfies(
+                t -> {
+                  assertThat(t.userMessage()).isEmpty();
+                  assertThat(t.sourceId()).isEqualTo("b-1");
+                  assertThat(t.assistantMessage()).isEqualTo(notice("b-1").content());
+                  assertThat(t.createdAt()).isEqualTo(clock.instant());
+                });
+        projects.cd(dir.toString());
+        assertThat(projects.currentSessionId()).isEqualTo(active.conversationId());
+        var output = new java.io.StringWriter();
+        var command =
+            new picocli.CommandLine(
+                new dev.mikoto2000.rei.ui.shell.HistoryCommand(
+                    mock(HistoryShellService.class),
+                    new SessionQueryService(sessions, turns),
+                    projects));
+        command.setOut(new java.io.PrintWriter(output));
+        assertThat(command.execute("show")).isZero();
+        assertThat(output.toString()).contains("Rei:", "そろそろ戻ろう。").doesNotContain("User:");
       }
-      assertThat(events)
-          .hasSize(3)
-          .allSatisfy(
-              e -> {
-                assertThat(e.sessionId()).isEqualTo(active.conversationId());
-                assertThat(e.projectId()).isEqualTo(project.id());
-              });
-      assertThat(tracker.lastUserActivityAt()).isEqualTo(userActivity);
-      assertThat(logs.readConversation(active.conversationId()))
-          .singleElement()
-          .satisfies(
-              e -> {
-                assertThat(e.source()).isEqualTo("BEHAVIOR_NOTIFICATION");
-                assertThat(e.sourceId()).isEqualTo("b-1");
-                assertThat(e.metadata()).containsOnlyKeys("severity", "triggerType");
-              });
-      projects.cd(Files.createDirectory(dir.resolve("other")).toString());
-      var restarted =
-          publisher(
-              new ConversationLogStore(null, clock, mapper),
-              new ConversationTurnStore(dir),
-              new FileSessionRepository(dir.resolve("sessions.json")));
-      restarted.publish(notice("b-1"));
-      assertThat(events).hasSize(3);
-      assertThat(new ConversationTurnStore(dir).findTurns(active.conversationId(), null, 10))
-          .singleElement()
-          .satisfies(
-              t -> {
-                assertThat(t.userMessage()).isEmpty();
-                assertThat(t.sourceId()).isEqualTo("b-1");
-                assertThat(t.assistantMessage()).isEqualTo(notice("b-1").content());
-                assertThat(t.createdAt()).isEqualTo(clock.instant());
-              });
-      projects.cd(dir.toString());
-      assertThat(projects.currentSessionId()).isEqualTo(active.conversationId());
-      var output = new java.io.StringWriter();
-      var command =
-          new picocli.CommandLine(
-              new dev.mikoto2000.rei.ui.shell.HistoryCommand(
-                  mock(HistoryShellService.class),
-                  new SessionQueryService(sessions, turns),
-                  projects));
-      command.setOut(new java.io.PrintWriter(output));
-      assertThat(command.execute("show")).isZero();
-      assertThat(output.toString()).contains("Rei:", "そろそろ戻ろう。").doesNotContain("User:");
     }
   }
 
   /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void noActiveSessionUsesOrdinaryDefaultAndNextUserContinuesIt() {
-    try (var scope = client.open();
-        var binding = projects.notificationsFollow(client)) {
-      publisher.publish(notice("b-1"));
-      publisher.publish(notice("b-2"));
-      var id = project.conversationId("chat:main");
-      assertThat(projects.currentSessionId()).isEqualTo(id);
-      assertThat(logs.readConversation(id)).hasSize(2);
-      var next =
-          new ShellConversationService(
-                  projects, new SessionLifecycle(sessions, clock), (c, p) -> {})
-              .submit("わかった");
-      assertThat(next.conversationId()).isEqualTo(id);
-      assertThat(sessions.findPage(project.id(), null, 10)).hasSize(1);
+    var scope = client.open();
+    try (scope) {
+      var binding = projects.notificationsFollow(client);
+      try (binding) {
+        publisher.publish(notice("b-1"));
+        publisher.publish(notice("b-2"));
+        var id = project.conversationId("chat:main");
+        assertThat(projects.currentSessionId()).isEqualTo(id);
+        assertThat(logs.readConversation(id)).hasSize(2);
+        var next =
+            new ShellConversationService(
+                    projects, new SessionLifecycle(sessions, clock), (c, p) -> {})
+                .submit("わかった");
+        assertThat(next.conversationId()).isEqualTo(id);
+        assertThat(sessions.findPage(project.id(), null, 10)).hasSize(1);
+      }
     }
   }
 
@@ -333,7 +339,8 @@ class BehaviorConversationIntegrationTest {
   /** 話題の管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void capturedDestinationSurvivesSwitchBeforeAppend() throws Exception {
-    try (var scope = client.open()) {
+    var scope = client.open();
+    try (scope) {
       var appender = new BehaviorConversationHistoryAppender(logs, turns, sessions, projects);
       var target = appender.capture(notice("captured"));
       projects.cd(Files.createDirectory(dir.resolve("other")).toString());

@@ -64,7 +64,8 @@ class ReviewFindingJsonBoundaryTest {
     var estimator = TokenEstimator.conservative();
     var reviews = new ReviewTools(ledger, raw, new Tools(), estimator);
     var owner = new AgentRunContext("run", "session", root, "project");
-    try (var active = AgentRunScope.open(owner)) {
+    var active = AgentRunScope.open(owner);
+    try (active) {
       String task;
       if (legacy) task = "legacy:" + reviews.beginReview(List.of("lesson.md"), "correctness", "v1").id();
       else {

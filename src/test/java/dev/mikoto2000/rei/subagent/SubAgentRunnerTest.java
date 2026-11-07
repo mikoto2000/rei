@@ -52,7 +52,8 @@ class SubAgentRunnerTest {
     var runner = runner(p -> Flux.error(new IllegalStateException("password=secret")), "2s");
     var parent =
         new dev.mikoto2000.rei.core.chat.AgentRunContext("parent", "session", directory, "project");
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(parent)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(parent);
+    try (scope) {
       var result = runner.run("reviewer", "review", null);
       assertThat(result.output()).contains("INTERNAL_ERROR").doesNotContain("secret");
       assertThat(events)
@@ -109,7 +110,8 @@ class SubAgentRunnerTest {
     var operation =
         CompletableFuture.supplyAsync(
             () -> {
-              try (var scope = AgentRunScope.open(parent)) {
+              var scope = AgentRunScope.open(parent);
+              try (scope) {
                 return runner.run("reviewer", "inspect", null, shared);
               }
             });
@@ -208,7 +210,8 @@ class SubAgentRunnerTest {
             cancellation,
             id -> false);
     runner.setTaskTracking(true, runs, lifecycle);
-    try (var scope = AgentRunScope.open(parent)) {
+    var scope = AgentRunScope.open(parent);
+    try (scope) {
       assertThat(runner.run("reviewer", "inspect", null, shared).status())
           .isEqualTo(SubAgentResult.Status.FAILED);
     }
@@ -255,7 +258,8 @@ class SubAgentRunnerTest {
     var operation =
         CompletableFuture.supplyAsync(
             () -> {
-              try (var scope = AgentRunScope.open(parent)) {
+              var scope = AgentRunScope.open(parent);
+              try (scope) {
                 return runner.run("reviewer", "review", null);
               }
             });
@@ -914,7 +918,8 @@ class SubAgentRunnerTest {
             "project",
             AgentRunContext.RequestSource.MCP,
             AgentRunContext.Mode.READ_ONLY);
-    try (var scope = AgentRunScope.open(parent)) {
+    var scope = AgentRunScope.open(parent);
+    try (scope) {
       assertThat(runner.run("reviewer", "task", null).status())
           .isEqualTo(SubAgentResult.Status.COMPLETED);
     }
@@ -936,7 +941,8 @@ class SubAgentRunnerTest {
     var parent =
         new AgentRunContext(
             "web", "session", directory, "project", AgentRunContext.RequestSource.WEB);
-    try (var scope = AgentRunScope.open(parent)) {
+    var scope = AgentRunScope.open(parent);
+    try (scope) {
       assertThat(runner.run("reviewer", "task", null).status())
           .isEqualTo(SubAgentResult.Status.COMPLETED);
     }
@@ -969,7 +975,8 @@ class SubAgentRunnerTest {
             },
             "2s");
     var parent = new AgentRunContext("parent", "chat:main", directory);
-    try (var scope = AgentRunScope.open(parent)) {
+    var scope = AgentRunScope.open(parent);
+    try (scope) {
       var result = runner.run("reviewer", "review this", "explicit context");
       assertThat(result.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
       assertThat(result.output()).isEqualTo(SubAgentResultParserTest.VALID);
@@ -1132,14 +1139,16 @@ class SubAgentRunnerTest {
     var parent = new AgentRunContext("parent", "chat:main", directory);
     AtomicReference<SubAgentResult> result = new AtomicReference<>();
     AtomicBoolean parentDisposed = new AtomicBoolean();
-    try (var scope = AgentRunScope.open(parent)) {
+    var scope = AgentRunScope.open(parent);
+    try (scope) {
       cancellation.begin(null);
       cancellation.register(() -> parentDisposed.set(true));
       Thread child =
           Thread.ofVirtual()
               .start(
                   () -> {
-                    try (var childScope = AgentRunScope.open(parent)) {
+                    var childScope = AgentRunScope.open(parent);
+                    try (childScope) {
                       result.set(runner.run("reviewer", "task", null));
                     }
                   });
@@ -1221,7 +1230,8 @@ class SubAgentRunnerTest {
     var results = new CopyOnWriteArrayList<SubAgentResult>();
     Runnable task =
         () -> {
-          try (var scope = AgentRunScope.open(parent)) {
+          var scope = AgentRunScope.open(parent);
+          try (scope) {
             results.add(runner.run("reviewer", "task", null));
           }
         };

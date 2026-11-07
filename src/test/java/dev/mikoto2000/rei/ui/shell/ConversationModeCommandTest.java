@@ -34,7 +34,8 @@ class ConversationModeCommandTest {
     var out = new StringWriter();
     var cli = new CommandLine(new ConversationModeCommand(shell));
     cli.setOut(new PrintWriter(out));
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       assertThat(cli.execute("status")).isZero();
       assertThat(shell.currentSessionId()).isNull();
       assertThat(out.toString()).contains("auto");

@@ -240,8 +240,9 @@ class ContextCompletionTest {
     var registered = Files.createDirectory(root.resolve("registered"));
     Files.createFile(root.resolve("ordinary.txt"));
     projects.add(registered.toString());
-    try (var scope =
-        dev.mikoto2000.rei.core.project.ProjectClientScope.open(projects.newClient())) {
+    var scope =
+        dev.mikoto2000.rei.core.project.ProjectClientScope.open(projects.newClient());
+    try (scope) {
       var result = complete(command(), "/project cd ", 12);
       assertThat(result)
           .extracting(Candidate::value)

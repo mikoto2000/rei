@@ -30,16 +30,20 @@ class RepositoryReviewEntryTest {
     var ledger = new ReviewCoverageLedger(new StorageDatabase(data));
     var tools = new ReviewTools(ledger, new RawToolResultStore(data), new Tools(), TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "session", root, "project");
-    try (var active = AgentRunScope.open(owner)) {
-      var task = tools.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L);
-      assertThatThrownBy(() -> tools.requireComplete(owner)).isInstanceOf(ExecutionStoppedException.class);
-      tools.scanReviewSnapshot(task.id(), 100);
-      assertThat(tools.reviewTaskStatus(task.id()).enumeration()).isEqualTo("SEALED");
-      assertThat(tools.listReviewTargets(task.id(), null, 100).entries()).hasSize(1);
-      assertThatThrownBy(() -> tools.requireComplete(owner)).isInstanceOf(ExecutionStoppedException.class);
+    {
+      var active = AgentRunScope.open(owner);
+      try (active) {
+        var task = tools.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L);
+        assertThatThrownBy(() -> tools.requireComplete(owner)).isInstanceOf(ExecutionStoppedException.class);
+        tools.scanReviewSnapshot(task.id(), 100);
+        assertThat(tools.reviewTaskStatus(task.id()).enumeration()).isEqualTo("SEALED");
+        assertThat(tools.listReviewTargets(task.id(), null, 100).entries()).hasSize(1);
+        assertThatThrownBy(() -> tools.requireComplete(owner)).isInstanceOf(ExecutionStoppedException.class);
+      }
     }
     var unrelated = new AgentRunContext("another-run", "session", root, "project");
-    try (var active = AgentRunScope.open(unrelated)) {
+    var active = AgentRunScope.open(unrelated);
+    try (active) {
       tools.requireComplete(unrelated);
     }
   }

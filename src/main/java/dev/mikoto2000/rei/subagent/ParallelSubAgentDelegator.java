@@ -309,7 +309,8 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
                     deadlineReached.set(true);
                     return item(request, Status.TIMEOUT, null);
                   }
-                  try (var scope = AgentRunScope.open(parent)) {
+                  var scope = AgentRunScope.open(parent);
+                  try (scope) {
                     ChatGptSubAgentBackend.Receipt receipt = null;
                     SubAgentResult result;
                     if (child == null && external(request.backendId())) {

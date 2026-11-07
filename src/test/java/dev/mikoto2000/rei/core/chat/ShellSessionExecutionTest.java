@@ -106,7 +106,8 @@ class ShellSessionExecutionTest {
                 assertThat(
                         execution.execute(context, prompt, new UserInterventionQueue()).success())
                     .isTrue());
-    try (var scope = projects.newClient().open()) {
+    var scope = projects.newClient().open();
+    try (scope) {
       assertThat(memory.get(saved.conversationId())).isEmpty();
       assertThat(
               new picocli.CommandLine(new ResumeConversationCommand(restarted))
@@ -175,40 +176,42 @@ class ShellSessionExecutionTest {
                     .isTrue());
     var previous = System.getProperty("rei.data-dir");
     System.setProperty("rei.data-dir", directory.toString());
-    try (var application = new AnnotationConfigApplicationContext();
-        var scope = projects.newClient().open()) {
-      application.registerBean(Clock.class, Clock::systemUTC);
-      application.registerBean(
-          AgentEventFactory.class, () -> new AgentEventFactory(Clock.systemUTC()));
-      application.registerBean(AgentEventBus.class, InMemoryAgentEventBus::new);
-      application.register(ProjectScopeConfiguration.class, WorkingSetConfiguration.class);
-      application.refresh();
-      var working = application.getBean(WorkingSet.class);
-      var first = shell.submit("alpha-marker");
-      working.recordRead(directory.resolve("alpha.txt"));
-      assertThat(new picocli.CommandLine(new NewConversationCommand(shell)).execute()).isZero();
-      var secondId = shell.currentSessionId();
-      assertThat(working.getFiles()).isEmpty();
-      shell.submit("beta-marker");
-      assertThat(prompts.getLast().toString())
-          .contains("beta-marker")
-          .doesNotContain("alpha-marker");
-      working.recordRead(directory.resolve("beta.txt"));
-      assertThat(
-              new picocli.CommandLine(new ResumeConversationCommand(shell))
-                  .execute(first.conversationId()))
-          .isZero();
-      assertThat(working.getFiles())
-          .extracting(FileReference::path)
-          .containsExactly(directory.resolve("alpha.txt").toString());
-      shell.submit("continue-alpha");
-      assertThat(prompts.getLast().toString())
-          .contains("alpha-marker", "continue-alpha")
-          .doesNotContain("beta-marker");
-      assertThat(memory.get(secondId).toString())
-          .contains("beta-marker")
-          .doesNotContain("alpha-marker");
-      assertThat(projects.currentContext().id()).isEqualTo(first.projectId());
+    try (var application = new AnnotationConfigApplicationContext()) {
+      var scope = projects.newClient().open();
+      try (scope) {
+        application.registerBean(Clock.class, Clock::systemUTC);
+        application.registerBean(
+            AgentEventFactory.class, () -> new AgentEventFactory(Clock.systemUTC()));
+        application.registerBean(AgentEventBus.class, InMemoryAgentEventBus::new);
+        application.register(ProjectScopeConfiguration.class, WorkingSetConfiguration.class);
+        application.refresh();
+        var working = application.getBean(WorkingSet.class);
+        var first = shell.submit("alpha-marker");
+        working.recordRead(directory.resolve("alpha.txt"));
+        assertThat(new picocli.CommandLine(new NewConversationCommand(shell)).execute()).isZero();
+        var secondId = shell.currentSessionId();
+        assertThat(working.getFiles()).isEmpty();
+        shell.submit("beta-marker");
+        assertThat(prompts.getLast().toString())
+            .contains("beta-marker")
+            .doesNotContain("alpha-marker");
+        working.recordRead(directory.resolve("beta.txt"));
+        assertThat(
+                new picocli.CommandLine(new ResumeConversationCommand(shell))
+                    .execute(first.conversationId()))
+            .isZero();
+        assertThat(working.getFiles())
+            .extracting(FileReference::path)
+            .containsExactly(directory.resolve("alpha.txt").toString());
+        shell.submit("continue-alpha");
+        assertThat(prompts.getLast().toString())
+            .contains("alpha-marker", "continue-alpha")
+            .doesNotContain("beta-marker");
+        assertThat(memory.get(secondId).toString())
+            .contains("beta-marker")
+            .doesNotContain("alpha-marker");
+        assertThat(projects.currentContext().id()).isEqualTo(first.projectId());
+      }
     } finally {
       if (previous == null) System.clearProperty("rei.data-dir");
       else System.setProperty("rei.data-dir", previous);

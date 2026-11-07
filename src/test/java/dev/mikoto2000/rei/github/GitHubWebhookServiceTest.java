@@ -81,7 +81,8 @@ class GitHubWebhookServiceTest {
     var inbox = new AttentionRepository(ds, CLOCK);
     var owner = new AgentRunContext("owner", session, root, project.id());
     String schedule;
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       schedule =
           scheduler
               .scheduleOnEvent(
@@ -175,8 +176,9 @@ class GitHubWebhookServiceTest {
     var scheduler = new PersistentAgentScheduler(ds, CLOCK);
     var inbox = org.mockito.Mockito.spy(new AttentionRepository(ds, CLOCK));
     String schedule;
-    try (var scope =
-        AgentRunScope.open(new AgentRunContext("owner", session, root, project.id()))) {
+    var scope =
+        AgentRunScope.open(new AgentRunContext("owner", session, root, project.id()));
+    try (scope) {
       schedule =
           scheduler
               .scheduleOnEvent(

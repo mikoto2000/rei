@@ -98,8 +98,11 @@ public final class VoicePlaybackService implements AutoCloseable {
             BooleanSupplier current = () -> epoch == generation.get() && eligible(context);
             if (!current.getAsBoolean()) return;
             var settings = options.get();
-            try (var playback = gate.playback(Duration.ofMillis(settings.echoTailMs()))) {
-              if (current.getAsBoolean()) output.speak(settings.ttsVoice(), text, current);
+            try {
+              var playback = gate.playback(Duration.ofMillis(settings.echoTailMs()));
+              try (playback) {
+                if (current.getAsBoolean()) output.speak(settings.ttsVoice(), text, current);
+              }
             } catch (InterruptedException interrupted) {
               // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
               Thread.currentThread().interrupt();

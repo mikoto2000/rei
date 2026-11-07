@@ -22,7 +22,8 @@ class SoundNotificationToolsTest {
             java.nio.file.Path.of("."),
             "project",
             dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB);
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context);
+    try (scope) {
       org.assertj.core.api.Assertions.assertThat(tools.notify("web answer")).contains("Shell");
     }
     org.mockito.Mockito.verifyNoInteractions(service);
@@ -36,7 +37,8 @@ class SoundNotificationToolsTest {
     var context =
         new dev.mikoto2000.rei.core.chat.AgentRunContext(
             "shell", "session", java.nio.file.Path.of("."));
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context);
+    try (scope) {
       tools.notify("shell answer");
     }
     verify(service).notify("shell answer");

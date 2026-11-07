@@ -280,7 +280,8 @@ class SkillResourceReadTest {
             "project",
             dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.MCP,
             dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY);
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+    try (scope) {
       assertThat(
               readOne(tools, "review", new Tools.ReadFileRequest("references/guide.md", null, null))
                   .error())

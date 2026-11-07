@@ -24,26 +24,30 @@ class RawPagingScaleTest {
     var owner = new AgentRunContext("run", "chat", dir, "project");
     int calls = 0, offset = 0;
     var text = new StringBuilder();
-    try (var scope = AgentRunScope.open(owner)) {
-      var pages = new RawToolResultTools(store, TokenEstimator.conservative(), 256);
-      while (offset < source.length()) {
-        String wire = pages.readRawToolResult(ref, offset, 16000);
-        String[] split = wire.split("\n", 8);
-        int next = Integer.parseInt(split[5].substring(12));
-        assertThat(next).isGreaterThan(offset);
-        text.append(split[7]);
-        offset = next;
-        calls++;
+    {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
+        var pages = new RawToolResultTools(store, TokenEstimator.conservative(), 256);
+        while (offset < source.length()) {
+          String wire = pages.readRawToolResult(ref, offset, 16000);
+          String[] split = wire.split("\n", 8);
+          int next = Integer.parseInt(split[5].substring(12));
+          assertThat(next).isGreaterThan(offset);
+          text.append(split[7]);
+          offset = next;
+          calls++;
+        }
+        assertThat(store.bodyReadCount()).isEqualTo(1);
+        assertThat(store.bodyWriteCount()).isEqualTo(1);
+        assertThatThrownBy(() -> store.read("other", ref))
+            .hasMessageContaining("RAW_RESULT_ACCESS_DENIED");
       }
-      assertThat(store.bodyReadCount()).isEqualTo(1);
-      assertThat(store.bodyWriteCount()).isEqualTo(1);
-      assertThatThrownBy(() -> store.read("other", ref))
-          .hasMessageContaining("RAW_RESULT_ACCESS_DENIED");
     }
     assertThat(calls).isGreaterThan(100);
     assertThat(text.toString()).isEqualTo(source);
     store.clearRun("run");
-    try (var scope = AgentRunScope.open(owner)) {
+    var scope = AgentRunScope.open(owner);
+    try (scope) {
       store.read("chat", ref);
       assertThat(store.bodyReadCount()).isEqualTo(2);
     }

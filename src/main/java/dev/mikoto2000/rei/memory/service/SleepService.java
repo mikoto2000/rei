@@ -223,124 +223,127 @@ public class SleepService {
     String id = "sleep_" + UUID.randomUUID(), started = java.time.Instant.now().toString();
     long from = 0, to = 0;
     int processed = 0;
-    try (var deadline = execution == null ? null : execution.watchdog()) {
-      check.run();
-      if (events != null)
-        events.publish(
-            dev.mikoto2000.rei.event.AgentEventType.MEMORY_SLEEP_STARTED,
-            project,
-            session,
-            id,
-            preview,
-            0,
-            0,
-            0,
-            "STARTED");
-      from = lastProcessed.applyAsLong(session);
-      to = from;
-      var snapshot = readTurns.apply(session);
-      if (from > snapshot.size())
-        throw new IllegalStateException("History precedes saved Sleep checkpoint");
-      var batch = new ArrayList<ConversationTurnStore.Turn>();
-      int tokens = 0;
-      for (int i = (int) from;
-          i < snapshot.size() && i - from < properties.sleep().maxTurns();
-          i++) {
-        var turn = snapshot.get(i);
-        if (turn.status() == ConversationTurnStore.Status.RUNNING) break;
-        int size =
-            TokenEstimator.conservative().text(turn.request())
-                + TokenEstimator.conservative().text(turn.assistantMessage())
-                + 64;
-        if (tokens + size > properties.sleep().maxInputTokens()) {
-          if (i == from)
-            throw new IllegalStateException(
-                "Turn exceeds rei.memory.sleep.max-input-tokens; increase the limit to process it");
-          break;
-        }
-        tokens += size;
-        to = i + 1;
-        // Cancelled/failed turns are terminal but not evidence of agreed decisions.
-        if (turn.status() == ConversationTurnStore.Status.COMPLETED) batch.add(turn);
-      }
-      processed = (int) (to - from);
-      dev.mikoto2000.rei.llm.ModelCallBudget budget =
-          properties.sleep().maxLlmCallsPerProject() > 0
-                  || properties.sleep().maxTotalTokensPerProject() > 0
-              ? persistentBudget.apply(project, check)
-              : properties.sleep().maxLlmCalls() > 0 || properties.sleep().maxTotalTokens() > 0
-                  ? new SleepModelBudget(properties.sleep(), check)
-                  : null;
-      if (execution != null) budget = execution.accounting(budget);
-      if (!preview && episodes != null)
-        episodes.process().accept(new EpisodeScope(session, project, cancellation), budget);
-      var candidates =
-          batch.isEmpty()
-              ? List.<MemoryCandidate>of()
-              : budget == null
-                  ? extractor.extract(List.copyOf(batch))
-                  : extractor.extract(List.copyOf(batch), budget);
-      check.run();
-      var sourceIds =
-          batch.stream()
-              .map(ConversationTurnStore.Turn::runId)
-              .collect(java.util.stream.Collectors.toSet());
-      var plans = new ArrayList<Plan>();
-      var seen = new HashSet<String>();
-      var usedTargets = new HashSet<String>();
-      for (var candidate : candidates) {
+    try {
+      var deadline = execution == null ? null : execution.watchdog();
+      try (deadline) {
         check.run();
-        if (!sourceIds.containsAll(candidate.sourceTurnIds()))
-          throw new IllegalArgumentException(
-              "Candidate references a turn outside the selected range");
-        var existing = new ArrayList<LongTermMemory>();
-        int existingTokens = TokenEstimator.conservative().text(candidate.content()) + 512;
-        for (var m : candidatesForResolution.apply(candidate, project)) {
-          int size = TokenEstimator.conservative().text(m.content() + m.summary() + m.id()) + 64;
-          if (existingTokens + size > properties.sleep().maxInputTokens()) break;
-          existing.add(m);
-          existingTokens += size;
-        }
-        var resolution =
-            !seen.add(candidate.scope() + ":" + MemoryResolver.normalize(candidate.content()))
-                ? new MemoryResolution(MemoryAction.IGNORE, List.of())
-                : budget == null
-                    ? resolver.resolve(candidate, existing, project)
-                    : resolver.resolve(candidate, existing, project, budget);
-        var targets = resolution.targetIds().stream().map(currentMemory).toList();
-        if (resolution.targetIds().stream().anyMatch(usedTargets::contains))
-          throw new IllegalArgumentException(
-              "Ambiguous batch: multiple changes to the same memory; retry with fewer turns");
-        usedTargets.addAll(resolution.targetIds());
-        plans.add(new Plan(candidate, resolution, targets));
-      }
-      var run =
-          run(
-              id,
-              session,
+        if (events != null)
+          events.publish(
+              dev.mikoto2000.rei.event.AgentEventType.MEMORY_SLEEP_STARTED,
               project,
-              started,
-              preview ? "PREVIEW" : "COMPLETED",
-              from,
-              to,
+              session,
+              id,
+              preview,
+              0,
+              0,
+              0,
+              "STARTED");
+        from = lastProcessed.applyAsLong(session);
+        to = from;
+        var snapshot = readTurns.apply(session);
+        if (from > snapshot.size())
+          throw new IllegalStateException("History precedes saved Sleep checkpoint");
+        var batch = new ArrayList<ConversationTurnStore.Turn>();
+        int tokens = 0;
+        for (int i = (int) from;
+            i < snapshot.size() && i - from < properties.sleep().maxTurns();
+            i++) {
+          var turn = snapshot.get(i);
+          if (turn.status() == ConversationTurnStore.Status.RUNNING) break;
+          int size =
+              TokenEstimator.conservative().text(turn.request())
+                  + TokenEstimator.conservative().text(turn.assistantMessage())
+                  + 64;
+          if (tokens + size > properties.sleep().maxInputTokens()) {
+            if (i == from)
+              throw new IllegalStateException(
+                  "Turn exceeds rei.memory.sleep.max-input-tokens; increase the limit to process it");
+            break;
+          }
+          tokens += size;
+          to = i + 1;
+          // Cancelled/failed turns are terminal but not evidence of agreed decisions.
+          if (turn.status() == ConversationTurnStore.Status.COMPLETED) batch.add(turn);
+        }
+        processed = (int) (to - from);
+        dev.mikoto2000.rei.llm.ModelCallBudget budget =
+            properties.sleep().maxLlmCallsPerProject() > 0
+                    || properties.sleep().maxTotalTokensPerProject() > 0
+                ? persistentBudget.apply(project, check)
+                : properties.sleep().maxLlmCalls() > 0 || properties.sleep().maxTotalTokens() > 0
+                    ? new SleepModelBudget(properties.sleep(), check)
+                    : null;
+        if (execution != null) budget = execution.accounting(budget);
+        if (!preview && episodes != null)
+          episodes.process().accept(new EpisodeScope(session, project, cancellation), budget);
+        var candidates =
+            batch.isEmpty()
+                ? List.<MemoryCandidate>of()
+                : budget == null
+                    ? extractor.extract(List.copyOf(batch))
+                    : extractor.extract(List.copyOf(batch), budget);
+        check.run();
+        var sourceIds =
+            batch.stream()
+                .map(ConversationTurnStore.Turn::runId)
+                .collect(java.util.stream.Collectors.toSet());
+        var plans = new ArrayList<Plan>();
+        var seen = new HashSet<String>();
+        var usedTargets = new HashSet<String>();
+        for (var candidate : candidates) {
+          check.run();
+          if (!sourceIds.containsAll(candidate.sourceTurnIds()))
+            throw new IllegalArgumentException(
+                "Candidate references a turn outside the selected range");
+          var existing = new ArrayList<LongTermMemory>();
+          int existingTokens = TokenEstimator.conservative().text(candidate.content()) + 512;
+          for (var m : candidatesForResolution.apply(candidate, project)) {
+            int size = TokenEstimator.conservative().text(m.content() + m.summary() + m.id()) + 64;
+            if (existingTokens + size > properties.sleep().maxInputTokens()) break;
+            existing.add(m);
+            existingTokens += size;
+          }
+          var resolution =
+              !seen.add(candidate.scope() + ":" + MemoryResolver.normalize(candidate.content()))
+                  ? new MemoryResolution(MemoryAction.IGNORE, List.of())
+                  : budget == null
+                      ? resolver.resolve(candidate, existing, project)
+                      : resolver.resolve(candidate, existing, project, budget);
+          var targets = resolution.targetIds().stream().map(currentMemory).toList();
+          if (resolution.targetIds().stream().anyMatch(usedTargets::contains))
+            throw new IllegalArgumentException(
+                "Ambiguous batch: multiple changes to the same memory; retry with fewer turns");
+          usedTargets.addAll(resolution.targetIds());
+          plans.add(new Plan(candidate, resolution, targets));
+        }
+        var run =
+            run(
+                id,
+                session,
+                project,
+                started,
+                preview ? "PREVIEW" : "COMPLETED",
+                from,
+                to,
+                processed,
+                plans,
+                0);
+        if (!preview && processed > 0) {
+          commitSleep.accept(new CommitRequest(run, from, plans), check);
+        }
+        if (events != null)
+          events.publish(
+              dev.mikoto2000.rei.event.AgentEventType.MEMORY_SLEEP_COMPLETED,
+              project,
+              session,
+              id,
+              preview,
               processed,
-              plans,
-              0);
-      if (!preview && processed > 0) {
-        commitSleep.accept(new CommitRequest(run, from, plans), check);
+              plans.size(),
+              run.added(),
+              run.status());
+        return new Report(run, plans, preview);
       }
-      if (events != null)
-        events.publish(
-            dev.mikoto2000.rei.event.AgentEventType.MEMORY_SLEEP_COMPLETED,
-            project,
-            session,
-            id,
-            preview,
-            processed,
-            plans.size(),
-            run.added(),
-            run.status());
-      return new Report(run, plans, preview);
     } catch (RuntimeException | Error error) {
       AutoSleepExecution.Failure exceeded = null;
       if (!(error instanceof Error)

@@ -103,7 +103,8 @@ class VoiceAdvancedTest {
     var gate = new VoiceAudioGate(tick::get);
     long before = gate.epoch();
     assertThat(gate.allowed(before)).isTrue();
-    try (var playback = gate.playback(Duration.ofMillis(800))) {
+    var playback = gate.playback(Duration.ofMillis(800));
+    try (playback) {
       assertThat(gate.suppressed()).isTrue();
       assertThat(gate.allowed(before)).isFalse();
     }

@@ -81,19 +81,22 @@ class ReviewModelBoundaryTest {
     ReviewCoverageLedger.Job job;
     ReviewTools.Page page;
     dev.mikoto2000.rei.durable.WorkItemStore.Claim claim;
-    try (var scope = AgentRunScope.open(owner)) {
-      if (operation.equals("work-item") || operation.equals("next-work-item")) {
-        var task = reviews.beginRepositoryReview("WORKTREE", List.of("data/**"), 100, 1048576L);
-        reviews.scanReviewSnapshot(task.id(), 100);
-        claim = reviews.claimReviewWorkItem(task.id(), 1024);
-        job = null;
-        page = null;
-      } else {
-        job = reviews.beginReview(List.of("lesson.md"), "correctness", "v1");
-        page =
-            reviews.readReviewFile(
-                job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
-        claim = null;
+    {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
+        if (operation.equals("work-item") || operation.equals("next-work-item")) {
+          var task = reviews.beginRepositoryReview("WORKTREE", List.of("data/**"), 100, 1048576L);
+          reviews.scanReviewSnapshot(task.id(), 100);
+          claim = reviews.claimReviewWorkItem(task.id(), 1024);
+          job = null;
+          page = null;
+        } else {
+          job = reviews.beginReview(List.of("lesson.md"), "correctness", "v1");
+          page =
+              reviews.readReviewFile(
+                  job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
+          claim = null;
+        }
       }
     }
     var assembler =
@@ -342,12 +345,15 @@ class ReviewModelBoundaryTest {
     var owner = new AgentRunContext("run", "chat", repository, "project");
     ReviewCoverageLedger.Job job = null;
     dev.mikoto2000.rei.durable.WorkItemStore.Claim claim = null;
-    try (var scope = AgentRunScope.open(owner)) {
-      if (durable) {
-        var task = reviews.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L);
-        reviews.scanReviewSnapshot(task.id(), 100);
-        claim = reviews.claimReviewWorkItem(task.id(), 1024);
-      } else job = reviews.beginReview(List.of("lesson.md"), "correctness", "v1");
+    {
+      var scope = AgentRunScope.open(owner);
+      try (scope) {
+        if (durable) {
+          var task = reviews.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L);
+          reviews.scanReviewSnapshot(task.id(), 100);
+          claim = reviews.claimReviewWorkItem(task.id(), 1024);
+        } else job = reviews.beginReview(List.of("lesson.md"), "correctness", "v1");
+      }
     }
     var assembler =
         new ContextAssembler(

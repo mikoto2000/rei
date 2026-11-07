@@ -58,7 +58,8 @@ public class HttpApiTools {
                     .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
                 instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext)))
       authorizeLegacyRead.accept(request);
-    try (var scope = FetchScope.enter(context)) {
+    var scope = FetchScope.enter(context);
+    try (scope) {
       return read.apply(request);
     }
   }
@@ -83,7 +84,8 @@ public class HttpApiTools {
             instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext))
       throw new dev.mikoto2000.rei.core.policy.ToolPermissionException(
           "httpRequestWrite", dev.mikoto2000.rei.core.policy.PermissionDecision.REQUIRE_APPROVAL);
-    try (var scope = FetchScope.enter(context)) {
+    var scope = FetchScope.enter(context);
+    try (scope) {
       return write.apply(request);
     }
   }

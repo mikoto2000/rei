@@ -776,122 +776,125 @@ final class ActivityEvidencePipeline {
     }
     String source = background ? "VISION_BACKGROUND" : "VISION_FOREGROUND";
     String stage = "prepare";
-    try (var ignored =
-        org.slf4j.MDC.putCloseable("activityScope", background ? "background" : "foreground")) {
-      var image =
-          background
-              ? work.desktop
-              : !p.getDetection().isForegroundCrop()
-                      || p.getDetection().isBackgroundFullScreenEnabled()
-                  ? work.screen
-                  : ActivityImages.foreground(work.screen, original.foreground());
-      if (image == null) return;
-      if (!background
-          && !p.getDetection().isBackgroundFullScreenEnabled()
-          && p.getDetection().isForegroundCrop()
-          && image == work.screen) {
-        skipped.increment();
-        log.info(
-            "Activity fallback skipped: reason=foreground_bounds_unavailable evidence_retained=true");
-        return;
-      }
-      apiStarted = clock.instant();
-      synchronized (this) {
-        if ((!allowed(work.generation)
-            || (!lifeAllowed(work.record.capturedAt())
-                || life != null && !life.valid(work.lifeLease)))) return;
-        if (background) {
-          desktopPolicy.executed(apiStarted);
-          backgroundCalls.increment();
-        } else {
-          foregroundCalls.increment();
-          foregroundStarted = apiStarted;
-        }
-      }
-      recordAttempt(work, background, apiStarted);
-      stage = "extract";
-      var result = extractor.extract(image, original.foreground());
-      apiCompleted = clock.instant();
-      stage = "merge";
-      synchronized (this) {
-        if ((!allowed(work.generation)
-            || (!lifeAllowed(work.record.capturedAt())
-                || life != null && !life.valid(work.lifeLease)))) return;
-        var base = work.record;
-        ActivityRecord merged;
-        if (background)
-          merged = ActivityBackgroundMerge.merge(base, result, p.getPrimaryConfidenceThreshold());
-        else merged = ActivityEnrichment.merge(base, result);
-        var d = merged.detection();
-        var sources = new LinkedHashSet<>(d.classificationSources());
-        sources.add(source);
-        var weights = new LinkedHashMap<>(d.sourceConfidence());
-        weights.put(source, result.confidence());
-        var secondary = new ArrayList<>(d.secondaryConfidence());
-        if (background)
-          for (var candidate : merged.inference().activities())
-            if (!base.inference().activities().contains(candidate))
-              secondary.add(
-                  new ActivityClassification.Secondary(
-                      candidate,
-                      ActivityFieldConfidence.from(candidate, result.confidence()).secondary()));
-        boolean used =
+    try {
+      var ignored =
+          org.slf4j.MDC.putCloseable("activityScope", background ? "background" : "foreground");
+      try (ignored) {
+        var image =
             background
-                ? VisionDiagnostics.of(merged.detection()).background().context() != null
-                : !base.inference().equals(merged.inference())
-                    || !ActivityEnrichment.fields(base).equals(ActivityEnrichment.fields(merged));
-        var vision =
-            VisionDiagnostics.of(d)
-                .with(
-                    background,
-                    used
-                        ? VisionDiagnostics.State.USED
-                        : VisionDiagnostics.State.ATTEMPTED_SUCCEEDED_NOT_USED,
-                    null)
-                .timing(
-                    background,
-                    new VisionDiagnostics.Timing(
-                        original.id(), work.imageCapturedAt, apiStarted, apiCompleted));
-        var detection =
-            new ActivityRecord.Detection(
-                d.evidence(),
-                List.copyOf(sources),
-                true,
-                "EVIDENCE_PLUS_VISION",
-                "FINAL",
-                weights,
-                d.reason(),
-                d.fieldConfidence(),
-                secondary,
-                d.diagnostics(),
-                vision);
-        var updated =
-            copy(
-                merged,
-                merged.inference(),
-                merged.confidence(),
-                detection,
-                merged.screenshotReferences());
-        stage = "persist";
-        store.replace(updated);
-        work.record = updated;
-        supplementSaved = true;
-        if (!background) {
-          completed.increment();
-          lastSucceededKey = work.key;
-          lastSucceededAt = work.imageCapturedAt;
-          lastSucceededResult = result;
-          lastSucceededTiming = vision.foreground().timing();
+                ? work.desktop
+                : !p.getDetection().isForegroundCrop()
+                        || p.getDetection().isBackgroundFullScreenEnabled()
+                    ? work.screen
+                    : ActivityImages.foreground(work.screen, original.foreground());
+        if (image == null) return;
+        if (!background
+            && !p.getDetection().isBackgroundFullScreenEnabled()
+            && p.getDetection().isForegroundCrop()
+            && image == work.screen) {
+          skipped.increment();
+          log.info(
+              "Activity fallback skipped: reason=foreground_bounds_unavailable evidence_retained=true");
+          return;
         }
-        classificationCounts(base, -1);
-        classificationCounts(work.record, 1);
-        if (previous != null && previous.id().equals(work.record.id())) previous = work.record;
-        success.increment();
+        apiStarted = clock.instant();
+        synchronized (this) {
+          if ((!allowed(work.generation)
+              || (!lifeAllowed(work.record.capturedAt())
+                  || life != null && !life.valid(work.lifeLease)))) return;
+          if (background) {
+            desktopPolicy.executed(apiStarted);
+            backgroundCalls.increment();
+          } else {
+            foregroundCalls.increment();
+            foregroundStarted = apiStarted;
+          }
+        }
+        recordAttempt(work, background, apiStarted);
+        stage = "extract";
+        var result = extractor.extract(image, original.foreground());
+        apiCompleted = clock.instant();
+        stage = "merge";
+        synchronized (this) {
+          if ((!allowed(work.generation)
+              || (!lifeAllowed(work.record.capturedAt())
+                  || life != null && !life.valid(work.lifeLease)))) return;
+          var base = work.record;
+          ActivityRecord merged;
+          if (background)
+            merged = ActivityBackgroundMerge.merge(base, result, p.getPrimaryConfidenceThreshold());
+          else merged = ActivityEnrichment.merge(base, result);
+          var d = merged.detection();
+          var sources = new LinkedHashSet<>(d.classificationSources());
+          sources.add(source);
+          var weights = new LinkedHashMap<>(d.sourceConfidence());
+          weights.put(source, result.confidence());
+          var secondary = new ArrayList<>(d.secondaryConfidence());
+          if (background)
+            for (var candidate : merged.inference().activities())
+              if (!base.inference().activities().contains(candidate))
+                secondary.add(
+                    new ActivityClassification.Secondary(
+                        candidate,
+                        ActivityFieldConfidence.from(candidate, result.confidence()).secondary()));
+          boolean used =
+              background
+                  ? VisionDiagnostics.of(merged.detection()).background().context() != null
+                  : !base.inference().equals(merged.inference())
+                      || !ActivityEnrichment.fields(base).equals(ActivityEnrichment.fields(merged));
+          var vision =
+              VisionDiagnostics.of(d)
+                  .with(
+                      background,
+                      used
+                          ? VisionDiagnostics.State.USED
+                          : VisionDiagnostics.State.ATTEMPTED_SUCCEEDED_NOT_USED,
+                      null)
+                  .timing(
+                      background,
+                      new VisionDiagnostics.Timing(
+                          original.id(), work.imageCapturedAt, apiStarted, apiCompleted));
+          var detection =
+              new ActivityRecord.Detection(
+                  d.evidence(),
+                  List.copyOf(sources),
+                  true,
+                  "EVIDENCE_PLUS_VISION",
+                  "FINAL",
+                  weights,
+                  d.reason(),
+                  d.fieldConfidence(),
+                  secondary,
+                  d.diagnostics(),
+                  vision);
+          var updated =
+              copy(
+                  merged,
+                  merged.inference(),
+                  merged.confidence(),
+                  detection,
+                  merged.screenshotReferences());
+          stage = "persist";
+          store.replace(updated);
+          work.record = updated;
+          supplementSaved = true;
+          if (!background) {
+            completed.increment();
+            lastSucceededKey = work.key;
+            lastSucceededAt = work.imageCapturedAt;
+            lastSucceededResult = result;
+            lastSucceededTiming = vision.foreground().timing();
+          }
+          classificationCounts(base, -1);
+          classificationCounts(work.record, 1);
+          if (previous != null && previous.id().equals(work.record.id())) previous = work.record;
+          success.increment();
+        }
+        log.info(
+            "Activity evidence enriched: scope={} observation_age_ms={}",
+            background ? "background" : "foreground",
+            Duration.between(original.capturedAt(), clock.instant()).toMillis());
       }
-      log.info(
-          "Activity evidence enriched: scope={} observation_age_ms={}",
-          background ? "background" : "foreground",
-          Duration.between(original.capturedAt(), clock.instant()).toMillis());
     } catch (IOException | RuntimeException e) {
       if (apiStarted != null && apiCompleted == null) apiCompleted = clock.instant();
       if (!background) failed.increment();

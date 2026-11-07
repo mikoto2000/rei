@@ -228,7 +228,8 @@ class DocumentRendererTest {
     tools.setDocumentRenderer(
         service(text -> new DocumentRendererService.Rendered(0, false, png, "fixture")));
     assertThrows(IllegalArgumentException.class, () -> tools.validateDocumentRender(request));
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner())) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner());
+    try (scope) {
       var result = tools.validateDocumentRender(request);
       assertEquals(result, tools.inspectDocumentRender(result.id()));
     }

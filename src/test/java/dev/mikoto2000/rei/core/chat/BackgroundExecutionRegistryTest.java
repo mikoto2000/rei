@@ -39,8 +39,9 @@ class BackgroundExecutionRegistryTest {
         new dev.mikoto2000.rei.summarize.CurrentConversationHistoryAppender(
             memory, Optional.empty());
     var router = new ConversationInputRouter(tasks::add, (c, p, q) -> {});
-    try (var client =
-        dev.mikoto2000.rei.core.project.ProjectClientScope.open(projects.newClient())) {
+    var client =
+        dev.mikoto2000.rei.core.project.ProjectClientScope.open(projects.newClient());
+    try (client) {
       var project = projects.currentContext();
       String session = project.conversationId("chat:" + UUID.randomUUID());
       projects.selectSession(session);

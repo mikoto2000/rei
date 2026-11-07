@@ -100,56 +100,58 @@ class WebSessionExecutionTest {
               execution.execute(context, prompt, queue);
             });
     var registry = new RunRegistry(Clock.systemUTC());
-    try (var runs = new RunService(registry, bus, factory, cancellation, router::cancelQueued);
-        var scope = projectService.newClient().open()) {
-      var submit =
-          new ChatSubmitService(
-              projects,
-              new SessionRegistry(Clock.systemUTC()),
-              registry,
-              new dev.mikoto2000.rei.conversation.FileSessionRepository(
-                  directory.resolve("sessions.json")),
-              Clock.systemUTC(),
-              (context, prompt) ->
-                  router.submit(context, prompt, work -> runs.execute(context, work)));
-      var a = submit.submit("alpha-marker", first.id(), null);
-      var b = submit.submit("beta-marker", first.id(), null);
-      var continuation = submit.submit("continue-alpha", first.id(), a.conversationId());
-      projectService.cd(second.root().toString());
-      while (!tasks.isEmpty()) tasks.removeFirst().run();
-      assertThat(projectService.currentProject()).isEqualTo(second.root());
-      assertThat(executed).containsExactly(a, b, continuation);
-      assertThat(turns.read(a.conversationId()))
-          .allSatisfy(
-              turn -> {
-                assertThat(turn.assistantMessage()).isEqualTo("answer");
-                assertThat(turn.createdAt()).isNotNull();
-              });
-      assertThat(executed).allMatch(context -> context.projectRoot().equals(first.root()));
-      assertThat(turns.read(a.conversationId()))
-          .extracting(ConversationTurnStore.Turn::runId)
-          .containsExactly(a.runId(), continuation.runId());
-      assertThat(turns.read(b.conversationId()))
-          .extracting(ConversationTurnStore.Turn::runId)
-          .containsExactly(b.runId());
-      assertThat(memory.get(b.conversationId()).toString())
-          .contains("beta-marker")
-          .doesNotContain("alpha-marker");
-      assertThat(memory.get(a.conversationId()).toString())
-          .contains("alpha-marker")
-          .doesNotContain("beta-marker");
-      assertThat(prompts.getLast().toString())
-          .contains("alpha-marker")
-          .doesNotContain("beta-marker");
-      for (var context : executed) {
-        assertThat(runs.get(context.runId()).status()).isEqualTo(RunStatus.COMPLETED);
-        assertThat(events.stream().filter(event -> context.runId().equals(event.runId())).toList())
-            .isNotEmpty()
-            .allMatch(
-                event ->
-                    context.conversationId().equals(event.sessionId())
-                        && context.runId().equals(event.turnId())
-                        && first.id().equals(event.projectId()));
+    try (var runs = new RunService(registry, bus, factory, cancellation, router::cancelQueued)) {
+      var scope = projectService.newClient().open();
+      try (scope) {
+        var submit =
+            new ChatSubmitService(
+                projects,
+                new SessionRegistry(Clock.systemUTC()),
+                registry,
+                new dev.mikoto2000.rei.conversation.FileSessionRepository(
+                    directory.resolve("sessions.json")),
+                Clock.systemUTC(),
+                (context, prompt) ->
+                    router.submit(context, prompt, work -> runs.execute(context, work)));
+        var a = submit.submit("alpha-marker", first.id(), null);
+        var b = submit.submit("beta-marker", first.id(), null);
+        var continuation = submit.submit("continue-alpha", first.id(), a.conversationId());
+        projectService.cd(second.root().toString());
+        while (!tasks.isEmpty()) tasks.removeFirst().run();
+        assertThat(projectService.currentProject()).isEqualTo(second.root());
+        assertThat(executed).containsExactly(a, b, continuation);
+        assertThat(turns.read(a.conversationId()))
+            .allSatisfy(
+                turn -> {
+                  assertThat(turn.assistantMessage()).isEqualTo("answer");
+                  assertThat(turn.createdAt()).isNotNull();
+                });
+        assertThat(executed).allMatch(context -> context.projectRoot().equals(first.root()));
+        assertThat(turns.read(a.conversationId()))
+            .extracting(ConversationTurnStore.Turn::runId)
+            .containsExactly(a.runId(), continuation.runId());
+        assertThat(turns.read(b.conversationId()))
+            .extracting(ConversationTurnStore.Turn::runId)
+            .containsExactly(b.runId());
+        assertThat(memory.get(b.conversationId()).toString())
+            .contains("beta-marker")
+            .doesNotContain("alpha-marker");
+        assertThat(memory.get(a.conversationId()).toString())
+            .contains("alpha-marker")
+            .doesNotContain("beta-marker");
+        assertThat(prompts.getLast().toString())
+            .contains("alpha-marker")
+            .doesNotContain("beta-marker");
+        for (var context : executed) {
+          assertThat(runs.get(context.runId()).status()).isEqualTo(RunStatus.COMPLETED);
+          assertThat(events.stream().filter(event -> context.runId().equals(event.runId())).toList())
+              .isNotEmpty()
+              .allMatch(
+                  event ->
+                      context.conversationId().equals(event.sessionId())
+                          && context.runId().equals(event.turnId())
+                          && first.id().equals(event.projectId()));
+        }
       }
     }
   }

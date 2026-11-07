@@ -40,7 +40,8 @@ class ImageGenerationServiceTest {
     var owner =
         new dev.mikoto2000.rei.core.chat.AgentRunContext("image", "session", tempDir, project.id());
     ImageGenerationResult result;
-    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+    var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+    try (scope) {
       result =
           service.generate(
               new ImageGenerationRequest(

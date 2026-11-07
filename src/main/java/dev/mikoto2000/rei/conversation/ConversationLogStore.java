@@ -197,7 +197,8 @@ public class ConversationLogStore {
       var found = cached.entries().get(sourceId);
       if (found != null || cached.complete()) {
         // A cache hit must still fail closed when history is no longer readable.
-        try (var readable = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+        var readable = Files.newBufferedReader(file, StandardCharsets.UTF_8);
+        try (readable) {
           return java.util.Optional.ofNullable(found);
         }
       }
@@ -476,8 +477,11 @@ public class ConversationLogStore {
       var cached = historyFiles.get(file);
       if (cached != null && cached.stamp().equals(stamp)) {
         // Recheck readability even when the content and metadata have not changed.
-        try (var readable = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-          entries.addAll(cached.entries());
+        try {
+          var readable = Files.newBufferedReader(file, StandardCharsets.UTF_8);
+          try (readable) {
+            entries.addAll(cached.entries());
+          }
         } catch (IOException unavailable) {
           log.warn("Failed to read conversation log file: {}", file, unavailable);
         }

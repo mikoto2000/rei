@@ -39,7 +39,8 @@ class ActivityCommandsControllerTest {
     var api =
         new ActivityCommandsController(
             command, registry, projects, mock(IntegrationRunSubmitService.class));
-    try (var scope = ProjectClientScope.open(projects.newClient())) {
+    var scope = ProjectClientScope.open(projects.newClient());
+    try (scope) {
       assertEquals(second.id(), projects.currentContext().id());
       assertEquals("context", api.context(first.id(), "today").text());
       assertEquals(second.id(), projects.currentContext().id());
