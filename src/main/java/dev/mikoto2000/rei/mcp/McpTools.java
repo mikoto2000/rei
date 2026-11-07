@@ -48,12 +48,9 @@ public final class McpTools {
           "rei_task_cancel");
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  private final java.util.function.Predicate<String> registeredProject;
+
+  private final java.util.function.Function<Set<String>, List<Map<String, Object>>> visibleProjects;
 
   /** 許可。 */
   private final Set<String> allowed;
@@ -106,7 +103,26 @@ public final class McpTools {
       Duration receiptRetention,
       McpCursor cursors,
       dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals) {
-    this.projects = projects;
+    this.registeredProject = id -> projects.resolveById(id).isPresent();
+    this.visibleProjects =
+        allowlist ->
+            projects.list().stream()
+                .filter(p -> allowlist.contains(p.id()))
+                .limit(100)
+                .<Map<String, Object>>map(
+                    p ->
+                        Map.of(
+                            "project_id",
+                            p.id(),
+                            "name",
+                            CredentialRedactor.redact(p.name()),
+                            "capabilities",
+                            List.of(
+                                "READ_CONTEXT",
+                                "SUBMIT_READ_ONLY",
+                                "READ_OWN_RUN",
+                                "CANCEL_OWN_RUN")))
+                .toList();
     this.allowed = Set.copyOf(allowed);
     this.contexts = contexts;
     this.chats = chats;
@@ -230,8 +246,7 @@ public final class McpTools {
 
   /** MCPによる機能の提供に関するプロジェクトを処理する。 */
   private void project(String id) {
-    if (!allowed.contains(id) || projects.resolveById(id).isEmpty())
-      throw new McpError("NOT_FOUND");
+    if (!allowed.contains(id) || !registeredProject.test(id)) throw new McpError("NOT_FOUND");
   }
 
   /** 表示や受け渡しに用いるテキストを返す。 */
@@ -312,24 +327,7 @@ public final class McpTools {
 
   /** MCPによる機能の提供で用いるプロジェクト一覧を返す。 */
   private Map<String, Object> projects() {
-    return Map.of(
-        "schema_version",
-        1,
-        "projects",
-        projects.list().stream()
-            .filter(p -> allowed.contains(p.id()))
-            .limit(100)
-            .map(
-                p ->
-                    Map.of(
-                        "project_id",
-                        p.id(),
-                        "name",
-                        CredentialRedactor.redact(p.name()),
-                        "capabilities",
-                        List.of(
-                            "READ_CONTEXT", "SUBMIT_READ_ONLY", "READ_OWN_RUN", "CANCEL_OWN_RUN")))
-            .toList());
+    return Map.of("schema_version", 1, "projects", visibleProjects.apply(allowed));
   }
 
   /** MCPによる機能の提供で用いる文脈を返す。 */

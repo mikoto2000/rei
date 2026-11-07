@@ -37,18 +37,16 @@ import java.util.TreeSet;
  */
 public final class TaskManagerService {
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  private final java.util.function.Supplier<List<ProjectContext>> registeredProjects;
+
+  private final java.util.function.Function<String, Optional<ProjectContext>> findProject;
 
   /** 実行一覧。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
+      justification =
+          "Uses the shared run registry so participants observe the same run lifecycle.")
   private final RunRegistry runs;
 
   /** 再開用の記録一覧。 */
@@ -95,7 +93,8 @@ public final class TaskManagerService {
       GoalRepository goals,
       PersistentDependencyRepository dependencies,
       PersistentAgentScheduler schedules) {
-    this.projects = projects;
+    this.registeredProjects = () -> projects.list();
+    this.findProject = id -> projects.resolveById(id);
     this.runs = runs;
     this.checkpoints = checkpoints;
     this.goals = goals;
@@ -112,7 +111,7 @@ public final class TaskManagerService {
       throw new IllegalArgumentException("Invalid Task filter");
     String scope = "tasks:" + Objects.toString(project, "") + ":" + Objects.toString(session, "");
     var after = cursors.decode(scope, cursor);
-    var allowed = project == null ? projects.list() : List.of(project(project));
+    var allowed = project == null ? registeredProjects.get() : List.of(project(project));
     var rows = new TreeMap<String, TaskView>();
     for (var owner : allowed)
       for (var task : catalog(owner, session, after == null ? null : after.id(), limit + 1, null)) {
@@ -142,7 +141,7 @@ public final class TaskManagerService {
   /** 実行中タスクの操作で用いるプロジェクトを返す。 */
   private ProjectContext project(String id) {
     if (id == null || id.isBlank()) throw new IllegalArgumentException("Project required");
-    return projects.resolveById(id).orElseThrow(() -> new ResourceNotFoundException("Task"));
+    return findProject.apply(id).orElseThrow(() -> new ResourceNotFoundException("Task"));
   }
 
   /** 実行中タスクの操作で用いる利用可能な項目を返す。 */
