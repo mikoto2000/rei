@@ -32,22 +32,36 @@ public class CurrentConversationHistoryAppender implements ConversationHistoryAp
   @Override
   public void appendUserMessage(String content) {
     if (nonConversationalWebRun()) return;
-    addToMemory.accept(ConversationIds.currentChat(), new UserMessage(content));
-    appendLog("user", content);
+    appendUser(ConversationIds.currentChat(), content);
   }
 
   /** 既存の記録へ経緯を残すため、アシスタントメッセージを追記する。 */
   @Override
   public void appendAssistantMessage(String content) {
     if (nonConversationalWebRun()) return;
-    addToMemory.accept(ConversationIds.currentChat(), new AssistantMessage(content));
-    appendLog("assistant", content);
+    appendAssistant(ConversationIds.currentChat(), content);
   }
 
-  /** 既存の記録へ経緯を残すため、診断用のログ出力先を追記する。 */
-  private void appendLog(String speaker, String content) {
-    conversationLogStore.ifPresent(
-        store -> store.append(ConversationIds.currentChat(), speaker, content));
+  @Override
+  public java.util.function.Consumer<String> beginSummary(String request) {
+    if (nonConversationalWebRun()) return summary -> {};
+    String conversation = ConversationIds.currentChat();
+    appendUser(conversation, request);
+    return summary -> appendAssistant(conversation, summary);
+  }
+
+  private void appendUser(String conversation, String content) {
+    addToMemory.accept(conversation, new UserMessage(content));
+    appendLog(conversation, "user", content);
+  }
+
+  private void appendAssistant(String conversation, String content) {
+    addToMemory.accept(conversation, new AssistantMessage(content));
+    appendLog(conversation, "assistant", content);
+  }
+
+  private void appendLog(String conversation, String speaker, String content) {
+    conversationLogStore.ifPresent(store -> store.append(conversation, speaker, content));
   }
 
   /** 情報の要約において、以外ConversationalWeb実行に該当するか判定する。 */

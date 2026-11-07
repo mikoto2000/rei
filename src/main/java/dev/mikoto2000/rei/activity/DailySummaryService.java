@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.activity;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -15,11 +13,9 @@ public final class DailySummaryService {
   private final Supplier<SummaryThemeConfiguration> configuration;
 
   /** 書き込み先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Retains the configured writer callback used to generate each summary.")
-  private final DailySummaryWriter writer;
+  private final java.util.function.Function<DailySummaryAggregate, Outcome> summarizeAggregate;
+
+  private record Outcome(DailySummary summary, String mode) {}
 
   /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
@@ -29,13 +25,19 @@ public final class DailySummaryService {
   public DailySummaryService(Supplier<ProjectNameNormalizer> aliases, DailySummaryWriter writer) {
     this.configuration =
         () -> new SummaryThemeConfiguration(aliases.get(), SummaryThemeGroups.empty());
-    this.writer = writer;
+    this.summarizeAggregate =
+        writer == null
+            ? aggregate -> new Outcome(DailySummary.fallback(aggregate), "FALLBACK_DISABLED")
+            : aggregate -> writeWithFallback(writer, aggregate);
   }
 
   /** 指定された値や利用先を使って、DailySummaryServiceを初期化する。 */
   public DailySummaryService(ProjectAliasStore store, DailySummaryWriter writer) {
     this.configuration = store::snapshot;
-    this.writer = writer;
+    this.summarizeAggregate =
+        writer == null
+            ? aggregate -> new Outcome(DailySummary.fallback(aggregate), "FALLBACK_DISABLED")
+            : aggregate -> writeWithFallback(writer, aggregate);
   }
 
   /** 作業状況の把握で用いるローカルを返す。 */
@@ -62,26 +64,26 @@ public final class DailySummaryService {
         new DailySummaryAggregator(config.projects(), minimumConfidence, config.groups())
             .aggregate(date, range, zone, segments);
     if (aggregate.observedSeconds() == 0) return date + " の Activity は記録されていません。";
-    var result = DailySummary.fallback(aggregate);
-    String mode = "FALLBACK_DISABLED";
-    if (writer != null)
-      try {
-        result = writer.write(aggregate).validated(aggregate);
-        mode = "LLM_SUCCESS";
-      } catch (IOException | InterruptedException | RuntimeException error) {
-        mode = "FALLBACK";
-        log.debug(
-            "[summary-trace] writer-failure type={} cause={} timeout={}",
-            error.getClass().getSimpleName(),
-            error.getCause() == null ? "none" : error.getCause().getClass().getSimpleName(),
-            error.getMessage() != null
-                && error.getMessage().startsWith("Timeout on blocking read"));
-        log.warn(
-            "Daily summary writing failed; using deterministic fallback ({})",
-            error.getClass().getSimpleName());
-      }
-    log.debug("[summary-trace] writer-mode={}", mode);
-    log.debug("[summary-trace] formatter-input result={}", result);
-    return new DailySummaryFormatter().format(aggregate, result);
+    var outcome = summarizeAggregate.apply(aggregate);
+    log.debug("[summary-trace] writer-mode={}", outcome.mode());
+    log.debug("[summary-trace] formatter-input result={}", outcome.summary());
+    return new DailySummaryFormatter().format(aggregate, outcome.summary());
+  }
+
+  private static Outcome writeWithFallback(
+      DailySummaryWriter writer, DailySummaryAggregate aggregate) {
+    try {
+      return new Outcome(writer.write(aggregate).validated(aggregate), "LLM_SUCCESS");
+    } catch (IOException | InterruptedException | RuntimeException error) {
+      log.debug(
+          "[summary-trace] writer-failure type={} cause={} timeout={}",
+          error.getClass().getSimpleName(),
+          error.getCause() == null ? "none" : error.getCause().getClass().getSimpleName(),
+          error.getMessage() != null && error.getMessage().startsWith("Timeout on blocking read"));
+      log.warn(
+          "Daily summary writing failed; using deterministic fallback ({})",
+          error.getClass().getSimpleName());
+      return new Outcome(DailySummary.fallback(aggregate), "FALLBACK");
+    }
   }
 }

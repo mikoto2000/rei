@@ -383,7 +383,7 @@ public class ChatExecutionService {
     this.runCancellationRequested = id -> cancellationService.diagnostic(id).requestedAt() != null;
     this.onRunCancellation = (id, action) -> cancellationService.onCancel(id, action);
     this.awaitRunChildren = id -> cancellationService.awaitChildren(id);
-    this.childEntry = id -> () -> cancellationService.enterChild(id)::close;
+    this.childEntry = id -> () -> cancellationService.acquireChildRelease(id);
     this.memoryConsolidatorService = memoryConsolidatorService;
     this.outputLimitReplanner = outputLimitReplanner;
     this.topicOrchestrator = topicOrchestrator;

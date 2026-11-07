@@ -4,8 +4,6 @@ import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
@@ -56,11 +54,9 @@ public class DotDelegationService {
   }
 
   /** 実行環境実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so operations see the same lifecycle state.")
-  private dev.mikoto2000.rei.application.run.RunRegistry runtimeRuns;
+  private java.util.function.Predicate<AgentRunContext> ownsActiveRun;
+
+  private java.util.function.Predicate<String> transitionToWaiting;
 
   /** 依存条件一覧。 */
   private dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies;
@@ -116,7 +112,17 @@ public class DotDelegationService {
       dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies,
       dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints,
       dev.mikoto2000.rei.core.policy.ToolPermissionPolicy policy) {
-    this.runtimeRuns = runs;
+    this.ownsActiveRun =
+        runs == null
+            ? null
+            : owner -> {
+              var current = runs.get(owner.runId());
+              return current.context().equals(owner)
+                  && current.status() == dev.mikoto2000.rei.application.run.RunStatus.RUNNING
+                  && runs.ownsExecution(owner.runId());
+            };
+    this.transitionToWaiting =
+        run -> runs.transition(run, dev.mikoto2000.rei.application.run.RunStatus.WAITING, null);
     this.dependencies = dependencies;
     this.runningCheckpointTask =
         checkpoints == null
@@ -169,7 +175,7 @@ public class DotDelegationService {
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution, Map<String, Object> input) {
     if (!properties.parentLlmEnabled()
         || execution == null
-        || runtimeRuns == null
+        || ownsActiveRun == null
         || dependencies == null
         || runningCheckpointTask == null
         || authorization == null
@@ -190,10 +196,7 @@ public class DotDelegationService {
         .findById(owner.conversationId())
         .filter(s -> s.projectId().equals(owner.projectId()))
         .orElseThrow(() -> new DotException("SESSION_NOT_FOUND"));
-    var current = runtimeRuns.get(owner.runId());
-    if (!current.context().equals(owner)
-        || current.status() != dev.mikoto2000.rei.application.run.RunStatus.RUNNING
-        || !runtimeRuns.ownsExecution(owner.runId())) throw new DotException("RUN_NOT_ACTIVE");
+    if (!ownsActiveRun.test(owner)) throw new DotException("RUN_NOT_ACTIVE");
     var snapshot = DotPayload.publication(input);
     String category = (String) snapshot.get("category");
     var permit = permits.get(owner.runId());
@@ -275,13 +278,8 @@ public class DotDelegationService {
             .orElseThrow(() -> new DotException("NOT_FOUND"));
     if (Set.of("CANCELLED", "FAILED", "EXPIRED", "REJECTED").contains(request.status()))
       return false;
-    var current = runtimeRuns.get(owner.runId());
-    if (!current.context().equals(owner)
-        || current.status() != dev.mikoto2000.rei.application.run.RunStatus.RUNNING
-        || !runtimeRuns.ownsExecution(owner.runId())) throw new DotException("OWNER_CHANGED");
-    if (!runtimeRuns.transition(
-        owner.runId(), dev.mikoto2000.rei.application.run.RunStatus.WAITING, null))
-      throw new DotException("WAIT_FAILED");
+    if (!ownsActiveRun.test(owner)) throw new DotException("OWNER_CHANGED");
+    if (!transitionToWaiting.test(owner.runId())) throw new DotException("WAIT_FAILED");
     repo.publish(owner.projectId(), request.id());
     return true;
   }

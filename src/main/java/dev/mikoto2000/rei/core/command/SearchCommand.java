@@ -13,8 +13,6 @@ import dev.mikoto2000.rei.search.SearchKnowledgeService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.websearch.WebSearchContext;
 import dev.mikoto2000.rei.websearch.WebSearchPage;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -46,12 +44,7 @@ public class SearchCommand implements Runnable {
   private static final Logger log = LoggerFactory.getLogger(SearchCommand.class);
 
   /** モデルへ対話を依頼する窓口提供元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Creates chat clients through the shared provider and its current configuration.")
-  private final LlmChatClientProvider chatClientProvider;
+  private final java.util.function.Supplier<ChatClient> searchClient;
 
   /** 現在モデル保持先。 */
   private final java.util.function.Supplier<org.springframework.ai.openai.OpenAiChatOptions>
@@ -61,12 +54,11 @@ public class SearchCommand implements Runnable {
   private final SearchKnowledgeService searchKnowledgeService;
 
   /** キャンセルサービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellationService;
+  private final Runnable beginSearch;
+
+  private final java.util.function.Consumer<reactor.core.Disposable> registerStream;
+  private final java.util.function.BooleanSupplier consumeCancellation;
+  private final Runnable finishSearch;
 
   /** 出力。 */
   private java.util.function.Consumer<String> output = value -> System.out.print(value);
@@ -116,18 +108,24 @@ public class SearchCommand implements Runnable {
       LlmModelProvider modelProvider,
       SearchKnowledgeService searchKnowledgeService,
       CommandCancellationService cancellationService) {
-    this.chatClientProvider = chatClientProvider;
+    this.searchClient = () -> chatClientProvider.chatClient(LlmFeature.SEARCH);
     this.searchOptions =
         () -> modelProvider.chatOptions(LlmFeature.SEARCH, currentModelHolder.get());
     this.searchKnowledgeService = searchKnowledgeService;
-    this.cancellationService = cancellationService;
+    this.beginSearch = () -> cancellationService.begin(Thread.currentThread());
+    this.registerStream = stream -> cancellationService.register(stream);
+    this.consumeCancellation = () -> cancellationService.consumeCancellationRequested();
+    this.finishSearch = () -> cancellationService.clear();
   }
 
   private SearchCommand(SearchCommand source) {
-    this.chatClientProvider = source.chatClientProvider;
+    this.searchClient = source.searchClient;
     this.searchOptions = source.searchOptions;
     this.searchKnowledgeService = source.searchKnowledgeService;
-    this.cancellationService = source.cancellationService;
+    this.beginSearch = source.beginSearch;
+    this.registerStream = source.registerStream;
+    this.consumeCancellation = source.consumeCancellation;
+    this.finishSearch = source.finishSearch;
   }
 
   /** ベクトル上位件数。 */
@@ -156,15 +154,15 @@ public class SearchCommand implements Runnable {
     long startedAtNanos = System.nanoTime();
     String query = String.join(" ", queryParts);
     try {
-      cancellationService.begin(Thread.currentThread());
+      beginSearch.run();
       SearchKnowledgeResult result =
           searchKnowledgeService.search(query, vectorTopK, webTopK, threshold, source);
       List<VectorDocumentSearchResult> vectorResults = result.vectorResults();
       WebSearchContext webContext = result.webContext();
 
       ChatClientRequestSpec requestSpec =
-          chatClientProvider
-              .chatClient(LlmFeature.SEARCH)
+          searchClient
+              .get()
               .prompt(
                   new Prompt(buildPrompt(query, vectorResults, webContext), searchOptions.get()))
               .advisors(
@@ -193,7 +191,7 @@ public class SearchCommand implements Runnable {
                     latch.countDown();
                   },
                   latch::countDown);
-      cancellationService.register(disposable);
+      registerStream.accept(disposable);
 
       boolean completed = latch.await(streamTimeoutMillis(), TimeUnit.MILLISECONDS);
       if (!completed) {
@@ -217,7 +215,7 @@ public class SearchCommand implements Runnable {
       println("[error] 検索結果の取得に失敗しました: " + safeMessage(e, "原因不明"));
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      if (cancellationService.consumeCancellationRequested()) {
+      if (consumeCancellation.getAsBoolean()) {
         println("");
         println("[cancelled] ユーザーの停止要求により検索を中止しました。");
         return;
@@ -227,7 +225,7 @@ public class SearchCommand implements Runnable {
       log.warn("Search interrupted", e);
       println("[error] 検索が中断されました: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
     } finally {
-      cancellationService.clear();
+      finishSearch.run();
     }
   }
 
