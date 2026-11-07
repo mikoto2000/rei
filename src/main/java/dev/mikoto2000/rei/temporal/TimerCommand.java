@@ -26,11 +26,13 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
   private final Supplier<String> currentProjectId;
 
   /** 実行先の振り分け。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reconciles durable schedules through the shared dispatcher.")
-  private final AgentScheduleDispatcher dispatcher;
+  @FunctionalInterface
+  private interface ReconcileSchedule {
+    dev.mikoto2000.rei.temporal.PersistentAgentScheduler.Entry apply(
+        String project, String id, String expectedRunId);
+  }
+
+  private final ReconcileSchedule reconcileSchedule;
 
   /** 仕様。 */
   @Spec picocli.CommandLine.Model.CommandSpec spec;
@@ -79,7 +81,10 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
       AgentScheduleDispatcher dispatcher) {
     this.scheduler = scheduler;
     this.currentProjectId = () -> projects.currentContext().id();
-    this.dispatcher = dispatcher;
+    this.reconcileSchedule =
+        dispatcher == null
+            ? null
+            : (project, id, expectedRunId) -> dispatcher.reconcile(project, id, expectedRunId);
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -106,13 +111,13 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
                     + scheduler.eventTrigger(project, requiredId());
             case "history" -> scheduler.history(project, requiredId());
             case "reconcile" -> {
-              if (dispatcher == null
+              if (reconcileSchedule == null
                   || !acknowledgeUncertain
                   || expectedRunId == null
                   || expectedRunId.isBlank())
                 throw new IllegalArgumentException(
                     "Reconcile requires Run controls, --run-id and --acknowledge-uncertain-side-effects; inspect effects before creating another schedule");
-              yield dispatcher.reconcile(project, requiredId(), expectedRunId);
+              yield reconcileSchedule.apply(project, requiredId(), expectedRunId);
             }
             case "activate" -> {
               scheduler.activate(project, requiredId());

@@ -5,8 +5,6 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.doctor.DoctorActiveService;
 import dev.mikoto2000.rei.doctor.DoctorRequest;
 import dev.mikoto2000.rei.doctor.DoctorService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,11 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class DoctorController {
   /** 環境診断。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured diagnostic service for passive inspection.")
-  private final DoctorService doctor;
+  private final java.util.function.Function<Boolean, String> renderPassiveDiagnostics;
 
   /** 活動中。 */
   private final DoctorActiveService active;
@@ -68,7 +62,7 @@ public final class DoctorController {
   /** 指定された値や利用先を使って、DoctorControllerを初期化する。 */
   public DoctorController(
       DoctorService doctor, DoctorActiveService active, ChatSubmitService chat) {
-    this.doctor = doctor;
+    this.renderPassiveDiagnostics = details -> DoctorService.render(doctor.passive(details));
     this.active = active;
     this.submitChat =
         (request, key) -> {
@@ -82,7 +76,7 @@ public final class DoctorController {
   /** Web APIによる操作で用いるpassiveを返す。 */
   @GetMapping("/api/v1/doctor")
   public Text passive(@RequestParam(defaultValue = "false") boolean details) {
-    return new Text(DoctorService.render(doctor.passive(details)));
+    return new Text(renderPassiveDiagnostics.apply(details));
   }
 
   /** Web APIによる操作で用いる活動中を返す。 */
