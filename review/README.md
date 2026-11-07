@@ -13,7 +13,7 @@
 
 | ID | 状態 | 対応・検証 |
 |---|---|---|
-| M-1 | 対応済み | イベントと計測を同じ Run に紐づけ、非同期購読・応答の回帰テストを追加した。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [検証証跡](./test-evidence.md#m-1-と-l-3-の検証) |
+| M-1 | 対応済み | イベントと計測を同じ Run に紐づけ、停止要求を受理した Run の購読解除を `CANCELLED` として記録する。追加した回帰テスト3ケースを含む53件が通過した。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [所有権の検証](./test-evidence.md#m-1-と-l-3-の検証) · [キャンセル修正 PR #525](https://github.com/mikoto2000/rei/pull/525) · [キャンセル判定の検証](./test-evidence.md#m-1-のキャンセル判定の回帰テスト) |
 | M-2 | 実 Provider で確認済み | Rei 本体からの通常リクエストで Working Set が末尾の `system` に入り、正常に応答した。[取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [証跡記録 PR #487](https://github.com/mikoto2000/rei/pull/487) · [検証証跡](./test-evidence.md#rei-本体からの実-provider-検証) |
 | L-1 | 対応済み | 検索・読み取りの部分成功を維持し、除外項目に `PROJECT_PATH_EXCLUDED` と再試行の案内を返す。[修正 PR #505](https://github.com/mikoto2000/rei/pull/505) · [回帰テスト結果](./test-evidence.md#l-1-の回帰テスト) |
 | L-2 | 対応済み | `AgentEventChatModel` のローカル変数を `resolvedOwner` と `requestEventPublisher` に変更した。既存テスト29件が通過した。[修正 PR #516](https://github.com/mikoto2000/rei/pull/516) · [テスト結果](./test-evidence.md#l-2-の既存テスト) |

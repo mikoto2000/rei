@@ -10,7 +10,7 @@
 
 | ID | 重大度 | 対象 | 指摘時の要約 | 対応・検証状況 |
 |---|---|---|---|---|
-| M-1 | MEDIUM | `llm/AgentEventChatModel.java` | イベントと計測で Run の解決方法が異なり、非同期購読時に Timing Span が欠落し得る | 対応済み。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [検証証跡](./test-evidence.md#m-1-と-l-3-の検証) |
+| M-1 | MEDIUM | `llm/AgentEventChatModel.java` | 非同期購読時に Timing Span が欠落し、停止通知前の購読解除でキャンセルが `DISCONNECTED` と記録され得る | 対応済み。イベントと計測で同じ Run ID を使い、購読解除時にその Run の停止要求を照会する。追加した回帰テスト3ケースを含む53件が通過した。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [所有権の検証](./test-evidence.md#m-1-と-l-3-の検証) · [キャンセル修正 PR #525](https://github.com/mikoto2000/rei/pull/525) · [キャンセル判定の検証](./test-evidence.md#m-1-のキャンセル判定の回帰テスト) |
 | M-2 | MEDIUM | `core/working/WorkingSetAdvisor.java` / `ContextAssembler.java` | 通常経路で Working Set がユーザー本文の先頭から末尾の独立した `SystemMessage` へ移る | 実 Provider で確認済み。通常時の末尾は `user → system`。[取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [証跡記録 PR #487](https://github.com/mikoto2000/rei/pull/487) · [検証証跡](./test-evidence.md#rei-本体からの実-provider-検証) |
 | L-1 | LOW | `core/Tools.java` | `ExcludedInventoryPathException` の型付き拒否への変換が単一引数 `listFile` のみ | 対応済み。部分成功を維持し、除外項目にエラーコードと再試行の案内を返す。[修正 PR #505](https://github.com/mikoto2000/rei/pull/505) · [回帰テスト結果](./test-evidence.md#l-1-の回帰テスト) |
 | L-2 | LOW | `llm/AgentEventChatModel.java` | ローカル変数 `owner` / `publisher` が同名メソッドを隠蔽し可読性を下げる | 対応済み。同期・ストリーミングの両経路で変数名を変更した。既存テスト29件が通過した。[修正 PR #516](https://github.com/mikoto2000/rei/pull/516) · [テスト結果](./test-evidence.md#l-2-の既存テスト) |
