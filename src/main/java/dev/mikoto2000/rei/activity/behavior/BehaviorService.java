@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.topic.AgentMessagePublisher;
 import dev.mikoto2000.rei.topic.MessageOrigin;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
@@ -146,10 +147,6 @@ public final class BehaviorService {
   }
 
   /** 作業習慣の支援に関する定期確認を処理する。 */
-  @SuppressFBWarnings(
-      value = "REC_CATCH_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Isolates checked failures from the configured message generator in a scheduled evaluation.")
   public void tick() {
     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (!running.compareAndSet(false, true)) return;
@@ -219,7 +216,7 @@ public final class BehaviorService {
         recordEvent(
             a, emittedAt, BehaviorTimelineEvent.Outcome.EMITTED, suppression, notificationId);
       }
-    } catch (Exception error) {
+    } catch (IOException | RuntimeException error) {
       suppression = "FAILED";
       if (attempted != null)
         recordEvent(attempted, clock.instant(), BehaviorTimelineEvent.Outcome.FAILED, suppression);
