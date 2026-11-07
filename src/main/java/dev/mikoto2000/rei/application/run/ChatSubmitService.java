@@ -21,17 +21,16 @@ public final class ChatSubmitService {
   private final SessionRegistry sessions;
 
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
-  private final RunRegistry runs;
+  private final java.util.function.Consumer<AgentRunContext> registerRun;
+
+  private final java.util.function.Consumer<String> forgetRun;
 
   /** 受付から終了までの管理。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
+      justification =
+          "Uses the shared lifecycle service so session validation and submission use the same session state.")
   private final SessionLifecycle lifecycle;
 
   /** 実行先への引き渡し。 */
@@ -97,7 +96,8 @@ public final class ChatSubmitService {
       boolean concurrentEnabled) {
     this.findProject = id -> projects.resolveById(id);
     this.sessions = sessions;
-    this.runs = runs;
+    this.registerRun = context -> runs.register(context);
+    this.forgetRun = run -> runs.forget(run);
     this.dispatch = dispatch;
     this.lifecycle = lifecycle;
     this.concurrentEnabled = concurrentEnabled;
@@ -160,7 +160,7 @@ public final class ChatSubmitService {
         context -> {
           sessions.remember(context.conversationId(), project.id());
           try {
-            runs.register(context);
+            registerRun.accept(context);
             if (dotDelegations != null)
               dotDelegations.ifAvailable(dot -> dot.authoriseHumanInput(context, message));
             if (captures != null && clientId != null)
@@ -172,7 +172,7 @@ public final class ChatSubmitService {
             dispatch.accept(context, message);
           } catch (RuntimeException | Error error) {
             if (captures != null) captures.startFailed(context.runId());
-            runs.forget(context.runId());
+            forgetRun.accept(context.runId());
             sessions.forget(context.conversationId());
             throw error;
           }
@@ -206,10 +206,10 @@ public final class ChatSubmitService {
         context -> {
           sessions.remember(context.conversationId(), project.id());
           try {
-            runs.register(context);
+            registerRun.accept(context);
             dispatch.accept(context, message);
           } catch (RuntimeException | Error error) {
-            runs.forget(context.runId());
+            forgetRun.accept(context.runId());
             sessions.forget(context.conversationId());
             throw error;
           }

@@ -45,11 +45,10 @@ public final class TaskManagerService {
   private final ProjectRegistry projects;
 
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
-  private final RunRegistry runs;
+  private final java.util.function.Predicate<String> ownsExecution;
+
+  private final java.util.function.Supplier<java.util.Set<String>> registeredRunIds;
+  private final java.util.function.Function<String, RunSnapshot> registeredRun;
 
   /** 再開用の記録一覧。 */
   @SuppressFBWarnings(
@@ -96,7 +95,9 @@ public final class TaskManagerService {
       PersistentDependencyRepository dependencies,
       PersistentAgentScheduler schedules) {
     this.projects = projects;
-    this.runs = runs;
+    this.ownsExecution = id -> runs.ownsExecution(id);
+    this.registeredRunIds = () -> runs.runIds();
+    this.registeredRun = id -> runs.get(id);
     this.checkpoints = checkpoints;
     this.goals = goals;
     this.dependencies = dependencies;
@@ -210,16 +211,16 @@ public final class TaskManagerService {
               null,
               List.of(),
               saved.taskId(),
-              live && runs.ownsExecution(saved.runId()),
+              live && ownsExecution.test(saved.runId()),
               resumable,
-              live && runs.ownsExecution(saved.runId()) && current.status() == RunStatus.RUNNING,
+              live && ownsExecution.test(saved.runId()) && current.status() == RunStatus.RUNNING,
               saved.revision()));
     }
     var runKeys =
         exact == null
             ? (lower("run:", after) == null
                 ? List.<String>of()
-                : runs.runIds().stream().sorted().toList())
+                : registeredRunIds.get().stream().sorted().toList())
             : exact.startsWith("run:") ? List.of(exact.substring(4)) : List.<String>of();
     int selectedRuns = 0;
     for (String id : runKeys) {
@@ -269,11 +270,11 @@ public final class TaskManagerService {
                   : referenceTask(project, current.childOrigin().parentRunId()),
               List.of(),
               null,
-              !current.status().isTerminal() && runs.ownsExecution(id),
+              !current.status().isTerminal() && ownsExecution.test(id),
               false,
               current.childOrigin() == null
                   && current.status() == RunStatus.RUNNING
-                  && runs.ownsExecution(id),
+                  && ownsExecution.test(id),
               0));
     }
     var goalParents = new HashMap<String, String>();
@@ -314,7 +315,7 @@ public final class TaskManagerService {
             !goal.status().equals("RUNNING")
                 || current != null
                     && !current.status().isTerminal()
-                    && runs.ownsExecution(goal.currentRunId());
+                    && ownsExecution.test(goal.currentRunId());
         boolean resumable =
             Set.of("READY", "PAUSED", "BLOCKED", "FAILED", "WAITING_APPROVAL")
                     .contains(goal.status())
@@ -508,7 +509,7 @@ public final class TaskManagerService {
     var children = new TreeSet<>(task.childIds());
     var deps = new TreeSet<>(task.dependencyIds());
     if (task.runId() != null)
-      for (String id : runs.runIds()) {
+      for (String id : registeredRunIds.get()) {
         var child = run(project, task.sessionId(), id);
         if (child != null
             && child.childOrigin() != null
@@ -628,7 +629,7 @@ public final class TaskManagerService {
   private RunSnapshot run(ProjectContext project, String session, String id) {
     if (id == null) return null;
     try {
-      var run = runs.get(id);
+      var run = registeredRun.apply(id);
       return project.id().equals(run.context().projectId())
               && project.root().equals(run.context().projectRoot())
               && (session == null || session.equals(session(run)))

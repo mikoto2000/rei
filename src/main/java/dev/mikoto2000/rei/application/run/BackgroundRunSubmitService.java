@@ -34,12 +34,10 @@ public final class BackgroundRunSubmitService {
   private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared run registry so participants observe the same run lifecycle.")
-  private final RunRegistry registry;
+  private final java.util.function.Consumer<AgentRunContext> registerRun;
+
+  private final java.util.function.Consumer<String> forgetRun;
+  private final java.util.function.Function<String, RunSnapshot> registeredRun;
 
   /** 実行一覧。 */
   private final RunService runs;
@@ -123,7 +121,7 @@ public final class BackgroundRunSubmitService {
         activeSummaries.entrySet().stream()
             .map(
                 item -> {
-                  var run = registry.get(item.getKey());
+                  var run = registeredRun.apply(item.getKey());
                   return new dev.mikoto2000.rei.core.execution.ActiveExecution(
                       item.getKey(),
                       projectId,
@@ -133,7 +131,7 @@ public final class BackgroundRunSubmitService {
                       item.getValue(),
                       run.startedAt());
                 })
-            .filter(item -> registry.get(item.id()).context().projectId().equals(projectId))
+            .filter(item -> registeredRun.apply(item.id()).context().projectId().equals(projectId))
             .toList();
     background.showLastSummary(project, output::add, false, active);
     return String.join(System.lineSeparator(), output);
@@ -161,7 +159,7 @@ public final class BackgroundRunSubmitService {
                   context.projectRoot(),
                   dev.mikoto2000.rei.core.execution.ExecutionType.IMAGE,
                   prompt,
-                  registry.get(context.runId()).startedAt());
+                  registeredRun.apply(context.runId()).startedAt());
           try (var scope = dev.mikoto2000.rei.core.execution.ExecutionScope.open(execution)) {
             var result =
                 generateImage.apply(
@@ -198,7 +196,7 @@ public final class BackgroundRunSubmitService {
       String result) {
     if (runCancellationRequested.test(context.runId())
         || Thread.currentThread().isInterrupted()
-        || registry.get(context.runId()).status() == RunStatus.CANCELLED)
+        || registeredRun.apply(context.runId()).status() == RunStatus.CANCELLED)
       throw new java.util.concurrent.CancellationException();
     if (states != null)
       states.saveCompleted(
@@ -209,7 +207,7 @@ public final class BackgroundRunSubmitService {
               type,
               source,
               result,
-              registry.get(context.runId()).startedAt(),
+              registeredRun.apply(context.runId()).startedAt(),
               java.time.Instant.now()));
   }
 
@@ -226,7 +224,9 @@ public final class BackgroundRunSubmitService {
       ImageGenerationService images,
       ImageProperties properties) {
     this.findProject = id -> projects.resolveById(id);
-    this.registry = registry;
+    this.registerRun = context -> registry.register(context);
+    this.forgetRun = run -> registry.forget(run);
+    this.registeredRun = run -> registry.get(run);
     this.runs = runs;
     this.submitOperation =
         (context, operation) ->
@@ -299,11 +299,11 @@ public final class BackgroundRunSubmitService {
             project.root(),
             project.id(),
             AgentRunContext.RequestSource.WEB);
-    registry.register(context);
+    registerRun.accept(context);
     try {
       submitOperation.accept(context, () -> execute(context, operation));
     } catch (RuntimeException | Error error) {
-      registry.forget(context.runId());
+      forgetRun.accept(context.runId());
       throw error;
     }
     return context;

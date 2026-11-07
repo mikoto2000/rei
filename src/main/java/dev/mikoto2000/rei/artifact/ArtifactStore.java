@@ -11,8 +11,6 @@ import dev.mikoto2000.rei.application.state.OperationConflictException;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -71,16 +69,25 @@ public final class ArtifactStore implements dev.mikoto2000.rei.secretary.Secreta
   private final CursorCodec cursors = new CursorCodec();
 
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so operations see the same lifecycle state.")
-  private RunRegistry runs;
+  private java.util.function.Function<AgentRunContext, String> owningSession =
+      AgentRunContext::conversationId;
 
   /** 成果物の管理で使用する実行登録台帳を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setRunRegistry(RunRegistry runs) {
-    this.runs = runs;
+    this.owningSession =
+        owner -> {
+          if (runs != null) {
+            try {
+              var registered = runs.get(owner.runId());
+              if (!registered.context().equals(owner)) throw new OperationConflictException();
+              if (registered.childOrigin() != null) return registered.childOrigin().sessionId();
+            } catch (RunNotFoundException absent) {
+              /* Standalone trusted generation need not register a Run. */
+            }
+          }
+          return owner.conversationId();
+        };
   }
 
   /**
@@ -173,15 +180,7 @@ public final class ArtifactStore implements dev.mikoto2000.rei.secretary.Secreta
         || owner.runId().length() > 128
         || owner.conversationId().length() > 256)
       throw new IllegalArgumentException("Invalid Artifact ownership");
-    String session = owner.conversationId();
-    if (runs != null)
-      try {
-        var registered = runs.get(owner.runId());
-        if (!registered.context().equals(owner)) throw new OperationConflictException();
-        if (registered.childOrigin() != null) session = registered.childOrigin().sessionId();
-      } catch (RunNotFoundException absent) {
-        /* Standalone trusted generation need not register a Run. */
-      }
+    String session = owningSession.apply(owner);
     return publishOwned(
         project, session, owner.runId(), "RUN", sourceKey, media, filename, supplied);
   }
