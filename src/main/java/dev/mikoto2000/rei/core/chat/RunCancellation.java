@@ -13,8 +13,8 @@ public final class RunCancellation {
 
   /** 後続の操作を進められるか判断するため、活動中を確認する。 */
   public static void checkActive(org.springframework.ai.chat.prompt.Prompt prompt) {
-    if (!(prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options))
-      return;
+    if (!(prompt.getOptions()
+        instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options)) return;
     var values = options.getToolContext();
     if (values != null
         && values.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
@@ -75,7 +75,7 @@ public final class RunCancellation {
   }
 
   /** 会話の実行で用いる原因一覧を返す。 */
-  private static java.util.List<Throwable> causes(Throwable error) {
+  static java.util.List<Throwable> causes(Throwable error) {
     var causes = new java.util.ArrayList<Throwable>();
     var seen =
         java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());

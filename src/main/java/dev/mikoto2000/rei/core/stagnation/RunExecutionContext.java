@@ -103,8 +103,13 @@ public class RunExecutionContext {
       var c = continuity;
       var resumedBudget = budget == null ? null : budget.forExplicitResume();
       if (c == null)
-        return new ProgressState(information, resumedBudget, acquisitionOnlyIterations,
-            unknownIterations, unknownReplanNotices, null);
+        return new ProgressState(
+            information,
+            resumedBudget,
+            acquisitionOnlyIterations,
+            unknownIterations,
+            unknownReplanNotices,
+            null);
       var d = c.detector();
       var batch = c.resumeBatch();
       return new ProgressState(
@@ -117,7 +122,11 @@ public class RunExecutionContext {
               d == null
                   ? null
                   : new StagnationDetector.State(
-                      0, d.replanCount(), false, d.lastToolFingerprint(), d.lastFailureFingerprint()),
+                      0,
+                      d.replanCount(),
+                      false,
+                      d.lastToolFingerprint(),
+                      d.lastFailureFingerprint()),
               c.evaluator(),
               c.goalIdleIterations(),
               c.coverageIterations(),
@@ -236,11 +245,24 @@ public class RunExecutionContext {
       List<String> reviewPageKeys,
       boolean reconciliationHandoffUsed) {
     public ResumeBatch(
-        int contentReads, boolean commitRequested, boolean commitAttempted, int commitAttempts,
-        boolean reviewPagePending, String reviewPageReadKey, String reviewPageReadArguments,
+        int contentReads,
+        boolean commitRequested,
+        boolean commitAttempted,
+        int commitAttempts,
+        boolean reviewPagePending,
+        String reviewPageReadKey,
+        String reviewPageReadArguments,
         List<String> reviewPageKeys) {
-      this(contentReads, commitRequested, commitAttempted, commitAttempts, reviewPagePending,
-          reviewPageReadKey, reviewPageReadArguments, reviewPageKeys, false);
+      this(
+          contentReads,
+          commitRequested,
+          commitAttempted,
+          commitAttempts,
+          reviewPagePending,
+          reviewPageReadKey,
+          reviewPageReadArguments,
+          reviewPageKeys,
+          false);
     }
 
     public ResumeBatch(
@@ -251,8 +273,15 @@ public class RunExecutionContext {
         boolean reviewPagePending,
         String reviewPageReadKey,
         String reviewPageReadArguments) {
-      this(contentReads, commitRequested, commitAttempted, commitAttempts, reviewPagePending,
-          reviewPageReadKey, reviewPageReadArguments, List.of());
+      this(
+          contentReads,
+          commitRequested,
+          commitAttempted,
+          commitAttempts,
+          reviewPagePending,
+          reviewPageReadKey,
+          reviewPageReadArguments,
+          List.of());
     }
 
     public ResumeBatch(
@@ -551,8 +580,10 @@ public class RunExecutionContext {
     // Exact edit baselines and proposed diffs are necessary to turn the assessed unit into
     // an applied repair. They are not broad source reacquisition.
     if (needsResumeContentWork()
-        && (name.equals("readReviewFile") || name.equals("readReviewPages")
-            || name.equals("readReviewWorkItem") || name.equals("readNextReviewWorkItem")))
+        && (name.equals("readReviewFile")
+            || name.equals("readReviewPages")
+            || name.equals("readReviewWorkItem")
+            || name.equals("readNextReviewWorkItem")))
       return resumeReviewPagePending
           && (arguments == null
               || resumeReviewPageReadKey != null
@@ -570,8 +601,10 @@ public class RunExecutionContext {
 
   /** A saved page may need exact redelivery after prompt eviction or a process restart. */
   public synchronized boolean resumeToolHidden(String name) {
-    return !(name.equals("readReviewFile") || name.equals("readReviewPages")
-            || name.equals("readReviewWorkItem") || name.equals("readNextReviewWorkItem"))
+    return !(name.equals("readReviewFile")
+            || name.equals("readReviewPages")
+            || name.equals("readReviewWorkItem")
+            || name.equals("readNextReviewWorkItem"))
         && resumeAcquisitionBlocked(name);
   }
 
@@ -618,13 +651,14 @@ public class RunExecutionContext {
 
   /** Match only the exact source range returned by a successful registered-page read. */
   private static String reviewPageKey(String job, com.fasterxml.jackson.databind.JsonNode range) {
-    if (job.isBlank() || !range.isObject()
+    if (job.isBlank()
+        || !range.isObject()
         || range.path("path").asText().isBlank()
         || range.path("version").asText().isBlank()
         || range.path("contentHash").asText().isBlank()
         || range.path("span").path("start").asInt(-1) < 0
-        || range.path("span").path("end").asInt(-1)
-            <= range.path("span").path("start").asInt(-1)) return null;
+        || range.path("span").path("end").asInt(-1) <= range.path("span").path("start").asInt(-1))
+      return null;
     if (job.startsWith("durable:") && job.split(":", -1).length == 3)
       return ProgressEvaluator.actionKey("readReviewFile", "durable:" + job.split(":", -1)[1]);
     var identity = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
@@ -642,7 +676,8 @@ public class RunExecutionContext {
           output.isArray() ? output : List.of(output);
       for (var page : pages) {
         String key = reviewPageKey(page.path("reviewJobId").asText(), page.path("range"));
-        if (key == null || page.path("content").asText().isBlank()
+        if (key == null
+            || page.path("content").asText().isBlank()
             || resumeReviewPageKeys.size() >= 4) {
           resumeReviewPageKeys.clear();
           return;
@@ -672,9 +707,11 @@ public class RunExecutionContext {
           return;
         }
         String work = output.path("body").path("work").asText();
-        if (!ProgressEvaluator.failedResult(result) && !work.isBlank()
+        if (!ProgressEvaluator.failedResult(result)
+            && !work.isBlank()
             && output.path("sha256").asText().matches("[0-9a-f]{64}")
-            && resumeReviewPageKeys.remove(ProgressEvaluator.actionKey("readReviewFile", "durable:" + work))
+            && resumeReviewPageKeys.remove(
+                ProgressEvaluator.actionKey("readReviewFile", "durable:" + work))
             && resumeReviewPageKeys.isEmpty()) {
           finishResumeBatch();
           reviewPageReconciled = true;
@@ -694,9 +731,11 @@ public class RunExecutionContext {
           output.isArray() ? output : List.of(output);
       for (var receipt : receipts) {
         if (ProgressEvaluator.failedResult(receipt.toString())
-            || !name.equals("submitReviewResult") && !receipt.path("accepted").asBoolean()) continue;
+            || !name.equals("submitReviewResult") && !receipt.path("accepted").asBoolean())
+          continue;
         for (var entry : receipt.path("ranges")) {
-          if (!entry.path("delivered").asBoolean() || !entry.path("reviewed").asBoolean()
+          if (!entry.path("delivered").asBoolean()
+              || !entry.path("reviewed").asBoolean()
               || entry.path("stale").asBoolean(true)) continue;
           String key = reviewPageKey(receipt.path("id").asText(), entry.path("range"));
           if (key != null && resumeReviewPageKeys.remove(key) && resumeReviewPageKeys.isEmpty()) {
@@ -968,7 +1007,8 @@ public class RunExecutionContext {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Owns the injected evaluator for this execution and updates it through the run lifecycle.")
+      justification =
+          "Owns the injected evaluator for this execution and updates it through the run lifecycle.")
   private final ProgressEvaluator evaluator;
 
   /** 生成元。 */
@@ -1066,12 +1106,27 @@ public class RunExecutionContext {
   }
 
   /** 実行の停滞への対処に関するfail永続化されたツールを処理する。 */
-  public void failDurableTool(String call, String name, RuntimeException error) {
+  public void failDurableTool(String call, String name, Throwable error) {
     publisher.publishBoundary(
         factory
             .toolFailed(
                 call, name, dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(error))
             .withOwnership(runContext));
+  }
+
+  /**
+   * Tool controls keep their type across dispatch, with an explicit failure for unknown callbacks.
+   */
+  public static IllegalStateException toolCallbackFailure(RuntimeException error) {
+    if (error instanceof ExecutionStoppedException stopped) throw stopped;
+    if (error instanceof dev.mikoto2000.rei.core.chat.RunWaitingException waiting) throw waiting;
+    if (error instanceof dev.mikoto2000.rei.chatgpt.ChatGptException denied) throw denied;
+    if (error instanceof org.springframework.ai.tool.execution.ToolExecutionException toolFailure)
+      throw toolFailure;
+    if (error instanceof IllegalArgumentException invalid) throw invalid;
+    if (error instanceof SecurityException forbidden) throw forbidden;
+    if (error instanceof IllegalStateException stateFailure) return stateFailure;
+    return new IllegalStateException("Tool callback failed", error);
   }
 
   /** 待機中。 */
@@ -1488,11 +1543,12 @@ public class RunExecutionContext {
     if (recentActions.size() > 6) recentActions.removeFirst();
     var observed = evaluator.afterTool(name, arguments, result, before);
     pending.addAll(observed);
-    if (!(resumeReviewPagePending && name.equals("submitReviewWorkItem")) && observed.stream()
-        .anyMatch(
-            e ->
-                e.kind() == ProgressEvent.STATE_CHANGED
-                    || e.kind() == ProgressEvent.SUBGOAL_COMPLETED)) finishResumeBatch();
+    if (!(resumeReviewPagePending && name.equals("submitReviewWorkItem"))
+        && observed.stream()
+            .anyMatch(
+                e ->
+                    e.kind() == ProgressEvent.STATE_CHANGED
+                        || e.kind() == ProgressEvent.SUBGOAL_COMPLETED)) finishResumeBatch();
     else if (observed.stream().anyMatch(e -> e.kind() == ProgressEvent.NEW_INFORMATION)) {
       // Useful, verified preparation (e.g. an exact edit baseline/diff) repairs the
       // response protocol without falsely confirming the still-pending work unit.
@@ -1503,8 +1559,10 @@ public class RunExecutionContext {
       boolean wasPending = hasPendingResumeContentWork();
       resumeBatchReads = Math.min(RESUME_BATCH_READ_LIMIT, resumeBatchReads + 1);
       resumeBatchReadInIteration = true;
-      if ((name.equals("readReviewFile") || name.equals("readReviewPages")
-          || name.equals("readReviewWorkItem") || name.equals("readNextReviewWorkItem"))) {
+      if ((name.equals("readReviewFile")
+          || name.equals("readReviewPages")
+          || name.equals("readReviewWorkItem")
+          || name.equals("readNextReviewWorkItem"))) {
         resumeReviewPagePending = true;
         resumeReviewPageReadKey = ProgressEvaluator.actionKey(name, arguments);
         resumeReviewPageReadArguments =
@@ -1534,7 +1592,7 @@ public class RunExecutionContext {
   }
 
   /** 後から経緯や使用量を確認できるよう、失敗情報を記録する。 */
-  public synchronized void recordFailure(String name, String arguments, RuntimeException error) {
+  public synchronized void recordFailure(String name, String arguments, Throwable error) {
     iterationFailed = true;
     if (closed) return;
     evaluator.recordFailure(name, arguments);
@@ -1690,8 +1748,11 @@ public class RunExecutionContext {
     if (restorationIteration) return null;
     // A late acknowledgement must reach the next ordinary, budgeted action once. Preserve
     // the streak and checkpoint the spent handoff so duplicate pages cannot renew it forever.
-    if (reviewPageReconciled && detector.isReplanRequested() && !diagnosis().goalStagnant()
-        && !iterationFailed && !reconciliationHandoffUsed) {
+    if (reviewPageReconciled
+        && detector.isReplanRequested()
+        && !diagnosis().goalStagnant()
+        && !iterationFailed
+        && !reconciliationHandoffUsed) {
       reconciliationHandoffUsed = true;
       toolResultsCheckpoint.accept(lastCheckpointMessages);
       return null;
