@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.conversation;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -43,11 +41,9 @@ public class ConversationHistorySearchService {
   private final JdbcClient jdbcClient;
 
   /** 会話ログ保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common conversation log and its shared indexing state.")
-  private final ConversationLogStore conversationLogStore;
+  private final java.util.function.Function<String, List<ConversationLogEntry>> readProjectLogs;
+
+  private final java.util.function.Supplier<List<ConversationLogEntry>> readAllLogs;
 
   /** プロジェクト関連情報の取得。 */
   private final ProjectHistoryRetrieval projectRetrieval;
@@ -71,7 +67,8 @@ public class ConversationHistorySearchService {
   public ConversationHistorySearchService(
       DataSource dataSource, ConversationLogStore conversationLogStore) {
     this.jdbcClient = JdbcClient.create(dataSource);
-    this.conversationLogStore = conversationLogStore;
+    this.readProjectLogs = project -> conversationLogStore.readProject(project);
+    this.readAllLogs = () -> conversationLogStore.readAll();
     this.projectRetrieval =
         new ProjectHistoryRetrieval(
             conversationLogStore,
@@ -209,7 +206,7 @@ public class ConversationHistorySearchService {
               ? Math.min(safeLimit, HistoryRetrievalPolicy.CROSS_PROJECT_MAX_RESULTS)
               : safeLimit;
       var entries =
-          conversationLogStore.readProject(sourceId).stream()
+          readProjectLogs.apply(sourceId).stream()
               .filter(e -> e.conversationId().equals(id))
               .toList();
       var messages =
@@ -278,7 +275,7 @@ public class ConversationHistorySearchService {
   private List<ConversationSearchResult> searchPersistentLogs(
       String query, String scope, String speaker, TimeRange timeRange) {
     List<String> terms = List.of(query.strip().toLowerCase(Locale.ROOT).split("\\s+"));
-    return conversationLogStore.readAll().stream()
+    return readAllLogs.get().stream()
         .filter(entry -> scope.equals("all") || entry.scope().equals(scope))
         .filter(entry -> speaker == null || entry.speaker().equalsIgnoreCase(speaker))
         .filter(
@@ -309,7 +306,7 @@ public class ConversationHistorySearchService {
   private List<ConversationHistoryMessage> findPersistentLogDetail(
       String conversationId, int limit) {
     List<ConversationLogEntry> entries =
-        conversationLogStore.readAll().stream()
+        readAllLogs.get().stream()
             .filter(entry -> entry.conversationId().equals(conversationId))
             .toList();
     return entries.stream()
