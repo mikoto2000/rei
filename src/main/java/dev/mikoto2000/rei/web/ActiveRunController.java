@@ -4,8 +4,6 @@ import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.ui.shell.ActiveRunDisplay;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Optional;
 import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -24,11 +22,7 @@ public final class ActiveRunController {
   private final ActiveRunDisplay display;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final Function<String, Cancellation> cancelProject;
 
   /** プロジェクト一覧。 */
   private final Function<String, Optional<ProjectContext>> findProject;
@@ -69,7 +63,18 @@ public final class ActiveRunController {
   public ActiveRunController(
       ActiveRunDisplay display, CommandCancellationService cancellation, ProjectRegistry projects) {
     this.display = display;
-    this.cancellation = cancellation;
+    this.cancelProject =
+        project -> {
+          boolean accepted = cancellation.cancelProject(project);
+          var diagnostics = cancellation.projectDiagnostics(project);
+          String status =
+              diagnostics.stream().anyMatch(d -> d.status().equals("CANCEL_FAILED"))
+                  ? "CANCEL_FAILED"
+                  : diagnostics.stream().anyMatch(d -> d.status().equals("CANCEL_STALLED"))
+                      ? "CANCEL_STALLED"
+                      : accepted || !diagnostics.isEmpty() ? "CANCEL_REQUESTED" : "NOT_FOUND";
+          return new Cancellation(accepted, status, diagnostics);
+        };
     this.findProject = id -> projects.resolveById(id);
   }
 
@@ -93,17 +98,10 @@ public final class ActiveRunController {
     if (projectId == null || projectId.isBlank() || projectId.length() > 128)
       throw new IllegalArgumentException("Project ID required");
     var project =
-        findProject.apply(projectId)
+        findProject
+            .apply(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
-    boolean accepted = cancellation.cancelProject(project.id());
-    var diagnostics = cancellation.projectDiagnostics(project.id());
-    String status =
-        diagnostics.stream().anyMatch(d -> d.status().equals("CANCEL_FAILED"))
-            ? "CANCEL_FAILED"
-            : diagnostics.stream().anyMatch(d -> d.status().equals("CANCEL_STALLED"))
-                ? "CANCEL_STALLED"
-                : accepted || !diagnostics.isEmpty() ? "CANCEL_REQUESTED" : "NOT_FOUND";
-    return new Cancellation(accepted, status, diagnostics);
+    return cancelProject.apply(project.id());
   }
 }

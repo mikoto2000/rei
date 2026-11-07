@@ -58,12 +58,9 @@ public final class MemoryRunSubmitService {
   private final BiConsumer<AgentRunContext, Runnable> submitOperation;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final java.util.function.Supplier<Runnable> beginCommand;
+
+  private final java.util.function.BooleanSupplier cancellationRequested;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -119,7 +116,12 @@ public final class MemoryRunSubmitService {
     this.submitOperation =
         (context, operation) ->
             router.submitOperation(context, operation, work -> runs.execute(context, work));
-    this.cancellation = cancellation;
+    this.beginCommand =
+        () -> {
+          cancellation.begin(Thread.currentThread());
+          return cancellation::clear;
+        };
+    this.cancellationRequested = () -> cancellation.isCancellationRequested();
     this.events = events;
     this.bus = bus;
     this.sleep = sleep;
@@ -230,13 +232,12 @@ public final class MemoryRunSubmitService {
   private void executeReport(
       AgentRunContext context, String operation, java.util.function.Supplier<String> report) {
     try (var scope = AgentRunScope.open(context)) {
-      cancellation.begin(Thread.currentThread());
+      Runnable clearCancellation = beginCommand.get();
       try {
-        if (cancellation.isCancellationRequested()) return;
+        if (cancellationRequested.getAsBoolean()) return;
         bus.publish(events.runStarted(context.runId(), operation, null).withOwnership(context));
         String text = report.get();
-        if (cancellation.isCancellationRequested() || Thread.currentThread().isInterrupted())
-          return;
+        if (cancellationRequested.getAsBoolean() || Thread.currentThread().isInterrupted()) return;
         bus.publish(
             events
                 .messageDelta(context.runId(), CredentialRedactor.redact(text))
@@ -245,7 +246,7 @@ public final class MemoryRunSubmitService {
       } catch (java.util.concurrent.CancellationException cancelled) {
         runs.cancel(context.runId());
       } finally {
-        cancellation.clear();
+        clearCancellation.run();
       }
     }
   }
@@ -253,9 +254,9 @@ public final class MemoryRunSubmitService {
   /** 依頼された操作を進めるため、待機を実行する。 */
   private void executeSleep(AgentRunContext context, boolean preview) {
     try (var scope = AgentRunScope.open(context)) {
-      cancellation.begin(Thread.currentThread());
+      Runnable clearCancellation = beginCommand.get();
       try {
-        if (cancellation.isCancellationRequested()) return;
+        if (cancellationRequested.getAsBoolean()) return;
         bus.publish(
             events.runStarted(context.runId(), "memory.sleep", null).withOwnership(context));
         support.enabled();
@@ -265,15 +266,14 @@ public final class MemoryRunSubmitService {
                     context.runId(), preview ? "Sleep preview started..." : "Sleep started...")
                 .withOwnership(context));
         var report = sleep.sleep(context.conversationId(), context.projectId(), preview);
-        if (cancellation.isCancellationRequested() || Thread.currentThread().isInterrupted())
-          return;
+        if (cancellationRequested.getAsBoolean() || Thread.currentThread().isInterrupted()) return;
         bus.publish(
             events.messageDelta(context.runId(), support.report(report)).withOwnership(context));
         bus.publish(events.runCompleted(context.runId(), 0).withOwnership(context));
       } catch (java.util.concurrent.CancellationException cancelled) {
         runs.cancel(context.runId());
       } finally {
-        cancellation.clear();
+        clearCancellation.run();
       }
     }
   }

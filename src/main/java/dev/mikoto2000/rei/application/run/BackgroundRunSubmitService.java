@@ -48,12 +48,10 @@ public final class BackgroundRunSubmitService {
   private final BiConsumer<AgentRunContext, Runnable> submitOperation;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final java.util.function.Supplier<Runnable> beginCommand;
+
+  private final java.util.function.BooleanSupplier cancellationRequested;
+  private final java.util.function.Predicate<String> runCancellationRequested;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -198,7 +196,7 @@ public final class BackgroundRunSubmitService {
       dev.mikoto2000.rei.core.execution.ExecutionType type,
       String source,
       String result) {
-    if (cancellation.diagnostic(context.runId()).requestedAt() != null
+    if (runCancellationRequested.test(context.runId())
         || Thread.currentThread().isInterrupted()
         || registry.get(context.runId()).status() == RunStatus.CANCELLED)
       throw new java.util.concurrent.CancellationException();
@@ -233,7 +231,13 @@ public final class BackgroundRunSubmitService {
     this.submitOperation =
         (context, operation) ->
             router.submitOperation(context, operation, work -> runs.execute(context, work));
-    this.cancellation = cancellation;
+    this.beginCommand =
+        () -> {
+          cancellation.begin(Thread.currentThread());
+          return cancellation::clear;
+        };
+    this.cancellationRequested = () -> cancellation.isCancellationRequested();
+    this.runCancellationRequested = run -> cancellation.diagnostic(run).requestedAt() != null;
     this.events = events;
     this.bus = bus;
     this.summaries = summaries;
@@ -308,19 +312,18 @@ public final class BackgroundRunSubmitService {
   /** 要求された処理を実行する。 */
   private void execute(AgentRunContext context, Function<AgentRunContext, String> operation) {
     try (var scope = AgentRunScope.open(context)) {
-      cancellation.begin(Thread.currentThread());
+      Runnable clearCancellation = beginCommand.get();
       try {
-        if (cancellation.isCancellationRequested()) return;
+        if (cancellationRequested.getAsBoolean()) return;
         bus.publish(events.runStarted(context.runId(), "operation", null).withOwnership(context));
         String result = operation.apply(context);
-        if (cancellation.isCancellationRequested() || Thread.currentThread().isInterrupted())
-          return;
+        if (cancellationRequested.getAsBoolean() || Thread.currentThread().isInterrupted()) return;
         bus.publish(events.messageDelta(context.runId(), result).withOwnership(context));
         bus.publish(events.runCompleted(context.runId(), 0).withOwnership(context));
       } catch (java.util.concurrent.CancellationException error) {
         runs.cancel(context.runId());
       } finally {
-        cancellation.clear();
+        clearCancellation.run();
       }
     }
   }

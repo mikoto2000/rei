@@ -16,7 +16,8 @@ public class RunService implements AutoCloseable {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
+      justification =
+          "Uses the shared run registry so participants observe the same run lifecycle.")
   private final RunRegistry registry;
 
   /** 通知の連携先。 */
@@ -26,11 +27,13 @@ public class RunService implements AutoCloseable {
   private final AgentEventFactory events;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final java.util.function.Consumer<String> forgetCancellation;
+
+  private final java.util.function.Consumer<String> completeRunResources;
+  private final java.util.function.Function<String, CommandCancellationService.CancellationRequest>
+      requestCancellation;
+  private final java.util.function.Function<String, CommandCancellationService.Diagnostic>
+      diagnoseCancellation;
 
   /** キャンセル待機中。 */
   private final Predicate<String> cancelQueued;
@@ -81,7 +84,10 @@ public class RunService implements AutoCloseable {
     this.registry = registry;
     this.bus = bus;
     this.events = events;
-    this.cancellation = cancellation;
+    this.forgetCancellation = run -> cancellation.forgetPendingCancellation(run);
+    this.completeRunResources = run -> cancellation.completeResources(run);
+    this.requestCancellation = run -> cancellation.requestRun(run);
+    this.diagnoseCancellation = cancellation == null ? null : run -> cancellation.diagnostic(run);
     this.cancelQueued = cancelQueued;
     subscription = bus == null ? null : bus.subscribe(this::onEvent);
   }
@@ -164,7 +170,7 @@ public class RunService implements AutoCloseable {
               if (current.status() != RunStatus.QUEUED || !cancelQueued.test(runId))
                 return new CancellationResult(false, current);
               registry.transition(runId, RunStatus.CANCELLED, null);
-              cancellation.forgetPendingCancellation(runId);
+              forgetCancellation.accept(runId);
               notify.set(queuedCancellation.remove(runId));
               bus.publish(
                   events
@@ -202,15 +208,15 @@ public class RunService implements AutoCloseable {
                   && (current.status() == RunStatus.RUNNING
                       || current.status() == RunStatus.QUEUED && !queuedRemoved
                       || executing.contains(runId))) {
-                request.set(cancellation.requestRun(runId));
+                request.set(requestCancellation.apply(runId));
                 outcome = new CancellationResult(request.get().accepted(), registry.get(runId));
               } else {
                 if (!registry.transition(runId, RunStatus.CANCELLED, null) && !queuedRemoved)
                   return new CancellationResult(false, current);
                 if (current.status() == RunStatus.QUEUED) {
-                  cancellation.forgetPendingCancellation(runId);
+                  forgetCancellation.accept(runId);
                   notify.set(queuedCancellation.remove(runId));
-                } else request.set(cancellation.requestRun(runId));
+                } else request.set(requestCancellation.apply(runId));
                 bus.publish(
                     events
                         .runCancelled(
@@ -252,7 +258,7 @@ public class RunService implements AutoCloseable {
         atomically(
             () -> {
               skipped.set(queuedCancellation.remove(context.runId()));
-              boolean stopped = cancellation.diagnostic(context.runId()).requestedAt() != null;
+              boolean stopped = diagnoseCancellation.apply(context.runId()).requestedAt() != null;
               if (stopped && registry.transition(context.runId(), RunStatus.CANCELLED, null))
                 bus.publish(events.runCancelled(context.runId(), null).withOwnership(context));
               boolean admitted =
@@ -262,7 +268,7 @@ public class RunService implements AutoCloseable {
                 registry.beginExecution(context.runId());
               }
               if (!admitted) {
-                cancellation.forgetPendingCancellation(context.runId());
+                forgetCancellation.accept(context.runId());
               }
 
               return admitted;
@@ -278,13 +284,13 @@ public class RunService implements AutoCloseable {
       failure = "Runner failed: " + dev.mikoto2000.rei.event.FailureMessages.describe(error);
     } finally {
       try {
-        cancellation.completeResources(context.runId());
+        completeRunResources.accept(context.runId());
         String completedFailure = failure;
         runAtomically(
             () -> {
               executing.remove(context.runId());
               var terminal = terminalEvents.remove(context.runId());
-              var stop = cancellation.diagnostic(context.runId());
+              var stop = diagnoseCancellation.apply(context.runId());
               if (stop.requestedAt() != null) {
                 if (registry.transition(context.runId(), RunStatus.CANCELLED, null))
                   bus.publish(
@@ -303,7 +309,7 @@ public class RunService implements AutoCloseable {
                 if (!registry.get(context.runId()).status().isWaiting())
                   fail(context, completedFailure);
               }
-              cancellation.forgetPendingCancellation(context.runId());
+              forgetCancellation.accept(context.runId());
             });
       } finally {
         registry.endExecution(context.runId());
@@ -313,7 +319,7 @@ public class RunService implements AutoCloseable {
 
   /** 停止要求と終了確認の診断情報を返す。 */
   public CommandCancellationService.Diagnostic cancellationDiagnostic(String runId) {
-    return cancellation == null ? null : cancellation.diagnostic(runId);
+    return diagnoseCancellation == null ? null : diagnoseCancellation.apply(runId);
   }
 
   /** 実行の受付と状態管理に関するfailを処理する。 */
@@ -340,11 +346,11 @@ public class RunService implements AutoCloseable {
   public void finishMissingTerminal(AgentRunContext context, RunStatus terminal) {
     // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
     if (!terminal.isTerminal()) throw new IllegalArgumentException("Terminal state required");
-    cancellation.completeResources(context.runId());
+    completeRunResources.accept(context.runId());
     runAtomically(
         () -> {
           var effectiveTerminal =
-              cancellation.diagnostic(context.runId()).requestedAt() != null
+              diagnoseCancellation.apply(context.runId()).requestedAt() != null
                   ? RunStatus.CANCELLED
                   : terminal;
           var failure =

@@ -59,12 +59,9 @@ public final class IntegrationRunSubmitService {
   private final BiConsumer<AgentRunContext, Runnable> submitOperation;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final java.util.function.Supplier<Runnable> beginCommand;
+
+  private final java.util.function.BooleanSupplier cancellationRequested;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -355,7 +352,12 @@ public final class IntegrationRunSubmitService {
     this.submitOperation =
         (context, operation) ->
             router.submitOperation(context, operation, work -> runs.execute(context, work));
-    this.cancellation = cancellation;
+    this.beginCommand =
+        () -> {
+          cancellation.begin(Thread.currentThread());
+          return cancellation::clear;
+        };
+    this.cancellationRequested = () -> cancellation.isCancellationRequested();
     this.events = events;
     this.bus = bus;
     this.calendar = calendar;
@@ -546,15 +548,15 @@ public final class IntegrationRunSubmitService {
   private void execute(
       AgentRunContext context, String operation, java.util.function.Supplier<String> report) {
     try (var scope = AgentRunScope.open(context)) {
-      cancellation.begin(Thread.currentThread());
+      Runnable clearCancellation = beginCommand.get();
       try {
-        if (cancellation.isCancellationRequested()) {
+        if (cancellationRequested.getAsBoolean()) {
           runs.cancel(context.runId());
           return;
         }
         bus.publish(events.runStarted(context.runId(), operation, null).withOwnership(context));
         String text = report.get();
-        if (cancellation.isCancellationRequested() || Thread.currentThread().isInterrupted()) {
+        if (cancellationRequested.getAsBoolean() || Thread.currentThread().isInterrupted()) {
           runs.cancel(context.runId());
           return;
         }
@@ -566,7 +568,7 @@ public final class IntegrationRunSubmitService {
       } catch (java.util.concurrent.CancellationException cancelled) {
         runs.cancel(context.runId());
       } finally {
-        cancellation.clear();
+        clearCancellation.run();
       }
     }
   }
