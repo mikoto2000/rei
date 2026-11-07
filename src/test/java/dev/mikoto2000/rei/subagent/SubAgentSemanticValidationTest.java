@@ -96,8 +96,7 @@ class SubAgentSemanticValidationTest {
     assertThat(options.getModel()).isEqualTo("judge-model");
     assertThat(options.getTemperature()).isEqualTo(0.1);
     assertThat(options.getMaxCompletionTokens()).isEqualTo(234);
-    assertThat(((org.springframework.ai.openai.OpenAiChatOptions) options).getToolChoice())
-        .isEqualTo("none");
+    assertThat(options.getToolChoice()).isEqualTo("none");
     assertThat(options.getToolCallbacks()).isEmpty();
     assertThat(options.getToolContext())
         .containsOnlyKeys(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName());
