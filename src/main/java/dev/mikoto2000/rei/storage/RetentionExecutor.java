@@ -69,11 +69,7 @@ public final class RetentionExecutor {
   @FunctionalInterface
   interface Checkpoint {
     /** データ保存の共通処理に関するreachedを処理する。 */
-    @SuppressFBWarnings(
-        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-        matchType = SuppressMatchType.EXACT,
-        justification = "A checkpoint callback can abort a retention transition with a checked failure.")
-    void reached(String stage, String execution) throws Exception;
+    void reached(String stage, String execution) throws IOException, InterruptedException;
   }
 
   /** 登録台帳。 */
@@ -265,7 +261,8 @@ public final class RetentionExecutor {
   @SuppressFBWarnings(
       value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
       matchType = SuppressMatchType.EXACT,
-      justification = "Preserves unchecked apply failures while wrapping checked quarantine failures.")
+      justification =
+          "Preserves unchecked apply failures while wrapping checked quarantine failures.")
   public Execution apply(String planId) {
     return registry.serialized(
         () -> {
@@ -393,7 +390,8 @@ public final class RetentionExecutor {
   @SuppressFBWarnings(
       value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
       matchType = SuppressMatchType.EXACT,
-      justification = "Preserves unchecked restore failures while wrapping checked storage failures.")
+      justification =
+          "Preserves unchecked restore failures while wrapping checked storage failures.")
   public Execution restore(String id) {
     return registry.serialized(
         () -> {
