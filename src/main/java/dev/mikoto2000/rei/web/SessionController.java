@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.session.SessionQueryService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -29,17 +27,13 @@ public class SessionController {
   private SessionActions actions;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared project registry so lookups use the same registered projects.")
-  private dev.mikoto2000.rei.core.project.ProjectRegistry projects;
+  private Function<String, java.util.Optional<dev.mikoto2000.rei.core.project.ProjectContext>>
+      findProject;
 
   /** Web APIによる操作で使用するプロジェクト一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setProjects(dev.mikoto2000.rei.core.project.ProjectRegistry projects) {
-    this.projects = projects;
+    findProject = projects == null ? null : id -> projects.resolveById(id);
   }
 
   /** Web APIによる操作で使用する受付から終了までの管理を設定する。 */
@@ -148,9 +142,9 @@ public class SessionController {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (id == null || id.isBlank() || id.length() > 128)
       throw new IllegalArgumentException("Project ID required");
-    if (projects == null) throw new IllegalStateException("Project registry unavailable");
-    return projects
-        .resolveById(id)
+    if (findProject == null) throw new IllegalStateException("Project registry unavailable");
+    return findProject
+        .apply(id)
         .orElseThrow(
             () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
   }
