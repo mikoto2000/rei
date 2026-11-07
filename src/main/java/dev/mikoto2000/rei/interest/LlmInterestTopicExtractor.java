@@ -12,6 +12,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -34,11 +35,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
   private final LlmModelProvider modelProvider;
 
   /** モデル保持先サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the model selection shared by commands and the API.")
-  private final ModelHolderService modelHolderService;
+  private final Supplier<String> readSelectedModel;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   @SuppressFBWarnings(
@@ -60,7 +57,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
       ModelHolderService modelHolderService,
       JsonMapper objectMapper) {
     this.modelProvider = modelProvider;
-    this.modelHolderService = modelHolderService;
+    this.readSelectedModel = () -> modelHolderService.get();
     this.objectMapper = objectMapper;
   }
 
@@ -81,7 +78,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
     Prompt prompt =
         new Prompt(
             buildPrompt(snippets, maxTopics, pastQueries),
-            modelProvider.chatOptions(LlmFeature.INTEREST_DISCOVERY, modelHolderService.get()));
+            modelProvider.chatOptions(LlmFeature.INTEREST_DISCOVERY, readSelectedModel.get()));
 
     String response = callWithTimeout(prompt);
     return parse(response);

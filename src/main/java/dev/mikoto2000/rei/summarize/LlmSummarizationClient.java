@@ -5,6 +5,7 @@ import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -24,17 +25,13 @@ public class LlmSummarizationClient implements SummarizationClient {
   private final LlmModelProvider modelProvider;
 
   /** モデル保持先サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the model selection shared by commands and the API.")
-  private final ModelHolderService modelHolderService;
+  private final Supplier<String> readSelectedModel;
 
   /** 指定された値や利用先を使って、LlmSummarizationClientを初期化する。 */
   public LlmSummarizationClient(
       LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
     this.modelProvider = modelProvider;
-    this.modelHolderService = modelHolderService;
+    this.readSelectedModel = () -> modelHolderService.get();
   }
 
   /** 対象の内容を、要点が分かる形にまとめる。 */
@@ -46,7 +43,7 @@ public class LlmSummarizationClient implements SummarizationClient {
             new Prompt(
                 new UserMessage(buildPrompt(content)),
                 modelProvider.chatOptions(
-                    LlmFeature.WEB_PAGE_SUMMARY, modelHolderService.get(), false)));
+                    LlmFeature.WEB_PAGE_SUMMARY, readSelectedModel.get(), false)));
     Generation generation = response == null ? null : response.getResult();
     var output = generation == null ? null : generation.getOutput();
     var text = output == null ? null : output.getText();

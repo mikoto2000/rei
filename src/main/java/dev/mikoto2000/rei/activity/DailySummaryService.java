@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.activity;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -67,7 +68,7 @@ public final class DailySummaryService {
       try {
         result = writer.write(aggregate).validated(aggregate);
         mode = "LLM_SUCCESS";
-      } catch (Exception error) {
+      } catch (IOException | InterruptedException | RuntimeException error) {
         mode = "FALLBACK";
         log.debug(
             "[summary-trace] writer-failure type={} cause={} timeout={}",

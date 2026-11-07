@@ -4,6 +4,7 @@ import dev.mikoto2000.rei.core.service.ModelHolderService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -20,11 +21,7 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
   private final ChatModel chatModel;
 
   /** モデル保持先サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the model selection shared by commands and the API.")
-  private final ModelHolderService modelHolderService;
+  private final Supplier<String> readSelectedModel;
 
   /** 入力の解釈。 */
   private final TopicCandidateParser parser;
@@ -43,7 +40,7 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
       TopicCandidateParser parser,
       TopicGeneratorProperties properties) {
     this.chatModel = chatModel;
-    this.modelHolderService = modelHolderService;
+    this.readSelectedModel = () -> modelHolderService == null ? "" : modelHolderService.get();
     this.parser = parser;
     this.properties = properties;
   }
@@ -65,7 +62,7 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
 
   /** 話題の管理で用いるプロンプトを返す。 */
   String prompt(TopicGenerationContext context) {
-    String model = modelHolderService == null ? "" : modelHolderService.get();
+    String model = readSelectedModel.get();
     return """
         あなたは会話の話題候補を生成する補助コンポーネントです。
 

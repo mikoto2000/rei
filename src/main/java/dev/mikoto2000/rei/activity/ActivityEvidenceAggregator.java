@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.activity;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +43,7 @@ public final class ActivityEvidenceAggregator {
         if (c.workContext() != null) work = c.workContext();
       } catch (java.util.concurrent.CancellationException e) {
         throw e;
-      } catch (Exception e) {
+      } catch (IOException | InterruptedException | RuntimeException e) {
         log.warn("Activity evidence source unavailable ({})", e.getClass().getSimpleName());
       }
     var visible =
