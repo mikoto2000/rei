@@ -4,11 +4,14 @@ import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
 import dev.mikoto2000.rei.application.session.SessionQueryService;
 import dev.mikoto2000.rei.conversation.HistorySearchScope;
 import dev.mikoto2000.rei.conversation.HistoryShellService;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.ui.shell.HistoryCommand;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -38,12 +41,7 @@ public final class HistoryReportController {
   private final ProjectService selection;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /**
    * Web APIによる操作で受け渡すテキストを表す。
@@ -61,7 +59,7 @@ public final class HistoryReportController {
     this.report = new HistoryCommand(history, sessions, selection);
     this.sessions = sessions;
     this.selection = selection;
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
   }
 
   /** Web APIによる操作で用いる選択中を返す。 */
@@ -70,7 +68,7 @@ public final class HistoryReportController {
     if (projectId == null || projectId.isBlank() || projectId.length() > 128)
       throw new IllegalArgumentException("Project ID required");
     var project =
-        projects.resolveById(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
+        findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
     if (sessionId != null && !sessions.getSession(sessionId).projectId().equals(project.id()))
       throw new IllegalArgumentException("Session belongs to another Project");
     try (var scope = selection.newClient().open()) {

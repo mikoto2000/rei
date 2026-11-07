@@ -1,10 +1,13 @@
 package dev.mikoto2000.rei.web;
 
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.ui.shell.ActiveRunDisplay;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.Optional;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,11 +31,7 @@ public final class ActiveRunController {
   private final CommandCancellationService cancellation;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /**
    * Web APIによる操作で受け渡すテキストを表す。
@@ -71,7 +70,7 @@ public final class ActiveRunController {
       ActiveRunDisplay display, CommandCancellationService cancellation, ProjectRegistry projects) {
     this.display = display;
     this.cancellation = cancellation;
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
   }
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
@@ -94,8 +93,7 @@ public final class ActiveRunController {
     if (projectId == null || projectId.isBlank() || projectId.length() > 128)
       throw new IllegalArgumentException("Project ID required");
     var project =
-        projects
-            .resolveById(projectId)
+        findProject.apply(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
     boolean accepted = cancellation.cancelProject(project.id());

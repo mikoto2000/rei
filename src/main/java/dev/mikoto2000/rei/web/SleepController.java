@@ -7,6 +7,7 @@ import dev.mikoto2000.rei.memory.command.MemoryCommandSupport;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
+import java.util.function.Predicate;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
@@ -36,11 +37,7 @@ public final class SleepController {
   private final MemoryCommandSupport support;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Predicate<String> projectExists;
 
   /** 会話一覧。 */
   @SuppressFBWarnings(
@@ -103,7 +100,7 @@ public final class SleepController {
       SessionLifecycle sessions) {
     this.runs = runs;
     this.support = support;
-    this.projects = projects;
+    this.projectExists = id -> projects.resolveById(id).isPresent();
     this.sessions = sessions;
   }
 
@@ -201,9 +198,7 @@ public final class SleepController {
 
   /** Web APIによる操作に関するプロジェクトを処理する。 */
   private void project(String id) {
-    projects
-        .resolveById(id)
-        .orElseThrow(
-            () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
+    if (!projectExists.test(id))
+      throw new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project");
   }
 }

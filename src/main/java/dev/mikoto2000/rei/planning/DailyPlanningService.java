@@ -27,7 +27,9 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * 日次計画のユースケースを実現する。
@@ -212,11 +214,7 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
   private final Duration staleAfter;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 許可。 */
   private final List<ProjectContext> allowed;
@@ -269,7 +267,7 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
     properties.validate();
     this.clock = clock;
     this.zone = ZoneId.of(properties.getZone());
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
     this.tasks = tasks;
     this.contexts = contexts;
     this.goals = goals;
@@ -286,8 +284,7 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
             .sorted()
             .map(
                 id ->
-                    projects
-                        .resolveById(id)
+                    findProject.apply(id)
                         .orElseThrow(
                             () -> new IllegalArgumentException("Today Project not registered")))
             .toList();
@@ -549,8 +546,7 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
 
   /** 要求された条件を満たすか判断するため、作業ルートを確認する。 */
   private void verifyRoot(ProjectContext owner) {
-    if (projects
-        .resolveById(owner.id())
+    if (findProject.apply(owner.id())
         .filter(current -> current.root().equals(owner.root()))
         .isEmpty()) throw new ResourceNotFoundException("Today Project");
   }

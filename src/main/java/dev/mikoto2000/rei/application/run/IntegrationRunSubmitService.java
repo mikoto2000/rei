@@ -4,6 +4,7 @@ import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.AgentEventBus;
@@ -15,6 +16,8 @@ import dev.mikoto2000.rei.task.TaskService;
 import dev.mikoto2000.rei.task.command.TaskCommand;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.Optional;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.stereotype.Service;
@@ -30,12 +33,7 @@ import org.springframework.stereotype.Service;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class IntegrationRunSubmitService {
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 受付から終了までの管理。 */
   @SuppressFBWarnings(
@@ -350,7 +348,7 @@ public final class IntegrationRunSubmitService {
       AgentEventBus bus,
       GoogleCalendarService calendar,
       TaskService tasks) {
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
     this.lifecycle = lifecycle;
     this.registry = registry;
     this.runs = runs;
@@ -481,7 +479,7 @@ public final class IntegrationRunSubmitService {
       String operation,
       java.util.function.Supplier<String> report) {
     var project =
-        projects.resolveById(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
+        findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
     if (sessionId != null) lifecycle.validate(sessionId, projectId);
     var context =
         new AgentRunContext(
@@ -513,7 +511,7 @@ public final class IntegrationRunSubmitService {
         || sessionId != null && (sessionId.isBlank() || sessionId.length() > 512))
       throw new IllegalArgumentException("Invalid receipt key or Session");
     var project =
-        projects.resolveById(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
+        findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
     String fingerprint;
     try {
       fingerprint =

@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.application.run;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.AgentEventBus;
@@ -15,6 +16,7 @@ import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -27,12 +29,7 @@ import java.util.function.Supplier;
  */
 public final class BackgroundRunSubmitService {
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 登録台帳。 */
   @SuppressFBWarnings(
@@ -125,7 +122,7 @@ public final class BackgroundRunSubmitService {
   /** 実行の受付と状態管理で用いる最新要約対象軽量CLIを返す。 */
   public String latestSummaryForCli(String projectId) {
     var project =
-        projects.resolveById(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
+        findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
     if (background == null) throw new IllegalStateException("Background runtime unavailable");
     var output = new java.util.ArrayList<String>();
     var active =
@@ -234,7 +231,7 @@ public final class BackgroundRunSubmitService {
       WebPageSummarizerService summaries,
       ImageGenerationService images,
       ImageProperties properties) {
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
     this.registry = registry;
     this.runs = runs;
     this.router = router;
@@ -290,7 +287,7 @@ public final class BackgroundRunSubmitService {
   private AgentRunContext submit(String projectId, Function<AgentRunContext, String> operation) {
     requireText(projectId, 128);
     var project =
-        projects.resolveById(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
+        findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
     // Empty internal conversation identity denotes an operation, with no persisted Session or Turn.
     var context =
         new AgentRunContext(
