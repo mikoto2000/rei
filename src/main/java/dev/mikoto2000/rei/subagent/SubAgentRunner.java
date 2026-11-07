@@ -9,8 +9,6 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
@@ -356,17 +354,25 @@ public final class SubAgentRunner {
   }
 
   /** 権限一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared guard for current tool authorization.")
-  private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
+  private java.util.function.BiFunction<
+          AgentRunContext, AgentRunContext, java.util.function.BiConsumer<String, String>>
+      authorizeChildTool;
+
+  private java.util.function.Predicate<String> automaticallyApprovedChildRead;
 
   /** 補助エージェントへの委譲で使用するツール権限利用条件の確認を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setToolPermissionGuard(
       dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {
-    this.permissions = permissions;
+    this.authorizeChildTool =
+        (owner, parent) ->
+            (tool, input) -> {
+              if (permissions == null) return;
+              if (parent == null) permissions.check(tool, input, owner);
+              else permissions.checkDelegated(tool, input, owner, parent);
+            };
+    this.automaticallyApprovedChildRead =
+        tool -> permissions != null && permissions.automaticallyApprovedRead(tool);
   }
 
   /** 処理状況と問題の調査に使うログの出力先。 */
@@ -1015,13 +1021,10 @@ public final class SubAgentRunner {
               check.run();
               Runnable authorize =
                   () -> {
-                    if (permissions != null) {
-                      if (approvalParent == null)
-                        permissions.check(callback.getToolDefinition().name(), input, owner);
-                      else
-                        permissions.checkDelegated(
-                            callback.getToolDefinition().name(), input, owner, approvalParent);
-                    }
+                    if (authorizeChildTool != null)
+                      authorizeChildTool
+                          .apply(owner, approvalParent)
+                          .accept(callback.getToolDefinition().name(), input);
                   };
               String result =
                   retries.call(
@@ -1048,8 +1051,8 @@ public final class SubAgentRunner {
                       check,
                       () ->
                           !durableChildren.containsKey(owner.runId())
-                              && permissions != null
-                              && permissions.automaticallyApprovedRead(
+                              && automaticallyApprovedChildRead != null
+                              && automaticallyApprovedChildRead.test(
                                   callback.getToolDefinition().name()));
               check.run();
               return evidence == null

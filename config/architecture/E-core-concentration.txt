@@ -674,7 +674,6 @@ business: dev.mikoto2000.rei.subagent.SubAgentRunner$1 -> dev.mikoto2000.rei.cor
 business: dev.mikoto2000.rei.subagent.SubAgentRunner$2 -> dev.mikoto2000.rei.core.chat.BoundedToolLoop$SharedBudgetExceeded
 business: dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.chat.AgentRunScope
-business: dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.policy.ToolPermissionGuard
 business: dev.mikoto2000.rei.subagent.SubAgentSemanticValidator -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.subagent.SubAgentSemanticValidator -> dev.mikoto2000.rei.core.chat.BoundedToolLoop
 business: dev.mikoto2000.rei.subagent.SubAgentSemanticValidator -> dev.mikoto2000.rei.core.chat.BoundedToolLoop$ModelRetries

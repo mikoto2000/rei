@@ -36,8 +36,6 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -351,11 +349,13 @@ public final class ChatGptSubAgentBackend {
   private final SubAgentRegistry registry;
 
   /** 権限一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common guard for the current tool authorization policy.")
-  private final ToolPermissionGuard permissions;
+  private final java.util.function.Function<
+          AgentRunContext, java.util.function.BiConsumer<String, String>>
+      authorize;
+
+  private final java.util.function.Function<
+          AgentRunContext, java.util.function.BiConsumer<String, String>>
+      recheckPlanPolicy;
 
   /** キャンセル。 */
   private final Runnable beginCancellation;
@@ -438,7 +438,9 @@ public final class ChatGptSubAgentBackend {
     this.backendId = backendId;
     this.settings = settings;
     this.registry = registry;
-    this.permissions = permissions;
+    this.authorize = owner -> (tool, input) -> permissions.check(tool, input, owner);
+    this.recheckPlanPolicy =
+        owner -> (tool, input) -> permissions.checkAuthorizedPlanPolicy(tool, input, owner);
     this.beginCancellation = () -> cancellation.begin(null);
     this.clearCancellation = () -> cancellation.clear();
     this.onCancel = (run, action) -> cancellation.onCancel(run, action);
@@ -742,12 +744,13 @@ public final class ChatGptSubAgentBackend {
                               "refinements",
                               execution.refinementRounds()))));
       phase = "SEND_AUTHORIZATION";
-      permissions.check(
-          backendId.equals("codex-app-server")
-              ? "requestCodexAppServerSubAgent"
-              : "requestChatGptPlanSubAgent",
-          approval,
-          owner);
+      authorize
+          .apply(owner)
+          .accept(
+              backendId.equals("codex-app-server")
+                  ? "requestCodexAppServerSubAgent"
+                  : "requestChatGptPlanSubAgent",
+              approval);
       state = State.AUTHORIZED;
       publish(parent, id, role.id(), state, false, request.modelId(), null, 0);
       int maxRepairs =
@@ -784,12 +787,13 @@ public final class ChatGptSubAgentBackend {
           if (System.nanoTime() >= deadline) throw ChatGptException.of(TIMEOUT);
           phase = "SEND_POLICY_RECHECK";
           if (automaticRun) automatic.check(request.account(), request.modelId());
-          permissions.checkAuthorizedPlanPolicy(
-              backendId.equals("codex-app-server")
-                  ? "requestCodexAppServerSubAgent"
-                  : "requestChatGptPlanSubAgent",
-              approval,
-              owner);
+          recheckPlanPolicy
+              .apply(owner)
+              .accept(
+                  backendId.equals("codex-app-server")
+                      ? "requestCodexAppServerSubAgent"
+                      : "requestChatGptPlanSubAgent",
+                  approval);
           phase = "SHARED_BUDGET";
           if (roleCalls.get() >= role.maxSteps())
             throw ChatGptException.delegation(
@@ -1314,7 +1318,7 @@ public final class ChatGptSubAgentBackend {
           throw ChatGptException.source(ChatGptException.SourceFailure.PATH_NOT_ALLOWED, index);
         if (Files.size(file) > 262144)
           throw ChatGptException.source(ChatGptException.SourceFailure.TOO_LARGE, index);
-        permissions.check("readFile", file.toString(), owner);
+        authorize.apply(owner).accept("readFile", file.toString());
         byte[] bytes;
         try (var input = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
           bytes = input.readNBytes(262145);
