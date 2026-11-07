@@ -130,7 +130,10 @@ public final class BehaviorService {
 
   /** 作業習慣の支援において、許可に該当するか判定する。 */
   private synchronized boolean allowed(long token) {
-    return enabled() && activityEnabled.getAsBoolean() && !capture.isPaused() && token == generation;
+    return enabled()
+        && activityEnabled.getAsBoolean()
+        && !capture.isPaused()
+        && token == generation;
   }
 
   /** 対象を判断基準に照らして評価する。 */

@@ -3,8 +3,7 @@ package dev.mikoto2000.rei.ui.shell;
 import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
 import dev.mikoto2000.rei.application.run.SessionConflictException;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -19,11 +18,7 @@ import picocli.CommandLine.Spec;
     mixinStandardHelpOptions = true)
 public final class ResumeConversationCommand implements java.util.concurrent.Callable<Integer> {
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Shares the shell session and routes operations for its selected conversation.")
-  private final ShellConversationService conversations;
+  private final Consumer<String> resumeConversation;
 
   /** 会話の識別子。 */
   @Parameters(
@@ -43,14 +38,14 @@ public final class ResumeConversationCommand implements java.util.concurrent.Cal
   /** 指定された値や利用先を使って、ResumeConversationCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public ResumeConversationCommand(ShellConversationService conversations) {
-    this.conversations = conversations;
+    this.resumeConversation = id -> conversations.resume(id);
   }
 
   /** 現在の project の Session を明示的に選択しますを行う。 */
   @Override
   public Integer call() {
     try {
-      conversations.resume(sessionId);
+      resumeConversation.accept(sessionId);
       spec.commandLine()
           .getOut()
           .println(

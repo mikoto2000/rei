@@ -1,13 +1,13 @@
 package dev.mikoto2000.rei.paper;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
@@ -18,16 +18,15 @@ public class OpenAlexSearchProvider implements AcademicSearchProvider {
   private final PaperHttpClient http;
 
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
-  private final PaperProperties config;
+  private final Supplier<String> apiKey;
+
+  private final IntSupplier maxResponseBytes;
 
   /** 指定された値や利用先を使って、OpenAlexSearchProviderを初期化する。 */
   public OpenAlexSearchProvider(PaperHttpClient http, PaperProperties config) {
     this.http = http;
-    this.config = config;
+    this.apiKey = () -> config.getOpenAlexApiKey();
+    this.maxResponseBytes = () -> config.getMaxResponseBytes();
   }
 
   /** 論文の調査と整理で用いるencを返す。 */
@@ -56,11 +55,12 @@ public class OpenAlexSearchProvider implements AcademicSearchProvider {
               + (q.sort() == PaperSearchQuery.Sort.NEWEST
                   ? "publication_date:desc"
                   : "cited_by_count:desc");
-    if (!config.getOpenAlexApiKey().isBlank()) url += "&api_key=" + enc(config.getOpenAlexApiKey());
+    String key = apiKey.get();
+    if (!key.isBlank()) url += "&api_key=" + enc(key);
     try {
       var root =
           PaperJson.MAPPER.readTree(
-              http.get(URI.create(url), "application/json", config.getMaxResponseBytes(), op));
+              http.get(URI.create(url), "application/json", maxResponseBytes.getAsInt(), op));
       if (!root.path("results").isArray()) throw new IllegalArgumentException();
       List<Paper> result = new ArrayList<>();
       for (var n : root.path("results")) {

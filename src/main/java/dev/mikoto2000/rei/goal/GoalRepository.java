@@ -1125,7 +1125,8 @@ public class GoalRepository {
     var goal = get(project, id);
     if (goal.status().equals("RUNNING")) {
       String phase =
-          db.sql("SELECT COALESCE(completion_phase, 'RUNNING') FROM agent_goals WHERE project=? AND id=?")
+          db.sql(
+                  "SELECT COALESCE(completion_phase, 'RUNNING') FROM agent_goals WHERE project=? AND id=?")
               .params(project, id)
               .query(String.class)
               .single();

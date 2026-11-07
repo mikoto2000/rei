@@ -65,9 +65,7 @@ public class ImplementationRequestService {
       String nextAction) {
     public Prepared {
       allowedPaths =
-          allowedPaths == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(allowedPaths));
+          allowedPaths == null ? null : Collections.unmodifiableList(new ArrayList<>(allowedPaths));
       unresolvedRequirements =
           unresolvedRequirements == null
               ? null
@@ -113,9 +111,7 @@ public class ImplementationRequestService {
       boolean pushPerformed) {
     public Outcome {
       changedFiles =
-          changedFiles == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(changedFiles));
+          changedFiles == null ? null : Collections.unmodifiableList(new ArrayList<>(changedFiles));
       acceptanceResults =
           acceptanceResults == null
               ? null
@@ -142,7 +138,8 @@ public class ImplementationRequestService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured permission policy for the current tool authorization decision.")
+      justification =
+          "Uses the configured permission policy for the current tool authorization decision.")
   private final ToolPermissionPolicy policy;
 
   /** この機能の動作設定。 */
@@ -182,7 +179,8 @@ public class ImplementationRequestService {
     this.requests = requests;
     this.approvals = approvals;
     this.policy = policy;
-    this.implementationEnabled = () -> properties.isEnabled() && properties.isImplementationEnabled();
+    this.implementationEnabled =
+        () -> properties.isEnabled() && properties.isImplementationEnabled();
     this.implementationTestCommand = () -> properties.getImplementationTestCommand();
     this.implementationTestTimeoutSeconds = () -> properties.getImplementationTestTimeoutSeconds();
     this.delegation = delegation;
@@ -377,7 +375,8 @@ public class ImplementationRequestService {
   @SuppressFBWarnings(
       value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
       matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original execution failure after recording the uncertain outcome.")
+      justification =
+          "Preserves the original execution failure after recording the uncertain outcome.")
   public Outcome execute(RunExecutionContext run, String id, int version, String hash) {
     var owner = owner(run);
     run.checkActive();

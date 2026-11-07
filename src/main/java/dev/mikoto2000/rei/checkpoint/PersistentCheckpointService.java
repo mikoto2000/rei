@@ -42,6 +42,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
@@ -63,11 +64,8 @@ public class PersistentCheckpointService implements AutoCloseable {
   private final PersistentCheckpointRepository repository;
 
   /** 再開時の記録と現在の状態を照合する窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Checks the current state of durable checkpoints through the shared reconciler.")
-  private final CheckpointReconciler reconciler;
+  private final BiFunction<PersistentCheckpoint, Boolean, CheckpointReconciler.Result>
+      checkCheckpoint;
 
   /** 設定。 */
   private final BooleanSupplier checkpointsEnabled;
@@ -267,7 +265,7 @@ public class PersistentCheckpointService implements AutoCloseable {
       ObjectProvider<TaskState> tasks,
       ObjectProvider<CheckpointStore> legacy) {
     this.repository = repository;
-    this.reconciler = reconciler;
+    this.checkCheckpoint = (checkpoint, leased) -> reconciler.check(checkpoint, leased);
     this.checkpointsEnabled = () -> settings.isEnabled();
     this.contextCharacters = () -> settings.getContextCharacters();
     this.bus = bus;
@@ -475,7 +473,7 @@ public class PersistentCheckpointService implements AutoCloseable {
   /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public CheckpointReconciler.Result inspect(String project, String task) {
     var state = get(project, task);
-    var result = reconciler.check(state, repository.leased(project, task));
+    var result = checkCheckpoint.apply(state, repository.leased(project, task));
     var diagnostics = repository.diagnostics(project, task);
     if (!diagnostics.isEmpty()) {
       var blockers = new ArrayList<>(result.blockers());
@@ -614,7 +612,7 @@ public class PersistentCheckpointService implements AutoCloseable {
             "承認待ちは /approval list で内容を確認し、/approval approve <approvalId> --continue で続行してください。");
       if (expectedRevision != null && state.revision() != expectedRevision)
         throw new dev.mikoto2000.rei.application.state.OperationConflictException();
-      var result = reconciler.check(state, false);
+      var result = checkCheckpoint.apply(state, false);
       if (expectedPrevious != null) {
         var registry = runs.getIfAvailable();
         if (registry == null)
@@ -736,7 +734,7 @@ public class PersistentCheckpointService implements AutoCloseable {
           || !state.projectRoot().equals(owner.projectRoot().toString())
           || state.mode() != owner.mode())
         throw new IllegalStateException("Owning checkpoint revision changed");
-      var result = reconciler.check(state, false);
+      var result = checkCheckpoint.apply(state, false);
       if (!repository.diagnostics(owner.projectId(), task).isEmpty()
           || !result.automaticResumeSafe())
         throw new IllegalStateException(
@@ -790,31 +788,32 @@ public class PersistentCheckpointService implements AutoCloseable {
   /** 作業の中断と再開において、参照専用に該当するか判定する。 */
   private boolean readOnly(String tool) {
     // Explicit allowlist; guessing from substrings can mistake deleteTarget/sendReader for a read.
-    return CheckpointOperationRecovery.RETRYABLE_READS.contains(tool) || Set.of(
-            "checkpointList",
-            "checkpointShow",
-            "checkpointInspect",
-            "checkpointSave",
-            "checkpointAnnotate",
-            "checkpointConfirm",
-            "checkpointPlan",
-            "today",
-            "now",
-            "findFile",
-            "listFile",
-            "grepMultiQuery",
-            "searchAndRead",
-            "searchFilePage",
-            "readMultiFile",
-            "readFile",
-            "readPdfFile",
-            "readBinaryFile",
-            "getShellProcessStatus",
-            "updateTaskState",
-            "workContextGet",
-            "workContextHistory",
-            "workContextRevision")
-        .contains(tool);
+    return CheckpointOperationRecovery.RETRYABLE_READS.contains(tool)
+        || Set.of(
+                "checkpointList",
+                "checkpointShow",
+                "checkpointInspect",
+                "checkpointSave",
+                "checkpointAnnotate",
+                "checkpointConfirm",
+                "checkpointPlan",
+                "today",
+                "now",
+                "findFile",
+                "listFile",
+                "grepMultiQuery",
+                "searchAndRead",
+                "searchFilePage",
+                "readMultiFile",
+                "readFile",
+                "readPdfFile",
+                "readBinaryFile",
+                "getShellProcessStatus",
+                "updateTaskState",
+                "workContextGet",
+                "workContextHistory",
+                "workContextRevision")
+            .contains(tool);
   }
 
   /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */

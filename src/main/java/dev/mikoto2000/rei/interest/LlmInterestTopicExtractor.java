@@ -12,10 +12,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
@@ -29,12 +31,9 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
   private static final long EXTRACT_TIMEOUT_SECONDS = 1200L;
 
   /** モデル提供元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider modelProvider;
+  private final Supplier<ChatModel> featureModel;
+
+  private final Function<String, OpenAiChatOptions> optionsForModel;
 
   /** モデル保持先サービス。 */
   private final Supplier<String> readSelectedModel;
@@ -54,7 +53,9 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
       LlmModelProvider modelProvider,
       ModelHolderService modelHolderService,
       JsonMapper objectMapper) {
-    this.modelProvider = modelProvider;
+    this.featureModel = () -> modelProvider.chatModel(LlmFeature.INTEREST_DISCOVERY);
+    this.optionsForModel =
+        selected -> modelProvider.chatOptions(LlmFeature.INTEREST_DISCOVERY, selected);
     this.readSelectedModel = () -> modelHolderService.get();
     this.candidateReader =
         objectMapper.readerFor(new TypeReference<List<InterestTopicCandidate>>() {});
@@ -77,7 +78,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
     Prompt prompt =
         new Prompt(
             buildPrompt(snippets, maxTopics, pastQueries),
-            modelProvider.chatOptions(LlmFeature.INTEREST_DISCOVERY, readSelectedModel.get()));
+            optionsForModel.apply(readSelectedModel.get()));
 
     String response = callWithTimeout(prompt);
     return parse(response);
@@ -93,7 +94,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
     Future<String> future =
         executor.submit(
             () -> {
-              var response = modelProvider.chatModel(LlmFeature.INTEREST_DISCOVERY).call(prompt);
+              var response = featureModel.get().call(prompt);
               var generation = response == null ? null : response.getResult();
               var output = generation == null ? null : generation.getOutput();
               if (output == null)

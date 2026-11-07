@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.HexFormat;
@@ -83,11 +84,7 @@ public final class GitHubWebhookService {
   private final GitHubFactRepository facts;
 
   /** 実行予定の管理。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent schedule and claim state.")
-  private final PersistentAgentScheduler scheduler;
+  private final BiConsumer<GitHubFactRepository.OwnedFact, Instant> signalEvent;
 
   /** 受信した案内や確認待ち情報の保存先。 */
   private final AttentionRepository inbox;
@@ -117,7 +114,9 @@ public final class GitHubWebhookService {
     this.findProject = id -> projects.resolveById(id);
     this.validateSession = (session, project) -> sessions.validate(session, project);
     this.facts = facts;
-    this.scheduler = scheduler;
+    this.signalEvent =
+        (owned, receivedAt) ->
+            scheduler.signalExternalEvent(owned.event(receivedAt), owned.project().root());
     this.inbox = inbox;
     this.verifier = verifier;
     this.clock = clock;
@@ -203,8 +202,9 @@ public final class GitHubWebhookService {
         properties.getMaxDeliveries(),
         properties.getMaxFacts(),
         owned -> {
-          var envelope = owned.event(clock.instant());
-          scheduler.signalExternalEvent(envelope, owned.project().root());
+          var receivedAt = clock.instant();
+          var envelope = owned.event(receivedAt);
+          signalEvent.accept(owned, receivedAt);
           if (notifications.contains(owned.id()))
             inbox
                 .createGitHub(

@@ -45,11 +45,7 @@ public class BlueskyReplyTextGenerator {
       Pattern.compile("[A-Za-z_$][A-Za-z0-9_.$-]*\\s*\\(\\s*\\{.*}\\s*\\)\\s*;?", Pattern.DOTALL);
 
   /** モデルへ対話を依頼する窓口提供元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the application provider for the configured chat clients.")
-  private final LlmChatClientProvider chatClientProvider;
+  private final Supplier<ChatClient> replyChatClient;
 
   /** モデル保持先サービス。 */
   private final Supplier<String> readSelectedModel;
@@ -81,7 +77,7 @@ public class BlueskyReplyTextGenerator {
       ModelHolderService modelHolderService,
       LlmModelProvider modelProvider,
       BlueskyProperties properties) {
-    this.chatClientProvider = chatClientProvider;
+    this.replyChatClient = () -> chatClientProvider.chatClient(LlmFeature.BLUESKY_REPLY);
     this.readSelectedModel = () -> modelHolderService.get();
     this.optionsForModel = model -> modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, model);
     this.properties = properties;
@@ -216,8 +212,7 @@ public class BlueskyReplyTextGenerator {
 
   /** 依頼された内容を提供するため、内容を生成する。 */
   private String generateContent(Prompt prompt, String conversationId) {
-    return chatClientProvider
-        .chatClient(LlmFeature.BLUESKY_REPLY)
+    return replyChatClient.get()
         .prompt(prompt)
         .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId))
         .stream()

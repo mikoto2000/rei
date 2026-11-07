@@ -1,11 +1,10 @@
 package dev.mikoto2000.rei.paper;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Service;
@@ -14,11 +13,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class PaperExtractionService {
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
-  private final PaperProperties config;
+  private final Supplier<PaperSettings> settings;
 
   /** 見出し。 */
   private static final java.util.regex.Pattern HEADING =
@@ -29,22 +24,23 @@ public class PaperExtractionService {
 
   /** 指定された値や利用先を使って、PaperExtractionServiceを初期化する。 */
   public PaperExtractionService(PaperProperties config) {
-    this.config = config;
+    this.settings = () -> PaperSettings.capture(config);
   }
 
   /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
   public StructuredPaper extract(String title, byte[] pdf, PaperOperation op) {
+    var config = settings.get();
     op.check();
-    if (pdf.length > config.getMaxPdfBytes()) throw failure();
+    if (pdf.length > config.maxPdfBytes()) throw failure();
     try (var doc = Loader.loadPDF(pdf)) {
-      if (doc.getNumberOfPages() > config.getMaxPages()) throw failure();
+      if (doc.getNumberOfPages() > config.maxPages()) throw failure();
       List<PaperSection> sections = new ArrayList<>();
       List<String> references = new ArrayList<>();
       int total = 0;
       String heading = "UNKNOWN";
       for (int page = 1; page <= doc.getNumberOfPages(); page++) {
         op.check();
-        final int remaining = config.getMaxExtractedChars() - total;
+        final int remaining = config.maxExtractedChars() - total;
         var writer =
             new Writer() {
               /** 値。 */
@@ -79,12 +75,12 @@ public class PaperExtractionService {
           op.check();
           var m = HEADING.matcher(line.strip());
           if (m.matches()) {
-            add(sections, heading, block.toString(), page);
+            add(sections, heading, block.toString(), page, config);
             block.setLength(0);
             heading = m.group(1);
           } else block.append(line).append('\n');
         }
-        add(sections, heading, block.toString(), page);
+        add(sections, heading, block.toString(), page, config);
       }
       for (var s : sections)
         if (s.heading().equalsIgnoreCase("references")) references.add(s.text());
@@ -107,10 +103,11 @@ public class PaperExtractionService {
   }
 
   /** 新たな対象を登録し、後から利用できるようにする。 */
-  private void add(List<PaperSection> sections, String heading, String text, int page) {
+  private void add(
+      List<PaperSection> sections, String heading, String text, int page, PaperSettings config) {
     if (text.isBlank()) return;
-    for (String chunk : PaperTranslationService.chunks(text, config.getMaxSectionChars())) {
-      if (sections.size() >= config.getMaxSections()) throw failure();
+    for (String chunk : PaperTranslationService.chunks(text, config.maxSectionChars())) {
+      if (sections.size() >= config.maxSections()) throw failure();
       sections.add(new PaperSection(heading, chunk, page, page));
     }
   }

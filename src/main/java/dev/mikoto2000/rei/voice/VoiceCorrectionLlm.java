@@ -92,7 +92,8 @@ public final class VoiceCorrectionLlm {
         new ObjectMapper()
             .writeValueAsString(java.util.Map.of("asr", original, "references", context));
     var response =
-        correctionClient.get()
+        correctionClient
+            .get()
             .prompt()
             .system(SYSTEM)
             .user(data)

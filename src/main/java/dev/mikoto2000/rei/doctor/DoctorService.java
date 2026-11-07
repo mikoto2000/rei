@@ -48,7 +48,8 @@ public class DoctorService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound VoiceProperties shared by consumers of these settings.")
+      justification =
+          "Reads the application-bound VoiceProperties shared by consumers of these settings.")
   private final VoiceProperties voice;
 
   /** Codexの設定または実行の窓口。 */

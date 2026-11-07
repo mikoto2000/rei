@@ -86,7 +86,8 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
 
   /** 指定された値や利用先を使って、WindowsDesktopActivityObserverを初期化する。 */
   public WindowsDesktopActivityObserver(ActivityProperties properties) {
-    this.identifyBackgroundCapture = () -> properties != null && properties.getDetection().isBackgroundFullScreenEnabled();
+    this.identifyBackgroundCapture =
+        () -> properties != null && properties.getDetection().isBackgroundFullScreenEnabled();
   }
 
   /** 取得記録。 */
@@ -95,8 +96,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
   /** 後から状況を確認できるよう、Windowsデスクトップ作業状況観測を記録する。 */
   private CapturedScreen readCapture() throws AWTException, IOException, InterruptedException {
     var metadata = lastMetadata;
-    boolean identified =
-        identifyBackgroundCapture.getAsBoolean();
+    boolean identified = identifyBackgroundCapture.getAsBoolean();
     if (identified && (metadata == null || !metadata.complete()))
       throw new IllegalStateException("Desktop identity unavailable");
     var screen = capture.captureScreen();

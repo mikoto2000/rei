@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** 論文内容のユースケースを実現する。 */
@@ -30,11 +31,7 @@ public class PaperContentService {
   private final PaperExtractionService extraction;
 
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
-  private final PaperProperties config;
+  private final Supplier<PaperSettings> settings;
 
   /** 保存と検索の窓口。 */
   @SuppressFBWarnings(
@@ -67,7 +64,7 @@ public class PaperContentService {
     this.store = store;
     this.http = http;
     this.extraction = extraction;
-    this.config = config;
+    this.settings = () -> PaperSettings.capture(config);
     this.repository = repository;
   }
 
@@ -88,6 +85,7 @@ public class PaperContentService {
 
   /** 論文の調査と整理で用いる内容使用中を返す。 */
   private StructuredPaper contentLocked(Paper paper, PaperOperation op) {
+    var config = settings.get();
     op.check();
     if (repository != null && repository.find(paper.id()).isEmpty())
       throw new PaperException(PaperException.Code.PAPER_NOT_FOUND, "論文が見つかりません");
@@ -113,7 +111,7 @@ public class PaperContentService {
         for (var provider : providers) {
           var uri = provider.resolve(paper);
           if (uri.isPresent()) {
-            pdf = Optional.of(http.get(uri.get(), "application/pdf", config.getMaxPdfBytes(), op));
+            pdf = Optional.of(http.get(uri.get(), "application/pdf", config.maxPdfBytes(), op));
             store.write(paper.id(), "originals", "pdf", pdf.get(), op);
             break;
           }
@@ -175,8 +173,9 @@ public class PaperContentService {
 
   /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private void validate(StructuredPaper p) {
-    if (p.sections().size() > config.getMaxSections()
+    var config = settings.get();
+    if (p.sections().size() > config.maxSections()
         || p.sections().stream().mapToLong(s -> s.text().length()).sum()
-            > config.getMaxExtractedChars()) throw new IllegalArgumentException();
+            > config.maxExtractedChars()) throw new IllegalArgumentException();
   }
 }

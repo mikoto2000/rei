@@ -14,9 +14,12 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
 
 /**
@@ -27,18 +30,17 @@ import org.springframework.stereotype.Service;
 @Service
 public class LlmWorkContextExtractor implements WorkContextExtractor {
   /** モデル一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider models;
+  private final Supplier<ChatModel> modelForCalls;
+
+  private final Supplier<OpenAiChatOptions> optionsForCalls;
 
   /** この機能の動作設定。 */
   private final WorkContextProperties properties;
 
   /** 指定された値や利用先を使って、LlmWorkContextExtractorを初期化する。 */
   public LlmWorkContextExtractor(LlmModelProvider models, WorkContextProperties properties) {
-    this.models = models;
+    this.modelForCalls = () -> models.memoryChatModel();
+    this.optionsForCalls = () -> models.chatOptions(LlmFeature.MEMORY, null);
     this.properties = properties;
   }
 
@@ -108,9 +110,9 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
           WorkContextExtractionException.Reason.INPUT_TOO_LARGE,
           inputTokens,
           properties.maxInputTokens());
-    var model = models.memoryChatModel();
+    var model = modelForCalls.get();
     ToolLoopSupport.requireNoDefaultTools(model);
-    var optionsBuilder = models.chatOptions(LlmFeature.MEMORY, null).mutate();
+    var optionsBuilder = optionsForCalls.get().mutate();
     optionsBuilder.toolCallbacks(List.of());
     optionsBuilder.toolChoice("none");
     var options = optionsBuilder.build();

@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.doctor;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import static dev.mikoto2000.rei.doctor.DoctorResult.Status.ERROR;
 import static dev.mikoto2000.rei.doctor.DoctorResult.Status.NOT_APPLICABLE;
 import static dev.mikoto2000.rei.doctor.DoctorResult.Status.NOT_CONFIGURED;
@@ -28,6 +26,8 @@ import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.OpenAiCompatibleEndpoint;
 import dev.mikoto2000.rei.voice.VoiceProperties;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
@@ -45,6 +45,7 @@ import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.core.env.Environment;
@@ -103,17 +104,16 @@ public class DoctorActiveService {
   private final Environment environment;
 
   /** モデル一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider models;
+  private final Supplier<ChatModel> subAgentModel;
+
+  private final Function<String, OpenAiChatOptions> optionsForModel;
 
   /** 選択中モデル。 */
   private final Supplier<String> readSelectedModel;
 
   /** HTTP通信。 */
-  private final Function<ConnectivityRequest, JavaHttpDependencyProbe.Connectivity> connectivityProbe;
+  private final Function<ConnectivityRequest, JavaHttpDependencyProbe.Connectivity>
+      connectivityProbe;
 
   /** 接続性の診断に必要な入力。 */
   private record ConnectivityRequest(String endpoint, Duration timeout, Runnable checkActive) {}
@@ -181,7 +181,8 @@ public class DoctorActiveService {
       Clock clock) {
     this.passive = passive;
     this.environment = environment;
-    this.models = models;
+    this.subAgentModel = () -> models.subAgentChatModel();
+    this.optionsForModel = selected -> models.chatOptions(LlmFeature.CHAT, selected);
     this.readSelectedModel = () -> selectedModel.get();
     this.connectivityProbe =
         request -> http.connectivity(request.endpoint(), request.timeout(), request.checkActive());
@@ -256,7 +257,7 @@ public class DoctorActiveService {
       OpenAiChatOptions inferenceOptions = null;
       String connectionIdentity = "";
       if (check == DoctorRequest.Check.INFERENCE) {
-        var defaults = models.chatOptions(LlmFeature.CHAT, target);
+        var defaults = optionsForModel.apply(target);
         var inferenceBuilder = defaults == null ? OpenAiChatOptions.builder() : defaults.mutate();
         if (defaults == null) inferenceBuilder.model(target);
         inferenceOptions = inferenceBuilder.build();
@@ -423,10 +424,11 @@ public class DoctorActiveService {
   @SuppressFBWarnings(
       value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
       matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original inference failure when it is not classified as a timeout.")
+      justification =
+          "Preserves the original inference failure when it is not classified as a timeout.")
   private DoctorResult inference(
       RunExecutionContext run, OpenAiChatOptions captured, Duration timeout) {
-    var model = models.subAgentChatModel();
+    var model = subAgentModel.get();
     ToolLoopSupport.requireNoDefaultTools(model);
     var options = captured.mutate();
     var bounded =

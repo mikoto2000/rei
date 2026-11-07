@@ -9,11 +9,10 @@ import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TIMEOUT;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.policy.ToolPermissionGuard;
 import dev.mikoto2000.rei.event.CredentialRedactor;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -22,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -66,11 +66,7 @@ public final class PlanAppServerClient implements PlanInference {
   private final Launcher launcher;
 
   /** 権限一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common guard for the current tool authorization policy.")
-  private final ToolPermissionGuard permissions;
+  private final BiConsumer<String, AgentRunContext> authorizeRead;
 
   /** 要求と実行を関連付ける追跡情報。 */
   private final ThreadLocal<PlanAppServerRpc.Trace> traces = new ThreadLocal<>();
@@ -114,7 +110,7 @@ public final class PlanAppServerClient implements PlanInference {
       PlanClient accounts, Launcher launcher, ToolPermissionGuard permissions) {
     this.accounts = accounts;
     this.launcher = launcher;
-    this.permissions = permissions;
+    this.authorizeRead = (path, owner) -> permissions.check("readFile", path, owner);
   }
 
   /** ChatGPTとの連携で用いる取り出し追跡情報を返す。 */
@@ -218,7 +214,7 @@ public final class PlanAppServerClient implements PlanInference {
                 path -> {
                   if (stop.getAsBoolean() || !snapshots.containsKey(path) || served.contains(path))
                     throw ChatGptException.of(PERMISSION_DENIED);
-                  permissions.check("readFile", path, owner);
+                  authorizeRead.accept(path, owner);
                   // Reserve the next inference before replying to a tool; parallel tool replies
                   // over-reserve conservatively.
                   if (budget != null
