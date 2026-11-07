@@ -62,11 +62,9 @@ public class EpisodeSearchService {
   private final WorkContextService work;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project selection and client session state.")
-  private dev.mikoto2000.rei.core.project.ProjectService projects;
+  private java.util.function.Supplier<List<String>> searchableProjects = List::of;
+
+  private java.util.function.Predicate<String> isRegisteredProject = project -> false;
 
   /** トークン数の上限。 */
   private int maxTokens = 1500;
@@ -103,7 +101,18 @@ public class EpisodeSearchService {
   /** 過去の経験の活用で使用するプロジェクト一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setProjects(dev.mikoto2000.rei.core.project.ProjectService projects) {
-    this.projects = projects;
+    this.searchableProjects =
+        projects == null
+            ? List::of
+            : () ->
+                projects.registeredProjects().stream()
+                    .limit(256)
+                    .map(dev.mikoto2000.rei.core.project.ProjectContext::id)
+                    .toList();
+    this.isRegisteredProject =
+        project ->
+            projects != null
+                && projects.registeredProjects().stream().anyMatch(p -> p.id().equals(project));
   }
 
   /** 過去の経験の活用で使用する記憶設定を設定する。 */
@@ -185,12 +194,8 @@ public class EpisodeSearchService {
         .map(ConversationSearchResult::sourceProjectId)
         .filter(Objects::nonNull)
         .forEach(projects::add);
-    if (this.projects != null
-        && request.retrievalScope() != HistorySearchScope.CURRENT_PROJECT_ONLY)
-      this.projects.registeredProjects().stream()
-          .limit(256)
-          .map(dev.mikoto2000.rei.core.project.ProjectContext::id)
-          .forEach(projects::add);
+    if (request.retrievalScope() != HistorySearchScope.CURRENT_PROJECT_ONLY)
+      projects.addAll(searchableProjects.get());
     var episodeHits = new ArrayList<Hit>();
     int foreign = 0;
     for (String project : projects) {
@@ -320,8 +325,7 @@ public class EpisodeSearchService {
 
   /** 過去の経験の活用で用いる登録済みプロジェクトを返す。 */
   public String registeredProject(String project) {
-    if (projects == null
-        || projects.registeredProjects().stream().noneMatch(p -> p.id().equals(project)))
+    if (!isRegisteredProject.test(project))
       throw new IllegalArgumentException("Unknown registered project");
     return project;
   }

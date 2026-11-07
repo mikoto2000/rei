@@ -37,12 +37,9 @@ import java.util.TreeSet;
  */
 public final class TaskManagerService {
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  private final java.util.function.Supplier<List<ProjectContext>> registeredProjects;
+
+  private final java.util.function.Function<String, Optional<ProjectContext>> findProject;
 
   /** 実行一覧。 */
   private final java.util.function.Predicate<String> ownsExecution;
@@ -94,7 +91,8 @@ public final class TaskManagerService {
       GoalRepository goals,
       PersistentDependencyRepository dependencies,
       PersistentAgentScheduler schedules) {
-    this.projects = projects;
+    this.registeredProjects = () -> projects.list();
+    this.findProject = id -> projects.resolveById(id);
     this.ownsExecution = id -> runs.ownsExecution(id);
     this.registeredRunIds = () -> runs.runIds();
     this.registeredRun = id -> runs.get(id);
@@ -113,7 +111,7 @@ public final class TaskManagerService {
       throw new IllegalArgumentException("Invalid Task filter");
     String scope = "tasks:" + Objects.toString(project, "") + ":" + Objects.toString(session, "");
     var after = cursors.decode(scope, cursor);
-    var allowed = project == null ? projects.list() : List.of(project(project));
+    var allowed = project == null ? registeredProjects.get() : List.of(project(project));
     var rows = new TreeMap<String, TaskView>();
     for (var owner : allowed)
       for (var task : catalog(owner, session, after == null ? null : after.id(), limit + 1, null)) {
@@ -143,7 +141,7 @@ public final class TaskManagerService {
   /** 実行中タスクの操作で用いるプロジェクトを返す。 */
   private ProjectContext project(String id) {
     if (id == null || id.isBlank()) throw new IllegalArgumentException("Project required");
-    return projects.resolveById(id).orElseThrow(() -> new ResourceNotFoundException("Task"));
+    return findProject.apply(id).orElseThrow(() -> new ResourceNotFoundException("Task"));
   }
 
   /** 実行中タスクの操作で用いる利用可能な項目を返す。 */

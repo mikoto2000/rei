@@ -15,7 +15,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -105,11 +104,7 @@ public final class AutoSleepService implements AutoCloseable {
   private dev.mikoto2000.rei.application.session.SessionRepository savedSessions;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project selection and client session state.")
-  private dev.mikoto2000.rei.core.project.ProjectService projects;
+  private java.util.function.Supplier<java.util.Set<String>> registeredProjects;
 
   /** 起動時。 */
   private Iterator<dev.mikoto2000.rei.application.session.SessionMetadata> startup;
@@ -132,7 +127,13 @@ public final class AutoSleepService implements AutoCloseable {
       dev.mikoto2000.rei.application.session.SessionRepository savedSessions,
       dev.mikoto2000.rei.core.project.ProjectService projects) {
     this.savedSessions = savedSessions;
-    this.projects = projects;
+    this.registeredProjects =
+        projects == null
+            ? null
+            : () ->
+                projects.completionProjects().stream()
+                    .map(project -> project.id())
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
   }
 
   /**
@@ -141,12 +142,12 @@ public final class AutoSleepService implements AutoCloseable {
    * <p>Metadata only: no history reads or model calls until the usual idle gates pass.
    */
   private void discoverStartup() {
-    if (savedSessions == null || projects == null) return;
+    if (savedSessions == null || registeredProjects == null) return;
     if (!startupCaptured) {
       startup = savedSessions.completionSnapshot().iterator();
       startupCaptured = true;
     }
-    var registered = projects.completionProjects();
+    var registered = registeredProjects.get();
     for (int scanned = 0; scanned < 256 && sessions.size() < 256 && startup.hasNext(); scanned++) {
       var item = startup.next();
       registerMetadata(item, registered);
@@ -157,10 +158,10 @@ public final class AutoSleepService implements AutoCloseable {
   /** 後から対象を参照できるよう、付随情報を登録する。 */
   private void registerMetadata(
       dev.mikoto2000.rei.application.session.SessionMetadata item,
-      List<dev.mikoto2000.rei.core.project.ProjectContext> registered) {
+      java.util.Set<String> registered) {
     if (item.sessionId().isBlank()
         || item.projectId().isBlank()
-        || registered.stream().noneMatch(p -> p.id().equals(item.projectId()))) return;
+        || !registered.contains(item.projectId())) return;
     try {
       String encoded = dev.mikoto2000.rei.core.project.ProjectStorage.projectId(item.sessionId());
       if (encoded != null && !encoded.equals(item.projectId())) return;
@@ -193,7 +194,7 @@ public final class AutoSleepService implements AutoCloseable {
       var rows = savedSessions.findPage(null, metadataCursor, limit);
       if (rows.size() > limit)
         throw new IllegalStateException("Session metadata page exceeds limit");
-      var registered = projects.completionProjects();
+      var registered = registeredProjects.get();
       for (var item : rows) registerMetadata(item, registered);
       if (rows.size() < limit) {
         metadataScanning = false;
@@ -284,14 +285,14 @@ public final class AutoSleepService implements AutoCloseable {
 
   /** 長期記憶の保存と検索で用いる利用先の検出終了要求一覧を返す。 */
   private Map<String, MemoryRepository.AutoSleepRequest> discoverEndRequests() {
-    if (projects == null || (!properties.onSessionEnd() && !properties.onShutdown()))
+    if (registeredProjects == null || (!properties.onSessionEnd() && !properties.onShutdown()))
       return Map.of();
-    var registered = projects.completionProjects();
+    var registered = registeredProjects.get();
     var requested = new LinkedHashMap<String, MemoryRepository.AutoSleepRequest>();
     for (var request : sleep.pendingAutoSleepRequests()) {
       if (!(request.cause().equals("session_end") && properties.onSessionEnd())
           && !(request.cause().equals("shutdown") && properties.onShutdown())) continue;
-      if (registered.stream().noneMatch(p -> p.id().equals(request.projectId()))) continue;
+      if (!registered.contains(request.projectId())) continue;
       if (sleep.autoState(request.sessionId(), request.projectId()).stoppedAt() != null) continue;
       try {
         String encoded =
