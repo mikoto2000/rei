@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.topic;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -39,11 +37,9 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
     return policy == null || policy.valid(lease);
   }
 
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads and updates the same candidate store.")
-  private final TopicCandidateStore candidateStore;
+  private final java.util.function.BiConsumer<List<TopicCandidate>, Instant> replaceCandidates;
+  private final java.util.function.BiFunction<Instant, java.time.Duration, List<TopicCandidate>>
+      currentCandidates;
 
   /** 文脈提供元。 */
   private final TopicGenerationContextProvider contextProvider;
@@ -113,7 +109,8 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
       Clock clock,
       java.util.concurrent.Executor refreshExecutor) {
     this.topicGeneratorService = topicGeneratorService;
-    this.candidateStore = candidateStore;
+    this.replaceCandidates = (candidates, now) -> candidateStore.replace(candidates, now);
+    this.currentCandidates = (now, maxAge) -> candidateStore.currentCandidates(now, maxAge);
     this.contextProvider = contextProvider;
     this.activityTracker = activityTracker;
     this.messagePublisher = messagePublisher;
@@ -144,7 +141,7 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
                       context, () -> lifeAllowed() && lifeValid(lease));
               if (!lifeAllowed() || !lifeValid(lease)) return;
               if (refreshVersion.get() != version || Thread.currentThread().isInterrupted()) return;
-              candidateStore.replace(candidates, Instant.now(clock));
+              replaceCandidates.accept(candidates, Instant.now(clock));
               eventPublisher.publish(
                   eventFactory.topicCandidatesRefreshed(
                       candidates.size(), candidates.stream().map(TopicCandidate::topic).toList()));
@@ -169,7 +166,7 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
     try {
       Instant now = Instant.now(clock);
       List<TopicCandidate> candidates =
-          candidateStore.currentCandidates(now, topicSettings.candidateMaxAge());
+          currentCandidates.apply(now, topicSettings.candidateMaxAge());
       TopicExecutionContext executionContext =
           new TopicExecutionContext(
               "topic-" + UUID.randomUUID(),
