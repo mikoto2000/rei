@@ -3,11 +3,10 @@ package dev.mikoto2000.rei.core.relatedgraph;
 import dev.mikoto2000.rei.core.working.WorkingSet;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -25,11 +24,7 @@ import org.springframework.stereotype.Component;
 public class RelatedFileGraphAdvisor implements BaseAdvisor {
 
   /** 関連ファイル関連図。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Renders the current related-file graph that tools update during a run.")
-  private final RelatedFileGraph relatedFileGraph;
+  private final Function<Set<String>, String> renderRelatedFiles;
 
   /** 作業中集合。 */
   private final Supplier<Set<String>> loadWorkingSetPaths;
@@ -61,18 +56,14 @@ public class RelatedFileGraphAdvisor implements BaseAdvisor {
       WorkingSet workingSet,
       AgentEventFactory events,
       AgentEventPublisher eventPublisher) {
-    this.relatedFileGraph = relatedFileGraph;
+    this.renderRelatedFiles = paths -> relatedFileGraph.renderForPrompt(paths);
     this.loadWorkingSetPaths =
-        () -> workingSet.getFiles().stream()
-            .map(ref -> ref.path())
-            .collect(java.util.stream.Collectors.toSet());
+        () ->
+            workingSet.getFiles().stream()
+                .map(ref -> ref.path())
+                .collect(java.util.stream.Collectors.toSet());
     this.events = events;
     this.eventPublisher = eventPublisher;
-  }
-
-  /** 関連情報の探索で用いる関連ファイル関連図を返す。 */
-  RelatedFileGraph relatedFileGraph() {
-    return relatedFileGraph;
   }
 
   /** 関連情報の探索の本処理へ渡す文脈を準備する。 */
@@ -83,7 +74,7 @@ public class RelatedFileGraphAdvisor implements BaseAdvisor {
       return request;
     }
     Set<String> workingSetPaths = loadWorkingSetPaths.get();
-    String context = relatedFileGraph.renderForPrompt(workingSetPaths);
+    String context = renderRelatedFiles.apply(workingSetPaths);
     if (context.isBlank()) {
       return request;
     }

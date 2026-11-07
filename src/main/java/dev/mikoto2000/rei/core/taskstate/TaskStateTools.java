@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.core.taskstate;
 
 import dev.mikoto2000.rei.context.TaskProgressStore;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -17,11 +15,7 @@ import org.springframework.stereotype.Component;
 public class TaskStateTools {
 
   /** タスク状態。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Updates the current task state shared with the run's prompt advisor.")
-  private final TaskState taskState;
+  private final UpdateTask updateProgress;
 
   @FunctionalInterface
   private interface ProgressRecorder {
@@ -38,12 +32,9 @@ public class TaskStateTools {
 
   /** 指定された値や利用先を使って、TaskStateToolsを初期化する。 */
   public TaskStateTools(TaskState taskState) {
-    this.taskState = taskState;
-  }
-
-  /** 作業状態の記録で用いるタスク状態を返す。 */
-  TaskState taskState() {
-    return taskState;
+    this.updateProgress =
+        (goal, status, completed, pending) ->
+            applyUpdate(taskState, goal, status, completed, pending);
   }
 
   /**
@@ -82,6 +73,23 @@ public class TaskStateTools {
     if (status == null || status.isBlank()) {
       return "status は必須です";
     }
+    var outcome = updateProgress.apply(goal, status, completed, pending);
+    if (outcome.error() != null) return outcome.error();
+    progress.record(
+        dev.mikoto2000.rei.context.RunIdentity.currentRunId(),
+        outcome.goal(),
+        outcome.status(),
+        completed,
+        pending);
+    return "updated";
+  }
+
+  private static UpdateOutcome applyUpdate(
+      TaskState taskState,
+      String goal,
+      String status,
+      List<String> completed,
+      List<String> pending) {
     switch (status) {
       case TaskState.STATUS_IDLE -> {
         taskState.reset();
@@ -90,7 +98,7 @@ public class TaskStateTools {
         if (goal != null && !goal.isBlank()) {
           taskState.start(goal);
         } else if (taskState.isEmpty()) {
-          return "goal は必須です";
+          return new UpdateOutcome("goal は必須です", null, null);
         }
         addAll(taskState, completed, pending);
       }
@@ -109,20 +117,14 @@ public class TaskStateTools {
         taskState.block();
       }
       default -> {
-        return "不正な status です: " + status;
+        return new UpdateOutcome("不正な status です: " + status, null, null);
       }
     }
-    progress.record(
-        dev.mikoto2000.rei.context.RunIdentity.currentRunId(),
-        taskState.goal(),
-        taskState.status(),
-        completed,
-        pending);
-    return "updated";
+    return new UpdateOutcome(null, taskState.goal(), taskState.status());
   }
 
   /** 新たな対象を管理できるよう、全対象を追加する。 */
-  private void addAll(TaskState taskState, List<String> completed, List<String> pending) {
+  private static void addAll(TaskState taskState, List<String> completed, List<String> pending) {
     if (completed != null) {
       for (String item : completed) {
         taskState.addCompleted(item);
@@ -133,5 +135,12 @@ public class TaskStateTools {
         taskState.addPending(item);
       }
     }
+  }
+
+  private record UpdateOutcome(String error, String goal, String status) {}
+
+  @FunctionalInterface
+  private interface UpdateTask {
+    UpdateOutcome apply(String goal, String status, List<String> completed, List<String> pending);
   }
 }

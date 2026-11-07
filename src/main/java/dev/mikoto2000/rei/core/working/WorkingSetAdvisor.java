@@ -2,9 +2,9 @@ package dev.mikoto2000.rei.core.working;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
+import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -21,11 +21,9 @@ import org.springframework.stereotype.Component;
 public class WorkingSetAdvisor implements BaseAdvisor {
 
   /** 作業中集合。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared working set so callers see the current file selection.")
-  private final WorkingSet workingSet;
+  private final Supplier<String> renderFiles;
+
+  private final IntSupplier fileCount;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -50,7 +48,8 @@ public class WorkingSetAdvisor implements BaseAdvisor {
   /** 指定された値や利用先を使って、WorkingSetAdvisorを初期化する。 */
   public WorkingSetAdvisor(
       WorkingSet workingSet, AgentEventFactory events, AgentEventPublisher eventPublisher) {
-    this.workingSet = workingSet;
+    this.renderFiles = () -> workingSet.renderForPrompt();
+    this.fileCount = () -> workingSet.getFiles().size();
     this.events = events;
     this.eventPublisher = eventPublisher;
   }
@@ -62,7 +61,7 @@ public class WorkingSetAdvisor implements BaseAdvisor {
     if (userMessage == null) {
       return request;
     }
-    String workingSetContext = workingSet.renderForPrompt();
+    String workingSetContext = renderFiles.get();
     if (workingSetContext.isBlank()
         && !Boolean.TRUE.equals(request.context().get("rei.contextProjection"))) return request;
     if (!workingSetContext.isBlank()) publishContextInjected(workingSetContext);
@@ -94,6 +93,6 @@ public class WorkingSetAdvisor implements BaseAdvisor {
       return;
     }
     eventPublisher.publish(
-        events.workingSetContextInjected(workingSet.getFiles().size(), workingSetContext.length()));
+        events.workingSetContextInjected(fileCount.getAsInt(), workingSetContext.length()));
   }
 }

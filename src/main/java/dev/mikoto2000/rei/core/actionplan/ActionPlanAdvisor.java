@@ -2,10 +2,9 @@ package dev.mikoto2000.rei.core.actionplan;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -22,11 +21,9 @@ import org.springframework.stereotype.Component;
 public class ActionPlanAdvisor implements BaseAdvisor {
 
   /** 操作計画。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Renders the current action plan for the owning run.")
-  private final ActionPlan actionPlan;
+  private final Supplier<String> stateOwner;
+
+  private final Supplier<String> promptState;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -51,26 +48,22 @@ public class ActionPlanAdvisor implements BaseAdvisor {
   /** 指定された値や利用先を使って、ActionPlanAdvisorを初期化する。 */
   public ActionPlanAdvisor(
       ActionPlan actionPlan, AgentEventFactory events, AgentEventPublisher eventPublisher) {
-    this.actionPlan = actionPlan;
+    this.stateOwner = () -> actionPlan.ownerRunId();
+    this.promptState = () -> actionPlan.renderForPrompt();
     this.events = events;
     this.eventPublisher = eventPublisher;
-  }
-
-  /** 行動計画の管理で用いる操作計画を返す。 */
-  ActionPlan actionPlan() {
-    return actionPlan;
   }
 
   /** 行動計画の管理の本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     if (!dev.mikoto2000.rei.context.CancelledTaskHistory.allowsState(
-        request.context(), actionPlan.ownerRunId())) return request;
+        request.context(), stateOwner.get())) return request;
     UserMessage userMessage = request.prompt().getUserMessage();
     if (userMessage == null) {
       return request;
     }
-    String context = actionPlan.renderForPrompt();
+    String context = promptState.get();
     if (context.isBlank()) {
       return request;
     }
