@@ -8,6 +8,7 @@ import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,11 +36,7 @@ public final class VectorDocumentController {
   private final VectorDocumentService vectors;
 
   /** バックグラウンド。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared background ingestion queue and its active work state.")
-  private final AsyncVectorDocumentService background;
+  private final Consumer<List<String>> addDocuments;
 
   /** 実行一覧。 */
   @SuppressFBWarnings(
@@ -69,9 +66,7 @@ public final class VectorDocumentController {
   public record Documents(List<String> documents) implements StrictApiRequest {
     public Documents {
       documents =
-          documents == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(documents));
+          documents == null ? null : Collections.unmodifiableList(new ArrayList<>(documents));
     }
   }
 
@@ -86,9 +81,7 @@ public final class VectorDocumentController {
       implements StrictApiRequest {
     public Ingestion {
       documents =
-          documents == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(documents));
+          documents == null ? null : Collections.unmodifiableList(new ArrayList<>(documents));
     }
   }
 
@@ -135,7 +128,7 @@ public final class VectorDocumentController {
   public VectorDocumentController(
       VectorDocumentService vectors, AsyncVectorDocumentService background) {
     this.vectors = vectors;
-    this.background = background;
+    this.addDocuments = documents -> background.addAsync(documents);
   }
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
@@ -175,7 +168,7 @@ public final class VectorDocumentController {
                 throw new IllegalArgumentException("Expand file globs in the client");
             });
     var documents = List.copyOf(request.documents());
-    background.addAsync(documents);
+    addDocuments.accept(documents);
     return text("追加処理を開始: " + String.join(", ", documents));
   }
 

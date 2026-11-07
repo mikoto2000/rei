@@ -73,7 +73,8 @@ public final class SubAgentDagService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound SubAgentProperties shared by consumers of these settings.")
+      justification =
+          "Reads the application-bound SubAgentProperties shared by consumers of these settings.")
   private final SubAgentProperties properties;
 
   /** 保存と検索の窓口。 */
@@ -212,10 +213,6 @@ public final class SubAgentDagService {
   }
 
   /** 要求された処理を実行する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original execution failure after updating durable DAG ownership.")
   private Outcome execute(
       RunExecutionContext run,
       DurableSubAgentRepository.Checkpoint saved,
@@ -358,7 +355,7 @@ public final class SubAgentDagService {
       if (repository.get(owner, saved.id()).status().equals("RUNNING"))
         repository.ownerLost(saved.id(), execution);
       return get(owner, saved.id());
-    } catch (RuntimeException error) {
+    } catch (RuntimeException | Error error) {
       if (repository.get(owner, saved.id()).status().equals("RUNNING"))
         repository.ownerLost(saved.id(), execution);
       throw error;

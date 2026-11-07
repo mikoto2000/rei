@@ -372,11 +372,6 @@ public class ImplementationRequestService {
   }
 
   /** 要求された処理を実行する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Preserves the original execution failure after recording the uncertain outcome.")
   public Outcome execute(RunExecutionContext run, String id, int version, String hash) {
     var owner = owner(run);
     run.checkActive();
@@ -463,7 +458,7 @@ public class ImplementationRequestService {
               frozen.path("testCommand").textValue(),
               frozen.path("testTimeoutSeconds").intValue());
       return complete(saved, validated.specification(), receipt);
-    } catch (RuntimeException error) {
+    } catch (RuntimeException | Error error) {
       // Process/storage uncertainty is never turned into a fresh automatic attempt, including
       // cancellation.
       requests.finish(id, "UNKNOWN", id, null);

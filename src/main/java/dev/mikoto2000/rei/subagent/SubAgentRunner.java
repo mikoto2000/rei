@@ -310,7 +310,8 @@ public final class SubAgentRunner {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured standalone, durable, and retry limits when starting child work.")
+      justification =
+          "Uses the configured standalone, durable, and retry limits when starting child work.")
   private SubAgentProperties standaloneBudgetProperties = new SubAgentProperties();
 
   /** 補助エージェントへの委譲で使用する独立した予算設定を設定する。 */
@@ -371,7 +372,8 @@ public final class SubAgentRunner {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
+      justification =
+          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** イベント一覧。 */
@@ -451,10 +453,6 @@ public final class SubAgentRunner {
   }
 
   /** 依頼された操作を進めるため、内部を実行する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original child registration failure after releasing durable ownership.")
   private SubAgentResult runInternal(
       String agent,
       String task,
@@ -584,7 +582,7 @@ public final class SubAgentRunner {
     try {
       if (tracked)
         taskRuns.registerChild(owner, parent, agent, claimed == null ? null : claimed.id());
-    } catch (RuntimeException failure) {
+    } catch (RuntimeException | Error failure) {
       if (claimed != null) durable.ownerLost(claimed.id(), runId);
       throw failure;
     }
@@ -967,10 +965,6 @@ public final class SubAgentRunner {
           }
 
           /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
-          @SuppressFBWarnings(
-              value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-              matchType = SuppressMatchType.EXACT,
-              justification = "Preserves the original tool failure after recording unsuccessful durable completion.")
           public String call(String input, ToolContext context) {
             try (var scope = AgentRunScope.open(owner);
                 var lease = cancellation.enterChild(owner.runId());
@@ -1005,7 +999,7 @@ public final class SubAgentRunner {
                           String output = observed.call(input, context);
                           durable.toolCompleted(child, owner.runId(), operation, true);
                           return output;
-                        } catch (RuntimeException failure) {
+                        } catch (RuntimeException | Error failure) {
                           durable.toolCompleted(child, owner.runId(), operation, false);
                           throw failure;
                         }

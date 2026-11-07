@@ -19,6 +19,7 @@ import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -36,24 +37,22 @@ public final class BackgroundRunSubmitService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
+      justification =
+          "Uses the shared run registry so participants observe the same run lifecycle.")
   private final RunRegistry registry;
 
   /** 実行一覧。 */
   private final RunService runs;
 
   /** 入力の振り分け。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared input router so all operations use the same queue and active runs.")
-  private final ConversationInputRouter router;
+  private final BiConsumer<AgentRunContext, Runnable> submitOperation;
 
   /** キャンセル。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
+      justification =
+          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** イベント一覧。 */
@@ -231,7 +230,9 @@ public final class BackgroundRunSubmitService {
     this.findProject = id -> projects.resolveById(id);
     this.registry = registry;
     this.runs = runs;
-    this.router = router;
+    this.submitOperation =
+        (context, operation) ->
+            router.submitOperation(context, operation, work -> runs.execute(context, work));
     this.cancellation = cancellation;
     this.events = events;
     this.bus = bus;
@@ -262,7 +263,8 @@ public final class BackgroundRunSubmitService {
           var output =
               context.projectRoot().resolve(".rei/web-images").resolve(context.runId() + ".png");
           var result =
-              generateImage.apply(new ImageGenerationRequest(prompt, output, null, dimensions, true));
+              generateImage.apply(
+                  new ImageGenerationRequest(prompt, output, null, dimensions, true));
           if (!result.success()) {
             if ("cancelled".equals(result.message()))
               throw new java.util.concurrent.CancellationException();
@@ -295,8 +297,7 @@ public final class BackgroundRunSubmitService {
             AgentRunContext.RequestSource.WEB);
     registry.register(context);
     try {
-      router.submitOperation(
-          context, () -> execute(context, operation), work -> runs.execute(context, work));
+      submitOperation.accept(context, () -> execute(context, operation));
     } catch (RuntimeException | Error error) {
       registry.forget(context.runId());
       throw error;

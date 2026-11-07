@@ -17,6 +17,7 @@ import dev.mikoto2000.rei.task.command.TaskCommand;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -39,31 +40,30 @@ public final class IntegrationRunSubmitService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
+      justification =
+          "Uses the shared lifecycle service so session validation and submission use the same session state.")
   private final SessionLifecycle lifecycle;
 
   /** 登録台帳。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
+      justification =
+          "Uses the shared run registry so participants observe the same run lifecycle.")
   private final RunRegistry registry;
 
   /** 実行一覧。 */
   private final RunService runs;
 
   /** 入力の振り分け。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared input router so all operations use the same queue and active runs.")
-  private final ConversationInputRouter router;
+  private final BiConsumer<AgentRunContext, Runnable> submitOperation;
 
   /** キャンセル。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
+      justification =
+          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** イベント一覧。 */
@@ -352,7 +352,9 @@ public final class IntegrationRunSubmitService {
     this.lifecycle = lifecycle;
     this.registry = registry;
     this.runs = runs;
-    this.router = router;
+    this.submitOperation =
+        (context, operation) ->
+            router.submitOperation(context, operation, work -> runs.execute(context, work));
     this.cancellation = cancellation;
     this.events = events;
     this.bus = bus;
@@ -490,8 +492,7 @@ public final class IntegrationRunSubmitService {
             AgentRunContext.RequestSource.WEB);
     registry.register(context);
     try {
-      router.submitOperation(
-          context, () -> execute(context, operation, report), work -> runs.execute(context, work));
+      submitOperation.accept(context, () -> execute(context, operation, report));
     } catch (RuntimeException | Error error) {
       registry.forget(context.runId());
       throw error;
@@ -533,10 +534,7 @@ public final class IntegrationRunSubmitService {
         context -> {
           registry.register(context);
           try {
-            router.submitOperation(
-                context,
-                () -> execute(context, operation, report),
-                work -> runs.execute(context, work));
+            submitOperation.accept(context, () -> execute(context, operation, report));
           } catch (RuntimeException | Error error) {
             registry.forget(context.runId());
             throw error;

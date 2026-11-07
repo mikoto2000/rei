@@ -73,7 +73,8 @@ public class DotDelegationService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the current shared tool permission policy for delegation authorization.")
+      justification =
+          "Uses the current shared tool permission policy for delegation authorization.")
   private dev.mikoto2000.rei.core.policy.ToolPermissionPolicy policy;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
@@ -152,10 +153,6 @@ public class DotDelegationService {
   }
 
   /** 利用者の状態表示で用いる要求親を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original delegation failure after abandoning the durable admission.")
   public Map<String, Object> requestParent(
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution, Map<String, Object> input) {
     if (!properties.parentLlmEnabled()
@@ -249,7 +246,7 @@ public class DotDelegationService {
               permit.inputHash()));
       execution.setDotWait(history -> suspend(execution, history));
       return repo.get(owner.projectId(), id);
-    } catch (RuntimeException failure) {
+    } catch (RuntimeException | Error failure) {
       repo.abandonAdmission(owner.projectId(), id);
       throw failure;
     }

@@ -2,12 +2,11 @@ package dev.mikoto2000.rei.voice;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.application.input.ConversationInput;
+import dev.mikoto2000.rei.conversation.ConversationLogEntry;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.core.datasource.ReiDataDirectory;
 import dev.mikoto2000.rei.core.project.ProjectStorage;
 import dev.mikoto2000.rei.event.CredentialRedactor;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -18,6 +17,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.IntSupplier;
 
 /**
@@ -58,11 +58,7 @@ public final class VoiceCorrectionContext {
   }
 
   /** 履歴。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common conversation log and its shared indexing state.")
-  private final ConversationLogStore history;
+  private final BiFunction<String, String, List<ConversationLogEntry>> recentHistory;
 
   /** データ。 */
   private final Path data;
@@ -75,7 +71,10 @@ public final class VoiceCorrectionContext {
   /** 指定された値や利用先を使って、VoiceCorrectionContextを初期化する。 */
   public VoiceCorrectionContext(
       ConversationLogStore history, Path data, VoiceCorrectionProperties limits) {
-    this.history = history;
+    this.recentHistory =
+        history == null
+            ? null
+            : (project, session) -> history.recentConversation(project, session, 4);
     this.data = data;
     this.maxContextChars = () -> limits.getMaxContextChars();
     this.maxDictionaryEntries = () -> limits.getMaxDictionaryEntries();
@@ -86,8 +85,8 @@ public final class VoiceCorrectionContext {
     var target = input.target();
     var recent = new ArrayList<String>();
     int remaining = maxContextChars.getAsInt();
-    if (history != null && remaining > 0) {
-      var entries = history.recentConversation(target.project().id(), target.sessionId(), 4);
+    if (recentHistory != null && remaining > 0) {
+      var entries = recentHistory.apply(target.project().id(), target.sessionId());
       for (var entry : entries.reversed()) {
         if (!Set.of("user", "assistant").contains(entry.speaker())) continue;
         String safe =

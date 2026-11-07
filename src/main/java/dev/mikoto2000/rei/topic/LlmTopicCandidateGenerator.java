@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.topic;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -27,11 +25,7 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
   private final TopicCandidateParser parser;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound TopicGeneratorProperties shared by consumers of these settings.")
-  private final TopicGeneratorProperties properties;
+  private final Supplier<TopicSettings> settings;
 
   /** 指定された値や利用先を使って、LlmTopicCandidateGeneratorを初期化する。 */
   public LlmTopicCandidateGenerator(
@@ -42,18 +36,19 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
     this.chatModel = chatModel;
     this.readSelectedModel = () -> modelHolderService == null ? "" : modelHolderService.get();
     this.parser = parser;
-    this.properties = properties;
+    this.settings = () -> TopicSettings.capture(properties);
   }
 
   /** 指定された条件に従って、依頼された内容を生成する。 */
   @Override
   public List<TopicCandidate> generate(TopicGenerationContext context) {
-    if (!properties.isEnabled()) return List.of();
+    var topicSettings = settings.get();
+    if (!topicSettings.enabled()) return List.of();
     try {
       ChatResponse response = chatModel.call(new Prompt(prompt(context)));
       var generation = response == null ? null : response.getResult();
       AssistantMessage output = generation == null ? null : generation.getOutput();
-      return parser.parse(output == null ? "" : output.getText(), properties.getMaxCandidates());
+      return parser.parse(output == null ? "" : output.getText(), topicSettings.maxCandidates());
     } catch (RuntimeException e) {
       log.warn("Topic candidate generation failed");
       return List.of();
@@ -62,6 +57,7 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
 
   /** 話題の管理で用いるプロンプトを返す。 */
   String prompt(TopicGenerationContext context) {
+    var topicSettings = settings.get();
     String model = readSelectedModel.get();
     return """
         あなたは会話の話題候補を生成する補助コンポーネントです。
@@ -91,7 +87,7 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
         {"candidates":[{"topic":"スクリプトの実行・テスト状況を確認する","reason":"最近の会話では実行結果がまだ確認できていないため","type":"unfinished_work","source":"working_set","priority":0.8,"freshness":0.9,"usefulness":0.8,"intrusiveness":0.2,"confidence":0.9}]}
         Max candidates:\s\
         """
-        + String.format("%d", properties.getMaxCandidates())
+        + String.format("%d", topicSettings.maxCandidates())
         + "\nModel hint: "
         + model
         + """

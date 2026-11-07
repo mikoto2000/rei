@@ -66,7 +66,8 @@ public final class RawToolResultStore {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared storage registry to coordinate object references and retention.")
+      justification =
+          "Uses the shared storage registry to coordinate object references and retention.")
   private final dev.mikoto2000.rei.storage.StorageObjectRegistry registry;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
@@ -147,10 +148,6 @@ public final class RawToolResultStore {
   }
 
   /** 後から参照できるよう、Serializedを保存する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original write failure and attaches cleanup failures as suppressed causes.")
   private String saveSerialized(
       String conversation, String run, String toolName, String callId, String raw) {
     try {
@@ -189,7 +186,7 @@ public final class RawToolResultStore {
         if (registry != null)
           registry.registerRawWithBody(conversation, run, ref, hash, true, created);
         return ref;
-      } catch (RuntimeException failure) {
+      } catch (RuntimeException | Error failure) {
         try {
           // Only files created by this serialized save, and only after proving the registration did
           // not commit.

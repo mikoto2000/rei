@@ -50,7 +50,8 @@ public final class ConversationInputRouter {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Coordinates admission with the same cancellation service that owns active commands.")
+      justification =
+          "Coordinates admission with the same cancellation service that owns active commands.")
   private dev.mikoto2000.rei.core.service.CommandCancellationService cancellation =
       new dev.mikoto2000.rei.core.service.CommandCancellationService();
 
@@ -203,10 +204,6 @@ public final class ConversationInputRouter {
   }
 
   /** 依頼を実行経路へ渡すため、バックグラウンドを受け付ける。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original dispatch failure after releasing background run ownership.")
   public ActiveExecution submitBackground(
       ProjectContext project,
       ExecutionType type,
@@ -241,7 +238,7 @@ public final class ConversationInputRouter {
               changed();
             }
           });
-    } catch (RuntimeException error) {
+    } catch (RuntimeException | Error error) {
       background.remove(execution.id());
       changed();
       throw error;
@@ -333,10 +330,6 @@ public final class ConversationInputRouter {
    *
    * <p>Explicit application work shares the agent FIFO without entering the chat runner or mailbox.
    */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original submission failure after releasing the run slot.")
   public void submitOperation(
       AgentRunContext context, Runnable operation, Consumer<Runnable> lifecycle) {
     var slot = slot(context, "operation");
@@ -381,7 +374,7 @@ public final class ConversationInputRouter {
             }
           },
           context.requestSource() == AgentRunContext.RequestSource.MCP);
-    } catch (RuntimeException error) {
+    } catch (RuntimeException | Error error) {
       if (admissions != null)
         admissions.transition(context.runId(), dev.mikoto2000.rei.application.run.RunStatus.FAILED);
       forget(slot);
@@ -413,10 +406,6 @@ public final class ConversationInputRouter {
   }
 
   /** 実行順序を管理するため、会話入力入力の振り分けを実行待ちに登録する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original enqueue failure after releasing the run slot.")
   private Disposition enqueue(Slot slot, Consumer<Runnable> lifecycle) {
     var context = slot.context();
     if (admissions != null) admissions.reserveKnownSession(context);
@@ -471,7 +460,7 @@ public final class ConversationInputRouter {
               },
               context.requestSource() == AgentRunContext.RequestSource.MCP);
       return first ? Disposition.STARTED : Disposition.QUEUED;
-    } catch (RuntimeException error) {
+    } catch (RuntimeException | Error error) {
       if (admissions != null)
         admissions.transition(context.runId(), dev.mikoto2000.rei.application.run.RunStatus.FAILED);
       agentSlots.remove(context.runId());
@@ -530,6 +519,7 @@ public final class ConversationInputRouter {
             .warn("Active run display listener failed", error);
       }
   }
+
   /** ライフサイクルの境界で元のディスパッチ失敗を伝える。 */
   @SuppressFBWarnings(
       value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
@@ -540,5 +530,4 @@ public final class ConversationInputRouter {
       throw error;
     };
   }
-
 }

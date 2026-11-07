@@ -28,7 +28,8 @@ public final class SlackRuntime {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound SlackProperties shared by consumers of these settings.")
+      justification =
+          "Reads the application-bound SlackProperties shared by consumers of these settings.")
   private final SlackProperties p;
 
   /** 保存先。 */
@@ -49,14 +50,16 @@ public final class SlackRuntime {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
+      justification =
+          "Uses the shared lifecycle service so session validation and submission use the same session state.")
   private final SessionLifecycle sessions;
 
   /** 登録台帳。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
+      justification =
+          "Uses the shared run registry so participants observe the same run lifecycle.")
   private final RunRegistry registry;
 
   /** 実行一覧。 */
@@ -66,7 +69,8 @@ public final class SlackRuntime {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared input router so all operations use the same queue and active runs.")
+      justification =
+          "Uses the shared input router so all operations use the same queue and active runs.")
   private final ConversationInputRouter router;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
@@ -192,10 +196,6 @@ public final class SlackRuntime {
   }
 
   /** Slackとの連携に関する実行先への引き渡しを処理する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves uncertain dispatch failures after updating the run and its Slack receipt.")
   private void dispatch(SlackMessage m) {
     String text = m.text().replace("<@" + self + ">", "").strip();
     String command =
@@ -249,7 +249,7 @@ public final class SlackRuntime {
                     () -> {
                       throw new IllegalStateException("Run admission capacity reached");
                     });
-              } catch (RuntimeException uncertain) {
+              } catch (RuntimeException | Error uncertain) {
                 if (!router.containsRun(context.projectId(), context.runId())) {
                   runs.execute(
                       context, () -> runs.finishMissingTerminal(context, RunStatus.UNKNOWN));

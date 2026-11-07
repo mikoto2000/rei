@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,11 +55,7 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
   private final AgentMessagePublisher messagePublisher;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound TopicGeneratorProperties shared by consumers of these settings.")
-  private final TopicGeneratorProperties properties;
+  private final Supplier<TopicSettings> settings;
 
   /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
@@ -120,7 +117,7 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
     this.contextProvider = contextProvider;
     this.activityTracker = activityTracker;
     this.messagePublisher = messagePublisher;
-    this.properties = properties;
+    this.settings = () -> TopicSettings.capture(properties);
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
     this.clock = clock;
@@ -130,7 +127,8 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
   /** 通知に応じて状態や表示を更新するため、チャット完了を受け付ける。 */
   @Override
   public void onChatCompleted() {
-    if (!properties.isEnabled() || !lifeAllowed()) return;
+    var topicSettings = settings.get();
+    if (!topicSettings.enabled() || !lifeAllowed()) return;
     var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     long version = refreshVersion.incrementAndGet();
     try {
@@ -162,6 +160,7 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
   /** 通知に応じて状態や表示を更新するため、利用者操作がない状態を受け付ける。 */
   @Override
   public TopicGeneratorService.TopicRunResult onUserIdle() {
+    var topicSettings = settings.get();
     if (!lifeAllowed()) return TopicGeneratorService.TopicRunResult.skipped("life_policy");
     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (!running.compareAndSet(false, true))
@@ -170,7 +169,7 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
     try {
       Instant now = Instant.now(clock);
       List<TopicCandidate> candidates =
-          candidateStore.currentCandidates(now, properties.getCandidateMaxAge());
+          candidateStore.currentCandidates(now, topicSettings.candidateMaxAge());
       TopicExecutionContext executionContext =
           new TopicExecutionContext(
               "topic-" + UUID.randomUUID(),
