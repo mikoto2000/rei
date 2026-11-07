@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.websearch;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,20 +15,20 @@ public class WebSearchPropertiesLogger implements ApplicationRunner {
   private static final Logger log = LoggerFactory.getLogger(WebSearchPropertiesLogger.class);
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound WebSearchProperties shared by consumers of these settings.")
-  private final WebSearchProperties properties;
+  private final java.util.function.Supplier<String> configurationSummary;
 
   /** 指定された値や利用先を使って、WebSearchPropertiesLoggerを初期化する。 */
   public WebSearchPropertiesLogger(WebSearchProperties properties) {
-    this.properties = properties;
+    this.configurationSummary = () -> summarize(properties);
   }
 
   /** Web上の情報の調査の操作を実行する。 */
   @Override
   public void run(ApplicationArguments args) {
+    log.info(configurationSummary.get());
+  }
+
+  private static String summarize(WebSearchProperties properties) {
     List<WebSearchProperties.ProviderProperties> providers = properties.getProviders();
     List<String> providerSummaries =
         providers == null
@@ -45,12 +43,12 @@ public class WebSearchPropertiesLogger implements ApplicationRunner {
                                 provider.getApiKey() != null && !provider.getApiKey().isBlank()))
                 .toList();
 
-    log.info(
-        "Web search config: enabled={}, timeoutSeconds={}, maxResults={}, providersCount={}, providers={}",
-        properties.isEnabled(),
-        properties.getTimeoutSeconds(),
-        properties.getMaxResults(),
-        providerSummaries.size(),
-        providerSummaries);
+    return "Web search config: enabled=%s, timeoutSeconds=%s, maxResults=%s, providersCount=%s, providers=%s"
+        .formatted(
+            properties.isEnabled(),
+            properties.getTimeoutSeconds(),
+            properties.getMaxResults(),
+            providerSummaries.size(),
+            providerSummaries);
   }
 }

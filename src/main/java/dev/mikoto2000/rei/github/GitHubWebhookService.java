@@ -64,11 +64,10 @@ public final class GitHubWebhookService {
   private final GitHubWebhookDecoder decoder;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared webhook security and delivery policy for incoming requests.")
-  private final GitHubWebhookProperties properties;
+  private final java.util.function.BooleanSupplier recheckRequired;
+
+  private final java.util.function.IntSupplier maxDeliveries;
+  private final java.util.function.IntSupplier maxFacts;
 
   /** プロジェクト一覧。 */
   private final Function<String, Optional<ProjectContext>> findProject;
@@ -110,7 +109,9 @@ public final class GitHubWebhookService {
       GitHubStateVerifier verifier) {
     properties.validateMappings();
     this.decoder = new GitHubWebhookDecoder(properties, clock);
-    this.properties = properties;
+    this.recheckRequired = () -> properties.isRecheckRequired();
+    this.maxDeliveries = () -> properties.getMaxDeliveries();
+    this.maxFacts = () -> properties.getMaxFacts();
     this.findProject = id -> projects.resolveById(id);
     this.validateSession = (session, project) -> sessions.validate(session, project);
     this.facts = facts;
@@ -120,14 +121,15 @@ public final class GitHubWebhookService {
     this.inbox = inbox;
     this.verifier = verifier;
     this.clock = clock;
-    if (properties.isRecheckRequired() && verifier == null)
+    if (recheckRequired.getAsBoolean() && verifier == null)
       throw new IllegalArgumentException("GitHub state recheck is required but unavailable");
     owners =
         properties.getMappings().stream()
             .map(
                 mapping -> {
                   var project =
-                      findProject.apply(mapping.projectId())
+                      findProject
+                          .apply(mapping.projectId())
                           .orElseThrow(
                               () ->
                                   new IllegalArgumentException(
@@ -167,11 +169,12 @@ public final class GitHubWebhookService {
             || rule.branch() != null && !rule.branch().equals(fact.branch())
             || rule.pullRequest() != null && !rule.pullRequest().equals(fact.pullRequest()))
           continue;
-        if (!findProject.apply(owner.project().id())
+        if (!findProject
+            .apply(owner.project().id())
             .filter(current -> current.root().equals(owner.project().root()))
             .isPresent()) throw new ResourceNotFoundException("GitHub mapping");
         validateSession.accept(rule.sessionId(), rule.projectId());
-        if (properties.isRecheckRequired()
+        if (recheckRequired.getAsBoolean()
             && verifier.verify(fact) != GitHubStateVerifier.Verdict.CONFIRMED)
           throw new OperationConflictException();
         String id =
@@ -199,8 +202,8 @@ public final class GitHubWebhookService {
         digest,
         event,
         List.copyOf(unique.values()),
-        properties.getMaxDeliveries(),
-        properties.getMaxFacts(),
+        maxDeliveries.getAsInt(),
+        maxFacts.getAsInt(),
         owned -> {
           var receivedAt = clock.instant();
           var envelope = owned.event(receivedAt);
@@ -224,7 +227,8 @@ public final class GitHubWebhookService {
   /** GitHubとの連携で用いる自分が所有する対象を返す。 */
   private ProjectContext owned(String project, String session) {
     var registered =
-        findProject.apply(project)
+        findProject
+            .apply(project)
             .orElseThrow(() -> new ResourceNotFoundException("GitHub mapping"));
     if (owners.stream()
         .noneMatch(

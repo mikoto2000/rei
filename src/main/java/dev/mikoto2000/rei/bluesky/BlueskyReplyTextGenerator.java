@@ -7,8 +7,6 @@ import dev.mikoto2000.rei.llm.FixedLlmModelProvider;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.List;
 import java.util.function.Function;
@@ -54,11 +52,7 @@ public class BlueskyReplyTextGenerator {
   private final Function<String, OpenAiChatOptions> optionsForModel;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound BlueskyProperties shared by consumers of these settings.")
-  private final BlueskyProperties properties;
+  private final java.util.function.IntSupplier generationTimeoutSeconds;
 
   /** Blueskyとの連携を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public BlueskyReplyTextGenerator(
@@ -80,7 +74,11 @@ public class BlueskyReplyTextGenerator {
     this.replyChatClient = () -> chatClientProvider.chatClient(LlmFeature.BLUESKY_REPLY);
     this.readSelectedModel = () -> modelHolderService.get();
     this.optionsForModel = model -> modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, model);
-    this.properties = properties;
+    this.generationTimeoutSeconds =
+        () -> {
+          var reply = properties.getReply();
+          return reply == null ? 1200 : reply.getGenerationTimeoutSeconds();
+        };
   }
 
   /** 指定された条件に従って、依頼された内容を生成する。 */
@@ -201,7 +199,8 @@ public class BlueskyReplyTextGenerator {
   /** Blueskyとの連携で用いる返信選択可能な設定を返す。 */
   private OpenAiChatOptions replyOptions() {
     var options =
-        optionsForModel.apply(readSelectedModel.get())
+        optionsForModel
+            .apply(readSelectedModel.get())
             .mutate()
             .toolChoice("none")
             .toolCallbacks(List.of())
@@ -212,7 +211,8 @@ public class BlueskyReplyTextGenerator {
 
   /** 依頼された内容を提供するため、内容を生成する。 */
   private String generateContent(Prompt prompt, String conversationId) {
-    return replyChatClient.get()
+    return replyChatClient
+        .get()
         .prompt(prompt)
         .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId))
         .stream()
@@ -254,10 +254,7 @@ public class BlueskyReplyTextGenerator {
 
   /** Blueskyとの連携で用いる生成タイムアウトを返す。 */
   Duration generationTimeout() {
-    BlueskyProperties.BlueskyReplyProperties replyProperties = properties.getReply();
-    int timeoutSeconds =
-        replyProperties == null ? 1200 : replyProperties.getGenerationTimeoutSeconds();
-    return Duration.ofSeconds(Math.max(1, timeoutSeconds));
+    return Duration.ofSeconds(Math.max(1, generationTimeoutSeconds.getAsInt()));
   }
 
   /** Blueskyとの連携で用いる回答テキストを返す。 */

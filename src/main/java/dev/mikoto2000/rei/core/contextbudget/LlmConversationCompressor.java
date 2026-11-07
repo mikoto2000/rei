@@ -4,8 +4,6 @@ import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
 import dev.mikoto2000.rei.llm.OutputLimitDetector;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -31,17 +29,16 @@ public class LlmConversationCompressor implements ConversationCompressor {
   private final ObjectProvider<LlmModelProvider> models;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ContextCompressionProperties shared by consumers of these settings.")
-  private final ContextCompressionProperties properties;
+  private final java.util.function.IntSupplier summaryTimeoutSeconds;
+
+  private final java.util.function.Supplier<ModelCallBudget> standaloneBudget;
 
   /** 指定された値や利用先を使って、LlmConversationCompressorを初期化する。 */
   public LlmConversationCompressor(
       ObjectProvider<LlmModelProvider> models, ContextCompressionProperties properties) {
     this.models = models;
-    this.properties = properties;
+    this.summaryTimeoutSeconds = () -> properties.getSummaryTimeoutSeconds();
+    this.standaloneBudget = () -> StandaloneSummaryBudget.create(properties);
   }
 
   /** 対象の内容を、要点が分かる形にまとめる。 */
@@ -78,9 +75,7 @@ public class LlmConversationCompressor implements ConversationCompressor {
       ModelCallBudget supplied) {
     var execution = ContextAssembler.execution(owner);
     ModelCallBudget standalone =
-        execution == null
-            ? (supplied == null ? StandaloneSummaryBudget.create(properties) : supplied)
-            : null;
+        execution == null ? (supplied == null ? standaloneBudget.get() : supplied) : null;
     if (execution != null) execution.consumeNextLlmCall();
     var result = new StringBuilder();
     var aggregate =
@@ -98,14 +93,16 @@ public class LlmConversationCompressor implements ConversationCompressor {
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
       var ownerOptions = owner.getOptions();
       var baseOptions =
-          provider.chatOptions(LlmFeature.CHAT, ownerOptions == null ? null : ownerOptions.getModel());
+          provider.chatOptions(
+              LlmFeature.CHAT, ownerOptions == null ? null : ownerOptions.getModel());
       var optionsBuilder = baseOptions.mutate().toolCallbacks(List.of()).toolChoice("none");
       // Keep the provider's supported token parameter while enforcing the summary budget.
       if (baseOptions.getMaxCompletionTokens() != null)
         optionsBuilder.maxCompletionTokens(null).maxTokens(null).maxCompletionTokens(maxTokens);
       else optionsBuilder.maxTokens(maxTokens);
       var toolContext = new LinkedHashMap<String, Object>();
-      if (ownerOptions instanceof org.springframework.ai.model.tool.ToolCallingChatOptions original) {
+      if (ownerOptions
+          instanceof org.springframework.ai.model.tool.ToolCallingChatOptions original) {
         var context = original.getToolContext();
         if (context != null) toolContext.putAll(context);
       }
@@ -167,7 +164,7 @@ public class LlmConversationCompressor implements ConversationCompressor {
       new org.springframework.ai.chat.model.MessageAggregator()
           .aggregate(responses, aggregate::set)
           .then()
-          .timeout(Duration.ofSeconds(properties.getSummaryTimeoutSeconds()))
+          .timeout(Duration.ofSeconds(summaryTimeoutSeconds.getAsInt()))
           .block();
       var response = aggregate.get();
       var usage = response == null ? null : response.getMetadata().getUsage();

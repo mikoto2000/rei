@@ -6,8 +6,6 @@ import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -31,11 +29,12 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class GitHubWebhookDecoder {
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared webhook security and delivery policy for incoming requests.")
-  private final GitHubWebhookProperties properties;
+  private final java.util.function.IntSupplier maxPayloadBytes;
+
+  private final java.util.function.Predicate<String> acceptsEvent;
+  private final java.util.function.Supplier<String> signingSecret;
+  private final java.util.function.Supplier<java.time.Duration> maxAge;
+  private final java.util.function.Supplier<java.time.Duration> futureSkew;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -46,7 +45,11 @@ public final class GitHubWebhookDecoder {
   /** 指定された値や利用先を使って、GitHubWebhookDecoderを初期化する。 */
   public GitHubWebhookDecoder(GitHubWebhookProperties properties, Clock clock) {
     properties.validateTransport();
-    this.properties = properties;
+    this.maxPayloadBytes = () -> properties.getMaxPayloadBytes();
+    this.acceptsEvent = event -> properties.getEvents().contains(event);
+    this.signingSecret = () -> properties.getSecret();
+    this.maxAge = () -> properties.getMaxAge();
+    this.futureSkew = () -> properties.getFutureSkew();
     this.clock = clock;
     var factory =
         JsonFactory.builder()
@@ -63,10 +66,10 @@ public final class GitHubWebhookDecoder {
 
   /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   public List<GitHubFact> decode(String event, String signature, byte[] bytes) {
-    if (bytes == null || bytes.length > properties.getMaxPayloadBytes())
+    if (bytes == null || bytes.length > maxPayloadBytes.getAsInt())
       throw new IllegalArgumentException("GitHub payload limit");
     verify(signature, bytes);
-    if (event == null || !properties.getEvents().contains(event))
+    if (event == null || !acceptsEvent.test(event))
       throw new IllegalArgumentException("Unsupported GitHub event");
     JsonNode root;
     try {
@@ -207,7 +210,7 @@ public final class GitHubWebhookDecoder {
     try {
       var mac = Mac.getInstance("HmacSHA256");
       mac.init(
-          new SecretKeySpec(properties.getSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+          new SecretKeySpec(signingSecret.get().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
       if (!MessageDigest.isEqual(
           mac.doFinal(bytes), HexFormat.of().parseHex(signature.substring(7))))
         throw new SecurityException("Invalid GitHub signature");
@@ -224,8 +227,8 @@ public final class GitHubWebhookDecoder {
     } catch (DateTimeException invalid) {
       throw new IllegalArgumentException("Invalid GitHub event timestamp");
     }
-    if (at.isBefore(clock.instant().minus(properties.getMaxAge()))
-        || at.isAfter(clock.instant().plus(properties.getFutureSkew())))
+    if (at.isBefore(clock.instant().minus(maxAge.get()))
+        || at.isAfter(clock.instant().plus(futureSkew.get())))
       throw new IllegalArgumentException("GitHub event outside replay window");
     return at;
   }
