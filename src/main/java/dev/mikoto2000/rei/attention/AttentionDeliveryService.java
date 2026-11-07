@@ -78,7 +78,8 @@ public class AttentionDeliveryService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured permission policy for the current tool authorization decision.")
+      justification =
+          "Uses the configured permission policy for the current tool authorization decision.")
   private final ToolPermissionPolicy policy;
 
   /** 通知の送信先。 */
@@ -311,7 +312,10 @@ public class AttentionDeliveryService {
     } catch (InterruptedException error) {
       interrupted = true;
       receipt = new NotificationProvider.Receipt("UNKNOWN", "interrupted_outcome_unknown", "", 0);
-    } catch (Exception error) {
+    } catch (java.io.IOException
+        | java.util.concurrent.ExecutionException
+        | java.util.concurrent.TimeoutException
+        | RuntimeException error) {
       receipt = new NotificationProvider.Receipt("UNKNOWN", "transport_outcome_unknown", "", 0);
     } finally {
       interrupted |= Thread.interrupted();
