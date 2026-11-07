@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.event;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -18,6 +16,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -51,16 +51,24 @@ public class ProfileEventLogStore implements AgentEventListener {
   private final Object writeLock = new Object();
 
   /** 管理対象。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads and appends events through the same managed log.")
-  private dev.mikoto2000.rei.storage.ManagedActivityLog managed;
+  private ManagedLogActions managed;
 
   /** 実行状況の通知で使用する管理対象作業状況ログを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setManagedActivityLog(dev.mikoto2000.rei.storage.ManagedActivityLog managed) {
-    this.managed = managed;
+    this.managed =
+        managed == null
+            ? null
+            : new ManagedLogActions(
+                managed::legacyFile,
+                managed::append,
+                managed::read,
+                (events, event) ->
+                    managed.appendWith(
+                        event.projectId(),
+                        toEntry(event),
+                        events.root(),
+                        db -> events.appendInTransaction(db, event)));
   }
 
   /** 明示ファイル出力は従来の経路を使い、同じ管理ログだけを共同確定に参加させる。 */
@@ -70,11 +78,7 @@ public class ProfileEventLogStore implements AgentEventListener {
 
   /** 既存の診断保存adapterがイベントも同じtransactionへ参加させる。 */
   void persistStreamingEvent(SqliteProjectAgentEventStore events, AgentEvent event) {
-    managed.appendWith(
-        event.projectId(),
-        toEntry(event),
-        events.root(),
-        db -> events.appendInTransaction(db, event));
+    managed.persistStreaming().accept(events, event);
   }
 
   /** 実行状況の通知を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -95,7 +99,7 @@ public class ProfileEventLogStore implements AgentEventListener {
   public Path file() {
     if (managed != null && file == null) {
       var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
-      return managed.legacyFile(project == null ? null : project.id());
+      return managed.legacyFile().apply(project == null ? null : project.id());
     }
     return file != null
         ? file
@@ -116,7 +120,7 @@ public class ProfileEventLogStore implements AgentEventListener {
     }
     ProfileEventLogEntry entry = toEntry(event);
     if (managed != null && this.file == null) {
-      managed.append(event.projectId(), entry);
+      managed.append().accept(event.projectId(), entry);
       return;
     }
     Path file =
@@ -146,7 +150,7 @@ public class ProfileEventLogStore implements AgentEventListener {
   public List<ProfileEventLogEntry> readAll() {
     if (managed != null && this.file == null) {
       var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
-      return managed.read(project == null ? null : project.id());
+      return managed.read().apply(project == null ? null : project.id());
     }
     Path file = file();
     if (!Files.isRegularFile(file)) {
@@ -348,4 +352,10 @@ public class ProfileEventLogStore implements AgentEventListener {
       return count == 0 ? 0L : Math.round((double) totalMillis / count);
     }
   }
+
+  private record ManagedLogActions(
+      Function<String, Path> legacyFile,
+      BiConsumer<String, ProfileEventLogEntry> append,
+      Function<String, List<ProfileEventLogEntry>> read,
+      BiConsumer<SqliteProjectAgentEventStore, AgentEvent> persistStreaming) {}
 }
