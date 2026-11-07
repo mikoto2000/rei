@@ -4,9 +4,8 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.memory.service.SleepService;
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.concurrent.Callable;
+import java.util.function.BiFunction;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -30,11 +29,12 @@ import picocli.CommandLine.Spec;
     })
 public class SleepCommand implements Callable<Integer> {
   /** サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared sleep service and its persisted consolidation state.")
-  private final SleepService service;
+  private final ExecuteSleep executeSleep;
+
+  @FunctionalInterface
+  private interface ExecuteSleep {
+    SleepService.Report execute(String session, String project, boolean preview);
+  }
 
   /** 補助。 */
   private final MemoryCommandSupport support;
@@ -48,16 +48,15 @@ public class SleepCommand implements Callable<Integer> {
   private final java.util.function.Supplier<Runnable> beginCommand;
 
   /** 自動。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared coordinator for pending sleep runs and status.")
-  private dev.mikoto2000.rei.memory.service.AutoSleepService auto;
+  private BiFunction<String, String, String> autoStatus;
+
+  private BiFunction<String, String, String> resumeAutoSleep;
 
   /** 長期記憶の活用で使用する自動を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setAuto(dev.mikoto2000.rei.memory.service.AutoSleepService auto) {
-    this.auto = auto;
+    this.autoStatus = (session, project) -> auto.status(session, project);
+    this.resumeAutoSleep = (session, project) -> auto.resume(session, project);
   }
 
   /** 仕様。 */
@@ -82,7 +81,7 @@ public class SleepCommand implements Callable<Integer> {
       MemoryCommandSupport support,
       ProjectService projects,
       CommandCancellationService cancellation) {
-    this.service = service;
+    this.executeSleep = (session, project, preview) -> service.sleep(session, project, preview);
     this.support = support;
     this.currentProjectId = () -> projects.currentContext().id();
     this.currentSessionId = () -> projects.currentSessionId();
@@ -119,7 +118,7 @@ public class SleepCommand implements Callable<Integer> {
           try {
             out().println(preview ? "Sleep preview started..." : "Sleep started...");
             out().flush();
-            return support.report(service.sleep(session, project, preview));
+            return support.report(executeSleep.execute(session, project, preview));
           } finally {
             clearCancellation.run();
           }
@@ -235,7 +234,8 @@ public class SleepCommand implements Callable<Integer> {
     /** 長期記憶の活用の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       var p = auto.parent;
-      return p.execute(() -> p.auto.status(p.currentSessionId.get(), p.currentProjectId.get()));
+      return p.execute(
+          () -> p.autoStatus.apply(p.currentSessionId.get(), p.currentProjectId.get()));
     }
   }
 
@@ -248,7 +248,8 @@ public class SleepCommand implements Callable<Integer> {
     /** 長期記憶の活用の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       var p = auto.parent;
-      return p.execute(() -> p.auto.resume(p.currentSessionId.get(), p.currentProjectId.get()));
+      return p.execute(
+          () -> p.resumeAutoSleep.apply(p.currentSessionId.get(), p.currentProjectId.get()));
     }
   }
 }
