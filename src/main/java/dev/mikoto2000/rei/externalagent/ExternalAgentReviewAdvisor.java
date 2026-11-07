@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.externalagent;
 
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -72,11 +70,21 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
       """;
 
   /** サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared delegation service for review and implementation workflows.")
-  private final ExternalAgentDelegationService service;
+  private final java.util.function.BiFunction<
+          RunExecutionContext, ReviewRequest, ExternalAgentResult>
+      review;
+
+  private final java.util.function.Function<RunExecutionContext, ImplementationOperations>
+      implementations;
+
+  private record ReviewRequest(
+      ExternalAgentRequest.Agent agent, String task, String target, String decisions) {}
+
+  private record ImplementationOperations(
+      java.util.function.BiFunction<ExternalAgentRequest.Agent, String, ExternalAgentResult>
+          implement,
+      java.util.function.BiFunction<String, String, ExternalAgentResult> merge,
+      java.util.function.Function<String, IsolatedImplementationService.Receipt> receipt) {}
 
   /** 記憶。 */
   private final java.util.function.Function<
@@ -92,7 +100,18 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
   public ExternalAgentReviewAdvisor(
       ExternalAgentDelegationService service,
       org.springframework.ai.chat.memory.ChatMemory memory) {
-    this.service = service;
+    this.review =
+        (owner, request) ->
+            request.agent() == null
+                ? service.review(owner, request.task(), request.target(), request.decisions())
+                : service.review(
+                    owner, request.agent(), request.task(), request.target(), request.decisions());
+    this.implementations =
+        owner ->
+            new ImplementationOperations(
+                (agent, target) -> service.implement(owner, agent, target),
+                (id, hash) -> service.mergeImplementation(owner, id, hash),
+                id -> service.implementation(owner, id));
     this.readConversation = memory == null ? null : session -> memory.get(session);
   }
 
@@ -122,23 +141,27 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
           result =
               switch (command.action()) {
                 case "material-review" ->
-                    service.review(
+                    review.apply(
                         run,
-                        "Review technical training material using the complete material review specification",
-                        command.target(),
-                        decisions(history));
+                        new ReviewRequest(
+                            null,
+                            "Review technical training material using the complete material review specification",
+                            command.target(),
+                            decisions(history)));
                 case "implement" ->
-                    service.implement(
-                        run,
-                        ExternalAgentRequest.Agent.valueOf(
-                            command.agent().toUpperCase(Locale.ROOT)),
-                        command.target());
+                    implementations
+                        .apply(run)
+                        .implement()
+                        .apply(
+                            ExternalAgentRequest.Agent.valueOf(
+                                command.agent().toUpperCase(Locale.ROOT)),
+                            command.target());
                 case "merge" -> {
                   var fields = command.target().split(" ", 2);
-                  yield service.mergeImplementation(run, fields[0], fields[1]);
+                  yield implementations.apply(run).merge().apply(fields[0], fields[1]);
                 }
                 case "implementation" -> {
-                  var receipt = service.implementation(run, command.target());
+                  var receipt = implementations.apply(run).receipt().apply(command.target());
                   try {
                     yield new ExternalAgentResult(
                         ExternalAgentResult.Status.SUCCESS,
@@ -157,17 +180,20 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
                 }
                 default ->
                     command.agent().equals("codex")
-                        ? service.review(
+                        ? review.apply(
                             run,
-                            "Review the specified target or current design",
-                            command.target(),
-                            decisions(history))
-                        : service.review(
+                            new ReviewRequest(
+                                null,
+                                "Review the specified target or current design",
+                                command.target(),
+                                decisions(history)))
+                        : review.apply(
                             run,
-                            ExternalAgentRequest.Agent.CLAUDE,
-                            "Review the specified target",
-                            command.target(),
-                            decisions(history));
+                            new ReviewRequest(
+                                ExternalAgentRequest.Agent.CLAUDE,
+                                "Review the specified target",
+                                command.target(),
+                                decisions(history)));
               };
         } catch (IllegalArgumentException error) {
           result = ExternalAgentResult.rejected(error.getMessage());
