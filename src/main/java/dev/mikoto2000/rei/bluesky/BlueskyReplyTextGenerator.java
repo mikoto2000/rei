@@ -11,6 +11,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -54,11 +55,7 @@ public class BlueskyReplyTextGenerator {
   private final Supplier<String> readSelectedModel;
 
   /** モデル提供元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the application model provider for current chat options.")
-  private final LlmModelProvider modelProvider;
+  private final Function<String, OpenAiChatOptions> optionsForModel;
 
   /** この機能の動作設定。 */
   @SuppressFBWarnings(
@@ -86,7 +83,7 @@ public class BlueskyReplyTextGenerator {
       BlueskyProperties properties) {
     this.chatClientProvider = chatClientProvider;
     this.readSelectedModel = () -> modelHolderService.get();
-    this.modelProvider = modelProvider;
+    this.optionsForModel = model -> modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, model);
     this.properties = properties;
   }
 
@@ -208,8 +205,7 @@ public class BlueskyReplyTextGenerator {
   /** Blueskyとの連携で用いる返信選択可能な設定を返す。 */
   private OpenAiChatOptions replyOptions() {
     var options =
-        modelProvider
-            .chatOptions(LlmFeature.BLUESKY_REPLY, readSelectedModel.get())
+        optionsForModel.apply(readSelectedModel.get())
             .mutate()
             .toolChoice("none")
             .toolCallbacks(List.of())
