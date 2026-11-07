@@ -10,7 +10,6 @@ dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.checkpoint.CheckpointCom
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.checkpoint.ResumeCommand
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.chat.ConversationInputRouter
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.command.ReiLineReaderFactory
-dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.command.ReiLineReaderFactory$Session
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.command.UserInputParser
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.command.UserInputService
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.command.UserInputService$Input
