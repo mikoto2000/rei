@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.event;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -96,10 +94,6 @@ public class ToolEventCallbackDecorator
   }
 
   /** 実行状況の通知で用いる通知および呼び出しを返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the failure reported by the decorated tool callback after recording it.")
   private String emitAndCall(String toolInput, ToolContext toolContext, Supplier<String> caller) {
     var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     if (toolContext != null
@@ -132,24 +126,36 @@ public class ToolEventCallbackDecorator
                 instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
           execution.checkActive();
         result = caller.get();
-      } catch (RuntimeException e) {
-        String searchFailure = searchFailureResult(toolName, e);
+      } catch (RuntimeException | Error e) {
+        String searchFailure =
+            e instanceof RuntimeException runtime ? searchFailureResult(toolName, runtime) : null;
         String structuredFailure =
-            !Thread.currentThread().isInterrupted()
+            e instanceof RuntimeException
+                    && !Thread.currentThread().isInterrupted()
                     && !dev.mikoto2000.rei.core.stagnation.RunExecutionContext.isControlFailure(e)
                 ? dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.toolFailureResult(e)
                 : null;
-        eventPublisher.publishBoundary(
-            eventFactory.toolFailed(
-                toolCallId,
-                toolName,
-                searchFailure != null || structuredFailure != null
-                    ? dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(e)
-                    : new ErrorInformation(
-                        e.getClass().getSimpleName(), summarize(e.getMessage()), null)));
+        try {
+          eventPublisher.publishBoundary(
+              eventFactory.toolFailed(
+                  toolCallId,
+                  toolName,
+                  searchFailure != null || structuredFailure != null
+                      ? dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(e)
+                      : new ErrorInformation(
+                          e.getClass().getSimpleName(), summarize(e.getMessage()), null)));
+        } catch (RuntimeException | Error recording) {
+          if (e instanceof Error) {
+            if (recording != e) e.addSuppressed(recording);
+            throw e;
+          }
+          throw recording;
+        }
         if (searchFailure != null) return searchFailure;
         if (structuredFailure != null) return structuredFailure;
-        if (FILE_TOOLS.contains(toolName) && !Thread.currentThread().isInterrupted()) {
+        if (e instanceof RuntimeException
+            && FILE_TOOLS.contains(toolName)
+            && !Thread.currentThread().isInterrupted()) {
           var diagnostic = dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(e);
           if (diagnostic.code().equals("source_missing")
               || diagnostic.code().equals("file_unavailable")) {

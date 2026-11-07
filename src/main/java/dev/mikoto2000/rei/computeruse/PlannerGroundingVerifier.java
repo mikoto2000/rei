@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.computeruse;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -82,8 +80,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
         || point[1] < 0
         || point[1] > 1) throw new InvalidComputerDecision("Invalid verification point");
     int x = Math.min(display.imageWidth() - 1, (int) (point[0] * display.imageWidth()));
-    int y =
-        Math.min(display.imageHeight() - 1, (int) (point[1] * display.imageHeight()));
+    int y = Math.min(display.imageHeight() - 1, (int) (point[1] * display.imageHeight()));
     var desktop = display.desktopPoint(new ComputerAction.Target(x, y, target));
     String state;
     // UIA uses physical screen coordinates. Do not silently mix them with scaled AWT coordinates.
@@ -292,10 +289,6 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
   }
 
   /** 画面操作の支援の要求を実行し、呼び出し元へ結果を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original model failure after writing the diagnostic evidence.")
   private String call(ComputerObservation observation, String stage, String text, byte[]... images)
       throws IOException {
     var requestOptions =
@@ -313,7 +306,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
                 .map(image -> new Media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(image)))
                 .toList());
       response = model.call(new Prompt(List.of(user.build()), requestOptions));
-    } catch (RuntimeException error) {
+    } catch (RuntimeException | Error error) {
       var stack = new java.io.StringWriter();
       error.printStackTrace(new java.io.PrintWriter(stack));
       save(
@@ -350,7 +343,8 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
       Set.of("input", "button", "link", "text", "other", "unknown");
 
   /** 画面操作の支援で用いる厳格なJSON変換を返す。 */
-  private static com.fasterxml.jackson.databind.JsonNode strictJson(String text) throws JsonProcessingException {
+  private static com.fasterxml.jackson.databind.JsonNode strictJson(String text)
+      throws JsonProcessingException {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (text == null || text.length() > 4000) throw new IllegalArgumentException();
     return new com.fasterxml.jackson.databind.ObjectMapper()

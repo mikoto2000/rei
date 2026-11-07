@@ -5,8 +5,6 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.ErrorInformation;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.event.SkillCandidatesEvaluatedPayload;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -129,10 +127,6 @@ public class AgentSkillAdvisor implements BaseAdvisor {
 
   /** スキルの利用の本処理へ渡す文脈を準備する。 */
   @Override
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Records skill-routing failure details and propagates the original failure.")
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     Prompt prompt = request.prompt();
     dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
@@ -142,7 +136,8 @@ public class AgentSkillAdvisor implements BaseAdvisor {
     }
 
     var toolContext =
-        prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+        prompt.getOptions()
+                instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
             ? options.getToolContext()
             : null;
     var execution =
@@ -195,15 +190,23 @@ public class AgentSkillAdvisor implements BaseAdvisor {
               skillNames(selection.explicitSkills()),
               skillNames(selection.implicitSkills()),
               selection.warnings()));
-    } catch (RuntimeException exception) {
-      eventPublisher.publish(
-          eventFactory.skillRoutingFailed(
-              runId,
-              routingId,
-              elapsedMillis(startedAtNanos),
-              candidateCount,
-              routingInvocation,
-              ErrorInformation.from(exception)));
+    } catch (RuntimeException | Error exception) {
+      try {
+        eventPublisher.publish(
+            eventFactory.skillRoutingFailed(
+                runId,
+                routingId,
+                elapsedMillis(startedAtNanos),
+                candidateCount,
+                routingInvocation,
+                ErrorInformation.from(exception)));
+      } catch (RuntimeException | Error recording) {
+        if (exception instanceof Error) {
+          if (recording != exception) exception.addSuppressed(recording);
+          throw exception;
+        }
+        throw recording;
+      }
       throw exception;
     }
     if (selection.selectedSkills().isEmpty()
