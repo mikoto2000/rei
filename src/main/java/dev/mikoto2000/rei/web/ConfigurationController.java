@@ -1,8 +1,8 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.config.ExternalConfigFileService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,11 +18,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/config")
 public final class ConfigurationController {
   /** サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Resolves or initializes the application's current external configuration files.")
-  private final ExternalConfigFileService service;
+  private final Supplier<String> configPath;
+
+  private final Function<Initialize, String> initializeConfig;
 
   /**
    * Web APIによる操作で受け渡すテキストを表す。
@@ -40,19 +38,20 @@ public final class ConfigurationController {
 
   /** 指定された値や利用先を使って、ConfigurationControllerを初期化する。 */
   public ConfigurationController(ExternalConfigFileService service) {
-    this.service = service;
+    this.configPath = () -> service.configFilePath().toString();
+    this.initializeConfig = request -> service.initializeConfigFile(request.force()).toString();
   }
 
   /** Web APIによる操作で用いるパスを返す。 */
   @GetMapping("/path")
   public Text path() {
-    return new Text(service.configFilePath().toString());
+    return new Text(configPath.get());
   }
 
   /** Web APIによる操作で用いる初期化を返す。 */
   @PostMapping("/initialize")
   public Text initialize(@RequestBody Initialize request) {
     if (request == null) throw new IllegalArgumentException("Initialization options required");
-    return new Text("設定テンプレートを作成しました: " + service.initializeConfigFile(request.force()));
+    return new Text("設定テンプレートを作成しました: " + initializeConfig.apply(request));
   }
 }

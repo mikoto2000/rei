@@ -1,9 +1,8 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.BackgroundRunSubmitService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
@@ -19,15 +18,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public class BackgroundRunController {
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits and queries runs through the shared background service.")
-  private final BackgroundRunSubmitService runs;
+  private final Function<SummaryRequest, String> submitSummary;
+
+  private final Function<ImageRequest, String> submitImage;
 
   /** 指定された値や利用先を使って、BackgroundRunControllerを初期化する。 */
   public BackgroundRunController(BackgroundRunSubmitService runs) {
-    this.runs = runs;
+    this.submitSummary = request -> runs.summary(request.projectId(), request.url()).runId();
+    this.submitImage =
+        request -> runs.image(request.projectId(), request.prompt(), request.size()).runId();
   }
 
   /**
@@ -57,13 +56,13 @@ public class BackgroundRunController {
   /** Web APIによる操作で用いる要約を返す。 */
   @PostMapping("/summaries")
   public ResponseEntity<AcceptedRunResponse> summary(@RequestBody SummaryRequest r) {
-    return accepted(runs.summary(r.projectId(), r.url()).runId());
+    return accepted(submitSummary.apply(r));
   }
 
   /** Web APIによる操作で用いる画像を返す。 */
   @PostMapping("/images")
   public ResponseEntity<AcceptedRunResponse> image(@RequestBody ImageRequest r) {
-    return accepted(runs.image(r.projectId(), r.prompt(), r.size()).runId());
+    return accepted(submitImage.apply(r));
   }
 
   /** Web APIによる操作で用いる受付済みを返す。 */

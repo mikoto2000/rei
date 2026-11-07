@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.launcher.BackendEndpoint;
 import dev.mikoto2000.rei.launcher.BackendEndpointStore;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.util.UUID;
 
@@ -14,11 +12,9 @@ import java.util.UUID;
  */
 public final class BackendInstance implements AutoCloseable {
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Publishes and removes the endpoint through the same registration store.")
-  private final BackendEndpointStore store;
+  private final PublishEndpoint<BackendEndpoint> publishEndpoint;
+
+  private final RemoveEndpoint removeEndpoint;
 
   /** 起動単位の識別子識別子。 */
   private final String instanceId = UUID.randomUUID().toString();
@@ -28,23 +24,27 @@ public final class BackendInstance implements AutoCloseable {
 
   /** 指定された値や利用先を使って、BackendInstanceを初期化する。 */
   public BackendInstance(BackendEndpointStore store) {
-    this.store = store;
+    this.publishEndpoint =
+        port -> {
+          var value =
+              new BackendEndpoint(
+                  1,
+                  instanceId,
+                  store.storageId(),
+                  ProcessHandle.current().pid(),
+                  "http://127.0.0.1:" + port,
+                  BackendEndpoint.CURRENT_API_PROTOCOL,
+                  "READY");
+          store.publish(value);
+          return value;
+        };
+    this.removeEndpoint = () -> store.removeOwned(instanceId);
   }
 
   /** Web APIによる操作に関する準備完了を処理する。 */
   public synchronized void ready(int port) throws IOException {
     if (ready != null) throw new IllegalStateException("Backend already ready");
-    var value =
-        new BackendEndpoint(
-            1,
-            instanceId,
-            store.storageId(),
-            ProcessHandle.current().pid(),
-            "http://127.0.0.1:" + port,
-            BackendEndpoint.CURRENT_API_PROTOCOL,
-            "READY");
-    store.publish(value);
-    ready = value;
+    ready = publishEndpoint.publish(port);
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
@@ -62,8 +62,18 @@ public final class BackendInstance implements AutoCloseable {
   @Override
   public synchronized void close() throws IOException {
     if (ready != null) {
-      store.removeOwned(instanceId);
+      removeEndpoint.remove();
       ready = null;
     }
+  }
+
+  @FunctionalInterface
+  private interface PublishEndpoint<T> {
+    T publish(int port) throws IOException;
+  }
+
+  @FunctionalInterface
+  private interface RemoveEndpoint {
+    void remove() throws IOException;
   }
 }
