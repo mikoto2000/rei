@@ -1,11 +1,10 @@
 package dev.mikoto2000.rei.topic;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /** 情報への関心話題候補の内容を生成する。 */
 public class CuriosityTopicCandidateGenerator implements TopicCandidateGenerator {
@@ -13,25 +12,22 @@ public class CuriosityTopicCandidateGenerator implements TopicCandidateGenerator
   private final Function<CuriosityQuery, List<CuriosityItem>> findCandidates;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound TopicGeneratorProperties shared by consumers of these settings.")
-  private final TopicGeneratorProperties properties;
+  private final Supplier<TopicSettings> settings;
 
   /** 指定された値や利用先を使って、CuriosityTopicCandidateGeneratorを初期化する。 */
   public CuriosityTopicCandidateGenerator(
       CuriosityQueue queue, TopicGeneratorProperties properties) {
     this.findCandidates = query -> queue.findCandidates(query);
-    this.properties = properties;
+    this.settings = () -> TopicSettings.capture(properties);
   }
 
   /** 指定された条件に従って、依頼された内容を生成する。 */
   @Override
   public List<TopicCandidate> generate(TopicGenerationContext context) {
-    if (!properties.isEnabled()) return List.of();
+    var topicSettings = settings.get();
+    if (!topicSettings.enabled()) return List.of();
     Instant now = context.currentTime();
-    return findCandidates.apply(new CuriosityQuery(now, properties.getMaxCandidates())).stream()
+    return findCandidates.apply(new CuriosityQuery(now, topicSettings.maxCandidates())).stream()
         .map(
             item ->
                 new TopicCandidate(

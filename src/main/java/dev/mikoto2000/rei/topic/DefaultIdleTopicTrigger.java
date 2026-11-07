@@ -1,19 +1,14 @@
 package dev.mikoto2000.rei.topic;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /** 話題の管理に必要な既定操作がない状態話題実行条件を扱う。 */
 public class DefaultIdleTopicTrigger implements IdleTopicTrigger {
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound TopicGeneratorProperties shared by consumers of these settings.")
-  private final TopicGeneratorProperties properties;
+  private final Supplier<TopicSettings> settings;
 
   /** 作業状況追跡。 */
   private final AgentActivityTracker activityTracker;
@@ -21,13 +16,14 @@ public class DefaultIdleTopicTrigger implements IdleTopicTrigger {
   /** 指定された値や利用先を使って、DefaultIdleTopicTriggerを初期化する。 */
   public DefaultIdleTopicTrigger(
       TopicGeneratorProperties properties, AgentActivityTracker activityTracker) {
-    this.properties = properties;
+    this.settings = () -> TopicSettings.capture(properties);
     this.activityTracker = activityTracker;
   }
 
   /** 対象を判断基準に照らして評価する。 */
   @Override
   public IdleTriggerDecision evaluate(Instant now) {
+    var topicSettings = settings.get();
     Instant latestActivityAt =
         Stream.of(
                 activityTracker.applicationStartedAt(),
@@ -37,12 +33,12 @@ public class DefaultIdleTopicTrigger implements IdleTopicTrigger {
             .max(Instant::compareTo)
             .orElse(now);
     Duration idleDuration = Duration.between(latestActivityAt, now);
-    Duration required = properties.getIdleTrigger().getMinimumIdle();
-    if (!properties.isEnabled()) {
+    Duration required = topicSettings.minimumIdle();
+    if (!topicSettings.enabled()) {
       return IdleTriggerDecision.rejected(
           idleDuration, IdleTriggerRejectReason.FEATURE_DISABLED, required);
     }
-    if (!properties.getIdleTrigger().isEnabled()) {
+    if (!topicSettings.idleEnabled()) {
       return IdleTriggerDecision.rejected(
           idleDuration, IdleTriggerRejectReason.IDLE_TRIGGER_DISABLED, required);
     }

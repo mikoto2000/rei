@@ -9,6 +9,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -37,11 +38,7 @@ public class TopicGeneratorService {
   private final CuriosityQueue curiosityQueue;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound TopicGeneratorProperties shared by consumers of these settings.")
-  private final TopicGeneratorProperties properties;
+  private final Supplier<TopicSettings> settings;
 
   /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
@@ -74,7 +71,7 @@ public class TopicGeneratorService {
     this.speakDecisionPolicy = speakDecisionPolicy;
     this.messageGenerator = messageGenerator;
     this.curiosityQueue = curiosityQueue;
-    this.properties = properties;
+    this.settings = () -> TopicSettings.capture(properties);
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
     this.clock = clock;
@@ -98,6 +95,7 @@ public class TopicGeneratorService {
   /** 話題の管理の操作を実行する。 */
   public synchronized TopicRunResult run(
       TopicGenerationContext context, TopicExecutionContext executionContext) {
+    var topicSettings = settings.get();
     boolean userRecentlyActive = false;
     if (executionContext.lastUserActivityAt() != null
         && executionContext.lastAgentActivityAt() != null) {
@@ -107,8 +105,7 @@ public class TopicGeneratorService {
               : executionContext.lastAgentActivityAt();
       userRecentlyActive =
           executionContext.trigger() != TopicTrigger.USER_IDLE
-              && !latest.isBefore(
-                  executionContext.now().minus(properties.getIdleTrigger().getMinimumIdle()));
+              && !latest.isBefore(executionContext.now().minus(topicSettings.minimumIdle()));
     }
     return run(context, executionContext, userRecentlyActive);
   }
@@ -120,7 +117,8 @@ public class TopicGeneratorService {
 
   public synchronized List<TopicCandidate> prepareCandidates(
       TopicGenerationContext context, java.util.function.BooleanSupplier allowed) {
-    if (!properties.isEnabled() || !allowed.getAsBoolean()) return List.of();
+    var topicSettings = settings.get();
+    if (!topicSettings.enabled() || !allowed.getAsBoolean()) return List.of();
     return generateCandidates(context, true, allowed);
   }
 
@@ -134,6 +132,7 @@ public class TopicGeneratorService {
       TopicGenerationContext context,
       boolean ignoreFailures,
       java.util.function.BooleanSupplier allowed) {
+    var topicSettings = settings.get();
     List<TopicCandidate> candidates = new ArrayList<>();
     for (TopicCandidateGenerator generator : generators) {
       if (!allowed.getAsBoolean()) return List.of();
@@ -146,9 +145,9 @@ public class TopicGeneratorService {
         log.warn("Topic candidate refresh failed: {}", generator.getClass().getSimpleName());
       }
       if (!allowed.getAsBoolean()) return List.of();
-      if (candidates.size() >= properties.getMaxCandidates()) break;
+      if (candidates.size() >= topicSettings.maxCandidates()) break;
     }
-    return candidates.stream().limit(properties.getMaxCandidates()).toList();
+    return candidates.stream().limit(topicSettings.maxCandidates()).toList();
   }
 
   /** 依頼された操作を進めるため、付き候補一覧を実行する。 */
@@ -162,7 +161,8 @@ public class TopicGeneratorService {
       TopicGenerationContext context,
       TopicExecutionContext executionContext,
       boolean userRecentlyActive) {
-    if (!properties.isEnabled()) return TopicRunResult.skipped("disabled");
+    var topicSettings = settings.get();
+    if (!topicSettings.enabled()) return TopicRunResult.skipped("disabled");
     String topicGenerationId = "tg-" + UUID.randomUUID();
     eventPublisher.publish(
         eventFactory.topicGenerationStarted(
@@ -212,6 +212,7 @@ public class TopicGeneratorService {
       long started,
       boolean publishStarted,
       boolean completeSpokenLifecycle) {
+    var topicSettings = settings.get();
     String runId = executionContext.runId();
     boolean agentBusy = executionContext.agentBusy();
     if (publishStarted) {
@@ -223,7 +224,7 @@ public class TopicGeneratorService {
       List<TopicCandidate> candidates =
           providedCandidates == null
               ? List.of()
-              : providedCandidates.stream().limit(properties.getMaxCandidates()).toList();
+              : providedCandidates.stream().limit(topicSettings.maxCandidates()).toList();
       for (TopicCandidate candidate : candidates) {
         eventPublisher.publish(
             eventFactory.topicCandidateGenerated(
@@ -333,11 +334,11 @@ public class TopicGeneratorService {
       }
       lastTopicSpokenAt = executionContext.now();
       recentTopics.add(candidate.topic());
-      if (recentTopics.size() > properties.getMaxCandidates()) recentTopics.removeFirst();
+      if (recentTopics.size() > topicSettings.maxCandidates()) recentTopics.removeFirst();
       if (candidate.source() == TopicSource.CURIOSITY_QUEUE) {
         curiosityQueue
             .findCandidates(
-                new CuriosityQuery(executionContext.now(), properties.getMaxCandidates()))
+                new CuriosityQuery(executionContext.now(), topicSettings.maxCandidates()))
             .stream()
             .filter(
                 item ->
@@ -407,8 +408,9 @@ public class TopicGeneratorService {
 
   /** 話題の管理で用いるrejection理由を返す。 */
   private TopicRejectionReason rejectionReason(RankedTopicCandidate ranked) {
-    if (ranked.finalScore() < properties.getMinimumScore()) return TopicRejectionReason.LOW_SCORE;
-    if (ranked.candidate().confidence() < properties.getMinimumConfidence())
+    var topicSettings = settings.get();
+    if (ranked.finalScore() < topicSettings.minimumScore()) return TopicRejectionReason.LOW_SCORE;
+    if (ranked.candidate().confidence() < topicSettings.minimumConfidence())
       return TopicRejectionReason.LOW_CONFIDENCE;
     return null;
   }

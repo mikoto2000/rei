@@ -1,12 +1,11 @@
 package dev.mikoto2000.rei.topic;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -25,11 +24,7 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
   private final DiscoverySeenRepository seenRepository;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound TopicGeneratorProperties shared by consumers of these settings.")
-  private final TopicGeneratorProperties properties;
+  private final Supplier<TopicSettings> settings;
 
   /** 指定された値や利用先を使って、DiscoveryTopicCandidateGeneratorを初期化する。 */
   public DiscoveryTopicCandidateGenerator(
@@ -40,13 +35,14 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
     this.seedGenerator = seedGenerator;
     this.sources = sources == null ? List.of() : List.copyOf(sources);
     this.seenRepository = seenRepository;
-    this.properties = properties;
+    this.settings = () -> TopicSettings.capture(properties);
   }
 
   /** 指定された条件に従って、依頼された内容を生成する。 */
   @Override
   public List<TopicCandidate> generate(TopicGenerationContext context) {
-    if (!properties.isEnabled() || !properties.getDiscovery().isEnabled()) return List.of();
+    var topicSettings = settings.get();
+    if (!topicSettings.enabled() || !topicSettings.discoveryEnabled()) return List.of();
     List<String> seeds = seedGenerator.generate(context);
     if (seeds.isEmpty()) return List.of();
     List<TopicCandidate> candidates = new ArrayList<>();
@@ -54,8 +50,8 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
     for (DiscoverySource source : sources) {
       try {
         for (DiscoveryItem item : source.discover(discoveryContext)) {
-          if (candidates.size() >= properties.getMaxCandidates()) break;
-          if (item.relevance() < properties.getDiscovery().getMinimumRelevance()) continue;
+          if (candidates.size() >= topicSettings.maxCandidates()) break;
+          if (item.relevance() < topicSettings.minimumRelevance()) continue;
           if (seenRepository.isSeen(item.source(), item.externalId())) continue;
           candidates.add(toCandidate(item, context.currentTime()));
           seenRepository.markSeen(item.source(), item.externalId());
@@ -85,11 +81,11 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
 
   /** 話題の管理で用いる情報の鮮度を返す。 */
   double freshness(Instant publishedAt, Instant now) {
+    var topicSettings = settings.get();
     if (publishedAt == null) return 0.5d;
     long days = Math.max(0L, Duration.between(publishedAt, now).toDays());
-    if (days >= properties.getDiscovery().getFreshnessWindowDays()) return 0.1d;
-    double remaining = properties.getDiscovery().getFreshnessWindowDays() - days;
-    return Math.max(
-        0.1d, Math.min(1.0d, remaining / properties.getDiscovery().getFreshnessWindowDays()));
+    if (days >= topicSettings.freshnessWindowDays()) return 0.1d;
+    double remaining = topicSettings.freshnessWindowDays() - days;
+    return Math.max(0.1d, Math.min(1.0d, remaining / topicSettings.freshnessWindowDays()));
   }
 }
