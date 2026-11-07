@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.activity;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -27,12 +28,8 @@ public final class TemporalActivityInferenceService {
   @FunctionalInterface
   public interface Model {
     /** 作業状況の把握で用いる推定を返す。 */
-    @SuppressFBWarnings(
-        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-        matchType = SuppressMatchType.EXACT,
-        justification = "The configured inference callback can report its own checked model or transport failure.")
     Outcome infer(String input, int maxOutputTokens, int timeoutSeconds, long maxTotalTokens)
-        throws Exception;
+        throws IOException;
   }
 
   /** 作業状況の把握に必要な予算失敗情報を扱う。 */
@@ -180,10 +177,6 @@ public final class TemporalActivityInferenceService {
   }
 
   /** 作業状況の把握に関する定期確認を処理する。 */
-  @SuppressFBWarnings(
-      value = "REC_CATCH_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Retains base activity records when the configured inference model reports a checked failure.")
   public synchronized void tick() {
     if (!p.isEnabled() || !p.getTemporal().isEnabled() || paused.getAsBoolean()) return;
     var now = clock.instant();
@@ -285,7 +278,7 @@ public final class TemporalActivityInferenceService {
                   "LLM",
                   candidateCalls,
                   tokens);
-        } catch (Exception e) {
+        } catch (IOException | RuntimeException e) {
           long consumed =
               e instanceof BudgetFailure b ? b.tokens : e instanceof ModelFailure m ? m.tokens : 0;
           tokens += consumed;
@@ -317,7 +310,7 @@ public final class TemporalActivityInferenceService {
       savePending = false;
       fingerprint = input.fingerprint();
       completed++;
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       failed++;
       log.warn(
           "Activity temporal inference failed: reason={} base_records_retained=true",
