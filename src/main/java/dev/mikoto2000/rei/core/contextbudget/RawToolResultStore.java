@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.core.contextbudget;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -15,6 +13,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 
 /**
  * 元のツールの結果の記録を保持し、後続の処理で参照できるようにする。
@@ -63,12 +67,7 @@ public final class RawToolResultStore {
   private final Path base;
 
   /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared storage registry to coordinate object references and retention.")
-  private final dev.mikoto2000.rei.storage.StorageObjectRegistry registry;
+  private final ManagedRawAccess managed;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper = new ObjectMapper();
@@ -105,7 +104,25 @@ public final class RawToolResultStore {
     if (maxResultBytes < 1 || maxStoreBytes < 1 || maxCacheBytes < 0)
       throw new IllegalArgumentException("Invalid raw result capacity");
     this.base = base;
-    this.registry = registry;
+    this.managed =
+        registry == null
+            ? null
+            : new ManagedRawAccess(
+                registry::serialized,
+                registry::rawStoredBytes,
+                registration ->
+                    registry.registerRawWithBody(
+                        registration.conversation(),
+                        registration.run(),
+                        registration.reference(),
+                        registration.hash(),
+                        true,
+                        registration.createdBody()),
+                (conversation, reference) ->
+                    registry.rawObject(conversation, reference).isPresent(),
+                registry::verifyRawReadable,
+                registry::verifyRawBodyReadable,
+                registry::verifyBodyPath);
     this.maxResultBytes = maxResultBytes;
     this.maxStoreBytes = maxStoreBytes;
     this.maxCacheBytes = maxCacheBytes;
@@ -140,8 +157,8 @@ public final class RawToolResultStore {
 
   /** 後から参照できるよう、指定された情報を保存する。 */
   public String save(String conversation, String run, String toolName, String callId, String raw) {
-    if (registry != null)
-      return registry.serialized(() -> saveSerialized(conversation, run, toolName, callId, raw));
+    if (managed != null)
+      return managed.write().apply(() -> saveSerialized(conversation, run, toolName, callId, raw));
     synchronized (this) {
       return saveSerialized(conversation, run, toolName, callId, raw);
     }
@@ -173,7 +190,7 @@ public final class RawToolResultStore {
         throw new IllegalStateException("RAW_RESULT_CAPACITY_EXCEEDED");
       boolean created = !Files.exists(content);
       long additional = metadata.length + (created ? body.length : 0);
-      long used = registry == null ? localBytes(conversation) : registry.rawStoredBytes();
+      long used = managed == null ? localBytes(conversation) : managed.storedBytes().getAsLong();
       if (additional > maxStoreBytes - used)
         throw new IllegalStateException("RAW_RESULT_CAPACITY_EXCEEDED");
       try {
@@ -183,14 +200,14 @@ public final class RawToolResultStore {
         } else if (!hash(Files.readAllBytes(content)).equals(hash))
           throw new IllegalStateException("RAW_RESULT_IDENTITY_CHANGED");
         ContextFiles.write(pointer, new String(metadata, java.nio.charset.StandardCharsets.UTF_8));
-        if (registry != null)
-          registry.registerRawWithBody(conversation, run, ref, hash, true, created);
+        if (managed != null)
+          managed.register().accept(new RawRegistration(conversation, run, ref, hash, created));
         return ref;
       } catch (RuntimeException | Error failure) {
         try {
           // Only files created by this serialized save, and only after proving the registration did
           // not commit.
-          if (registry == null || registry.rawObject(conversation, ref).isEmpty()) {
+          if (managed == null || !managed.committed().test(conversation, ref)) {
             Files.deleteIfExists(pointer);
             if (created) Files.deleteIfExists(content);
           }
@@ -212,7 +229,7 @@ public final class RawToolResultStore {
     UUID.fromString(ref);
     Path pointer = file(conversation, ref);
     verify(pointer);
-    if (registry != null) registry.verifyRawReadable(conversation, ref);
+    if (managed != null) managed.verifyPointer().accept(conversation, ref);
     if (!Files.isRegularFile(pointer, LinkOption.NOFOLLOW_LINKS))
       throw new IllegalStateException("RAW_RESULT_NOT_FOUND");
     var owner = AgentRunScope.current();
@@ -226,7 +243,7 @@ public final class RawToolResultStore {
         if (hit.bodyRef() != null) {
           var path = bodyFile(conversation, hit.bodyRef());
           verify(path);
-          if (registry != null) registry.verifyRawBodyReadable(conversation, hit.bodyRef());
+          if (managed != null) managed.verifyBody().accept(conversation, hit.bodyRef());
           if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
             throw new IllegalStateException("RAW_RESULT_NOT_FOUND");
         }
@@ -246,12 +263,12 @@ public final class RawToolResultStore {
       }
       String raw = stored.rawResult();
       if (stored.bodyRef() != null) {
-        if (registry != null && registry.rawObject(conversation, ref).isEmpty())
+        if (managed != null && !managed.committed().test(conversation, ref))
           throw new IllegalStateException("RAW_RESULT_NOT_FOUND: uncommitted pointer");
         if (raw != null) throw new IllegalStateException("RAW_RESULT_IDENTITY_CHANGED");
         Path body = bodyFile(conversation, stored.bodyRef());
         verify(body);
-        if (registry != null) registry.verifyRawBodyReadable(conversation, stored.bodyRef());
+        if (managed != null) managed.verifyBody().accept(conversation, stored.bodyRef());
         if (!Files.isRegularFile(body, LinkOption.NOFOLLOW_LINKS))
           throw new IllegalStateException("RAW_RESULT_NOT_FOUND");
         if (Files.size(body) > maxResultBytes)
@@ -299,7 +316,7 @@ public final class RawToolResultStore {
 
   /** 要求された条件を満たすことを確認する。 */
   private void verify(Path path) {
-    if (registry != null) registry.verifyBodyPath(path);
+    if (managed != null) managed.verifyPath().accept(path);
   }
 
   /** モデルへ渡す文脈の管理で用いるローカルバイト数を返す。 */
@@ -346,4 +363,16 @@ public final class RawToolResultStore {
       throw new IllegalStateException(error);
     }
   }
+
+  private record RawRegistration(
+      String conversation, String run, String reference, String hash, boolean createdBody) {}
+
+  private record ManagedRawAccess(
+      Function<Supplier<String>, String> write,
+      LongSupplier storedBytes,
+      Consumer<RawRegistration> register,
+      BiPredicate<String, String> committed,
+      BiConsumer<String, String> verifyPointer,
+      BiConsumer<String, String> verifyBody,
+      Consumer<Path> verifyPath) {}
 }
