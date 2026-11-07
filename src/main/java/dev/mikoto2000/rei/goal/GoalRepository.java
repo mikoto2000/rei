@@ -1175,6 +1175,26 @@ public class GoalRepository {
     }
   }
 
+  /** Carries the live reservation between admission and execution within the Goal module. */
+  static final class ChatBudget {
+    private final java.util.function.Supplier<?> reservation;
+
+    private ChatBudget(java.util.function.Supplier<?> reservation) {
+      this.reservation = reservation;
+    }
+  }
+
+  static ChatBudget chatBudget(
+      dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
+    return new ChatBudget(() -> reservation);
+  }
+
+  static dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation chatReservation(
+      ChatBudget budget) {
+    return (dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation)
+        budget.reservation.get();
+  }
+
   /** Connect the durable owner to the already shared model budget. */
   public dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation secretaryBudget(
       java.util.function.BooleanSupplier reserve, java.util.function.IntSupplier remaining) {
