@@ -11,6 +11,7 @@ import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.ToolEventCallbackProvider;
+import dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService;
 import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.reminder.ReminderTools;
@@ -29,11 +30,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
@@ -166,21 +171,20 @@ public class LlmChatClientProvider {
   }
 
   /** モデル提供元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider modelProvider;
+  private final Function<String, OpenAiChatOptions> featureOptions;
+
+  private final Function<String, ChatModel> featureModel;
+  private final Supplier<ChatModel> subAgentModel;
+  private final Supplier<ChatModel> memoryModel;
+  private final Supplier<ChatModel> voiceCorrectionModel;
 
   /** システムへの指示サービス。 */
   private final SystemPromptService systemPromptService;
 
   /** チャット記憶。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Supplies the shared conversation memory to clients created for the current history.")
-  private final ChatMemory chatMemory;
+  private final Supplier<Advisor> newMemoryAdvisor;
+
+  private final Function<ExternalAgentDelegationService, Advisor> newReviewAdvisor;
 
   /** ツール一覧。 */
   private final ObjectProvider<Tools> tools;
@@ -361,9 +365,20 @@ public class LlmChatClientProvider {
       ObjectProvider<ToolEventCallbackProvider> toolEventCallbackProvider,
       AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher) {
-    this.modelProvider = modelProvider;
+    this.featureOptions = feature -> modelProvider.chatOptions(feature, null);
+    this.featureModel = feature -> modelProvider.chatModel(feature);
+    this.subAgentModel = () -> modelProvider.subAgentChatModel();
+    this.memoryModel = () -> modelProvider.memoryChatModel();
+    this.voiceCorrectionModel = () -> modelProvider.voiceCorrectionChatModel();
     this.systemPromptService = systemPromptService;
-    this.chatMemory = chatMemory;
+    this.newMemoryAdvisor =
+        () ->
+            MessageChatMemoryAdvisor.builder(chatMemory)
+                .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
+                .build();
+    this.newReviewAdvisor =
+        service ->
+            new dev.mikoto2000.rei.externalagent.ExternalAgentReviewAdvisor(service, chatMemory);
     this.tools = tools;
     this.googleCalendarTools = googleCalendarTools;
     this.taskTools = taskTools;
@@ -402,7 +417,7 @@ public class LlmChatClientProvider {
     return cache.computeIfAbsent(
         "parallel-" + mode,
         ignored -> {
-          var options = modelProvider.chatOptions(LlmFeature.CHAT, null);
+          var options = featureOptions.apply(LlmFeature.CHAT);
           dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
           var callbacks = new ArrayList<org.springframework.ai.tool.ToolCallback>();
           if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY) {
@@ -429,7 +444,7 @@ public class LlmChatClientProvider {
           var builder =
               ChatClient.builder(
                       new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-                          modelProvider.subAgentChatModel(), contextAssembler))
+                          subAgentModel.get(), contextAssembler))
                   .defaultAdvisors(new RunAwareToolCallingAdvisor())
                   .defaultOptions(
                       options
@@ -447,15 +462,15 @@ public class LlmChatClientProvider {
   private ChatClient createChatClient(String feature) {
     // Extraction and summarization process supplied evidence without conversation state or tools.
     if (LlmFeature.MEMORY.equals(feature) || LlmFeature.VOICE_CORRECTION.equals(feature)) {
-      var options = modelProvider.chatOptions(feature, null);
+      var options = featureOptions.apply(feature);
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
       var defaults = options.mutate();
       defaults.toolCallbacks(List.of());
       defaults.toolChoice("none");
       return ChatClient.builder(
               LlmFeature.VOICE_CORRECTION.equals(feature)
-                  ? modelProvider.voiceCorrectionChatModel()
-                  : modelProvider.memoryChatModel())
+                  ? voiceCorrectionModel.get()
+                  : memoryModel.get())
           .defaultOptions(defaults)
           .build();
     }
@@ -470,15 +485,9 @@ public class LlmChatClientProvider {
         && memoryContext != null
         && memoryContext.getIfAvailable() != null) advisors.add(memoryContext.getObject());
     if (LlmFeature.CHAT.equals(feature) && externalDelegation != null)
-      advisors.add(
-          new dev.mikoto2000.rei.externalagent.ExternalAgentReviewAdvisor(
-              externalDelegation, chatMemory));
+      advisors.add(newReviewAdvisor.apply(externalDelegation));
     if (LlmFeature.CHAT.equals(feature) && contextHistory != null) advisors.add(contextHistory);
-    else
-      advisors.add(
-          MessageChatMemoryAdvisor.builder(chatMemory)
-              .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
-              .build());
+    else advisors.add(newMemoryAdvisor.get());
     RuntimeContextAdvisor runtimeContextAdvisorInstance = runtimeContextAdvisor.getIfAvailable();
     if (runtimeContextAdvisorInstance != null) {
       advisors.add(runtimeContextAdvisorInstance);
@@ -500,13 +509,13 @@ public class LlmChatClientProvider {
     ChatClient.Builder builder =
         ChatClient.builder(
                 new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-                    modelProvider.chatModel(feature),
+                    featureModel.apply(feature),
                     LlmFeature.CHAT.equals(feature) ? contextAssembler : null))
             .defaultAdvisors(new RunAwareToolCallingAdvisor())
             .defaultSystem(
                 dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(
                     systemPromptService.systemPrompt()))
-            .defaultOptions(modelProvider.chatOptions(feature, null).mutate())
+            .defaultOptions(featureOptions.apply(feature).mutate())
             .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors));
 
     // Reply generation returns text; only the caller may publish the reply.
