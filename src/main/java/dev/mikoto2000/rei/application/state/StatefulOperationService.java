@@ -14,11 +14,16 @@ import dev.mikoto2000.rei.memory.service.MemoryService;
 import dev.mikoto2000.rei.reminder.Reminder;
 import dev.mikoto2000.rei.reminder.ReminderService;
 import dev.mikoto2000.rei.skills.AgentSkillRepository;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.LongConsumer;
+import java.util.function.LongFunction;
+import java.util.function.Supplier;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.stereotype.Service;
 
@@ -31,28 +36,28 @@ import org.springframework.stereotype.Service;
 @Service
 public final class StatefulOperationService {
   /** フィードの操作窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared feed service for the persisted feed state.")
-  private final FeedService feeds;
+  private final BiFunction<String, String, Feed> addFeed;
+
+  private final Function<FeedUpdate, Feed> applyFeedUpdate;
+  private final LongConsumer removeFeed;
 
   /** リマインダーの操作窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared reminder service for the active reminders.")
-  private final ReminderService reminders;
+  private final BiFunction<String, OffsetDateTime, Reminder> scheduleAt;
+
+  private final Function<RelativeReminder, Reminder> scheduleBefore;
+  private final Supplier<List<Reminder>> activeReminders;
+  private final LongFunction<Reminder> findReminder;
+  private final LongConsumer removeReminder;
 
   /** 関心の操作窓口。 */
   private final InterestUpdateService interests;
 
   /** 記憶の操作窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared memory service for persisted memory operations.")
-  private final MemoryService memories;
+  private final Supplier<List<Memory>> listUnscopedMemories;
+
+  private final Function<String, Optional<Memory>> findUnscopedMemory;
+  private final Function<Memory, Memory> saveMemory;
+  private final Consumer<String> markMemoryDeleted;
 
   /** スキルの保存先。 */
   private final AgentSkillRepository skills;
@@ -64,10 +69,24 @@ public final class StatefulOperationService {
       InterestUpdateService interests,
       MemoryService memories,
       AgentSkillRepository skills) {
-    this.feeds = feeds;
-    this.reminders = reminders;
+    this.addFeed = (url, name) -> feeds.add(url, name);
+    this.applyFeedUpdate =
+        request -> feeds.update(request.id(), request.displayName(), request.enabled());
+    this.removeFeed = id -> feeds.delete(id);
+    this.scheduleAt = (message, at) -> reminders.addAt(message, at);
+    this.scheduleBefore =
+        request ->
+            reminders.addBefore(request.message(), request.target(), request.minutesBefore());
+    this.activeReminders = () -> reminders.listActive();
+    this.findReminder = id -> reminders.findById(id);
+    this.removeReminder = id -> reminders.delete(id);
     this.interests = interests;
-    this.memories = memories;
+    this.listUnscopedMemories =
+        () -> memories.listActive().stream().filter(StatefulOperationService::unscoped).toList();
+    this.findUnscopedMemory =
+        id -> memories.findById(id).filter(StatefulOperationService::unscoped);
+    this.saveMemory = memory -> memories.save(memory);
+    this.markMemoryDeleted = id -> memories.updateStatus(id, MemoryStatus.DELETED);
     this.skills = skills;
   }
 
@@ -76,7 +95,7 @@ public final class StatefulOperationService {
     url(url);
     optionalText(displayName, 200);
     try {
-      return feeds.add(url, displayName);
+      return addFeed.apply(url, displayName);
     } catch (DuplicateFeedException | org.springframework.dao.DuplicateKeyException error) {
       throw new OperationConflictException();
     }
@@ -88,7 +107,7 @@ public final class StatefulOperationService {
     optionalText(displayName, 200);
     if (displayName == null && enabled == null) throw new IllegalArgumentException("Empty update");
     try {
-      return feeds.update(id, displayName, enabled);
+      return applyFeedUpdate.apply(new FeedUpdate(id, displayName, enabled));
     } catch (EmptyResultDataAccessException error) {
       throw new ResourceNotFoundException("Feed");
     }
@@ -97,33 +116,34 @@ public final class StatefulOperationService {
   /** 対象を管理から外すため、フィードを削除する。 */
   public void deleteFeed(long id) {
     positiveId(id);
-    feeds.delete(id);
+    removeFeed.accept(id);
   }
 
   /** 新たな対象を利用できるよう、リマインダーを作成する。 */
   public Reminder createReminder(String message, String at, String target, Integer minutesBefore) {
     text(message, 2000);
     if (at != null && target == null && minutesBefore == null)
-      return reminders.addAt(message, OffsetDateTime.parse(at));
+      return scheduleAt.apply(message, OffsetDateTime.parse(at));
     if (at == null
         && target != null
         && minutesBefore != null
         && minutesBefore >= 0
         && minutesBefore <= 525600)
-      return reminders.addBefore(message, OffsetDateTime.parse(target), minutesBefore);
+      return scheduleBefore.apply(
+          new RelativeReminder(message, OffsetDateTime.parse(target), minutesBefore));
     throw new IllegalArgumentException("Specify at or target/minutesBefore");
   }
 
   /** 状態変更の調整で用いるリマインダー一覧一覧を返す。 */
   public List<Reminder> remindersList() {
-    return reminders.listActive();
+    return activeReminders.get();
   }
 
   /** 状態変更の調整で用いるリマインダーを返す。 */
   public Reminder reminder(long id) {
     positiveId(id);
     try {
-      return reminders.findById(id);
+      return findReminder.apply(id);
     } catch (EmptyResultDataAccessException error) {
       throw new ResourceNotFoundException("Reminder");
     }
@@ -132,7 +152,7 @@ public final class StatefulOperationService {
   /** 対象を管理から外すため、リマインダーを削除する。 */
   public void deleteReminder(long id) {
     positiveId(id);
-    reminders.delete(id);
+    removeReminder.accept(id);
   }
 
   /** 状態変更の調整で用いる関心一覧一覧を返す。 */
@@ -158,16 +178,13 @@ public final class StatefulOperationService {
 
   /** 状態変更の調整で用いる記憶一覧一覧を返す。 */
   public List<Memory> memoriesList() {
-    return memories.listActive().stream().filter(StatefulOperationService::unscoped).toList();
+    return listUnscopedMemories.get();
   }
 
   /** 状態変更の調整で用いる記憶を返す。 */
   public Memory memory(String id) {
     text(id, 128);
-    return memories
-        .findById(id)
-        .filter(StatefulOperationService::unscoped)
-        .orElseThrow(() -> new ResourceNotFoundException("Memory"));
+    return findUnscopedMemory.apply(id).orElseThrow(() -> new ResourceNotFoundException("Memory"));
   }
 
   /** 新たな対象を利用できるよう、記憶を作成する。 */
@@ -184,7 +201,7 @@ public final class StatefulOperationService {
     double score = confidence == null ? 0.8 : confidence;
     if (!Double.isFinite(score) || score < 0 || score > 1)
       throw new IllegalArgumentException("Invalid confidence");
-    return memories.save(
+    return saveMemory.apply(
         new Memory(
             null, content, memoryType, memoryScope, MemoryStatus.ACTIVE, score, null, null, null));
   }
@@ -192,7 +209,7 @@ public final class StatefulOperationService {
   /** 対象を管理から外すため、記憶を削除する。 */
   public void deleteMemory(String id) {
     var current = memory(id);
-    if (current.status() != MemoryStatus.DELETED) memories.updateStatus(id, MemoryStatus.DELETED);
+    if (current.status() != MemoryStatus.DELETED) markMemoryDeleted.accept(id);
   }
 
   /** 変更された設定や記録を反映するため、スキル一覧を読み直す。 */
@@ -229,4 +246,8 @@ public final class StatefulOperationService {
         || uri.getHost() == null
         || uri.getUserInfo() != null) throw new IllegalArgumentException("Invalid URL");
   }
+
+  private record FeedUpdate(long id, String displayName, Boolean enabled) {}
+
+  private record RelativeReminder(String message, OffsetDateTime target, int minutesBefore) {}
 }
