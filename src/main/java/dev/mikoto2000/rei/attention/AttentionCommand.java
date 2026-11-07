@@ -4,6 +4,7 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -18,12 +19,7 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
   private final AttentionRepository repository;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final Supplier<String> currentProjectId;
 
   /** 仕様。 */
   @Spec picocli.CommandLine.Model.CommandSpec spec;
@@ -72,7 +68,7 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
   @org.springframework.beans.factory.annotation.Autowired
   public AttentionCommand(AttentionRepository repository, ProjectService projects) {
     this.repository = repository;
-    this.projects = projects;
+    this.currentProjectId = () -> projects.currentContext().id();
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -85,7 +81,7 @@ public class AttentionCommand implements java.util.concurrent.Callable<Integer> 
   public Integer call() {
     var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
-      String project = projects.currentContext().id();
+      String project = currentProjectId.get();
       Object result =
           switch (action) {
             case "list" -> repository.list(project);

@@ -35,12 +35,7 @@ public class BackgroundCommands {
   private final ConversationInputRouter runs;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final Supplier<ProjectContext> currentProject;
 
   /** 状態一覧。 */
   private final ProjectRunStateStore states;
@@ -84,7 +79,7 @@ public class BackgroundCommands {
       AgentEventPublisher publisher,
       Clock clock) {
     this.runs = runs;
-    this.projects = projects;
+    this.currentProject = () -> projects.currentContext();
     this.states = states;
     this.summaries = summaries;
     this.images = images;
@@ -121,7 +116,7 @@ public class BackgroundCommands {
       matchType = SuppressMatchType.EXACT,
       justification = "Preserves the original dispatch failure after publishing the failed run status.")
   private ActiveExecution start(ExecutionType type, String source, Supplier<String> operation) {
-    var project = projects.currentContext();
+    var project = currentProject.get();
     var registered = new java.util.concurrent.atomic.AtomicReference<ActiveExecution>();
     try {
       return runs.submitBackground(
@@ -189,7 +184,7 @@ public class BackgroundCommands {
 
   /** 利用者が内容を確認できるよう、直近要約を表示する。 */
   public void showLastSummary(Consumer<String> out) {
-    showLastSummary(projects.currentContext(), out, true, java.util.List.of());
+    showLastSummary(currentProject.get(), out, true, java.util.List.of());
   }
 
   /** 利用者が内容を確認できるよう、直近要約を表示する。 */

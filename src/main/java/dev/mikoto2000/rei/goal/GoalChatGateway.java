@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.core.chat.UserInterventionQueue;
 import dev.mikoto2000.rei.core.policy.PermissionDecision;
 import dev.mikoto2000.rei.core.policy.ToolPermissionException;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.AgentEventFactory;
@@ -18,7 +19,9 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 
 /**
@@ -58,12 +61,7 @@ public class GoalChatGateway
   private final FileGoalVerifier verifier;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final Supplier<List<ProjectContext>> registeredProjects;
 
   /** 会話一覧。 */
   private final SessionRepository sessions;
@@ -147,7 +145,7 @@ public class GoalChatGateway
       AgentEventPublisher publisher) {
     this.goals = goals;
     this.verifier = verifier;
-    this.projects = projects;
+    this.registeredProjects = () -> projects.registeredProjects();
     this.sessions = sessions;
     this.router = router;
     this.chat = chat;
@@ -163,7 +161,7 @@ public class GoalChatGateway
     try {
       if (!Files.isDirectory(root)
           || !root.toRealPath().equals(root)
-          || projects.registeredProjects().stream()
+          || registeredProjects.get().stream()
               .noneMatch(p -> p.id().equals(goal.projectId()) && p.root().equals(root)))
         throw new IllegalStateException("Goal Project is missing or relocated");
     } catch (java.io.IOException error) {
@@ -424,7 +422,7 @@ public class GoalChatGateway
   @Override
   public void validate(String project, String session) {
     var registered =
-        projects.registeredProjects().stream()
+        registeredProjects.get().stream()
             .filter(p -> p.id().equals(project))
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("Secretary Project is missing"));
@@ -451,7 +449,7 @@ public class GoalChatGateway
       throw new IllegalStateException("Concurrent managed read-only execution is required");
     validate(request.projectId(), request.sessionId());
     var root =
-        projects.registeredProjects().stream()
+        registeredProjects.get().stream()
             .filter(p -> p.id().equals(request.projectId()))
             .findFirst()
             .orElseThrow()
