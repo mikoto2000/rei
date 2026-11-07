@@ -44,12 +44,9 @@ public final class MemoryRunSubmitService {
   private final SessionLifecycle lifecycle;
 
   /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared run registry so participants observe the same run lifecycle.")
-  private final RunRegistry registry;
+  private final java.util.function.Consumer<AgentRunContext> registerRun;
+
+  private final java.util.function.Consumer<String> forgetRun;
 
   /** 実行一覧。 */
   private final RunService runs;
@@ -114,7 +111,8 @@ public final class MemoryRunSubmitService {
       MemoryCommandSupport support) {
     this.projects = projects;
     this.lifecycle = lifecycle;
-    this.registry = registry;
+    this.registerRun = context -> registry.register(context);
+    this.forgetRun = run -> registry.forget(run);
     this.runs = runs;
     this.submitOperation =
         (context, operation) ->
@@ -216,11 +214,11 @@ public final class MemoryRunSubmitService {
         key,
         fingerprint,
         context -> {
-          registry.register(context);
+          registerRun.accept(context);
           try {
             submitOperation.accept(context, () -> execution.accept(context));
           } catch (RuntimeException | Error error) {
-            registry.forget(context.runId());
+            forgetRun.accept(context.runId());
             throw error;
           }
         });

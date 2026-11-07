@@ -55,12 +55,7 @@ public final class SlackRuntime {
   private final SessionLifecycle sessions;
 
   /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared run registry so participants observe the same run lifecycle.")
-  private final RunRegistry registry;
+  private final java.util.function.Consumer<AgentRunContext> registerRun;
 
   /** 実行一覧。 */
   private final RunService runs;
@@ -101,7 +96,7 @@ public final class SlackRuntime {
     this.self = self;
     this.projects = projects;
     this.sessions = sessions;
-    this.registry = registry;
+    this.registerRun = context -> registry.register(context);
     this.runs = runs;
     this.router = router;
     this.clock = clock;
@@ -237,7 +232,7 @@ public final class SlackRuntime {
             context -> {
               if (!store.prepare(m, context.runId(), binding))
                 throw new IllegalStateException("Slack receipt already dispatched");
-              registry.register(context);
+              registerRun.accept(context);
               try {
                 reply(context.runId() + ":accepted", m, "受付しました。Run: " + context.runId());
                 router.submit(context, text, work -> runs.execute(context, work));
