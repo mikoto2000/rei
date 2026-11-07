@@ -3,12 +3,11 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.github.GitHubFactRepository;
 import dev.mikoto2000.rei.github.GitHubWebhookProperties;
 import dev.mikoto2000.rei.github.GitHubWebhookService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.IntSupplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.HttpStatus;
@@ -33,23 +32,19 @@ public class GitHubWebhookController {
   private final GitHubWebhookService service;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound GitHubWebhookProperties shared by consumers of these settings.")
-  private final GitHubWebhookProperties properties;
+  private final IntSupplier maxPayloadBytes;
 
   /** 指定された値や利用先を使って、GitHubWebhookControllerを初期化する。 */
   public GitHubWebhookController(GitHubWebhookService service, GitHubWebhookProperties properties) {
     this.service = service;
-    this.properties = properties;
+    this.maxPayloadBytes = () -> properties.getMaxPayloadBytes();
   }
 
   /** Web APIによる操作で用いる受信を返す。 */
   @PostMapping(value = "/events", consumes = "application/json")
   public ResponseEntity<GitHubFactRepository.Receipt> receive(HttpServletRequest request)
       throws IOException {
-    int limit = properties.getMaxPayloadBytes();
+    int limit = maxPayloadBytes.getAsInt();
     if (request.getContentLengthLong() > limit)
       throw new org.springframework.web.server.ResponseStatusException(
           HttpStatus.PAYLOAD_TOO_LARGE);

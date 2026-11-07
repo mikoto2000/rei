@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.image;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Supplier;
 import org.springframework.ai.image.Image;
 import org.springframework.ai.image.ImageGeneration;
 import org.springframework.ai.image.ImageModel;
@@ -19,11 +18,7 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
   private final ImageModelProvider imageModelProvider;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ImageProperties shared by consumers of these settings.")
-  private final ImageProperties properties;
+  private final Supplier<String> responseFormatSetting;
 
   /** 画像の生成を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public OpenAiImageGenerationClient(ImageModelProvider imageModelProvider) {
@@ -35,7 +30,7 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
   public OpenAiImageGenerationClient(
       ImageModelProvider imageModelProvider, ImageProperties properties) {
     this.imageModelProvider = imageModelProvider;
-    this.properties = properties;
+    this.responseFormatSetting = () -> properties.getResponseFormat();
   }
 
   /** 指定された条件に従って、依頼された内容を生成する。 */
@@ -77,7 +72,7 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
 
   /** 画像の生成において、送信応答形式の実施条件を判定する。 */
   private boolean shouldSendResponseFormat(String model) {
-    String responseFormat = properties.getResponseFormat();
+    String responseFormat = responseFormatSetting.get();
     if (responseFormat == null
         || responseFormat.isBlank()
         || responseFormat.equalsIgnoreCase("auto")) {

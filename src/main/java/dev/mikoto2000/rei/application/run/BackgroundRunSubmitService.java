@@ -17,6 +17,7 @@ import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * バックグラウンド実行受付のユースケースを実現する。
@@ -74,11 +75,7 @@ public final class BackgroundRunSubmitService {
   private final ImageGenerationService images;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ImageProperties shared by consumers of these settings.")
-  private final ImageProperties properties;
+  private final Supplier<String> defaultImageSize;
 
   /** 状態一覧。 */
   private dev.mikoto2000.rei.core.project.ProjectRunStateStore states;
@@ -161,7 +158,7 @@ public final class BackgroundRunSubmitService {
         throw new IllegalArgumentException("Absolute image output required");
     }
     if (model != null) requireText(model, 512);
-    var dimensions = ImageSize.parse(size == null ? properties.getSize() : size);
+    var dimensions = ImageSize.parse(size == null ? defaultImageSize.get() : size);
     return submit(
         projectId,
         context -> {
@@ -246,7 +243,7 @@ public final class BackgroundRunSubmitService {
     this.bus = bus;
     this.summaries = summaries;
     this.images = images;
-    this.properties = properties;
+    this.defaultImageSize = () -> properties.getSize();
   }
 
   /** 実行の受付と状態管理で用いる要約を返す。 */
@@ -263,7 +260,7 @@ public final class BackgroundRunSubmitService {
   /** 実行の受付と状態管理で用いる画像を返す。 */
   public AgentRunContext image(String projectId, String prompt, String size) {
     requireText(prompt, 10000);
-    var dimensions = ImageSize.parse(size == null ? properties.getSize() : size);
+    var dimensions = ImageSize.parse(size == null ? defaultImageSize.get() : size);
     return submit(
         projectId,
         context -> {

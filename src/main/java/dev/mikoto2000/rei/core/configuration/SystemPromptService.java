@@ -1,11 +1,10 @@
 package dev.mikoto2000.rei.core.configuration;
 
 import dev.mikoto2000.rei.config.ExternalConfigFileService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
@@ -22,11 +21,7 @@ public class SystemPromptService {
   private final ResourceLoader resourceLoader;
 
   /** 外部設定ファイルサービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Resolves or initializes the application's current external configuration files.")
-  private final ExternalConfigFileService externalConfigFileService;
+  private final Supplier<Path> additionalPromptPath;
 
   /** 指定された値や利用先を使って、SystemPromptServiceを初期化する。 */
   @Autowired
@@ -36,7 +31,7 @@ public class SystemPromptService {
       ExternalConfigFileService externalConfigFileService) {
     this.coreProperties = coreProperties;
     this.resourceLoader = resourceLoader;
-    this.externalConfigFileService = externalConfigFileService;
+    this.additionalPromptPath = () -> externalConfigFileService.additionalSystemPromptFilePath();
   }
 
   /** 機能の組み立てで用いるシステムへの指示を返す。 */
@@ -74,7 +69,7 @@ public class SystemPromptService {
 
   /** 必要な内容を参照できるよう、追加システムへの指示を読み取る。 */
   private String readAdditionalSystemPrompt() {
-    Path file = externalConfigFileService.additionalSystemPromptFilePath();
+    Path file = additionalPromptPath.get();
     if (!Files.exists(file)) {
       return "";
     }
