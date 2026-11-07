@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.core.completion.CompletionEngine;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Supplier;
@@ -14,45 +12,33 @@ import picocli.CommandLine;
 
 /** JLine入力補完を別の利用先へ接続する。 */
 public final class JLineCompletionAdapter implements Completer {
-  /** コマンド。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Resolves completions against the live command tree used by the shell.")
-  private final CommandLine command;
-
-  /** 入力候補を選ぶ共通の処理。 */
-  private final CompletionEngine engine;
-
-  /** ディレクトリ。 */
-  private final Supplier<Path> directory;
-
-  /** 対象の解決。 */
-  private final CommandCompletionContextResolver resolver = new CommandCompletionContextResolver();
+  private final java.util.function.BiConsumer<ParsedLine, List<Candidate>> appendCompletions;
 
   /** 指定された値や利用先を使って、JLineCompletionAdapterを初期化する。 */
   public JLineCompletionAdapter(
       CommandLine command, CompletionEngine engine, Supplier<Path> directory) {
-    this.command = command;
-    this.engine = engine;
-    this.directory = directory;
+    var resolver = new CommandCompletionContextResolver();
+    this.appendCompletions =
+        (line, candidates) -> {
+          for (var candidate : engine.complete(resolver.resolve(command, line, directory.get()))) {
+            candidates.add(
+                new Candidate(
+                    candidate.value(),
+                    candidate.display(),
+                    candidate.kind(),
+                    candidate.description(),
+                    null,
+                    null,
+                    candidate.appendSpace()));
+          }
+        };
   }
 
   /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
   @Override
   public void complete(LineReader reader, ParsedLine line, List<Candidate> candidates) {
     try {
-      for (var candidate : engine.complete(resolver.resolve(command, line, directory.get()))) {
-        candidates.add(
-            new Candidate(
-                candidate.value(),
-                candidate.display(),
-                candidate.kind(),
-                candidate.description(),
-                null,
-                null,
-                candidate.appendSpace()));
-      }
+      appendCompletions.accept(line, candidates);
     } catch (RuntimeException ignored) {
       /* Invalid input or metadata must never break the reader. */
     }
