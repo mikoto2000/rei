@@ -12,8 +12,6 @@ import dev.mikoto2000.rei.image.ImageGenerationRequest;
 import dev.mikoto2000.rei.image.ImageGenerationResult;
 import dev.mikoto2000.rei.image.ImageGenerationService;
 import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
@@ -30,12 +28,17 @@ import org.springframework.stereotype.Service;
 @Service
 public class BackgroundCommands {
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared input router so all operations use the same queue and active runs.")
-  private final ConversationInputRouter runs;
+  private final java.util.function.BiFunction<ProjectContext, BackgroundRequest, ActiveExecution>
+      submitBackground;
+
+  private final java.util.function.Supplier<java.util.List<ActiveExecution>> activeExecutions;
+  private final java.util.function.Consumer<Runnable> executeAuxiliary;
+
+  private record BackgroundRequest(
+      ExecutionType type,
+      String source,
+      java.util.function.Consumer<ActiveExecution> registered,
+      java.util.function.Consumer<ActiveExecution> work) {}
 
   /** プロジェクト一覧。 */
   private final Supplier<ProjectContext> currentProject;
@@ -77,7 +80,12 @@ public class BackgroundCommands {
       AgentEventFactory events,
       AgentEventPublisher publisher,
       Clock clock) {
-    this.runs = runs;
+    this.submitBackground =
+        (project, request) ->
+            runs.submitBackground(
+                project, request.type(), request.source(), request.registered(), request.work());
+    this.activeExecutions = () -> runs.activeExecutions();
+    this.executeAuxiliary = work -> runs.executeAuxiliary(work);
     this.currentProject = () -> projects.currentContext();
     this.states = states;
     this.summaries = summaries;
@@ -114,31 +122,32 @@ public class BackgroundCommands {
     var project = currentProject.get();
     var registered = new java.util.concurrent.atomic.AtomicReference<ActiveExecution>();
     try {
-      return runs.submitBackground(
+      return submitBackground.apply(
           project,
-          type,
-          source,
-          e -> {
-            registered.set(e);
-            publish(e, "RUNNING", "");
-          },
-          e -> {
-            try {
-              String result = operation.get();
-              if (Thread.currentThread().isInterrupted())
-                throw new java.util.concurrent.CancellationException();
-              states.saveCompleted(CompletedExecution.of(e, source, result, clock.instant()));
-              publish(e, "COMPLETED", result);
-            } catch (Exception error) {
-              publish(
-                  e,
-                  status(error),
-                  new HistoryFormatter()
-                      .label(dev.mikoto2000.rei.event.FailureMessages.describe(error)));
-              org.slf4j.LoggerFactory.getLogger(getClass())
-                  .debug("Background execution failed: {}", e.id(), error);
-            }
-          });
+          new BackgroundRequest(
+              type,
+              source,
+              e -> {
+                registered.set(e);
+                publish(e, "RUNNING", "");
+              },
+              e -> {
+                try {
+                  String result = operation.get();
+                  if (Thread.currentThread().isInterrupted())
+                    throw new java.util.concurrent.CancellationException();
+                  states.saveCompleted(CompletedExecution.of(e, source, result, clock.instant()));
+                  publish(e, "COMPLETED", result);
+                } catch (Exception error) {
+                  publish(
+                      e,
+                      status(error),
+                      new HistoryFormatter()
+                          .label(dev.mikoto2000.rei.event.FailureMessages.describe(error)));
+                  org.slf4j.LoggerFactory.getLogger(getClass())
+                      .debug("Background execution failed: {}", e.id(), error);
+                }
+              }));
     } catch (RuntimeException | Error error) {
       if (registered.get() != null)
         publish(
@@ -190,7 +199,7 @@ public class BackgroundCommands {
       java.util.List<ActiveExecution> additional) {
     var format = new HistoryFormatter();
     var active =
-        java.util.stream.Stream.concat(runs.activeExecutions().stream(), additional.stream())
+        java.util.stream.Stream.concat(activeExecutions.get().stream(), additional.stream())
             .filter(e -> e.type() == ExecutionType.SUMMARIZE && project.id().equals(e.projectId()))
             .toList();
     if (!active.isEmpty()) {
@@ -230,7 +239,7 @@ public class BackgroundCommands {
                 result.source(),
                 result.startedAt());
         try {
-          runs.executeAuxiliary(
+          executeAuxiliary.accept(
               () -> {
                 try (var scope = ExecutionScope.open(execution)) {
                   summaryNarrator.narrateCompletedRun(text);
