@@ -3,9 +3,10 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.application.state.OperationConflictException;
 import dev.mikoto2000.rei.temporal.AgentScheduleDispatcher;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -26,25 +27,27 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @RequestMapping("/api/v1/projects/{projectId}/schedules")
 public class ScheduleController {
-  /** 保存と検索の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent schedule and claim state.")
-  private final PersistentAgentScheduler repository;
+  private final Function<String, List<PersistentAgentScheduler.Entry>> listSchedules;
+  private final BiFunction<String, String, Inspection> inspectSchedule;
+  private final BiFunction<String, String, List<PersistentAgentScheduler.History>> scheduleHistory;
+  private final BiConsumer<String, String> activateSchedule;
+  private final BiConsumer<String, String> cancelSchedule;
 
-  /** 実行先の振り分け。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reconciles durable schedules through the shared dispatcher.")
-  private final AgentScheduleDispatcher dispatcher;
+  private final BiFunction<ScheduleIdentity, String, PersistentAgentScheduler.Entry>
+      reconcileSchedule;
+
+  private record ScheduleIdentity(String project, String id) {}
 
   /** 指定された値や利用先を使って、ScheduleControllerを初期化する。 */
   public ScheduleController(
       PersistentAgentScheduler repository, AgentScheduleDispatcher dispatcher) {
-    this.repository = repository;
-    this.dispatcher = dispatcher;
+    this.listSchedules = project -> repository.list(project);
+    this.inspectSchedule = (project, id) -> inspect(repository, project, id);
+    this.scheduleHistory = (project, id) -> repository.history(project, id);
+    this.activateSchedule = (project, id) -> repository.activate(project, id);
+    this.cancelSchedule = (project, id) -> repository.cancel(project, id);
+    this.reconcileSchedule =
+        (identity, run) -> dispatcher.reconcile(identity.project(), identity.id(), run);
   }
 
   /**
@@ -72,12 +75,17 @@ public class ScheduleController {
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @GetMapping
   public List<PersistentAgentScheduler.Entry> list(@PathVariable String projectId) {
-    return repository.list(projectId);
+    return listSchedules.apply(projectId);
   }
 
   /** 利用者が対象の情報を確認できるように表示する。 */
   @GetMapping("/{id}")
   public Inspection show(@PathVariable String projectId, @PathVariable String id) {
+    return inspectSchedule.apply(projectId, id);
+  }
+
+  private static Inspection inspect(
+      PersistentAgentScheduler repository, String projectId, String id) {
     var schedule = repository.get(projectId, id);
     var interval =
         repository
@@ -95,7 +103,7 @@ public class ScheduleController {
   @GetMapping("/{id}/history")
   public List<PersistentAgentScheduler.History> history(
       @PathVariable String projectId, @PathVariable String id) {
-    return repository.history(projectId, id);
+    return scheduleHistory.apply(projectId, id);
   }
 
   /** Web APIによる操作で用いるactivateを返す。 */
@@ -103,7 +111,7 @@ public class ScheduleController {
   public Inspection activate(@PathVariable String projectId, @PathVariable String id) {
     return control(
         () -> {
-          repository.activate(projectId, id);
+          activateSchedule.accept(projectId, id);
           return show(projectId, id);
         });
   }
@@ -113,7 +121,7 @@ public class ScheduleController {
   public Inspection cancel(@PathVariable String projectId, @PathVariable String id) {
     return control(
         () -> {
-          repository.cancel(projectId, id);
+          cancelSchedule.accept(projectId, id);
           return show(projectId, id);
         });
   }
@@ -139,7 +147,9 @@ public class ScheduleController {
         || request.expectedRunId().length() > 128)
       throw new IllegalArgumentException(
           "Inspect effects and acknowledge the exact saved Run before reconciliation");
-    return control(() -> dispatcher.reconcile(projectId, id, request.expectedRunId()));
+    return control(
+        () ->
+            reconcileSchedule.apply(new ScheduleIdentity(projectId, id), request.expectedRunId()));
   }
 
   /** Web APIによる操作で用いる制御を返す。 */

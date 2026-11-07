@@ -24,7 +24,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Predicate;
 import org.springframework.stereotype.Service;
 
 /**
@@ -54,12 +56,9 @@ public final class DotResumeService {
           "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService checkpointService;
 
-  /** 予約されたエージェント実行を管理する窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent schedule and claim state.")
-  private final PersistentAgentScheduler schedules;
+  private final BiFunction<String, String, String> scheduleResume;
+  private final BiConsumer<String, String> activateSchedule;
+  private final Predicate<PersistentAgentScheduler.Entry> activeClaim;
 
   /** 実行一覧。 */
   private final org.springframework.beans.factory.ObjectProvider<RunRegistry> runs;
@@ -72,9 +71,6 @@ public final class DotResumeService {
 
   /** 権限一覧。 */
   private final dev.mikoto2000.rei.core.policy.ToolPermissionProperties permissions;
-
-  /** 期限や記録日時の判定に使う時刻の取得元。 */
-  private final Clock clock;
 
   /** 指定された値や利用先を使って、DotResumeServiceを初期化する。 */
   public DotResumeService(
@@ -94,12 +90,17 @@ public final class DotResumeService {
     this.delegation = delegation;
     this.findCheckpoint = (project, task) -> checkpoints.get(project, task);
     this.checkpointService = checkpointService;
-    this.schedules = schedules;
+    this.scheduleResume =
+        (request, session) ->
+            schedules
+                .scheduleAt(clock.instant().plusSeconds(1), "dot-resume:" + request, session)
+                .id();
+    this.activateSchedule = (project, id) -> schedules.activate(project, id);
+    this.activeClaim = claim -> schedules.activeClaim(claim);
     this.runs = runs;
     this.sessions = sessions;
     this.schedulerSettings = schedulerSettings;
     this.permissions = permissions;
-    this.clock = clock;
   }
 
   /** 要求された条件を満たすことを確認する。 */
@@ -222,10 +223,9 @@ public final class DotResumeService {
     try (var scope =
         AgentRunScope.open(
             new AgentRunContext(owner.run(), owner.session(), Path.of(owner.root()), project))) {
-      var task =
-          schedules.scheduleAt(clock.instant().plusSeconds(1), "dot-resume:" + id, owner.session());
-      repo.attachSchedule(project, id, task.id());
-      schedules.activate(project, task.id());
+      var scheduleId = scheduleResume.apply(id, owner.session());
+      repo.attachSchedule(project, id, scheduleId);
+      activateSchedule.accept(project, scheduleId);
     } catch (RuntimeException failure) {
       repo.finishResume(project, id, "UNKNOWN");
       throw new DotException("RESUME_ADMISSION_UNKNOWN");
@@ -261,7 +261,7 @@ public final class DotResumeService {
     if (!Objects.equals(intent.get("schedule"), entry.task().id())
         || !owner.root().equals(entry.projectRoot())
         || !Objects.equals(owner.session(), entry.task().conversationId())
-        || !schedules.activeClaim(entry)) throw new DotException("RESUME_OWNER_CHANGED");
+        || !activeClaim.test(entry)) throw new DotException("RESUME_OWNER_CHANGED");
     var state = checked(owner);
     if (((Number) intent.get("revision")).longValue() != state.revision())
       throw new DotException("CHECKPOINT_REVISION_CHANGED");
