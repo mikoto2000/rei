@@ -16,16 +16,21 @@ public final class ShellConversationService {
   private final dev.mikoto2000.rei.application.input.ConversationInputGateway gateway;
 
   /** 取得記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared capture lifecycle when admitting a shell conversation.")
-  private dev.mikoto2000.rei.llm.capture.CaptureStore captures;
+  @FunctionalInterface
+  private interface AcceptCapture {
+    void record(Object client, String conversation, String submission, String run);
+  }
+
+  private record CaptureHooks(
+      AcceptCapture accept, java.util.function.Consumer<String> startFailed) {}
+
+  private CaptureHooks captureHooks;
 
   /** 会話の継続管理で使用する取得記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures) {
-    this.captures = captures;
+    captureHooks =
+        captures == null ? null : new CaptureHooks(captures::accept, captures::startFailed);
   }
 
   /**
@@ -207,7 +212,7 @@ public final class ShellConversationService {
                   project, currentSessionId()),
               message,
               clock.instant());
-      var captureStore = captures;
+      var capture = captureHooks;
       var client = currentClient.get();
       var context =
           gateway.submit(
@@ -217,12 +222,14 @@ public final class ShellConversationService {
                 rememberOwner(client, run);
                 if (dotDelegations != null)
                   dotDelegations.ifAvailable(dot -> dot.authoriseHumanInput(run, message));
-                if (captureStore != null)
-                  captureStore.accept(
-                      client, run.conversationId(), input.inputId().toString(), run.runId());
+                if (capture != null)
+                  capture
+                      .accept()
+                      .record(
+                          client, run.conversationId(), input.inputId().toString(), run.runId());
               },
               run -> {
-                if (captureStore != null) captureStore.startFailed(run.runId());
+                if (capture != null) capture.startFailed().accept(run.runId());
               });
       selectSession.accept(context.conversationId());
       return context;
