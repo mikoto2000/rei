@@ -1,8 +1,7 @@
 package dev.mikoto2000.rei.topic;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
+import java.util.Objects;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /** 話題生成の設定値をまとめ、利用環境に応じた動作を指定できるようにする。 */
@@ -27,13 +26,13 @@ public class TopicGeneratorProperties {
   private Duration candidateMaxAge = Duration.ofMinutes(30);
 
   /** 操作がない状態実行条件。 */
-  private final IdleTrigger idleTrigger = new IdleTrigger();
+  private IdleTrigger idleTrigger = new IdleTrigger();
 
   /** 情報への関心。 */
-  private final Curiosity curiosity = new Curiosity();
+  private Curiosity curiosity = new Curiosity();
 
   /** 利用先の検出。 */
-  private final Discovery discovery = new Discovery();
+  private Discovery discovery = new Discovery();
 
   /** 話題の管理において、有効状態かどうかを判定する。 */
   public boolean isEnabled() {
@@ -96,30 +95,33 @@ public class TopicGeneratorProperties {
   }
 
   /** 話題の管理で参照する操作がない状態実行条件を返す。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Spring populates this getter-only nested idle trigger settings bean.")
   public IdleTrigger getIdleTrigger() {
-    return idleTrigger;
+    return idleTrigger.copy();
+  }
+
+  /** 指定された設定をコピーして保持する。 */
+  public void setIdleTrigger(IdleTrigger idleTrigger) {
+    this.idleTrigger = Objects.requireNonNull(idleTrigger).copy();
   }
 
   /** 話題の管理で参照する情報への関心を返す。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Spring populates this getter-only nested curiosity settings bean.")
   public Curiosity getCuriosity() {
-    return curiosity;
+    return curiosity.copy();
+  }
+
+  /** 指定された設定をコピーして保持する。 */
+  public void setCuriosity(Curiosity curiosity) {
+    this.curiosity = Objects.requireNonNull(curiosity).copy();
   }
 
   /** 話題の管理で参照する利用先の検出を返す。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Spring populates this getter-only nested discovery settings bean.")
   public Discovery getDiscovery() {
-    return discovery;
+    return discovery.copy();
+  }
+
+  /** 指定された設定をコピーして保持する。 */
+  public void setDiscovery(Discovery discovery) {
+    this.discovery = Objects.requireNonNull(discovery).copy();
   }
 
   /** 話題の管理に必要な操作がない状態実行条件を扱う。 */
@@ -132,6 +134,15 @@ public class TopicGeneratorProperties {
 
     /** 最小操作がない状態。 */
     private Duration minimumIdle = Duration.ofMinutes(2);
+
+    /** 現在の設定値のコピーを返す。 */
+    private IdleTrigger copy() {
+      var copy = new IdleTrigger();
+      copy.enabled = enabled;
+      copy.checkInterval = checkInterval;
+      copy.minimumIdle = minimumIdle;
+      return copy;
+    }
 
     /** 話題の管理において、有効状態かどうかを判定する。 */
     public boolean isEnabled() {
@@ -169,6 +180,13 @@ public class TopicGeneratorProperties {
     /** 有効期限。 */
     private Duration expiration = Duration.ofDays(30);
 
+    /** 現在の設定値のコピーを返す。 */
+    private Curiosity copy() {
+      var copy = new Curiosity();
+      copy.expiration = expiration;
+      return copy;
+    }
+
     /** 話題の管理で参照する有効期限を返す。 */
     public Duration getExpiration() {
       return expiration;
@@ -193,6 +211,16 @@ public class TopicGeneratorProperties {
 
     /** 情報の鮮度範囲日数。 */
     private int freshnessWindowDays = 30;
+
+    /** 現在の設定値のコピーを返す。 */
+    private Discovery copy() {
+      var copy = new Discovery();
+      copy.enabled = enabled;
+      copy.maxSeeds = maxSeeds;
+      copy.minimumRelevance = minimumRelevance;
+      copy.freshnessWindowDays = freshnessWindowDays;
+      return copy;
+    }
 
     /** 話題の管理において、有効状態かどうかを判定する。 */
     public boolean isEnabled() {
