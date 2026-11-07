@@ -6,8 +6,6 @@ import dev.mikoto2000.rei.http.FetchOperation;
 import dev.mikoto2000.rei.http.FetchScope;
 import dev.mikoto2000.rei.http.HttpFetchException;
 import dev.mikoto2000.rei.http.PublicNetworkPolicy;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.net.IDN;
 import java.net.URI;
@@ -100,10 +98,6 @@ public final class WebSearchSelection {
   private WebSearchSelection() {}
 
   /** 指定された検索条件に合う情報を探し、候補を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the provider failure when no search result can be returned.")
   public static List<Candidate> search(
       WebSearchService service,
       WebSearchQueryPlanner planner,
@@ -134,7 +128,7 @@ public final class WebSearchSelection {
             if (http.code() == HttpFetchException.Code.TOTAL_TIMEOUT
                 || http.code() == HttpFetchException.Code.TRANSFER_BUDGET) throw http;
           }
-          if (unique.isEmpty()) throw failed;
+          if (unique.isEmpty()) propagateProviderFailure(failed);
           recordSearchFailure(failed);
           continue;
         } catch (IOException failed) {
@@ -172,6 +166,15 @@ public final class WebSearchSelection {
       }
     }
     return choose(query, new ArrayList<>(unique.values()), limit);
+  }
+
+  /** Keep known provider failures, while giving unexpected failures a stable boundary type. */
+  static void propagateProviderFailure(Exception failure) throws IOException, InterruptedException {
+    if (failure instanceof IOException io) throw io;
+    if (failure instanceof InterruptedException interrupted) throw interrupted;
+    if (failure instanceof IllegalStateException state) throw state;
+    if (failure instanceof IllegalArgumentException input) throw input;
+    throw new IllegalStateException("Web search provider failed", failure);
   }
 
   /** 通常の検索障害を記録し、部分結果にも診断を引き継ぐ。 */
