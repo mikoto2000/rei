@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.externalagent;
 
 import dev.mikoto2000.rei.application.session.ShellConversationService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -17,11 +15,7 @@ import picocli.CommandLine.Spec;
 @Command(name = "agent", description = "外部エージェントのレビュー・分離実装の結果を確認し、検証済みの結果を明示的にマージします")
 public class ExternalAgentCommand implements java.util.concurrent.Callable<Integer> {
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Shares the shell session and routes operations for its selected conversation.")
-  private final ShellConversationService conversations;
+  private final java.util.function.Consumer<String> submit;
 
   /** 引数。 */
   @Parameters(
@@ -41,7 +35,7 @@ public class ExternalAgentCommand implements java.util.concurrent.Callable<Integ
   /** 指定された値や利用先を使って、ExternalAgentCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public ExternalAgentCommand(ShellConversationService conversations) {
-    this.conversations = conversations;
+    this.submit = conversations == null ? null : message -> conversations.submit(message);
   }
 
   /** 外部エージェントのレビュー・分離実装の結果を確認し、検証済みの結果を明示的にマージしますを行う。 */
@@ -54,11 +48,11 @@ public class ExternalAgentCommand implements java.util.concurrent.Callable<Integ
       spec.commandLine().getErr().println(dev.mikoto2000.rei.event.FailureMessages.describe(error));
       return 2;
     }
-    if (conversations == null) {
+    if (submit == null) {
       spec.commandLine().getErr().println("External agent runtime unavailable");
       return 2;
     }
-    conversations.submit(text);
+    submit.accept(text);
     return 0;
   }
 }

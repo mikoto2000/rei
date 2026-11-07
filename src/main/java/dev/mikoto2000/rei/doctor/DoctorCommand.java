@@ -22,11 +22,7 @@ public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
   private final DoctorService doctor;
 
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Shares the shell session and routes operations for its selected conversation.")
-  private final dev.mikoto2000.rei.application.session.ShellConversationService conversations;
+  private final java.util.function.Consumer<String> submit;
 
   /** 引数。 */
   @Unmatched String[] arguments;
@@ -50,7 +46,7 @@ public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
       DoctorService doctor,
       dev.mikoto2000.rei.application.session.ShellConversationService conversations) {
     this.doctor = doctor;
-    this.conversations = conversations;
+    this.submit = conversations == null ? null : message -> conversations.submit(message);
   }
 
   /** Passive環境診断、または明示したActive診断を行う。 */
@@ -67,11 +63,10 @@ public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
             .println(DoctorService.render(doctor.passive(request.details())));
       } else {
         operation = "診断Runの受付";
-        if (conversations == null)
-          throw new IllegalArgumentException("Doctor Run queue unavailable");
+        if (submit == null) throw new IllegalArgumentException("Doctor Run queue unavailable");
         spec.commandLine().getOut().println(request.plan());
         spec.commandLine().getOut().flush();
-        conversations.submit(
+        submit.accept(
             "/doctor "
                 + java.util.Arrays.stream(args)
                     .map(

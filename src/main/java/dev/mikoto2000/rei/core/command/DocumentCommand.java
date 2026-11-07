@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.core.command;
 
 import dev.mikoto2000.rei.application.session.ShellConversationService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -17,11 +15,7 @@ import picocli.CommandLine.Spec;
 @Command(name = "document", description = "複数ファイルの変更提案を確認し、管理対象のテキストやステージングを明示的に復旧します")
 public final class DocumentCommand implements java.util.concurrent.Callable<Integer> {
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Shares the shell session and routes operations for its selected conversation.")
-  private final ShellConversationService conversations;
+  private final java.util.function.Consumer<String> submit;
 
   /** 操作。 */
   @Parameters(
@@ -49,13 +43,13 @@ public final class DocumentCommand implements java.util.concurrent.Callable<Inte
   /** 指定された値や利用先を使って、DocumentCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public DocumentCommand(ShellConversationService conversations) {
-    this.conversations = conversations;
+    this.submit = conversations == null ? null : message -> conversations.submit(message);
   }
 
   /** 複数ファイルの変更提案を確認し、管理対象のテキストやステージングを明示的に復旧しますを行う。 */
   @Override
   public Integer call() {
-    if (conversations == null
+    if (submit == null
         || id == null
         || !id.matches("[a-f0-9-]{36}")
         || !(action.equals("show") && hash == null
@@ -68,7 +62,7 @@ public final class DocumentCommand implements java.util.concurrent.Callable<Inte
               "Use /document show UUID or /document rollback|clean|reconcile-single UUID proposalSha256");
       return 2;
     }
-    conversations.submit("/document " + action + " " + id + (hash == null ? "" : " " + hash));
+    submit.accept("/document " + action + " " + id + (hash == null ? "" : " " + hash));
     return 0;
   }
 
