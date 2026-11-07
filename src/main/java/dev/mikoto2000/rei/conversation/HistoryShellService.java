@@ -5,7 +5,9 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.llm.ConversationIds;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.springframework.stereotype.Service;
 
 /**
@@ -34,11 +36,7 @@ public class HistoryShellService {
   private final ConversationLogStore store;
 
   /** 検索。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured search service for shared conversation history.")
-  private final ConversationHistorySearchService search;
+  private final Function<HistorySearchRequest, List<ConversationSearchResult>> searchHistory;
 
   /** 形式。 */
   private final HistoryFormatter format = new HistoryFormatter();
@@ -50,7 +48,7 @@ public class HistoryShellService {
       ConversationHistorySearchService search) {
     this.projects = projects;
     this.store = store;
-    this.search = search;
+    this.searchHistory = request -> search.searchForShell(request);
   }
 
   /** 会話履歴と受付記録の管理で用いるプロジェクトを返す。 */
@@ -138,7 +136,7 @@ public class HistoryShellService {
     positive(limit, 50, "--limit");
     var current = project(null);
     var results =
-        search.searchForShell(
+        searchHistory.apply(
             new HistorySearchRequest(
                 query, current.id(), null, scope, "all", null, null, null, limit));
     if (results.isEmpty()) {

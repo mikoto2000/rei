@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
+import dev.mikoto2000.rei.conversation.ConversationLogEntry;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -47,11 +48,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   private final ConversationSummaryRepository summaries;
 
   /** ログ一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common conversation log and its shared indexing state.")
-  private final dev.mikoto2000.rei.conversation.ConversationLogStore logs;
+  private final Function<String, List<ConversationLogEntry>> readHistory;
 
   /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ContextHistoryAdvisor(
@@ -68,7 +65,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     this.readTurns = conversation -> turns.read(conversation);
     this.memory = memory;
     this.summaries = summaries;
-    this.logs = logs;
+    this.readHistory = id -> logs == null ? List.of() : logs.readConversation(id);
   }
 
   /** 他の補助処理と組み合わせる際の適用順序を返す。 */
@@ -99,10 +96,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                       dev.mikoto2000.rei.context.CancelledTaskHistory.GENERATION,
                       cancelled.generation()))
               .build());
-    var logEntries =
-        logs == null
-            ? java.util.List.<dev.mikoto2000.rei.conversation.ConversationLogEntry>of()
-            : logs.readConversation(id);
+    var logEntries = readHistory.apply(id);
     if (!logEntries.isEmpty()) {
       String historyKey = id;
       if (request.prompt().getOptions()

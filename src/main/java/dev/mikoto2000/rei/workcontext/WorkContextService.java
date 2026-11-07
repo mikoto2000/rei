@@ -4,6 +4,7 @@ import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.AgentRunFailedPayload;
 import dev.mikoto2000.rei.event.FileCreatedPayload;
@@ -31,6 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
@@ -58,11 +60,7 @@ public class WorkContextService {
   private final ConversationTurnStore turns;
 
   /** イベント一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common project event stream for ordered reads.")
-  private final ProjectAgentEventStore events;
+  private final BiFunction<String, Integer, List<AgentEvent>> recentEvents;
 
   /** 情報の抽出。 */
   private final WorkContextExtractor extractor;
@@ -102,7 +100,7 @@ public class WorkContextService {
     this.sessions = sessions;
     this.registeredProjects = () -> projects.registeredProjects();
     this.turns = turns;
-    this.events = events;
+    this.recentEvents = (project, limit) -> events.recent(project, limit);
     this.extractor = extractor;
     this.git = git;
     this.properties = properties;
@@ -259,7 +257,7 @@ public class WorkContextService {
           selected.stream()
               .map(ConversationTurnStore.Turn::runId)
               .collect(java.util.stream.Collectors.toSet());
-      for (var event : events.recent(project.id(), 1000)) {
+      for (var event : recentEvents.apply(project.id(), 1000)) {
         if (!sessionId.equals(event.sessionId()) || !ids.contains(event.runId())) continue;
         if (event.payload() instanceof ToolCompletedPayload tool) {
           if (tool.toolName().startsWith("workContext")) continue;

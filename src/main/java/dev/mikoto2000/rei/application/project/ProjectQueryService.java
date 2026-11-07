@@ -1,9 +1,9 @@
 package dev.mikoto2000.rei.application.project;
 
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * プロジェクト検索条件のユースケースを実現する。
@@ -14,12 +14,7 @@ import java.util.List;
 @org.springframework.context.annotation.Lazy
 public final class ProjectQueryService implements dev.mikoto2000.rei.secretary.SecretaryProjects {
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Supplier<List<ProjectContext>> listProjects;
 
   /** Shell and Backend share the registered identity query without changing current selection. */
   @org.springframework.beans.factory.annotation.Autowired
@@ -30,7 +25,7 @@ public final class ProjectQueryService implements dev.mikoto2000.rei.secretary.S
 
   /** 指定された値や利用先を使って、ProjectQueryServiceを初期化する。 */
   public ProjectQueryService(ProjectRegistry projects) {
-    this.projects = projects;
+    this.listProjects = () -> projects.list();
   }
 
   /**
@@ -44,7 +39,7 @@ public final class ProjectQueryService implements dev.mikoto2000.rei.secretary.S
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<ProjectSummary> list() {
-    return projects.list().stream()
+    return listProjects.get().stream()
         .map(project -> new ProjectSummary(project.id(), project.name(), project.root().toString()))
         .toList();
   }

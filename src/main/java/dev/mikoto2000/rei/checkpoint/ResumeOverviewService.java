@@ -7,11 +7,13 @@ import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 /**
@@ -27,11 +29,8 @@ public class ResumeOverviewService {
   private String preferredZone = "";
 
   /** 保存と検索の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared repository for checkpoint state and lease coordination.")
-  private final PersistentCheckpointRepository repository;
+  private final BiFunction<String, Instant, PersistentCheckpointRepository.OverviewSelection>
+      selectOverview;
 
   /** プロジェクト一覧。 */
   private final Supplier<List<ProjectContext>> registeredProjects;
@@ -52,7 +51,7 @@ public class ResumeOverviewService {
       ProjectService projects,
       ResumeOverviewProperties properties,
       Clock clock) {
-    this.repository = repository;
+    this.selectOverview = (project, cutoff) -> repository.overviewSelection(project, cutoff);
     this.registeredProjects = () -> projects.registeredProjects();
     this.properties = properties;
     this.clock = clock;
@@ -82,7 +81,7 @@ public class ResumeOverviewService {
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
     var selection =
-        repository.overviewSelection(
+        selectOverview.apply(
             project.id(), clock.instant().minus(Duration.ofDays(properties.getFailedMaxAgeDays())));
     var latest = selection.latest();
     String key = project.id() + "|" + selection.count() + "|" + Objects.toString(latest, "");
