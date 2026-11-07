@@ -38,11 +38,10 @@ public class SleepService {
   private final MemoryRepository repository;
 
   /** やり取り一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent turn store for history and run lookups.")
-  private final ConversationTurnStore turns;
+  private final java.util.function.ToLongFunction<String> turnCount;
+
+  private final java.util.function.Function<String, java.util.List<ConversationTurnStore.Turn>>
+      readTurns;
 
   /** 情報の抽出。 */
   private final MemoryCandidateExtractor extractor;
@@ -112,7 +111,8 @@ public class SleepService {
       MemoryResolver resolver,
       MemoryProperties properties) {
     this.repository = repository;
-    this.turns = turns;
+    this.turnCount = session -> turns.turnCount(session);
+    this.readTurns = session -> turns.read(session);
     this.extractor = extractor;
     this.resolver = resolver;
     this.properties = properties;
@@ -172,7 +172,7 @@ public class SleepService {
             "STARTED");
       from = repository.lastProcessed(session);
       to = from;
-      var snapshot = turns.read(session);
+      var snapshot = readTurns.apply(session);
       if (from > snapshot.size())
         throw new IllegalStateException("History precedes saved Sleep checkpoint");
       var batch = new ArrayList<ConversationTurnStore.Turn>();
@@ -437,7 +437,7 @@ public class SleepService {
     return session == null
         ? 0
         : Math.max(
-            Math.max(0, turns.turnCount(session) - repository.lastProcessed(session)),
+            Math.max(0, turnCount.applyAsLong(session) - repository.lastProcessed(session)),
             episodes == null ? 0 : episodes.pending(session));
   }
 

@@ -385,16 +385,12 @@ public class ChatExecutionService {
   }
 
   /** 要求取得記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the same capture lifecycle across request admission and completion.")
-  private dev.mikoto2000.rei.llm.capture.CaptureStore requestCaptures;
+  private java.util.function.Consumer<String> finishRequestCapture;
 
   /** 会話の実行で使用する要求取得記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setRequestCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures) {
-    requestCaptures = captures;
+    finishRequestCapture = captures == null ? null : captures::finish;
   }
 
   /** 要求された処理を実行する。 */
@@ -519,7 +515,7 @@ public class ChatExecutionService {
         result = executeInScope(context, promptText, interventions, reservation, terminalEvents);
       } finally {
         cancellationService.completeResources(context.runId());
-        if (requestCaptures != null) requestCaptures.finish(context.runId());
+        if (finishRequestCapture != null) finishRequestCapture.accept(context.runId());
         stopped = cancellationService.diagnostic(context.runId()).requestedAt() != null;
         cancellationService.clear();
         activityTracker.ifPresent(

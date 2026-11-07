@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.storage;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -49,20 +47,21 @@ public final class StorageMaintenance {
   public record Checkpoint(int busy, long logFrames, long checkpointedFrames) {}
 
   /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Coordinates maintenance against the same durable object and reference registry.")
-  private final StorageObjectRegistry registry;
+  private final java.nio.file.Path root;
+
+  private final StorageDatabase.WorkRunner read;
+  private final StorageDatabase.WorkRunner maintenance;
 
   /** 指定された値や利用先を使って、StorageMaintenanceを初期化する。 */
   public StorageMaintenance(StorageObjectRegistry registry) {
-    this.registry = registry;
+    this.root = registry.root;
+    this.read = registry.database::read;
+    this.maintenance = registry.database::maintenance;
   }
 
   /** データ保存の共通処理で用いる大きさを返す。 */
   private long size(String name) throws IOException {
-    var path = registry.root.resolve(name);
+    var path = root.resolve(name);
     StorageBackup.requireSafePath(path);
     return Files.exists(path, LinkOption.NOFOLLOW_LINKS) ? Files.size(path) : 0;
   }
@@ -85,7 +84,7 @@ public final class StorageMaintenance {
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
   public Status status() {
-    return registry.database.read(
+    return read.run(
         db -> {
           long pageSize = pragma(db, "page_size"),
               pages = pragma(db, "page_count"),
@@ -99,7 +98,7 @@ public final class StorageMaintenance {
               free,
               Math.multiplyExact(pages - free, pageSize),
               (int) pragma(db, "auto_vacuum"),
-              Files.getFileStore(registry.root).getUsableSpace());
+              Files.getFileStore(root).getUsableSpace());
         });
   }
 
@@ -114,14 +113,14 @@ public final class StorageMaintenance {
 
   /** データ保存の共通処理で用いる再開用の記録を返す。 */
   public Checkpoint checkpoint() {
-    return registry.database.maintenance(StorageMaintenance::checkpoint);
+    return maintenance.run(StorageMaintenance::checkpoint);
   }
 
   /** データ保存の共通処理において、incremental保存領域の整理に該当するか判定する。 */
   public boolean incrementalVacuum(int pages) {
     if (pages < 1 || pages > 10000)
       throw new IllegalArgumentException("Incremental vacuum requires 1..10,000 pages");
-    return registry.database.maintenance(
+    return maintenance.run(
         db -> {
           if (pragma(db, "auto_vacuum") != 2) return false;
           try (var query = db.createStatement()) {
@@ -135,7 +134,7 @@ public final class StorageMaintenance {
   public void vacuum(Duration window) {
     if (window == null || window.toSeconds() < 1 || window.toSeconds() > 3600)
       throw new IllegalArgumentException("Explicit maintenance window must be 1..3600 seconds");
-    registry.database.maintenance(
+    maintenance.run(
         db -> {
           try (var query = db.createStatement();
               var rows =
@@ -147,7 +146,7 @@ public final class StorageMaintenance {
               Math.addExact(
                   Math.addExact(Math.multiplyExact(size("storage.db"), 2), size("storage.db-wal")),
                   64L * 1024 * 1024);
-          if (Files.getFileStore(registry.root).getUsableSpace() < required)
+          if (Files.getFileStore(root).getUsableSpace() < required)
             throw new IllegalStateException("Insufficient disk space for VACUUM");
           var checkpoint = checkpoint(db);
           if (checkpoint.busy() != 0 || checkpoint.logFrames() > checkpoint.checkpointedFrames())

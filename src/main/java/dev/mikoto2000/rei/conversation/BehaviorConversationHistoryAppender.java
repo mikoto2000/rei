@@ -7,8 +7,6 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.project.ProjectStorage;
 import dev.mikoto2000.rei.llm.ConversationIds;
 import dev.mikoto2000.rei.topic.AgentMessage;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.LinkedHashMap;
 import java.util.List;
 import org.springframework.stereotype.Component;
@@ -31,18 +29,22 @@ public final class BehaviorConversationHistoryAppender {
   public record Destination(String conversationId, String projectId, boolean alreadyRecorded) {}
 
   /** ログ一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common conversation log and its shared indexing state.")
-  private final ConversationLogStore logs;
+  @FunctionalInterface
+  private interface AppendNotification {
+    ConversationLogEntry append(
+        String conversation,
+        String source,
+        String text,
+        java.time.Instant at,
+        java.util.Map<String, String> metadata);
+  }
+
+  private final java.util.function.Function<String, java.util.Optional<ConversationLogEntry>>
+      findNotification;
+  private final AppendNotification appendNotification;
 
   /** やり取り一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent turn store for history and run lookups.")
-  private final ConversationTurnStore turns;
+  private final java.util.function.Consumer<ConversationLogEntry> appendAssistantTurn;
 
   /** 会話一覧。 */
   private final SessionRepository sessions;
@@ -59,8 +61,11 @@ public final class BehaviorConversationHistoryAppender {
       ConversationTurnStore turns,
       SessionRepository sessions,
       ProjectService projects) {
-    this.logs = logs;
-    this.turns = turns;
+    this.findNotification = id -> logs.findNotification(id);
+    this.appendNotification =
+        (conversation, source, text, at, metadata) ->
+            logs.appendNotification(conversation, source, text, at, metadata);
+    this.appendAssistantTurn = turns == null ? null : turns::appendAssistantNotification;
     this.sessions = sessions;
     this.notificationLock = projects == null ? () -> this : () -> projects.notificationLock();
     this.notificationDestination =
@@ -90,7 +95,7 @@ public final class BehaviorConversationHistoryAppender {
 
   /** 後から状況を確認できるよう、作業習慣会話履歴Appenderを記録する。 */
   public Destination capture(AgentMessage message) {
-    var existing = logs.findNotification(message.id());
+    var existing = findNotification.apply(message.id());
     if (existing.isPresent()) {
       var id = existing.get().conversationId();
       return new Destination(id, ProjectStorage.projectId(id), true);
@@ -105,7 +110,7 @@ public final class BehaviorConversationHistoryAppender {
     for (var key : List.of("severity", "triggerType"))
       if (message.metadata().containsKey(key)) metadata.put(key, message.metadata().get(key));
     var entry =
-        logs.appendNotification(
+        appendNotification.append(
             destination.conversationId(),
             message.id(),
             message.content(),
@@ -132,7 +137,7 @@ public final class BehaviorConversationHistoryAppender {
           throw new IllegalArgumentException("Session ownership mismatch");
         sessions.accept(metadataRow, () -> {});
       }
-    if (turns != null) turns.appendAssistantNotification(entry);
+    if (appendAssistantTurn != null) appendAssistantTurn.accept(entry);
     if (projectId != null) selectNotificationDefault.accept(projectId, entry.conversationId());
   }
 }

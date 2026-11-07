@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.paper;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -10,25 +8,22 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** 論文翻訳のユースケースを実現する。 */
 @Service
 public class PaperTranslationService {
-  /** リポジトリ。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared paper repository for the library and its artifacts.")
-  private final PaperRepository repo;
+  private final Predicate<String> paperExists;
+  private final Function<String, List<String>> artifactIds;
+  private final PaperArtifactAccess.FindMetadata findMetadata;
+  private final PaperArtifactAccess.SaveMetadata saveMetadata;
 
-  /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common artifact store for paper content and cleanup.")
-  private final PaperArtifactStore store;
+  private final BiFunction<String, String, Optional<byte[]>> readTranslation;
+  private final WriteTranslation writeTranslation;
 
   /** 内容。 */
   private final PaperContentService content;
@@ -46,8 +41,14 @@ public class PaperTranslationService {
       PaperContentService content,
       PaperLanguageModel llm,
       PaperProperties config) {
-    this.repo = repo;
-    this.store = store;
+    this.paperExists = id -> repo.find(id).isPresent();
+    this.artifactIds = id -> repo.artifactIds(id);
+    this.findMetadata = (id, kind, key) -> repo.artifact(id, kind, key);
+    this.saveMetadata =
+        (id, kind, key, contentValue, op) -> repo.saveArtifact(id, kind, key, contentValue, op);
+    this.readTranslation = (id, version) -> store.read(id, "translations", version);
+    this.writeTranslation =
+        (id, version, bytes, op) -> store.write(id, "translations", version, bytes, op);
     this.content = content;
     this.llm = llm;
     this.settings = () -> PaperSettings.capture(config);
@@ -79,20 +80,20 @@ public class PaperTranslationService {
       Paper paper, PaperTranslation.Mode mode, String section, boolean refresh, PaperOperation op) {
     var config = settings.get();
     if (mode == null) mode = config.defaultTranslationMode();
-    if (repo.find(paper.id()).isEmpty())
+    if (!paperExists.test(paper.id()))
       throw new PaperException(PaperException.Code.PAPER_NOT_FOUND, "論文が見つかりません");
     op.check();
     String selected = section == null ? "" : section.strip();
     String key =
         PaperCacheKey.of(
-            repo,
             paper,
+            () -> findMetadata.find(paper.id(), "source", "revision"),
             selected.toLowerCase(Locale.ROOT),
             mode,
             llm.model(),
             config.promptVersion(),
             config.glossaryVersion());
-    var cached = repo.artifact(paper.id(), "translation", key);
+    var cached = findMetadata.find(paper.id(), "translation", key);
     org.slf4j.LoggerFactory.getLogger(getClass())
         .info(
             "paper translation paperId={} cache={}",
@@ -100,8 +101,8 @@ public class PaperTranslationService {
             cached.isPresent() && !refresh ? "hit" : "miss");
     if (cached.isPresent() && !refresh) {
       Optional<byte[]> bytes = Optional.empty();
-      for (String id : repo.artifactIds(paper.id())) {
-        bytes = store.read(id, "translations", cached.get());
+      for (String id : artifactIds.apply(paper.id())) {
+        bytes = readTranslation.apply(id, cached.get());
         if (bytes.isPresent()) break;
       }
       if (bytes.isPresent())
@@ -129,7 +130,8 @@ public class PaperTranslationService {
                   "エージェント型ワークフロー",
                   "computer use",
                   "Computer Use"));
-      repo.artifact(paper.id(), "glossary", config.glossaryVersion())
+      findMetadata
+          .find(paper.id(), "glossary", config.glossaryVersion())
           .ifPresent(
               saved -> {
                 var dictionary =
@@ -194,15 +196,11 @@ public class PaperTranslationService {
               List.copyOf(result),
               source.warnings());
       String version = UUID.randomUUID().toString();
-      store.write(
-          paper.id(),
-          "translations",
-          version,
-          PaperJson.write(translation).getBytes(StandardCharsets.UTF_8),
-          op);
-      repo.saveArtifact(
+      writeTranslation.write(
+          paper.id(), version, PaperJson.write(translation).getBytes(StandardCharsets.UTF_8), op);
+      saveMetadata.save(
           paper.id(), "glossary", config.glossaryVersion(), PaperJson.write(glossary), op);
-      repo.saveArtifact(paper.id(), "translation", key, version, op);
+      saveMetadata.save(paper.id(), "translation", key, version, op);
       org.slf4j.LoggerFactory.getLogger(getClass())
           .info("paper translation paperId={} chunks={}", paper.id(), result.size());
       return translation;
@@ -234,5 +232,10 @@ public class PaperTranslationService {
       if (!glossary.containsKey(name) && !translated.contains(name))
         throw new PaperException(PaperException.Code.TRANSLATION_FAILED, "モデル名・略語が保持されていません");
     }
+  }
+
+  @FunctionalInterface
+  private interface WriteTranslation {
+    void write(String paperId, String version, byte[] bytes, PaperOperation operation);
   }
 }

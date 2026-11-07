@@ -52,11 +52,15 @@ public class EpisodeSearchService {
   private final Function<HistorySearchRequest, List<ConversationSearchResult>> searchHistory;
 
   /** やり取り一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent turn store for history and run lookups.")
-  private final ConversationTurnStore turns;
+  private final java.util.function.ToLongFunction<String> turnCount;
+
+  private record TurnRange(String session, long from, int limit) {}
+
+  private final java.util.function.Function<TurnRange, java.util.List<ConversationTurnStore.Turn>>
+      readRange;
+  private final java.util.function.BiFunction<
+          String, String, java.util.Optional<ConversationTurnStore.Turn>>
+      findRun;
 
   /** 作業。 */
   private final WorkContextService work;
@@ -133,7 +137,9 @@ public class EpisodeSearchService {
     this.episodes = episodes;
     this.searchMemories = (query, project) -> memories.search(query, project, 8);
     this.searchHistory = request -> history.search(request);
-    this.turns = turns;
+    this.turnCount = session -> turns.turnCount(session);
+    this.readRange = range -> turns.readRange(range.session(), range.from(), range.limit());
+    this.findRun = (session, run) -> turns.findRun(session, run);
     this.work = work;
   }
 
@@ -145,9 +151,9 @@ public class EpisodeSearchService {
     if (memoryEnabled && (context == null || context.isBlank())) {
       var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
       if (run != null && Objects.equals(run.projectId(), request.preferredProjectId())) {
-        long count = turns.turnCount(run.conversationId());
+        long count = turnCount.applyAsLong(run.conversationId());
         String recent =
-            turns.readRange(run.conversationId(), Math.max(0, count - 3), 3).stream()
+            readRange.apply(new TurnRange(run.conversationId(), Math.max(0, count - 3), 3)).stream()
                 .filter(
                     t ->
                         t.status() != ConversationTurnStore.Status.RUNNING
@@ -343,7 +349,7 @@ public class EpisodeSearchService {
 
   /** 依頼された操作を進めるため、取得元を実行する。 */
   private Optional<ConversationTurnStore.Turn> runSource(String session, String run) {
-    return accessible(() -> turns.findRun(session, run));
+    return accessible(() -> findRun.apply(session, run));
   }
 
   /** 過去の経験の活用で用いる利用可能なを返す。 */

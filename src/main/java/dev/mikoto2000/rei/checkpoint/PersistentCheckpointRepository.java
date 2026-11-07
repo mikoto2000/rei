@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.checkpoint;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -38,16 +36,20 @@ public class PersistentCheckpointRepository {
   private final CheckpointProperties settings;
 
   /** 対象データ一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared object registry for retention and reference tracking.")
-  private dev.mikoto2000.rei.storage.StorageObjectRegistry objects;
+  private record CheckpointReferences(
+      java.util.function.Consumer<PersistentCheckpoint> protect,
+      java.util.function.Consumer<List<String>> release) {}
+
+  private CheckpointReferences checkpointReferences;
 
   /** 作業の中断と再開で使用する保存対象データ登録台帳を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setStorageObjectRegistry(dev.mikoto2000.rei.storage.StorageObjectRegistry objects) {
-    this.objects = objects;
+    this.checkpointReferences =
+        objects == null
+            ? null
+            : new CheckpointReferences(
+                objects::protectCheckpoint, objects::releaseCheckpointHistory);
   }
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
@@ -435,7 +437,7 @@ public class PersistentCheckpointRepository {
     if (incomingBytes > settings.getMaxSnapshotBytes())
       throw CheckpointException.snapshotCapacity(incomingBytes, settings.getMaxSnapshotBytes());
     // Cross-DB order deliberately favors extra protection if this save fails.
-    if (objects != null) objects.protectCheckpoint(next);
+    if (checkpointReferences != null) checkpointReferences.protect().accept(next);
     var removed = new ArrayList<HistoricalRow>();
     var saved =
         transaction.execute(
@@ -928,12 +930,14 @@ public class PersistentCheckpointRepository {
 
   /** 後続の処理が利用できるよう、参照先一覧を解放する。 */
   private void releaseReferences(List<HistoricalRow> removed) {
-    if (objects != null && !removed.isEmpty())
+    if (checkpointReferences != null && !removed.isEmpty())
       try {
-        objects.releaseCheckpointHistory(
-            removed.stream()
-                .map(row -> row.project() + ":" + row.task() + ":" + row.revision())
-                .toList());
+        checkpointReferences
+            .release()
+            .accept(
+                removed.stream()
+                    .map(row -> row.project() + ":" + row.task() + ":" + row.revision())
+                    .toList());
       } catch (RuntimeException unavailable) {
         /* Cross-DB failure leaves extra protection, never unprotected live evidence. */
       }
