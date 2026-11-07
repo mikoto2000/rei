@@ -299,4 +299,29 @@ class ProjectRunQueueTest {
     assertThat(rejected.get()).isEqualTo(1);
     tasks.removeFirst().run();
   }
+
+  /** 一つの引き渡しの Error で、予約済みの後続作業を取り残さないことを確認する。 */
+  @Test
+  void fatalDispatchReleasesEverySelectedReader() {
+    var scheduled = new ArrayList<Runnable>();
+    var reject = new java.util.concurrent.atomic.AtomicBoolean();
+    var failure = new AssertionError("fixture");
+    var queue =
+        new ProjectRunQueue(
+            work -> {
+              if (reject.get()) throw failure;
+              scheduled.add(work);
+            });
+    queue.enqueue("project", "writer", () -> {});
+    queue.enqueue("project", "reader-one", ProjectRunQueue.Access.READ_ONLY, () -> {});
+    queue.enqueue("project", "reader-two", ProjectRunQueue.Access.READ_ONLY, () -> {});
+    reject.set(true);
+    assertThatThrownBy(() -> scheduled.removeFirst().run()).isSameAs(failure);
+    assertThat(queue.containsRun("project", "writer")).isFalse();
+    assertThat(queue.containsRun("project", "reader-one")).isFalse();
+    assertThat(queue.containsRun("project", "reader-two")).isFalse();
+    reject.set(false);
+    assertThat(queue.enqueue("project", "after", () -> {})).isTrue();
+    assertThat(scheduled).hasSize(1);
+  }
 }

@@ -40,18 +40,16 @@ public class SleepCommand implements Callable<Integer> {
   private final MemoryCommandSupport support;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final java.util.function.Supplier<String> currentProjectId;
+
+  private final java.util.function.Supplier<String> currentSessionId;
 
   /** キャンセル。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
+      justification =
+          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** 自動。 */
@@ -91,7 +89,8 @@ public class SleepCommand implements Callable<Integer> {
       CommandCancellationService cancellation) {
     this.service = service;
     this.support = support;
-    this.projects = projects;
+    this.currentProjectId = () -> projects.currentContext().id();
+    this.currentSessionId = () -> projects.currentSessionId();
     this.cancellation = cancellation;
   }
 
@@ -116,7 +115,7 @@ public class SleepCommand implements Callable<Integer> {
     return execute(
         () -> {
           support.enabled();
-          String session = projects.currentSessionId(), project = projects.currentContext().id();
+          String session = currentSessionId.get(), project = currentProjectId.get();
           cancellation.begin(Thread.currentThread());
           try {
             out().println(preview ? "Sleep preview started..." : "Sleep started...");
@@ -237,8 +236,7 @@ public class SleepCommand implements Callable<Integer> {
     /** 長期記憶の活用の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       var p = auto.parent;
-      return p.execute(
-          () -> p.auto.status(p.projects.currentSessionId(), p.projects.currentContext().id()));
+      return p.execute(() -> p.auto.status(p.currentSessionId.get(), p.currentProjectId.get()));
     }
   }
 
@@ -251,8 +249,7 @@ public class SleepCommand implements Callable<Integer> {
     /** 長期記憶の活用の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       var p = auto.parent;
-      return p.execute(
-          () -> p.auto.resume(p.projects.currentSessionId(), p.projects.currentContext().id()));
+      return p.execute(() -> p.auto.resume(p.currentSessionId.get(), p.currentProjectId.get()));
     }
   }
 }

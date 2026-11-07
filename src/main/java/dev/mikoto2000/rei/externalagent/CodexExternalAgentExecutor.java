@@ -31,7 +31,8 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound CodexProperties shared by consumers of these settings.")
+      justification =
+          "Reads the application-bound CodexProperties shared by consumers of these settings.")
   private final CodexProperties properties;
 
   /** 実行の担当。 */
@@ -73,10 +74,6 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
   }
 
   /** 要求された処理を実行する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the external agent failure after settling token accounting.")
   @Override
   public ExternalAgentResult execute(
       ExternalAgentRequest request,
@@ -236,9 +233,18 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     } catch (java.io.IOException error) {
       return new ExternalAgentResult(
           Status.UNAVAILABLE, "Could not prepare Codex review", List.of(), List.of(), 0, null, "");
-    } catch (RuntimeException error) {
-      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
-      if (budget != null && invoked && !reported) budget.recordTotalTokens(null);
+    } catch (RuntimeException | Error error) {
+      if (error instanceof RuntimeException runtime)
+        dev.mikoto2000.rei.core.chat.RunCancellation.propagate(runtime);
+      try {
+        if (budget != null && invoked && !reported) budget.recordTotalTokens(null);
+      } catch (RuntimeException | Error accounting) {
+        if (error instanceof Error) {
+          if (accounting != error) error.addSuppressed(accounting);
+          throw error;
+        }
+        throw accounting;
+      }
       throw error;
     } finally {
       if (schema != null)

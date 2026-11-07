@@ -238,11 +238,10 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
   private final PersistentDependencyRepository dependencies;
 
   /** 予約されたエージェント実行を管理する窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent schedule and claim state.")
-  private final PersistentAgentScheduler schedules;
+  private final BiFunction<String, String, PersistentAgentScheduler.Entry> findSchedule;
+
+  private final BiFunction<String, String, Optional<PersistentAgentScheduler.EventTrigger>>
+      findEventTrigger;
 
   /** 再開用の記録一覧。 */
   private final BiFunction<String, String, PersistentCheckpoint> findCheckpoint;
@@ -270,8 +269,11 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
     this.contexts = contexts;
     this.goals = goals;
     this.dependencies = dependencies;
-    this.schedules = schedules;
-    this.findCheckpoint = checkpoints == null ? null : (project, task) -> checkpoints.get(project, task);
+    this.findSchedule = schedules == null ? null : (project, id) -> schedules.get(project, id);
+    this.findEventTrigger =
+        schedules == null ? null : (project, id) -> schedules.eventTrigger(project, id);
+    this.findCheckpoint =
+        checkpoints == null ? null : (project, task) -> checkpoints.get(project, task);
     this.activity = activity;
     taskLimit = properties.getMaxTasksPerProject();
     itemLimit = properties.getMaxItemsPerProject();
@@ -282,7 +284,8 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
             .sorted()
             .map(
                 id ->
-                    findProject.apply(id)
+                    findProject
+                        .apply(id)
                         .orElseThrow(
                             () -> new IllegalArgumentException("Today Project not registered")))
             .toList();
@@ -473,14 +476,14 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
       title = saved.spec().kind() + ": " + saved.spec().target();
       due = saved.deadline();
     }
-    if (task.kind().equals("SCHEDULE") && schedules != null) {
-      var saved = schedules.get(owner.id(), task.sourceId());
+    if (task.kind().equals("SCHEDULE") && findSchedule != null) {
+      var saved = findSchedule.apply(owner.id(), task.sourceId());
       if (!sameRoot(owner, saved.projectRoot())) return null;
       title = saved.task().action();
       due =
           task.status().equals("WAITING")
-              ? schedules
-                  .eventTrigger(owner.id(), task.sourceId())
+              ? findEventTrigger
+                  .apply(owner.id(), task.sourceId())
                   .map(PersistentAgentScheduler.EventTrigger::expiresAt)
                   .orElse(null)
               : saved.task().executeAt();
@@ -544,7 +547,8 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
 
   /** 要求された条件を満たすか判断するため、作業ルートを確認する。 */
   private void verifyRoot(ProjectContext owner) {
-    if (findProject.apply(owner.id())
+    if (findProject
+        .apply(owner.id())
         .filter(current -> current.root().equals(owner.root()))
         .isEmpty()) throw new ResourceNotFoundException("Today Project");
   }

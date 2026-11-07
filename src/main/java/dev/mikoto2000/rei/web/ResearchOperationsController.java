@@ -6,12 +6,11 @@ import dev.mikoto2000.rei.core.command.UserInputParser;
 import dev.mikoto2000.rei.externalagent.BeginnerReviewRequest;
 import dev.mikoto2000.rei.externalagent.ExternalAgentCommandRequest;
 import dev.mikoto2000.rei.paper.PaperCommandRequest;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BiFunction;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
@@ -30,11 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class ResearchOperationsController {
   /** チャット。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits operations through the shared chat run entry point.")
-  private final ChatSubmitService chat;
+  private final BiFunction<ChatRequest, String, ChatResponse> submitChat;
 
   /**
    * Web APIによる操作で受け渡す引数を表す。
@@ -47,9 +42,7 @@ public final class ResearchOperationsController {
       implements StrictApiRequest {
     public Arguments {
       arguments =
-          arguments == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(arguments));
+          arguments == null ? null : Collections.unmodifiableList(new ArrayList<>(arguments));
     }
   }
 
@@ -68,7 +61,13 @@ public final class ResearchOperationsController {
 
   /** 指定された値や利用先を使って、ResearchOperationsControllerを初期化する。 */
   public ResearchOperationsController(ChatSubmitService chat) {
-    this.chat = chat;
+    this.submitChat =
+        (request, key) -> {
+          var run =
+              chat.submit(
+                  request.message(), request.projectId(), request.sessionId(), request.mode(), key);
+          return new ChatResponse(run.runId(), run.conversationId(), run.runId());
+        };
   }
 
   /** Web APIによる操作で用いる論文を返す。 */
@@ -149,9 +148,11 @@ public final class ResearchOperationsController {
   /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   private ResponseEntity<ChatResponse> submit(
       String command, String project, String session, String key) {
-    var run = chat.submit(command, project, session, AgentRunContext.Mode.EXCLUSIVE, key);
+    var response =
+        submitChat.apply(
+            new ChatRequest(command, project, session, AgentRunContext.Mode.EXCLUSIVE), key);
     return ResponseEntity.accepted()
-        .location(URI.create("/api/v1/runs/" + run.runId()))
-        .body(new ChatResponse(run.runId(), run.conversationId(), run.runId()));
+        .location(URI.create("/api/v1/runs/" + response.runId()))
+        .body(response);
   }
 }

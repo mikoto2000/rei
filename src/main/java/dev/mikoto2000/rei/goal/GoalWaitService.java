@@ -64,7 +64,8 @@ public class GoalWaitService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
+      justification =
+          "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService checkpoints;
 
   /** 再開用の記録保存と検索の窓口。 */
@@ -127,7 +128,8 @@ public class GoalWaitService {
     PersistentCheckpoint saved = null;
     if (goal.currentRunId() != null) {
       saved =
-          checkpointForRun.apply(project, goal.currentRunId())
+          checkpointForRun
+              .apply(project, goal.currentRunId())
               .orElseThrow(
                   () ->
                       new IllegalStateException(
@@ -232,10 +234,6 @@ public class GoalWaitService {
   }
 
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original resume failure after aborting preparation and recording admission uncertainty.")
   private GoalWaitRepository.Wait resume(
       GoalWaitRepository.Wait wait, PersistentAgentScheduler.Entry scheduled) {
     requireWaiting(wait);
@@ -297,7 +295,7 @@ public class GoalWaitService {
                       owner, checkpoint.taskId(), wait.runId(), checkpoint.revision());
               });
       return waits.transition(claimed, "RESUMED", "goal_resume_admitted", resumed.currentRunId());
-    } catch (RuntimeException error) {
+    } catch (RuntimeException | Error error) {
       var current = goals.get(wait.project(), wait.goalId());
       if (current.currentRunId() != null)
         checkpoints.abortPreparedGoalContinuation(current.currentRunId());

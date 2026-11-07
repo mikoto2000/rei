@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.websearch;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
@@ -12,11 +10,11 @@ import org.springframework.stereotype.Component;
 public class WebPageExtractor {
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the current shared search provider, extraction, and request policy.")
-  private final WebSearchProperties properties;
+  private final Runnable validateSelection;
+
+  private final java.util.function.IntSupplier maxDecodedBytes;
+  private final java.util.function.IntSupplier pageMaxCharacters;
+  private final java.util.function.IntSupplier pageMaxTokens;
 
   /** Web上の情報の調査を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WebPageExtractor() {
@@ -26,7 +24,10 @@ public class WebPageExtractor {
   /** 指定された値や利用先を使って、WebPageExtractorを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public WebPageExtractor(WebSearchProperties properties) {
-    this.properties = properties;
+    this.validateSelection = () -> properties.validateSelection();
+    this.maxDecodedBytes = () -> properties.getMaxDecodedBytes();
+    this.pageMaxCharacters = () -> properties.getPageMaxCharacters();
+    this.pageMaxTokens = () -> properties.getPageMaxTokens();
   }
 
   /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
@@ -36,9 +37,9 @@ public class WebPageExtractor {
 
   /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
   public WebSearchPage extract(WebSearchResult result, String html, String query) {
-    properties.validateSelection();
+    validateSelection.run();
     Document document;
-    try (var reader = new WebHtmlReader(html, properties.getMaxDecodedBytes())) {
+    try (var reader = new WebHtmlReader(html, maxDecodedBytes.getAsInt())) {
       document =
           org.jsoup.parser.Parser.htmlParser()
               .setTrackPosition(true)
@@ -77,14 +78,12 @@ public class WebPageExtractor {
         query == null || query.isBlank()
             ? null
             : WebSectionExtractor.select(
-                document, query, properties.getPageMaxCharacters(), properties.getPageMaxTokens());
+                document, query, pageMaxCharacters.getAsInt(), pageMaxTokens.getAsInt());
     boolean truncated =
-        selected == null
-            ? content.length() > properties.getPageMaxCharacters()
-            : selected.truncated();
+        selected == null ? content.length() > pageMaxCharacters.getAsInt() : selected.truncated();
     content =
         selected == null
-            ? WebSectionExtractor.clip(content, properties.getPageMaxCharacters())
+            ? WebSectionExtractor.clip(content, pageMaxCharacters.getAsInt())
             : selected.content();
 
     var page =

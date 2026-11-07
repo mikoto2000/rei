@@ -24,12 +24,11 @@ public class WorkCommand implements Callable<Integer> {
   private final WorkContextService service;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private record SelectedProject(String id, java.nio.file.Path root) {}
+
+  private final java.util.function.Supplier<SelectedProject> selectedProject;
+
+  private final java.util.function.Supplier<String> currentSessionId;
 
   /** Gitの情報。 */
   private final WorkContextGit git;
@@ -38,7 +37,8 @@ public class WorkCommand implements Callable<Integer> {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
+      justification =
+          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** 仕様。 */
@@ -60,7 +60,12 @@ public class WorkCommand implements Callable<Integer> {
       WorkContextGit git,
       CommandCancellationService cancellation) {
     this.service = service;
-    this.projects = projects;
+    this.selectedProject =
+        () -> {
+          var project = projects.currentContext();
+          return new SelectedProject(project.id(), project.root());
+        };
+    this.currentSessionId = () -> projects.currentSessionId();
     this.git = git;
     this.cancellation = cancellation;
   }
@@ -85,7 +90,7 @@ public class WorkCommand implements Callable<Integer> {
   int show() {
     return execute(
         () -> {
-          var p = projects.currentContext();
+          var p = selectedProject.get();
           return new WorkContextFormatter()
               .details(
                   service.current(p.id()).orElse(null),
@@ -98,7 +103,7 @@ public class WorkCommand implements Callable<Integer> {
     return execute(
         () -> {
           // Capture session first; the application service resolves the immutable session owner.
-          String session = projects.currentSessionId();
+          String session = currentSessionId.get();
           cancellation.begin(Thread.currentThread());
           try {
             return service
@@ -120,7 +125,7 @@ public class WorkCommand implements Callable<Integer> {
   int history() {
     return execute(
         () -> {
-          var rows = service.history(projects.currentContext().id(), 100);
+          var rows = service.history(selectedProject.get().id(), 100);
           if (rows.isEmpty()) return "Work Context: 履歴はまだありません。";
           return rows.stream()
               .map(

@@ -6,6 +6,7 @@ import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy;
 import dev.mikoto2000.rei.conversation.HistorySearchRequest;
 import dev.mikoto2000.rei.conversation.HistorySearchScope;
+import dev.mikoto2000.rei.memory.model.LongTermMemory;
 import dev.mikoto2000.rei.memory.service.MemoryRepository;
 import dev.mikoto2000.rei.vectorstore.ReciprocalRankFusion;
 import dev.mikoto2000.rei.workcontext.WorkContextService;
@@ -21,6 +22,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import org.springframework.stereotype.Service;
 
@@ -44,11 +46,7 @@ public class EpisodeSearchService {
   private final EpisodeRepository episodes;
 
   /** 記憶一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common repository for persisted memory and its transaction boundaries.")
-  private final MemoryRepository memories;
+  private final BiFunction<String, String, List<LongTermMemory>> searchMemories;
 
   /** 履歴。 */
   private final Function<HistorySearchRequest, List<ConversationSearchResult>> searchHistory;
@@ -124,7 +122,7 @@ public class EpisodeSearchService {
       ConversationTurnStore turns,
       WorkContextService work) {
     this.episodes = episodes;
-    this.memories = memories;
+    this.searchMemories = (query, project) -> memories.search(query, project, 8);
     this.searchHistory = request -> history.search(request);
     this.turns = turns;
     this.work = work;
@@ -244,7 +242,7 @@ public class EpisodeSearchService {
     }
     List<Hit> memoryHits =
         memoryEnabled
-            ? memories.search(query, request.preferredProjectId(), 8).stream()
+            ? searchMemories.apply(query, request.preferredProjectId()).stream()
                 .filter(m -> range.includes(m.updatedAt().toInstant()))
                 .map(
                     m ->
