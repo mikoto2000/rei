@@ -97,8 +97,8 @@ class ToolEventCallbackDecoratorTest {
     var decorated = new ToolEventCallbackDecorator(callback, factory, bus);
     String result = decorated.call("broad");
     var json = new tools.jackson.databind.json.JsonMapper().readTree(result);
-    assertEquals("file_result_budget_exceeded", json.path("error").asText());
-    assertTrue(json.path("guidance").asText().contains("baseDir"));
+    assertEquals("file_result_budget_exceeded", json.path("error").asString());
+    assertTrue(json.path("guidance").asString().contains("baseDir"));
     assertTrue(dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(result));
     assertTrue(!result.contains("PRIVATE"));
     assertTrue(decorated.call("narrow").contains("Target.java"));
@@ -166,10 +166,10 @@ class ToolEventCallbackDecoratorTest {
     String result = new ToolEventCallbackDecorator(callback, factory, bus).call("input", context);
     var json = new tools.jackson.databind.json.JsonMapper().readTree(result);
     assertTrue(!json.path("success").asBoolean());
-    assertEquals(code, json.path("error").asText());
+    assertEquals(code, json.path("error").asString());
     assertEquals(status, json.path("httpStatus").asInt());
-    assertTrue(json.path("message").asText().contains("HTTP " + status));
-    assertTrue(json.path("guidance").asText().contains("ローカル"));
+    assertTrue(json.path("message").asString().contains("HTTP " + status));
+    assertTrue(json.path("guidance").asString().contains("ローカル"));
     assertTrue(dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(result));
     assertTrue(!result.contains("PRIVATE"));
     assertEquals("search-call", received.get(1).correlationId());

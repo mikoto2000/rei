@@ -43,7 +43,7 @@ class JapaneseHolidayToolsTest {
     assertTrue(result.contains("勤労感謝の日"));
     assertTrue(result.contains("HOLIDAY"));
     var json = new tools.jackson.databind.ObjectMapper().readTree(result);
-    assertEquals("MONDAY", json.get("dayOfWeek").asText());
+    assertEquals("MONDAY", json.get("dayOfWeek").asString());
     assertFalse(json.get("isWeekend").asBoolean());
     assertTrue(json.get("isNationalHolidayOrDayOff").asBoolean());
     var unknown =

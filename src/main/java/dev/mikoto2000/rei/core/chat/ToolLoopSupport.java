@@ -168,7 +168,7 @@ public final class ToolLoopSupport {
               .build()
               .readTree(response.responseData());
       return result.isObject()
-          && result.path("error").isTextual()
+          && result.path("error").isString()
           && result.path("accepted").isBoolean()
           && !result.path("accepted").asBoolean()
           && result.path("validationExecuted").asBoolean(false);

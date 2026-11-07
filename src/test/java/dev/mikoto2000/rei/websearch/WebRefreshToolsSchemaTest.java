@@ -40,7 +40,7 @@ class WebRefreshToolsSchemaTest {
               : root;
       assertTrue(input.path("properties").has("forceRefresh"), schema);
       for (var required : input.path("required"))
-        assertNotEquals("forceRefresh", required.asText());
+        assertNotEquals("forceRefresh", required.asString());
     }
   }
 }

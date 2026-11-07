@@ -47,7 +47,7 @@ public class GitHubWebhookController {
     int limit = maxPayloadBytes.getAsInt();
     if (request.getContentLengthLong() > limit)
       throw new org.springframework.web.server.ResponseStatusException(
-          HttpStatus.PAYLOAD_TOO_LARGE);
+          HttpStatus.CONTENT_TOO_LARGE);
     String encoding = request.getHeader("Content-Encoding");
     if (encoding != null && !encoding.equalsIgnoreCase("identity"))
       throw new org.springframework.web.server.ResponseStatusException(
@@ -55,7 +55,7 @@ public class GitHubWebhookController {
     byte[] bytes = request.getInputStream().readNBytes(limit + 1);
     if (bytes.length > limit)
       throw new org.springframework.web.server.ResponseStatusException(
-          HttpStatus.PAYLOAD_TOO_LARGE);
+          HttpStatus.CONTENT_TOO_LARGE);
     return ResponseEntity.accepted()
         .body(
             service.receive(

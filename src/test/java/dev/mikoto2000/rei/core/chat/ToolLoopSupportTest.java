@@ -91,7 +91,7 @@ class ToolLoopSupportTest {
             .readTree(feedback.getResponses().getFirst().responseData());
     assertThat(failure.path("success").asBoolean()).isFalse();
     assertThat(failure.path("httpStatus").asInt()).isEqualTo(402);
-    assertThat(failure.path("error").asText()).isEqualTo("payment_required");
+    assertThat(failure.path("error").asString()).isEqualTo("payment_required");
     assertThat(fixed).isTrue();
     assertThat(feedback.getResponses().getLast().responseData()).isEqualTo("fixed");
     assertThat(events.stream().map(dev.mikoto2000.rei.event.AgentEvent::type).toList())

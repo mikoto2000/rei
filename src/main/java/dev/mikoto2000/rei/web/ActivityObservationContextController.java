@@ -89,7 +89,7 @@ public class ActivityObservationContextController {
       throw new IllegalArgumentException("Invalid Activity calendar date");
     } catch (ActivityQueryLimitException limit) {
       throw new ResponseStatusException(
-          HttpStatus.UNPROCESSABLE_ENTITY, "Activity context evidence limit exceeded");
+          HttpStatus.UNPROCESSABLE_CONTENT, "Activity context evidence limit exceeded");
     } catch (UnsupportedOperationException unsupported) {
       throw new ResponseStatusException(
           HttpStatus.SERVICE_UNAVAILABLE, "Bounded Activity context unavailable");

@@ -190,7 +190,7 @@ class ActivityPeriodHttpTest {
                               "springSecurityFilterChain", jakarta.servlet.Filter.class))
                       .build();
               mvc.perform(get("/api/v1/activity/period").header("Authorization", "Bearer secret"))
-                  .andExpect(status().isUnprocessableEntity())
+                  .andExpect(status().isUnprocessableContent())
                   .andExpect(jsonPath("$.report").doesNotExist());
             });
     new WebApplicationContextRunner()

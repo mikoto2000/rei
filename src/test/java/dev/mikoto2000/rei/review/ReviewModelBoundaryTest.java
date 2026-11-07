@@ -145,10 +145,10 @@ class ReviewModelBoundaryTest {
                       tools.jackson.databind.json.JsonMapper.builder()
                           .build()
                           .readTree(message.getResponses().getLast().responseData());
-                  assertThat(correction.path("error").asText())
+                  assertThat(correction.path("error").asString())
                       .isEqualTo("INVALID_REVIEW_READ_ARGUMENTS");
                   assertThat(correction.path("accepted").asBoolean(true)).isFalse();
-                  assertThat(correction.path("guidance").asText()).contains("1..4", "512..2048");
+                  assertThat(correction.path("guidance").asString()).contains("1..4", "512..2048");
                   assertThat(message.getMetadata()).doesNotContainKey("rei.reviewReceipts");
                   assertThat(
                           ((Map<?, ?>) message.getMetadata().get("rei.deliveryPolicies"))

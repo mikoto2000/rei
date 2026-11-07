@@ -25,7 +25,7 @@ class BuildTestFailureDiagnosisTest {
     var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
     var result = result("failed", 7, "", "", false);
     var json = mapper.readTree(mapper.writeValueAsString(result));
-    assertEquals(result.diagnosis().outcome(), json.path("diagnosis").path("outcome").asText());
+    assertEquals(result.diagnosis().outcome(), json.path("diagnosis").path("outcome").asString());
   }
 
   /** 外部プロセスの管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */

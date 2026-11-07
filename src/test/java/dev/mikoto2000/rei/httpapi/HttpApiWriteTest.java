@@ -105,7 +105,7 @@ class HttpApiWriteTest {
               new HttpApiRequest(origin + "/api", "GET", null, null, null, null, profile, null));
       assertEquals(200, result.status());
       assertFalse(result.toString().contains("test-secret"));
-      assertEquals("[REDACTED]", result.json().get("echo").asText());
+      assertEquals("[REDACTED]", result.json().get("echo").asString());
     }
   }
 

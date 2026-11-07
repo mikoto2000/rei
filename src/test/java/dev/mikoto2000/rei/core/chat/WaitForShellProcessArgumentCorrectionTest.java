@@ -78,9 +78,9 @@ class WaitForShellProcessArgumentCorrectionTest {
                 // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
                 verifyNoInteractions(processes);
                 var correction = JsonMapper.builder().build().readTree(latestToolResponse(prompt));
-                assertThat(correction.path("error").asText()).isEqualTo("INVALID_TOOL_ARGUMENTS");
+                assertThat(correction.path("error").asString()).isEqualTo("INVALID_TOOL_ARGUMENTS");
                 assertThat(correction.path("executed").asBoolean()).isFalse();
-                assertThat(correction.path("guidance").asText()).contains("timeoutSeconds", "60");
+                assertThat(correction.path("guidance").asString()).contains("timeoutSeconds", "60");
                 assertThat(correction.path("correctionsRemaining").asInt()).isEqualTo(1);
                 return waitCall("corrected-wait", 60);
               }
@@ -121,7 +121,7 @@ class WaitForShellProcessArgumentCorrectionTest {
               if (invocation > 1) {
                 JsonNode correction =
                     JsonMapper.builder().build().readTree(latestToolResponse(prompt));
-                assertThat(correction.path("error").asText()).isEqualTo("INVALID_TOOL_ARGUMENTS");
+                assertThat(correction.path("error").asString()).isEqualTo("INVALID_TOOL_ARGUMENTS");
                 assertThat(correction.path("maxCorrections").asInt()).isEqualTo(2);
                 remaining.add(correction.path("correctionsRemaining").asInt());
               }

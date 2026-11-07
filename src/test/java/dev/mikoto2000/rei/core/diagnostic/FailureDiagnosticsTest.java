@@ -43,8 +43,8 @@ class FailureDiagnosticsTest {
         new tools.jackson.databind.json.JsonMapper()
             .readTree(FailureDiagnostics.toolFailureResult(wrapped));
     assertFalse(failure.path("success").asBoolean());
-    assertEquals("REVIEW_ACCESS_DENIED", failure.path("error").asText());
-    assertEquals("Use beginReview with \"current\" files", failure.path("guidance").asText());
+    assertEquals("REVIEW_ACCESS_DENIED", failure.path("error").asString());
+    assertEquals("Use beginReview with \"current\" files", failure.path("guidance").asString());
     assertFalse(failure.toString().contains("PRIVATE"));
     org.junit.jupiter.api.Assertions.assertNull(
         FailureDiagnostics.toolFailureResult(new IllegalArgumentException("REVIEW_ACCESS_DENIED")));
