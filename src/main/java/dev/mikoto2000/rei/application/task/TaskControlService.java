@@ -10,8 +10,6 @@ import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
 import dev.mikoto2000.rei.goal.GoalLoopService;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Objects;
 import java.util.function.Predicate;
 
@@ -22,18 +20,18 @@ import java.util.function.Predicate;
  */
 public final class TaskControlService {
   /** タスク一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common task service for current task and execution state.")
-  private final TaskManagerService tasks;
+  @FunctionalInterface
+  private interface ReadTask {
+    TaskView get(String project, String session, String id);
+  }
+
+  private final ReadTask readTask;
 
   /** 会話の実行を受け付ける窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits operations through the shared chat run entry point.")
-  private final ChatSubmitService chats;
+  private record Submission(String project, String session, String message) {}
+
+  private final java.util.function.BiFunction<Submission, AgentRunContext.Mode, TaskView>
+      submitTask;
 
   /** 実行一覧。 */
   private final RunService runs;
@@ -42,37 +40,40 @@ public final class TaskControlService {
   private final Predicate<String> ownsExecution;
 
   /** 入力一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared input router so all operations use the same queue and active runs.")
-  private final ConversationInputRouter inputs;
+  @FunctionalInterface
+  private interface OfferInput {
+    boolean offer(String project, String session, String run, String message);
+  }
+
+  private final OfferInput offerInput;
 
   /** 再開用の記録一覧。 */
   @FunctionalInterface
-  private interface ResumeCheckpoint {
-    void resume(String project, String task, long revision);
+  private interface RevisionOperation {
+    void apply(String project, String task, long revision);
   }
 
-  private final ResumeCheckpoint resumeCheckpoint;
+  private final RevisionOperation resumeCheckpoint;
 
   /** 目標一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared goal service to operate on the active goal lifecycle.")
-  private final GoalLoopService goals;
+  @FunctionalInterface
+  private interface CancelGoal {
+    void cancel(String project, String goal, String expectedRun, long revision);
+  }
+
+  @FunctionalInterface
+  private interface ResumeGoal {
+    void resume(String project, String goal, Runnable validate);
+  }
+
+  private final CancelGoal cancelGoal;
+  private final ResumeGoal resumeGoal;
 
   /** 依存条件一覧。 */
   private final PersistentDependencyRepository dependencies;
 
   /** 予約されたエージェント実行を管理する窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent schedule and claim state.")
-  private final PersistentAgentScheduler schedules;
+  private final RevisionOperation cancelSchedule;
 
   /** 指定された値や利用先を使って、TaskControlServiceを初期化する。 */
   public TaskControlService(
@@ -85,17 +86,37 @@ public final class TaskControlService {
       GoalLoopService goals,
       PersistentDependencyRepository dependencies,
       PersistentAgentScheduler schedules) {
-    this.tasks = tasks;
-    this.chats = chats;
+    this.readTask = (project, session, id) -> tasks.get(project, session, id);
+    this.submitTask =
+        (request, mode) -> {
+          var run = chats.submit(request.message(), request.project(), request.session(), mode);
+          return readTask.get(run.projectId(), run.conversationId(), "run:" + run.runId());
+        };
     this.runs = runs;
     this.ownsExecution = run -> registry.ownsExecution(run);
-    this.inputs = inputs;
+    this.offerInput =
+        (project, session, run, message) ->
+            inputs.offerIntervention(project, session, run, message);
     this.resumeCheckpoint =
         (project, task, revision) ->
             checkpoints.resume(project, task, AgentRunContext.RequestSource.WEB, revision);
-    this.goals = goals;
+    this.cancelGoal =
+        (project, goal, expectedRun, revision) ->
+            goals.cancel(project, goal, expectedRun, revision);
+    this.resumeGoal =
+        (project, goal, validate) -> {
+          synchronized (goals) {
+            validate.run();
+            try {
+              goals.run(project, goal);
+            } catch (IllegalStateException unavailable) {
+              throw new OperationConflictException();
+            }
+          }
+        };
     this.dependencies = dependencies;
-    this.schedules = schedules;
+    this.cancelSchedule =
+        (project, schedule, revision) -> schedules.cancel(project, schedule, revision);
   }
 
   /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
@@ -104,15 +125,14 @@ public final class TaskControlService {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (message == null || message.isBlank() || message.length() > 16384)
       throw new IllegalArgumentException("Invalid Task input");
-    var run = chats.submit(message, project, session, mode);
-    return tasks.get(run.projectId(), run.conversationId(), "run:" + run.runId());
+    return submitTask.apply(new Submission(project, session, message), mode);
   }
 
   /** 対象の実行をキャンセルする。 */
   public TaskView cancel(
       String project, String session, String id, String expectedRun, long revision) {
     if (revision < 0) throw new IllegalArgumentException("Invalid Task revision");
-    var task = tasks.get(project, session, id);
+    var task = readTask.get(project, session, id);
     if (task.status().equals("CANCELLED") && Objects.equals(expectedRun, task.runId())) return task;
     expected(task, expectedRun, revision);
     if (!task.cancelSupported()) throw new OperationConflictException();
@@ -123,13 +143,13 @@ public final class TaskControlService {
       }
       case "GOAL" -> {
         if (task.status().equals("RUNNING")) owned(task.runId());
-        goals.cancel(project, task.sourceId(), expectedRun, revision);
+        cancelGoal.cancel(project, task.sourceId(), expectedRun, revision);
       }
       case "DEPENDENCY" -> dependencies.cancel(project, task.sourceId(), revision);
-      case "SCHEDULE" -> schedules.cancel(project, task.sourceId(), revision);
+      case "SCHEDULE" -> cancelSchedule.apply(project, task.sourceId(), revision);
       default -> throw new OperationConflictException();
     }
-    return tasks.get(project, session, id);
+    return readTask.get(project, session, id);
   }
 
   /**
@@ -140,35 +160,30 @@ public final class TaskControlService {
    */
   public TaskView suspend(
       String project, String session, String id, String expectedRun, long revision) {
-    var task = tasks.get(project, session, id);
+    var task = readTask.get(project, session, id);
     expected(task, expectedRun, revision);
     if (!task.suspendSupported()) throw new OperationConflictException();
     owned(task.runId());
     runs.cancel(task.runId());
-    return tasks.get(project, session, id);
+    return readTask.get(project, session, id);
   }
 
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public TaskView resume(
       String project, String session, String id, String expectedRun, long revision) {
-    var task = tasks.get(project, session, id);
+    var task = readTask.get(project, session, id);
     expected(task, expectedRun, revision);
     if (!task.resumeSupported()) throw new OperationConflictException();
     switch (task.kind()) {
-      case "CHECKPOINT" -> resumeCheckpoint.resume(project, task.sourceId(), revision);
-      case "GOAL" -> {
-        synchronized (goals) {
-          expected(tasks.get(project, session, id), expectedRun, revision);
-          try {
-            goals.run(project, task.sourceId());
-          } catch (IllegalStateException unavailable) {
-            throw new OperationConflictException();
-          }
-        }
-      }
+      case "CHECKPOINT" -> resumeCheckpoint.apply(project, task.sourceId(), revision);
+      case "GOAL" ->
+          resumeGoal.resume(
+              project,
+              task.sourceId(),
+              () -> expected(readTask.get(project, session, id), expectedRun, revision));
       default -> throw new OperationConflictException();
     }
-    return tasks.get(project, session, id);
+    return readTask.get(project, session, id);
   }
 
   /**
@@ -186,13 +201,13 @@ public final class TaskControlService {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (message == null || message.isBlank() || message.length() > 16384)
       throw new IllegalArgumentException("Invalid Task guidance");
-    var task = tasks.get(project, session, id);
+    var task = readTask.get(project, session, id);
     expected(task, expectedRun, revision);
     if (!task.inputSupported()) throw new OperationConflictException();
     owned(task.runId());
-    if (!inputs.offerIntervention(project, session, task.runId(), message))
+    if (!offerInput.offer(project, session, task.runId(), message))
       throw new OperationConflictException();
-    return tasks.get(project, session, id);
+    return readTask.get(project, session, id);
   }
 
   /** 実行中タスクの操作に関する期待する内容を処理する。 */
