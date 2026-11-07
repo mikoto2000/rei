@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.core;
 
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
+import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -256,7 +257,7 @@ final class FileSnapshots {
     private static final long serialVersionUID = 1L;
 
     ExcludedInventoryPathException() {
-      super("Excluded or outside Project path");
+      super(ReadingProblem.excludedPathMessage());
     }
   }
 

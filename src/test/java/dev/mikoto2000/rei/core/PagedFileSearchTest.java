@@ -22,6 +22,53 @@ class PagedFileSearchTest {
   @TempDir Path root;
 
   @Test
+  void excludedQueriesKeepSuccessfulPagesAndOriginalQueryIndexes() throws Exception {
+    Files.writeString(root.resolve("allowed.txt"), "hit\nhit\n");
+    var database = ReadingBenchmarkDatabase.prepare(root.resolve("data"));
+    var search =
+        new PagedFileSearch(
+            new Tools() {
+              @Override
+              List<String> gitLsFiles(List<String> pathSpecs, Path directory) {
+                return List.of("allowed.txt");
+              }
+            },
+            ReadingTestStores.store(database));
+    var excluded =
+        new Tools.GrepQuery("hit", ".env", false, true, false, false, 0, 0, null, true, null, null);
+    var allowed =
+        new Tools.GrepQuery(
+            "hit", "allowed.txt", false, true, false, false, 0, 0, null, true, null, null);
+    var queries = new java.util.ArrayList<>(java.util.Collections.nCopies(19, excluded));
+    queries.add(allowed);
+    try (var lease = ReadingBenchmarkDatabase.keepOpen(database);
+        var scope = AgentRunScope.open(new AgentRunContext("run", "chat", root, "project"))) {
+      var first =
+          search.read(new PagedFileSearch.Request(queries, 0, 512, 2048, 1, 1, null), root);
+      assertNull(first.error());
+      assertEquals(
+          java.util.stream.IntStream.range(0, 19).boxed().toList(),
+          first.excludedQueries().queryIndexes());
+      assertEquals("PROJECT_PATH_EXCLUDED", first.excludedQueries().problem().code());
+      assertTrue(
+          first.excludedQueries().problem().recovery()
+              .contains("Retry with an allowed Project-relative path"));
+      assertEquals(19, first.files().getFirst().matches().getFirst().queryIndex());
+      assertTrue(FileResultBudget.fits(first, 2048, 512));
+      assertNotNull(first.resultCursor());
+
+      var next =
+          search.read(
+              new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, first.resultCursor()),
+              root);
+      assertNull(next.error());
+      assertEquals(first.excludedQueries(), next.excludedQueries());
+      assertEquals(19, next.files().getFirst().matches().getFirst().queryIndex());
+      assertEquals(2, next.files().getFirst().sections().getFirst().startLine());
+    }
+  }
+
+  @Test
   void changeToAnUnscannedCandidateInvalidatesBothCursorKinds() throws Exception {
     Files.writeString(root.resolve("a.txt"), "hit\nhit\n");
     Files.writeString(root.resolve("b.txt"), "miss\n");
