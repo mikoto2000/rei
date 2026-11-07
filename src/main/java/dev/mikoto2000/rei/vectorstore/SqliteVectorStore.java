@@ -26,6 +26,15 @@ import tools.jackson.databind.json.JsonMapper;
 public final class SqliteVectorStore
     implements VectorStore, VectorDocumentRepository, RetrievalCandidates {
 
+  /** 隣接チャンクごとの語句一致率のうち最大の値を取得する。 */
+  private static final String ADJACENT_LEXICAL_SCORE_SQL =
+      """
+      WITH patterns AS (SELECT '%' || value || '%' AS pattern FROM json_each(?))
+      SELECT MAX((SELECT AVG(LOWER(cx.chunk_text) LIKE pattern) FROM patterns))
+      FROM document_chunks_vec AS cx
+      WHERE doc_id = ? AND source = ? AND ABS(chunk_index - ?) <= 1
+      """;
+
   /** データ取得元。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
@@ -291,8 +300,9 @@ public final class SqliteVectorStore
     List<ScoredDocument> scoredDocuments = new ArrayList<>();
     try (Connection connection = dataSource.getConnection();
         var statement = connection.prepareStatement(sql.toString());
-        var adjacentStatement = connection.prepareStatement(adjacentLexicalScoreSql(queryTerms))) {
+        var adjacentStatement = connection.prepareStatement(ADJACENT_LEXICAL_SCORE_SQL)) {
       bindParams(statement, params);
+      adjacentStatement.setString(1, writeJson(queryTerms));
       try (var rs = statement.executeQuery()) {
         while (rs.next()) {
           Object distanceValue = rs.getObject("distance");
@@ -305,7 +315,6 @@ public final class SqliteVectorStore
             lexicalScore =
                 adjacentLexicalScore(
                     adjacentStatement,
-                    queryTerms,
                     rs.getString("doc_id"),
                     rs.getString("source"),
                     rs.getInt("chunk_index"));
@@ -347,49 +356,38 @@ public final class SqliteVectorStore
   }
 
   /** 関連文書の検索で用いる語句による限定検索を返す。 */
-  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
-      value = "SQL_PREPARED_STATEMENT_GENERATED_FROM_NONCONSTANT_STRING",
-      justification = "Only fixed SQL fragments and placeholder counts are composed. All search terms and filter values are bound parameters.")
   private List<Document> lexicalOnlySearch(
       SearchRequest request, FilterCriteria criteria, List<String> queryTerms) {
     if (queryTerms.isEmpty()) {
       return List.of();
     }
-    List<Object> params = new ArrayList<>();
-    StringBuilder sql =
-        new StringBuilder(
-            """
-        SELECT chunk_id, doc_id, source, chunk_index, ingested_at, chunk_text, metadata_json
-        FROM document_chunks_vec
-        WHERE (
-        """);
-    sql.append(lexicalClause("chunk_text", queryTerms, params));
-    sql.append(
-        """
-        OR EXISTS (
-          SELECT 1
-          FROM document_chunks_vec cx
-          WHERE cx.doc_id = document_chunks_vec.doc_id
-            AND cx.source = document_chunks_vec.source
-            AND ABS(cx.chunk_index - document_chunks_vec.chunk_index) <= 1
-            AND (
-        """);
-    sql.append(lexicalClause("cx.chunk_text", queryTerms, params));
-    sql.append(")))");
-    if (criteria.source() != null) {
-      sql.append(" AND source = ?");
-      params.add(criteria.source());
-    }
-    if (criteria.docId() != null) {
-      sql.append(" AND doc_id = ?");
-      params.add(criteria.docId());
-    }
-
+    String termsJson = writeJson(queryTerms);
     List<ScoredDocument> scoredDocuments = new ArrayList<>();
     try (Connection connection = dataSource.getConnection();
-        var statement = connection.prepareStatement(sql.toString());
-        var adjacentStatement = connection.prepareStatement(adjacentLexicalScoreSql(queryTerms))) {
-      bindParams(statement, params);
+        var statement =
+            connection.prepareStatement(
+                """
+                WITH patterns AS (SELECT '%' || value || '%' AS pattern FROM json_each(?))
+                SELECT chunk_id, doc_id, source, chunk_index, ingested_at, chunk_text, metadata_json
+                FROM document_chunks_vec AS candidate
+                WHERE (? IS NULL OR source = ?) AND (? IS NULL OR doc_id = ?)
+                  AND (
+                    EXISTS (SELECT 1 FROM patterns WHERE LOWER(candidate.chunk_text) LIKE pattern)
+                    OR EXISTS (
+                      SELECT 1
+                      FROM document_chunks_vec AS cx, patterns
+                      WHERE cx.doc_id = candidate.doc_id
+                        AND cx.source = candidate.source
+                        AND ABS(cx.chunk_index - candidate.chunk_index) <= 1
+                        AND LOWER(cx.chunk_text) LIKE pattern))
+                """);
+        var adjacentStatement = connection.prepareStatement(ADJACENT_LEXICAL_SCORE_SQL)) {
+      statement.setString(1, termsJson);
+      statement.setString(2, criteria.source());
+      statement.setString(3, criteria.source());
+      statement.setString(4, criteria.docId());
+      statement.setString(5, criteria.docId());
+      adjacentStatement.setString(1, termsJson);
       try (var rs = statement.executeQuery()) {
         while (rs.next()) {
           double lexicalScore = lexicalScore(queryTerms, rs.getString("chunk_text"));
@@ -397,7 +395,6 @@ public final class SqliteVectorStore
             lexicalScore =
                 adjacentLexicalScore(
                     adjacentStatement,
-                    queryTerms,
                     rs.getString("doc_id"),
                     rs.getString("source"),
                     rs.getInt("chunk_index"));
@@ -759,34 +756,6 @@ public final class SqliteVectorStore
     return (double) matches / (double) queryTerms.size();
   }
 
-  /** 関連文書の検索で用いる語句によるClauseを返す。 */
-  private String lexicalClause(
-      String textExpression, List<String> queryTerms, List<Object> params) {
-    List<String> lexicalConditions = new ArrayList<>();
-    for (String queryTerm : queryTerms) {
-      lexicalConditions.add("LOWER(" + textExpression + ") LIKE ?");
-      params.add("%" + queryTerm + "%");
-    }
-    return String.join(" OR ", lexicalConditions);
-  }
-
-  /** 関連文書の検索で用いるadjacent語句による評価値データ操作を返す。 */
-  private String adjacentLexicalScoreSql(List<String> queryTerms) {
-    if (queryTerms.isEmpty()) {
-      return "SELECT 0";
-    }
-    List<String> lexicalMatches = new ArrayList<>();
-    for (int i = 0; i < queryTerms.size(); i++) {
-      lexicalMatches.add("CASE WHEN LOWER(chunk_text) LIKE ? THEN 1 ELSE 0 END");
-    }
-    return "SELECT MAX(("
-        + String.join(" + ", lexicalMatches)
-        + ") * 1.0 / "
-        + queryTerms.size()
-        + ") "
-        + "FROM document_chunks_vec WHERE doc_id = ? AND source = ? AND ABS(chunk_index - ?) <= 1";
-  }
-
   /** 後続の照会で対応する対象を見つけられるよう、引数を関連付ける。 */
   private void bindParams(java.sql.PreparedStatement statement, List<Object> params)
       throws SQLException {
@@ -797,22 +766,11 @@ public final class SqliteVectorStore
 
   /** 関連文書の検索で用いるadjacent語句による評価値を返す。 */
   private double adjacentLexicalScore(
-      java.sql.PreparedStatement statement,
-      List<String> queryTerms,
-      String docId,
-      String source,
-      int chunkIndex)
+      java.sql.PreparedStatement statement, String docId, String source, int chunkIndex)
       throws SQLException {
-    if (queryTerms.isEmpty()) {
-      return 0.0d;
-    }
-    int parameterIndex = 1;
-    for (String queryTerm : queryTerms) {
-      statement.setString(parameterIndex++, "%" + queryTerm + "%");
-    }
-    statement.setString(parameterIndex++, docId);
-    statement.setString(parameterIndex++, source);
-    statement.setInt(parameterIndex, chunkIndex);
+    statement.setString(2, docId);
+    statement.setString(3, source);
+    statement.setInt(4, chunkIndex);
     try (var rs = statement.executeQuery()) {
       if (!rs.next()) {
         return 0.0d;
