@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.llm.capture;
 
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -32,11 +30,17 @@ import picocli.CommandLine.Spec;
     mixinStandardHelpOptions = true)
 public final class LlmCaptureCommand implements Runnable {
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared capture store and its active capture sessions.")
-  private final CaptureStore store;
+  private final java.util.function.BiConsumer<Object, String> reserveCapture;
+
+  private final java.util.function.BiFunction<Object, String, String> captureStatus;
+  private final java.util.function.BiPredicate<Object, String> cancelCapture;
+  private final Supplier<java.util.List<CaptureStore.SessionInfo>> captureSessions;
+  private final java.util.function.Function<String, java.util.List<CaptureStore.AttemptInfo>>
+      runAttempts;
+  private final java.util.function.Function<String, CaptureStore.AttemptInfo> findAttempt;
+  private final java.util.function.Function<String, byte[]> readBody;
+  private final Predicate<String> deleteRun;
+  private final Runnable clearCapture;
 
   /** クライアント。 */
   private final Supplier<Object> client;
@@ -82,7 +86,15 @@ public final class LlmCaptureCommand implements Runnable {
       Supplier<Object> client,
       Supplier<String> conversation,
       Runnable ensureConversation) {
-    this.store = store;
+    this.reserveCapture = (owner, id) -> store.reserve(owner, id);
+    this.captureStatus = (owner, id) -> store.status(owner, id);
+    this.cancelCapture = (owner, id) -> store.off(owner, id);
+    this.captureSessions = () -> store.sessions();
+    this.runAttempts = id -> store.attempts(id);
+    this.findAttempt = id -> store.attempt(id);
+    this.readBody = id -> store.body(id);
+    this.deleteRun = id -> store.delete(id);
+    this.clearCapture = () -> store.clear();
     this.client = client;
     this.conversation = conversation;
     this.ensureConversation = ensureConversation;
@@ -203,39 +215,39 @@ public final class LlmCaptureCommand implements Runnable {
         case "next" -> {
           arity(args, 1);
           ensureConversation.run();
-          store.reserve(client.get(), conversation.get());
+          reserveCapture.accept(client.get(), conversation.get());
           out.println("次のこのCLI会話の依頼を記録します。本文には秘密情報が含まれる可能性があります。");
         }
         case "status" -> {
           arity(args, 1);
-          out.println(store.status(client.get(), conversation.get()));
+          out.println(captureStatus.apply(client.get(), conversation.get()));
         }
         case "off" -> {
           arity(args, 1);
           out.println(
-              store.off(client.get(), conversation.get())
+              cancelCapture.test(client.get(), conversation.get())
                   ? "予約を取り消しました。"
                   : "この会話の未消費予約はありません。進行中の記録は継続します。");
         }
         case "list" -> {
-          if (args.length == 1) store.sessions().forEach(s -> out.println(s));
+          if (args.length == 1) captureSessions.get().forEach(s -> out.println(s));
           else {
             arity(args, 2);
-            store.attempts(args[1]).forEach(a -> out.println(a));
+            runAttempts.apply(args[1]).forEach(a -> out.println(a));
           }
         }
         case "show" -> {
           arity(args, 2);
-          var a = store.attempt(args[1]);
+          var a = findAttempt.apply(args[1]);
           out.println(a);
           out.println("マスキングは完全性を保証しません。");
           if (a.captureState().equals("COMPLETE"))
-            out.println(CaptureDisplay.masked(store.body(a.attemptId())));
+            out.println(CaptureDisplay.masked(readBody.apply(a.attemptId())));
           else out.println("完全な原本はありません: " + a.reason());
         }
         case "raw" -> {
           arity(args, 2);
-          var a = store.attempt(args[1]);
+          var a = findAttempt.apply(args[1]);
           requireComplete(a);
           if (!confirm()) {
             out.println("確認が得られなかったため、原本の表示・保存を中止しました。");
@@ -243,28 +255,29 @@ public final class LlmCaptureCommand implements Runnable {
           }
           out.println("UTF-8復号・制御文字エスケープ済み表示です。完全なバイト表現ではありません。");
           out.println(
-              CaptureDisplay.escape(new String(store.body(a.attemptId()), StandardCharsets.UTF_8)));
+              CaptureDisplay.escape(
+                  new String(readBody.apply(a.attemptId()), StandardCharsets.UTF_8)));
         }
         case "export" -> {
           arity(args, 3);
-          var a = store.attempt(args[1]);
+          var a = findAttempt.apply(args[1]);
           requireComplete(a);
           if (!confirm()) {
             out.println("確認が得られなかったため、原本の表示・保存を中止しました。");
             return 2;
           }
-          export(store.body(a.attemptId()), Path.of(args[2]));
+          export(readBody.apply(a.attemptId()), Path.of(args[2]));
           out.println("原本バイト列を保存しました。出力ファイルはcaptureの削除対象外です。");
         }
         case "delete" -> {
           arity(args, 2);
-          if (!store.delete(args[1]))
+          if (!deleteRun.test(args[1]))
             throw new IllegalArgumentException("Unknown or ambiguous Run ID");
           out.println("Run記録を削除しました。");
         }
         case "clear" -> {
           arity(args, 1);
-          store.clear();
+          clearCapture.run();
           out.println("予約と全記録を削除しました。");
         }
         default -> throw new IllegalArgumentException("Unknown capture action");
