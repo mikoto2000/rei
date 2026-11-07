@@ -1,12 +1,13 @@
 package dev.mikoto2000.rei.websearch;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Metrics;
 import io.micrometer.core.instrument.Timer;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import java.util.function.IntConsumer;
+import java.util.function.ObjLongConsumer;
 
 /**
  * Web上の情報の調査に必要なWeb検索計測値を扱う。
@@ -21,58 +22,61 @@ public final class WebSearchMetrics {
   /** 観測。 */
   public static final WebSearchMetrics OBSERVED = new WebSearchMetrics(Metrics.globalRegistry);
 
-  /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Records metrics in the application's shared registry.")
-  private final MeterRegistry registry;
+  private final ObjLongConsumer<String> eventCounter;
+  private final Consumer<String> providerCounter;
+  private final Consumer<String> openAiStatusCounter;
+  private final IntConsumer httpStatusCounter;
+  private final ObjLongConsumer<String> durationTimer;
 
   /** 指定された値や利用先を使って、WebSearchMetricsを初期化する。 */
   public WebSearchMetrics(MeterRegistry registry) {
-    this.registry = registry;
+    this.eventCounter =
+        (event, amount) ->
+            registry.counter("rei.web.search.events", "event", event).increment(amount);
+    this.providerCounter =
+        provider -> registry.counter("rei.web.search.providers", "provider", provider).increment();
+    this.openAiStatusCounter =
+        status -> registry.counter("rei.web.search.openai.responses", "status", status).increment();
+    this.httpStatusCounter =
+        status ->
+            registry.counter("rei.web.search.http", "status", Integer.toString(status)).increment();
+    this.durationTimer =
+        (stage, nanos) ->
+            Timer.builder("rei.web.search.duration")
+                .tag("stage", stage)
+                .publishPercentiles(0.5, 0.95)
+                .register(registry)
+                .record(nanos, TimeUnit.NANOSECONDS);
   }
 
   /** 新たな対象を登録し、後から利用できるようにする。 */
   public void add(String event, long amount) {
-    if (amount > 0) registry.counter("rei.web.search.events", "event", event).increment(amount);
+    if (amount > 0) eventCounter.accept(event, amount);
   }
 
   /** Web上の情報の調査に関する提供元を処理する。 */
   public void provider(String provider) {
-    registry
-        .counter(
-            "rei.web.search.providers",
-            "provider",
-            Set.of("duckduckgo", "brave", "openai").contains(provider) ? provider : "other")
-        .increment();
+    providerCounter.accept(
+        Set.of("duckduckgo", "brave", "openai").contains(provider) ? provider : "other");
   }
 
   /** Record only bounded API states, never response text or error messages. */
   public void openAiStatus(String status) {
-    registry
-        .counter(
-            "rei.web.search.openai.responses",
-            "status",
-            Set.of("completed", "failed", "incomplete", "in_progress", "queued", "cancelled")
-                    .contains(status)
-                ? status
-                : "invalid")
-        .increment();
+    openAiStatusCounter.accept(
+        Set.of("completed", "failed", "incomplete", "in_progress", "queued", "cancelled")
+                .contains(status)
+            ? status
+            : "invalid");
   }
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
   public void status(int status) {
-    registry.counter("rei.web.search.http", "status", Integer.toString(status)).increment();
+    httpStatusCounter.accept(status);
   }
 
   /** Web上の情報の調査に関する継続時間を処理する。 */
   public void duration(String stage, long nanos) {
-    Timer.builder("rei.web.search.duration")
-        .tag("stage", stage)
-        .publishPercentiles(0.5, 0.95)
-        .register(registry)
-        .record(nanos, TimeUnit.NANOSECONDS);
+    durationTimer.accept(stage, nanos);
   }
 
   /** 表示や受け渡しに用いるテキストを返す。 */
