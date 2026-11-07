@@ -1,8 +1,7 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.application.session.ShellConversationService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Function;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -13,11 +12,7 @@ import picocli.CommandLine.Spec;
 @Command(name = "new", description = "新しい Session を作成して選択します", mixinStandardHelpOptions = true)
 public final class NewConversationCommand implements java.util.concurrent.Callable<Integer> {
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Shares the shell session and routes operations for its selected conversation.")
-  private final ShellConversationService conversations;
+  private final Function<String, String> newSessionId;
 
   /** 仕様。 */
   @Spec private picocli.CommandLine.Model.CommandSpec spec;
@@ -34,15 +29,15 @@ public final class NewConversationCommand implements java.util.concurrent.Callab
   /** 指定された値や利用先を使って、NewConversationCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public NewConversationCommand(ShellConversationService conversations) {
-    this.conversations = conversations;
+    this.newSessionId = title -> conversations.newConversation(title).sessionId();
   }
 
   /** 新しい Session を作成して選択しますを行う。 */
   @Override
   public Integer call() {
     try {
-      var session = conversations.newConversation(title);
-      spec.commandLine().getOut().println("Current session: " + session.sessionId());
+      String sessionId = newSessionId.apply(title);
+      spec.commandLine().getOut().println("Current session: " + sessionId);
       return 0;
     } catch (RuntimeException error) {
       spec.commandLine()

@@ -25,6 +25,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import org.springframework.ai.tool.annotation.Tool;
 
 /**
@@ -100,11 +101,7 @@ public final class ReviewTools {
   private final ReviewCoverageLedger ledger;
 
   /** 元の。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common tool result store for body references and cache state.")
-  private final RawToolResultStore raw;
+  private final Consumer<String> clearRawResults;
 
   /** ファイル一覧。 */
   private final java.util.function.Supplier<Tools> files;
@@ -155,7 +152,7 @@ public final class ReviewTools {
       java.util.function.Supplier<Tools> files,
       TokenEstimator estimator) {
     this.ledger = ledger;
-    this.raw = raw;
+    this.clearRawResults = run -> raw.clearRun(run);
     this.files = files;
     this.estimator = estimator;
     this.tasks = ledger.durableTasks();
@@ -1457,7 +1454,7 @@ public final class ReviewTools {
           && parent.projectId().equals(owner.projectId())
           && job.owner().equals(scope)) ledger.grant(id, scope, scope(parent));
     }
-    raw.clearRun(owner.runId());
+    clearRawResults.accept(owner.runId());
   }
 
   /** 内容の同一性を照合するためのハッシュ値を求める。 */

@@ -18,8 +18,6 @@ import dev.mikoto2000.rei.ui.shell.UserInputFrame;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.io.PrintWriter;
@@ -104,11 +102,7 @@ public class ReiApplication {
   private final CommandUserInputDisplayPolicy commandUserInputDisplayPolicy;
 
   /** 非同期ベクトル文書サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared background ingestion queue and its active work state.")
-  private final AsyncVectorDocumentService asyncVectorDocumentService;
+  private final BooleanSupplier activeEmbeddings;
 
   /** 音通知通知サービス。 */
   private final Runnable notifyCommandCompletion;
@@ -185,7 +179,7 @@ public class ReiApplication {
     this.cancelCommand = () -> commandCancellationService.cancel();
     this.commandCompletionNotificationPolicy = commandCompletionNotificationPolicy;
     this.commandUserInputDisplayPolicy = commandUserInputDisplayPolicy;
-    this.asyncVectorDocumentService = asyncVectorDocumentService;
+    this.activeEmbeddings = () -> asyncVectorDocumentService.hasActiveEmbeddings();
     this.notifyCommandCompletion =
         () -> soundNotificationService.notify(COMMAND_COMPLETION_MESSAGE);
     this.chatResponseNarrator = chatResponseNarrator;
@@ -875,7 +869,7 @@ public class ReiApplication {
 
   /** れいの起動において、confirm終了条件付きNeededに該当するか判定する。 */
   boolean confirmExitIfNeeded(ConfirmationReader confirmationReader) {
-    if (!asyncVectorDocumentService.hasActiveEmbeddings()) {
+    if (!activeEmbeddings.getAsBoolean()) {
       return true;
     }
     System.out.println("警告: embed add の処理が実行中です。");

@@ -26,6 +26,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -210,11 +211,7 @@ public class BeginnerReviewService {
   private final LlmModelProvider models;
 
   /** 権限一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common guard for the current tool authorization policy.")
-  private final ToolPermissionGuard permissions;
+  private final BiConsumer<String, AgentRunContext> authorizeReviewRead;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON = new ObjectMapper();
@@ -247,7 +244,7 @@ public class BeginnerReviewService {
   /** 指定された値や利用先を使って、BeginnerReviewServiceを初期化する。 */
   public BeginnerReviewService(LlmModelProvider models, ToolPermissionGuard permissions) {
     this.models = models;
-    this.permissions = permissions;
+    this.authorizeReviewRead = (input, owner) -> permissions.check("readMultiFile", input, owner);
   }
 
   /** 外部エージェントへの委譲で用いるレビューを返す。 */
@@ -256,7 +253,7 @@ public class BeginnerReviewService {
     run.checkActive();
     var owner = run.runContext();
     if (owner == null) throw new IllegalArgumentException("Captured Project Run required");
-    permissions.check("readMultiFile", "material-review " + request.root(), owner);
+    authorizeReviewRead.accept("material-review " + request.root(), owner);
     Path root = ExternalAgentRequest.resolveTarget(owner.projectRoot(), request.root());
     if (root == null || ExternalAgentSourceSnapshot.excluded(owner.projectRoot().relativize(root)))
       throw new IllegalArgumentException("Material root is excluded");

@@ -1,11 +1,13 @@
 package dev.mikoto2000.rei.slack;
 
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.policy.ToolPermissionGuard;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.function.BiConsumer;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.Tool;
@@ -38,11 +40,7 @@ public final class SlackAgentTools {
   private final SlackAgentRepository repository;
 
   /** 権限一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common guard for the current tool authorization policy.")
-  private final ToolPermissionGuard permissions;
+  private final BiConsumer<String, AgentRunContext> authorizeDelegation;
 
   /** 登録済み。 */
   private java.util.function.Consumer<SlackAgentRepository.Request> registered = q -> {};
@@ -59,7 +57,7 @@ public final class SlackAgentTools {
       ToolPermissionGuard permissions) {
     this.settings = settings;
     this.repository = repository;
-    this.permissions = permissions;
+    this.authorizeDelegation = (input, owner) -> permissions.check("askExternalAgent", input, owner);
   }
 
   /** Slackとの連携で用いるask外部エージェントを返す。 */
@@ -103,7 +101,7 @@ public final class SlackAgentTools {
             + safe
             + "\nExpected output: "
             + expected;
-    permissions.check("askExternalAgent", authorization, e.runContext());
+    authorizeDelegation.accept(authorization, e.runContext());
     e.checkActive();
     return repository.transaction(
         () -> {

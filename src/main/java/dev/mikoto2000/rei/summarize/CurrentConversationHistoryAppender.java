@@ -2,12 +2,12 @@ package dev.mikoto2000.rei.summarize;
 
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.llm.ConversationIds;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Component;
 
@@ -16,11 +16,7 @@ import org.springframework.stereotype.Component;
 public class CurrentConversationHistoryAppender implements ConversationHistoryAppender {
 
   /** チャット記憶。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared conversation memory for the current history.")
-  private final ChatMemory chatMemory;
+  private final BiConsumer<String, Message> addToMemory;
 
   /** 会話ログ保存先。 */
   private final Optional<ConversationLogStore> conversationLogStore;
@@ -28,7 +24,7 @@ public class CurrentConversationHistoryAppender implements ConversationHistoryAp
   /** 指定された値や利用先を使って、CurrentConversationHistoryAppenderを初期化する。 */
   public CurrentConversationHistoryAppender(
       ChatMemory chatMemory, Optional<ConversationLogStore> conversationLogStore) {
-    this.chatMemory = chatMemory;
+    this.addToMemory = (id, message) -> chatMemory.add(id, List.of(message));
     this.conversationLogStore = conversationLogStore;
   }
 
@@ -36,7 +32,7 @@ public class CurrentConversationHistoryAppender implements ConversationHistoryAp
   @Override
   public void appendUserMessage(String content) {
     if (nonConversationalWebRun()) return;
-    chatMemory.add(ConversationIds.currentChat(), List.of(new UserMessage(content)));
+    addToMemory.accept(ConversationIds.currentChat(), new UserMessage(content));
     appendLog("user", content);
   }
 
@@ -44,7 +40,7 @@ public class CurrentConversationHistoryAppender implements ConversationHistoryAp
   @Override
   public void appendAssistantMessage(String content) {
     if (nonConversationalWebRun()) return;
-    chatMemory.add(ConversationIds.currentChat(), List.of(new AssistantMessage(content)));
+    addToMemory.accept(ConversationIds.currentChat(), new AssistantMessage(content));
     appendLog("assistant", content);
   }
 
