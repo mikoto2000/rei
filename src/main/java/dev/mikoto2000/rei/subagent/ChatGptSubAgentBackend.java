@@ -382,12 +382,17 @@ public final class ChatGptSubAgentBackend {
   private final Clock clock;
 
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared run registry so participants observe the same run lifecycle.")
-  private final RunRegistry runs;
+  private final java.util.function.Consumer<AgentRunContext> registerStandaloneRun;
+
+  private final java.util.function.Function<
+          AgentRunContext, java.util.function.BiConsumer<AgentRunContext, String>>
+      registerChildRun;
+
+  private final java.util.function.Consumer<String> markRunStarted;
+
+  private final java.util.function.BiConsumer<String, RunOutcome> finishRun;
+
+  private record RunOutcome(State state, String diagnostic) {}
 
   /** 受付。 */
   private Semaphore admission = new Semaphore(1);
@@ -446,7 +451,23 @@ public final class ChatGptSubAgentBackend {
     this.events = events;
     this.publisher = publisher;
     this.clock = clock;
-    this.runs = runs;
+    this.registerStandaloneRun = context -> runs.register(context);
+    this.registerChildRun = owner -> (child, role) -> runs.registerChild(child, owner, role);
+    this.markRunStarted = id -> runs.transition(id, RunStatus.RUNNING, null);
+    this.finishRun =
+        (id, outcome) ->
+            runs.transition(
+                id,
+                outcome.state() == State.COMPLETED
+                    ? RunStatus.COMPLETED
+                    : outcome.state() == State.OUTCOME_UNKNOWN
+                        ? RunStatus.UNKNOWN
+                        : outcome.state() == State.STOP_CONFIRMED
+                            ? RunStatus.CANCELLED
+                            : RunStatus.FAILED,
+                outcome.state() == State.COMPLETED
+                    ? null
+                    : new RunFailure("ChatGptPlan", outcome.diagnostic()));
   }
 
   /** 補助エージェントへの委譲の操作を実行する。 */
@@ -598,10 +619,10 @@ public final class ChatGptSubAgentBackend {
         };
     reactor.core.Disposable parentHook = null;
     try (var scope = AgentRunScope.open(child)) {
-      if (standalone) runs.register(child);
-      else runs.registerChild(child, owner, role.id());
+      if (standalone) registerStandaloneRun.accept(child);
+      else registerChildRun.apply(owner).accept(child, role.id());
       tracked = true;
-      runs.transition(id, RunStatus.RUNNING, null);
+      markRunStarted.accept(id);
       publish(parent, id, role.id(), State.CREATED, false, request.modelId(), null, 0);
       beginCancellation.run();
       parentHook = onCancel.apply(parent, () -> cancelled.set(true));
@@ -1075,14 +1096,7 @@ public final class ChatGptSubAgentBackend {
           semantic = null;
         }
         if (tracked) {
-          runs.transition(
-              id,
-              state == State.COMPLETED
-                  ? RunStatus.COMPLETED
-                  : state == State.OUTCOME_UNKNOWN
-                      ? RunStatus.UNKNOWN
-                      : state == State.STOP_CONFIRMED ? RunStatus.CANCELLED : RunStatus.FAILED,
-              state == State.COMPLETED ? null : new RunFailure("ChatGptPlan", diagnostic));
+          finishRun.accept(id, new RunOutcome(state, diagnostic));
           try (var terminalScope = AgentRunScope.open(child)) {
             publish(
                 parent,
