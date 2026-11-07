@@ -9,6 +9,9 @@ import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
+import java.util.function.Supplier;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.openai.OpenAiChatOptions;
 
 /**
  * 音声による対話に必要な音声補正言語モデルを扱う。
@@ -41,18 +44,10 @@ public final class VoiceCorrectionLlm {
       """;
 
   /** クライアント一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Creates chat clients through the shared provider and its current configuration.")
-  private final LlmChatClientProvider clients;
+  private final Supplier<ChatClient> correctionClient;
 
   /** モデル一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
-  private final LlmModelProvider models;
+  private final Supplier<OpenAiChatOptions> correctionOptions;
 
   /** この機能の動作設定。 */
   @SuppressFBWarnings(
@@ -66,15 +61,15 @@ public final class VoiceCorrectionLlm {
       LlmChatClientProvider clients,
       LlmModelProvider models,
       VoiceCorrectionProperties properties) {
-    this.clients = clients;
-    this.models = models;
+    this.correctionClient = () -> clients.chatClient(LlmFeature.VOICE_CORRECTION);
+    this.correctionOptions = () -> models.chatOptions(LlmFeature.VOICE_CORRECTION, null);
     this.properties = properties;
   }
 
   /** 音声による対話の要求を実行し、呼び出し元へ結果を返す。 */
   public String call(String original, VoiceCorrectionContext.Snapshot context)
       throws JsonProcessingException {
-    var base = models.chatOptions(LlmFeature.VOICE_CORRECTION, null);
+    var base = correctionOptions.get();
     var builder =
         base.mutate()
             .toolCallbacks(List.of())
@@ -95,8 +90,7 @@ public final class VoiceCorrectionLlm {
         new ObjectMapper()
             .writeValueAsString(java.util.Map.of("asr", original, "references", context));
     var response =
-        clients
-            .chatClient(LlmFeature.VOICE_CORRECTION)
+        correctionClient.get()
             .prompt()
             .system(SYSTEM)
             .user(data)
