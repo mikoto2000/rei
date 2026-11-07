@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.voice;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.InvocationTargetException;
@@ -116,23 +114,26 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
   }
 
   /** 必要な対象を利用できるよう、Sherpaバックエンド生成元の利用を開始する。 */
-  public synchronized VoiceBackend open(VoiceSettings settings) throws Exception {
+  public synchronized VoiceBackend open(VoiceSettings settings)
+      throws IOException, ReflectiveOperationException, InterruptedException {
     return openRole(settings, true, true);
   }
 
   /** 必要な対象を利用できるよう、発話区間の検出の利用を開始する。 */
-  public synchronized VoiceBackend openVad(VoiceSettings settings) throws Exception {
+  public synchronized VoiceBackend openVad(VoiceSettings settings)
+      throws IOException, ReflectiveOperationException, InterruptedException {
     return openRole(settings, true, false);
   }
 
   /** 必要な対象を利用できるよう、Recognizerの利用を開始する。 */
-  public synchronized VoiceBackend openRecognizer(VoiceSettings settings) throws Exception {
+  public synchronized VoiceBackend openRecognizer(VoiceSettings settings)
+      throws IOException, ReflectiveOperationException, InterruptedException {
     return openRole(settings, false, true);
   }
 
   /** 必要な対象を利用できるよう、役割の利用を開始する。 */
   private VoiceBackend openRole(VoiceSettings settings, boolean withVad, boolean withRecognizer)
-      throws Exception {
+      throws IOException, ReflectiveOperationException, InterruptedException {
     if (closing) throw new IllegalStateException("Voice runtime closed");
     var options = Objects.requireNonNull(inference.get());
     Path root = directory.get().toAbsolutePath().normalize();
@@ -192,7 +193,8 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
       return new VoiceBackend(
           new VoiceActivityDetector() {
             /** 音声による対話で用いるprobabilityを返す。 */
-            public float probability(float[] frame) throws Exception {
+            public float probability(float[] frame)
+                throws IOException, ReflectiveOperationException, InterruptedException {
               if (detector == null)
                 throw new IllegalStateException("VAD is not loaded in this worker");
               VoicePcm.validateFrame(frame);
@@ -210,7 +212,8 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
           },
           new SpeechRecognizer() {
             /** 音声による対話で用いるrecognizeを返す。 */
-            public String recognize(SpeechSegment segment) throws Exception {
+            public String recognize(SpeechSegment segment)
+                throws IOException, ReflectiveOperationException, InterruptedException {
               if (decoder == null)
                 throw new IllegalStateException("ASR is not loaded in this worker");
               Object stream = call(decoder, "createStream");
@@ -238,7 +241,11 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
               }
             }
           });
-    } catch (Exception | LinkageError e) {
+    } catch (IOException
+        | ReflectiveOperationException
+        | InterruptedException
+        | RuntimeException
+        | LinkageError e) {
       try {
         if (recognizer != null) release(recognizer);
       } catch (RuntimeException cleanup) {
@@ -260,7 +267,8 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
   }
 
   /** 音声による対話で用いる組み立てを返す。 */
-  private Object builder(String name) throws Exception {
+  private Object builder(String name)
+      throws IOException, ReflectiveOperationException, InterruptedException {
     return invoke(type(name).getMethod("builder"), null);
   }
 
@@ -270,21 +278,24 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
   }
 
   /** 音声による対話で用いる構築を返す。 */
-  private Object construct(String name, Object config) throws Exception {
+  private Object construct(String name, Object config)
+      throws IOException, ReflectiveOperationException, InterruptedException {
     try {
       return type(name).getConstructor(config.getClass()).newInstance(config);
     } catch (InvocationTargetException e) {
-      return rethrow(e.getCause());
+      throw invocationFailure(e);
     }
   }
 
   /** 以後の処理で使う値を、指定された内容へ切り替える。 */
-  private void set(Object target, String name, Object value) throws Exception {
+  private void set(Object target, String name, Object value)
+      throws IOException, ReflectiveOperationException, InterruptedException {
     call(target, name, value);
   }
 
   /** 音声による対話の要求を実行し、呼び出し元へ結果を返す。 */
-  private Object call(Object target, String name, Object... args) throws Exception {
+  private Object call(Object target, String name, Object... args)
+      throws IOException, ReflectiveOperationException, InterruptedException {
     for (var method : target.getClass().getMethods()) {
       if (!method.getName().equals(name) || method.getParameterCount() != args.length) continue;
       var types = method.getParameterTypes();
@@ -312,30 +323,33 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
   }
 
   /** 音声による対話で用いる呼び出しを返す。 */
-  private static Object invoke(Method method, Object target, Object... args) throws Exception {
+  private static Object invoke(Method method, Object target, Object... args)
+      throws IOException, ReflectiveOperationException, InterruptedException {
     try {
       return method.invoke(target, args);
     } catch (InvocationTargetException e) {
-      return rethrow(e.getCause());
+      throw invocationFailure(e);
     }
   }
 
-  /** 音声による対話で用いるrethrowを返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the checked cause unwrapped from a reflective invocation.")
-  private static Object rethrow(Throwable cause) throws Exception {
-    if (cause instanceof Exception e) throw e;
-    if (cause instanceof Error e) throw e;
-    throw new IllegalStateException(cause);
+  /** JNI の致命的エラーと中断を伝え、他の呼び出し失敗は反射 API の例外として保持する。 */
+  private static InvocationTargetException invocationFailure(InvocationTargetException failure)
+      throws IOException, InterruptedException {
+    Throwable cause = failure.getCause();
+    if (cause instanceof Error error) throw error;
+    if (cause instanceof InterruptedException interrupted) throw interrupted;
+    if (cause instanceof IOException io) throw io;
+    return failure;
   }
 
   /** 後続の処理が利用できるよう、Sherpaバックエンド生成元を解放する。 */
   private void release(Object target) {
     try {
       call(target, "release");
-    } catch (Exception e) {
+    } catch (IOException
+        | ReflectiveOperationException
+        | InterruptedException
+        | RuntimeException e) {
       throw new IllegalStateException("Native release failed", e);
     }
   }

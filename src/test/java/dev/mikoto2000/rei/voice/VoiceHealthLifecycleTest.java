@@ -147,7 +147,7 @@ class VoiceHealthLifecycleTest {
                 backend(
                     new SpeechRecognizer() {
                       /** {@code recognize} の条件を再現するための補助情報を返す。 */
-                      public String recognize(SpeechSegment segment) throws Exception {
+                      public String recognize(SpeechSegment segment) throws InterruptedException {
                         entered.countDown();
                         release.await();
                         return "stale";
@@ -190,7 +190,7 @@ class VoiceHealthLifecycleTest {
     var source =
         new MicrophoneCaptureService.FrameSource() {
           /** 検証用に、必要な内容を参照できるよう、音声フレームを読み取る。 */
-          public float[] readFrame() throws Exception {
+          public float[] readFrame() throws InterruptedException {
             Thread.sleep(5);
             reads.incrementAndGet();
             return new float[512];

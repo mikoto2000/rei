@@ -483,7 +483,7 @@ class VoiceInputCoordinatorTest {
                 backend(
                     new SpeechRecognizer() {
                       /** {@code recognize} の条件を再現するための補助情報を返す。 */
-                      public String recognize(SpeechSegment segment) throws Exception {
+                      public String recognize(SpeechSegment segment) throws InterruptedException {
                         recognized.incrementAndGet();
                         entered.countDown();
                         release.await();
@@ -681,7 +681,7 @@ class VoiceInputCoordinatorTest {
                 backend(
                     new SpeechRecognizer() {
                       /** {@code recognize} の条件を再現するための補助情報を返す。 */
-                      public String recognize(SpeechSegment segment) throws Exception {
+                      public String recognize(SpeechSegment segment) throws InterruptedException {
                         entered.countDown();
                         release.await();
                         return "hello";
@@ -726,7 +726,7 @@ class VoiceInputCoordinatorTest {
                 backend(
                     new SpeechRecognizer() {
                       /** {@code recognize} の条件を再現するための補助情報を返す。 */
-                      public String recognize(SpeechSegment segment) throws Exception {
+                      public String recognize(SpeechSegment segment) throws InterruptedException {
                         entered.countDown();
                         boolean done = false;
                         while (!done)
@@ -1055,7 +1055,7 @@ class VoiceInputCoordinatorTest {
     var source =
         new MicrophoneCaptureService.FrameSource() {
           /** 検証用に、必要な内容を参照できるよう、音声フレームを読み取る。 */
-          public float[] readFrame() throws Exception {
+          public float[] readFrame() throws InterruptedException {
             released.await();
             return null;
           }

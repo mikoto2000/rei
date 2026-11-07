@@ -29,7 +29,8 @@ public final class NativeVoiceWorker {
   }
 
   /** 音声による対話の操作を実行する。 */
-  private static void run(String[] args) throws Exception {
+  private static void run(String[] args)
+      throws IOException, ReflectiveOperationException, InterruptedException {
     if ((args.length != 8 && args.length != 10)
         || (!args[0].equals("vad") && !args[0].equals("asr")))
       throw new IllegalArgumentException("Invalid worker options");

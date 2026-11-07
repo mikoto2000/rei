@@ -31,7 +31,7 @@ class VoiceSlowMicrophoneCloseTest {
         d ->
             new MicrophoneCaptureService.FrameSource() {
               /** 検証用に、必要な内容を参照できるよう、音声フレームを読み取る。 */
-              public float[] readFrame() throws Exception {
+              public float[] readFrame() throws InterruptedException {
                 Thread.sleep(10);
                 return new float[512];
               }

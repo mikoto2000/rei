@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.voice;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
@@ -102,7 +103,7 @@ public final class VoicePlaybackService implements AutoCloseable {
             } catch (InterruptedException interrupted) {
               // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
               Thread.currentThread().interrupt();
-            } catch (Exception failure) {
+            } catch (IOException | RuntimeException failure) {
               events.publish(VoiceEventPublisher.Type.TTS_FAILED, "local playback failed");
             }
           });

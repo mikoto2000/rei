@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.voice;
 
+import java.io.IOException;
 import java.util.Objects;
+import javax.sound.sampled.LineUnavailableException;
 
 /**
  * 音声による対話に必要なGuardedマイク取得記録を扱う。
@@ -23,7 +25,7 @@ public final class GuardedMicrophoneCapture implements MicrophoneCaptureService 
   }
 
   /** 必要な対象を利用できるよう、Guardedマイク取得記録の利用を開始する。 */
-  public FrameSource open(AudioDevice device) throws Exception {
+  public FrameSource open(AudioDevice device) throws LineUnavailableException, InterruptedException {
     var binding = monitor.bind(device);
     var source = capture.open(device);
     boolean verified = false;
@@ -35,12 +37,12 @@ public final class GuardedMicrophoneCapture implements MicrophoneCaptureService 
     }
     return new FrameSource() {
       /** 必要な内容を参照できるよう、観測単位を読み取る。 */
-      public float[] readFrame() throws Exception {
+      public float[] readFrame() throws IOException, InterruptedException {
         return source.readFrame();
       }
 
       /** 後続の操作を進められるか判断するため、稼働状態を確認する。 */
-      public void checkHealth() throws Exception {
+      public void checkHealth() throws IOException {
         monitor.check(binding);
         source.checkHealth();
       }
