@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.application.session;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.ResponseStyle;
 import dev.mikoto2000.rei.core.project.ProjectService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -52,11 +50,11 @@ public final class ShellConversationService {
   /** 会話の継続管理に関するremember所有者を処理する。 */
   private void rememberOwner(
       dev.mikoto2000.rei.core.project.ProjectClient client, AgentRunContext context) {
-    if (inputs != null)
+    if (containsRun != null)
       owned
           .entrySet()
           .removeIf(
-              entry -> !inputs.containsRun(entry.getValue().context().projectId(), entry.getKey()));
+              entry -> !containsRun.test(entry.getValue().context().projectId(), entry.getKey()));
     owned.put(context.runId(), new Owned(client, context));
   }
 
@@ -89,11 +87,8 @@ public final class ShellConversationService {
     var target = input.target();
     synchronized (client) {
       if (!isSelected(client, target)) throw new IllegalStateException("Voice target changed");
-      if (!gateway.isNovel(input) || inputs == null) return 0;
-      var active =
-          inputs.activeRuns().stream()
-              .map(dev.mikoto2000.rei.core.chat.ActiveRun::runId)
-              .collect(java.util.stream.Collectors.toSet());
+      if (!gateway.isNovel(input) || containsRun == null) return 0;
+      var active = activeRunIds.get();
       int cancelled = 0;
       for (var owner : owned.values()) {
         var context = owner.context();
@@ -147,12 +142,12 @@ public final class ShellConversationService {
   private final boolean concurrentEnabled;
 
   /** 入力一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared input router so all operations use the same queue and active runs.")
-  private final dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs;
+  private final java.util.function.BiPredicate<String, String> containsRun;
+
+  private final java.util.function.Supplier<java.util.Set<String>> activeRunIds;
+  private final java.util.function.Predicate<Intervention> offerIntervention;
+
+  private record Intervention(String project, String session, String run, String message) {}
 
   /** 会話の継続管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ShellConversationService(
@@ -193,7 +188,16 @@ public final class ShellConversationService {
             lifecycle.responseStyle(currentProject.get(), currentSessionId(), style, voiceOnly);
     this.endSession = (session, project) -> lifecycle.end(session, project);
     this.concurrentEnabled = concurrentEnabled;
-    this.inputs = inputs;
+    this.containsRun = inputs == null ? null : (project, run) -> inputs.containsRun(project, run);
+    this.activeRunIds =
+        () ->
+            inputs.activeRuns().stream()
+                .map(dev.mikoto2000.rei.core.chat.ActiveRun::runId)
+                .collect(java.util.stream.Collectors.toSet());
+    this.offerIntervention =
+        request ->
+            inputs.offerIntervention(
+                request.project(), request.session(), request.run(), request.message());
     this.gateway =
         new dev.mikoto2000.rei.application.input.ConversationInputGateway(
             lifecycle, dispatch, inputs, clock);
@@ -330,11 +334,11 @@ public final class ShellConversationService {
 
   /** 会話の継続管理において、interveneに該当するか判定する。 */
   public boolean intervene(String runId, String message) {
-    if (!concurrentEnabled || inputs == null)
+    if (!concurrentEnabled || containsRun == null)
       throw new IllegalArgumentException("Concurrent conversations are disabled");
     synchronized (currentClient.get()) {
-      return inputs.offerIntervention(
-          currentProject.get().id(), currentSessionId(), runId, message);
+      return offerIntervention.test(
+          new Intervention(currentProject.get().id(), currentSessionId(), runId, message));
     }
   }
 
