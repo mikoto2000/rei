@@ -14,7 +14,9 @@ class DiscoveryTopicCandidateGeneratorTest {
   @Test
   void generatesLimitedSeedsFromWorkingSetRecentTopicAndConversation() {
     TopicGeneratorProperties properties = enabledProperties();
-    properties.getDiscovery().setMaxSeeds(2);
+    var discovery = properties.getDiscovery();
+    discovery.setMaxSeeds(2);
+    properties.setDiscovery(discovery);
     DiscoverySeedGenerator seedGenerator = new DiscoverySeedGenerator(properties);
 
     List<String> seeds =
