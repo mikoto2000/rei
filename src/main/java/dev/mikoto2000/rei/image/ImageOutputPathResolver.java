@@ -1,11 +1,10 @@
 package dev.mikoto2000.rei.image;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.function.Supplier;
 
 /** 画像出力パスの指定を解決し、利用する対象を確定する。 */
 public class ImageOutputPathResolver {
@@ -18,11 +17,7 @@ public class ImageOutputPathResolver {
   private final Path workDirectory;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ImageProperties shared by consumers of these settings.")
-  private final ImageProperties properties;
+  private final Supplier<Path> outputDirectory;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -30,7 +25,7 @@ public class ImageOutputPathResolver {
   /** 指定された値や利用先を使って、ImageOutputPathResolverを初期化する。 */
   public ImageOutputPathResolver(Path workDirectory, ImageProperties properties, Clock clock) {
     this.workDirectory = workDirectory;
-    this.properties = properties;
+    this.outputDirectory = () -> properties.getOutputDirectory();
     this.clock = clock;
   }
 
@@ -49,6 +44,6 @@ public class ImageOutputPathResolver {
     var execution = dev.mikoto2000.rei.core.execution.ExecutionScope.current();
     String suffix = execution == null ? "" : "-" + execution.id();
     String fileName = "image-" + LocalDateTime.now(clock).format(FILE_TIMESTAMP) + suffix + ".png";
-    return properties.getOutputDirectory().resolve(fileName);
+    return outputDirectory.get().resolve(fileName);
   }
 }

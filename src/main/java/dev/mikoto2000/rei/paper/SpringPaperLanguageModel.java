@@ -3,7 +3,9 @@ package dev.mikoto2000.rei.paper;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.time.Duration;
 import java.util.List;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -20,16 +22,12 @@ public class SpringPaperLanguageModel implements PaperLanguageModel {
   private final LlmModelProvider provider;
 
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
-  private final PaperProperties config;
+  private final Supplier<Duration> llmTimeout;
 
   /** 指定された値や利用先を使って、SpringPaperLanguageModelを初期化する。 */
   public SpringPaperLanguageModel(LlmModelProvider provider, PaperProperties config) {
     this.provider = provider;
-    this.config = config;
+    this.llmTimeout = () -> config.getLlmTimeout();
   }
 
   /** 論文の調査と整理で用いるモデルを返す。 */
@@ -74,6 +72,6 @@ public class SpringPaperLanguageModel implements PaperLanguageModel {
                 })
             .last("")
             .toFuture();
-    return op.await(future, config.getLlmTimeout());
+    return op.await(future, llmTimeout.get());
   }
 }

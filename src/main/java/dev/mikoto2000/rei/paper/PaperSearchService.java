@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntSupplier;
 import org.springframework.stereotype.Service;
 
 /** 論文検索のユースケースを実現する。 */
@@ -33,11 +34,7 @@ public class PaperSearchService {
   private final PaperSessionReferences refs;
 
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
-  private final PaperProperties config;
+  private final IntSupplier maxSearchLimit;
 
   /** 指定された値や利用先を使って、PaperSearchServiceを初期化する。 */
   public PaperSearchService(
@@ -50,7 +47,7 @@ public class PaperSearchService {
     this.fallback = fallback;
     this.repo = repo;
     this.refs = refs;
-    this.config = config;
+    this.maxSearchLimit = () -> config.getMaxLimit();
   }
 
   /**
@@ -69,7 +66,7 @@ public class PaperSearchService {
   /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public Result search(PaperSearchQuery q, PaperOperation op) {
     op.check();
-    if (q.limit() > config.getMaxLimit())
+    if (q.limit() > maxSearchLimit.getAsInt())
       throw new PaperException(PaperException.Code.INVALID_QUERY, "設定された検索件数上限を超えています");
     List<String> warnings = new ArrayList<>();
     List<Paper> papers;
