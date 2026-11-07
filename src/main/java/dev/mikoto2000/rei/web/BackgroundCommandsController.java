@@ -1,8 +1,7 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.BackgroundRunSubmitService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
@@ -18,15 +17,28 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class BackgroundCommandsController {
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits and queries runs through the shared background service.")
-  private final BackgroundRunSubmitService runs;
+  private final Function<String, String> latestSummary;
+
+  private final Function<Summary, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitSummary;
+  private final Function<Image, ResponseEntity<BackgroundRunController.AcceptedRunResponse>>
+      submitImage;
 
   /** 指定された値や利用先を使って、BackgroundCommandsControllerを初期化する。 */
   public BackgroundCommandsController(BackgroundRunSubmitService runs) {
-    this.runs = runs;
+    this.latestSummary = project -> runs.latestSummaryForCli(project);
+    this.submitSummary =
+        request -> accepted(runs.summaryForCli(request.projectId(), request.url()));
+    this.submitImage =
+        request ->
+            accepted(
+                runs.imageForCli(
+                    request.projectId(),
+                    request.prompt(),
+                    request.output(),
+                    request.model(),
+                    request.size(),
+                    Boolean.TRUE.equals(request.raw())));
   }
 
   /**
@@ -61,7 +73,7 @@ public final class BackgroundCommandsController {
   /** Web APIによる操作で用いる最新を返す。 */
   @GetMapping("/api/v1/projects/{projectId}/summaries/latest")
   public Text latest(@PathVariable String projectId) {
-    return new Text(runs.latestSummaryForCli(projectId));
+    return new Text(latestSummary.apply(projectId));
   }
 
   /** 対象の内容を、要点が分かる形にまとめる。 */
@@ -69,7 +81,7 @@ public final class BackgroundCommandsController {
   public ResponseEntity<BackgroundRunController.AcceptedRunResponse> summarize(
       @RequestBody Summary request) {
     if (request == null) throw new IllegalArgumentException("Summary required");
-    return accepted(runs.summaryForCli(request.projectId(), request.url()));
+    return submitSummary.apply(request);
   }
 
   /** Web APIによる操作で用いる画像を返す。 */
@@ -77,14 +89,7 @@ public final class BackgroundCommandsController {
   public ResponseEntity<BackgroundRunController.AcceptedRunResponse> image(
       @RequestBody Image request) {
     if (request == null) throw new IllegalArgumentException("Image required");
-    return accepted(
-        runs.imageForCli(
-            request.projectId(),
-            request.prompt(),
-            request.output(),
-            request.model(),
-            request.size(),
-            Boolean.TRUE.equals(request.raw())));
+    return submitImage.apply(request);
   }
 
   /** Web APIによる操作で用いる受付済みを返す。 */

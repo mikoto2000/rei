@@ -3,11 +3,11 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService;
 import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelsService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,11 +30,9 @@ public class ModelController {
   private final OpenAiCompatibleModelsService models;
 
   /** 保持先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the model selection shared by commands and the API.")
-  private final ModelHolderService holder;
+  private final Supplier<String> selectedModel;
+
+  private final Consumer<String> selectModel;
 
   /** 使用を終えたモデルの解放を依頼する窓口。 */
   private final OpenAiCompatibleModelUnloadService unload;
@@ -49,7 +47,8 @@ public class ModelController {
       ModelHolderService holder,
       OpenAiCompatibleModelUnloadService unload) {
     this.models = models;
-    this.holder = holder;
+    this.selectedModel = () -> holder.get();
+    this.selectModel = model -> holder.set(model);
     this.unload = unload;
   }
 
@@ -84,20 +83,20 @@ public class ModelController {
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @GetMapping
   public Models list() {
-    return new Models(models.listModels(), holder.get());
+    return new Models(models.listModels(), selectedModel.get());
   }
 
   /** Web APIによる操作で用いる現在を返す。 */
   @GetMapping("/current")
   public Selection current() {
-    return new Selection(holder.get());
+    return new Selection(selectedModel.get());
   }
 
   /** 指定された条件に応じて、利用する対象を選ぶ。 */
   @PutMapping("/current")
   public synchronized Selection select(@RequestBody Selection request) {
     if (request == null) throw new IllegalArgumentException("Model required");
-    String previous = holder.get();
+    String previous = selectedModel.get();
     if (!request.model().equals(previous)) {
       try {
         unload.unload(previous);
@@ -105,7 +104,7 @@ public class ModelController {
         log.warn("Previous model unload failed while selecting a new model");
       }
     }
-    holder.set(request.model());
+    selectModel.accept(request.model());
     return current();
   }
 }

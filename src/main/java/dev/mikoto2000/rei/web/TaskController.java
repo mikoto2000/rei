@@ -5,9 +5,8 @@ import dev.mikoto2000.rei.application.task.TaskControlService;
 import dev.mikoto2000.rei.application.task.TaskManagerService;
 import dev.mikoto2000.rei.application.task.TaskView;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Optional;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.HttpStatus;
@@ -31,18 +30,18 @@ import org.springframework.web.util.UriComponentsBuilder;
 @RequestMapping("/api/v1/tasks")
 public class TaskController {
   /** タスク一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common task service for current task and execution state.")
-  private final TaskManagerService tasks;
+  private final Function<TaskPage, HistoryPage<TaskView>> listTasks;
+
+  private final Function<TaskIdentity, TaskView> findTask;
 
   /** タスクの状態変更を受け付ける窓口。 */
   private final TaskControlService controls;
 
   /** 指定された値や利用先を使って、TaskControllerを初期化する。 */
   public TaskController(TaskManagerService tasks, TaskControlService controls) {
-    this.tasks = tasks;
+    this.listTasks =
+        page -> tasks.list(page.project(), page.session(), page.limit(), page.cursor());
+    this.findTask = key -> tasks.get(key.project(), key.session(), key.id());
     this.controls = controls;
   }
 
@@ -53,7 +52,7 @@ public class TaskController {
       @RequestParam(required = false) String sessionId,
       @RequestParam(required = false) Integer limit,
       @RequestParam(required = false) String cursor) {
-    return tasks.list(projectId, sessionId, limit, cursor);
+    return listTasks.apply(new TaskPage(projectId, sessionId, limit, cursor));
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
@@ -62,7 +61,7 @@ public class TaskController {
       @PathVariable String id,
       @RequestParam String projectId,
       @RequestParam(required = false) String sessionId) {
-    return tasks.get(projectId, sessionId, id);
+    return findTask.apply(new TaskIdentity(projectId, sessionId, id));
   }
 
   /**
@@ -184,4 +183,8 @@ public class TaskController {
         || revision < 0)
       throw new IllegalArgumentException("Project and expected Task revision required");
   }
+
+  private record TaskPage(String project, String session, Integer limit, String cursor) {}
+
+  private record TaskIdentity(String project, String session, String id) {}
 }
