@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.core.command.EmbedCommand;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -29,11 +27,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/vector-documents")
 public final class VectorDocumentController {
   /** ベクトル一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared document index for listing, search, and deletion.")
-  private final VectorDocumentService vectors;
+  private final java.util.function.Supplier<String> listDocuments;
+
+  private final java.util.function.Function<SearchQuery, String> searchDocuments;
+  private final java.util.function.Function<Deletion, String> deleteDocuments;
+
+  private record SearchQuery(String query, Integer topK, Double threshold, String source) {}
 
   /** バックグラウンド。 */
   private final Consumer<List<String>> addDocuments;
@@ -128,14 +127,20 @@ public final class VectorDocumentController {
   /** 指定された値や利用先を使って、VectorDocumentControllerを初期化する。 */
   public VectorDocumentController(
       VectorDocumentService vectors, AsyncVectorDocumentService background) {
-    this.vectors = vectors;
+    this.listDocuments = () -> EmbedCommand.reportList(vectors);
+    this.searchDocuments =
+        request ->
+            EmbedCommand.reportSearch(
+                vectors, request.query(), request.topK(), request.threshold(), request.source());
+    this.deleteDocuments =
+        request -> EmbedCommand.reportDelete(vectors, request.docId(), request.source());
     this.addDocuments = documents -> background.addAsync(documents);
   }
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @GetMapping
   public Text list() {
-    return text(EmbedCommand.reportList(vectors));
+    return text(listDocuments.get());
   }
 
   /** 指定された検索条件に合う情報を探し、候補を返す。 */
@@ -149,7 +154,7 @@ public final class VectorDocumentController {
     optional(source);
     if (threshold != null && !Double.isFinite(threshold))
       throw new IllegalArgumentException("Invalid threshold");
-    return text(EmbedCommand.reportSearch(vectors, query, topK, threshold, source));
+    return text(searchDocuments.apply(new SearchQuery(query, topK, threshold, source)));
   }
 
   /** 新たな対象を登録し、後から利用できるようにする。 */
@@ -179,7 +184,7 @@ public final class VectorDocumentController {
     if (request == null) throw new IllegalArgumentException("Deletion required");
     optional(request.docId());
     optional(request.source());
-    return text(EmbedCommand.reportDelete(vectors, request.docId(), request.source()));
+    return text(deleteDocuments.apply(request));
   }
 
   /** Web APIによる操作に関する必須を処理する。 */
