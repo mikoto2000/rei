@@ -12,10 +12,10 @@ import dev.mikoto2000.rei.event.TaskCreatedPayload;
 import dev.mikoto2000.rei.event.TaskFailedPayload;
 import dev.mikoto2000.rei.event.ToolCompletedPayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.util.List;
+import java.util.function.BiFunction;
 import org.springframework.stereotype.Service;
 
 /**
@@ -32,11 +32,7 @@ public class RunReflectionService {
   private final AgentEventBus bus;
 
   /** 履歴。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common project event stream for ordered reads.")
-  private final ProjectAgentEventStore history;
+  private final BiFunction<String, Integer, List<AgentEvent>> recentEvents;
 
   /** 購読。 */
   private AgentEventBus.Subscription subscription;
@@ -52,7 +48,7 @@ public class RunReflectionService {
       RunReflectionRepository repo, AgentEventBus bus, ProjectAgentEventStore history) {
     this.repo = repo;
     this.bus = bus;
-    this.history = history;
+    this.recentEvents = history == null ? null : (project, limit) -> history.recent(project, limit);
   }
 
   /**
@@ -62,12 +58,12 @@ public class RunReflectionService {
    */
   public synchronized RunReflectionRepository.Item collect(
       String project, String session, String run) {
-    if (history == null
+    if (recentEvents == null
         || !RunReflectionRepository.valid(project)
         || !RunReflectionRepository.valid(session)
         || !RunReflectionRepository.valid(run))
       throw new IllegalArgumentException("Project, Session, Run and persisted history required");
-    var saved = history.recent(project, 1000);
+    var saved = recentEvents.apply(project, 1000);
     if (saved.size() == 1000)
       throw new IllegalArgumentException(
           "History window is full; inspect the persisted event log instead of inferring a complete reflection");

@@ -4,6 +4,7 @@ import dev.mikoto2000.rei.activity.ActivityWorkContextService;
 import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
 import dev.mikoto2000.rei.application.task.TaskManagerService;
 import dev.mikoto2000.rei.application.task.TaskView;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository;
 import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
 import dev.mikoto2000.rei.core.project.ProjectContext;
@@ -29,6 +30,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
@@ -243,11 +245,7 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
   private final PersistentAgentScheduler schedules;
 
   /** 再開用の記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared repository for checkpoint state and lease coordination.")
-  private final PersistentCheckpointRepository checkpoints;
+  private final BiFunction<String, String, PersistentCheckpoint> findCheckpoint;
 
   /** 作業状況。 */
   private final ActivityWorkContextService activity;
@@ -273,7 +271,7 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
     this.goals = goals;
     this.dependencies = dependencies;
     this.schedules = schedules;
-    this.checkpoints = checkpoints;
+    this.findCheckpoint = checkpoints == null ? null : (project, task) -> checkpoints.get(project, task);
     this.activity = activity;
     taskLimit = properties.getMaxTasksPerProject();
     itemLimit = properties.getMaxItemsPerProject();
@@ -489,8 +487,8 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
       tags.add("SAVED_CONTINUATION");
       if (saved.status().equals("PENDING")) tags.add("ACTIVATION_REQUIRED");
     }
-    if (task.kind().equals("CHECKPOINT") && checkpoints != null) {
-      var saved = checkpoints.get(owner.id(), task.sourceId());
+    if (task.kind().equals("CHECKPOINT") && findCheckpoint != null) {
+      var saved = findCheckpoint.apply(owner.id(), task.sourceId());
       if (!sameRoot(owner, saved.projectRoot())) return null;
       title = saved.nextAction() == null ? saved.request() : saved.nextAction();
       if (saved.resumedFromRunId() != null) tags.add("RESUMED");

@@ -12,6 +12,8 @@ import dev.mikoto2000.rei.event.BackgroundExecutionPayload;
 import dev.mikoto2000.rei.event.ProjectAgentEventStore;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.List;
+import java.util.function.BiFunction;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -58,11 +60,7 @@ public class ProjectShellActivity implements AgentEventListener {
   private final ProjectService projects;
 
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common project event stream for ordered reads.")
-  private final ProjectAgentEventStore store;
+  private final BiFunction<String, Integer, List<AgentEvent>> recentEvents;
 
   /** 状態一覧。 */
   private final ProjectRunStateStore states;
@@ -128,7 +126,7 @@ public class ProjectShellActivity implements AgentEventListener {
       WorkingSet workingSet,
       ChatMemory memory) {
     this.projects = projects;
-    this.store = store;
+    this.recentEvents = (project, limit) -> store.recent(project, limit);
     this.states = states;
     this.workingSet = workingSet;
     this.memory = memory;
@@ -216,7 +214,7 @@ public class ProjectShellActivity implements AgentEventListener {
           "Last run: "
               + states.read(project.id()).map(ProjectRunStateStore.State::status).orElse("none"));
     output.println("Recent activity:");
-    for (var event : store.recent(project.id(), Math.max(1, Math.min(recentLimit, 1000))))
+    for (var event : recentEvents.apply(project.id(), Math.max(1, Math.min(recentLimit, 1000))))
       if (event.sessionId() == null || visibleConversation().equals(event.sessionId()))
         renderer.onRecentEvent(event);
     output.flush();
