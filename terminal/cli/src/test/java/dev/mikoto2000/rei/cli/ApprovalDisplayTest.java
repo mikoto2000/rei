@@ -146,59 +146,61 @@ class ApprovalDisplayTest {
     assertTimeoutPreemptively(
         java.time.Duration.ofSeconds(8),
         () -> {
-          try (var input = new PipedInputStream();
-              var keys = new PipedOutputStream(input);
-              var terminal =
-                  TerminalBuilder.builder()
-                      .system(false)
-                      .type("xterm")
-                      .streams(input, new ByteArrayOutputStream())
-                      .size(new org.jline.terminal.Size(90, 24))
-                      .build();
-              var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
-            var reader = new ApprovalMenuLineReader(terminal, true);
-            try (var menu =
-                new ApprovalActionMenu(reader, () -> new ApprovalActionMenu.Owner("p", "s"))) {
-              menu.enabled(true);
-              menu.offer("p", "s", ID);
-              var result =
-                  executor.submit(
-                      () ->
-                          reader.readLine(
-                              "> ", null, (org.jline.reader.MaskingCallback) null, "draft"));
-              while (!reader.isReading() || !reader.getBuffer().toString().equals("draft"))
-                Thread.sleep(5);
-              reader
-                  .getWidgets()
-                  .put(
-                      "fixture-cursor",
-                      () -> {
-                        reader.getBuffer().cursor(3);
-                        return true;
-                      });
-              reader.callWidget("fixture-cursor");
-              assertEquals(3, reader.getBuffer().cursor());
-              reader.printAbove("stream chunk one");
-              reader.printAbove("stream chunk two");
-              menu.reconcile(
-                  new ApprovalActionMenu.Owner("p", "s"),
-                  List.of(ID, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
-              assertTrue(
-                  reader
-                      .getDisplayedBufferWithPrompts(new ArrayList<>())
-                      .toString()
-                      .contains("[APPROVAL PENDING: 2]"));
-              assertEquals("draft", reader.getBuffer().toString());
-              assertEquals(3, reader.getBuffer().cursor());
-              menu.reconcile(new ApprovalActionMenu.Owner("p", "s"), List.of());
-              assertEquals("draft", reader.getBuffer().toString());
-              assertEquals(3, reader.getBuffer().cursor());
-              keys.write('\r');
-              keys.flush();
-              assertEquals("draft", result.get(2, java.util.concurrent.TimeUnit.SECONDS));
-            } finally {
-              keys.close();
-              executor.shutdownNow();
+          try (var input = new PipedInputStream()) {
+            var keys = new PipedOutputStream(input);
+            try (keys;
+                var terminal =
+                    TerminalBuilder.builder()
+                        .system(false)
+                        .type("xterm")
+                        .streams(input, new ByteArrayOutputStream())
+                        .size(new org.jline.terminal.Size(90, 24))
+                        .build();
+                var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+              var reader = new ApprovalMenuLineReader(terminal, true);
+              try (var menu =
+                  new ApprovalActionMenu(reader, () -> new ApprovalActionMenu.Owner("p", "s"))) {
+                menu.enabled(true);
+                menu.offer("p", "s", ID);
+                var result =
+                    executor.submit(
+                        () ->
+                            reader.readLine(
+                                "> ", null, (org.jline.reader.MaskingCallback) null, "draft"));
+                while (!reader.isReading() || !reader.getBuffer().toString().equals("draft"))
+                  Thread.sleep(5);
+                reader
+                    .getWidgets()
+                    .put(
+                        "fixture-cursor",
+                        () -> {
+                          reader.getBuffer().cursor(3);
+                          return true;
+                        });
+                reader.callWidget("fixture-cursor");
+                assertEquals(3, reader.getBuffer().cursor());
+                reader.printAbove("stream chunk one");
+                reader.printAbove("stream chunk two");
+                menu.reconcile(
+                    new ApprovalActionMenu.Owner("p", "s"),
+                    List.of(ID, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"));
+                assertTrue(
+                    reader
+                        .getDisplayedBufferWithPrompts(new ArrayList<>())
+                        .toString()
+                        .contains("[APPROVAL PENDING: 2]"));
+                assertEquals("draft", reader.getBuffer().toString());
+                assertEquals(3, reader.getBuffer().cursor());
+                menu.reconcile(new ApprovalActionMenu.Owner("p", "s"), List.of());
+                assertEquals("draft", reader.getBuffer().toString());
+                assertEquals(3, reader.getBuffer().cursor());
+                keys.write('\r');
+                keys.flush();
+                assertEquals("draft", result.get(2, java.util.concurrent.TimeUnit.SECONDS));
+              } finally {
+                keys.close();
+                executor.shutdownNow();
+              }
             }
           }
         });
