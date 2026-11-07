@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.skills;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
@@ -26,18 +25,14 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
   private static final String SKILL_FILE_NAME = "SKILL.md";
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound AgentSkillsProperties shared by consumers of these settings.")
-  private final AgentSkillsProperties properties;
+  private final Supplier<List<String>> skillDirectories;
 
   /** キャッシュ。 */
   private volatile List<AgentSkill> cache;
 
   /** 指定された値や利用先を使って、FileSystemAgentSkillRepositoryを初期化する。 */
   public FileSystemAgentSkillRepository(AgentSkillsProperties properties) {
-    this.properties = properties;
+    this.skillDirectories = () -> properties.getDirectories();
     this.cache = loadSkills();
   }
 
@@ -71,7 +66,7 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
   /** 保存された情報を利用できるよう、スキル一覧を読み込む。 */
   private List<AgentSkill> loadSkills() {
     Map<String, AgentSkill> skills = new LinkedHashMap<>();
-    for (String directory : properties.getDirectories()) {
+    for (String directory : skillDirectories.get()) {
       Path skillsDirectory = resolveDirectory(directory);
       if (isKiroPath(skillsDirectory) || !Files.isDirectory(skillsDirectory)) {
         continue;

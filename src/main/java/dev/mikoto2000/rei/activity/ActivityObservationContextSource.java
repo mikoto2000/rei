@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.workcontext.WorkContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -12,6 +10,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -30,11 +29,7 @@ public final class ActivityObservationContextSource implements ActivityEvidenceS
   }
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ActivityProperties shared by consumers of these settings.")
-  private final ActivityProperties properties;
+  private final BooleanSupplier workContextEnabled;
 
   /** プロジェクト一覧。 */
   private final Supplier<ProjectContext> projects;
@@ -51,7 +46,7 @@ public final class ActivityObservationContextSource implements ActivityEvidenceS
       Supplier<ProjectContext> projects,
       Function<String, Optional<WorkContext>> contexts,
       GitCapture git) {
-    this.properties = properties;
+    this.workContextEnabled = () -> properties.isWorkContextEnabled();
     this.projects = projects;
     this.contexts = contexts;
     this.git = git;
@@ -62,7 +57,7 @@ public final class ActivityObservationContextSource implements ActivityEvidenceS
   public Contribution collect(Instant at) {
     var project = projects.get();
     if (project == null) return new Contribution("", "", List.of());
-    if (!properties.isWorkContextEnabled()) return basic(project);
+    if (!workContextEnabled.getAsBoolean()) return basic(project);
     try {
       return capture(project, at);
     } catch (java.util.concurrent.CancellationException error) {
