@@ -23,16 +23,14 @@ public class CheckpointCommand implements Callable<Integer> {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
+      justification =
+          "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService service;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final java.util.function.Supplier<String> currentProjectId;
+
+  private final java.util.function.Supplier<String> currentSessionId;
 
   /** 仕様。 */
   @Spec CommandSpec spec;
@@ -49,7 +47,8 @@ public class CheckpointCommand implements Callable<Integer> {
   @org.springframework.beans.factory.annotation.Autowired
   public CheckpointCommand(PersistentCheckpointService service, ProjectService projects) {
     this.service = service;
-    this.projects = projects;
+    this.currentProjectId = () -> projects.currentContext().id();
+    this.currentSessionId = () -> projects.currentSessionId();
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -112,7 +111,7 @@ public class CheckpointCommand implements Callable<Integer> {
   public Integer call() {
     var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
-      var state = service.saveCurrent(projects.currentContext().id(), projects.currentSessionId());
+      var state = service.saveCurrent(currentProjectId.get(), currentSessionId.get());
       writer.println("Checkpoint saved: task=" + state.taskId() + " revision=" + state.revision());
       return 0;
     } catch (RuntimeException e) {

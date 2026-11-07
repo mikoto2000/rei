@@ -27,12 +27,11 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   private final GoalLoopService loop;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private record SelectedProject(String id, java.nio.file.Path root) {}
+
+  private final java.util.function.Supplier<SelectedProject> selectedProject;
+
+  private final java.util.function.Supplier<String> currentSessionId;
 
   /** 待機一覧。 */
   private GoalWaitService waits;
@@ -155,7 +154,12 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   public GoalCommand(GoalRepository goals, GoalLoopService loop, ProjectService projects) {
     this.goals = goals;
     this.loop = loop;
-    this.projects = projects;
+    this.selectedProject =
+        () -> {
+          var project = projects.currentContext();
+          return new SelectedProject(project.id(), project.root());
+        };
+    this.currentSessionId = () -> projects.currentSessionId();
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -168,7 +172,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   public Integer call() {
     var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
-      var project = projects.currentContext();
+      var project = selectedProject.get();
       Object result =
           switch (action) {
             case "list" -> goals.list(project.id());
@@ -179,7 +183,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
               if (planVersion == null || planVersion < 0)
                 throw new IllegalArgumentException("Observed --plan-version required");
               var goal = goals.get(project.id(), requiredValue());
-              if (!goal.sessionId().equals(projects.currentSessionId()))
+              if (!goal.sessionId().equals(currentSessionId.get()))
                 throw new IllegalArgumentException("Select owning Goal Session");
               yield loop.defineStages(
                   project.id(), goal.id(), planVersion, GoalStageRepository.parsePlan(stagesJson));
@@ -189,7 +193,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
                 throw new IllegalArgumentException(
                     "--stage-id, --stage-version, --proof-json required");
               var goal = goals.get(project.id(), requiredValue());
-              if (!goal.sessionId().equals(projects.currentSessionId()))
+              if (!goal.sessionId().equals(currentSessionId.get()))
                 throw new IllegalArgumentException("Select owning Goal Session");
               yield loop.attachStageEvidence(
                   project.id(),
@@ -204,7 +208,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
                     + goals.attempts(project.id(), requiredValue());
             case "wait" -> {
               var goal = goals.get(project.id(), requiredValue());
-              if (!goal.sessionId().equals(projects.currentSessionId()))
+              if (!goal.sessionId().equals(currentSessionId.get()))
                 throw new IllegalArgumentException("Select the owning Goal Session");
               yield dependencyId == null
                   ? waits().show(project.id(), goal.id())
@@ -230,7 +234,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
               var owner =
                   new AgentRunContext(
                       UUID.randomUUID().toString(),
-                      projects.currentSessionId(),
+                      currentSessionId.get(),
                       project.root(),
                       project.id());
               if ((completionJson == null) == (proofJson == null))
@@ -242,7 +246,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
                       owner, goal.id(), GoalRepository.parseCompletionProof(proofJson));
             }
             case "create" -> {
-              String session = projects.currentSessionId();
+              String session = currentSessionId.get();
               if (session == null || session.isBlank())
                 throw new IllegalArgumentException(
                     "Create or select a Session before creating a Goal");

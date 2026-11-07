@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.dot;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,12 +21,9 @@ public final class DotCommand implements java.util.concurrent.Callable<Integer> 
   private final DotDelegationService service;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final java.util.function.Supplier<String> currentProjectId;
+
+  private final java.util.function.Supplier<String> currentSessionId;
 
   /** 引数。 */
   @Parameters(
@@ -142,7 +137,8 @@ public final class DotCommand implements java.util.concurrent.Callable<Integer> 
   @org.springframework.beans.factory.annotation.Autowired
   public DotCommand(DotDelegationService service, ProjectService projects) {
     this.service = service;
-    this.projects = projects;
+    this.currentProjectId = () -> projects.currentContext().id();
+    this.currentSessionId = () -> projects.currentSessionId();
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -155,12 +151,11 @@ public final class DotCommand implements java.util.concurrent.Callable<Integer> 
     var out = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
       var request = DotCommandRequest.parse(words());
-      String project =
-          request.projectId() == null ? projects.currentContext().id() : request.projectId();
+      String project = request.projectId() == null ? currentProjectId.get() : request.projectId();
       Object result =
           switch (request.action()) {
             case "request" ->
-                service.createHuman(project, projects.currentSessionId(), request.payload());
+                service.createHuman(project, currentSessionId.get(), request.payload());
             case "requests" -> service.list(project);
             case "status" ->
                 resumes == null

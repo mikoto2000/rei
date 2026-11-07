@@ -24,7 +24,8 @@ public class MemoryCommandSupport {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common repository for persisted memory and its transaction boundaries.")
+      justification =
+          "Uses the common repository for persisted memory and its transaction boundaries.")
   private final MemoryRepository repository;
 
   /** 待機。 */
@@ -35,12 +36,9 @@ public class MemoryCommandSupport {
   private final SleepService sleep;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final java.util.function.Supplier<String> currentProjectId;
+
+  private final java.util.function.Supplier<String> currentSessionId;
 
   /** この機能の動作設定。 */
   private final MemoryProperties properties;
@@ -53,13 +51,14 @@ public class MemoryCommandSupport {
       MemoryProperties properties) {
     this.repository = repository;
     this.sleep = sleep;
-    this.projects = projects;
+    this.currentProjectId = () -> projects.currentContext().id();
+    this.currentSessionId = () -> projects.currentSessionId();
     this.properties = properties;
   }
 
   /** 長期記憶の活用で用いるプロジェクトを返す。 */
   private String project() {
-    return projects.currentContext().id();
+    return currentProjectId.get();
   }
 
   /** この機能を利用する設定が有効かどうかを返す。 */
@@ -225,7 +224,7 @@ public class MemoryCommandSupport {
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
   public String status() {
-    return statusForProject(project(), projects.currentSessionId());
+    return statusForProject(project(), currentSessionId.get());
   }
 
   /** 長期記憶の活用で用いる状態対象プロジェクトを返す。 */
