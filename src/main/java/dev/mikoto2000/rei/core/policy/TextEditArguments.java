@@ -54,7 +54,7 @@ public final class TextEditArguments {
         for (var op : operations) {
           String at = "request.operations[" + index++ + "]";
           path(op, "path", at + ".path", 1024, errors);
-          String kind = op.path("kind").asText("");
+          String kind = op.path("kind").asString("");
           if (!Set.of("UPDATE", "CREATE", "DELETE", "RENAME").contains(kind))
             errors.add(at + ".kind must be UPDATE/CREATE/DELETE/RENAME");
           else if (kind.equals("UPDATE")) {

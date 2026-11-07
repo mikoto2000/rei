@@ -354,7 +354,7 @@ class McpHttpIntegrationTest {
             new HashSet<>(client.listTools().tools().stream().map(McpSchema.Tool::name).toList()));
         assertFalse(
             client
-                .callTool(new McpSchema.CallToolRequest("rei_projects_list", Map.of()))
+                .callTool(new McpSchema.CallToolRequest("rei_projects_list", Map.of(), null))
                 .isError());
         String dot =
             (String)
@@ -376,19 +376,19 @@ class McpHttpIntegrationTest {
                     .get("request_id");
         assertFalse(
             client
-                .callTool(new McpSchema.CallToolRequest("rei_requests_list", Map.of()))
+                .callTool(new McpSchema.CallToolRequest("rei_requests_list", Map.of(), null))
                 .isError());
         assertFalse(
             client
                 .callTool(
-                    new McpSchema.CallToolRequest("rei_request_get", Map.of("request_id", dot)))
+                    new McpSchema.CallToolRequest("rei_request_get", Map.of("request_id", dot), null))
                 .isError());
         String claim = UUID.randomUUID().toString();
         assertFalse(
             client
                 .callTool(
                     new McpSchema.CallToolRequest(
-                        "rei_request_claim", Map.of("request_id", dot, "claim_id", claim)))
+                        "rei_request_claim", Map.of("request_id", dot, "claim_id", claim), null))
                 .isError());
         var receipt =
             client.callTool(
@@ -404,20 +404,20 @@ class McpHttpIntegrationTest {
                         "outcome",
                         "COMPLETED",
                         "summary",
-                        "Fixed short report")));
+                        "Fixed short report"), null));
         assertFalse(receipt.isError());
         assertEquals(true, ((Map<?, ?>) receipt.structuredContent()).get("persisted"));
         assertFalse(
             client
                 .callTool(
-                    new McpSchema.CallToolRequest("rei_context_get", Map.of("project_id", p.id())))
+                    new McpSchema.CallToolRequest("rei_context_get", Map.of("project_id", p.id()), null))
                 .isError());
         var submitted =
             client.callTool(
                 new McpSchema.CallToolRequest(
                     "rei_task_submit",
                     Map.of(
-                        "project_id", p.id(), "instruction", "review", "request_id", "sdk-key")));
+                        "project_id", p.id(), "instruction", "review", "request_id", "sdk-key"), null));
         assertFalse(submitted.isError(), submitted.toString());
         var data = (Map<?, ?>) submitted.structuredContent();
         String run = (String) data.get("run_id");
@@ -425,19 +425,19 @@ class McpHttpIntegrationTest {
             client
                 .callTool(
                     new McpSchema.CallToolRequest(
-                        "rei_task_status", Map.of("project_id", p.id(), "run_id", run)))
+                        "rei_task_status", Map.of("project_id", p.id(), "run_id", run), null))
                 .isError());
         assertTrue(
             client
                 .callTool(
                     new McpSchema.CallToolRequest(
-                        "rei_task_result", Map.of("project_id", p.id(), "run_id", run)))
+                        "rei_task_result", Map.of("project_id", p.id(), "run_id", run), null))
                 .isError());
         assertFalse(
             client
                 .callTool(
                     new McpSchema.CallToolRequest(
-                        "rei_task_cancel", Map.of("project_id", p.id(), "run_id", run)))
+                        "rei_task_cancel", Map.of("project_id", p.id(), "run_id", run), null))
                 .isError());
       }
     }

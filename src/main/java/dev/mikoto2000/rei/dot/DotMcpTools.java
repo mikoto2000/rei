@@ -219,7 +219,7 @@ public final class DotMcpTools {
     }
     try {
       return new McpSchema.CallToolResult(
-          List.of(new McpSchema.TextContent(StorageDatabase.JSON.writeValueAsString(output))),
+          List.of(McpSchema.TextContent.builder(StorageDatabase.JSON.writeValueAsString(output)).build()),
           error,
           output,
           null);

@@ -20,7 +20,7 @@ public final class ShellHttpUsage {
     if (input == null || input.length() > 1_048_576) return false;
     try {
       var json = tools.jackson.databind.json.JsonMapper.builder().build().readTree(input);
-      return recognizable(json.path("request").path("command").asText(""));
+      return recognizable(json.path("request").path("command").asString(""));
     } catch (RuntimeException invalid) {
       return false;
     }

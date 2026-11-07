@@ -350,7 +350,7 @@ public class HttpApiService {
   private String redact(String value, String secret) {
     if (value == null || secret == null) return value;
     // JSON escaping and common URL encoding must not reveal a reflected credential either.
-    String escaped = mapper.getNodeFactory().textNode(secret).toString();
+    String escaped = mapper.getNodeFactory().stringNode(secret).toString();
     return value
         .replace(escaped.substring(1, escaped.length() - 1), "[REDACTED]")
         .replace(secret, "[REDACTED]")

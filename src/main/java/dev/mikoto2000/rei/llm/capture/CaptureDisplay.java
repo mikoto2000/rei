@@ -44,9 +44,7 @@ final class CaptureDisplay {
   private static void mask(JsonNode node, int depth, int[] count) {
     if (depth > 100 || ++count[0] > 65536) throw new IllegalArgumentException("Display limit");
     if (node instanceof ObjectNode object) {
-      var fields = object.fields();
-      while (fields.hasNext()) {
-        var entry = fields.next();
+      for (var entry : object.properties()) {
         String key = entry.getKey().toLowerCase(java.util.Locale.ROOT).replace("-", "_");
         if (key.matches(
             ".*(api_?key|password|passwd|secret|authorization|access_token|refresh_token|cookie|b64_json|base64|audio_data|^token$|^data$).*"))

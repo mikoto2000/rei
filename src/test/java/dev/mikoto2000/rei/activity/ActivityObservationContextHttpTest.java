@@ -334,7 +334,7 @@ class ActivityObservationContextHttpTest {
               mvc.perform(
                       get("/api/v1/projects/" + project.id() + "/activity/observation-context")
                           .header("Authorization", "Bearer secret"))
-                  .andExpect(status().isUnprocessableEntity())
+                  .andExpect(status().isUnprocessableContent())
                   .andExpect(jsonPath("$.report").doesNotExist());
             });
     new WebApplicationContextRunner()

@@ -23,6 +23,6 @@ class ClockToolsTest {
     assertEquals("Asia/Tokyo", actual.timeZone());
     var mapper = JsonMapper.builder().build();
     var payload = mapper.readTree(mapper.writeValueAsString(actual));
-    assertEquals("Asia/Tokyo", payload.path("timezone").asText());
+    assertEquals("Asia/Tokyo", payload.path("timezone").asString());
   }
 }

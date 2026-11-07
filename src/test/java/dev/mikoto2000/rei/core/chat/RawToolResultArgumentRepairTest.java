@@ -105,9 +105,9 @@ class RawToolResultArgumentRepairTest {
                 // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
                 verifyNoInteractions(store);
                 var correction = correction(message);
-                assertThat(correction.path("error").asText()).isEqualTo("INVALID_TOOL_ARGUMENTS");
+                assertThat(correction.path("error").asString()).isEqualTo("INVALID_TOOL_ARGUMENTS");
                 assertThat(correction.path("executed").asBoolean()).isFalse();
-                assertThat(correction.path("guidance").asText()).contains("offset", "nextOffset");
+                assertThat(correction.path("guidance").asString()).contains("offset", "nextOffset");
                 assertThat(correction.path("correctionsRemaining").asInt()).isEqualTo(1);
                 assertDelivery(message, "invalid-read", ResultDelivery.Kind.GENERAL);
                 return response(toolCall("corrected-read", "readRawToolResult", VALID));
@@ -161,10 +161,10 @@ class RawToolResultArgumentRepairTest {
               var message = latestToolMessage(prompt);
               if (invocation == 2) {
                 var correction = correction(message);
-                assertThat(correction.path("error").asText()).isEqualTo("INVALID_CURSOR");
+                assertThat(correction.path("error").asString()).isEqualTo("INVALID_CURSOR");
                 assertThat(correction.path("accepted").asBoolean(true)).isFalse();
                 assertThat(correction.path("validationExecuted").asBoolean()).isTrue();
-                assertThat(correction.path("guidance").asText())
+                assertThat(correction.path("guidance").asString())
                     .contains("offset=0", "nextOffset", "UTF-16");
                 assertThat(correction.path("correctionsRemaining").asInt()).isEqualTo(1);
                 assertDelivery(message, "invalid-cursor", ResultDelivery.Kind.GENERAL);
@@ -234,7 +234,7 @@ class RawToolResultArgumentRepairTest {
               assertThat(invocation).isLessThanOrEqualTo(3);
               if (invocation > 1) {
                 var correction = correction(latestToolMessage(prompt));
-                assertThat(correction.path("error").asText()).isEqualTo("INVALID_TOOL_ARGUMENTS");
+                assertThat(correction.path("error").asString()).isEqualTo("INVALID_TOOL_ARGUMENTS");
                 assertThat(correction.path("maxCorrections").asInt()).isEqualTo(2);
                 remaining.add(correction.path("correctionsRemaining").asInt());
               }

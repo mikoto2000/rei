@@ -82,7 +82,7 @@ class HttpApiReadTest {
       var result = service.read(request(null, null));
       assertEquals(status, result.status());
       assertEquals("HTTP_ERROR", result.error());
-      assertEquals("fixture", result.json().get("error").asText());
+      assertEquals("fixture", result.json().get("error").asString());
       server.removeContext("/api");
     }
   }

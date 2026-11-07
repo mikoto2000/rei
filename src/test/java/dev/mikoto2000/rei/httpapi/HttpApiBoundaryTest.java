@@ -85,7 +85,7 @@ class HttpApiBoundaryTest {
     var result =
         service.read(
             new HttpApiRequest("https://example.com", null, null, null, null, null, null, null));
-    assertEquals("[REDACTED]", result.json().get("access_token").asText());
+    assertEquals("[REDACTED]", result.json().get("access_token").asString());
     assertEquals("[1]", result.json().get("items").toString());
   }
 }

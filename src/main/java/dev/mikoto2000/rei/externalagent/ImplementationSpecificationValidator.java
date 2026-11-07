@@ -20,9 +20,10 @@ import java.util.TreeSet;
 public final class ImplementationSpecificationValidator {
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON =
-      new ObjectMapper()
-          .configure(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY, true)
-          .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
+      com.fasterxml.jackson.databind.json.JsonMapper.builder()
+          .enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+          .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
+          .build();
 
   /**
    * 外部エージェントへの委譲で受け渡す検証済みを表す。

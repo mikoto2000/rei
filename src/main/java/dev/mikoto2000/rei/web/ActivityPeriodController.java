@@ -80,7 +80,7 @@ public class ActivityPeriodController {
       throw new IllegalArgumentException("Invalid Activity calendar date");
     } catch (ActivityQueryLimitException limit) {
       throw new ResponseStatusException(
-          HttpStatus.UNPROCESSABLE_ENTITY, "Activity analysis evidence limit exceeded");
+          HttpStatus.UNPROCESSABLE_CONTENT, "Activity analysis evidence limit exceeded");
     } catch (UnsupportedOperationException unsupported) {
       throw new ResponseStatusException(
           HttpStatus.SERVICE_UNAVAILABLE, "Bounded Activity analysis is unavailable");
