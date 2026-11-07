@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.application.run;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.AgentEventBus;
@@ -15,8 +16,10 @@ import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * バックグラウンド実行受付のユースケースを実現する。
@@ -26,12 +29,7 @@ import java.util.function.Function;
  */
 public final class BackgroundRunSubmitService {
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 登録台帳。 */
   @SuppressFBWarnings(
@@ -74,11 +72,7 @@ public final class BackgroundRunSubmitService {
   private final ImageGenerationService images;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ImageProperties shared by consumers of these settings.")
-  private final ImageProperties properties;
+  private final Supplier<String> defaultImageSize;
 
   /** 状態一覧。 */
   private dev.mikoto2000.rei.core.project.ProjectRunStateStore states;
@@ -128,7 +122,7 @@ public final class BackgroundRunSubmitService {
   /** 実行の受付と状態管理で用いる最新要約対象軽量CLIを返す。 */
   public String latestSummaryForCli(String projectId) {
     var project =
-        projects.resolveById(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
+        findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
     if (background == null) throw new IllegalStateException("Background runtime unavailable");
     var output = new java.util.ArrayList<String>();
     var active =
@@ -161,7 +155,7 @@ public final class BackgroundRunSubmitService {
         throw new IllegalArgumentException("Absolute image output required");
     }
     if (model != null) requireText(model, 512);
-    var dimensions = ImageSize.parse(size == null ? properties.getSize() : size);
+    var dimensions = ImageSize.parse(size == null ? defaultImageSize.get() : size);
     return submit(
         projectId,
         context -> {
@@ -237,7 +231,7 @@ public final class BackgroundRunSubmitService {
       WebPageSummarizerService summaries,
       ImageGenerationService images,
       ImageProperties properties) {
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
     this.registry = registry;
     this.runs = runs;
     this.router = router;
@@ -246,7 +240,7 @@ public final class BackgroundRunSubmitService {
     this.bus = bus;
     this.summaries = summaries;
     this.images = images;
-    this.properties = properties;
+    this.defaultImageSize = () -> properties.getSize();
   }
 
   /** 実行の受付と状態管理で用いる要約を返す。 */
@@ -263,7 +257,7 @@ public final class BackgroundRunSubmitService {
   /** 実行の受付と状態管理で用いる画像を返す。 */
   public AgentRunContext image(String projectId, String prompt, String size) {
     requireText(prompt, 10000);
-    var dimensions = ImageSize.parse(size == null ? properties.getSize() : size);
+    var dimensions = ImageSize.parse(size == null ? defaultImageSize.get() : size);
     return submit(
         projectId,
         context -> {
@@ -293,7 +287,7 @@ public final class BackgroundRunSubmitService {
   private AgentRunContext submit(String projectId, Function<AgentRunContext, String> operation) {
     requireText(projectId, 128);
     var project =
-        projects.resolveById(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
+        findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
     // Empty internal conversation identity denotes an operation, with no persisted Session or Turn.
     var context =
         new AgentRunContext(

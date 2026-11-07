@@ -4,12 +4,11 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmProperties;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import io.micrometer.observation.ObservationRegistry;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 import org.springframework.ai.image.ImageModel;
 import org.springframework.ai.openai.OpenAiImageModel;
@@ -29,11 +28,7 @@ public class ImageModelProvider {
   private final Supplier<LlmProperties.Server> imageSettings;
 
   /** 画像設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ImageProperties shared by consumers of these settings.")
-  private final ImageProperties imageProperties;
+  private final IntSupplier requestTimeoutSeconds;
 
   /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
@@ -54,7 +49,7 @@ public class ImageModelProvider {
       AgentEventPublisher eventPublisher) {
     this.defaultImageModelProvider = defaultImageModelProvider;
     this.imageSettings = () -> properties.feature(LlmFeature.IMAGE_GENERATION);
-    this.imageProperties = imageProperties;
+    this.requestTimeoutSeconds = () -> imageProperties.getTimeoutSeconds();
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
   }
@@ -129,7 +124,7 @@ public class ImageModelProvider {
                 server.getApiKey() == null || server.getApiKey().isBlank()
                     ? "dummy-key"
                     : server.getApiKey())
-            .timeout(Duration.ofSeconds(Math.max(1, imageProperties.getTimeoutSeconds())));
+            .timeout(Duration.ofSeconds(Math.max(1, requestTimeoutSeconds.getAsInt())));
     String model = model(null);
     if (model != null && !model.isBlank()) {
       options.model(model);

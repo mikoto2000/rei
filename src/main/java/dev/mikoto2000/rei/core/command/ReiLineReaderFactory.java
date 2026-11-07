@@ -7,8 +7,6 @@ import dev.mikoto2000.rei.core.completion.FilePathCompletionProvider;
 import dev.mikoto2000.rei.core.completion.PathFallbackCompletionProvider;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.ui.shell.JLineCompletionAdapter;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import org.jline.reader.Completer;
 import org.jline.reader.LineReader;
@@ -22,42 +20,16 @@ import picocli.CommandLine;
  * <p>Builds the canonical JLine input services for the Shell.
  */
 public final class ReiLineReaderFactory {
-  /**
-   * 共通の実行基盤で受け渡す会話を表す。
-   *
-   * @param reader 読み取り元
-   * @param completer 入力候補の提示先
-   */
-  public record Session(LineReader reader, Completer completer) {
-    /** 現在の端末に設定された入力処理と補完処理を保持する。 */
-    @SuppressFBWarnings(
-        value = "EI_EXPOSE_REP2",
-        matchType = SuppressMatchType.EXACT,
-        justification = "Keeps the live input reader configured for the same terminal session.")
-    public Session {}
-
-    /** 端末セッションに割り当てられた入力処理を返す。 */
-    @SuppressFBWarnings(
-        value = "EI_EXPOSE_REP",
-        matchType = SuppressMatchType.EXACT,
-        justification = "The shell must use the reader configured for its terminal session.")
-    public LineReader reader() {
-      return reader;
-    }
-  }
-
   /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ReiLineReaderFactory() {}
 
   /** 指定された内容から新しい対象を作成する。 */
-  public static Session create(Terminal terminal, CommandLine command) throws IOException {
-    return create(terminal, command, completionEngine());
+  public static LineReader create(Terminal terminal, CommandLine command) throws IOException {
+    return create(terminal, completer(command));
   }
 
   /** 指定された内容から新しい対象を作成する。 */
-  public static Session create(Terminal terminal, CommandLine command, CompletionEngine engine)
-      throws IOException {
-    Completer completer = completer(command, engine);
+  public static LineReader create(Terminal terminal, Completer completer) throws IOException {
     var reader = new ApprovalMenuLineReader(terminal);
     reader.setCompleter(completer);
     reader.setParser(parser());
@@ -65,7 +37,7 @@ public final class ReiLineReaderFactory {
     reader.setVariable(LineReader.HISTORY_FILE_SIZE, 1000);
     reader.setOpt(LineReader.Option.BRACKETED_PASTE);
     if (java.io.File.separatorChar == '\\') reader.setOpt(LineReader.Option.CASE_INSENSITIVE);
-    return new Session(reader, completer);
+    return reader;
   }
 
   /** 共通の実行基盤で用いる入力の解釈を返す。 */

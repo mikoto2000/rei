@@ -1,10 +1,9 @@
 package dev.mikoto2000.rei.paper;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.IntSupplier;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
@@ -15,16 +14,12 @@ public class CrossrefSearchProvider implements AcademicSearchProvider {
   private final PaperHttpClient http;
 
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
-  private final PaperProperties config;
+  private final IntSupplier maxResponseBytes;
 
   /** 指定された値や利用先を使って、CrossrefSearchProviderを初期化する。 */
   public CrossrefSearchProvider(PaperHttpClient http, PaperProperties config) {
     this.http = http;
-    this.config = config;
+    this.maxResponseBytes = () -> config.getMaxResponseBytes();
   }
 
   /** 指定された検索条件に合う情報を探し、候補を返す。 */
@@ -67,7 +62,7 @@ public class CrossrefSearchProvider implements AcademicSearchProvider {
   private JsonNode fetch(String url, PaperOperation op) {
     try {
       return PaperJson.MAPPER.readTree(
-          http.get(URI.create(url), "application/json", config.getMaxResponseBytes(), op));
+          http.get(URI.create(url), "application/json", maxResponseBytes.getAsInt(), op));
     } catch (PaperException e) {
       throw e;
     } catch (java.util.concurrent.CancellationException e) {

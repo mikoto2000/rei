@@ -4,10 +4,9 @@ import dev.mikoto2000.rei.activity.ActivityQueryLimitException;
 import dev.mikoto2000.rei.activity.ActivityWorkContextService;
 import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.DateTimeException;
 import java.time.LocalDate;
+import java.util.function.Predicate;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -48,12 +47,7 @@ public class ActivityObservationContextController {
       String report) {}
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Predicate<String> projectExists;
 
   /** サービス一覧。 */
   private final ObjectProvider<ActivityWorkContextService> services;
@@ -61,7 +55,7 @@ public class ActivityObservationContextController {
   /** 指定された値や利用先を使って、ActivityObservationContextControllerを初期化する。 */
   public ActivityObservationContextController(
       ProjectRegistry projects, ObjectProvider<ActivityWorkContextService> services) {
-    this.projects = projects;
+    this.projectExists = id -> projects.resolveById(id).isPresent();
     this.services = services;
   }
 
@@ -69,7 +63,8 @@ public class ActivityObservationContextController {
   @GetMapping("/api/v1/projects/{projectId}/activity/observation-context")
   public Report report(
       @PathVariable String projectId, @RequestParam(defaultValue = "today") String date) {
-    projects.resolveById(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
+    if (!projectExists.test(projectId))
+      throw new ResourceNotFoundException("Project");
     var service = services.getIfAvailable();
     if (service == null)
       throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Activity is disabled");

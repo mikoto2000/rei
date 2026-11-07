@@ -55,7 +55,7 @@ class ProjectCommandHistoryTest {
     terminal.setSize(new Size(100, 30));
     reader =
         (LineReaderImpl)
-            ReiLineReaderFactory.create(terminal, new CommandLine(CommandSpec.create())).reader();
+            ReiLineReaderFactory.create(terminal, new CommandLine(CommandSpec.create()));
     selected.set(
         new ProjectContext("00000000-0000-0000-0000-000000000001", "same-name", root.resolve("a")));
   }

@@ -1,11 +1,14 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.session.SessionLifecycle;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.timing.TimingCommand;
 import dev.mikoto2000.rei.timing.TimingRecorder;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.Optional;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,11 +24,7 @@ public final class TimingController {
   private final TimingRecorder recorder;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 会話一覧。 */
   @SuppressFBWarnings(
@@ -45,7 +44,7 @@ public final class TimingController {
   public TimingController(
       TimingRecorder recorder, ProjectRegistry projects, SessionLifecycle sessions) {
     this.recorder = recorder;
-    this.projects = projects;
+    this.findProject = id -> projects.resolveById(id);
     this.sessions = sessions;
   }
 
@@ -64,8 +63,7 @@ public final class TimingController {
     if (projectId == null || projectId.isBlank() || projectId.length() > 128)
       throw new IllegalArgumentException("Project ID required");
     var project =
-        projects
-            .resolveById(projectId)
+        findProject.apply(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
     sessions.validate(sessionId, project.id());
