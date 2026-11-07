@@ -17,8 +17,6 @@ import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -53,7 +51,7 @@ public final class TaskManagerService {
   private final java.util.function.Function<String, RunSnapshot> registeredRun;
 
   /** 再開用の記録一覧。 */
-  private final Function<CheckpointPage, List<PersistentCheckpoint>> readCheckpointPage;
+  private final Function<TaskSourcePage, List<PersistentCheckpoint>> readTaskSourcePage;
 
   private final BiFunction<String, String, Optional<PersistentCheckpoint>> checkpointForRun;
   private final BiPredicate<String, String> checkpointLeased;
@@ -65,11 +63,18 @@ public final class TaskManagerService {
   private final PersistentDependencyRepository dependencies;
 
   /** 予約されたエージェント実行を管理する窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent schedule and claim state.")
-  private final PersistentAgentScheduler schedules;
+  private final Function<TaskSourcePage, List<PersistentAgentScheduler.Entry>> readSchedulePage;
+
+  private final BiFunction<String, String, PersistentAgentScheduler.Entry> readSchedule;
+  private final BiFunction<String, String, String> scheduleCreator;
+  private final BiFunction<String, String, List<PersistentAgentScheduler.History>> scheduleHistory;
+  private final BiFunction<String, String, Optional<PersistentAgentScheduler.EventTrigger>>
+      scheduleEventTrigger;
+  private final Function<ScheduleRunLookup, Optional<PersistentAgentScheduler.Entry>>
+      originatingSchedule;
+  private final Function<ScheduleRunLookup, List<PersistentAgentScheduler.Entry>> createdSchedules;
+
+  private record ScheduleRunLookup(String project, String root, String session, String run) {}
 
   /** 続きの取得位置一覧。 */
   private final CursorCodec cursors = new CursorCodec();
@@ -99,7 +104,7 @@ public final class TaskManagerService {
     this.ownsExecution = id -> runs.ownsExecution(id);
     this.registeredRunIds = () -> runs.runIds();
     this.registeredRun = id -> runs.get(id);
-    this.readCheckpointPage =
+    this.readTaskSourcePage =
         checkpoints == null
             ? null
             : page ->
@@ -111,7 +116,22 @@ public final class TaskManagerService {
     this.checkpointLeased = (project, task) -> checkpoints.leased(project, task);
     this.goals = goals;
     this.dependencies = dependencies;
-    this.schedules = schedules;
+    this.readSchedulePage =
+        schedules == null
+            ? null
+            : page ->
+                schedules.taskPage(
+                    page.project(), page.root(), page.session(), page.after(), page.limit());
+    this.readSchedule = (project, id) -> schedules.get(project, id);
+    this.scheduleCreator = (project, id) -> schedules.creatorRun(project, id);
+    this.scheduleHistory = (project, id) -> schedules.history(project, id);
+    this.scheduleEventTrigger = (project, id) -> schedules.eventTrigger(project, id);
+    this.originatingSchedule =
+        lookup ->
+            schedules.taskOrigin(lookup.project(), lookup.root(), lookup.session(), lookup.run());
+    this.createdSchedules =
+        lookup ->
+            schedules.createdByRun(lookup.project(), lookup.root(), lookup.session(), lookup.run());
   }
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
@@ -162,15 +182,15 @@ public final class TaskManagerService {
     var result = new LinkedHashMap<String, TaskView>();
     var runTasks = new HashMap<String, String>();
     var checkpointRows =
-        readCheckpointPage == null
+        readTaskSourcePage == null
             ? List.<PersistentCheckpoint>of()
             : sourceRows(
                 "run:",
                 exact,
                 after,
                 key ->
-                    readCheckpointPage.apply(
-                        new CheckpointPage(
+                    readTaskSourcePage.apply(
+                        new TaskSourcePage(
                             project.id(), project.root().toString(), session, key, limit)),
                 key ->
                     checkpointForRun
@@ -419,19 +439,21 @@ public final class TaskManagerService {
                 dependency.version()));
       }
     var scheduleLinks = new HashMap<String, String>();
-    if (schedules != null)
+    if (readSchedulePage != null)
       for (var schedule :
           sourceRows(
               "schedule:",
               exact,
               after,
               key ->
-                  schedules.taskPage(project.id(), project.root().toString(), session, key, limit),
-              key -> existing(() -> schedules.get(project.id(), key)))) {
+                  readSchedulePage.apply(
+                      new TaskSourcePage(
+                          project.id(), project.root().toString(), session, key, limit)),
+              key -> existing(() -> readSchedule.apply(project.id(), key)))) {
         if (!sameRoot(project, schedule.projectRoot())) continue;
         String id = "schedule:" + schedule.task().id();
         String parent =
-            referenceTask(project, schedules.creatorRun(project.id(), schedule.task().id()));
+            referenceTask(project, scheduleCreator.apply(project.id(), schedule.task().id()));
         if (parent != null) parents.put(id, parent);
         if (schedule.runId() != null && runTasks.containsKey(schedule.runId()))
           scheduleLinks.put(runTasks.get(schedule.runId()), schedule.task().id());
@@ -444,14 +466,14 @@ public final class TaskManagerService {
         if (state.equals("RUNNING")
             && run(project, schedule.task().conversationId(), schedule.runId()) == null)
           state = "UNKNOWN";
-        var history = schedules.history(project.id(), schedule.task().id());
+        var history = scheduleHistory.apply(project.id(), schedule.task().id());
         Instant updated =
             history.isEmpty() ? schedule.task().createdAt() : history.getLast().timestamp();
         var references = new ArrayList<TaskView.Reference>();
         if (schedule.runId() != null)
           references.add(new TaskView.Reference("RUN", schedule.runId()));
-        schedules
-            .eventTrigger(project.id(), schedule.task().id())
+        scheduleEventTrigger
+            .apply(project.id(), schedule.task().id())
             .filter(
                 trigger ->
                     trigger.sourceRunId().startsWith("github:") && trigger.matchedEventId() != null)
@@ -543,13 +565,16 @@ public final class TaskManagerService {
             parent = "goal:" + goal;
           }
         }
-        if (schedules != null) {
+        if (readSchedulePage != null) {
           var origin =
-              schedules.taskOrigin(project.id(), project.root().toString(), task.sessionId(), run);
+              originatingSchedule.apply(
+                  new ScheduleRunLookup(
+                      project.id(), project.root().toString(), task.sessionId(), run));
           if (origin.isPresent()) schedule = origin.get().task().id();
           for (var child :
-              schedules.createdByRun(
-                  project.id(), project.root().toString(), task.sessionId(), run))
+              createdSchedules.apply(
+                  new ScheduleRunLookup(
+                      project.id(), project.root().toString(), task.sessionId(), run)))
             children.add("schedule:" + child.task().id());
         }
         if (dependencies != null)
@@ -674,6 +699,6 @@ public final class TaskManagerService {
 
   private record ArtifactPage(String project, String session, String run, String cursor) {}
 
-  private record CheckpointPage(
+  private record TaskSourcePage(
       String project, String root, String session, String after, int limit) {}
 }
