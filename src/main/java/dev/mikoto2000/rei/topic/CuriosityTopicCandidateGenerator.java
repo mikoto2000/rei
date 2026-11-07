@@ -5,15 +5,12 @@ import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.function.Function;
 
 /** 情報への関心話題候補の内容を生成する。 */
 public class CuriosityTopicCandidateGenerator implements TopicCandidateGenerator {
   /** 実行待ち。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared queue for pending and consumed curiosity items.")
-  private final CuriosityQueue queue;
+  private final Function<CuriosityQuery, List<CuriosityItem>> findCandidates;
 
   /** この機能の動作設定。 */
   @SuppressFBWarnings(
@@ -25,7 +22,7 @@ public class CuriosityTopicCandidateGenerator implements TopicCandidateGenerator
   /** 指定された値や利用先を使って、CuriosityTopicCandidateGeneratorを初期化する。 */
   public CuriosityTopicCandidateGenerator(
       CuriosityQueue queue, TopicGeneratorProperties properties) {
-    this.queue = queue;
+    this.findCandidates = query -> queue.findCandidates(query);
     this.properties = properties;
   }
 
@@ -34,7 +31,7 @@ public class CuriosityTopicCandidateGenerator implements TopicCandidateGenerator
   public List<TopicCandidate> generate(TopicGenerationContext context) {
     if (!properties.isEnabled()) return List.of();
     Instant now = context.currentTime();
-    return queue.findCandidates(new CuriosityQuery(now, properties.getMaxCandidates())).stream()
+    return findCandidates.apply(new CuriosityQuery(now, properties.getMaxCandidates())).stream()
         .map(
             item ->
                 new TopicCandidate(

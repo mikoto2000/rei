@@ -1,22 +1,19 @@
 package dev.mikoto2000.rei.topic;
 
+import dev.mikoto2000.rei.conversation.ConversationLogEntry;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.core.working.FileReference;
 import dev.mikoto2000.rei.core.working.WorkingSet;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
+import java.util.List;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 
 /** 既定話題生成文脈を用途や設定に応じて提供する窓口。 */
 @Component
 public class DefaultTopicGenerationContextProvider implements TopicGenerationContextProvider {
   /** 会話ログ保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common conversation log and its shared indexing state.")
-  private final ConversationLogStore conversationLogStore;
+  private final Supplier<List<ConversationLogEntry>> readConversationLog;
 
   /** 作業中集合。 */
   private final java.util.Optional<WorkingSet> workingSet;
@@ -29,7 +26,7 @@ public class DefaultTopicGenerationContextProvider implements TopicGenerationCon
       ConversationLogStore conversationLogStore,
       java.util.Optional<WorkingSet> workingSet,
       Clock clock) {
-    this.conversationLogStore = conversationLogStore;
+    this.readConversationLog = () -> conversationLogStore.readAll();
     this.workingSet = workingSet;
     this.clock = clock;
   }
@@ -39,7 +36,7 @@ public class DefaultTopicGenerationContextProvider implements TopicGenerationCon
   public TopicGenerationContext currentContext() {
     java.time.Instant now = java.time.Instant.now(clock);
     java.util.List<dev.mikoto2000.rei.conversation.ConversationLogEntry> entries =
-        conversationLogStore.readAll();
+        readConversationLog.get();
     java.util.List<ConversationTopicMessage> conversation =
         entries.stream()
             .filter(entry -> "chat".equals(entry.scope()))

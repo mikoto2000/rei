@@ -2,10 +2,9 @@ package dev.mikoto2000.rei.memory.service;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Map;
+import java.util.function.BiFunction;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -25,15 +24,11 @@ import org.springframework.stereotype.Component;
 @Component
 public class MemoryContextAdvisor implements BaseAdvisor {
   /** 関連する記憶を検索する窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Retrieves current memories through the configured retriever.")
-  private final MemoryRetriever retriever;
+  private final BiFunction<String, String, MemoryRetriever.Result> retrieveMemories;
 
   /** 指定された値や利用先を使って、MemoryContextAdvisorを初期化する。 */
   public MemoryContextAdvisor(MemoryRetriever retriever) {
-    this.retriever = retriever;
+    this.retrieveMemories = (query, project) -> retriever.retrieve(query, project);
   }
 
   /** 長期記憶の保存と検索の本処理へ渡す文脈を準備する。 */
@@ -48,7 +43,7 @@ public class MemoryContextAdvisor implements BaseAdvisor {
             .toList();
     if (users.isEmpty()) return request;
     try {
-      var result = retriever.retrieve(users.getLast().getText(), run.projectId());
+      var result = retrieveMemories.apply(users.getLast().getText(), run.projectId());
       if (result.context().isBlank()) return request;
       var messages = new ArrayList<Message>(request.prompt().getInstructions());
       messages.add(
