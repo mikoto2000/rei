@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.doctor;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Spec;
@@ -15,11 +13,9 @@ import picocli.CommandLine.Unmatched;
     mixinStandardHelpOptions = true)
 public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
   /** 環境診断。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured diagnostic service for passive inspection.")
-  private final DoctorService doctor;
+  private final java.util.function.Function<
+          Boolean, java.util.List<dev.mikoto2000.rei.doctor.DoctorResult>>
+      passiveDiagnostics;
 
   /** 会話一覧。 */
   private final java.util.function.Consumer<String> submit;
@@ -45,7 +41,7 @@ public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
   public DoctorCommand(
       DoctorService doctor,
       dev.mikoto2000.rei.application.session.ShellConversationService conversations) {
-    this.doctor = doctor;
+    this.passiveDiagnostics = doctor == null ? null : details -> doctor.passive(details);
     this.submit = conversations == null ? null : message -> conversations.submit(message);
   }
 
@@ -57,10 +53,11 @@ public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
       var request = DoctorRequest.parse(args);
       if (request.checks().isEmpty()) {
         operation = "受動診断";
-        if (doctor == null) throw new IllegalArgumentException("Doctor runtime unavailable");
+        if (passiveDiagnostics == null)
+          throw new IllegalArgumentException("Doctor runtime unavailable");
         spec.commandLine()
             .getOut()
-            .println(DoctorService.render(doctor.passive(request.details())));
+            .println(DoctorService.render(passiveDiagnostics.apply(request.details())));
       } else {
         operation = "診断Runの受付";
         if (submit == null) throw new IllegalArgumentException("Doctor Run queue unavailable");

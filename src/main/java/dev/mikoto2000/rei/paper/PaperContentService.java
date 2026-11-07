@@ -24,11 +24,12 @@ public class PaperContentService {
   private final PaperHttpClient http;
 
   /** 論文から本文を抽出する窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Extracts content using the configured paper extraction service.")
-  private final PaperExtractionService extraction;
+  @FunctionalInterface
+  private interface ExtractPaper {
+    StructuredPaper apply(String title, byte[] pdf, PaperOperation operation);
+  }
+
+  private final ExtractPaper extractPaper;
 
   /** 設定。 */
   private final Supplier<PaperSettings> settings;
@@ -63,7 +64,7 @@ public class PaperContentService {
       PaperRepository repository) {
     this.store = store;
     this.http = http;
-    this.extraction = extraction;
+    this.extractPaper = (title, pdf, operation) -> extraction.extract(title, pdf, operation);
     this.settings = () -> PaperSettings.capture(config);
     this.repository = repository;
   }
@@ -118,7 +119,7 @@ public class PaperContentService {
         }
       }
       if (pdf.isPresent()) {
-        var parsed = extraction.extract(paper.title(), pdf.get(), op);
+        var parsed = extractPaper.apply(paper.title(), pdf.get(), op);
         store.write(
             paper.id(),
             "extracted",
@@ -156,7 +157,7 @@ public class PaperContentService {
   private void importLocked(Paper paper, byte[] pdf, PaperOperation op) {
     if (repository != null && repository.find(paper.id()).isEmpty())
       throw new PaperException(PaperException.Code.PAPER_NOT_FOUND, "論文が見つかりません");
-    var parsed = extraction.extract(paper.title(), pdf, op);
+    var parsed = extractPaper.apply(paper.title(), pdf, op);
     if (repository != null)
       repository.saveArtifact(paper.id(), "source", "revision", UUID.randomUUID().toString(), op);
     // Invalidate the prior extraction first. An interrupted replacement can then reparse the

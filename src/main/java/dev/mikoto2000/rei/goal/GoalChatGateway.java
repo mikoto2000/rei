@@ -54,11 +54,10 @@ public class GoalChatGateway
   private final GoalRepository goals;
 
   /** 確認の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared verifier and its configured completion and evidence policy.")
-  private final FileGoalVerifier verifier;
+  private final java.util.function.Predicate<GoalRepository.Goal> satisfiesCriterion;
+
+  private final java.util.function.Function<GoalRepository.Goal, GoalCompletionProgress>
+      inspectRepair;
 
   /** プロジェクト一覧。 */
   private final Supplier<List<ProjectContext>> registeredProjects;
@@ -70,7 +69,8 @@ public class GoalChatGateway
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared input router so all operations use the same queue and active runs.")
+      justification =
+          "Uses the shared input router so all operations use the same queue and active runs.")
   private final ConversationInputRouter router;
 
   /** チャット。 */
@@ -84,7 +84,8 @@ public class GoalChatGateway
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
+      justification =
+          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** イベント一覧。 */
@@ -144,7 +145,8 @@ public class GoalChatGateway
       AgentEventFactory events,
       AgentEventPublisher publisher) {
     this.goals = goals;
-    this.verifier = verifier;
+    this.satisfiesCriterion = goal -> verifier.verify(goal).satisfied();
+    this.inspectRepair = goal -> GoalCompletionProgress.inspect(goal, "REPAIRING", verifier);
     this.registeredProjects = () -> projects.registeredProjects();
     this.sessions = sessions;
     this.router = router;
@@ -223,7 +225,7 @@ public class GoalChatGateway
                       validate(goal);
                       var stageVerification = stages == null ? null : stages.observeRun(goal, run);
                       if (stageVerification == null
-                          ? verifier.verify(goal).satisfied()
+                          ? satisfiesCriterion.test(goal)
                           : stageVerification.result() == GoalStageVerifier.Result.VERIFIED)
                         outcome =
                             new GoalLoopService.Outcome(
@@ -257,7 +259,7 @@ public class GoalChatGateway
                                 .reduce((a, b) -> b)
                                 .orElse(null);
                         if (previous != null && previous.status().equals("UNVERIFIED")) {
-                          var current = GoalCompletionProgress.inspect(goal, "REPAIRING", verifier);
+                          var current = inspectRepair.apply(goal);
                           prompt +=
                               "\nRepair diagnosis: "
                                   + GoalRepairDiagnosis.of(previous.reason()).kind()

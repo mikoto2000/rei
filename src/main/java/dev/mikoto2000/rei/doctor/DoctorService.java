@@ -47,21 +47,24 @@ public class DoctorService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound VoiceProperties shared by consumers of these settings.")
+      justification =
+          "Reads the application-bound VoiceProperties shared by consumers of these settings.")
   private final VoiceProperties voice;
 
   /** Codexの設定または実行の窓口。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound CodexProperties shared by consumers of these settings.")
+      justification =
+          "Reads the application-bound CodexProperties shared by consumers of these settings.")
   private final CodexProperties codex;
 
   /** Claudeの設定または実行の窓口。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ClaudeCodeProperties shared by consumers of these settings.")
+      justification =
+          "Reads the application-bound ClaudeCodeProperties shared by consumers of these settings.")
   private final ClaudeCodeProperties claude;
 
   /** 言語モデル。 */
@@ -74,16 +77,12 @@ public class DoctorService {
   private final VoiceModelManifest manifest;
 
   /** 現在モデル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the current application model selection.")
-  private dev.mikoto2000.rei.core.service.ModelHolderService currentModel;
+  private java.util.function.Supplier<String> currentModel;
 
   /** 実行環境の診断で使用する現在モデルを設定する。 */
   @Autowired
   public void setCurrentModel(dev.mikoto2000.rei.core.service.ModelHolderService holder) {
-    currentModel = holder;
+    currentModel = holder == null ? null : () -> holder.get();
   }
 
   /** 実行環境の診断を利用するため、指定を補って共通の初期化へ引き渡す。 */
