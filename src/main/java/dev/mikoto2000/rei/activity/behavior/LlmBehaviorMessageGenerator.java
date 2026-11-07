@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.activity.behavior;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.function.Supplier;
@@ -35,7 +36,7 @@ public final class LlmBehaviorMessageGenerator implements BehaviorMessageGenerat
 
   /** 指定された条件に従って、依頼された内容を生成する。 */
   @Override
-  public String generate(BehaviorNotification notification) throws Exception {
+  public String generate(BehaviorNotification notification) throws IOException {
     var a = notification.assessment();
     var data = new LinkedHashMap<String, Object>();
     data.put("severity", a.severity());

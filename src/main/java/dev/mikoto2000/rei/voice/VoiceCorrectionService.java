@@ -2,8 +2,7 @@ package dev.mikoto2000.rei.voice;
 
 import dev.mikoto2000.rei.application.input.ConversationInput;
 import dev.mikoto2000.rei.event.CredentialRedactor;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,11 +35,7 @@ public final class VoiceCorrectionService implements AutoCloseable {
   @FunctionalInterface
   public interface Llm {
     /** 音声による対話の要求を実行し、呼び出し元へ結果を返す。 */
-    @SuppressFBWarnings(
-        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-        matchType = SuppressMatchType.EXACT,
-        justification = "The configured correction callback can report a checked model or transport failure.")
-    String call(String raw, VoiceCorrectionContext.Snapshot context) throws Exception;
+    String call(String raw, VoiceCorrectionContext.Snapshot context) throws IOException, InterruptedException;
   }
 
   /** この機能の動作設定。 */
@@ -300,10 +295,6 @@ public final class VoiceCorrectionService implements AutoCloseable {
   }
 
   /** 音声による対話で用いるcorrect内部を返す。 */
-  @SuppressFBWarnings(
-      value = "REC_CATCH_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Records checked failures from the configured voice correction model in the worker.")
   private CompletionStage<VoiceCorrectionValidator.Decision> correctInternal(
       ConversationInput input,
       String asrOriginal,
@@ -376,7 +367,7 @@ public final class VoiceCorrectionService implements AutoCloseable {
                           + elapsed(validation));
                   if (current.getAsBoolean()) job.finish(decision);
                   else job.cancel();
-                } catch (Exception failure) {
+                } catch (IOException | InterruptedException | RuntimeException failure) {
                   job.finish(validator.fallback(raw, "llm_failure"));
                 } // Never publish exception text.
                 return null;
