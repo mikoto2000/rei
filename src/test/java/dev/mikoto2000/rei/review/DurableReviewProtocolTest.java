@@ -21,6 +21,39 @@ class DurableReviewProtocolTest {
   @TempDir Path temporary;
 
   @Test
+  void sizesNewClaimUsingTheAttemptIdReturnedToTheModel() throws Exception {
+    var root = Files.createDirectory(temporary.resolve("repository"));
+    String source = "0123456789abcdef".repeat(100);
+    Files.writeString(root.resolve("source.txt"), source);
+    var data = temporary.resolve("data");
+    try (var gate = new StorageMigrationCoordinator(data)) {
+      gate.prepare();
+    }
+    var conservative = TokenEstimator.conservative();
+    // A real attempt ID can cost more tokens than the same number of repeated digits.
+    String placeholder = "\"attempt\":\"" + "0".repeat(36) + "\"";
+    TokenEstimator estimator =
+        text -> conservative.text(text) + (text.contains(placeholder) ? 0 : 32);
+    var tools =
+        new ReviewTools(
+            new ReviewCoverageLedger(new StorageDatabase(data)),
+            new RawToolResultStore(data),
+            new Tools(),
+            estimator);
+    var owner = new AgentRunContext("run", "session", root, "project");
+    try (var active = AgentRunScope.open(owner)) {
+      String task = tools.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L).id();
+      tools.scanReviewSnapshot(task, 100);
+      var page = tools.readNextReviewWorkItem(task, 256);
+      assertThat(page).isNotNull();
+      assertThat(estimator.text(StorageDatabase.JSON.writeValueAsString(page)))
+          .isLessThanOrEqualTo(256);
+      assertThat(page.content()).isNotEmpty().isEqualTo(source.substring(0, page.nextOffset()));
+      assertThat(tools.readNextReviewWorkItem(task, 512)).isEqualTo(page);
+    }
+  }
+
+  @Test
   void frozenChunksRequireTrustedDeliveryAndResumeOnlyPendingRanges() throws Exception {
     var root = Files.createDirectory(temporary.resolve("repository"));
     String source = "abcdef🙂\n".repeat(1000);
