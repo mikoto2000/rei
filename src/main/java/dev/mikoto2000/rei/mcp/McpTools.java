@@ -14,8 +14,6 @@ import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.workcontext.WorkContextService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -59,21 +57,37 @@ public final class McpTools {
   private final WorkContextService contexts;
 
   /** 会話の実行を受け付ける窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits operations through the shared chat run entry point.")
-  private final ChatSubmitService chats;
+  private final java.util.function.Function<Submission, String> submitMcp;
+
+  private record Submission(
+      String prompt, String project, String session, McpAdmission admission) {}
 
   /** 実行一覧。 */
   private final RunService runs;
 
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Operates on the shared request, run and checkpoint state.")
-  private final McpRequestStore store;
+  private final java.util.function.Function<String, java.util.Optional<McpRequestStore.Request>>
+      findByRequest;
+
+  private final java.util.function.Function<String, java.util.Optional<McpRequestStore.Request>>
+      findByRun;
+  private final java.util.function.BiPredicate<String, String> ownsSession;
+  private final java.util.function.Function<McpRequestStore.Request, RunStatus> readStatus;
+  private final java.util.function.Function<
+          McpRequestStore.Request, java.util.Optional<CheckpointReceipt>>
+      checkpoint;
+  private final java.util.function.Consumer<McpRequestStore.Request> snapshot;
+  private final java.util.function.Consumer<Audit> audit;
+
+  private record CheckpointReceipt(String taskId, long revision) {}
+
+  private record Audit(
+      String operation,
+      String outcome,
+      String project,
+      String run,
+      String hash,
+      String correlation) {}
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -125,9 +139,30 @@ public final class McpTools {
                 .toList();
     this.allowed = Set.copyOf(allowed);
     this.contexts = contexts;
-    this.chats = chats;
+    this.submitMcp =
+        request ->
+            chats
+                .submitMcp(
+                    request.prompt(), request.project(), request.session(), request.admission())
+                .runId();
     this.runs = runs;
-    this.store = store;
+    this.findByRequest = hash -> store.byRequest(hash);
+    this.findByRun = run -> store.byRun(run);
+    this.ownsSession = (project, session) -> store.ownsSession(project, session);
+    this.readStatus = request -> store.status(request).status();
+    this.checkpoint =
+        request ->
+            store.checkpoint(request).map(c -> new CheckpointReceipt(c.taskId(), c.revision()));
+    this.snapshot = request -> store.snapshot(request);
+    this.audit =
+        entry ->
+            store.audit(
+                entry.operation(),
+                entry.outcome(),
+                entry.project(),
+                entry.run(),
+                entry.hash(),
+                entry.correlation());
     this.clock = clock;
     this.concurrent = concurrent;
     this.receiptRetention = receiptRetention;
@@ -188,17 +223,18 @@ public final class McpTools {
       error = true;
     }
     try {
-      store.audit(
-          name,
-          error
-              ? ((Map<?, ?>) output.get("error")).get("code").toString()
-              : Boolean.TRUE.equals(output.get("replayed")) ? "REPLAYED" : "SUCCESS",
-          safeId(args, "project_id"),
-          safeId(args, "run_id"),
-          args != null && args.get("request_id") instanceof String s
-              ? ConversationAdmissionStore.hash(s)
-              : null,
-          correlation);
+      audit.accept(
+          new Audit(
+              name,
+              error
+                  ? ((Map<?, ?>) output.get("error")).get("code").toString()
+                  : Boolean.TRUE.equals(output.get("replayed")) ? "REPLAYED" : "SUCCESS",
+              safeId(args, "project_id"),
+              safeId(args, "run_id"),
+              args != null && args.get("request_id") instanceof String s
+                  ? ConversationAdmissionStore.hash(s)
+                  : null,
+              correlation));
     } catch (RuntimeException unavailable) {
       output =
           Map.of(
@@ -417,7 +453,7 @@ public final class McpTools {
       throw new McpError("INTERNAL_ERROR");
     }
     String hash = ConversationAdmissionStore.hash(request);
-    var old = store.byRequest(hash);
+    var old = findByRequest.apply(hash);
     if (old.isPresent()) {
       var r = old.get();
       if (!r.project().equals(p)) throw new McpError("REQUEST_CONFLICT");
@@ -427,20 +463,21 @@ public final class McpTools {
       return receipt(r, request, true);
     }
     if (!concurrent) throw new McpError("FEATURE_DISABLED");
-    if (session != null && !store.ownsSession(p, session)) throw new McpError("NOT_FOUND");
+    if (session != null && !ownsSession.test(p, session)) throw new McpError("NOT_FOUND");
     String prompt =
         instruction
             + "\n\nConstraints (READ_ONLY authority is fixed):\n"
             + String.join("\n", constraints)
             + "\n\nAcceptance criteria (require verification evidence):\n"
             + String.join("\n", criteria);
-    var accepted =
-        chats.submitMcp(
-            prompt,
-            p,
-            session,
-            new McpAdmission(hash, fingerprint, receiptRetention, criteria.size(), criteria));
-    return receipt(store.byRun(accepted.runId()).orElseThrow(), request, false);
+    String runId =
+        submitMcp.apply(
+            new Submission(
+                prompt,
+                p,
+                session,
+                new McpAdmission(hash, fingerprint, receiptRetention, criteria.size(), criteria)));
+    return receipt(findByRun.apply(runId).orElseThrow(), request, false);
   }
 
   /** MCPによる機能の提供で用いる受付記録を返す。 */
@@ -457,12 +494,12 @@ public final class McpTools {
                 "admission_status",
                 "ACCEPTED",
                 "run_status",
-                store.status(r).status().name(),
+                readStatus.apply(r).name(),
                 "created_at",
                 r.created().toString(),
                 "replayed",
                 replay));
-    store.checkpoint(r).ifPresent(c -> output.put("task_id", c.taskId()));
+    checkpoint.apply(r).ifPresent(c -> output.put("task_id", c.taskId()));
     return output;
   }
 
@@ -477,7 +514,9 @@ public final class McpTools {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (request != null && request.length() > 128) throw new McpError("INVALID_ARGUMENT");
     var r =
-        (run != null ? store.byRun(run) : store.byRequest(ConversationAdmissionStore.hash(request)))
+        (run != null
+                ? findByRun.apply(run)
+                : findByRequest.apply(ConversationAdmissionStore.hash(request)))
             .orElseThrow(() -> new McpError("NOT_FOUND"));
     if (!r.project().equals(p)) throw new McpError("NOT_FOUND");
     return r;
@@ -488,7 +527,7 @@ public final class McpTools {
     var r = owned(a, true);
     if (a.containsKey("request_id") && !clock.instant().isBefore(r.expires()))
       throw new McpError("REQUEST_EXPIRED");
-    var s = store.status(r);
+    RunStatus status = readStatus.apply(r);
     var approval =
         listApprovals.apply(r.project()).stream()
             .filter(v -> v.runId().equals(r.run()))
@@ -500,38 +539,33 @@ public final class McpTools {
                         "status",
                         v.status(),
                         "resume_required",
-                        s.status() != RunStatus.RUNNING && s.status() != RunStatus.QUEUED))
+                        status != RunStatus.RUNNING && status != RunStatus.QUEUED))
             .toList();
     var out = new LinkedHashMap<String, Object>();
     out.put("run_id", r.run());
-    out.put(
-        "task_id",
-        store
-            .checkpoint(r)
-            .map(dev.mikoto2000.rei.checkpoint.PersistentCheckpoint::taskId)
-            .orElse(null));
+    out.put("task_id", checkpoint.apply(r).map(CheckpointReceipt::taskId).orElse(null));
     out.put("session_id", r.session());
-    out.put("state", s.status().name());
-    out.put(
-        "waiting_reason", s.status() == RunStatus.WAITING ? "EXTERNAL_OR_CHECKPOINT_WAIT" : null);
+    out.put("state", status.name());
+    out.put("waiting_reason", status == RunStatus.WAITING ? "EXTERNAL_OR_CHECKPOINT_WAIT" : null);
     out.put("progress", null);
     out.put("approval", approval);
     if (!approval.isEmpty())
-      store.audit(
-          "approval_wait",
-          "SAVED_APPROVAL",
-          r.project(),
-          r.run(),
-          r.hash(),
-          UUID.randomUUID().toString());
+      audit.accept(
+          new Audit(
+              "approval_wait",
+              "SAVED_APPROVAL",
+              r.project(),
+              r.run(),
+              r.hash(),
+              UUID.randomUUID().toString()));
     out.put(
         "checkpoint_ref",
-        store
-            .checkpoint(r)
+        checkpoint
+            .apply(r)
             .map(c -> Map.of("task_id", c.taskId(), "revision", c.revision()))
             .orElse(null));
     out.put("updated_at", r.updatedAt().toString());
-    out.put("retry_after_seconds", s.status().isTerminal() ? 0 : 2);
+    out.put("retry_after_seconds", status.isTerminal() ? 0 : 2);
     return out;
   }
 
@@ -539,13 +573,13 @@ public final class McpTools {
   @SuppressWarnings("unchecked")
   private Map<String, Object> result(Map<String, Object> a) {
     var r = owned(a, false);
-    store.snapshot(r);
-    r = store.byRun(r.run()).orElseThrow();
+    snapshot.accept(r);
+    r = findByRun.apply(r.run()).orElseThrow();
     if (r.resultExpires() != null && !clock.instant().isBefore(r.resultExpires()))
       throw new McpError("RESULT_EXPIRED");
     if (r.state() == null)
       throw new McpError(
-          store.status(r).status() == RunStatus.UNKNOWN ? "RUN_STATE_UNKNOWN" : "RESULT_NOT_READY");
+          readStatus.apply(r) == RunStatus.UNKNOWN ? "RUN_STATE_UNKNOWN" : "RESULT_NOT_READY");
     if (r.result() == null) throw new McpError("RESULT_EXPIRED");
     try {
       var saved = StorageDatabase.JSON.readValue(r.result(), Map.class);
@@ -589,17 +623,17 @@ public final class McpTools {
   /** 対象の実行をキャンセルする。 */
   private Map<String, Object> cancel(Map<String, Object> a) {
     var r = owned(a, false);
-    var s = store.status(r);
-    if (s.status() == RunStatus.UNKNOWN) throw new McpError("RUN_STATE_UNKNOWN");
+    RunStatus status = readStatus.apply(r);
+    if (status == RunStatus.UNKNOWN) throw new McpError("RUN_STATE_UNKNOWN");
     // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
-    if (s.status().isTerminal())
+    if (status.isTerminal())
       return Map.of(
           "run_id",
           r.run(),
           "cancel_request_status",
           "ALREADY_TERMINAL",
           "run_status",
-          s.status().name(),
+          status.name(),
           "cleanup_status",
           "UNKNOWN",
           "rollback_status",
