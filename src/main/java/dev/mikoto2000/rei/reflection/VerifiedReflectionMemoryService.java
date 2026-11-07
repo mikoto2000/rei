@@ -17,6 +17,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import org.springframework.stereotype.Service;
 
 /**
@@ -45,15 +46,12 @@ public class VerifiedReflectionMemoryService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common repository for persisted memory and its transaction boundaries.")
+      justification =
+          "Uses the common repository for persisted memory and its transaction boundaries.")
   private final MemoryRepository memories;
 
   /** 確認の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared verifier and its configured completion and evidence policy.")
-  private final FileGoalVerifier verifier;
+  private final Function<GoalRepository.Goal, FileGoalVerifier.Verification> verifyGoal;
 
   /** 所有者。 */
   private final GoalLoopService.Gateway owner;
@@ -76,7 +74,7 @@ public class VerifiedReflectionMemoryService {
     this.goals = goals;
     this.reflections = reflections;
     this.memories = memories;
-    this.verifier = verifier;
+    this.verifyGoal = goal -> verifier.verify(goal);
     this.owner = owner;
     this.properties = properties;
     this.clock = clock;
@@ -107,7 +105,7 @@ public class VerifiedReflectionMemoryService {
     var previous = memories.verifiedReflectionProof(project, reflectionId);
     if (previous.isPresent())
       return new Promotion(memories.find(previous.get().memoryId()).orElseThrow(), previous.get());
-    var verification = verifier.verify(goal);
+    var verification = verifyGoal.apply(goal);
     if (!verification.satisfied())
       throw new IllegalStateException("Independent verification failed: " + verification.reason());
     if (Thread.currentThread().isInterrupted())

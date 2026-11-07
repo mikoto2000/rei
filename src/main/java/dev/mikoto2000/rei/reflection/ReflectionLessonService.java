@@ -4,8 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.goal.FileGoalVerifier;
 import dev.mikoto2000.rei.goal.GoalRepository;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -17,6 +15,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -123,11 +122,7 @@ public class ReflectionLessonService {
   private final GoalRepository goals;
 
   /** 確認の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared verifier and its configured completion and evidence policy.")
-  private final FileGoalVerifier verifier;
+  private final Predicate<GoalRepository.Goal> goalSatisfied;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -152,7 +147,7 @@ public class ReflectionLessonService {
     this.runs = runs;
     this.reflections = reflections;
     this.goals = goals;
-    this.verifier = verifier;
+    this.goalSatisfied = goal -> verifier.verify(goal).satisfied();
     this.clock = clock;
     this.enabled = enabled;
     db.sql(
@@ -242,7 +237,7 @@ public class ReflectionLessonService {
               && Objects.equals(
                   goal.currentRunId() == null ? "" : goal.currentRunId(), item.runId())
               && reflections.matchesCriteria(item, goal)
-              && verifier.verify(goal).satisfied();
+              && goalSatisfied.test(goal);
       return new Observation(
           "observation-" + hash(owner(context) + ":" + kind + ":" + id),
           "OBSERVATION",
