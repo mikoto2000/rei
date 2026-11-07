@@ -84,7 +84,8 @@ public final class SapiVoiceOutput implements VoiceSpeechOutput {
 
   /** 音声による対話に関する読み上げを処理する。 */
   @Override
-  public void speak(String voice, String text, BooleanSupplier current) throws Exception {
+  public void speak(String voice, String text, BooleanSupplier current)
+      throws IOException, InterruptedException {
     if (voice == null
         || voice.isBlank()
         || voice.length() > 256

@@ -14,7 +14,7 @@ import javax.sound.sampled.TargetDataLine;
 /** 音声による対話に必要なJava音通知マイク取得記録を扱う。 */
 public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureService {
   /** 必要な対象を利用できるよう、Java音通知マイク取得記録の利用を開始する。 */
-  public FrameSource open(AudioDevice device) throws Exception {
+  public FrameSource open(AudioDevice device) throws LineUnavailableException {
     Mixer mixer = resolveMixer(device);
     AudioFormat format = selectFormat(mixer);
     var line = (TargetDataLine) mixer.getLine(new DataLine.Info(TargetDataLine.class, format));
@@ -57,7 +57,7 @@ public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureServic
           }
         }
       };
-    } catch (Exception | LinkageError e) {
+    } catch (LineUnavailableException | RuntimeException | LinkageError e) {
       line.close();
       throw e;
     }

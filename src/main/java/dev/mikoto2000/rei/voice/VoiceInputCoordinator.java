@@ -3,8 +3,8 @@ package dev.mikoto2000.rei.voice;
 import dev.mikoto2000.rei.application.input.ConversationInput;
 import dev.mikoto2000.rei.application.input.ConversationTarget;
 import dev.mikoto2000.rei.application.input.InputSource;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.io.IOException;
+import java.net.URISyntaxException;
 import java.time.Clock;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,6 +17,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import javax.sound.sampled.LineUnavailableException;
 
 /**
  * 音声入力からの依頼かどうかの複数の処理を調整する。
@@ -549,10 +550,6 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   }
 
   /** 音声による対話に関するsuperviseを処理する。 */
-  @SuppressFBWarnings(
-      value = "REC_CATCH_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Records checked device acquisition and backend startup failures for the active run.")
   private void supervise(Run run) {
     boolean captureStarted = false, recognitionStarted = false;
     try {
@@ -608,7 +605,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         if (!run.stop) {
           try {
             run.source.checkHealth();
-          } catch (Exception healthFailure) {
+          } catch (IOException | RuntimeException healthFailure) {
             fail(run, VoiceEventPublisher.Type.DEVICE_CHANGED);
             continue;
           }
@@ -626,7 +623,8 @@ public final class VoiceInputCoordinator implements AutoCloseable {
       // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       fail(run, VoiceEventPublisher.Type.BACKEND_FAILED);
-    } catch (Exception | LinkageError e) {
+    } catch (IOException | ReflectiveOperationException | URISyntaxException
+        | LineUnavailableException | RuntimeException | LinkageError e) {
       fail(
           run,
           run.backend == null
@@ -676,10 +674,6 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   }
 
   /** 後から状況を確認できるよう、繰り返しを記録する。 */
-  @SuppressFBWarnings(
-      value = "REC_CATCH_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Records checked frame read and detection failures from the selected voice backend.")
   private void captureLoop(Run run) {
     var assembler = new SpeechSegmentAssembler(run.settings, clock);
     long previousEpoch = audioGate.epoch();
@@ -751,7 +745,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
       if (!run.stop) fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED);
       // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
-    } catch (Exception | LinkageError e) {
+    } catch (IOException | ReflectiveOperationException | RuntimeException | LinkageError e) {
       fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED);
     } finally {
       assembler.reset();
@@ -760,10 +754,6 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   }
 
   /** 音声による対話に関するrecognize繰り返しを処理する。 */
-  @SuppressFBWarnings(
-      value = "REC_CATCH_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Records checked recognition failures from the selected speech backend.")
   private void recognizeLoop(Run run) {
     var wakeGate = new VoiceWakeGate(clock);
     try {
@@ -874,7 +864,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
       if (!run.stop) fail(run, VoiceEventPublisher.Type.RECOGNITION_FAILED);
       // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
-    } catch (Exception | LinkageError e) {
+    } catch (IOException | ReflectiveOperationException | RuntimeException | LinkageError e) {
       fail(run, VoiceEventPublisher.Type.RECOGNITION_FAILED);
     } finally {
       run.exited.countDown();

@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.voice;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.io.IOException;
 import java.util.function.BooleanSupplier;
 
 /**
@@ -12,11 +11,8 @@ import java.util.function.BooleanSupplier;
 @FunctionalInterface
 public interface VoiceSpeechOutput extends AutoCloseable {
   /** 音声による対話に関する読み上げを処理する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Speech output adapters can report checked platform or process failures.")
-  void speak(String voice, String text, BooleanSupplier current) throws Exception;
+  void speak(String voice, String text, BooleanSupplier current)
+      throws IOException, InterruptedException;
 
   /** 実行中の処理を停止する。 */
   default void stop() {}

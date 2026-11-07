@@ -117,7 +117,7 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
       return new VoiceBackend(
           new VoiceActivityDetector() {
             /** 音声による対話で用いるprobabilityを返す。 */
-            public float probability(float[] frame) throws Exception {
+            public float probability(float[] frame) throws IOException {
               return vad.probability(frame);
             }
 
@@ -128,7 +128,7 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
           },
           new SpeechRecognizer() {
             /** 音声による対話で用いるrecognizeを返す。 */
-            public String recognize(SpeechSegment segment) throws Exception {
+            public String recognize(SpeechSegment segment) throws IOException {
               return decoder.recognize(segment.samples());
             }
 
