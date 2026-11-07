@@ -4,8 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.SpecificationVersion;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -28,11 +27,7 @@ public final class ClassificationRuleSuggestions {
   @FunctionalInterface
   public interface Model {
     /** 後続の判断で選べる候補を用意するため、モデルを提案する。 */
-    @SuppressFBWarnings(
-        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-        matchType = SuppressMatchType.EXACT,
-        justification = "The configured model callback can report its own checked transport or generation failure.")
-    String propose(String input, String schema) throws Exception;
+    String propose(String input, String schema) throws IOException;
   }
 
   /** 補助操作。 */
@@ -91,10 +86,6 @@ public final class ClassificationRuleSuggestions {
   }
 
   /** 作業状況の把握で用いる提案を返す。 */
-  @SuppressFBWarnings(
-      value = "REC_CATCH_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Converts checked failures from the configured model into suggestion diagnostics.")
   public String suggest(boolean entertainment) {
     if (!toolkit.ruleSuggestionsEnabled())
       return "ルール候補生成は無効です。";
@@ -168,7 +159,7 @@ public final class ClassificationRuleSuggestions {
           + proposal.rationale().replaceAll("[\\p{Cntrl}]", " ")
           + "\n"
           + proposal.yaml();
-    } catch (Exception e) {
+    } catch (IOException | RuntimeException e) {
       return "ルール候補を生成できませんでした。有効ルールは変更していません。\n失敗段階: " + stage + "\n理由: " + diagnostic(e);
     }
   }
