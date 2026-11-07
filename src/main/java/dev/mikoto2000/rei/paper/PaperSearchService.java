@@ -1,12 +1,12 @@
 package dev.mikoto2000.rei.paper;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.IntSupplier;
 import org.springframework.stereotype.Service;
 
@@ -20,18 +20,10 @@ public class PaperSearchService {
   private final CrossrefSearchProvider fallback;
 
   /** リポジトリ。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared paper repository for the library and its artifacts.")
-  private final PaperRepository repo;
+  private final BiFunction<Paper, PaperOperation, Paper> savePaper;
 
   /** 参照先一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the same session references for result indexing and resolution.")
-  private final PaperSessionReferences refs;
+  private final BiConsumer<String, List<String>> replaceReferences;
 
   /** 設定。 */
   private final IntSupplier maxSearchLimit;
@@ -45,8 +37,8 @@ public class PaperSearchService {
       PaperProperties config) {
     this.primary = primary;
     this.fallback = fallback;
-    this.repo = repo;
-    this.refs = refs;
+    this.savePaper = (paper, op) -> repo.save(paper, op);
+    this.replaceReferences = (session, ids) -> refs.replace(session, ids);
     this.maxSearchLimit = () -> config.getMaxLimit();
   }
 
@@ -79,10 +71,10 @@ public class PaperSearchService {
     Map<String, Paper> saved = new LinkedHashMap<>();
     for (Paper p : papers) {
       op.check();
-      var s = repo.save(p, op);
+      var s = savePaper.apply(p, op);
       saved.put(s.id(), s);
     }
-    refs.replace(op.sessionId(), List.copyOf(saved.keySet()));
+    replaceReferences.accept(op.sessionId(), List.copyOf(saved.keySet()));
     org.slf4j.LoggerFactory.getLogger(getClass())
         .info(
             "paper search query={} results={} dedup={}",
@@ -96,6 +88,6 @@ public class PaperSearchService {
   public Paper enrich(Paper paper, PaperOperation op) {
     if (paper.doi() == null) return paper;
     var extra = fallback.metadata(paper.doi(), op);
-    return repo.save(extra, op);
+    return savePaper.apply(extra, op);
   }
 }

@@ -1,8 +1,7 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.IntegrationRunSubmitService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
@@ -16,15 +15,21 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class SearchCommandsController {
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits operations through the shared integration run entry point.")
-  private final IntegrationRunSubmitService runs;
+  private final Function<Search, String> submitSearch;
 
   /** 指定された値や利用先を使って、SearchCommandsControllerを初期化する。 */
   public SearchCommandsController(IntegrationRunSubmitService runs) {
-    this.runs = runs;
+    this.submitSearch =
+        request ->
+            runs.search(
+                    request.projectId(),
+                    request.sessionId(),
+                    request.query(),
+                    request.vectorTopK() == null ? 3 : request.vectorTopK(),
+                    request.webTopK() == null ? 5 : request.webTopK(),
+                    request.threshold(),
+                    request.source())
+                .runId();
   }
 
   /**
@@ -61,17 +66,9 @@ public final class SearchCommandsController {
         || request.threshold() != null && !Double.isFinite(request.threshold())
         || request.source() != null && request.source().length() > 16384)
       throw new IllegalArgumentException("Invalid search request");
-    var context =
-        runs.search(
-            request.projectId(),
-            request.sessionId(),
-            request.query(),
-            request.vectorTopK() == null ? 3 : request.vectorTopK(),
-            request.webTopK() == null ? 5 : request.webTopK(),
-            request.threshold(),
-            request.source());
+    String runId = submitSearch.apply(request);
     return ResponseEntity.accepted()
-        .location(java.net.URI.create("/api/v1/runs/" + context.runId()))
-        .body(new BackgroundRunController.AcceptedRunResponse(context.runId()));
+        .location(java.net.URI.create("/api/v1/runs/" + runId))
+        .body(new BackgroundRunController.AcceptedRunResponse(runId));
   }
 }

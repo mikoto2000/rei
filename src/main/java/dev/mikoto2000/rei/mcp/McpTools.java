@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.application.run.RunService;
 import dev.mikoto2000.rei.application.run.RunStatus;
 import dev.mikoto2000.rei.application.run.SessionBusyException;
 import dev.mikoto2000.rei.conversation.ConversationAdmissionStore;
+import dev.mikoto2000.rei.core.policy.ToolApprovalRepository;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.storage.StorageDatabase;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * MCPをモデルから呼び出せるツールとして提供する。
@@ -89,11 +91,7 @@ public final class McpTools {
   private final McpCursor cursors;
 
   /** 承認一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common approval state to coordinate requests and decisions.")
-  private final dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals;
+  private final Function<String, List<ToolApprovalRepository.Request>> listApprovals;
 
   /** 指定された値や利用先を使って、McpToolsを初期化する。 */
   public McpTools(
@@ -118,7 +116,7 @@ public final class McpTools {
     this.concurrent = concurrent;
     this.receiptRetention = receiptRetention;
     this.cursors = cursors;
-    this.approvals = approvals;
+    this.listApprovals = project -> approvals.list(project);
   }
 
   /** MCPによる機能の提供の要求を実行し、呼び出し元へ結果を返す。 */
@@ -494,7 +492,7 @@ public final class McpTools {
       throw new McpError("REQUEST_EXPIRED");
     var s = store.status(r);
     var approval =
-        approvals.list(r.project()).stream()
+        listApprovals.apply(r.project()).stream()
             .filter(v -> v.runId().equals(r.run()))
             .map(
                 v ->
