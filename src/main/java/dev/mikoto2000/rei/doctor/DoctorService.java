@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.env.ConfigurableEnvironment;
@@ -51,18 +52,14 @@ public class DoctorService {
   private final VoiceProperties voice;
 
   /** Codexの設定または実行の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound CodexProperties shared by consumers of these settings.")
-  private final CodexProperties codex;
+  private final BooleanSupplier codexEnabled;
+
+  private final Supplier<String> codexCommand;
 
   /** Claudeの設定または実行の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ClaudeCodeProperties shared by consumers of these settings.")
-  private final ClaudeCodeProperties claude;
+  private final BooleanSupplier claudeEnabled;
+
+  private final Supplier<String> claudeCommand;
 
   /** 言語モデル。 */
   private final Supplier<LlmProperties.Server> chatSettings;
@@ -108,8 +105,10 @@ public class DoctorService {
       VoiceModelManifest manifest) {
     this.environment = environment;
     this.voice = voice;
-    this.codex = codex;
-    this.claude = claude;
+    this.codexEnabled = () -> codex.isEnabled();
+    this.codexCommand = () -> codex.getCommand();
+    this.claudeEnabled = () -> claude.isEnabled();
+    this.claudeCommand = () -> claude.getCommand();
     this.chatSettings = () -> llm.feature("chat");
     this.clock = clock;
     this.manifest = manifest;
@@ -246,8 +245,8 @@ public class DoctorService {
         () ->
             external(
                 "external.codex",
-                codex.isEnabled(),
-                codex.getCommand(),
+                codexEnabled.getAsBoolean(),
+                codexCommand.get(),
                 details,
                 "rei.external-agents.codex.command"));
     observe(
@@ -257,8 +256,8 @@ public class DoctorService {
         () ->
             external(
                 "external.claude",
-                claude.isEnabled(),
-                claude.getCommand(),
+                claudeEnabled.getAsBoolean(),
+                claudeCommand.get(),
                 details,
                 "rei.external-agents.claude.command"));
     observe(results, "voice.bundle", "filesystem metadata", () -> bundle(details));

@@ -1497,21 +1497,28 @@ class PersistentCheckpointServiceTest {
             });
     var holder = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
     org.mockito.Mockito.when(holder.get()).thenReturn("test");
+    var llmSettings = new dev.mikoto2000.rei.llm.LlmProperties();
+    llmSettings.updateOutputLimit(limits -> limits.setMaxLlmCallsPerRun(1000));
+    var client =
+        org.springframework.ai.chat.client.ChatClient.builder(model)
+            .defaultAdvisors(new RunScopedAdvisor(new ResumeContextAdvisor(service)))
+            .build();
     var chat =
         new ChatExecutionService(
-            org.springframework.ai.chat.client.ChatClient.builder(model)
-                .defaultAdvisors(new RunScopedAdvisor(new ResumeContextAdvisor(service)))
-                .build(),
+            new dev.mikoto2000.rei.llm.FixedLlmChatClientProvider(client),
             holder,
+            new dev.mikoto2000.rei.llm.FixedLlmModelProvider(),
+            llmSettings,
             new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Optional.empty(),
+            Clock.systemDefaultZone(),
             Optional.empty(),
             events,
             bus);
     org.springframework.test.util.ReflectionTestUtils.setField(chat, "checkpoints", service);
-    ((dev.mikoto2000.rei.llm.LlmProperties)
-            org.springframework.test.util.ReflectionTestUtils.getField(chat, "llmProperties"))
-        .getOutputLimit()
-        .setMaxLlmCallsPerRun(1000);
     chat.execute(next, "resume", new dev.mikoto2000.rei.core.chat.UserInterventionQueue());
     var repaired = repository.get("A", state().taskId()).progress();
     assertEquals(0, repaired.continuity().detector().stagnationCount());

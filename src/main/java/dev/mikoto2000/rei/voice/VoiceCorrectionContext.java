@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.function.IntSupplier;
 
 /**
  * 音声による対話に必要な音声補正文脈を扱う。
@@ -67,25 +68,24 @@ public final class VoiceCorrectionContext {
   private final Path data;
 
   /** 上限一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound VoiceCorrectionProperties shared by consumers of these settings.")
-  private final VoiceCorrectionProperties limits;
+  private final IntSupplier maxContextChars;
+
+  private final IntSupplier maxDictionaryEntries;
 
   /** 指定された値や利用先を使って、VoiceCorrectionContextを初期化する。 */
   public VoiceCorrectionContext(
       ConversationLogStore history, Path data, VoiceCorrectionProperties limits) {
     this.history = history;
     this.data = data;
-    this.limits = limits;
+    this.maxContextChars = () -> limits.getMaxContextChars();
+    this.maxDictionaryEntries = () -> limits.getMaxDictionaryEntries();
   }
 
   /** 後から状況を確認できるよう、音声補正文脈を記録する。 */
   public Snapshot capture(ConversationInput input) {
     var target = input.target();
     var recent = new ArrayList<String>();
-    int remaining = limits.getMaxContextChars();
+    int remaining = maxContextChars.getAsInt();
     if (history != null && remaining > 0) {
       var entries = history.recentConversation(target.project().id(), target.sessionId(), 4);
       for (var entry : entries.reversed()) {
@@ -109,7 +109,7 @@ public final class VoiceCorrectionContext {
         dictionaries(
             base.resolve("voice/terms.json"),
             project.resolve("voice/terms.json"),
-            limits.getMaxDictionaryEntries()));
+            maxDictionaryEntries.getAsInt()));
   }
 
   /** 音声による対話で用いるdictionariesを返す。 */

@@ -168,11 +168,7 @@ public class ChatExecutionService {
   private final LlmModelProvider modelProvider;
 
   /** 言語モデル設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound LlmProperties shared by consumers of these settings.")
-  private final LlmProperties llmProperties;
+  private final Supplier<LlmProperties.OutputLimit> outputLimits;
 
   /** キャンセルサービス。 */
   @SuppressFBWarnings(
@@ -373,7 +369,7 @@ public class ChatExecutionService {
     this.chatClientProvider = chatClientProvider;
     this.readSelectedModel = () -> currentModelHolder.get();
     this.modelProvider = modelProvider;
-    this.llmProperties = llmProperties;
+    this.outputLimits = () -> llmProperties.getOutputLimit();
     this.cancellationService = cancellationService;
     this.memoryConsolidatorService = memoryConsolidatorService;
     this.outputLimitReplanner = outputLimitReplanner;
@@ -566,12 +562,12 @@ public class ChatExecutionService {
     AtomicReference<GenerationMetrics> lastGenerationMetrics = new AtomicReference<>();
     OutputLimitRunBudget budget =
         new OutputLimitRunBudget(
-            llmProperties.getOutputLimit().getMaxReplansPerGoal(),
-            llmProperties.getOutputLimit().getMaxLlmCallsPerRun(),
+            outputLimits.get().getMaxReplansPerGoal(),
+            outputLimits.get().getMaxLlmCallsPerRun(),
             reservation,
-            llmProperties.getOutputLimit().getMaxTotalTokensPerRun(),
-            llmProperties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun(),
-            llmProperties.getOutputLimit().isLlmCallBudgetEnabled());
+            outputLimits.get().getMaxTotalTokensPerRun(),
+            outputLimits.get().getMaxToolArgumentCorrectionsPerRun(),
+            outputLimits.get().isLlmCallBudgetEnabled());
     RunExecutionContext execution =
         new RunExecutionContext(
             runId,
@@ -959,7 +955,7 @@ public class ChatExecutionService {
           new ErrorInformation(
               "ToolArgumentRepairExhausted",
               "ツール引数の修正上限（"
-                  + llmProperties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun()
+                  + outputLimits.get().getMaxToolArgumentCorrectionsPerRun()
                   + "回）に達しました。"
                   + "直前の引数エラーを確認し、/resume <taskId> で同じタスクを再開できます。"
                   + "明示再開で修正枠を更新し、累積使用量とモデル呼び出し・トークンの上限は保持します。",
@@ -1088,7 +1084,7 @@ public class ChatExecutionService {
               progressSoFar + "\n" + execution.outputLimitHandoff(),
               partialOutput,
               budget.replanCount(),
-              llmProperties.getOutputLimit().getMaxReplansPerGoal(),
+              outputLimits.get().getMaxReplansPerGoal(),
               budget.remainingLlmCalls());
       plan =
           budget.tokenLimitEnabled()

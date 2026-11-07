@@ -20,6 +20,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BooleanSupplier;
+import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /**
@@ -143,11 +146,11 @@ public class ImplementationRequestService {
   private final ToolPermissionPolicy policy;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound CodexProperties shared by consumers of these settings.")
-  private final CodexProperties properties;
+  private final BooleanSupplier implementationEnabled;
+
+  private final Supplier<String> implementationTestCommand;
+
+  private final IntSupplier implementationTestTimeoutSeconds;
 
   /** 委譲。 */
   @SuppressFBWarnings(
@@ -179,7 +182,9 @@ public class ImplementationRequestService {
     this.requests = requests;
     this.approvals = approvals;
     this.policy = policy;
-    this.properties = properties;
+    this.implementationEnabled = () -> properties.isEnabled() && properties.isImplementationEnabled();
+    this.implementationTestCommand = () -> properties.getImplementationTestCommand();
+    this.implementationTestTimeoutSeconds = () -> properties.getImplementationTestTimeoutSeconds();
     this.delegation = delegation;
     this.clock = clock;
   }
@@ -629,13 +634,12 @@ public class ImplementationRequestService {
 
   /** この機能を利用する設定が有効かどうかを返す。 */
   private boolean enabled() {
-    return properties.isEnabled()
-        && properties.isImplementationEnabled()
-        && properties.getImplementationTestCommand() != null
-        && !properties.getImplementationTestCommand().isBlank()
-        && properties.getImplementationTestCommand().length() <= 4096
-        && properties.getImplementationTestTimeoutSeconds() >= 1
-        && properties.getImplementationTestTimeoutSeconds() <= 60;
+    return implementationEnabled.getAsBoolean()
+        && implementationTestCommand.get() != null
+        && !implementationTestCommand.get().isBlank()
+        && implementationTestCommand.get().length() <= 4096
+        && implementationTestTimeoutSeconds.getAsInt() >= 1
+        && implementationTestTimeoutSeconds.getAsInt() <= 60;
   }
 
   /** 外部エージェントへの委譲で用いる所有者を返す。 */
@@ -689,9 +693,9 @@ public class ImplementationRequestService {
             "operation",
             "REPLACE_EXISTING_TEXT",
             "testCommand",
-            properties.getImplementationTestCommand(),
+            implementationTestCommand.get(),
             "testTimeoutSeconds",
-            properties.getImplementationTestTimeoutSeconds()));
+            implementationTestTimeoutSeconds.getAsInt()));
   }
 
   /** 外部エージェントへの委譲で用いる基準を返す。 */
