@@ -2,10 +2,9 @@ package dev.mikoto2000.rei.ui.shell.sound;
 
 import dev.mikoto2000.rei.topic.AgentMessage;
 import dev.mikoto2000.rei.topic.MessageOrigin;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.function.BooleanSupplier;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -24,11 +23,7 @@ public class AgentMessageNarrator {
   private final ChatResponseNarrator narrator;
 
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound SoundNotificationProperties shared by consumers of these settings.")
-  private final SoundNotificationProperties settings;
+  private final BooleanSupplier narrationEnabled;
 
   /** 実行先。 */
   private final Executor executor;
@@ -39,13 +34,13 @@ public class AgentMessageNarrator {
       SoundNotificationProperties settings,
       @Qualifier("agentRunExecutor") Executor executor) {
     this.narrator = narrator;
-    this.settings = settings;
+    this.narrationEnabled = () -> settings.isEnabled();
     this.executor = executor;
   }
 
   /** 通知に応じて状態や表示を更新するため、公開を受け付ける。 */
   public void onPublished(AgentMessage message) {
-    if (!settings.isEnabled()
+    if (!narrationEnabled.getAsBoolean()
         || message == null
         || message.origin() != MessageOrigin.BEHAVIOR
         || !"assistant".equalsIgnoreCase(message.role())
@@ -55,7 +50,7 @@ public class AgentMessageNarrator {
       executor.execute(
           () -> {
             try {
-              if (settings.isEnabled()) narrator.narrateCompletedRun(message.content());
+              if (narrationEnabled.getAsBoolean()) narrator.narrateCompletedRun(message.content());
             } catch (RuntimeException error) {
               log.warn("Behavior narration failed ({})", error.getClass().getSimpleName());
             }
