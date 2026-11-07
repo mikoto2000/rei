@@ -5,8 +5,6 @@ import dev.mikoto2000.rei.bluesky.BlueskyReplyConversationRepository;
 import dev.mikoto2000.rei.bluesky.command.BskyCommand;
 import dev.mikoto2000.rei.interest.InterestUpdateService;
 import dev.mikoto2000.rei.interest.command.InterestCommand;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
@@ -25,11 +23,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1")
 public final class SocialCommandsController {
   /** 履歴。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared Bluesky conversation history for command operations.")
-  private final BlueskyReplyConversationRepository history;
+  private final java.util.function.Supplier<String> historyUsers;
+
+  private final java.util.function.BiFunction<String, Integer, String> readReplyHistory;
 
   /** 関心一覧。 */
   private final InterestUpdateService interests;
@@ -48,7 +44,8 @@ public final class SocialCommandsController {
       BlueskyReplyConversationRepository history,
       InterestUpdateService interests,
       IntegrationRunSubmitService runs) {
-    this.history = history;
+    this.historyUsers = () -> BskyCommand.reportHistoryUsers(history);
+    this.readReplyHistory = (handle, limit) -> BskyCommand.reportHistory(history, handle, limit);
     this.interests = interests;
     this.submitReplyBluesky =
         request ->
@@ -88,14 +85,14 @@ public final class SocialCommandsController {
   /** Web APIによる操作で用いる利用者一覧を返す。 */
   @GetMapping("/bluesky/history-users")
   public Text users() {
-    return text(BskyCommand.reportHistoryUsers(history));
+    return text(historyUsers.get());
   }
 
   /** 過去の記録を、条件に従って参照できる形で返す。 */
   @GetMapping("/bluesky/history/{handle}")
   public Text history(@PathVariable String handle, @RequestParam(defaultValue = "20") int limit) {
     required(handle);
-    return text(BskyCommand.reportHistory(history, handle, limit));
+    return text(readReplyHistory.apply(handle, limit));
   }
 
   /** Web APIによる操作で用いる返信を返す。 */

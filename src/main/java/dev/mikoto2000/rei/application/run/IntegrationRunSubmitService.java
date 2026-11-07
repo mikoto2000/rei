@@ -14,8 +14,6 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarService;
 import dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand;
 import dev.mikoto2000.rei.task.TaskService;
 import dev.mikoto2000.rei.task.command.TaskCommand;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -37,12 +35,16 @@ public final class IntegrationRunSubmitService {
   private final Function<String, Optional<ProjectContext>> findProject;
 
   /** 受付から終了までの管理。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared lifecycle service so session validation and submission use the same session state.")
-  private final SessionLifecycle lifecycle;
+  private final BiConsumer<String, String> validateSession;
+
+  private final java.util.function.BiFunction<ProjectContext, Admission, AgentRunContext> admitRun;
+
+  private record Admission(
+      String session,
+      String operation,
+      String key,
+      String fingerprint,
+      java.util.function.Supplier<String> report) {}
 
   /** 登録台帳。 */
   private final java.util.function.Consumer<AgentRunContext> registerRun;
@@ -70,21 +72,20 @@ public final class IntegrationRunSubmitService {
   private final GoogleCalendarService calendar;
 
   /** タスク一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared task service for the same account and task state.")
-  private final TaskService tasks;
+  private final java.util.function.Supplier<String> authorizeTasks;
+
+  private final java.util.function.BiFunction<Integer, java.time.LocalDate, String> listTasks;
+  private final java.util.function.Function<TaskAddition, String> addTask;
+  private final java.util.function.LongFunction<String> completeTask;
+  private final java.util.function.LongFunction<String> deleteTask;
+
+  private record TaskAddition(String title, java.time.LocalDate due, int priority) {}
 
   /** 作業状況。 */
   private dev.mikoto2000.rei.activity.ActivityCommand activity;
 
   /** Blueskyへの投稿を依頼する窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured Bluesky account service when submitting reply runs.")
-  private dev.mikoto2000.rei.bluesky.BlueskyPostService bluesky;
+  private java.util.function.BiFunction<String, java.util.List<String>, String> replyOnBluesky;
 
   /** 関心一覧。 */
   private dev.mikoto2000.rei.interest.InterestDiscoveryJob interests;
@@ -105,11 +106,7 @@ public final class IntegrationRunSubmitService {
   private dev.mikoto2000.rei.workcontext.WorkContextService work;
 
   /** 埋め込み表現。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared asynchronous ingestion service for vector document runs.")
-  private dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService embeddings;
+  private BiConsumer<java.util.List<String>, java.util.function.Consumer<String>> ingestDocuments;
 
   private org.springframework.beans.factory.ObjectProvider<
           dev.mikoto2000.rei.secretary.SecretaryConnections>
@@ -141,7 +138,10 @@ public final class IntegrationRunSubmitService {
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setEmbeddings(
       dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService embeddings) {
-    this.embeddings = embeddings;
+    this.ingestDocuments =
+        embeddings == null
+            ? null
+            : (documents, output) -> embeddings.addAndReport(documents, output);
   }
 
   /** 実行の受付と状態管理で用いるingestベクトル一覧を返す。 */
@@ -153,8 +153,8 @@ public final class IntegrationRunSubmitService {
         "vectors.ingest",
         () -> {
           var context = AgentRunScope.current();
-          java.util.Objects.requireNonNull(embeddings, "Embedding unavailable")
-              .addAndReport(
+          java.util.Objects.requireNonNull(ingestDocuments, "Embedding unavailable")
+              .accept(
                   documents,
                   line ->
                       bus.publish(
@@ -291,7 +291,11 @@ public final class IntegrationRunSubmitService {
   /** 実行の受付と状態管理で使用するBlueskyを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setBluesky(dev.mikoto2000.rei.bluesky.BlueskyPostService service) {
-    bluesky = service;
+    replyOnBluesky =
+        service == null
+            ? null
+            : (target, words) ->
+                dev.mikoto2000.rei.bluesky.command.BskyCommand.reportReply(service, target, words);
   }
 
   /** 実行の受付と状態管理で使用する関心一覧を設定する。 */
@@ -307,10 +311,8 @@ public final class IntegrationRunSubmitService {
         session,
         "bluesky.reply",
         () ->
-            dev.mikoto2000.rei.bluesky.command.BskyCommand.reportReply(
-                java.util.Objects.requireNonNull(bluesky, "Bluesky unavailable"),
-                target,
-                text == null ? java.util.List.of() : java.util.List.of(text)));
+            java.util.Objects.requireNonNull(replyOnBluesky, "Bluesky unavailable")
+                .apply(target, text == null ? java.util.List.of() : java.util.List.of(text)));
   }
 
   /** 実行の受付と状態管理で用いる利用先の検出関心一覧を返す。 */
@@ -343,7 +345,19 @@ public final class IntegrationRunSubmitService {
       GoogleCalendarService calendar,
       TaskService tasks) {
     this.findProject = id -> projects.resolveById(id);
-    this.lifecycle = lifecycle;
+    this.validateSession = (session, project) -> lifecycle.validate(session, project);
+    this.admitRun =
+        (project, request) ->
+            lifecycle.submit(
+                project,
+                request.session(),
+                request.operation(),
+                AgentRunContext.RequestSource.WEB,
+                AgentRunContext.Mode.EXCLUSIVE,
+                false,
+                request.key(),
+                request.fingerprint(),
+                context -> enqueueIntegration(context, request));
     this.registerRun = context -> registry.register(context);
     this.forgetRun = run -> registry.forget(run);
     this.runs = runs;
@@ -359,7 +373,12 @@ public final class IntegrationRunSubmitService {
     this.events = events;
     this.bus = bus;
     this.calendar = calendar;
-    this.tasks = tasks;
+    this.authorizeTasks = () -> TaskCommand.reportAuthorization(tasks);
+    this.listTasks = (priority, due) -> TaskCommand.reportList(tasks, priority, due);
+    this.addTask =
+        input -> TaskCommand.reportAdd(tasks, input.title(), input.due(), input.priority());
+    this.completeTask = id -> TaskCommand.reportDone(tasks, id);
+    this.deleteTask = id -> TaskCommand.reportDelete(tasks, id);
   }
 
   /** 実行の受付と状態管理で用いる権限の確認予定表を返す。 */
@@ -384,22 +403,14 @@ public final class IntegrationRunSubmitService {
 
   /** 実行の受付と状態管理で用いる権限の確認タスク一覧を返す。 */
   public AgentRunContext authorizeTasks(String project, String session, String key) {
-    return submit(
-        project,
-        session,
-        key,
-        "google.tasks.authorize",
-        () -> TaskCommand.reportAuthorization(tasks));
+    return submit(project, session, key, "google.tasks.authorize", authorizeTasks);
   }
 
   /** 利用可能な対象を確認できるよう、Googleタスク一覧を一覧にする。 */
   public AgentRunContext listGoogleTasks(
       String project, String session, Integer priority, java.time.LocalDate dueBefore) {
     return submitAuxiliary(
-        project,
-        session,
-        "google.tasks.list",
-        () -> TaskCommand.reportList(tasks, priority, dueBefore));
+        project, session, "google.tasks.list", () -> listTasks.apply(priority, dueBefore));
   }
 
   /** 新たな対象を管理できるよう、Googleタスクを追加する。 */
@@ -409,19 +420,17 @@ public final class IntegrationRunSubmitService {
         project,
         session,
         "google.tasks.add",
-        () -> TaskCommand.reportAdd(tasks, title, due, priority));
+        () -> addTask.apply(new TaskAddition(title, due, priority)));
   }
 
   /** 実行結果を後続の処理へ引き渡すため、Googleタスクを完了させる。 */
   public AgentRunContext completeGoogleTask(String project, String session, long id) {
-    return submitAuxiliary(
-        project, session, "google.tasks.done", () -> TaskCommand.reportDone(tasks, id));
+    return submitAuxiliary(project, session, "google.tasks.done", () -> completeTask.apply(id));
   }
 
   /** 対象を管理から外すため、Googleタスクを削除する。 */
   public AgentRunContext deleteGoogleTask(String project, String session, long id) {
-    return submitAuxiliary(
-        project, session, "google.tasks.delete", () -> TaskCommand.reportDelete(tasks, id));
+    return submitAuxiliary(project, session, "google.tasks.delete", () -> deleteTask.apply(id));
   }
 
   /** 利用可能な対象を確認できるよう、予定表を一覧にする。 */
@@ -482,7 +491,7 @@ public final class IntegrationRunSubmitService {
       java.util.function.Supplier<String> report) {
     var project =
         findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
-    if (sessionId != null) lifecycle.validate(sessionId, projectId);
+    if (sessionId != null) validateSession.accept(sessionId, projectId);
     var context =
         new AgentRunContext(
             java.util.UUID.randomUUID().toString(),
@@ -522,24 +531,18 @@ public final class IntegrationRunSubmitService {
     } catch (java.io.IOException error) {
       throw new IllegalStateException("Cannot fingerprint integration request", error);
     }
-    return lifecycle.submit(
-        project,
-        sessionId,
-        operation,
-        AgentRunContext.RequestSource.WEB,
-        AgentRunContext.Mode.EXCLUSIVE,
-        false,
-        key,
-        fingerprint,
-        context -> {
-          registerRun.accept(context);
-          try {
-            submitOperation.accept(context, () -> execute(context, operation, report));
-          } catch (RuntimeException | Error error) {
-            forgetRun.accept(context.runId());
-            throw error;
-          }
-        });
+    return admitRun.apply(project, new Admission(sessionId, operation, key, fingerprint, report));
+  }
+
+  private void enqueueIntegration(AgentRunContext context, Admission request) {
+    registerRun.accept(context);
+    try {
+      submitOperation.accept(
+          context, () -> execute(context, request.operation(), request.report()));
+    } catch (RuntimeException | Error error) {
+      forgetRun.accept(context.runId());
+      throw error;
+    }
   }
 
   /** 要求された処理を実行する。 */
