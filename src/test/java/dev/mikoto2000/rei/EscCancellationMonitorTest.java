@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -40,5 +42,36 @@ class EscCancellationMonitorTest {
 
     assertEquals(130, exitCode);
     assertEquals(1, cancelCount.get());
+  }
+
+  @Test
+  void failedCommandPreservesFatalAndTerminalControlSignals() {
+    var monitor = new EscCancellationMonitor();
+    var fatal = new AssertionError("command failed");
+    var interrupted = new org.jline.reader.UserInterruptException("partial input");
+
+    assertSame(
+        fatal,
+        assertThrows(
+            AssertionError.class,
+            () -> monitor.await(CompletableFuture.failedFuture(fatal), timeout -> -1, () -> {})));
+    assertSame(
+        interrupted,
+        assertThrows(
+            org.jline.reader.UserInterruptException.class,
+            () ->
+                monitor.await(
+                    CompletableFuture.failedFuture(interrupted), timeout -> -1, () -> {})));
+  }
+
+  @Test
+  void failedCommandReportsAnExecutionFailureWithItsOriginalCause() {
+    var monitor = new EscCancellationMonitor();
+    var cause = new UnsupportedOperationException("command unavailable");
+    var failure =
+        assertThrows(
+            IllegalStateException.class,
+            () -> monitor.await(CompletableFuture.failedFuture(cause), timeout -> -1, () -> {}));
+    assertSame(cause, failure.getCause());
   }
 }
