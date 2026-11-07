@@ -1,0 +1,141 @@
+name: Java regression shard benchmark
+on:
+  push:
+    branches: [codex/java-ci-shard-benchmark]
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Preserve repository LF fixtures
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - name: Test performance report aggregation
+        shell: pwsh
+        run: |
+          ./scripts/test-test-performance-report.ps1
+          ./scripts/test-check-test-partition.ps1
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Use canonical temporary paths
+        shell: pwsh
+        run: |
+          $testTemp = Join-Path $env:RUNNER_TEMP 'rei-junit'
+          New-Item -ItemType Directory -Force -Path $testTemp | Out-Null
+          "TMP=$testTemp" >> $env:GITHUB_ENV
+          "TEMP=$testTemp" >> $env:GITHUB_ENV
+      - name: Architecture budgets and guard effectiveness
+        run: ./mvnw.cmd -B "-Dtest=PackageArchitectureTest,ArchitectureGuardTest,ArchitectureSourceReportTest" "-Darchitecture.report=true" test
+      - name: Preserve architecture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          path: target/architecture/**
+      - name: Separate architecture reports
+        run: |
+          if (Test-Path target/surefire-reports) {
+            Move-Item -LiteralPath target/surefire-reports -Destination target/architecture-surefire-reports
+          }
+      - name: Full regression with process deadline
+        run: ./.github/ci/full-test.ps1
+      - name: Export testcase evidence
+        if: always()
+        run: ./.github/ci/export-benchmark-tests.ps1
+      - name: Upload testcase evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-baseline
+          path: target/benchmark-tests/*.xml
+          retention-days: 7
+          if-no-files-found: error
+  shard-a:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Preserve repository LF fixtures
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - name: Test performance report aggregation
+        shell: pwsh
+        run: |
+          ./scripts/test-test-performance-report.ps1
+          ./scripts/test-check-test-partition.ps1
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Use canonical temporary paths
+        shell: pwsh
+        run: |
+          $testTemp = Join-Path $env:RUNNER_TEMP 'rei-junit'
+          New-Item -ItemType Directory -Force -Path $testTemp | Out-Null
+          "TMP=$testTemp" >> $env:GITHUB_ENV
+          "TEMP=$testTemp" >> $env:GITHUB_ENV
+      - name: Architecture budgets and guard effectiveness
+        run: ./mvnw.cmd -B "-Dtest=PackageArchitectureTest,ArchitectureGuardTest,ArchitectureSourceReportTest" "-Darchitecture.report=true" test
+      - name: Preserve architecture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          path: target/architecture/**
+      - name: Separate architecture reports
+        run: |
+          if (Test-Path target/surefire-reports) {
+            Move-Item -LiteralPath target/surefire-reports -Destination target/architecture-surefire-reports
+          }
+      - name: Full regression with process deadline
+        run: ./.github/ci/full-test.ps1 -BenchmarkShard A
+      - name: Export testcase evidence
+        if: always()
+        run: ./.github/ci/export-benchmark-tests.ps1
+      - name: Upload testcase evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-shard-a
+          path: target/benchmark-tests/*.xml
+          retention-days: 7
+          if-no-files-found: error
+  shard-b:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: Preserve repository LF fixtures
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Use canonical temporary paths
+        shell: pwsh
+        run: |
+          $testTemp = Join-Path $env:RUNNER_TEMP 'rei-junit'
+          New-Item -ItemType Directory -Force -Path $testTemp | Out-Null
+          "TMP=$testTemp" >> $env:GITHUB_ENV
+          "TEMP=$testTemp" >> $env:GITHUB_ENV
+      - name: Full regression with process deadline
+        run: ./.github/ci/full-test.ps1 -BenchmarkShard B
+      - name: Export testcase evidence
+        if: always()
+        run: ./.github/ci/export-benchmark-tests.ps1
+      - name: Upload testcase evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-shard-b
+          path: target/benchmark-tests/*.xml
+          retention-days: 7
+          if-no-files-found: error

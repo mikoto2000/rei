@@ -1,4 +1,4 @@
-param([ValidateRange(1, 1800)][int]$TimeoutSeconds = 1200)
+param([ValidateRange(1, 1800)][int]$TimeoutSeconds = 1200, [ValidateSet("A", "B")][string]$BenchmarkShard)
 
 $ErrorActionPreference = 'Stop'
 $repository = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -7,7 +7,12 @@ New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
 $stdout = Join-Path $artifacts 'ci-full.stdout.log'
 $stderr = Join-Path $artifacts 'ci-full.stderr.log'
 $wrapper = Join-Path $repository 'mvnw.cmd'
-$commandText = '"' + $wrapper + '" -B -Pfull "-Djava.io.tmpdir=' + $env:TEMP + '" test'
+$selection = switch ($BenchmarkShard) {
+    'A' { ' "-Dsurefire.includesFile=.github/ci/benchmark-shard-a.txt"' }
+    'B' { ' "-Dsurefire.excludesFile=.github/ci/benchmark-shard-a.txt"' }
+    default { '' }
+}
+$commandText = '"' + $wrapper + '" -B -Pfull "-Djava.io.tmpdir=' + $env:TEMP + '"' + $selection + ' test'
 $process = Start-Process -FilePath $env:ComSpec -ArgumentList ('/d /s /c "' + $commandText + '"') `
     -WorkingDirectory $repository -WindowStyle Hidden -PassThru `
     -RedirectStandardOutput $stdout -RedirectStandardError $stderr
