@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.interest;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -85,10 +83,6 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
   }
 
   /** 関心の管理で用いる呼び出し付きタイムアウトを返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original unchecked failure from the model future.")
   private String callWithTimeout(Prompt prompt) {
     ExecutorService executor = Executors.newSingleThreadExecutor();
     Future<String> future =
@@ -113,9 +107,9 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
       throw new IllegalStateException("Interest topic extraction was interrupted", e);
     } catch (ExecutionException e) {
       Throwable cause = e.getCause();
-      if (cause instanceof RuntimeException runtimeException) {
-        throw runtimeException;
-      }
+      if (cause instanceof Error fatal) throw fatal;
+      if (cause instanceof java.util.concurrent.CancellationException cancelled) throw cancelled;
+      if (cause instanceof IllegalStateException failure) throw failure;
       throw new IllegalStateException("Interest topic extraction failed", cause);
     } finally {
       executor.shutdownNow();
