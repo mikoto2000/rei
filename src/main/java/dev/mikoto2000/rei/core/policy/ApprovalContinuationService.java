@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import javax.sql.DataSource;
 import org.springframework.ai.chat.messages.Message;
@@ -82,17 +83,16 @@ public class ApprovalContinuationService implements RunContinuation {
   private final Map<String, Managed> managed = new ConcurrentHashMap<>();
 
   /** 再開用の記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint state for run lookups and transitions.")
-  private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints;
+  private BiConsumer<AgentRunContext, String> checkpointTransition = (owner, status) -> {};
 
   /** ツール利用の権限制御で使用する再開用の記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setCheckpoints(
       dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints) {
-    this.checkpoints = checkpoints;
+    this.checkpointTransition =
+        (owner, status) -> {
+          if (checkpoints != null) updateUnleasedCheckpoint(checkpoints, owner, status);
+        };
   }
 
   /**
@@ -539,29 +539,34 @@ public class ApprovalContinuationService implements RunContinuation {
 
   /** 後続の判断に現在の状態を反映するため、再開用の記録の状態を記録する。 */
   private void markCheckpoint(AgentRunContext owner, String status) {
-    var repository = checkpoints;
-    if (repository == null) return;
     try {
-      repository
-          .findByRun(owner.projectId(), owner.runId())
-          .filter(
-              saved ->
-                  saved.runId().equals(owner.runId())
-                      && saved.sessionId().equals(owner.conversationId())
-                      && !repository.leased(saved.projectId(), saved.taskId()))
-          .ifPresent(
-              saved -> {
-                var fields = repository.fields(saved);
-                fields.put("status", status);
-                fields.put("interruptionReason", "approval_" + status.toLowerCase(Locale.ROOT));
-                repository.save(
-                    repository.fields(fields),
-                    saved.revision(),
-                    "approval-stop:" + owner.runId() + ":" + status);
-              });
+      checkpointTransition.accept(owner, status);
     } catch (RuntimeException conflict) {
       /* Do not overwrite an active or changed checkpoint. */
     }
+  }
+
+  private static void updateUnleasedCheckpoint(
+      dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository repository,
+      AgentRunContext owner,
+      String status) {
+    repository
+        .findByRun(owner.projectId(), owner.runId())
+        .filter(
+            saved ->
+                saved.runId().equals(owner.runId())
+                    && saved.sessionId().equals(owner.conversationId())
+                    && !repository.leased(saved.projectId(), saved.taskId()))
+        .ifPresent(
+            saved -> {
+              var fields = repository.fields(saved);
+              fields.put("status", status);
+              fields.put("interruptionReason", "approval_" + status.toLowerCase(Locale.ROOT));
+              repository.save(
+                  repository.fields(fields),
+                  saved.revision(),
+                  "approval-stop:" + owner.runId() + ":" + status);
+            });
   }
 
   /** 状態の変化を利用先へ伝えるため、親を通知する。 */

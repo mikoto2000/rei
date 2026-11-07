@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.dot;
 
 import dev.mikoto2000.rei.application.session.SessionRepository;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -11,7 +12,9 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
@@ -63,11 +66,7 @@ public class DotDelegationService {
   private dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies;
 
   /** 再開用の記録保存と検索の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint state for run lookups and transitions.")
-  private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpointRepository;
+  private Function<AgentRunContext, Optional<String>> runningCheckpointTask;
 
   /** 判断基準。 */
   private record DelegationAuthorization(
@@ -119,7 +118,18 @@ public class DotDelegationService {
       dev.mikoto2000.rei.core.policy.ToolPermissionPolicy policy) {
     this.runtimeRuns = runs;
     this.dependencies = dependencies;
-    this.checkpointRepository = checkpoints;
+    this.runningCheckpointTask =
+        checkpoints == null
+            ? null
+            : owner ->
+                checkpoints
+                    .findByRun(owner.projectId(), owner.runId())
+                    .filter(
+                        checkpoint ->
+                            checkpoint.projectRoot().equals(owner.projectRoot().toString())
+                                && checkpoint.sessionId().equals(owner.conversationId())
+                                && checkpoint.status().equals("RUNNING"))
+                    .map(checkpoint -> checkpoint.taskId());
     this.authorization =
         policy == null
             ? null
@@ -161,7 +171,7 @@ public class DotDelegationService {
         || execution == null
         || runtimeRuns == null
         || dependencies == null
-        || checkpointRepository == null
+        || runningCheckpointTask == null
         || authorization == null
         || !authorization.enforced().getAsBoolean())
       throw new DotException("PARENT_DELEGATION_DISABLED");
@@ -194,14 +204,9 @@ public class DotDelegationService {
         || !DotAuthorization.categories(execution.userRequest()).contains(category)
         || !properties.allowedCategories().contains(category))
       throw new DotException("RUN_PERMISSION_REQUIRED");
-    var checkpoint =
-        checkpointRepository
-            .findByRun(owner.projectId(), owner.runId())
-            .filter(
-                c ->
-                    c.projectRoot().equals(owner.projectRoot().toString())
-                        && c.sessionId().equals(owner.conversationId())
-                        && c.status().equals("RUNNING"))
+    var checkpointTask =
+        runningCheckpointTask
+            .apply(owner)
             .orElseThrow(() -> new DotException("CHECKPOINT_REQUIRED"));
     int timeout =
         DotPayload.integer(
@@ -238,7 +243,7 @@ public class DotDelegationService {
       repo.bind(
           id,
           owner.projectId(),
-          checkpoint.taskId(),
+          checkpointTask,
           dependency.id(),
           Map.of(
               "budget",
