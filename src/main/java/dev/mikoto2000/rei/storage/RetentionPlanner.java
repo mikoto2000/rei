@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.storage;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.storage.StorageObjectRegistry.StoredObject;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -79,9 +77,7 @@ public final class RetentionPlanner {
       Instant created) {
     public Plan {
       candidates =
-          candidates == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(candidates));
+          candidates == null ? null : Collections.unmodifiableList(new ArrayList<>(candidates));
       protectedReasons =
           protectedReasons == null
               ? null
@@ -117,25 +113,43 @@ public final class RetentionPlanner {
       Instant created) {}
 
   /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared storage registry to coordinate object references and retention.")
-  private final StorageObjectRegistry registry;
+  @FunctionalInterface
+  private interface ProtectionQuery {
+    java.util.Optional<String> find(
+        java.sql.Connection db, StorageObjectRegistry.StoredObject object)
+        throws java.sql.SQLException;
+  }
+
+  @FunctionalInterface
+  private interface ObjectValidation {
+    boolean unchanged(StorageObjectRegistry.StoredObject object) throws java.io.IOException;
+  }
+
+  private final java.nio.file.Path root;
+  private final StorageDatabase.WorkRunner read;
+  private final StorageDatabase.WorkRunner transaction;
+  private final java.util.function.Supplier<java.time.Instant> clock;
+  private final ProtectionQuery findProtection;
+  private final ObjectValidation validation;
 
   /** 指定された値や利用先を使って、RetentionPlannerを初期化する。 */
   public RetentionPlanner(StorageObjectRegistry registry) {
-    this.registry = registry;
+    this.root = registry.root();
+    this.read = registry.database::read;
+    this.transaction = registry.database::transaction;
+    this.clock = () -> registry.clock.instant();
+    this.findProtection = registry::protectionReason;
+    this.validation = registry::unchanged;
   }
 
   /** データ保存の共通処理で用いる作業ルートを返す。 */
   public java.nio.file.Path root() {
-    return registry.root();
+    return root;
   }
 
   /** データ保存の共通処理で用いる判断基準を返す。 */
   public Policy policy(String id) {
-    return registry.database.read(db -> policy(db, id));
+    return read.run(db -> policy(db, id));
   }
 
   /** データ保存の共通処理で用いる判断基準を返す。 */
@@ -169,7 +183,7 @@ public final class RetentionPlanner {
         || maxCount != null && maxCount < 1)
       throw new IllegalArgumentException(
           "Positive retention limits required (at least one second)");
-    registry.database.transaction(
+    transaction.run(
         db -> {
           var old = policy(db, id);
           if (!Set.of("RAW_RESULT", "ACTIVITY_RAW", "EVENT", "REFLECTION").contains(old.kind())
@@ -193,10 +207,10 @@ public final class RetentionPlanner {
     if (maxObjects < 1 || maxObjects > 1000 || maxBytes < 1 || maxBytes > 1024L * 1024 * 1024)
       throw new IllegalArgumentException("Plan budget must be 1..1000 objects and 1..1GiB");
     String scope = suppliedScope == null ? "" : UUID.fromString(suppliedScope).toString();
-    return registry.database.transaction(
+    return transaction.run(
         db -> {
           Policy policy = policy(db, policyId);
-          Instant now = registry.clock.instant();
+          Instant now = clock.get();
           var candidates = new ArrayList<StoredObject>();
           var protectedReasons = new TreeMap<String, Long>();
           long bytes = 0, totalBytes = 0, totalCount = 0;
@@ -225,7 +239,7 @@ public final class RetentionPlanner {
                   break;
                 }
                 StoredObject object = StorageObjectRegistry.row(rows);
-                var protection = registry.protectionReason(db, object);
+                var protection = findProtection.find(db, object);
                 if (protection.isPresent()) {
                   protectedReasons.merge(protection.get(), 1L, Long::sum);
                   continue;
@@ -247,7 +261,7 @@ public final class RetentionPlanner {
                   limited = true;
                   continue;
                 }
-                if (!registry.unchanged(object)) {
+                if (!validation.unchanged(object)) {
                   protectedReasons.merge("changed-or-missing", 1L, Long::sum);
                   continue;
                 }
@@ -309,7 +323,8 @@ public final class RetentionPlanner {
 
   /** 現在の状態を、後から参照できる記録として取り出す。 */
   private static String snapshot(
-      String policy, long version, String scope, List<StoredObject> candidates) throws NoSuchAlgorithmException, JsonProcessingException {
+      String policy, long version, String scope, List<StoredObject> candidates)
+      throws NoSuchAlgorithmException, JsonProcessingException {
     var digest = MessageDigest.getInstance("SHA-256");
     digest.update(
         StorageDatabase.JSON.writeValueAsBytes(List.of(policy, version, scope, candidates)));
@@ -318,7 +333,7 @@ public final class RetentionPlanner {
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Plan get(String id) {
-    return registry.database.read(db -> get(db, id));
+    return read.run(db -> get(db, id));
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
@@ -370,21 +385,21 @@ public final class RetentionPlanner {
       if (!current.equals(expected)
           || !current.scope().equals(plan.scope())
           || !current.kind().equals(policy.kind())
-          || registry.protectionReason(db, current).isPresent()
-          || !registry.unchanged(current))
+          || findProtection.find(db, current).isPresent()
+          || !validation.unchanged(current))
         throw new IllegalStateException("Candidate changed or became protected; create a new plan");
     }
   }
 
   /** データ保存の共通処理で用いる承認を返す。 */
   public Approval approve(String id) {
-    return registry.database.transaction(
+    return transaction.run(
         db -> {
           Plan plan = get(db, id);
           validate(db, plan);
           if (plan.candidates().isEmpty())
             throw new IllegalStateException("An empty plan cannot be approved");
-          Instant now = registry.clock.instant();
+          Instant now = clock.get();
           try (var insert =
               db.prepareStatement(
                   "INSERT INTO retention_approvals VALUES(?,?,?) ON CONFLICT(plan_id) DO NOTHING")) {
@@ -399,7 +414,7 @@ public final class RetentionPlanner {
 
   /** 過去の記録を、条件に従って参照できる形で返す。 */
   public List<Summary> history() {
-    return registry.database.read(
+    return read.run(
         db -> {
           var result = new ArrayList<Summary>();
           try (var query = db.createStatement();
@@ -467,7 +482,7 @@ public final class RetentionPlanner {
 
   /** データ保存の共通処理で用いる状態対象範囲を返す。 */
   private Status statusScope(String scope) {
-    return registry.database.read(
+    return read.run(
         db -> {
           var usages = new ArrayList<ObjectUsage>();
           try (var query =
@@ -495,8 +510,8 @@ public final class RetentionPlanner {
                   limited = true;
                   break;
                 }
-                registry
-                    .protectionReason(db, StorageObjectRegistry.row(rows))
+                findProtection
+                    .find(db, StorageObjectRegistry.row(rows))
                     .ifPresent(reason -> reasons.merge(reason, 1L, Long::sum));
               }
             }

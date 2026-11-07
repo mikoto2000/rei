@@ -66,6 +66,11 @@ public final class StorageDatabase {
         throws IOException, NoSuchAlgorithmException, SQLException, InterruptedException;
   }
 
+  @FunctionalInterface
+  interface WorkRunner {
+    <T> T run(Work<T> work);
+  }
+
   /** 指定された値や利用先を使って、StorageDatabaseを初期化する。 */
   public StorageDatabase(Path root) {
     file = root.toAbsolutePath().normalize().resolve("storage.db");
@@ -281,13 +286,14 @@ public final class StorageDatabase {
   /**
    * Activity本文とDBの確定中だけ、依頼元の停止割り込みから保存処理を分離する。
    *
-   * <p>FileChannel.force is interruptible, but rolling back SQLite cannot undo a file append.
-   * Wait for the entire commit/rollback before returning, preserving the caller's interrupt flag.
-   * Other I/O and SQL failures still propagate; interrupted or changed files are never adopted.
+   * <p>FileChannel.force is interruptible, but rolling back SQLite cannot undo a file append. Wait
+   * for the entire commit/rollback before returning, preserving the caller's interrupt flag. Other
+   * I/O and SQL failures still propagate; interrupted or changed files are never adopted.
    */
   @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
       value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      justification = "Preserve the original transaction failure across FutureTask; wrapping would change cancellation semantics.")
+      justification =
+          "Preserve the original transaction failure across FutureTask; wrapping would change cancellation semantics.")
   <T> T activityTransaction(Work<T> work) {
     if (Thread.holdsLock(state))
       throw new IllegalStateException("Activity commit cannot start inside a storage operation");

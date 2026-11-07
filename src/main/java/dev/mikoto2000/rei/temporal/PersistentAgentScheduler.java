@@ -5,8 +5,6 @@ import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.event.DependencyStatusPayload;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -108,11 +106,7 @@ public class PersistentAgentScheduler
   private dev.mikoto2000.rei.storage.SqliteEventCursorStore eventCursors;
 
   /** 保存対象データ一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared object registry for retention and reference tracking.")
-  private dev.mikoto2000.rei.storage.StorageObjectRegistry storageObjects;
+  private java.util.function.BiConsumer<String, String> protectScheduleSignal;
 
   /** 時刻と期間の解釈で使用するイベント続きの取得位置保存先を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -123,7 +117,8 @@ public class PersistentAgentScheduler
   /** 時刻と期間の解釈で使用する保存対象データ一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setStorageObjects(dev.mikoto2000.rei.storage.StorageObjectRegistry objects) {
-    storageObjects = objects;
+    protectScheduleSignal =
+        objects == null ? null : (id, owner) -> objects.addReference(id, "SCHEDULE_SIGNAL", owner);
   }
 
   /** 指定された値や利用先を使って、PersistentAgentSchedulerを初期化する。 */
@@ -468,13 +463,12 @@ public class PersistentAgentScheduler
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (source == null || source.length() > 128) return;
     // Protect a fact before another DB can publish a durable pointer to it.
-    if (storageObjects != null)
-      storageObjects.addReference(
+    if (protectScheduleSignal != null)
+      protectScheduleSignal.accept(
           "event:"
               + dev.mikoto2000.rei.event.SqliteProjectAgentEventStore.scope(event.projectId())
               + ":"
               + event.id(),
-          "SCHEDULE_SIGNAL",
           event.projectId() + ":" + source + ":" + event.id());
     transaction.executeWithoutResult(
         status -> {
