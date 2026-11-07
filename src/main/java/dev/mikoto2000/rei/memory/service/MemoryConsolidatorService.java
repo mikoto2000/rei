@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,11 +37,7 @@ import org.springframework.stereotype.Service;
 public class MemoryConsolidatorService {
 
   /** モデルへ対話を依頼する窓口提供元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Creates chat clients through the shared provider and its current configuration.")
-  private final LlmChatClientProvider chatClientProvider;
+  private final Supplier<ChatClient> memoryClient;
 
   /** データベースへの接続クライアント。 */
   private final JdbcClient jdbcClient;
@@ -94,7 +91,7 @@ public class MemoryConsolidatorService {
       LlmChatClientProvider chatClientProvider,
       @Qualifier("dataSource") javax.sql.DataSource dataSource,
       MemoryProperties memoryProperties) {
-    this.chatClientProvider = chatClientProvider;
+    this.memoryClient = () -> chatClientProvider.chatClient(LlmFeature.MEMORY);
     this.jdbcClient = JdbcClient.create(dataSource);
     this.memoryProperties = memoryProperties;
   }
@@ -237,8 +234,7 @@ public class MemoryConsolidatorService {
     boolean invoked = false, reported = false;
     try {
       var request =
-          chatClientProvider
-              .chatClient(LlmFeature.MEMORY)
+          memoryClient.get()
               .prompt(prompt)
               .advisors(
                   advisor ->
