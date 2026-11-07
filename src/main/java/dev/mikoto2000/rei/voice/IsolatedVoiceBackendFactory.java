@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.voice;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
@@ -94,11 +92,28 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
   private void release(VoiceWorkerProcess worker) {
     try {
       worker.close();
-    } finally {
-      synchronized (this) {
-        if (worker.isAlive()) throw new IllegalStateException("Owned voice worker did not exit");
-        workers.remove(worker);
+    } catch (RuntimeException | Error failure) {
+      try {
+        forgetStoppedWorker(worker);
+      } catch (RuntimeException | Error inspectionFailure) {
+        if (inspectionFailure != failure) failure.addSuppressed(inspectionFailure);
       }
+      throw failure;
+    }
+    forgetStoppedWorker(worker);
+  }
+
+  private synchronized void forgetStoppedWorker(VoiceWorkerProcess worker) {
+    if (worker.isAlive()) throw new IllegalStateException("Owned voice worker did not exit");
+    workers.remove(worker);
+  }
+
+  private void releaseAfterFailedStartup(VoiceWorkerProcess worker, Throwable failure) {
+    if (worker == null) return;
+    try {
+      release(worker);
+    } catch (RuntimeException | Error cleanup) {
+      if (cleanup != failure) failure.addSuppressed(cleanup);
     }
   }
 
@@ -137,9 +152,9 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
               release(decoder);
             }
           });
-    } catch (IOException | URISyntaxException | RuntimeException | LinkageError failure) {
-      if (recognizer != null) release(recognizer);
-      release(vad);
+    } catch (IOException | URISyntaxException | RuntimeException | Error failure) {
+      releaseAfterFailedStartup(recognizer, failure);
+      releaseAfterFailedStartup(vad, failure);
       throw failure;
     }
   }
@@ -150,25 +165,29 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
   }
 
   /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reports the first worker shutdown failure with subsequent failures attached.")
   public void close() {
     List<VoiceWorkerProcess> owned;
     synchronized (this) {
       closed = true;
       owned = List.copyOf(workers);
     }
-    RuntimeException failure = null;
+    Throwable failure = null;
     for (var worker : owned) {
       try {
         release(worker);
-      } catch (RuntimeException e) {
-        if (failure == null) failure = e;
-        else failure.addSuppressed(e);
+      } catch (RuntimeException | Error shutdown) {
+        if (failure == null) {
+          failure = shutdown;
+        } else if (shutdown instanceof Error && !(failure instanceof Error)) {
+          shutdown.addSuppressed(failure);
+          failure = shutdown;
+        } else if (failure != shutdown) {
+          failure.addSuppressed(shutdown);
+        }
       }
     }
-    if (failure != null) throw failure;
+    if (failure instanceof Error fatal) throw fatal;
+    if (failure instanceof IllegalStateException state) throw state;
+    if (failure != null) throw new IllegalStateException("Voice worker shutdown failed", failure);
   }
 }
