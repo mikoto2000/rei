@@ -6,6 +6,7 @@ import dev.mikoto2000.rei.llm.capture.CaptureStore;
 import dev.mikoto2000.rei.llm.capture.LlmCaptureCommand;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -36,18 +37,14 @@ public final class CaptureCommandsController {
   private final Predicate<String> projectExists;
 
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
-  private final SessionLifecycle sessions;
+  private final BiConsumer<String, String> validateSession;
 
   /** 指定された値や利用先を使って、CaptureCommandsControllerを初期化する。 */
   public CaptureCommandsController(
       CaptureStore store, ProjectRegistry projects, SessionLifecycle sessions) {
     this.store = store;
     this.projectExists = id -> projects.resolveById(id).isPresent();
-    this.sessions = sessions;
+    this.validateSession = (session, project) -> sessions.validate(session, project);
   }
 
   /**
@@ -172,7 +169,7 @@ public final class CaptureCommandsController {
       throw new IllegalArgumentException("Invalid CLI identity");
     if (!projectExists.test(project))
       throw new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project");
-    sessions.validate(session, project);
+    validateSession.accept(session, project);
     return new LlmCaptureCommand(store, () -> "cli:" + client, () -> session, () -> {});
   }
 

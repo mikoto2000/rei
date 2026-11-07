@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
+import java.util.function.BiConsumer;
 
 /**
  * 成果物の管理に必要な成果物取得元書き出しを扱う。
@@ -36,11 +37,7 @@ public final class ArtifactSourceExport {
   private final ProjectRegistry projects;
 
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
-  private final SessionLifecycle sessions;
+  private final BiConsumer<String, String> validateSession;
 
   /** 変更一覧。 */
   @SuppressFBWarnings(
@@ -65,7 +62,7 @@ public final class ArtifactSourceExport {
       PaperLibraryService papers) {
     this.store = store;
     this.projects = projects;
-    this.sessions = sessions;
+    this.validateSession = (session, project) -> sessions.validate(session, project);
     this.changes = changes;
     this.papers = papers;
   }
@@ -79,7 +76,7 @@ public final class ArtifactSourceExport {
     var owner =
         projects.resolveById(project).orElseThrow(() -> new ResourceNotFoundException("Artifact"));
     try {
-      sessions.validate(session, project);
+      validateSession.accept(session, project);
     } catch (dev.mikoto2000.rei.application.run.SessionConflictException foreign) {
       throw new ResourceNotFoundException("Artifact");
     }
