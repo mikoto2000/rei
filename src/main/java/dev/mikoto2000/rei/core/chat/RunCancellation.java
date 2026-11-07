@@ -22,6 +22,14 @@ public final class RunCancellation {
       execution.checkActive();
   }
 
+  static final String CHILD_ENTRY_KEY = RunCancellation.class.getName() + ".childEntry";
+
+  /** Acquires a child lease for the Run that created the request. */
+  @FunctionalInterface
+  interface ChildEntry {
+    Runnable enter();
+  }
+
   /** 非同期境界を越えた処理が実際に戻るまで、Run の資源として保持する。 */
   public static dev.mikoto2000.rei.core.service.CommandCancellationService.ChildLease enterChild(
       org.springframework.ai.chat.prompt.Prompt prompt) {
@@ -29,6 +37,7 @@ public final class RunCancellation {
         instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options) {
       var values = options.getToolContext();
       if (values == null) return () -> {};
+      if (values.get(CHILD_ENTRY_KEY) instanceof ChildEntry entry) return entry.enter()::run;
       var service =
           values.get(dev.mikoto2000.rei.core.service.CommandCancellationService.class.getName());
       var context = values.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY);
@@ -44,6 +53,7 @@ public final class RunCancellation {
   /** response 側の非同期アドバイザーも同じ Run の所有資源として保持する。 */
   public static dev.mikoto2000.rei.core.service.CommandCancellationService.ChildLease enterChild(
       java.util.Map<String, Object> values) {
+    if (values.get(CHILD_ENTRY_KEY) instanceof ChildEntry entry) return entry.enter()::run;
     var service =
         values.get(dev.mikoto2000.rei.core.service.CommandCancellationService.class.getName());
     var owner = values.get(AgentRunContext.class.getName());

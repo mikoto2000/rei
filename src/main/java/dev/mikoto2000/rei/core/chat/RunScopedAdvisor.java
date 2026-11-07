@@ -107,6 +107,8 @@ public final class RunScopedAdvisor implements BaseAdvisor {
           dev.mikoto2000.rei.core.service.CommandCancellationService.class.getName();
       if (tools.containsKey(cancellationKey))
         context.put(cancellationKey, tools.get(cancellationKey));
+      if (tools.containsKey(RunCancellation.CHILD_ENTRY_KEY))
+        context.put(RunCancellation.CHILD_ENTRY_KEY, tools.get(RunCancellation.CHILD_ENTRY_KEY));
       copy = options.mutate().toolContext(tools).build();
       prompt = new org.springframework.ai.chat.prompt.Prompt(prompt.getInstructions(), copy);
     }

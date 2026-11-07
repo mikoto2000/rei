@@ -34,8 +34,6 @@ import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.skills.SkillRoutingRunContext;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.topic.TopicOrchestrator;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.util.Locale;
 import java.util.Map;
@@ -168,12 +166,16 @@ public class ChatExecutionService {
   private final Supplier<LlmProperties.OutputLimit> outputLimits;
 
   /** キャンセルサービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellationService;
+  private final Runnable beginCancellation;
+
+  private final java.util.function.Consumer<Disposable> registerCancellation;
+  private final java.util.function.BooleanSupplier cancellationRequested;
+  private final Runnable clearCancellation;
+  private final java.util.function.Consumer<String> completeRunResources;
+  private final java.util.function.Predicate<String> runCancellationRequested;
+  private final java.util.function.BiFunction<String, Runnable, Disposable> onRunCancellation;
+  private final java.util.function.Consumer<String> awaitRunChildren;
+  private final java.util.function.Function<String, RunCancellation.ChildEntry> childEntry;
 
   /** 記憶Consolidatorサービス。 */
   private final Optional<MemoryConsolidatorService> memoryConsolidatorService;
@@ -373,7 +375,15 @@ public class ChatExecutionService {
     this.privateSecretaryModel = expected -> modelProvider.privateSecretaryModel(expected);
     this.optionsForModel = selected -> modelProvider.chatOptions(LlmFeature.CHAT, selected, true);
     this.outputLimits = () -> llmProperties.getOutputLimit();
-    this.cancellationService = cancellationService;
+    this.beginCancellation = () -> cancellationService.begin(Thread.currentThread());
+    this.registerCancellation = disposable -> cancellationService.register(disposable);
+    this.cancellationRequested = () -> cancellationService.isCancellationRequested();
+    this.clearCancellation = () -> cancellationService.clear();
+    this.completeRunResources = id -> cancellationService.completeResources(id);
+    this.runCancellationRequested = id -> cancellationService.diagnostic(id).requestedAt() != null;
+    this.onRunCancellation = (id, action) -> cancellationService.onCancel(id, action);
+    this.awaitRunChildren = id -> cancellationService.awaitChildren(id);
+    this.childEntry = id -> () -> cancellationService.acquireChildRelease(id);
     this.memoryConsolidatorService = memoryConsolidatorService;
     this.outputLimitReplanner = outputLimitReplanner;
     this.topicOrchestrator = topicOrchestrator;
@@ -430,10 +440,10 @@ public class ChatExecutionService {
       OutputLimitRunBudget.LlmCallReservation reservation,
       String expectedModel) {
     try (var scope = AgentRunScope.open(context)) {
-      cancellationService.begin(Thread.currentThread());
+      beginCancellation.run();
       Disposable stream = null;
       try {
-        if (cancellationService.isCancellationRequested()) return ChatExecutionResult.cancelled();
+        if (cancellationRequested.getAsBoolean()) return ChatExecutionResult.cancelled();
         var model = privateSecretaryModel.apply(expectedModel);
         if (reservation == null || !reservation.tryReserve())
           return ChatExecutionResult.failed(
@@ -478,10 +488,10 @@ public class ChatExecutionService {
                       done.countDown();
                     },
                     done::countDown);
-        cancellationService.register(stream);
+        registerCancellation.accept(stream);
         if (!done.await(45, java.util.concurrent.TimeUnit.SECONDS))
           return ChatExecutionResult.failed("Private draft timed out", "private_draft_timeout");
-        if (cancellationService.isCancellationRequested()) return ChatExecutionResult.cancelled();
+        if (cancellationRequested.getAsBoolean()) return ChatExecutionResult.cancelled();
         if (failed.get())
           return ChatExecutionResult.failed("Private draft failed", "private_draft_failed");
         synchronized (text) {
@@ -496,7 +506,7 @@ public class ChatExecutionService {
         return ChatExecutionResult.failed("Private draft unavailable", "private_draft_failed");
       } finally {
         if (stream != null) stream.dispose();
-        cancellationService.clear();
+        clearCancellation.run();
       }
     }
   }
@@ -514,10 +524,10 @@ public class ChatExecutionService {
       try {
         result = executeInScope(context, promptText, interventions, reservation, terminalEvents);
       } finally {
-        cancellationService.completeResources(context.runId());
+        completeRunResources.accept(context.runId());
         if (finishRequestCapture != null) finishRequestCapture.accept(context.runId());
-        stopped = cancellationService.diagnostic(context.runId()).requestedAt() != null;
-        cancellationService.clear();
+        stopped = runCancellationRequested.test(context.runId());
+        clearCancellation.run();
         activityTracker.ifPresent(
             tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
       }
@@ -548,8 +558,8 @@ public class ChatExecutionService {
         doctor != null && dev.mikoto2000.rei.doctor.DoctorRequest.accepts(promptText);
     boolean structuredCommand = beginnerReview || doctorCommand;
     long startedAtNanos = System.nanoTime();
-    cancellationService.begin(Thread.currentThread());
-    if (cancellationService.isCancellationRequested()) return ChatExecutionResult.cancelled();
+    beginCancellation.run();
+    if (cancellationRequested.getAsBoolean()) return ChatExecutionResult.cancelled();
     String runId = context.runId();
     SkillRoutingRunContext skillRoutingContext = new SkillRoutingRunContext(runId);
     AtomicLong runCompletionTokens = new AtomicLong();
@@ -599,7 +609,7 @@ public class ChatExecutionService {
             chatMemory.add(context.conversationId(), java.util.List.of(new UserMessage(text)));
           appendConversationLog(context.conversationId(), "user", text);
         });
-    Disposable cancellationHook = cancellationService.onCancel(runId, execution::cancel);
+    Disposable cancellationHook = onRunCancellation.apply(runId, execution::cancel);
     ConversationTurnStore.Status turnStatus = ConversationTurnStore.Status.FAILED;
     String assistantMessage = null;
     boolean suspended = false;
@@ -860,7 +870,7 @@ public class ChatExecutionService {
       terminalEvents.add(eventFactory.runFailed(runId, failure));
       return ChatExecutionResult.failed(failure.message(), failure.code());
     } finally {
-      cancellationService.awaitChildren(context.runId());
+      awaitRunChildren.accept(context.runId());
       // Preserve interruption for the caller, but allow terminal metadata to be written during
       // cleanup.
       boolean interrupted = Thread.interrupted();
@@ -1199,8 +1209,8 @@ public class ChatExecutionService {
         Map.of(
             RunExecutionContext.KEY,
             execution,
-            CommandCancellationService.class.getName(),
-            cancellationService));
+            RunCancellation.CHILD_ENTRY_KEY,
+            childEntry.apply(execution.runContext().runId())));
     if (mode == AgentRunContext.Mode.CONVERSATION) {
       optionsBuilder.toolCallbacks(java.util.List.of());
       optionsBuilder.toolChoice("none");
@@ -1328,7 +1338,7 @@ public class ChatExecutionService {
       logChatFailure("Chat response stream failed to start", e);
       return failureResult(e);
     }
-    cancellationService.register(disposable);
+    registerCancellation.accept(disposable);
 
     try {
       if (mode == AgentRunContext.Mode.EXCLUSIVE) latch.await();
@@ -1387,7 +1397,7 @@ public class ChatExecutionService {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
-      if (cancellationService.isCancellationRequested()) {
+      if (cancellationRequested.getAsBoolean()) {
         return ChatRunResult.cancelled();
       }
       // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
