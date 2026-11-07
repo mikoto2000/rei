@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.llm;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,10 +55,6 @@ public class OutputLimitReplanner {
   }
 
   /** 用途に応じたモデル利用で用いる計画の見直しを返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Records unresolved usage and preserves the failure of the replanning call.")
   public OutputLimitReplanPlan replan(
       OutputLimitReplanRequest request, java.util.function.Consumer<Integer> usageRecorder) {
     log.info(
@@ -77,9 +71,18 @@ public class OutputLimitReplanner {
       if (usageRecorder != null)
         dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
       response = model.call(prompt);
-    } catch (RuntimeException error) {
-      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
-      if (usageRecorder != null) usageRecorder.accept(null);
+    } catch (RuntimeException | Error error) {
+      if (error instanceof RuntimeException runtime)
+        dev.mikoto2000.rei.core.chat.RunCancellation.propagate(runtime);
+      try {
+        if (usageRecorder != null) usageRecorder.accept(null);
+      } catch (RuntimeException | Error accounting) {
+        if (error instanceof Error) {
+          if (accounting != error) error.addSuppressed(accounting);
+          throw error;
+        }
+        throw accounting;
+      }
       throw error;
     }
     if (usageRecorder != null) {

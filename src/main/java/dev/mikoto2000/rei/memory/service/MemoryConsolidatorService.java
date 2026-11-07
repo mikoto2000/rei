@@ -15,8 +15,6 @@ import dev.mikoto2000.rei.memory.model.Memory;
 import dev.mikoto2000.rei.memory.model.MemoryScope;
 import dev.mikoto2000.rei.memory.model.MemoryStatus;
 import dev.mikoto2000.rei.memory.model.MemoryType;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -225,16 +223,13 @@ public class MemoryConsolidatorService {
   }
 
   /** 長期記憶の保存と検索の要求を実行し、呼び出し元へ結果を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original model failure after settling token accounting.")
   private String call(String prompt, String conversation, ModelCallBudget budget) {
     budget.run();
     boolean invoked = false, reported = false;
     try {
       var request =
-          memoryClient.get()
+          memoryClient
+              .get()
               .prompt(prompt)
               .advisors(
                   advisor ->
@@ -259,10 +254,18 @@ public class MemoryConsolidatorService {
       var generation = response == null ? null : response.getResult();
       var output = generation == null ? null : generation.getOutput();
       return output == null ? null : output.getText();
-    } catch (RuntimeException error) {
-      RunCancellation.propagate(error);
+    } catch (RuntimeException | Error error) {
+      if (error instanceof RuntimeException runtime) RunCancellation.propagate(runtime);
       if (error instanceof ExecutionStoppedException stopped) throw stopped;
-      if (invoked && !reported && budget.tokenLimitEnabled()) budget.recordTotalTokens(null);
+      try {
+        if (invoked && !reported && budget.tokenLimitEnabled()) budget.recordTotalTokens(null);
+      } catch (RuntimeException | Error accounting) {
+        if (error instanceof Error) {
+          if (accounting != error) error.addSuppressed(accounting);
+          throw error;
+        }
+        throw accounting;
+      }
       throw error;
     }
   }
