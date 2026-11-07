@@ -112,3 +112,15 @@ L-3 はコードで確認した。`call` と `stream` は解決済みの `runId`
 ## L-7 の回帰テスト
 
 同じコミットで Maven Wrapper の `full` プロファイルを使い、`DurableReviewProtocolTest#sizesNewClaimUsingTheAttemptIdReturnedToTheModel` の1件が通過した。実際の attempt ID が仮の ID より多くのトークンを消費する条件でも、初回の読み取りで予算内のページが返り、再読み取りで同じページが返ることを確認した。 [回帰テスト](https://github.com/mikoto2000/rei/blob/0fe6d2175063f1d20a8fca834a1cab8e417a2ea0/src/test/java/dev/mikoto2000/rei/review/DurableReviewProtocolTest.java#L24) · [修正 PR #418 の CI](https://github.com/mikoto2000/rei/pull/418/checks)
+
+## M-1 のキャンセル判定の回帰テスト
+
+停止要求を受理した後、キャンセル通知を処理する前に別スレッドで購読を解除し、Timing Span の状態を確認した。修正前の `main`（`f5e420f7`）では対象 Run を停止する2ケースが失敗した。修正コミット `19576d73` では、解決済みの Run ID で停止要求を照会し、3ケースすべてが通過した。 [修正 PR #525](https://github.com/mikoto2000/rei/pull/525) · [回帰テスト](https://github.com/mikoto2000/rei/blob/19576d739cd3443e176280fe5a0733e9773e45d3/src/test/java/dev/mikoto2000/rei/llm/AgentEventChatModelTimingTest.java#L262)
+
+| 停止要求の対象 | プロンプト内の実行コンテキスト | 修正前 | 修正後 |
+|---|---|---|---|
+| 購読を所有する Run | なし | `DISCONNECTED`（失敗） | `CANCELLED`（通過） |
+| 購読を所有する Run | あり。キャンセル状態は通知前 | `DISCONNECTED`（失敗） | `CANCELLED`（通過） |
+| 別の Run | なし | `DISCONNECTED`（通過） | `DISCONNECTED`（通過） |
+
+Windows / OpenJDK 25 で Maven Wrapper の `full` プロファイルを使い、追加した3ケースを含む関連テストとアーキテクチャ検査の計53件が通過した。失敗・エラー・スキップは0件だった。修正 PR の Windows 回帰 A・B、静的解析、集約チェックもすべて通過した。 [PR #525 の全チェック](https://github.com/mikoto2000/rei/pull/525/checks)

@@ -59,6 +59,12 @@ return dev.mikoto2000.rei.core.chat.AgentRunScope.current();
 
 呼び出し元から解決した `runId` をイベント発行、Timing Span、応答チャンクの計測に共通で使うようにした。非同期購読や応答処理が別の Run のスコープで行われても、Span とマイルストーンが呼び出し元の Run に記録されることを回帰テストで確認した。 [修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [検証証跡](./test-evidence.md#m-1-と-l-3-の検証)
 
+**キャンセル誤分類の再現と修正**
+
+修正前の `main`（`f5e420f7`）で、停止要求の受理後、キャンセル通知の処理前に別スレッドで購読を解除すると、対象 Run の Timing Span が `DISCONNECTED` と記録された。購読を解除したスレッドに割り込みがなく、プロンプトに `RunExecutionContext` がない場合と、コンテキストはあるがキャンセル状態がまだ反映されていない場合の両方で再現した。
+
+購読解除時に解決済みの `runId` で停止要求の受理状態を照会するようにした。対象 Run の停止要求が受理済みなら `CANCELLED` として記録する。通常の切断や、別 Run だけに停止要求がある場合は `DISCONNECTED` として記録する。 [修正 PR #525](https://github.com/mikoto2000/rei/pull/525) · [キャンセル判定の検証](./test-evidence.md#m-1-のキャンセル判定の回帰テスト)
+
 ---
 
 ## M-2: Working Set の注入位置が全経路で変更された
