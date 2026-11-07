@@ -1,8 +1,8 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.computeruse.CapturedScreen;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.awt.AWTException;
+import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -326,10 +326,6 @@ final class ActivityEvidencePipeline {
   }
 
   /** 作業状況の把握に関する定期確認を処理する。 */
-  @SuppressFBWarnings(
-      value = "REC_CATCH_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Isolates checked desktop observer failures and preserves the scheduled observation loop.")
   void tick() {
     if (!lifeAllowed(clock.instant())) return;
     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
@@ -344,7 +340,7 @@ final class ActivityEvidencePipeline {
       }
       try {
         screenshots.cleanup(clock.instant().minus(Duration.ofDays(p.getScreenshotRetentionDays())));
-      } catch (Exception e) {
+      } catch (IOException | RuntimeException e) {
         warn("retention", e);
       }
       if (!allowed(token)) return;
@@ -352,7 +348,7 @@ final class ActivityEvidencePipeline {
       DesktopActivityObserver.Metadata metadata;
       try {
         metadata = observer.metadata();
-      } catch (Exception e) {
+      } catch (IOException | InterruptedException | RuntimeException e) {
         warn("metadata", e);
         metadata = null;
       }
@@ -376,7 +372,7 @@ final class ActivityEvidencePipeline {
           reliable = reliable && age < 0x80000000L;
           idle = reliable && (sample.locked() || age >= 60000);
           evidence = evidence.withInput(new ActivityEvidence.InputReference(!idle, reliable));
-        } catch (Exception ignored) {
+        } catch (RuntimeException ignored) {
         }
 
       ActivityClassification classification;
@@ -386,7 +382,7 @@ final class ActivityEvidencePipeline {
                     && p.getDetection().getMode() != ActivityProperties.DetectionMode.VISION_FIRST
                 ? classify.apply(evidence)
                 : unknown(fg);
-      } catch (Exception e) {
+      } catch (RuntimeException e) {
         warn("classification", e);
         classification = unknown(fg);
       }
@@ -505,7 +501,7 @@ final class ActivityEvidencePipeline {
       try {
         screen = observer.capture();
         imageCapturedAt = clock.instant();
-      } catch (Exception e) {
+      } catch (AWTException | IOException | InterruptedException | RuntimeException e) {
         warn("screenshot", e);
         metrics();
         return;
@@ -581,7 +577,7 @@ final class ActivityEvidencePipeline {
                       work.record.detection(),
                       refs);
               store.replace(work.record);
-            } catch (Exception e) {
+            } catch (IOException | RuntimeException e) {
               warn("evidence persistence", e);
             }
           }
@@ -603,7 +599,7 @@ final class ActivityEvidencePipeline {
       }
       pollForeground();
       metrics();
-    } catch (Exception e) {
+    } catch (IOException | InterruptedException | RuntimeException e) {
       warn("observation", e);
     } finally {
       observing.set(false);
@@ -721,7 +717,7 @@ final class ActivityEvidencePipeline {
       store.replace(updated);
       if (previous != null && previous.id().equals(updated.id())) previous = updated;
       return updated;
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       warn("duplicate status", e);
       return record;
     }
@@ -767,10 +763,6 @@ final class ActivityEvidencePipeline {
   }
 
   /** 作業状況の把握に関するenrichを処理する。 */
-  @SuppressFBWarnings(
-      value = "REC_CATCH_EXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Isolates checked vision adapter failures while retaining captured activity evidence.")
   private void enrich(Work work, boolean background) {
     long started = System.nanoTime();
     Instant apiStarted = null, apiCompleted = null;
@@ -900,7 +892,7 @@ final class ActivityEvidencePipeline {
           "Activity evidence enriched: scope={} observation_age_ms={}",
           background ? "background" : "foreground",
           Duration.between(original.capturedAt(), clock.instant()).toMillis());
-    } catch (Exception e) {
+    } catch (IOException | RuntimeException e) {
       if (apiStarted != null && apiCompleted == null) apiCompleted = clock.instant();
       if (!background) failed.increment();
       failure.increment();
@@ -968,13 +960,13 @@ final class ActivityEvidencePipeline {
                 .shouldSave(false, ScreenshotPersistencePolicy.Outcome.EXTRACTION_FAILURE))
               try {
                 refs = screenshots.save(r.id(), r.capturedAt(), work.screen);
-              } catch (Exception imageError) {
+              } catch (IOException | RuntimeException imageError) {
                 warn("failure evidence", imageError);
               }
             work.record = copy(r, r.inference(), r.confidence(), detection, refs);
             store.replace(work.record);
             supplementSaved = true;
-          } catch (Exception storageError) {
+          } catch (RuntimeException storageError) {
             warn("failure status", storageError);
           }
       }
@@ -1050,7 +1042,7 @@ final class ActivityEvidencePipeline {
     work.record = copy(r, r.inference(), r.confidence(), detection, r.screenshotReferences());
     try {
       store.replace(work.record);
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       warn("attempt diagnostics", e);
     }
   }

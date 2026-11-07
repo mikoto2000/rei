@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.activity;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.awt.AWTException;
+import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -339,7 +341,7 @@ public final class ActivityCapture implements AutoCloseable {
     try {
       if (!lifeAllowed(clock.instant())) return null;
       return observer.lightweight();
-    } catch (Exception | LinkageError e) {
+    } catch (RuntimeException | LinkageError e) {
       return new DesktopActivityObserver.Lightweight(0, 0, null, null, false, false);
     }
   }
@@ -360,7 +362,7 @@ public final class ActivityCapture implements AutoCloseable {
       try {
         screenshots.cleanup(
             clock.instant().minus(Duration.ofDays(properties.getScreenshotRetentionDays())));
-      } catch (Exception e) {
+      } catch (IOException | RuntimeException e) {
         failure("retention", e);
       }
       long token;
@@ -394,7 +396,7 @@ public final class ActivityCapture implements AutoCloseable {
       var frame = new Frame(token, at, foreground, screen, observed, lifeLease);
       submit(frame);
       status = "submitted";
-    } catch (Exception e) {
+    } catch (AWTException | IOException | InterruptedException | RuntimeException e) {
       status = "failed";
       invalidate();
       failure("observation", e);
@@ -508,7 +510,7 @@ public final class ActivityCapture implements AutoCloseable {
                         new ActivityRecord.Inference(
                             "OS observation only; activity unknown", List.of()),
                         0);
-      } catch (Exception error) {
+      } catch (IOException | RuntimeException error) {
         saveEvidence(
             token,
             UUID.randomUUID().toString(),
@@ -557,7 +559,7 @@ public final class ActivityCapture implements AutoCloseable {
         // Keep foreground-only evidence in the reuse cache, even after background supplementation.
         if (!duplicate) fingerprints = Map.copyOf(current);
       }
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       synchronized (this) {
         if (allowed(token)) resetEvidence();
       }
@@ -581,7 +583,7 @@ public final class ActivityCapture implements AutoCloseable {
       return List.of();
     try {
       return screenshots.save(id, at, screen);
-    } catch (Exception error) {
+    } catch (IOException | RuntimeException error) {
       failure("evidence persistence", error);
       return List.of(); // A failed optional evidence write must not discard a valid ActivityRecord.
     }
@@ -592,7 +594,7 @@ public final class ActivityCapture implements AutoCloseable {
       dev.mikoto2000.rei.computeruse.CapturedScreen screen,
       ForegroundWindow foreground,
       String scope)
-      throws Exception {
+      throws IOException {
     try (var ignored = org.slf4j.MDC.putCloseable("activityScope", scope)) {
       return extractor.extract(screen, foreground);
     }
