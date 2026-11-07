@@ -95,9 +95,10 @@ class PersistentCheckpointRepositoryTest {
   }
 
   /** 単一改訂番号上限について、一括反映置換を許可することを確認する。 */
-  @Test
-  void singleRevisionLimitAllowsAtomicReplacementAndCorruptionKeepsLatestValidRevision()
-      throws Exception {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"broken", "null"})
+  void singleRevisionLimitAllowsAtomicReplacementAndCorruptionKeepsLatestValidRevision(
+      String corruptSnapshot) throws Exception {
     var settings = new CheckpointProperties();
     settings.setMaxRevisions(1);
     var ds = new SQLiteDataSource();
@@ -111,8 +112,9 @@ class PersistentCheckpointRepositoryTest {
     repo.save(first, 2, "third");
     try (var c =
             java.sql.DriverManager.getConnection("jdbc:sqlite:" + directory.resolve("work.db"));
-        var s = c.createStatement()) {
-      s.executeUpdate("UPDATE checkpoint_revisions SET snapshot='broken' WHERE revision=3");
+        var s = c.prepareStatement("UPDATE checkpoint_revisions SET snapshot=? WHERE revision=3")) {
+      s.setString(1, corruptSnapshot);
+      s.executeUpdate();
     }
     assertEquals(2, repo.get("A", "task").revision());
     assertEquals(List.of("Corrupt checkpoint"), repo.diagnostics("A", "task"));

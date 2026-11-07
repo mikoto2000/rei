@@ -120,20 +120,18 @@ public class PersistentCheckpointRepository {
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reports the original decode failure when every stored revision is invalid.")
   public PersistentCheckpoint get(String project, String task) {
-    RuntimeException invalid = null;
+    CheckpointException invalid = null;
     try (var rows = rows(project, task)) {
       var iterator = rows.iterator();
-      while (iterator.hasNext())
+      while (iterator.hasNext()) {
+        var row = iterator.next();
         try {
-          return decode(iterator.next(), project, task);
-        } catch (RuntimeException e) {
+          return decode(row, project, task);
+        } catch (CheckpointException e) {
           invalid = e;
         }
+      }
     }
     if (invalid != null) throw invalid;
     throw new IllegalArgumentException("Checkpoint task not found");
@@ -144,13 +142,15 @@ public class PersistentCheckpointRepository {
     var warnings = new ArrayList<String>();
     try (var rows = rows(project, task)) {
       var iterator = rows.iterator();
-      while (iterator.hasNext())
+      while (iterator.hasNext()) {
+        var row = iterator.next();
         try {
-          decode(iterator.next(), project, task);
+          decode(row, project, task);
           break;
-        } catch (RuntimeException error) {
+        } catch (CheckpointException error) {
           warnings.add(error.getMessage());
         }
+      }
     }
     return List.copyOf(warnings);
   }
@@ -1024,7 +1024,13 @@ public class PersistentCheckpointRepository {
   /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private PersistentCheckpoint decode(Row row, String project, String task) {
     try {
-      var state = json.readValue(row.snapshot(), PersistentCheckpoint.class);
+      var state =
+          row.snapshot() == null
+              ? null
+              : json.readValue(row.snapshot(), PersistentCheckpoint.class);
+      if (state == null)
+        throw new CheckpointException(
+            CheckpointException.Code.CORRUPT_CHECKPOINT, "Corrupt checkpoint");
       if (state.schemaVersion() != 1)
         throw new CheckpointException(
             CheckpointException.Code.INCOMPATIBLE_SCHEMA,
