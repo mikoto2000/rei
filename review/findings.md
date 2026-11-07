@@ -163,7 +163,9 @@ var publisher = publisher(owner);
 
 **対象**: `src/main/java/dev/mikoto2000/rei/llm/AgentEventChatModel.java`
 
-**根拠**
+**状態**: 解消済み
+
+**指摘時の根拠**
 
 ```java
 private ... measurement(Prompt prompt, String request) {
@@ -176,9 +178,9 @@ private ... measurement(Prompt prompt, String request) {
 
 3引数版も先頭で `owner(prompt)` を呼ぶ。
 
-**影響**
+**確認結果**
 
-軽微な二重解決。M-1 の修正で引数化すれば同時に解消する。
+M-1 の修正で、`measurement` は呼び出し側が解決した `runId` を受け取るようになった。二重解決を起こしていたオーバーロードは削除されている。 [修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434)
 
 ---
 
@@ -211,9 +213,11 @@ private Prompt withWorkingSetSnapshot(Prompt prompt) {
 
 **対象**: `src/main/java/dev/mikoto2000/rei/core/contextbudget/ContextAssembler.java`
 
-**根拠**
+**状態**: 対応済み
 
-`assembleLocked` は `estimate(project(raw, h, a))` を複数回呼ぶ。`project(...)` は `withWorkingSetSnapshot(...)` を呼び、そこで `workingSet.get()` を実行する。
+**指摘時の根拠**
+
+修正前は、`assembleLocked` が `estimate(project(raw, h, a))` を複数回呼び、投影のたびに `withWorkingSetSnapshot(...)` が `workingSet.get()` を実行していた。
 
 ```java
 String snapshot = workingSet == null ? marker.getText() : workingSet.get();
@@ -223,9 +227,9 @@ String snapshot = workingSet == null ? marker.getText() : workingSet.get();
 
 推定時と最終投影時で Working Set が変わると、推定値と実際の送信内容がずれる。また同じ内容を複数回描画する分のコストがかかる。
 
-**推奨対応**
+**対応結果**
 
-`assembleLocked` の冒頭で1回だけスナップショットを取得し、以降は同じ文字列を使う。
+組み立てごとに Working Set を一度取得し、トークンの見積もりと最終プロンプトで同じスナップショットを使うようにした。次のモデル呼び出しでは取り直すため、ツール実行後の更新も反映される。取得回数と次回の更新を確認する回帰テストを追加した。 [修正 PR #499](https://github.com/mikoto2000/rei/pull/499) · [回帰テスト結果](./test-evidence.md#l-5-の回帰テスト)
 
 ---
 
