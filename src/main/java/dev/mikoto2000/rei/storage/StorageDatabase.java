@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.io.IOException;
 import java.nio.file.Path;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -62,11 +64,8 @@ public final class StorageDatabase {
   @FunctionalInterface
   public interface Work<T> {
     /** データ保存の共通処理の操作を実行する。 */
-    @SuppressFBWarnings(
-        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-        matchType = SuppressMatchType.EXACT,
-        justification = "Transaction work may combine JDBC with file and other checked operations.")
-    T run(Connection connection) throws Exception;
+    T run(Connection connection)
+        throws IOException, NoSuchAlgorithmException, SQLException, InterruptedException;
   }
 
   /** 指定された値や利用先を使って、StorageDatabaseを初期化する。 */
@@ -117,6 +116,12 @@ public final class StorageDatabase {
     }
   }
 
+  /** SQLiteの共有接続を閉じるための所有権。 */
+  interface WalLease extends AutoCloseable {
+    @Override
+    void close() throws SQLException;
+  }
+
   /**
    * データ保存の共通処理で用いるkeepWal開始を返す。
    *
@@ -125,7 +130,7 @@ public final class StorageDatabase {
    * otherwise checkpoints and deletes the WAL. The startup gate must close this handle before
    * releasing its process lease.
    */
-  AutoCloseable keepWalOpen() throws java.io.IOException, SQLException {
+  WalLease keepWalOpen() throws java.io.IOException, SQLException {
     synchronized (state) {
       if (state.keepOpen)
         throw new IllegalStateException("Storage writer already has a lifetime owner");
@@ -134,13 +139,13 @@ public final class StorageDatabase {
         state.readerOwner = new Object();
         state.keepOpen = true;
       }
-      return new AutoCloseable() {
+      return new WalLease() {
         /** 終了済み。 */
         private boolean closed;
 
         /** データ保存の共通処理で利用した資源や登録を解放し、利用を終了する。 */
         @Override
-        public void close() throws Exception {
+        public void close() throws SQLException {
           synchronized (state) {
             if (closed) return;
             closed = true;
@@ -173,10 +178,6 @@ public final class StorageDatabase {
   }
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
-  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
-      value = "REC_CATCH_EXCEPTION",
-      justification =
-          "The public Work callback declares arbitrary checked Exception; read must wrap it and discard the failed reader, as StorageReadReuseTest verifies.")
   public <T> T read(Work<T> work) {
     try (var reader = borrowReader()) {
       // 接続を再利用しても、パスと形式の検証は省略しない。
@@ -188,7 +189,11 @@ public final class StorageDatabase {
       // 明示的なtransactionや失敗した接続を次の読み取りへ渡さない。
       reader.reusable = reader.connection.getAutoCommit();
       return result;
-    } catch (Exception error) {
+    } catch (IOException
+        | NoSuchAlgorithmException
+        | SQLException
+        | InterruptedException
+        | RuntimeException error) {
       throw new IllegalStateException("Cannot read SQLite storage", error);
     }
   }
