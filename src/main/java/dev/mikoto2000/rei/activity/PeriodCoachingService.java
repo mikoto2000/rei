@@ -1,8 +1,9 @@
 package dev.mikoto2000.rei.activity;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * 期間助言のユースケースを実現する。
@@ -14,46 +15,55 @@ public final class PeriodCoachingService {
   private final ActivityTimeline timeline;
 
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads and updates the same durable coaching settings and reservations.")
-  private final PeriodCoachingStore store;
+  private final Supplier<PeriodCoachingStore.Snapshot> loadSettings;
 
-  /** 期限や記録日時の判定に使う時刻の取得元。 */
-  private final Clock clock;
+  private final Function<Boolean, PeriodCoachingStore.Snapshot> changeEnabled;
+  private final Function<PeriodCoaching.Settings, PeriodCoachingStore.Snapshot> changeSettings;
+  private final BiFunction<PeriodCoaching.Settings, Long, PeriodCoachingStore.Snapshot>
+      changeSettingsAtRevision;
+  private final BiFunction<Boolean, Long, PeriodCoachingStore.Snapshot> changeEnabledAtRevision;
+  private final Function<Prepared, String> reserveAdvice;
 
   /** 指定された値や利用先を使って、PeriodCoachingServiceを初期化する。 */
   public PeriodCoachingService(ActivityTimeline timeline, PeriodCoachingStore store, Clock clock) {
     this.timeline = timeline;
-    this.store = store;
-    this.clock = clock;
+    this.loadSettings = () -> store.load();
+    this.changeEnabled = enabled -> store.setEnabled(enabled);
+    this.changeSettings = settings -> store.configure(settings.withEnabled(false));
+    this.changeSettingsAtRevision =
+        (settings, revision) -> store.configureExpected(settings.withEnabled(false), revision);
+    this.changeEnabledAtRevision =
+        (enabled, revision) -> store.setEnabledExpected(enabled, revision);
+    this.reserveAdvice =
+        prepared ->
+            store.reserve(
+                prepared.settings(), prepared.periodKey(), prepared.reason(), clock.instant());
   }
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
   public PeriodCoachingStore.Snapshot status() {
-    return store.load();
+    return loadSettings.get();
   }
 
   /** 作業状況の把握で使用する有効状態を設定する。 */
   public PeriodCoachingStore.Snapshot setEnabled(boolean enabled) {
-    return store.setEnabled(enabled);
+    return changeEnabled.apply(enabled);
   }
 
   /** 作業状況の把握で用いる設定を返す。 */
   public PeriodCoachingStore.Snapshot configure(PeriodCoaching.Settings settings) {
-    return store.configure(settings.withEnabled(false));
+    return changeSettings.apply(settings);
   }
 
   /** 作業状況の把握で用いる設定期待する内容を返す。 */
   public PeriodCoachingStore.Snapshot configureExpected(
       PeriodCoaching.Settings settings, long revision) {
-    return store.configureExpected(settings.withEnabled(false), revision);
+    return changeSettingsAtRevision.apply(settings, revision);
   }
 
   /** 作業状況の把握で使用する有効状態期待する内容を設定する。 */
   public PeriodCoachingStore.Snapshot setEnabledExpected(boolean enabled, long revision) {
-    return store.setEnabledExpected(enabled, revision);
+    return changeEnabledAtRevision.apply(enabled, revision);
   }
 
   /** 対象を判断基準に照らして評価する。 */
@@ -87,7 +97,7 @@ public final class PeriodCoachingService {
    * <p>No reservation or side effect; allows automatic callers to recheck their delivery context.
    */
   public Prepared prepare(ActivityPeriodAnalysis.Period period, String day) {
-    var settings = store.load();
+    var settings = loadSettings.get();
     if (!settings.settings().enabled())
       return new Prepared(settings, null, "DISABLED", "助言を抑制しました: DISABLED", false);
     var comparison = timeline.periodComparison(period, day);
@@ -120,14 +130,11 @@ public final class PeriodCoachingService {
 
   /** 競合する処理と利用範囲を調整するため、期間助言サービスを確保する。 */
   public String reserve(Prepared prepared) {
-    return prepared.advice()
-        ? store.reserve(
-            prepared.settings(), prepared.periodKey(), prepared.reason(), clock.instant())
-        : prepared.reason();
+    return prepared.advice() ? reserveAdvice.apply(prepared) : prepared.reason();
   }
 
   /** 作業状況の把握において、現在に該当するか判定する。 */
   public boolean current(Prepared prepared) {
-    return store.load().equals(prepared.settings());
+    return loadSettings.get().equals(prepared.settings());
   }
 }

@@ -2,8 +2,10 @@ package dev.mikoto2000.rei.core.policy;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.List;
+import java.util.Optional;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -16,26 +18,31 @@ import picocli.CommandLine.Spec;
 @Command(name = "approval", description = "ツールの一回限りの実行承認を確認・判断します")
 public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
   /** 保存と検索の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common approval state to coordinate requests and decisions.")
-  private final ToolApprovalRepository repository;
+  private final Function<String, List<ToolApprovalRepository.Request>> listPending;
+
+  private final BiFunction<String, String, ToolApprovalRepository.Request> findApproval;
+  private final Function<DecisionTarget, ToolApprovalRepository.Request> decideApproval;
 
   /** プロジェクト一覧。 */
   private final Supplier<String> currentProjectId;
 
   /** 継続入力一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared continuation lifecycle when listing and deciding approvals.")
-  private ApprovalContinuationService continuations;
+  private Function<String, List<ToolApprovalRepository.Request>> listContinuations;
+
+  private Function<DecisionTarget, ToolApprovalRepository.Request> decideContinuation;
+  private Function<String, Optional<String>> continuationState = id -> Optional.empty();
 
   /** ツール利用の権限制御で使用する継続入力一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setContinuations(ApprovalContinuationService service) {
-    continuations = service;
+    this.listContinuations = service == null ? null : service::list;
+    this.decideContinuation =
+        service == null
+            ? null
+            : decision ->
+                service.decide(
+                    decision.project(), decision.id(), decision.approved(), decision.continueRun());
+    this.continuationState = service == null ? id -> Optional.empty() : service::state;
   }
 
   /** continue実行。 */
@@ -56,17 +63,21 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
       new java.util.WeakHashMap<>();
 
   /** 再開用の記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint state for run lookups and transitions.")
-  private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints;
+  private Function<ToolApprovalRepository.Request, Optional<CheckpointHint>> findCheckpoint =
+      request -> Optional.empty();
 
   /** ツール利用の権限制御で使用する再開用の記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setCheckpoints(
       dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints) {
-    this.checkpoints = checkpoints;
+    this.findCheckpoint =
+        request ->
+            checkpoints == null
+                ? Optional.empty()
+                : checkpoints
+                    .findByRun(request.projectId(), request.runId())
+                    .filter(state -> state.sessionId().equals(request.sessionId()))
+                    .map(state -> new CheckpointHint(state.taskId(), state.status()));
   }
 
   /** 仕様。 */
@@ -96,7 +107,10 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
   /** 指定された値や利用先を使って、ApprovalCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public ApprovalCommand(ToolApprovalRepository repository, ProjectService projects) {
-    this.repository = repository;
+    this.listPending = project -> repository.list(project);
+    this.findApproval = (project, id) -> repository.get(project, id);
+    this.decideApproval =
+        decision -> repository.decide(decision.project(), decision.id(), decision.approved());
     this.currentProjectId = () -> projects.currentContext().id();
   }
 
@@ -116,18 +130,12 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
       Object result =
           switch (action) {
             case "list" ->
-                continuations == null ? repository.list(project) : continuations.list(project);
-            case "show" -> repository.get(project, requiredId());
-            case "approve" ->
-                continueRun
-                    ? requiredContinuations().decide(project, requiredId(), true, true)
-                    : continuations == null
-                        ? repository.decide(project, requiredId(), true)
-                        : continuations.decide(project, requiredId(), true, false);
-            case "deny" ->
-                continuations == null
-                    ? repository.decide(project, requiredId(), false)
-                    : continuations.decide(project, requiredId(), false, false);
+                listContinuations == null
+                    ? listPending.apply(project)
+                    : listContinuations.apply(project);
+            case "show" -> findApproval.apply(project, requiredId());
+            case "approve" -> decide(project, true, continueRun);
+            case "deny" -> decide(project, false, false);
             default ->
                 throw new IllegalArgumentException(
                     "Use /approval list|show|approve|deny [approvalId]");
@@ -141,7 +149,9 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
         printRequest(writer, request, false);
         if (continueRun)
           writer.println(
-              "続行受付: " + continuations.state(request.id()).orElse("UNKNOWN") + "（重複操作でも二重実行しません）。");
+              "続行受付: "
+                  + continuationState.apply(request.id()).orElse("UNKNOWN")
+                  + "（重複操作でも二重実行しません）。");
         else if (!"deny".equals(action)) printResume(writer, request);
       } else writer.println(result);
       return 0;
@@ -154,9 +164,13 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
   }
 
   /** ツール利用の権限制御で用いる必須継続入力一覧を返す。 */
-  private ApprovalContinuationService requiredContinuations() {
-    if (continuations == null) throw new IllegalStateException("Approval continuation unavailable");
-    return continuations;
+  private ToolApprovalRepository.Request decide(
+      String project, boolean approved, boolean continueRequested) {
+    var operation = decideContinuation;
+    if (continueRequested && operation == null)
+      throw new IllegalStateException("Approval continuation unavailable");
+    var target = new DecisionTarget(project, requiredId(), approved, continueRequested);
+    return operation == null ? decideApproval.apply(target) : operation.apply(target);
   }
 
   /** ツール利用の権限制御で用いるクライアントキーを返す。 */
@@ -197,10 +211,10 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
                 .atZone(java.time.ZoneId.systemDefault())
                 .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss z")));
     writer.println("承認ID: " + request.id());
-    if (continuations != null && continuations.state(request.id()).isPresent()) {
-      writer.println("続行状態: " + continuations.state(request.id()).orElseThrow());
+    if (continuationState.apply(request.id()).isPresent()) {
+      writer.println("続行状態: " + continuationState.apply(request.id()).orElseThrow());
       if (java.util.Set.of("PENDING", "APPROVED").contains(request.status())
-          && continuations.state(request.id()).orElse("").equals("WAITING_APPROVAL"))
+          && continuationState.apply(request.id()).orElse("").equals("WAITING_APPROVAL"))
         writer.println("承認して続行: /approval approve " + reference + " --continue");
     }
     if (numbered)
@@ -215,19 +229,14 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
       return;
     }
     try {
-      var task =
-          checkpoints == null
-              ? java.util.Optional.<dev.mikoto2000.rei.checkpoint.PersistentCheckpoint>empty()
-              : checkpoints
-                  .findByRun(request.projectId(), request.runId())
-                  .filter(state -> state.sessionId().equals(request.sessionId()));
+      var task = findCheckpoint.apply(request);
       if (task.isEmpty()) {
         writer.println("対応する task ID を取得できません。/resume list で確認してください（承認IDは /resume に使用できません）。");
         return;
       }
       var state = task.get();
       writer.println("task ID: " + state.taskId());
-      if (continuations != null && continuations.state(request.id()).isPresent()) {
+      if (continuationState.apply(request.id()).isPresent()) {
         writer.println("保存した呼び出しから続行: /approval approve " + request.id() + " --continue");
         return;
       }
@@ -275,4 +284,8 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
       super("list", "show", "approve", "deny");
     }
   }
+
+  private record CheckpointHint(String taskId, String status) {}
+
+  private record DecisionTarget(String project, String id, boolean approved, boolean continueRun) {}
 }

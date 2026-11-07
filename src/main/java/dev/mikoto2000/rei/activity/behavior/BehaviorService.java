@@ -7,8 +7,6 @@ import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.topic.AgentMessage;
 import dev.mikoto2000.rei.topic.AgentMessagePublisher;
 import dev.mikoto2000.rei.topic.MessageOrigin;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Instant;
@@ -16,8 +14,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 
 /**
  * 作業習慣のユースケースを実現する。
@@ -51,11 +52,10 @@ public final class BehaviorService {
       timelineObservations;
 
   /** 状態の保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads and writes the same behavior state and event history.")
-  private final BehaviorStateStore persistence;
+  private final Supplier<BehaviorState> loadState;
+
+  private final BiConsumer<BehaviorState, BehaviorAssessment> saveState;
+  private final Consumer<BehaviorTimelineEvent> appendEvent;
 
   /** 評価の判断。 */
   private final BehaviorEvaluator evaluator;
@@ -111,7 +111,9 @@ public final class BehaviorService {
     this.capture = capture;
     this.timelineSessions = (start, end) -> timeline.findBetween(start, end);
     this.timelineObservations = (start, end) -> timeline.findRecordsBetween(start, end);
-    this.persistence = persistence;
+    this.loadState = () -> persistence.load();
+    this.saveState = (state, assessment) -> persistence.save(state, assessment);
+    this.appendEvent = event -> persistence.appendEvent(event);
     this.generator = generator;
     this.publisher = publisher;
     this.tracker = tracker;
@@ -165,12 +167,12 @@ public final class BehaviorService {
       long activityVersion;
       synchronized (this) {
         if (!allowed(token)) return;
-        if (state == null) state = Objects.requireNonNull(persistence.load());
+        if (state == null) state = Objects.requireNonNull(loadState.get());
         var decision = policy.decide(a, state, true, tracker.isAgentBusy());
         suppression = decision.suppression().name();
         var next = decision.allowed() ? decision.state().notified(a) : decision.state();
         if (!next.equals(state)) {
-          persistence.save(next, a);
+          saveState.accept(next, a);
           state = next;
         }
         if (!decision.allowed()) {
@@ -244,7 +246,7 @@ public final class BehaviorService {
       String id) {
     if (a.severity() == BehaviorSeverity.NONE) return;
     try {
-      persistence.appendEvent(
+      appendEvent.accept(
           new BehaviorTimelineEvent(
               id,
               at,
@@ -261,7 +263,7 @@ public final class BehaviorService {
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
   public synchronized String status() {
-    if (state == null) state = Objects.requireNonNull(persistence.load());
+    if (state == null) state = Objects.requireNonNull(loadState.get());
     var a = assessment;
     var until = policy.cooldownUntil(state);
     return "Behavior enabled="

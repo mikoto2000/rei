@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.memory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
@@ -146,6 +147,21 @@ class AutoSleepModelWaitTest {
         java.util.Arrays.stream(error.getSuppressed())
             .anyMatch(
                 e -> e instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException));
+    verify(budget).recordTotalTokens(null);
+  }
+
+  @Test
+  void fatalModelFailureRetainsIdentityWhenUnknownUsageReportingFails() {
+    var fatal = new AssertionError("provider failed");
+    var accounting = new IllegalStateException("accounting failed");
+    when(model.stream(any(Prompt.class))).thenReturn(Flux.error(fatal));
+    var budget = mock(ModelCallBudget.class);
+    doThrow(accounting).when(budget).recordTotalTokens(null);
+    var processor = processor();
+
+    assertSame(
+        fatal, assertThrows(AssertionError.class, () -> processor.call("system", "data", budget)));
+    assertSame(accounting, fatal.getSuppressed()[0]);
     verify(budget).recordTotalTokens(null);
   }
 }

@@ -1,8 +1,7 @@
 package dev.mikoto2000.rei.websearch;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** Web上の情報の調査に必要なWeb検索Orchestratorを扱う。 */
@@ -10,23 +9,17 @@ import org.springframework.stereotype.Service;
 public class WebSearchOrchestrator {
 
   /** Web検索サービス。 */
-  private final WebSearchService webSearchService;
-
   /** Webページ情報の取得元。 */
   private final WebPageFetcher webPageFetcher;
 
   /** Web検索検索条件計画の作成。 */
-  private final WebSearchQueryPlanner webSearchQueryPlanner;
-
   /** Web検索集計。 */
   private final WebSearchAggregator webSearchAggregator;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound WebSearchProperties shared by consumers of these settings.")
-  private final WebSearchProperties properties;
+  private final Supplier<WebResearchLimits> researchLimits;
+
+  private final WebResearchPipeline.SelectCandidates candidates;
 
   /** まとめた処理。 */
   private final WebFetchBatch batch;
@@ -70,11 +63,13 @@ public class WebSearchOrchestrator {
       WebSearchAggregator webSearchAggregator,
       WebSearchProperties properties,
       WebFetchBatch batch) {
-    this.webSearchService = webSearchService;
     this.webPageFetcher = webPageFetcher;
-    this.webSearchQueryPlanner = webSearchQueryPlanner;
     this.webSearchAggregator = webSearchAggregator;
-    this.properties = properties;
+    this.researchLimits = () -> WebResearchLimits.capture(properties);
+    this.candidates =
+        (query, limit) ->
+            WebSearchSelection.search(
+                webSearchService, webSearchQueryPlanner, query, limit, properties);
     this.batch = batch;
   }
 
@@ -94,19 +89,17 @@ public class WebSearchOrchestrator {
   /** 依頼に関連する情報を得るため、観測を検索する。 */
   private WebSearchContext searchObserved(String query, Integer limit)
       throws IOException, InterruptedException {
+    var limits = researchLimits.get();
     int maximum =
-        limit == null
-            ? properties.getMaxResults()
-            : Math.max(1, Math.min(limit, properties.getMaxResults()));
+        limit == null ? limits.maxResults() : Math.max(1, Math.min(limit, limits.maxResults()));
     var research =
         WebResearchPipeline.run(
-            webSearchService,
-            webSearchQueryPlanner,
-            properties,
+            limits,
+            candidates,
             batch,
             query,
             maximum,
-            properties.getMaxPageFetches(),
+            limits.maxPageFetches(),
             candidate -> webPageFetcher.fetch(candidate.result()),
             WebResearchPipeline.PAGES);
     WebSearchMetrics.OBSERVED.add("fetch_candidates", research.pageAttempts());

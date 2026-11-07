@@ -9,8 +9,6 @@ import dev.mikoto2000.rei.llm.OutputLimitDetector;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.memory.model.LongTermMemory;
 import dev.mikoto2000.rei.memory.model.MemoryCandidate;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -148,19 +146,11 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
    *
    * <p>Shared tool-free MEMORY call path, including input/output limits and model usage accounting.
    */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves typed execution failures and accounting failures during the memory model call.")
   public String call(String system, String data, ModelCallBudget budget) {
     var model = modelForCalls.get();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
     var options =
-        optionsForCalls.get()
-            .mutate()
-            .toolCallbacks(List.of())
-            .toolChoice("none")
-            .build();
+        optionsForCalls.get().mutate().toolCallbacks(List.of()).toolChoice("none").build();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
     var prompt = new Prompt(List.of(new SystemMessage(system), new UserMessage(data)), options);
     if (dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative().text(data)
@@ -223,19 +213,31 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
       }
       if (outputLimited.get()) throw new AutoSleepExecution.Failure("OUTPUT_INVALID", null);
       return result.toString();
-    } catch (RuntimeException error) {
-      RunCancellation.propagate(error);
-      if (budget != null && invoked.get() && !reported)
+    } catch (RuntimeException | Error error) {
+      var fatal =
+          reactor.core.Exceptions.unwrap(error) instanceof Error underlying ? underlying : null;
+      if (fatal == null) RunCancellation.propagate(error);
+      if (budget != null && invoked.get() && !reported) {
         try {
           budget.recordTotalTokens(null);
-        } catch (RuntimeException accounting) {
-          RunCancellation.propagate(accounting);
-          if (!(budget instanceof AutoSleepExecution)) throw accounting;
-          error.addSuppressed(accounting);
+        } catch (RuntimeException | Error accounting) {
+          if (fatal != null) {
+            if (fatal != accounting) fatal.addSuppressed(accounting);
+          } else {
+            if (accounting instanceof Error accountingError) {
+              accountingError.addSuppressed(error);
+              throw accountingError;
+            }
+            RunCancellation.propagate(accounting);
+            if (!(budget instanceof AutoSleepExecution)) throw accounting;
+            if (error != accounting) error.addSuppressed(accounting);
+          }
         }
-      if (error instanceof AutoSleepExecution.Failure
-          || error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)
-        throw error;
+      }
+      if (fatal != null) throw fatal;
+      if (error instanceof AutoSleepExecution.Failure failure) throw failure;
+      if (error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)
+        throw stopped;
       throw new AutoSleepExecution.Failure(
           error instanceof org.springframework.dao.DataAccessException
               ? "PERSISTENCE_FAILED"

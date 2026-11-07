@@ -4,33 +4,48 @@ import dev.mikoto2000.rei.http.HttpFetchObserver;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Metrics;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.ObjLongConsumer;
 
 /** In-memory Micrometer aggregates with fixed labels, no headers, URLs or payloads. */
 public final class HttpApiMetrics {
   /** Use the same global registry as the existing web-search metrics. */
   public static final HttpApiMetrics OBSERVED = new HttpApiMetrics(Metrics.globalRegistry);
 
-  private final MeterRegistry registry;
+  private final Consumer<Boolean> countCall;
+  private final ObjLongConsumer<String> recordDuration;
+  private final Consumer<HttpApiResult> recordResult;
+  private final Function<Runnable, HttpFetchObserver> fetchObserver;
 
   /** Allow an isolated registry for deterministic verification. */
-  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      justification =
-          "The Micrometer registry must be shared so counters are visible to host exporters.")
   public HttpApiMetrics(MeterRegistry registry) {
-    this.registry = registry;
+    this.countCall =
+        write ->
+            registry.counter("rei.http.api.calls", "kind", write ? "write" : "read").increment();
+    this.recordDuration =
+        (stage, nanos) ->
+            registry
+                .timer("rei.http.api." + stage + ".duration")
+                .record(nanos, TimeUnit.NANOSECONDS);
+    this.recordResult = result -> recordResult(registry, result);
+    this.fetchObserver = sent -> fetchObserver(registry, sent);
     registry.counter("rei.http.api.retries"); // Transport retries are deliberately disabled.
   }
 
   void call(boolean write) {
-    registry.counter("rei.http.api.calls", "kind", write ? "write" : "read").increment();
+    countCall.accept(write);
   }
 
   void duration(String stage, long nanos) {
-    registry.timer("rei.http.api." + stage + ".duration").record(nanos, TimeUnit.NANOSECONDS);
+    recordDuration.accept(stage, nanos);
   }
 
   void result(HttpApiResult result) {
+    recordResult.accept(result);
+  }
+
+  private static void recordResult(MeterRegistry registry, HttpApiResult result) {
     if (result.error() != null)
       registry.counter("rei.http.api.errors", "code", result.error()).increment();
     registry.summary("rei.http.api.response.bytes").record(result.responseBytes());
@@ -45,6 +60,10 @@ public final class HttpApiMetrics {
   }
 
   HttpFetchObserver observer(Runnable sent) {
+    return fetchObserver.apply(sent);
+  }
+
+  private static HttpFetchObserver fetchObserver(MeterRegistry registry, Runnable sent) {
     return new HttpFetchObserver() {
       @Override
       public void request(boolean redirect) {

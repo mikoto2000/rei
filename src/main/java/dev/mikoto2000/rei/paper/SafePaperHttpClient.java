@@ -1,22 +1,20 @@
 package dev.mikoto2000.rei.paper;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.UnknownHostException;
+import java.time.Duration;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 
 /** 安全性論文HTTP通信を外部の接続先へ依頼する窓口。 */
 @Component
 public class SafePaperHttpClient implements PaperHttpClient {
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the configured network limits and retry policy for paper requests.")
-  private final PaperProperties config;
+  private final Supplier<RetryPolicy> retryPolicy;
+
+  private final Supplier<ExchangeSettings> exchangeSettings;
 
   /** 情報の取得元。 */
   private final dev.mikoto2000.rei.http.SafeHttpFetcher fetcher;
@@ -31,7 +29,23 @@ public class SafePaperHttpClient implements PaperHttpClient {
   public SafePaperHttpClient(
       PaperProperties config, dev.mikoto2000.rei.http.SafeHttpFetcher fetcher) {
     config.validate();
-    this.config = config;
+    this.retryPolicy =
+        () ->
+            new RetryPolicy(
+                config.getTimeout(),
+                config.getRetries(),
+                config.getMaxRedirects(),
+                config.getBackoff());
+    this.exchangeSettings =
+        () ->
+            new ExchangeSettings(
+                config.getMaxDecodedResponseBytes(),
+                config.getMaxDecodedPdfBytes(),
+                config.getConnectTimeout(),
+                config.getReadTimeout(),
+                config.getTimeout(),
+                config.getMaxRedirects(),
+                config.getUserAgent());
     this.fetcher = fetcher;
   }
 
@@ -70,12 +84,13 @@ public class SafePaperHttpClient implements PaperHttpClient {
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   @Override
   public byte[] get(URI initial, String type, int maxBytes, PaperOperation op) {
-    op = op.withDeadline(config.getTimeout());
+    var retry = retryPolicy.get();
+    op = op.withDeadline(retry.timeout());
     long started = System.nanoTime();
-    for (int attempt = 0; attempt <= config.getRetries(); attempt++) {
+    for (int attempt = 0; attempt <= retry.retries(); attempt++) {
       URI uri = initial;
       try {
-        for (int redirect = 0; redirect <= config.getMaxRedirects(); redirect++) {
+        for (int redirect = 0; redirect <= retry.maxRedirects(); redirect++) {
           op.check();
           validateUri(uri);
           // Literal IPs may bypass a resolver in the transport, so validate them here too.
@@ -85,14 +100,14 @@ public class SafePaperHttpClient implements PaperHttpClient {
           }
           Response response = exchange(uri, type, maxBytes, op);
           if (response.status() >= 300 && response.status() < 400) {
-            if (response.location() == null || redirect == config.getMaxRedirects())
+            if (response.location() == null || redirect == retry.maxRedirects())
               throw failure("リダイレクト上限または Location がありません");
             uri = uri.resolve(response.location());
             continue;
           }
           if (response.status() == 429 || response.status() >= 500) {
-            if (attempt < config.getRetries()) {
-              pause(attempt, response.retryAfter(), op);
+            if (attempt < retry.retries()) {
+              pause(retry.backoff(), attempt, response.retryAfter(), op);
               break;
             }
             throw new PaperException(
@@ -116,8 +131,8 @@ public class SafePaperHttpClient implements PaperHttpClient {
       } catch (PaperException e) {
         if (e.code() == PaperException.Code.SEARCH_FAILED
             && e.getCause() instanceof java.util.concurrent.ExecutionException
-            && attempt < config.getRetries()) {
-          pause(attempt, "", op);
+            && attempt < retry.retries()) {
+          pause(retry.backoff(), attempt, "", op);
           continue;
         }
         throw e;
@@ -129,8 +144,8 @@ public class SafePaperHttpClient implements PaperHttpClient {
               || cause instanceof io.netty.handler.timeout.ReadTimeoutException)
             throw new PaperException(PaperException.Code.PROVIDER_TIMEOUT, "Provider timeout");
         }
-        if (attempt == config.getRetries()) throw failure("HTTP 通信失敗");
-        pause(attempt, "", op);
+        if (attempt == retry.retries()) throw failure("HTTP 通信失敗");
+        pause(retry.backoff(), attempt, "", op);
       }
     }
     throw failure("Provider retry 上限");
@@ -138,18 +153,19 @@ public class SafePaperHttpClient implements PaperHttpClient {
 
   /** 論文の調査と整理で用いるexchangeを返す。 */
   protected Response exchange(URI uri, String type, int maxBytes, PaperOperation op) {
+    var settings = exchangeSettings.get();
     int decoded =
         "application/pdf".equals(type)
-            ? config.getMaxDecodedPdfBytes()
-            : config.getMaxDecodedResponseBytes();
+            ? settings.maxDecodedPdfBytes()
+            : settings.maxDecodedResponseBytes();
     var policy =
         new dev.mikoto2000.rei.http.HttpFetchPolicy(
             maxBytes,
             decoded,
-            config.getConnectTimeout(),
-            config.getReadTimeout(),
-            config.getTimeout(),
-            config.getMaxRedirects(),
+            settings.connectTimeout(),
+            settings.readTimeout(),
+            settings.timeout(),
+            settings.maxRedirects(),
             type,
             null,
             false);
@@ -158,7 +174,7 @@ public class SafePaperHttpClient implements PaperHttpClient {
       var response =
           fetcher.exchange(
               uri,
-              Map.of("User-Agent", config.getUserAgent(), "Accept", type),
+              Map.of("User-Agent", settings.userAgent(), "Accept", type),
               policy,
               operation,
               dev.mikoto2000.rei.http.HttpFetchObserver.NONE,
@@ -191,8 +207,8 @@ public class SafePaperHttpClient implements PaperHttpClient {
   }
 
   /** 論文の調査と整理に関する一時停止を処理する。 */
-  private void pause(int attempt, String retry, PaperOperation op) {
-    long ms = Math.min(5000, config.getBackoff().toMillis() * (1L << attempt));
+  private void pause(Duration backoff, int attempt, String retry, PaperOperation op) {
+    long ms = Math.min(5000, backoff.toMillis() * (1L << attempt));
     try {
       ms = Math.min(5000, Math.max(ms, Math.multiplyExact(Long.parseLong(retry), 1000)));
     } catch (NumberFormatException | ArithmeticException ignored) {
@@ -209,4 +225,15 @@ public class SafePaperHttpClient implements PaperHttpClient {
       }
     }
   }
+
+  private record RetryPolicy(Duration timeout, int retries, int maxRedirects, Duration backoff) {}
+
+  private record ExchangeSettings(
+      int maxDecodedResponseBytes,
+      int maxDecodedPdfBytes,
+      Duration connectTimeout,
+      Duration readTimeout,
+      Duration timeout,
+      int maxRedirects,
+      String userAgent) {}
 }

@@ -7,6 +7,7 @@ import dev.mikoto2000.rei.event.ErrorInformation;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import org.springframework.stereotype.Component;
 
 /**
@@ -34,23 +35,28 @@ public class ToolPermissionGuard {
           "webSearchAndRead");
 
   /** 承認一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared approval state for requests and decisions.")
-  private ToolApprovalRepository approvals;
+  private BiFunction<AgentRunContext, ApprovalInvocation, ApprovalAttempt> authorizeApproval;
 
   /** ツール利用の権限制御で使用する承認一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setApprovals(ToolApprovalRepository approvals) {
-    this.approvals = approvals;
+    this.authorizeApproval =
+        approvals == null
+            ? null
+            : (owner, invocation) -> {
+              if (approvals.consume(invocation.tool(), invocation.input(), owner))
+                return new ApprovalAttempt(true, null);
+              return new ApprovalAttempt(
+                  false, approvals.request(invocation.tool(), invocation.input(), owner).id());
+            };
   }
 
   /** 判断基準。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured permission policy for the current tool authorization decision.")
+      justification =
+          "Uses the configured permission policy for the current tool authorization decision.")
   private final ToolPermissionPolicy policy;
 
   /** イベント一覧。 */
@@ -180,11 +186,12 @@ public class ToolPermissionGuard {
     if (decision == PermissionDecision.AUTO_APPROVE) return;
     String request = null;
     if (decision == PermissionDecision.REQUIRE_APPROVAL
-        && approvals != null
+        && authorizeApproval != null
         && approvalOwner != null
         && approvalOwner.projectId() != null) {
-      if (approvals.consume(tool, input, approvalOwner)) return;
-      request = approvals.request(tool, input, approvalOwner).id();
+      var approval = authorizeApproval.apply(approvalOwner, new ApprovalInvocation(tool, input));
+      if (approval.granted()) return;
+      request = approval.requestId();
     }
     var error = new ToolPermissionException(tool, decision);
     publisher.publishBoundary(
@@ -205,4 +212,8 @@ public class ToolPermissionGuard {
             .withOwnership(owner));
     throw error.withApprovalId(request);
   }
+
+  private record ApprovalInvocation(String tool, String input) {}
+
+  private record ApprovalAttempt(boolean granted, String requestId) {}
 }

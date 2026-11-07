@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.paper;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -183,5 +184,28 @@ class PaperFailureTest {
     assertThrows(
         PaperException.class,
         () -> PaperCommandRequest.parse(new String[] {"search", "GUI", "--bogus"}));
+  }
+
+  @Test
+  void failedFuturePreservesFatalAndTypedPaperFailures() {
+    var operation = PaperOperation.local("session");
+    var timeout = java.time.Duration.ofSeconds(1);
+    var fatal = new AssertionError("provider failed");
+    var paper = new PaperException(PaperException.Code.PROVIDER_RATE_LIMITED, "rate limited");
+
+    assertSame(
+        fatal,
+        assertThrows(
+            AssertionError.class,
+            () ->
+                operation.await(
+                    java.util.concurrent.CompletableFuture.failedFuture(fatal), timeout)));
+    assertSame(
+        paper,
+        assertThrows(
+            PaperException.class,
+            () ->
+                operation.await(
+                    java.util.concurrent.CompletableFuture.failedFuture(paper), timeout)));
   }
 }

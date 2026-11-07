@@ -222,6 +222,24 @@ class StoragePageLayoutTest {
   }
 
   @Test
+  void fingerprintReadsMainTablesEvenWhenTemporaryTablesShareTheirNames() throws Exception {
+    try (var db = connection();
+        var sql = db.createStatement()) {
+      sql.execute("CREATE TABLE sample(value TEXT)");
+      sql.execute("CREATE TABLE pragma_table_info(value TEXT)");
+      sql.execute("INSERT INTO main.sample VALUES('original')");
+      String original = StoragePageLayout.contents(db);
+
+      sql.execute("CREATE TEMP TABLE sample(other_column INTEGER)");
+      sql.execute("INSERT INTO temp.sample VALUES(100)");
+      assertThat(StoragePageLayout.contents(db)).isEqualTo(original);
+
+      sql.execute("UPDATE main.sample SET value='changed'");
+      assertThat(StoragePageLayout.contents(db)).isNotEqualTo(original);
+    }
+  }
+
+  @Test
   void upgradesPreviouslyBuiltPageOnlyVersionSeventeenWithoutLosingData() throws Exception {
     prepareLegacy();
     try (var db = connection();

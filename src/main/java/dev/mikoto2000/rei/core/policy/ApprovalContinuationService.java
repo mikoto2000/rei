@@ -10,8 +10,6 @@ import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -21,7 +19,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import javax.sql.DataSource;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.beans.factory.ObjectProvider;
@@ -42,11 +43,11 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Primary
 public class ApprovalContinuationService implements RunContinuation {
   /** 承認一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common approval state to coordinate requests and decisions.")
-  private final ToolApprovalRepository approvals;
+  private final Function<String, List<ToolApprovalRepository.Request>> listApprovals;
+
+  private final BiFunction<String, String, ToolApprovalRepository.Request> findApproval;
+  private final Function<ApprovalDecision, ToolApprovalRepository.Request> decideApproval;
+  private final BiConsumer<String, String> retireContinuationGrant;
 
   /** 保存先。 */
   private final ApprovalContinuationStore store;
@@ -82,17 +83,16 @@ public class ApprovalContinuationService implements RunContinuation {
   private final Map<String, Managed> managed = new ConcurrentHashMap<>();
 
   /** 再開用の記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint state for run lookups and transitions.")
-  private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints;
+  private BiConsumer<AgentRunContext, String> checkpointTransition = (owner, status) -> {};
 
   /** ツール利用の権限制御で使用する再開用の記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setCheckpoints(
       dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints) {
-    this.checkpoints = checkpoints;
+    this.checkpointTransition =
+        (owner, status) -> {
+          if (checkpoints != null) updateUnleasedCheckpoint(checkpoints, owner, status);
+        };
   }
 
   /**
@@ -118,7 +118,11 @@ public class ApprovalContinuationService implements RunContinuation {
       ObjectProvider<dev.mikoto2000.rei.application.session.SessionRepository> sessions,
       @Qualifier("memoryConsolidationDataSource") DataSource source,
       Clock clock) {
-    this.approvals = approvals;
+    this.listApprovals = project -> approvals.list(project);
+    this.findApproval = (project, id) -> approvals.get(project, id);
+    this.decideApproval =
+        decision -> approvals.decide(decision.project(), decision.id(), decision.approved());
+    this.retireContinuationGrant = (project, id) -> approvals.retireContinuationGrant(project, id);
     this.store = store;
     this.registry = registry;
     this.runs = runs;
@@ -139,12 +143,12 @@ public class ApprovalContinuationService implements RunContinuation {
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<ToolApprovalRepository.Request> list(String project) {
     var rows = new LinkedHashMap<String, ToolApprovalRepository.Request>();
-    approvals.list(project).forEach(request -> rows.put(request.id(), request));
+    listApprovals.apply(project).forEach(request -> rows.put(request.id(), request));
     store
         .visible(project)
         .forEach(
             id -> {
-              var request = approvals.get(project, id);
+              var request = findApproval.apply(project, id);
               rows.put(id, request);
             });
     return rows.values().stream().limit(256).toList();
@@ -165,7 +169,7 @@ public class ApprovalContinuationService implements RunContinuation {
     var owner = execution.runContext();
     execution.checkActive();
     validate(owner);
-    var request = approvals.get(owner.projectId(), id);
+    var request = findApproval.apply(owner.projectId(), id);
     if (!request.runId().equals(owner.runId())
         || !request.sessionId().equals(owner.conversationId())
         || !Set.of("PENDING", "APPROVED").contains(request.status()))
@@ -200,7 +204,7 @@ public class ApprovalContinuationService implements RunContinuation {
         managed.containsKey(owner.runId()) || execution.hasParentReservation());
     previous.ifPresent(
         old -> {
-          approvals.retireContinuationGrant(owner.projectId(), old.approvalId());
+          retireContinuationGrant.accept(owner.projectId(), old.approvalId());
           store.state(old.approvalId(), "COMPLETED");
         });
     if (!registry.getObject().transition(owner.runId(), RunStatus.WAITING_APPROVAL, null)) {
@@ -220,7 +224,7 @@ public class ApprovalContinuationService implements RunContinuation {
       throw new IllegalArgumentException("Only approval can continue a Run");
     return transaction.execute(
         tx -> {
-          var current = approvals.get(project, id);
+          var current = findApproval.apply(project, id);
           var entry = store.find(id);
           if (continueRun) {
             var saved =
@@ -246,7 +250,7 @@ public class ApprovalContinuationService implements RunContinuation {
           }
           var decided =
               current.status().equals("PENDING")
-                  ? approvals.decide(project, id, approved)
+                  ? decideApproval.apply(new ApprovalDecision(project, id, approved))
                   : current;
           if (!decided.status().equals(approved ? "APPROVED" : "DENIED")
               && !(continueRun && decided.status().equals("CONSUMED")))
@@ -281,7 +285,7 @@ public class ApprovalContinuationService implements RunContinuation {
           .resuming(execution.runContext().runId())
           .ifPresent(
               entry -> {
-                approvals.retireContinuationGrant(
+                retireContinuationGrant.accept(
                     execution.runContext().projectId(), entry.approvalId());
                 store.state(entry.approvalId(), "COMPLETED");
               });
@@ -295,8 +299,7 @@ public class ApprovalContinuationService implements RunContinuation {
       var status = registry.getObject().get(owner.runId()).status();
       store.active().stream()
           .filter(entry -> entry.runId().equals(owner.runId()))
-          .forEach(
-              entry -> approvals.retireContinuationGrant(owner.projectId(), entry.approvalId()));
+          .forEach(entry -> retireContinuationGrant.accept(owner.projectId(), entry.approvalId()));
       store.finishRun(
           owner.runId(),
           status == RunStatus.COMPLETED
@@ -313,8 +316,7 @@ public class ApprovalContinuationService implements RunContinuation {
     if (store.active().stream().anyMatch(entry -> entry.runId().equals(owner.runId()))) {
       store.active().stream()
           .filter(entry -> entry.runId().equals(owner.runId()))
-          .forEach(
-              entry -> approvals.retireContinuationGrant(owner.projectId(), entry.approvalId()));
+          .forEach(entry -> retireContinuationGrant.accept(owner.projectId(), entry.approvalId()));
       store.finishRun(
           owner.runId(),
           result.success()
@@ -399,14 +401,14 @@ public class ApprovalContinuationService implements RunContinuation {
         var owner = doc.owner();
         var current = registry.getObject().get(owner.runId());
         if (current.status() == RunStatus.CANCELLED) {
-          approvals.retireContinuationGrant(owner.projectId(), entry.approvalId());
+          retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
           store.state(entry.approvalId(), "CANCELLED");
           notifyParent(owner, ChatExecutionResult.cancelled());
           continue;
         }
         if (entry.state().equals("RESUMING")) {
           if (!store.ownerAlive(entry)) {
-            approvals.retireContinuationGrant(owner.projectId(), entry.approvalId());
+            retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
             store.state(entry.approvalId(), "UNKNOWN");
             if (registry.getObject().claimWaiting(owner))
               runs.getObject().finishMissingTerminal(owner, RunStatus.UNKNOWN);
@@ -415,7 +417,7 @@ public class ApprovalContinuationService implements RunContinuation {
           continue;
         }
         if (router.getObject().containsRun(owner.projectId(), owner.runId())) continue;
-        var request = approvals.get(owner.projectId(), entry.approvalId());
+        var request = findApproval.apply(owner.projectId(), entry.approvalId());
         if (!clock.instant().isBefore(request.expiresAt())) {
           store.state(entry.approvalId(), "EXPIRED");
           stop(owner, ChatExecutionResult.failed("Approval expired", "approval_expired"));
@@ -432,7 +434,7 @@ public class ApprovalContinuationService implements RunContinuation {
         try {
           validate(owner);
         } catch (RuntimeException changed) {
-          approvals.retireContinuationGrant(owner.projectId(), entry.approvalId());
+          retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
           store.state(entry.approvalId(), "UNKNOWN");
           if (registry.getObject().claimWaiting(owner))
             runs.getObject().finishMissingTerminal(owner, RunStatus.UNKNOWN);
@@ -440,7 +442,7 @@ public class ApprovalContinuationService implements RunContinuation {
           continue;
         }
         if (doc.managedParent() && !managed.containsKey(owner.runId())) {
-          approvals.retireContinuationGrant(owner.projectId(), entry.approvalId());
+          retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
           store.state(entry.approvalId(), "UNKNOWN");
           if (registry.getObject().claimWaiting(owner))
             runs.getObject().finishMissingTerminal(owner, RunStatus.UNKNOWN);
@@ -460,7 +462,9 @@ public class ApprovalContinuationService implements RunContinuation {
                     if (!clock
                         .instant()
                         .isBefore(
-                            approvals.get(owner.projectId(), entry.approvalId()).expiresAt())) {
+                            findApproval
+                                .apply(owner.projectId(), entry.approvalId())
+                                .expiresAt())) {
                       store.state(entry.approvalId(), "EXPIRED");
                       runs.getObject().finishMissingTerminal(owner, RunStatus.FAILED);
                       markCheckpoint(owner, "FAILED");
@@ -479,7 +483,7 @@ public class ApprovalContinuationService implements RunContinuation {
                                 queue,
                                 parent == null ? null : parent.reservation());
                   } catch (RuntimeException uncertain) {
-                    approvals.retireContinuationGrant(owner.projectId(), entry.approvalId());
+                    retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
                     store.state(entry.approvalId(), "UNKNOWN");
                     runs.getObject().finishMissingTerminal(owner, RunStatus.UNKNOWN);
                     notifyParent(
@@ -489,7 +493,7 @@ public class ApprovalContinuationService implements RunContinuation {
                     return;
                   }
                   if (result.status() != ChatExecutionResult.Status.WAITING) {
-                    approvals.retireContinuationGrant(owner.projectId(), entry.approvalId());
+                    retireContinuationGrant.accept(owner.projectId(), entry.approvalId());
                     store.state(
                         entry.approvalId(),
                         result.status() == ChatExecutionResult.Status.CANCELLED
@@ -508,7 +512,7 @@ public class ApprovalContinuationService implements RunContinuation {
       } catch (RuntimeException unavailable) {
         // A claimed submission is uncertain; never silently requeue the side effect.
         if (store.find(entry.approvalId()).map(e -> e.state().equals("RESUMING")).orElse(false)) {
-          approvals.retireContinuationGrant(
+          retireContinuationGrant.accept(
               store.document(entry).owner().projectId(), entry.approvalId());
           store.state(entry.approvalId(), "UNKNOWN");
           try {
@@ -539,29 +543,34 @@ public class ApprovalContinuationService implements RunContinuation {
 
   /** 後続の判断に現在の状態を反映するため、再開用の記録の状態を記録する。 */
   private void markCheckpoint(AgentRunContext owner, String status) {
-    var repository = checkpoints;
-    if (repository == null) return;
     try {
-      repository
-          .findByRun(owner.projectId(), owner.runId())
-          .filter(
-              saved ->
-                  saved.runId().equals(owner.runId())
-                      && saved.sessionId().equals(owner.conversationId())
-                      && !repository.leased(saved.projectId(), saved.taskId()))
-          .ifPresent(
-              saved -> {
-                var fields = repository.fields(saved);
-                fields.put("status", status);
-                fields.put("interruptionReason", "approval_" + status.toLowerCase(Locale.ROOT));
-                repository.save(
-                    repository.fields(fields),
-                    saved.revision(),
-                    "approval-stop:" + owner.runId() + ":" + status);
-              });
+      checkpointTransition.accept(owner, status);
     } catch (RuntimeException conflict) {
       /* Do not overwrite an active or changed checkpoint. */
     }
+  }
+
+  private static void updateUnleasedCheckpoint(
+      dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository repository,
+      AgentRunContext owner,
+      String status) {
+    repository
+        .findByRun(owner.projectId(), owner.runId())
+        .filter(
+            saved ->
+                saved.runId().equals(owner.runId())
+                    && saved.sessionId().equals(owner.conversationId())
+                    && !repository.leased(saved.projectId(), saved.taskId()))
+        .ifPresent(
+            saved -> {
+              var fields = repository.fields(saved);
+              fields.put("status", status);
+              fields.put("interruptionReason", "approval_" + status.toLowerCase(Locale.ROOT));
+              repository.save(
+                  repository.fields(fields),
+                  saved.revision(),
+                  "approval-stop:" + owner.runId() + ":" + status);
+            });
   }
 
   /** 状態の変化を利用先へ伝えるため、親を通知する。 */
@@ -571,4 +580,6 @@ public class ApprovalContinuationService implements RunContinuation {
     if (external != null) external.detachParent(owner);
     if (parent != null) parent.completed().accept(result);
   }
+
+  private record ApprovalDecision(String project, String id, boolean approved) {}
 }

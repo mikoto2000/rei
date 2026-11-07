@@ -4,7 +4,6 @@ import dev.mikoto2000.rei.http.FetchOperation;
 import dev.mikoto2000.rei.http.FetchScope;
 import dev.mikoto2000.rei.http.HttpFetchException;
 import java.io.IOException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -109,20 +108,48 @@ final class WebResearchPipeline {
       WebFetchBatch.Fetcher<T> loader,
       Adapter<T> adapter)
       throws IOException, InterruptedException {
+    return run(
+        WebResearchLimits.capture(properties),
+        (plannedQuery, requested) ->
+            WebSearchSelection.search(search, planner, plannedQuery, requested, properties),
+        batch,
+        query,
+        limit,
+        readTop,
+        loader,
+        adapter);
+  }
+
+  @FunctionalInterface
+  interface SelectCandidates {
+    List<WebSearchSelection.Candidate> search(String query, int limit)
+        throws IOException, InterruptedException;
+  }
+
+  static <T> Research<T> run(
+      WebResearchLimits limits,
+      SelectCandidates selection,
+      WebFetchBatch batch,
+      String query,
+      int limit,
+      int readTop,
+      WebFetchBatch.Fetcher<T> loader,
+      Adapter<T> adapter)
+      throws IOException, InterruptedException {
     var candidates = new LinkedHashMap<String, WebSearchSelection.Candidate>();
     var loaded = new LinkedHashMap<String, T>();
     var attempted = new HashSet<String>();
     var omissions = new ArrayList<String>();
     int attempts = 0;
-    int maximumReads = Math.min(readTop, properties.getMaxPageFetches());
+    int maximumReads = Math.min(readTop, limits.maxPageFetches());
     WebRetrievalAssessment assessment =
         WebRetrievalAssessment.unknown(
             maximumReads == 0 ? "body_not_requested" : "no_readable_verified_body");
     List<WebSearchPage> evidence = List.of();
-    var scope = WebResearchScope.enter(properties);
+    var scope = WebResearchScope.enter(limits);
     try (scope;
         var extraction = WebExtractionScope.enter(query)) {
-      add(query, candidates, WebSearchSelection.search(search, planner, query, limit, properties));
+      add(query, candidates, selection.search(query, limit));
       boolean first = true;
       boolean triedUnreadBeforeSearch = false;
       // 根拠が十分になるか本文取得の予算に達するまで、追加調査を行う。
@@ -132,9 +159,8 @@ final class WebResearchPipeline {
         var pending = unread(query, candidates, attempted);
         int remainingReads = maximumReads - attempts;
         boolean canSearchAgain =
-            WebResearchScope.queryCount() < properties.getMaxSearchQueries()
-                && !SearchRequestBudget.exhausted();
-        int parallelReads = Math.min(remainingReads, properties.getFetchParallelism());
+            WebResearchScope.queryCount() < limits.maxQueries() && !SearchRequestBudget.exhausted();
+        int parallelReads = Math.min(remainingReads, limits.fetchParallelism());
         // 可能なら、並列取得でも不足した場合に追加検索の候補を読む枠を1件残す。
         if (canSearchAgain && remainingReads > 2)
           parallelReads = Math.min(parallelReads, remainingReads - 1);
@@ -149,10 +175,7 @@ final class WebResearchPipeline {
                 && (triedUnreadBeforeSearch || (promising == null && independent.isEmpty()));
         if (supplement) {
           try {
-            add(
-                query,
-                candidates,
-                WebSearchSelection.search(search, planner, query, limit, properties));
+            add(query, candidates, selection.search(query, limit));
           } catch (IOException failed) {
             FetchOperation.propagateControls(failed);
             WebSearchSelection.recordSearchFailure(failed);
@@ -177,7 +200,7 @@ final class WebResearchPipeline {
           independent = assessment.independentCandidates(query, evidence, pending, parallelReads);
         }
         if (pending.isEmpty()) break;
-        int window = Math.min(remainingReads, first ? properties.getInitialPageFetches() : 1);
+        int window = Math.min(remainingReads, first ? limits.initialPageFetches() : 1);
         var selected =
             !independent.isEmpty()
                 ? independent
@@ -188,9 +211,7 @@ final class WebResearchPipeline {
           attempted.add(WebSearchSelection.normalizeUrl(candidate.result().url()));
         // 取得が失敗した候補も試行回数に含め、失敗の繰り返しで予算を超えないようにする。
         attempts += selected.size();
-        var outcomes =
-            batch.fetch(
-                selected, Duration.ofSeconds(properties.getFetchBatchTimeoutSeconds()), loader);
+        var outcomes = batch.fetch(selected, limits.fetchBatchTimeout(), loader);
         for (int i = 0; i < outcomes.size(); i++) {
           var candidate = selected.get(i);
           var outcome = outcomes.get(i);

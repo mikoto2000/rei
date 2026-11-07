@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.memory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
@@ -159,5 +160,19 @@ class SleepServiceTest {
     assertEquals(0, repository.lastProcessed("s"));
     assertTrue(repository.list("p", 10, 0).isEmpty());
     assertEquals("CANCELLED", repository.history("p", 10).getFirst().status());
+  }
+
+  @Test
+  void fatalExtractionRecordsFailureWithoutAdvancingOrHoldingSession() {
+    turn("turn1", ConversationTurnStore.Status.COMPLETED);
+    var fatal = new AssertionError("extractor failed");
+    when(extractor.extract(anyList())).thenThrow(fatal).thenReturn(List.of());
+
+    assertSame(fatal, assertThrows(AssertionError.class, () -> service.sleep("s", "p", false)));
+    assertEquals("FAILED", repository.history("p", 10).getFirst().status());
+    assertEquals(0, repository.lastProcessed("s"));
+
+    service.sleep("s", "p", false);
+    assertEquals(1, repository.lastProcessed("s"));
   }
 }

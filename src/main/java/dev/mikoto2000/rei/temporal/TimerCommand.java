@@ -2,8 +2,10 @@ package dev.mikoto2000.rei.temporal;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -15,12 +17,11 @@ import picocli.CommandLine.Spec;
 @Component
 @Command(name = "timer", description = "保存された継続実行の予定を確認・有効化します")
 public class TimerCommand implements java.util.concurrent.Callable<Integer> {
-  /** 実行予定の管理。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent schedule and claim state.")
-  private final PersistentAgentScheduler scheduler;
+  private final Function<String, List<PersistentAgentScheduler.Entry>> listSchedules;
+  private final BiFunction<String, String, String> describeSchedule;
+  private final BiFunction<String, String, List<PersistentAgentScheduler.History>> scheduleHistory;
+  private final BiConsumer<String, String> activateSchedule;
+  private final BiConsumer<String, String> cancelSchedule;
 
   /** プロジェクト一覧。 */
   private final Supplier<String> currentProjectId;
@@ -79,7 +80,19 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
       PersistentAgentScheduler scheduler,
       ProjectService projects,
       AgentScheduleDispatcher dispatcher) {
-    this.scheduler = scheduler;
+    this.listSchedules = project -> scheduler.list(project);
+    this.describeSchedule =
+        (project, id) ->
+            scheduler.get(project, id)
+                + " interval="
+                + scheduler.interval(project, id)
+                + " cron="
+                + scheduler.cron(project, id)
+                + " event="
+                + scheduler.eventTrigger(project, id);
+    this.scheduleHistory = (project, id) -> scheduler.history(project, id);
+    this.activateSchedule = (project, id) -> scheduler.activate(project, id);
+    this.cancelSchedule = (project, id) -> scheduler.cancel(project, id);
     this.currentProjectId = () -> projects.currentContext().id();
     this.reconcileSchedule =
         dispatcher == null
@@ -100,16 +113,9 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
       String project = currentProjectId.get();
       Object result =
           switch (action) {
-            case "list" -> scheduler.list(project);
-            case "show" ->
-                scheduler.get(project, requiredId())
-                    + " interval="
-                    + scheduler.interval(project, requiredId())
-                    + " cron="
-                    + scheduler.cron(project, requiredId())
-                    + " event="
-                    + scheduler.eventTrigger(project, requiredId());
-            case "history" -> scheduler.history(project, requiredId());
+            case "list" -> listSchedules.apply(project);
+            case "show" -> describeSchedule.apply(project, requiredId());
+            case "history" -> scheduleHistory.apply(project, requiredId());
             case "reconcile" -> {
               if (reconcileSchedule == null
                   || !acknowledgeUncertain
@@ -120,11 +126,11 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
               yield reconcileSchedule.apply(project, requiredId(), expectedRunId);
             }
             case "activate" -> {
-              scheduler.activate(project, requiredId());
+              activateSchedule.accept(project, requiredId());
               yield "Schedule activated; dispatch requires rei.agent-scheduler.enabled and rei.tool-permission.enabled";
             }
             case "cancel" -> {
-              scheduler.cancel(project, requiredId());
+              cancelSchedule.accept(project, requiredId());
               yield "Schedule cancelled";
             }
             default ->

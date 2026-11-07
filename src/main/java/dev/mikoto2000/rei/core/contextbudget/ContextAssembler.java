@@ -5,6 +5,7 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.ContextCompressionPayload;
+import dev.mikoto2000.rei.llm.ModelCallBudget;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
@@ -15,6 +16,11 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
+import java.util.function.IntSupplier;
+import java.util.function.Supplier;
+import java.util.function.ToIntFunction;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -34,11 +40,12 @@ public class ContextAssembler {
       org.slf4j.LoggerFactory.getLogger(ContextAssembler.class);
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the configured context limits when assembling each request.")
-  private final ContextCompressionProperties properties;
+  private final BooleanSupplier compressionEnabled;
+
+  private final IntSupplier compressionThreshold;
+  private final ToIntFunction<Prompt> promptInputLimit;
+  private final Function<String, CompressionSettings> compressionSettings;
+  private final Supplier<ModelCallBudget> newStandaloneSummaryBudget;
 
   /** 概算。 */
   private final TokenEstimator estimator;
@@ -157,7 +164,21 @@ public class ContextAssembler {
       ConversationCompressor compressor,
       AgentEventFactory events,
       AgentEventPublisher publisher) {
-    this.properties = properties;
+    this.compressionEnabled = () -> properties.isEnabled();
+    this.compressionThreshold = () -> properties.getThreshold();
+    this.promptInputLimit =
+        prompt -> ContextBudgetManager.inputLimit(properties, estimator, prompt);
+    this.compressionSettings =
+        model ->
+            new CompressionSettings(
+                properties.getRecentTokens(),
+                properties.getSummaryTokens(),
+                properties.getSummaryTimeoutSeconds(),
+                properties.getMinimumCompressionGain(),
+                properties.getSafetyMargin(),
+                properties.getRetryCooldownSeconds(),
+                properties.contextLimit(model));
+    this.newStandaloneSummaryBudget = () -> StandaloneSummaryBudget.create(properties);
     this.estimator = estimator;
     this.summaries = summaries;
     this.tools = tools;
@@ -175,7 +196,7 @@ public class ContextAssembler {
 
   /** モデルへ渡す文脈の管理で用いるassembleを返す。 */
   public Prompt assemble(Prompt raw, String conversation, String run, Runnable checkActive) {
-    if (!properties.isEnabled()) {
+    if (!compressionEnabled.getAsBoolean()) {
       checkActive.run();
       var messages =
           raw.getInstructions().stream()
@@ -221,7 +242,7 @@ public class ContextAssembler {
   private Prompt assembleLocked(Prompt raw, String conversation, String run, Runnable check) {
     check.run();
     int hard = hardLimit(raw);
-    int threshold = Math.min(properties.getThreshold(), hard - 1);
+    int threshold = Math.min(compressionThreshold.getAsInt(), hard - 1);
     var history = new ArrayList<Entry>();
     var active = new ArrayList<Entry>();
     long sequence = sequenceOffset(raw);
@@ -256,7 +277,7 @@ public class ContextAssembler {
       var inherited = dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
       var budget =
           execution(raw) == null
-              ? (inherited == null ? StandaloneSummaryBudget.create(properties) : inherited)
+              ? (inherited == null ? newStandaloneSummaryBudget.get() : inherited)
               : null;
       compress(h, raw, check, budget);
       if (estimate(project(raw, h, a)) > threshold) compress(a, raw, check, budget);
@@ -321,35 +342,35 @@ public class ContextAssembler {
   /** モデルへ渡す文脈の管理に関する圧縮を処理する。 */
   private void compress(
       Segment segment, Prompt raw, Runnable check, dev.mikoto2000.rei.llm.ModelCallBudget budget) {
+    var options = raw.getOptions();
+    String model = options == null ? null : options.getModel();
+    var settings = compressionSettings.apply(model);
     int count =
         new CompressionPolicy(estimator)
             .prefixToCompress(
-                segment.entries.stream().map(Entry::message).toList(),
-                properties.getRecentTokens());
+                segment.entries.stream().map(Entry::message).toList(), settings.recentTokens());
     if (count == 0) return;
     var prefix = segment.entries.subList(0, count);
     long through = prefix.getLast().sequence();
     long before =
         estimator.text(segment.summary.summary())
             + prefix.stream().mapToLong(e -> estimator.message(e.message())).sum();
-    var options = raw.getOptions();
-    String model = options == null ? null : options.getModel();
     String configuration =
         Objects.toString(model, "")
             + "|"
-            + properties.getSummaryTokens()
+            + settings.summaryTokens()
             + "|"
-            + properties.getSummaryTimeoutSeconds()
+            + settings.summaryTimeoutSeconds()
             + "|"
-            + properties.getMinimumCompressionGain()
+            + settings.minimumCompressionGain()
             + "|"
-            + properties.getRecentTokens()
+            + settings.recentTokens()
             + "|"
-            + properties.getSafetyMargin()
+            + settings.safetyMargin()
             + "|"
-            + properties.getRetryCooldownSeconds()
+            + settings.retryCooldownSeconds()
             + "|"
-            + properties.contextLimit(model);
+            + settings.contextLimit();
     var retry = compressionRetries.decision(segment.retryKey, configuration);
     if (!retry.allowed()) {
       if (retry.announce())
@@ -377,10 +398,7 @@ public class ContextAssembler {
       // The summarizer itself must not exceed its input budget. Process a bounded prefix per
       // request.
       long max =
-          properties.contextLimit(model)
-              - properties.getSummaryTokens()
-              - properties.getSafetyMargin()
-              - 2048L;
+          settings.contextLimit() - settings.summaryTokens() - settings.safetyMargin() - 2048L;
       max = compressionRetries.inputLimit(segment.retryKey, configuration, max);
       while (before > max && count > 1) {
         count--;
@@ -401,9 +419,9 @@ public class ContextAssembler {
       var result =
           budget == null
               ? compressor.summarizeResult(
-                  segment.summary.summary(), messages, properties.getSummaryTokens(), raw)
+                  segment.summary.summary(), messages, settings.summaryTokens(), raw)
               : compressor.summarizeResult(
-                  segment.summary.summary(), messages, properties.getSummaryTokens(), raw, budget);
+                  segment.summary.summary(), messages, settings.summaryTokens(), raw, budget);
       check.run();
       String text = result == null ? null : result.text();
       if (text == null || text.isBlank())
@@ -413,16 +431,16 @@ public class ContextAssembler {
           result.outputTokens() != null && result.outputTokens() > 0
               ? result.outputTokens()
               : after;
-      if (outputTokens > properties.getSummaryTokens())
+      if (outputTokens > settings.summaryTokens())
         throw new ContextCompressionException(
             ContextCompressionException.Reason.SUMMARY_TOO_LONG,
             outputTokens,
-            properties.getSummaryTokens());
-      if (after > before * (1 - properties.getMinimumCompressionGain()))
+            settings.summaryTokens());
+      if (after > before * (1 - settings.minimumCompressionGain()))
         throw new ContextCompressionException(
             ContextCompressionException.Reason.INSUFFICIENT_GAIN,
             after,
-            (long) (before * (1 - properties.getMinimumCompressionGain())));
+            (long) (before * (1 - settings.minimumCompressionGain())));
       var summary = new ConversationSummary(text, through, Instant.now());
       // Cancellation and commit share the run monitor, preventing a late write after cancel().
       var execution = execution(raw);
@@ -470,9 +488,9 @@ public class ContextAssembler {
             " 要約対象="
                 + before
                 + " 推定tokens、要約上限="
-                + properties.getSummaryTokens()
+                + settings.summaryTokens()
                 + " tokens、制限時間="
-                + properties.getSummaryTimeoutSeconds()
+                + settings.summaryTimeoutSeconds()
                 + " 秒。";
       if (stopped != null)
         for (var suppressed : stopped.getSuppressed())
@@ -490,8 +508,8 @@ public class ContextAssembler {
                 configuration,
                 reason,
                 before,
-                properties.getSummaryTokens(),
-                properties.getRetryCooldownSeconds(),
+                settings.summaryTokens(),
+                settings.retryCooldownSeconds(),
                 shrink);
         details += " 再試行は " + wait + " 秒以上あけます。" + (shrink ? "次の要約対象を小さくします。" : "");
       }
@@ -656,13 +674,13 @@ public class ContextAssembler {
 
   /** モデルへ渡す文脈の管理で用いる厳しい条件上限を返す。 */
   private int hardLimit(Prompt prompt) {
-    return ContextBudgetManager.inputLimit(properties, estimator, prompt);
+    return promptInputLimit.applyAsInt(prompt);
   }
 
   /** モデルへ渡す文脈の管理で用いる実行を返す。 */
   static dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution(Prompt prompt) {
     if (toolContext(prompt).get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
-            instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
+        instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
       return execution;
     return null;
   }
@@ -699,9 +717,17 @@ public class ContextAssembler {
   }
 
   private static Map<String, Object> toolContext(Prompt prompt) {
-    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
-      return Map.of();
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return Map.of();
     var context = options.getToolContext();
     return context == null ? Map.of() : context;
   }
+
+  private record CompressionSettings(
+      int recentTokens,
+      int summaryTokens,
+      int summaryTimeoutSeconds,
+      double minimumCompressionGain,
+      int safetyMargin,
+      int retryCooldownSeconds,
+      int contextLimit) {}
 }

@@ -12,6 +12,7 @@ import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -50,15 +51,12 @@ public class GoalController {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
+      justification =
+          "Uses the shared project registry so lookups use the same registered projects.")
   private dev.mikoto2000.rei.core.project.ProjectRegistry projects;
 
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Validates sessions against the shared lifecycle state.")
-  private dev.mikoto2000.rei.application.session.SessionLifecycle sessions;
+  private BiConsumer<String, String> validateSession;
 
   /** Web APIによる操作に関する設定Creationを処理する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -66,7 +64,8 @@ public class GoalController {
       dev.mikoto2000.rei.core.project.ProjectRegistry projects,
       dev.mikoto2000.rei.application.session.SessionLifecycle sessions) {
     this.projects = projects;
-    this.sessions = sessions;
+    this.validateSession =
+        sessions == null ? null : (id, project) -> sessions.validate(id, project);
   }
 
   /**
@@ -111,14 +110,14 @@ public class GoalController {
         calls = request.maxLlmCalls() == null ? 20 : request.maxLlmCalls();
     if (runs < 1 || runs > 10 || calls < 1 || calls > 100)
       throw new IllegalArgumentException("Goal budgets: 1..10 Runs and 1..100 LLM calls");
-    if (projects == null || sessions == null)
+    if (projects == null || validateSession == null)
       throw new IllegalStateException("Goal creation unavailable");
     var project =
         projects
             .resolveById(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
-    sessions.validate(request.sessionId(), project.id());
+    validateSession.accept(request.sessionId(), project.id());
     var owner =
         new dev.mikoto2000.rei.core.chat.AgentRunContext(
             java.util.UUID.randomUUID().toString(),

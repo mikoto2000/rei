@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.application.session.SessionQueryService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,17 +26,14 @@ public class SessionController {
   private final SessionQueryService sessions;
 
   /** 受付から終了までの管理。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Ends sessions through the same lifecycle service that owns session state.")
-  private dev.mikoto2000.rei.application.session.SessionLifecycle lifecycle;
+  private SessionActions actions;
 
   /** プロジェクト一覧。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
+      justification =
+          "Uses the shared project registry so lookups use the same registered projects.")
   private dev.mikoto2000.rei.core.project.ProjectRegistry projects;
 
   /** Web APIによる操作で使用するプロジェクト一覧を設定する。 */
@@ -46,7 +45,23 @@ public class SessionController {
   /** Web APIによる操作で使用する受付から終了までの管理を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setLifecycle(dev.mikoto2000.rei.application.session.SessionLifecycle lifecycle) {
-    this.lifecycle = lifecycle;
+    this.actions =
+        lifecycle == null
+            ? null
+            : new SessionActions(
+                request ->
+                    SessionResponse.from(
+                        lifecycle.create(project(request.projectId()), request.title())),
+                (session, projectId) ->
+                    StyleResponse.from(lifecycle.validate(session, project(projectId).id())),
+                (session, request) ->
+                    StyleResponse.from(
+                        lifecycle.responseStyle(
+                            project(request.projectId()),
+                            session,
+                            request.style(),
+                            Boolean.TRUE.equals(request.voiceOnly()))),
+                (session, projectId) -> SessionResponse.from(lifecycle.end(session, projectId)));
   }
 
   /** 指定された値や利用先を使って、SessionControllerを初期化する。 */
@@ -70,7 +85,7 @@ public class SessionController {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (request == null || request.title() != null && request.title().length() > 2000)
       throw new IllegalArgumentException("Invalid Session request");
-    return SessionResponse.from(lifecycle().create(project(request.projectId()), request.title()));
+    return sessionActions().create().apply(request);
   }
 
   /**
@@ -107,7 +122,7 @@ public class SessionController {
   /** Web APIによる操作で用いる形式を返す。 */
   @GetMapping("/{sessionId}/response-style")
   public StyleResponse style(@PathVariable String sessionId, @RequestParam String projectId) {
-    return StyleResponse.from(lifecycle().validate(sessionId, project(projectId).id()));
+    return sessionActions().readStyle().apply(sessionId, projectId);
   }
 
   /** Web APIによる操作で用いる形式を返す。 */
@@ -118,19 +133,14 @@ public class SessionController {
         || Boolean.TRUE.equals(request.voiceOnly())
             && request.style() != dev.mikoto2000.rei.core.chat.ResponseStyle.CONVERSATION)
       throw new IllegalArgumentException("Invalid response style");
-    return StyleResponse.from(
-        lifecycle()
-            .responseStyle(
-                project(request.projectId()),
-                sessionId,
-                request.style(),
-                Boolean.TRUE.equals(request.voiceOnly())));
+    return sessionActions().changeStyle().apply(sessionId, request);
   }
 
   /** Web APIによる操作で用いる受付から終了までの管理を返す。 */
-  private dev.mikoto2000.rei.application.session.SessionLifecycle lifecycle() {
-    if (lifecycle == null) throw new IllegalStateException("Session lifecycle unavailable");
-    return lifecycle;
+  private SessionActions sessionActions() {
+    var configured = actions;
+    if (configured == null) throw new IllegalStateException("Session lifecycle unavailable");
+    return configured;
   }
 
   /** Web APIによる操作で用いるプロジェクトを返す。 */
@@ -174,8 +184,7 @@ public class SessionController {
   public SessionResponse end(@PathVariable String sessionId, @RequestBody EndRequest request) {
     if (request == null || request.projectId() == null || request.projectId().isBlank())
       throw new IllegalArgumentException("Project ID is required");
-    if (lifecycle == null) throw new IllegalStateException("Session lifecycle unavailable");
-    return SessionResponse.from(lifecycle.end(sessionId, request.projectId()));
+    return sessionActions().end().apply(sessionId, request.projectId());
   }
 
   /** Web APIによる操作で用いるやり取り一覧を返す。 */
@@ -190,4 +199,10 @@ public class SessionController {
         page.items().stream().map(SessionTurnResponse::from).toList(),
         page.nextCursor());
   }
+
+  private record SessionActions(
+      Function<CreateRequest, SessionResponse> create,
+      BiFunction<String, String, StyleResponse> readStyle,
+      BiFunction<String, StyleRequest, StyleResponse> changeStyle,
+      BiFunction<String, String, SessionResponse> end) {}
 }

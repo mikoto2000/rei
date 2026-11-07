@@ -1,10 +1,13 @@
 package dev.mikoto2000.rei.application.session;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.ResponseStyle;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * シェル会話のユースケースを実現する。
@@ -134,12 +137,11 @@ public final class ShellConversationService {
       selectionOf;
 
   /** 受付から終了までの管理。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared lifecycle service so session validation and submission use the same session state.")
-  private final SessionLifecycle lifecycle;
+  private final Function<String, SessionMetadata> createSession;
+
+  private final BiFunction<String, String, SessionMetadata> validateSession;
+  private final BiFunction<ResponseStyle, Boolean, SessionMetadata> changeResponseStyle;
+  private final BiFunction<String, String, SessionMetadata> endSession;
 
   /** 並行有効状態。 */
   private final boolean concurrentEnabled;
@@ -184,7 +186,12 @@ public final class ShellConversationService {
     this.selectedSessionId = () -> projects.currentSessionId();
     this.selectSession = session -> projects.selectSession(session);
     this.selectionOf = client -> projects.selectionOf(client);
-    this.lifecycle = lifecycle;
+    this.createSession = title -> lifecycle.create(currentProject.get(), title);
+    this.validateSession = (session, project) -> lifecycle.validate(session, project);
+    this.changeResponseStyle =
+        (style, voiceOnly) ->
+            lifecycle.responseStyle(currentProject.get(), currentSessionId(), style, voiceOnly);
+    this.endSession = (session, project) -> lifecycle.end(session, project);
     this.concurrentEnabled = concurrentEnabled;
     this.inputs = inputs;
     this.gateway =
@@ -339,7 +346,7 @@ public final class ShellConversationService {
   /** 新たな対象を利用できるよう、会話を作成する。 */
   public SessionMetadata newConversation(String title) {
     synchronized (currentClient.get()) {
-      var session = lifecycle.create(currentProject.get(), title);
+      var session = createSession.apply(title);
       selectSession.accept(session.sessionId());
       return session;
     }
@@ -348,7 +355,7 @@ public final class ShellConversationService {
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public void resume(String sessionId) {
     synchronized (currentClient.get()) {
-      lifecycle.validate(sessionId, currentProject.get().id());
+      validateSession.apply(sessionId, currentProject.get().id());
       selectSession.accept(sessionId);
     }
   }
@@ -357,7 +364,7 @@ public final class ShellConversationService {
   public SessionMetadata currentMetadata() {
     synchronized (currentClient.get()) {
       var id = currentSessionId();
-      return id == null ? null : lifecycle.validate(id, currentProject.get().id());
+      return id == null ? null : validateSession.apply(id, currentProject.get().id());
     }
   }
 
@@ -367,7 +374,7 @@ public final class ShellConversationService {
     java.util.Objects.requireNonNull(style);
     synchronized (currentClient.get()) {
       if (currentSessionId() == null) newConversation();
-      return lifecycle.responseStyle(currentProject.get(), currentSessionId(), style, voiceOnly);
+      return changeResponseStyle.apply(style, voiceOnly);
     }
   }
 
@@ -381,7 +388,7 @@ public final class ShellConversationService {
     synchronized (currentClient.get()) {
       String id = currentSessionId();
       if (id == null) return null;
-      var session = lifecycle.end(id, currentProject.get().id());
+      var session = endSession.apply(id, currentProject.get().id());
       selectSession.accept(null);
       return session;
     }
