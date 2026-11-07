@@ -57,6 +57,23 @@ class TimingIntegrationAdaptersTest {
     assertFalse(run.toString().contains("RESPONSE-SECRET"));
   }
 
+  @Test
+  void errorFinishesObservedRunAsFailedAndPropagatesUnchanged() {
+    var execution = new TimingExecution(store);
+    var failure = new AssertionError("fixture");
+    assertSame(
+        failure,
+        assertThrows(
+            AssertionError.class,
+            () ->
+                execution.observeRun(
+                    owner,
+                    () -> {
+                      throw failure;
+                    })));
+    assertEquals(Status.FAILED, store.latest("project", "session").orElseThrow().status());
+  }
+
   /** 実行時間の把握の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void exceptionsCancellationAndTimeoutAreObservedWithoutChangingControlFlow() {
