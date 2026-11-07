@@ -2696,7 +2696,6 @@ dev.mikoto2000.rei.voice.VoiceCommand -> dev.mikoto2000.rei.event.CredentialReda
 dev.mikoto2000.rei.voice.VoiceCommand -> dev.mikoto2000.rei.event.FailureMessages
 dev.mikoto2000.rei.voice.VoiceCommand$Models -> dev.mikoto2000.rei.event.FailureMessages
 dev.mikoto2000.rei.voice.VoiceCommand$Pending -> dev.mikoto2000.rei.application.input.ConversationInput
-dev.mikoto2000.rei.voice.VoiceCommand$Pending -> dev.mikoto2000.rei.application.session.ShellConversationService
 dev.mikoto2000.rei.voice.VoiceCorrectionContext -> dev.mikoto2000.rei.application.input.ConversationInput
 dev.mikoto2000.rei.voice.VoiceCorrectionContext -> dev.mikoto2000.rei.application.input.ConversationTarget
 dev.mikoto2000.rei.voice.VoiceCorrectionContext -> dev.mikoto2000.rei.conversation.ConversationLogEntry
