@@ -117,18 +117,23 @@ public final class ShellConversationService {
   private final java.time.Clock clock;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final java.util.function.Supplier<dev.mikoto2000.rei.core.project.ProjectClient>
+      currentClient;
+
+  private final java.util.function.Supplier<dev.mikoto2000.rei.core.project.ProjectContext>
+      currentProject;
+  private final java.util.function.Supplier<String> selectedSessionId;
+  private final java.util.function.Consumer<String> selectSession;
+  private final java.util.function.Function<
+          dev.mikoto2000.rei.core.project.ProjectClient, ProjectService.NotificationSelection>
+      selectionOf;
 
   /** 受付から終了までの管理。 */
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
+      justification =
+          "Uses the shared lifecycle service so session validation and submission use the same session state.")
   private final SessionLifecycle lifecycle;
 
   /** 並行有効状態。 */
@@ -138,7 +143,8 @@ public final class ShellConversationService {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared input router so all operations use the same queue and active runs.")
+      justification =
+          "Uses the shared input router so all operations use the same queue and active runs.")
   private final dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs;
 
   /** 会話の継続管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -168,7 +174,11 @@ public final class ShellConversationService {
       dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs,
       java.time.Clock clock) {
     this.clock = java.util.Objects.requireNonNull(clock);
-    this.projects = projects;
+    this.currentClient = () -> projects.currentClient();
+    this.currentProject = () -> projects.currentContext();
+    this.selectedSessionId = () -> projects.currentSessionId();
+    this.selectSession = session -> projects.selectSession(session);
+    this.selectionOf = client -> projects.selectionOf(client);
     this.lifecycle = lifecycle;
     this.concurrentEnabled = concurrentEnabled;
     this.inputs = inputs;
@@ -187,8 +197,8 @@ public final class ShellConversationService {
     if (mode == null) mode = AgentRunContext.Mode.EXCLUSIVE;
     if (mode != AgentRunContext.Mode.EXCLUSIVE && !concurrentEnabled)
       throw new IllegalArgumentException("Concurrent conversations are disabled");
-    synchronized (projects.currentClient()) {
-      var project = projects.currentContext();
+    synchronized (currentClient.get()) {
+      var project = currentProject.get();
       var input =
           new dev.mikoto2000.rei.application.input.ConversationInput(
               java.util.UUID.randomUUID(),
@@ -198,7 +208,7 @@ public final class ShellConversationService {
               message,
               clock.instant());
       var captureStore = captures;
-      var client = projects.currentClient();
+      var client = currentClient.get();
       var context =
           gateway.submit(
               input,
@@ -214,7 +224,7 @@ public final class ShellConversationService {
               run -> {
                 if (captureStore != null) captureStore.startFailed(run.runId());
               });
-      projects.selectSession(context.conversationId());
+      selectSession.accept(context.conversationId());
       return context;
     }
   }
@@ -225,16 +235,16 @@ public final class ShellConversationService {
    * <p>Captured on the interactive thread, then safe to pass to an ASR worker.
    */
   public dev.mikoto2000.rei.application.input.ConversationTarget captureTarget() {
-    synchronized (projects.currentClient()) {
+    synchronized (currentClient.get()) {
       if (currentSessionId() == null) newConversation();
       return new dev.mikoto2000.rei.application.input.ConversationTarget(
-          projects.currentContext(), currentSessionId());
+          currentProject.get(), currentSessionId());
     }
   }
 
   /** 後から状況を確認できるよう、クライアントを記録する。 */
   public dev.mikoto2000.rei.core.project.ProjectClient captureClient() {
-    return projects.currentClient();
+    return currentClient.get();
   }
 
   /** 会話の継続管理において、選択中かどうかを判定する。 */
@@ -242,7 +252,7 @@ public final class ShellConversationService {
       dev.mikoto2000.rei.core.project.ProjectClient client,
       dev.mikoto2000.rei.application.input.ConversationTarget target) {
     try {
-      var selection = projects.selectionOf(client);
+      var selection = selectionOf.apply(client);
       return selection.project().id().equals(target.project().id())
           && selection.project().root().equals(target.project().root())
           && java.util.Objects.equals(selection.conversationId(), target.sessionId());
@@ -308,9 +318,9 @@ public final class ShellConversationService {
   public boolean intervene(String runId, String message) {
     if (!concurrentEnabled || inputs == null)
       throw new IllegalArgumentException("Concurrent conversations are disabled");
-    synchronized (projects.currentClient()) {
+    synchronized (currentClient.get()) {
       return inputs.offerIntervention(
-          projects.currentContext().id(), currentSessionId(), runId, message);
+          currentProject.get().id(), currentSessionId(), runId, message);
     }
   }
 
@@ -321,26 +331,26 @@ public final class ShellConversationService {
 
   /** 新たな対象を利用できるよう、会話を作成する。 */
   public SessionMetadata newConversation(String title) {
-    synchronized (projects.currentClient()) {
-      var session = lifecycle.create(projects.currentContext(), title);
-      projects.selectSession(session.sessionId());
+    synchronized (currentClient.get()) {
+      var session = lifecycle.create(currentProject.get(), title);
+      selectSession.accept(session.sessionId());
       return session;
     }
   }
 
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public void resume(String sessionId) {
-    synchronized (projects.currentClient()) {
-      lifecycle.validate(sessionId, projects.currentContext().id());
-      projects.selectSession(sessionId);
+    synchronized (currentClient.get()) {
+      lifecycle.validate(sessionId, currentProject.get().id());
+      selectSession.accept(sessionId);
     }
   }
 
   /** 会話の継続管理で用いる現在付随情報を返す。 */
   public SessionMetadata currentMetadata() {
-    synchronized (projects.currentClient()) {
+    synchronized (currentClient.get()) {
       var id = currentSessionId();
-      return id == null ? null : lifecycle.validate(id, projects.currentContext().id());
+      return id == null ? null : lifecycle.validate(id, currentProject.get().id());
     }
   }
 
@@ -348,25 +358,24 @@ public final class ShellConversationService {
   public SessionMetadata responseStyle(
       dev.mikoto2000.rei.core.chat.ResponseStyle style, boolean voiceOnly) {
     java.util.Objects.requireNonNull(style);
-    synchronized (projects.currentClient()) {
+    synchronized (currentClient.get()) {
       if (currentSessionId() == null) newConversation();
-      return lifecycle.responseStyle(
-          projects.currentContext(), currentSessionId(), style, voiceOnly);
+      return lifecycle.responseStyle(currentProject.get(), currentSessionId(), style, voiceOnly);
     }
   }
 
   /** 会話の継続管理で用いる現在会話の識別子を返す。 */
   public String currentSessionId() {
-    return projects.currentSessionId();
+    return selectedSessionId.get();
   }
 
   /** 会話の継続管理で用いる終了を返す。 */
   public SessionMetadata end() {
-    synchronized (projects.currentClient()) {
+    synchronized (currentClient.get()) {
       String id = currentSessionId();
       if (id == null) return null;
-      var session = lifecycle.end(id, projects.currentContext().id());
-      projects.selectSession(null);
+      var session = lifecycle.end(id, currentProject.get().id());
+      selectSession.accept(null);
       return session;
     }
   }

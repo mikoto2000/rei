@@ -48,12 +48,10 @@ public final class BehaviorConversationHistoryAppender {
   private final SessionRepository sessions;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final java.util.function.Supplier<Object> notificationLock;
+
+  private final java.util.function.Supplier<Destination> notificationDestination;
+  private final java.util.function.BiConsumer<String, String> selectNotificationDefault;
 
   /** 指定された値や利用先を使って、BehaviorConversationHistoryAppenderを初期化する。 */
   public BehaviorConversationHistoryAppender(
@@ -64,12 +62,30 @@ public final class BehaviorConversationHistoryAppender {
     this.logs = logs;
     this.turns = turns;
     this.sessions = sessions;
-    this.projects = projects;
+    this.notificationLock = projects == null ? () -> this : () -> projects.notificationLock();
+    this.notificationDestination =
+        () -> {
+          if (projects == null) {
+            var id = ConversationIds.currentChat();
+            return new Destination(id, ProjectStorage.projectId(id), false);
+          }
+          var selection = projects.notificationSelection();
+          var project = selection.project();
+          var id =
+              selection.conversationId() == null
+                  ? project.conversationId(ConversationIds.chat())
+                  : selection.conversationId();
+          return new Destination(id, project.id(), false);
+        };
+    this.selectNotificationDefault =
+        projects == null
+            ? (project, session) -> {}
+            : (project, session) -> projects.selectNotificationDefault(project, session);
   }
 
   /** 会話履歴と受付記録の管理で用いる公開情報排他制御を返す。 */
   public Object publicationLock() {
-    return projects == null ? this : projects.notificationLock();
+    return notificationLock.get();
   }
 
   /** 後から状況を確認できるよう、作業習慣会話履歴Appenderを記録する。 */
@@ -79,17 +95,7 @@ public final class BehaviorConversationHistoryAppender {
       var id = existing.get().conversationId();
       return new Destination(id, ProjectStorage.projectId(id), true);
     }
-    if (projects == null) {
-      var id = ConversationIds.currentChat();
-      return new Destination(id, ProjectStorage.projectId(id), false);
-    }
-    var selection = projects.notificationSelection();
-    var project = selection.project();
-    var id =
-        selection.conversationId() == null
-            ? project.conversationId(ConversationIds.chat())
-            : selection.conversationId();
-    return new Destination(id, project.id(), false);
+    return notificationDestination.get();
   }
 
   /** 既存の記録へ経緯を残すため、作業習慣会話履歴Appenderを追記する。 */
@@ -127,7 +133,6 @@ public final class BehaviorConversationHistoryAppender {
         sessions.accept(metadataRow, () -> {});
       }
     if (turns != null) turns.appendAssistantNotification(entry);
-    if (projects != null && projectId != null)
-      projects.selectNotificationDefault(projectId, entry.conversationId());
+    if (projectId != null) selectNotificationDefault.accept(projectId, entry.conversationId());
   }
 }

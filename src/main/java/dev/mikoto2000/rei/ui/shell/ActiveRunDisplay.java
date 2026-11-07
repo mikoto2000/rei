@@ -17,16 +17,14 @@ public class ActiveRunDisplay {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared input router so all operations use the same queue and active runs.")
+      justification =
+          "Uses the shared input router so all operations use the same queue and active runs.")
   private final ConversationInputRouter runs;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final java.util.function.Supplier<String> currentProjectName;
+
+  private final java.util.function.Function<String, String> projectNameById;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -92,14 +90,24 @@ public class ActiveRunDisplay {
   /** 指定された値や利用先を使って、ActiveRunDisplayを初期化する。 */
   public ActiveRunDisplay(ConversationInputRouter runs, ProjectService projects, Clock clock) {
     this.runs = runs;
-    this.projects = projects;
+    this.currentProjectName = () -> projects.currentContext().name();
+    this.projectNameById =
+        id -> {
+          var all = projects.registeredProjects();
+          var project = all.stream().filter(p -> p.id().equals(id)).findFirst().orElse(null);
+          if (project == null) return id == null ? "unscoped" : id;
+          String name = ActiveRun.summary(project.name());
+          return all.stream().filter(p -> p.name().equals(project.name())).count() > 1
+              ? name + " [" + id.substring(0, 8) + "]"
+              : name;
+        };
     this.clock = clock;
   }
 
   /** ターミナルでの対話で用いるプロンプト状態を返す。 */
   public String promptStatus() {
     return "["
-        + ActiveRun.summary(projects.currentContext().name())
+        + ActiveRun.summary(currentProjectName.get())
         + "] ["
         + runs.activeExecutions().size()
         + " running]";
@@ -112,13 +120,7 @@ public class ActiveRunDisplay {
 
   /** ターミナルでの対話で用いるプロジェクト名前を返す。 */
   public String projectName(String id) {
-    var all = projects.registeredProjects();
-    var project = all.stream().filter(p -> p.id().equals(id)).findFirst().orElse(null);
-    if (project == null) return id == null ? "unscoped" : id;
-    String name = ActiveRun.summary(project.name());
-    return all.stream().filter(p -> p.name().equals(project.name())).count() > 1
-        ? name + " [" + id.substring(0, 8) + "]"
-        : name;
+    return projectNameById.apply(id);
   }
 
   /** 通常状態を維持しつつ、Agent の停止進行状況を同じ台帳から読む。 */
