@@ -70,12 +70,11 @@ public class DotDelegationService {
   private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpointRepository;
 
   /** 判断基準。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the current shared tool permission policy for delegation authorization.")
-  private dev.mikoto2000.rei.core.policy.ToolPermissionPolicy policy;
+  private record DelegationAuthorization(
+      java.util.function.BooleanSupplier enforced,
+      java.util.function.Supplier<String> fingerprint) {}
+
+  private DelegationAuthorization authorization;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private java.time.Clock clock = java.time.Clock.systemUTC();
@@ -121,7 +120,10 @@ public class DotDelegationService {
     this.runtimeRuns = runs;
     this.dependencies = dependencies;
     this.checkpointRepository = checkpoints;
-    this.policy = policy;
+    this.authorization =
+        policy == null
+            ? null
+            : new DelegationAuthorization(policy::enforced, policy::authorityFingerprint);
   }
 
   /**
@@ -160,8 +162,9 @@ public class DotDelegationService {
         || runtimeRuns == null
         || dependencies == null
         || checkpointRepository == null
-        || policy == null
-        || !policy.enforced()) throw new DotException("PARENT_DELEGATION_DISABLED");
+        || authorization == null
+        || !authorization.enforced().getAsBoolean())
+      throw new DotException("PARENT_DELEGATION_DISABLED");
     execution.checkActive();
     var owner = execution.runContext();
     if (owner == null
@@ -241,7 +244,7 @@ public class DotDelegationService {
               "budget",
               execution.budgetSnapshot(),
               "authority",
-              policy.authorityFingerprint(),
+              authorization.fingerprint().get(),
               "human_input_hash",
               permit.inputHash()));
       execution.setDotWait(history -> suspend(execution, history));

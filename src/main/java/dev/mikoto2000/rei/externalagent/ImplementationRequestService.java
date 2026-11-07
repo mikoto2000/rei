@@ -135,12 +135,9 @@ public class ImplementationRequestService {
   private final ToolApprovalRepository approvals;
 
   /** 判断基準。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the configured permission policy for the current tool authorization decision.")
-  private final ToolPermissionPolicy policy;
+  private final java.util.function.Supplier<PermissionDecision> implementationPermission;
+
+  private final java.util.function.Supplier<String> authorityFingerprint;
 
   /** この機能の動作設定。 */
   private final BooleanSupplier implementationEnabled;
@@ -178,7 +175,14 @@ public class ImplementationRequestService {
       Clock clock) {
     this.requests = requests;
     this.approvals = approvals;
-    this.policy = policy;
+    this.implementationPermission =
+        () -> {
+          var result = policy.evaluate(TOOL);
+          return result == PermissionDecision.AUTO_APPROVE && !policy.enforced()
+              ? PermissionDecision.REQUIRE_APPROVAL
+              : result;
+        };
+    this.authorityFingerprint = () -> policy.authorityFingerprint();
     this.implementationEnabled =
         () -> properties.isEnabled() && properties.isImplementationEnabled();
     this.implementationTestCommand = () -> properties.getImplementationTestCommand();
@@ -356,8 +360,8 @@ public class ImplementationRequestService {
             previousRequestId,
             validated.canonical(),
             envelope,
-            decision.name() + ":" + policy.authorityFingerprint(),
-            automatic ? "policy:" + policy.authorityFingerprint() : null,
+            decision.name() + ":" + authorityFingerprint.get(),
+            automatic ? "policy:" + authorityFingerprint.get() : null,
             automatic ? "AUTHORIZED" : "AWAITING_APPROVAL",
             null,
             null,
@@ -426,14 +430,14 @@ public class ImplementationRequestService {
         saved.previousRequestId() != null
             || decision != PermissionDecision.AUTO_APPROVE
             || saved.authorizationId() != null && !saved.authorizationId().startsWith("policy:");
-    String authorization = "policy:" + policy.authorityFingerprint();
+    String authorization = "policy:" + authorityFingerprint.get();
     if (explicit) {
       String input = approvalInput(id, saved.canonicalSpecification(), saved.executionEnvelope());
       if (!approvals.consume(TOOL, input, owner)) {
         var approval = approvals.request(TOOL, input, owner);
         String state = approval.status().equals("DENIED") ? "REJECTED" : "AWAITING_APPROVAL";
         requests.authorization(
-            id, decision.name() + ":" + policy.authorityFingerprint(), approval.id(), state);
+            id, decision.name() + ":" + authorityFingerprint.get(), approval.id(), state);
         return pending(
             requests.get(id),
             state,
@@ -443,7 +447,7 @@ public class ImplementationRequestService {
     }
     run.checkActive();
     requests.authorization(
-        id, decision.name() + ":" + policy.authorityFingerprint(), authorization, "AUTHORIZED");
+        id, decision.name() + ":" + authorityFingerprint.get(), authorization, "AUTHORIZED");
     if (!requests.claim(id, instance)) return execute(run, id, version, hash);
     active.add(id);
     try {
@@ -620,10 +624,7 @@ public class ImplementationRequestService {
 
   /** 外部エージェントへの委譲で用いる判断結果を返す。 */
   private PermissionDecision decision() {
-    var result = policy.evaluate(TOOL);
-    return result == PermissionDecision.AUTO_APPROVE && !policy.enforced()
-        ? PermissionDecision.REQUIRE_APPROVAL
-        : result;
+    return implementationPermission.get();
   }
 
   /** この機能を利用する設定が有効かどうかを返す。 */
