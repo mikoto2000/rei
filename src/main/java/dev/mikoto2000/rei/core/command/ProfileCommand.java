@@ -1,16 +1,18 @@
 package dev.mikoto2000.rei.core.command;
 
+import dev.mikoto2000.rei.application.read.ProfileQueryService;
 import dev.mikoto2000.rei.event.ProfileEventLogStore;
 import dev.mikoto2000.rei.event.ProfileEventLogStore.DurationStats;
 import dev.mikoto2000.rei.event.ProfileEventLogStore.ProfileBucket;
 import dev.mikoto2000.rei.event.ProfileEventLogStore.ProfileSummary;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -30,11 +32,10 @@ import picocli.CommandLine.Option;
 public class ProfileCommand implements Runnable {
 
   /** ログ保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared profile log for stored event queries.")
-  private final ProfileEventLogStore logStore;
+  private final Supplier<Path> logPath;
+
+  private final Function<Duration, List<ProfileBucket>> profileBuckets;
+  private final ProfileQueryService profileQuery;
 
   /** 書き込み先。 */
   private final java.io.PrintWriter writer;
@@ -45,8 +46,10 @@ public class ProfileCommand implements Runnable {
   }
 
   /** 指定された値や利用先を使って、ProfileCommandを初期化する。 */
-  private ProfileCommand(ProfileEventLogStore store, java.io.PrintWriter writer) {
-    this.logStore = store;
+  private ProfileCommand(ProfileCommand source, java.io.PrintWriter writer) {
+    this.logPath = source.logPath;
+    this.profileBuckets = source.profileBuckets;
+    this.profileQuery = source.profileQuery;
     this.writer = writer;
   }
 
@@ -54,7 +57,7 @@ public class ProfileCommand implements Runnable {
   private String render(java.util.function.Consumer<ProfileCommand> report) {
     var text = new java.io.StringWriter();
     var output = new java.io.PrintWriter(text, true);
-    report.accept(new ProfileCommand(logStore, output));
+    report.accept(new ProfileCommand(this, output));
     output.flush();
     return text.toString();
   }
@@ -87,7 +90,9 @@ public class ProfileCommand implements Runnable {
   /** 指定された値や利用先を使って、ProfileCommandを初期化する。 */
   @Autowired
   public ProfileCommand(ProfileEventLogStore logStore) {
-    this.logStore = logStore;
+    this.logPath = () -> logStore.file();
+    this.profileBuckets = duration -> logStore.buckets(duration);
+    this.profileQuery = new ProfileQueryService(logStore);
     this.writer = null;
   }
 
@@ -99,13 +104,12 @@ public class ProfileCommand implements Runnable {
 
   /** 利用者に結果を伝えるため、パスを出力する。 */
   void printPath() {
-    out().println(logStore.file());
+    out().println(logPath.get());
   }
 
   /** 利用者に結果を伝えるため、要約を出力する。 */
   void printSummary() {
-    ProfileSummary summary =
-        new dev.mikoto2000.rei.application.read.ProfileQueryService(logStore).summary();
+    ProfileSummary summary = profileQuery.summary();
     out().println("profile log: " + summary.file());
     out().println("events: " + summary.total());
     if (summary.total() == 0) {
@@ -132,9 +136,9 @@ public class ProfileCommand implements Runnable {
 
   /** 利用者に結果を伝えるため、Chartを出力する。 */
   void printChart(long bucketSeconds, int width) {
-    List<ProfileBucket> buckets = logStore.buckets(Duration.ofSeconds(bucketSeconds));
+    List<ProfileBucket> buckets = profileBuckets.apply(Duration.ofSeconds(bucketSeconds));
     if (buckets.isEmpty()) {
-      out().println("profile log is empty: " + logStore.file());
+      out().println("profile log is empty: " + logPath.get());
       return;
     }
     long max = buckets.stream().mapToLong(ProfileBucket::count).max().orElse(1L);
@@ -151,8 +155,7 @@ public class ProfileCommand implements Runnable {
 
   /** 利用者に結果を伝えるため、Mermaidを出力する。 */
   void printMermaid(int limit) {
-    ProfileSummary summary =
-        new dev.mikoto2000.rei.application.read.ProfileQueryService(logStore).summary();
+    ProfileSummary summary = profileQuery.summary();
     if (summary.total() == 0) {
       out().println("profile log is empty: " + summary.file());
       return;
