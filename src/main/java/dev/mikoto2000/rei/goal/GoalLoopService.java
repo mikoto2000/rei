@@ -3,9 +3,9 @@ package dev.mikoto2000.rei.goal;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
 import dev.mikoto2000.rei.core.policy.ToolPermissionProperties;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.springframework.stereotype.Service;
 
 /**
@@ -54,11 +54,10 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
   private final GoalRepository goals;
 
   /** 確認の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared verifier and its configured completion and evidence policy.")
-  private final FileGoalVerifier verifier;
+  private final Consumer<GoalRepository.Goal> validatePredicates;
+
+  private final Function<GoalRepository.Goal, FileGoalVerifier.Verification> verifyGoal;
+  private final BiFunction<GoalRepository.Goal, String, GoalCompletionProgress> inspectCompletion;
 
   /** 受付窓口。 */
   private final Gateway gateway;
@@ -136,7 +135,9 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
       ToolPermissionProperties permissions,
       GoalEvents events) {
     this.goals = goals;
-    this.verifier = verifier;
+    this.validatePredicates = goal -> verifier.requireEnabledPredicates(goal);
+    this.verifyGoal = goal -> verifier.verify(goal);
+    this.inspectCompletion = (goal, phase) -> GoalCompletionProgress.inspect(goal, phase, verifier);
     this.gateway = gateway;
     this.permissions = permissions;
     this.events = events;
@@ -287,14 +288,14 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
       throw new IllegalStateException("Enable rei.tool-permission.enabled before running a Goal");
     var goal = goals.get(project, id);
     gateway.validate(goal);
-    verifier.requireEnabledPredicates(goal);
+    validatePredicates.accept(goal);
     if (waits != null && waits.active(project, id))
       throw new IllegalStateException("Use the condition-checked Goal wait resume control");
     if (stages != null && !goal.status().equals("RUNNING")) stages.resumeExplicit(goal);
     if (!goal.status().equals("RUNNING")
         && !goal.status().equals("CANCELLED")
         && (stages == null || stages.allVerified(goal))
-        && verifier.verify(goal).satisfied()) return verify(project, id).goal();
+        && verifyGoal.apply(goal).satisfied()) return verify(project, id).goal();
     var claim = goals.claim(project, id);
     next(claim);
     return goals.get(project, id);
@@ -308,7 +309,7 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
     if (!permissions.enabled())
       throw new IllegalStateException("Enable tool permissions before Goal resume");
     gateway.validate(expected);
-    verifier.requireEnabledPredicates(expected);
+    validatePredicates.accept(expected);
     if (stages != null) stages.resumeExplicit(expected);
     var claim = goals.claim(expected, wait);
     next(claim, preparation);
@@ -332,8 +333,7 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
     gateway.validate(goal);
     var stageProgress = stages == null ? null : stages.progress(goal);
     goal = goals.get(project, id);
-    var progress =
-        GoalCompletionProgress.inspect(goal, goals.completionPhase(project, id), verifier);
+    var progress = inspectCompletion.apply(goal, goals.completionPhase(project, id));
     return stageProgress == null ? progress : progress.withStages(stageProgress);
   }
 
@@ -341,7 +341,7 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
   public Inspection verify(String project, String id) {
     var goal = goals.get(project, id);
     gateway.validate(goal);
-    var verification = verifier.verify(goal);
+    var verification = verifyGoal.apply(goal);
     if (stages != null && !stages.allVerified(goal))
       verification = new FileGoalVerifier.Verification(false, "stage_verification_required");
     if (verification.satisfied()
@@ -420,7 +420,7 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
       return;
     }
     if (selection != null && stages.enabled(goal) && selection.allVerified()) {
-      var finalVerification = verifier.verify(goal);
+      var finalVerification = verifyGoal.apply(goal);
       if (finalVerification.satisfied()) {
         stop(claim, "COMPLETED", finalVerification.reason());
         return;
@@ -566,7 +566,7 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
       }
     }
     var verifiedGoal = goals.get(claim.goal().projectId(), claim.goal().id());
-    var verification = verifier.verify(verifiedGoal);
+    var verification = verifyGoal.apply(verifiedGoal);
     // Final Goal repair Runs have no Stage Attempt, but must preserve every Stage contract too.
     if (stageManagement != null && !stageManagement.allVerified(verifiedGoal)) {
       recordAttempt(claim, run, "UNVERIFIED", "stage_evidence_stale");
