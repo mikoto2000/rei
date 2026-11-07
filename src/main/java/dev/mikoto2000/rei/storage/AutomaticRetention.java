@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.storage;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
@@ -43,11 +41,11 @@ public final class AutomaticRetention {
       Instant created) {}
 
   /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared storage registry to coordinate object references and retention.")
-  private final StorageObjectRegistry registry;
+  private final StorageDatabase.WorkRunner read;
+
+  private final StorageDatabase.WorkRunner transaction;
+  private final java.util.function.Supplier<java.time.Instant> now;
+  private final java.util.function.Consumer<java.util.function.Supplier<Void>> serialize;
 
   /** 計画の作成。 */
   private final RetentionPlanner planner;
@@ -58,7 +56,10 @@ public final class AutomaticRetention {
   /** 指定された値や利用先を使って、AutomaticRetentionを初期化する。 */
   public AutomaticRetention(
       StorageObjectRegistry registry, RetentionPlanner planner, RetentionExecutor executor) {
-    this.registry = registry;
+    this.read = registry.database::read;
+    this.transaction = registry.database::transaction;
+    this.now = () -> registry.clock.instant();
+    this.serialize = action -> registry.serialized(action);
     this.planner = planner;
     this.executor = executor;
   }
@@ -87,7 +88,7 @@ public final class AutomaticRetention {
         || interval.toSeconds() > Duration.ofDays(365).toSeconds())
       throw new IllegalArgumentException("Explicit bounded count, bytes and frequency required");
     String scope = supplied == null ? "" : UUID.fromString(supplied).toString();
-    return registry.database.transaction(
+    return transaction.run(
         db -> {
           var policy = RetentionPlanner.policy(db, policyId);
           if (!policy.kind().equals("ACTIVITY_RAW"))
@@ -107,7 +108,7 @@ public final class AutomaticRetention {
                   bytes,
                   interval.toSeconds(),
                   hash(policy, scope, objects, bytes, interval.toSeconds()),
-                  registry.clock.instant());
+                  now.get());
           try (var insert =
               db.prepareStatement(
                   "INSERT INTO retention_automatic_consents VALUES(?,?,?,?,?,?,?,?,?,'PROPOSED',?,NULL)")) {
@@ -168,7 +169,7 @@ public final class AutomaticRetention {
 
   /** データ保存の共通処理に関する承認を処理する。 */
   public void approve(String id) {
-    registry.database.transaction(
+    transaction.run(
         db -> {
           var consent = get(db, id);
           validate(db, consent);
@@ -190,7 +191,7 @@ public final class AutomaticRetention {
 
   /** データ保存の共通処理に関する無効化を処理する。 */
   public void disable(String id) {
-    registry.database.transaction(
+    transaction.run(
         db -> {
           var consent = get(db, id);
           try (var update =
@@ -212,7 +213,7 @@ public final class AutomaticRetention {
 
   /** 過去の記録を、条件に従って参照できる形で返す。 */
   public List<Consent> history() {
-    return registry.database.read(
+    return read.run(
         db -> {
           var result = new ArrayList<Consent>();
           try (var query = db.createStatement();
@@ -228,7 +229,7 @@ public final class AutomaticRetention {
 
   /** データ保存の共通処理で用いる状態を返す。 */
   public String state(String id) {
-    return registry.database.read(
+    return read.run(
         db -> {
           try (var query =
               db.prepareStatement(
@@ -248,15 +249,15 @@ public final class AutomaticRetention {
   /** データ保存の共通処理に関する定期確認を処理する。 */
   @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000, initialDelay = 60000)
   public void tick() {
-    registry.serialized(
+    serialize.accept(
         () -> {
           String id =
-              registry.database.read(
+              read.run(
                   db -> {
                     try (var query =
                         db.prepareStatement(
                             "SELECT c.id FROM retention_automatic_consents c JOIN retention_policies p ON p.id=c.policy_id AND p.version=c.policy_version WHERE c.status='ENABLED' AND p.automatic=1 AND (c.last_run IS NULL OR unixepoch(c.last_run)+c.interval_seconds<=?) ORDER BY COALESCE(c.last_run,''),c.id LIMIT 1")) {
-                      query.setLong(1, registry.clock.instant().getEpochSecond());
+                      query.setLong(1, now.get().getEpochSecond());
                       try (var rows = query.executeQuery()) {
                         return rows.next() ? rows.getString(1) : null;
                       }
@@ -265,14 +266,14 @@ public final class AutomaticRetention {
           if (id == null) return null;
           try {
             var consent =
-                registry.database.transaction(
+                transaction.run(
                     db -> {
                       var current = get(db, id);
                       validate(db, current);
                       try (var update =
                           db.prepareStatement(
                               "UPDATE retention_automatic_consents SET last_run=? WHERE id=?")) {
-                        update.setString(1, registry.clock.instant().toString());
+                        update.setString(1, now.get().toString());
                         update.setString(2, id);
                         update.executeUpdate();
                       }
@@ -285,14 +286,14 @@ public final class AutomaticRetention {
                     consent.maxObjects(),
                     consent.maxBytes());
             if (plan.candidates().isEmpty()) return null;
-            registry.database.transaction(
+            transaction.run(
                 db -> {
                   validate(db, consent);
                   try (var insert =
                       db.prepareStatement("INSERT INTO retention_automatic_runs VALUES(?,?,?)")) {
                     insert.setString(1, id);
                     insert.setString(2, plan.id());
-                    insert.setString(3, registry.clock.instant().toString());
+                    insert.setString(3, now.get().toString());
                     insert.executeUpdate();
                   }
                   return null;
