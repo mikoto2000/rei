@@ -9,8 +9,6 @@ import dev.mikoto2000.rei.conversation.HistorySearchScope;
 import dev.mikoto2000.rei.conversation.HistoryShellService;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.PrintWriter;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
@@ -42,12 +40,9 @@ public class HistoryCommand implements Callable<Integer> {
   private final SessionQueryService sessions;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final java.util.function.Function<String, String> projectLabelById;
+
+  private final java.util.function.Supplier<java.util.Optional<String>> selectedProjectId;
 
   /** 形式。 */
   private final HistoryFormatter format = new HistoryFormatter();
@@ -72,9 +67,7 @@ public class HistoryCommand implements Callable<Integer> {
 
   /** 既定の状態でHistoryCommandを初期化する。 */
   public HistoryCommand() {
-    service = null;
-    sessions = null;
-    projects = null;
+    this(null, null, null);
   }
 
   /** 指定された値や利用先を使って、HistoryCommandを初期化する。 */
@@ -83,7 +76,32 @@ public class HistoryCommand implements Callable<Integer> {
       HistoryShellService service, SessionQueryService sessions, ProjectService projects) {
     this.service = service;
     this.sessions = sessions;
-    this.projects = projects;
+    var formatter = format;
+    this.projectLabelById =
+        id -> {
+          return projects.registeredProjects().stream()
+              .filter(p -> p.id().equals(id))
+              .findFirst()
+              .map(p -> formatter.label(p.name()) + " [" + p.id() + "]")
+              .orElse(formatter.label(id));
+        };
+    this.selectedProjectId =
+        () ->
+            projects.registeredProjects().stream()
+                .filter(project -> project.root().equals(projects.currentProject()))
+                .findFirst()
+                .map(project -> project.id());
+  }
+
+  private HistoryCommand(
+      HistoryShellService service,
+      SessionQueryService sessions,
+      java.util.function.Function<String, String> projectLabelById,
+      java.util.function.Supplier<java.util.Optional<String>> selectedProjectId) {
+    this.service = service;
+    this.sessions = sessions;
+    this.projectLabelById = projectLabelById;
+    this.selectedProjectId = selectedProjectId;
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -94,7 +112,7 @@ public class HistoryCommand implements Callable<Integer> {
   /** ターミナルでの対話で用いるレポートを返す。 */
   private String report(java.util.function.Consumer<HistoryCommand> action) {
     var text = new java.io.StringWriter();
-    var command = new HistoryCommand(service, sessions, projects);
+    var command = new HistoryCommand(service, sessions, projectLabelById, selectedProjectId);
     command.setShellOutput(new PrintWriter(text, true));
     action.accept(command);
     return text.toString();
@@ -198,11 +216,7 @@ public class HistoryCommand implements Callable<Integer> {
 
   /** ターミナルでの対話で用いるプロジェクト表示名を返す。 */
   private String projectLabel(String id) {
-    return projects.registeredProjects().stream()
-        .filter(p -> p.id().equals(id))
-        .findFirst()
-        .map(p -> format.label(p.name()) + " [" + p.id() + "]")
-        .orElse(format.label(id));
+    return projectLabelById.apply(id);
   }
 
   /** 利用者が内容を確認できるよう、会話を表示する。 */
@@ -212,15 +226,12 @@ public class HistoryCommand implements Callable<Integer> {
           String id = requestedId;
           if (id == null) {
             Pagination.limit(limit);
-            var selectedProject =
-                projects.registeredProjects().stream()
-                    .filter(project -> project.root().equals(projects.currentProject()))
-                    .findFirst();
+            var selectedProject = selectedProjectId.get();
             if (selectedProject.isEmpty()) {
               out.accept("No sessions.");
               return;
             }
-            var latest = sessions.listSessions(selectedProject.get().id(), 1, null);
+            var latest = sessions.listSessions(selectedProject.get(), 1, null);
             if (latest.items().isEmpty()) {
               out.accept("No sessions.");
               return;

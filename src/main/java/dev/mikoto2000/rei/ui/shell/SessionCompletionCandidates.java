@@ -5,8 +5,6 @@ import dev.mikoto2000.rei.core.completion.CompletionCandidate;
 import dev.mikoto2000.rei.core.completion.CompletionContext;
 import dev.mikoto2000.rei.core.completion.CompletionMetadata;
 import dev.mikoto2000.rei.core.project.ProjectService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -66,11 +64,7 @@ public class SessionCompletionCandidates implements CompletionMetadata {
   @Component
   public static class CurrentProject extends SessionCompletionCandidates {
     /** プロジェクト一覧。 */
-    @SuppressFBWarnings(
-        value = "EI_EXPOSE_REP2",
-        matchType = SuppressMatchType.EXACT,
-        justification = "Resolves candidates from the same project registry used by the active shell.")
-    private final ProjectService projects;
+    private final java.util.function.Predicate<String> selectedProject;
 
     /** ターミナルでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public CurrentProject() {
@@ -81,18 +75,20 @@ public class SessionCompletionCandidates implements CompletionMetadata {
     @Autowired
     public CurrentProject(SessionRepository sessions, ProjectService projects) {
       super(sessions);
-      this.projects = projects;
+      this.selectedProject =
+          projectId ->
+              projects != null
+                  && projects.completionProjects().stream()
+                      .anyMatch(
+                          project ->
+                              project.id().equals(projectId)
+                                  && project.root().equals(projects.currentProject()));
     }
 
     /** ターミナルでの対話で判断に用いるacceptsの条件を確認する。 */
     @Override
     protected boolean accepts(String projectId) {
-      return projects != null
-          && projects.completionProjects().stream()
-              .anyMatch(
-                  project ->
-                      project.id().equals(projectId)
-                          && project.root().equals(projects.currentProject()));
+      return selectedProject.test(projectId);
     }
   }
 }

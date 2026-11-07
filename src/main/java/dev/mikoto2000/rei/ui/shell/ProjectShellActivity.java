@@ -10,8 +10,6 @@ import dev.mikoto2000.rei.event.AgentEventListener;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.BackgroundExecutionPayload;
 import dev.mikoto2000.rei.event.ProjectAgentEventStore;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.IntSupplier;
@@ -37,7 +35,8 @@ public class ProjectShellActivity implements AgentEventListener {
 
   /** ターミナルでの対話で使用する再開概要を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
-  public synchronized void setResumeOverview(dev.mikoto2000.rei.checkpoint.ResumeOverviewService service) {
+  public synchronized void setResumeOverview(
+      dev.mikoto2000.rei.checkpoint.ResumeOverviewService service) {
     resumeOverview = service;
   }
 
@@ -54,12 +53,10 @@ public class ProjectShellActivity implements AgentEventListener {
   }
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final java.util.function.Supplier<ProjectClient> currentClient;
+
+  private final java.util.function.Supplier<ProjectContext> currentProject;
+  private final java.util.function.Supplier<String> currentSessionId;
 
   /** 保存先。 */
   private final BiFunction<String, Integer, List<AgentEvent>> recentEvents;
@@ -119,7 +116,9 @@ public class ProjectShellActivity implements AgentEventListener {
       ProjectRunStateStore states,
       WorkingSet workingSet,
       ChatMemory memory) {
-    this.projects = projects;
+    this.currentClient = () -> projects.currentClient();
+    this.currentProject = () -> projects.currentContext();
+    this.currentSessionId = () -> projects.currentSessionId();
     this.recentEvents = (project, limit) -> store.recent(project, limit);
     this.states = states;
     this.workingSetSize = () -> workingSet.getFiles().size();
@@ -136,9 +135,9 @@ public class ProjectShellActivity implements AgentEventListener {
       ShellEventOutput output, ShellAgentEventRenderer.TopicNotificationOptions options) {
     this.output = output;
     this.options = options;
-    client = projects.currentClient();
-    visibleSession = projects.currentSessionId();
-    visibleProject = projects.currentContext().id();
+    client = currentClient.get();
+    visibleSession = currentSessionId.get();
+    visibleProject = currentProject.get().id();
     renderers.clear();
     renderer = rendererFor(visibleProject);
     globalRenderer = new ShellAgentEventRenderer(output, options);
@@ -150,9 +149,9 @@ public class ProjectShellActivity implements AgentEventListener {
       } catch (RuntimeException error) {
         overviewUnavailable(error);
       }
-      presentResume(projects.currentContext());
+      presentResume(currentProject.get());
     }
-    presentWorkContext(projects.currentContext(), visibleSession);
+    presentWorkContext(currentProject.get(), visibleSession);
   }
 
   /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */
@@ -236,8 +235,8 @@ public class ProjectShellActivity implements AgentEventListener {
     String selected;
     ProjectContext selectedProject;
     try (var scope = client.open()) {
-      selected = projects.currentSessionId();
-      selectedProject = projects.currentContext();
+      selected = currentSessionId.get();
+      selectedProject = currentProject.get();
     }
     if (java.util.Objects.equals(selected, visibleSession)) return;
     renderer.finish();

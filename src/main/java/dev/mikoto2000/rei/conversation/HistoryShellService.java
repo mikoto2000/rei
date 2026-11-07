@@ -21,12 +21,10 @@ public class HistoryShellService {
   public static final int DEFAULT_LAST = 50, DEFAULT_LIST_LIMIT = 50, DEFAULT_SEARCH_LIMIT = 10;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
-  private final ProjectService projects;
+  private final java.util.function.Supplier<java.nio.file.Path> currentProjectRoot;
+
+  private final java.util.function.Supplier<java.util.List<ProjectContext>> registeredProjects;
+  private final java.util.function.Supplier<String> currentSessionId;
 
   /** 保存先。 */
   @SuppressFBWarnings(
@@ -46,22 +44,23 @@ public class HistoryShellService {
       ProjectService projects,
       ConversationLogStore store,
       ConversationHistorySearchService search) {
-    this.projects = projects;
+    this.currentProjectRoot = () -> projects.currentProject();
+    this.registeredProjects = () -> projects.registeredProjects();
+    this.currentSessionId = () -> projects.currentSessionId();
     this.store = store;
     this.searchHistory = request -> search.searchForShell(request);
   }
 
   /** 会話履歴と受付記録の管理で用いるプロジェクトを返す。 */
   private ProjectContext project(String reference) {
-    var selected = projects.currentProject();
-    var all = projects.registeredProjects();
+    var selected = currentProjectRoot.get();
+    var all = registeredProjects.get();
     if (reference == null)
       return all.stream()
           .filter(p -> p.root().equals(selected))
           .findFirst()
           .orElseThrow(
-              () ->
-                  new IllegalArgumentException("Project not found: " + projects.currentProject()));
+              () -> new IllegalArgumentException("Project not found: " + currentProjectRoot.get()));
     var byId = all.stream().filter(p -> p.id().equals(reference)).findFirst();
     if (byId.isPresent()) return byId.get();
     var matches = all.stream().filter(p -> p.name().equals(reference)).toList();
@@ -107,7 +106,7 @@ public class HistoryShellService {
       String reference, String conversation, int last, boolean all, Consumer<String> out) {
     positive(last, 10000, "--last");
     var project = project(reference);
-    String selected = projects.currentSessionId();
+    String selected = currentSessionId.get();
     String logical =
         conversation == null
             ? (selected != null && selected.startsWith("project:" + project.id() + ":")
