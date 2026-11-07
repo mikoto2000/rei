@@ -19,6 +19,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.json.JsonMapper;
 
 /** 言語モデル関心話題に必要な情報を入力から取り出す。 */
@@ -31,18 +32,15 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured application model provider for model and option selection.")
+      justification =
+          "Uses the configured application model provider for model and option selection.")
   private final LlmModelProvider modelProvider;
 
   /** モデル保持先サービス。 */
   private final Supplier<String> readSelectedModel;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Jackson 3 mappers retain their configuration after construction.")
-  private final JsonMapper objectMapper;
+  private final ObjectReader candidateReader;
 
   /** 関心の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public LlmInterestTopicExtractor(
@@ -58,7 +56,8 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
       JsonMapper objectMapper) {
     this.modelProvider = modelProvider;
     this.readSelectedModel = () -> modelHolderService.get();
-    this.objectMapper = objectMapper;
+    this.candidateReader =
+        objectMapper.readerFor(new TypeReference<List<InterestTopicCandidate>>() {});
   }
 
   /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
@@ -97,7 +96,8 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
               var response = modelProvider.chatModel(LlmFeature.INTEREST_DISCOVERY).call(prompt);
               var generation = response == null ? null : response.getResult();
               var output = generation == null ? null : generation.getOutput();
-              if (output == null) throw new IllegalStateException("Missing interest extraction output");
+              if (output == null)
+                throw new IllegalStateException("Missing interest extraction output");
               return output.getText();
             });
     try {
@@ -160,8 +160,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
   /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   private List<InterestTopicCandidate> parse(String response) {
     try {
-      return objectMapper.readValue(
-          normalizeJsonArray(response), new TypeReference<List<InterestTopicCandidate>>() {});
+      return candidateReader.readValue(normalizeJsonArray(response));
     } catch (Exception e) {
       throw new IllegalStateException("Failed to parse interest topic candidates", e);
     }

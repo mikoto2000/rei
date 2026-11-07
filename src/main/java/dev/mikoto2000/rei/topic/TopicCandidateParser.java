@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.topic;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -11,6 +9,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.json.JsonMapper;
 
 /** 話題候補の入力を解釈し、機能内で扱える情報へ整える。 */
@@ -19,18 +18,14 @@ public class TopicCandidateParser {
   private static final Logger log = LoggerFactory.getLogger(TopicCandidateParser.class);
 
   /** JSON変換データの変換。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Jackson 3 mappers retain their configuration after construction.")
-  private final JsonMapper jsonMapper;
+  private final ObjectReader candidateReader;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
   /** 指定された値や利用先を使って、TopicCandidateParserを初期化する。 */
   public TopicCandidateParser(JsonMapper jsonMapper, Clock clock) {
-    this.jsonMapper = jsonMapper;
+    this.candidateReader = jsonMapper.reader();
     this.clock = clock;
   }
 
@@ -40,7 +35,7 @@ public class TopicCandidateParser {
       return List.of();
     }
     try {
-      JsonNode root = jsonMapper.readTree(normalizeJsonObject(text));
+      JsonNode root = candidateReader.readTree(normalizeJsonObject(text));
       JsonNode array = root.has("candidates") ? root.get("candidates") : root;
       if (!array.isArray()) return List.of();
       List<TopicCandidate> candidates = new ArrayList<>();

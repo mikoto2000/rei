@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Web検索のユースケースを実現する。 */
@@ -38,11 +39,9 @@ public class WebSearchService {
   private final WebSearchProperties properties;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Jackson 3 mappers retain their configuration after construction.")
-  private final JsonMapper objectMapper;
+  private final ObjectReader responseReader;
+
+  private final OpenAiWebSearch openai;
 
   /** 情報の取得元。 */
   private final dev.mikoto2000.rei.http.SafeHttpFetcher fetcher;
@@ -75,7 +74,8 @@ public class WebSearchService {
       dev.mikoto2000.rei.http.SafeHttpFetcher fetcher,
       dev.mikoto2000.rei.http.cache.HttpResponseCache cache) {
     this.properties = properties;
-    this.objectMapper = objectMapper;
+    this.responseReader = objectMapper.reader();
+    this.openai = new OpenAiWebSearch(objectMapper);
     this.fetcher = fetcher;
     this.cache = cache;
   }
@@ -283,7 +283,6 @@ public class WebSearchService {
     if (key == null || key.isBlank()) throw OpenAiWebSearch.failure("API_KEY_NOT_CONFIGURED");
     if (key.chars().anyMatch(character -> character <= 32 || character >= 127))
       throw OpenAiWebSearch.failure("API_KEY_INVALID");
-    var openai = new OpenAiWebSearch(objectMapper);
     String body = openai.request(provider, query);
     var request =
         HttpRequest.newBuilder(URI.create(provider.getBaseUrl()))
@@ -389,7 +388,7 @@ public class WebSearchService {
 
   /** 入力を機能内で扱えるよう、Brave結果一覧を解釈する。 */
   List<WebSearchResult> parseBraveResults(String responseBody, int limit) throws IOException {
-    JsonNode root = objectMapper.readTree(responseBody);
+    JsonNode root = responseReader.readTree(responseBody);
     JsonNode results = root.path("web").path("results");
     List<WebSearchResult> parsed = new ArrayList<>();
 
