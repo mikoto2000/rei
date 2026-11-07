@@ -80,7 +80,6 @@ public class PersistentCheckpointRepository {
   private static JdbcClient initialize(DataSource source) {
     var db = JdbcClient.create(source);
     var transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
-    // An update obtains SQLite's writer lock before reads, avoiding read-to-write upgrade races.
     db.sql(
             "CREATE TABLE IF NOT EXISTS checkpoint_heads(project TEXT NOT NULL,task TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 0,owner TEXT,lease_run TEXT,PRIMARY KEY(project,task))")
         .update();
@@ -96,6 +95,8 @@ public class PersistentCheckpointRepository {
     // Bootstrap once; triggers account atomically for every writer.
     transaction.executeWithoutResult(
         tx -> {
+          // Reserve the writer before a no-op schema check can establish a read transaction.
+          db.sql("UPDATE checkpoint_heads SET revision=revision WHERE 0").update();
           db.sql(
                   "CREATE TABLE IF NOT EXISTS checkpoint_history_usage(id INTEGER PRIMARY KEY CHECK(id=1),revisions INTEGER NOT NULL,bytes INTEGER NOT NULL,keys INTEGER NOT NULL)")
               .update();
