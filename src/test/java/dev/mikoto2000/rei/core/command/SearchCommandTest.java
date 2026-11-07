@@ -20,9 +20,11 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClient.AdvisorSpec;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
 import org.springframework.ai.chat.prompt.Prompt;
 import picocli.CommandLine;
@@ -66,7 +68,8 @@ class SearchCommandTest {
                             "Less trusted content"))),
                 null));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.just("combined ", "answer"));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -134,7 +137,8 @@ class SearchCommandTest {
                 WebSearchContext.primaryOnly(List.of()),
                 "Web search is disabled"));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.just("vector ", "only"));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -187,7 +191,8 @@ class SearchCommandTest {
                 WebSearchContext.primaryOnly(List.of()),
                 "Web search failed with status 401: invalid api key"));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(requestSpec);
     when(requestSpec.stream().content()).thenReturn(Flux.just("vector ", "fallback"));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -239,7 +244,8 @@ class SearchCommandTest {
                 WebSearchContext.primaryOnly(List.of()),
                 null));
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(requestSpec);
     when(requestSpec.stream().content())
         .thenReturn(Flux.<String>never().doOnCancel(() -> disposed.set(true)));
 

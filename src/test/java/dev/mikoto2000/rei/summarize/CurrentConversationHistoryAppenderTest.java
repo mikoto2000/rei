@@ -55,7 +55,7 @@ class CurrentConversationHistoryAppenderTest {
     appender.appendUserMessage("次のWebページを要約してください: https://example.com/article");
     appender.appendAssistantMessage("要約結果");
 
-    ArgumentCaptor<List<Message>> messages = ArgumentCaptor.forClass(List.class);
+    ArgumentCaptor<List<Message>> messages = ArgumentCaptor.captor();
     verify(chatMemory, Mockito.times(2)).add(eq(ConversationIds.currentChat()), messages.capture());
     assertEquals(
         "次のWebページを要約してください: https://example.com/article",

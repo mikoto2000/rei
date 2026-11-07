@@ -13,8 +13,10 @@ import java.io.PrintStream;
 import java.util.List;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClient.AdvisorSpec;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -38,7 +40,8 @@ class ChatCommandNarrationTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse())
         .thenReturn(Flux.just(response("answer "), response("text")));
 
@@ -73,7 +76,8 @@ class ChatCommandNarrationTest {
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse())
         .thenReturn(Flux.just(response("answer "), response("text")));
 
