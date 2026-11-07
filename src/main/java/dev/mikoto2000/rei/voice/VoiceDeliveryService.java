@@ -4,8 +4,6 @@ import dev.mikoto2000.rei.application.input.ConversationInput;
 import dev.mikoto2000.rei.application.input.ConversationTarget;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
 import dev.mikoto2000.rei.core.project.ProjectClient;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,15 +26,23 @@ public final class VoiceDeliveryService {
    */
   private record Binding(ProjectClient client, ConversationTarget target, long epoch) {}
 
+  static List<String> pendingInputLines(ShellConversationService shell, ConversationTarget target) {
+    return shell.pending(target).stream()
+        .map(input -> input.inputId() + " " + input.text())
+        .toList();
+  }
+
   /** 関連付け。 */
   private volatile Binding binding;
 
   /** シェル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Shares the shell session and routes operations for its selected conversation.")
-  private final ShellConversationService shell;
+  private final java.util.function.BiPredicate<ProjectClient, ConversationTarget> selectedTarget;
+
+  private final java.util.function.BiPredicate<
+          ProjectClient, dev.mikoto2000.rei.core.chat.AgentRunContext>
+      ownsRun;
+  private final java.util.function.ToIntBiFunction<ProjectClient, ConversationInput> cancelActive;
+  private final java.util.function.BiConsumer<ProjectClient, ConversationInput> submitVoice;
 
   /** 受信した案内や確認待ち情報の保存先。 */
   private final VoiceReviewInbox inbox;
@@ -102,14 +108,19 @@ public final class VoiceDeliveryService {
       java.util.function.Supplier<VoiceAdvancedOptions> advanced) {
     this.advanced = Objects.requireNonNull(advanced);
     this.clock = Objects.requireNonNull(clock);
-    this.shell = Objects.requireNonNull(shell);
+    Objects.requireNonNull(shell);
+    this.selectedTarget = (client, target) -> shell.isSelected(client, target);
+    this.ownsRun = (client, run) -> shell.ownsRun(client, run);
+    this.cancelActive = (client, input) -> shell.cancelSelectedActive(client, input);
+    this.submitVoice =
+        (client, input) -> shell.submitSelectedVoice(client, input, () -> submitted(input));
     this.events = Objects.requireNonNull(events);
     inbox = new VoiceReviewInbox(this::dispatch, i -> targetIsCurrent(i.target()), clock);
   }
 
   /** 後続の照会で対応する対象を見つけられるよう、音声配信サービスを関連付ける。 */
   public void bind(ProjectClient client, ConversationTarget target) {
-    if (client == null || target == null || !shell.isSelected(client, target))
+    if (client == null || target == null || !selectedTarget.test(client, target))
       throw new IllegalStateException("Current Shell client/Session required");
     var previous = binding;
     if (previous != null && (previous.client() != client || !previous.target().equals(target)))
@@ -123,7 +134,7 @@ public final class VoiceDeliveryService {
     return selected != null
         && selected.target().equals(target)
         && selected.epoch() == selected.client().selectionEpoch()
-        && shell.isSelected(selected.client(), target);
+        && selectedTarget.test(selected.client(), target);
   }
 
   /** 音声による対話において、owns実行に該当するか判定する。 */
@@ -137,7 +148,7 @@ public final class VoiceDeliveryService {
             .equals(selected.target().project().root().toAbsolutePath().normalize())
         && Objects.equals(context.conversationId(), selected.target().sessionId())
         && targetIsCurrent(selected.target())
-        && shell.ownsRun(selected.client(), context);
+        && ownsRun.test(selected.client(), context);
   }
 
   /** 音声による対話に関する実行先への引き渡しを処理する。 */
@@ -162,7 +173,7 @@ public final class VoiceDeliveryService {
           if (stopped.size() >= 4096)
             throw new IllegalStateException("Stop deduplication capacity reached");
           // Identity and selection are checked before any cancellation side effect.
-          int count = shell.cancelSelectedActive(selected.client(), input);
+          int count = cancelActive.applyAsInt(selected.client(), input);
           stopped.put(input.inputId(), input);
           events.publish(
               VoiceEventPublisher.Type.INTERRUPT_RESULT,
@@ -170,7 +181,7 @@ public final class VoiceDeliveryService {
           return;
         }
       }
-      shell.submitSelectedVoice(selected.client(), input, () -> submitted(input));
+      submitVoice.accept(selected.client(), input);
     }
   }
 
