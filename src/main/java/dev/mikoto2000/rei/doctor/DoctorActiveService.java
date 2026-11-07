@@ -132,11 +132,7 @@ public class DoctorActiveService {
   private final ClaudeCodeProperties claude;
 
   /** 音声。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound VoiceProperties shared by consumers of these settings.")
-  private final VoiceProperties voice;
+  private final Supplier<String> microphoneDeviceId;
 
   /** マイク。 */
   private final DoctorMicrophoneProbe microphone;
@@ -194,7 +190,7 @@ public class DoctorActiveService {
         request -> http.connectivity(request.endpoint(), request.timeout(), request.checkActive());
     this.codex = codex;
     this.claude = claude;
-    this.voice = voice;
+    this.microphoneDeviceId = () -> voice.getDeviceId();
     this.microphone = microphone;
     this.processes = processes;
     this.clock = clock;
@@ -254,7 +250,7 @@ public class DoctorActiveService {
             case INFERENCE -> readSelectedModel.get();
             case CODEX -> codex.getCommand();
             case CLAUDE -> claude.getCommand();
-            case MICROPHONE -> voice.getDeviceId();
+            case MICROPHONE -> microphoneDeviceId.get();
           };
       boolean enabled =
           switch (check) {
