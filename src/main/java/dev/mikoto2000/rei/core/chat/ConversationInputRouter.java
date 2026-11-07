@@ -369,7 +369,7 @@ public final class ConversationInputRouter {
               admissions.transition(
                   context.runId(), dev.mikoto2000.rei.application.run.RunStatus.FAILED);
             try {
-              lifecycle.accept(rethrowDispatchFailure(error));
+              lifecycle.accept(reportRejectedDispatch(error));
             } finally {
               forget(slot);
             }
@@ -454,7 +454,7 @@ public final class ConversationInputRouter {
                 if (captureCompletion != null)
                   captureCompletion.startFailed().accept(context.runId());
                 try {
-                  lifecycle.accept(rethrowDispatchFailure(error));
+                  lifecycle.accept(reportRejectedDispatch(error));
                 } finally {
                   agentSlots.remove(context.runId());
                   forget(slot);
@@ -523,13 +523,13 @@ public final class ConversationInputRouter {
   }
 
   /** ライフサイクルの境界で元のディスパッチ失敗を伝える。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Passes the original dispatch failure through the lifecycle callback.")
-  private static Runnable rethrowDispatchFailure(RuntimeException error) {
+  private static Runnable reportRejectedDispatch(RuntimeException error) {
+    var rejection =
+        error instanceof java.util.concurrent.RejectedExecutionException rejected
+            ? rejected
+            : new java.util.concurrent.RejectedExecutionException("Run dispatch failed", error);
     return () -> {
-      throw error;
+      throw rejection;
     };
   }
 }

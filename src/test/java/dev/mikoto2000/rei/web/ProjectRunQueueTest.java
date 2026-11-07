@@ -324,4 +324,29 @@ class ProjectRunQueueTest {
     assertThat(queue.enqueue("project", "after", () -> {})).isTrue();
     assertThat(scheduled).hasSize(1);
   }
+
+  @Test
+  void fatalDispatchRetainsEarlierRejectionAndReleasesBothReaders() {
+    var scheduled = new ArrayList<Runnable>();
+    var attempts = new java.util.concurrent.atomic.AtomicInteger();
+    var rejection = new RejectedExecutionException("first reader");
+    var fatal = new AssertionError("second reader");
+    var queue =
+        new ProjectRunQueue(
+            work -> {
+              switch (attempts.getAndIncrement()) {
+                case 1 -> throw rejection;
+                case 2 -> throw fatal;
+                default -> scheduled.add(work);
+              }
+            });
+    queue.enqueue("project", "writer", () -> {});
+    queue.enqueue("project", "first", ProjectRunQueue.Access.READ_ONLY, () -> {});
+    queue.enqueue("project", "second", ProjectRunQueue.Access.READ_ONLY, () -> {});
+
+    assertThatThrownBy(() -> scheduled.removeFirst().run()).isSameAs(fatal);
+    assertThat(fatal.getSuppressed()).contains(rejection);
+    assertThat(queue.containsRun("project", "first")).isFalse();
+    assertThat(queue.containsRun("project", "second")).isFalse();
+  }
 }
