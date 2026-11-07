@@ -360,12 +360,19 @@ public final class ChatGptSubAgentBackend {
       recheckPlanPolicy;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final Runnable beginCancellation;
+
+  private final Runnable clearCancellation;
+  private final java.util.function.BiFunction<String, Runnable, reactor.core.Disposable> onCancel;
+  private final java.util.function.Function<String, ChildLease> enterChild;
+
+  @FunctionalInterface
+  private interface ChildLease extends AutoCloseable {
+    @Override
+    void close();
+  }
+
+  private final java.util.function.BooleanSupplier cancellationRequested;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -431,7 +438,15 @@ public final class ChatGptSubAgentBackend {
     this.authorize = owner -> (tool, input) -> permissions.check(tool, input, owner);
     this.recheckPlanPolicy =
         owner -> (tool, input) -> permissions.checkAuthorizedPlanPolicy(tool, input, owner);
-    this.cancellation = cancellation;
+    this.beginCancellation = () -> cancellation.begin(null);
+    this.clearCancellation = () -> cancellation.clear();
+    this.onCancel = (run, action) -> cancellation.onCancel(run, action);
+    this.enterChild =
+        run -> {
+          var lease = cancellation.enterChild(run);
+          return () -> lease.close();
+        };
+    this.cancellationRequested = () -> cancellation.isCancellationRequested();
     this.events = events;
     this.publisher = publisher;
     this.clock = clock;
@@ -451,7 +466,7 @@ public final class ChatGptSubAgentBackend {
       boolean standalone,
       LlmCallReservation sharedBudget,
       boolean automaticRun) {
-    try (var lease = cancellation.enterChild(standalone || owner == null ? null : owner.runId())) {
+    try (var lease = enterChild.apply(standalone || owner == null ? null : owner.runId())) {
       return runInternalOwned(request, owner, standalone, sharedBudget, automaticRun);
     }
   }
@@ -592,8 +607,8 @@ public final class ChatGptSubAgentBackend {
       tracked = true;
       runs.transition(id, RunStatus.RUNNING, null);
       publish(parent, id, role.id(), State.CREATED, false, request.modelId(), null, 0);
-      cancellation.begin(null);
-      parentHook = cancellation.onCancel(parent, () -> cancelled.set(true));
+      beginCancellation.run();
+      parentHook = onCancel.apply(parent, () -> cancelled.set(true));
       phase = "SOURCE_READ";
       List<Source> allSources = readSources(owner, request.sources());
       phase = "REQUEST_PREPARATION";
@@ -748,7 +763,7 @@ public final class ChatGptSubAgentBackend {
           callUsage = null;
           knownTerminal = false;
           if (cancelled.get()
-              || cancellation.isCancellationRequested()
+              || cancellationRequested.getAsBoolean()
               || Thread.currentThread().isInterrupted()) throw ChatGptException.of(CANCELLED);
           if (System.nanoTime() >= deadline) throw ChatGptException.of(TIMEOUT);
           phase = "SEND_POLICY_RECHECK";
@@ -783,7 +798,7 @@ public final class ChatGptSubAgentBackend {
           java.util.function.BooleanSupplier stop =
               () ->
                   cancelled.get()
-                      || cancellation.isCancellationRequested()
+                      || cancellationRequested.getAsBoolean()
                       || Thread.currentThread().isInterrupted();
           if (backendId.equals("codex-app-server"))
             client.nativeBudget(
@@ -996,7 +1011,7 @@ public final class ChatGptSubAgentBackend {
       try {
         if (parentHook != null) parentHook.dispose();
         try (var scope = AgentRunScope.open(child)) {
-          cancellation.clear();
+          clearCancellation.run();
         }
         if (reserved && sharedBudget != null)
           try {

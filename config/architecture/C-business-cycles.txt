@@ -2244,8 +2244,6 @@ dev.mikoto2000.rei.subagent.SubAgentRunner$2 -> dev.mikoto2000.rei.llm.ModelCall
 dev.mikoto2000.rei.subagent.SubAgentRunner$2 -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$LlmCallReservation
 dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.chat.AgentRunScope
-dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.service.CommandCancellationService
-dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.service.CommandCancellationService$ChildLease
 dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.llm.ModelCallBudget
 dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.llm.ModelCallBudgetScope
 dev.mikoto2000.rei.subagent.SubAgentSemanticValidator -> dev.mikoto2000.rei.core.chat.AgentRunContext

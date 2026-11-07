@@ -4,8 +4,6 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.memory.configuration.AutoSleepProperties;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -15,6 +13,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,11 +33,27 @@ import org.springframework.stereotype.Component;
 @EnableConfigurationProperties(AutoSleepProperties.class)
 public final class AutoSleepService implements AutoCloseable {
   /** 待機。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared sleep service and its persisted consolidation state.")
-  private final SleepService sleep;
+  private final java.util.function.Consumer<AutoRequest> requestSleep;
+
+  private final java.util.function.Supplier<List<MemoryRepository.AutoSleepRequest>>
+      pendingRequests;
+  private final java.util.function.BiFunction<String, String, MemoryRepository.AutoState> readState;
+  private final java.util.function.BiFunction<
+          MemoryRepository.AutoState, StateChange, MemoryRepository.AutoState>
+      updateState;
+  private final java.util.function.ToLongFunction<String> unsleptTurns;
+  private final java.util.function.Predicate<MemoryRepository.AutoSleepRequest> completeRequest;
+  private final java.util.function.Function<AutoRun, SleepService.Report> performSleep;
+
+  private record AutoRequest(String session, String project, String cause) {}
+
+  private record StateChange(String code, String description, String timestamp, int limit) {}
+
+  private record AutoRun(
+      String session,
+      String project,
+      java.util.function.BooleanSupplier cancel,
+      AutoSleepExecution execution) {}
 
   /** 記憶。 */
   private final MemoryProperties memory;
@@ -236,7 +251,18 @@ public final class AutoSleepService implements AutoCloseable {
       AutoSleepProperties properties,
       AgentActivityTracker activity,
       Clock clock) {
-    this.sleep = sleep;
+    this.requestSleep =
+        request -> sleep.requestAutoSleep(request.session(), request.project(), request.cause());
+    this.pendingRequests = () -> sleep.pendingAutoSleepRequests();
+    this.readState = (session, project) -> sleep.autoState(session, project);
+    this.updateState =
+        (state, change) ->
+            sleep.updateAutoState(
+                state, change.code(), change.description(), change.timestamp(), change.limit());
+    this.unsleptTurns = session -> sleep.unsleptTurns(session);
+    this.completeRequest = request -> sleep.completeAutoSleepRequest(request);
+    this.performSleep =
+        run -> sleep.sleep(run.session(), run.project(), false, run.cancel(), run.execution());
     this.memory = memory;
     this.properties = properties;
     this.activity = activity;
@@ -274,7 +300,7 @@ public final class AutoSleepService implements AutoCloseable {
   public synchronized void afterSessionEnd(
       dev.mikoto2000.rei.application.session.SessionMetadata session) {
     if (closed || !properties.enabled() || !properties.onSessionEnd() || !memory.enabled()) return;
-    sleep.requestAutoSleep(session.sessionId(), session.projectId(), "session_end");
+    requestSleep.accept(new AutoRequest(session.sessionId(), session.projectId(), "session_end"));
     sessions.put(session.sessionId(), session.projectId());
     while (sessions.size() > 256) {
       String oldest = sessions.keySet().iterator().next();
@@ -289,11 +315,11 @@ public final class AutoSleepService implements AutoCloseable {
       return Map.of();
     var registered = registeredProjects.get();
     var requested = new LinkedHashMap<String, MemoryRepository.AutoSleepRequest>();
-    for (var request : sleep.pendingAutoSleepRequests()) {
+    for (var request : pendingRequests.get()) {
       if (!(request.cause().equals("session_end") && properties.onSessionEnd())
           && !(request.cause().equals("shutdown") && properties.onShutdown())) continue;
       if (!registered.contains(request.projectId())) continue;
-      if (sleep.autoState(request.sessionId(), request.projectId()).stoppedAt() != null) continue;
+      if (readState.apply(request.sessionId(), request.projectId()).stoppedAt() != null) continue;
       try {
         String encoded =
             dev.mikoto2000.rei.core.project.ProjectStorage.projectId(request.sessionId());
@@ -362,15 +388,16 @@ public final class AutoSleepService implements AutoCloseable {
       try {
         var pending = pendingUpdates.get(session.getKey());
         if (pending != null) {
-          var current = sleep.autoState(session.getKey(), session.getValue());
+          var current = readState.apply(session.getKey(), session.getValue());
           if (current.revision() == pending.state().revision()) {
             var updated =
-                sleep.updateAutoState(
+                updateState.apply(
                     pending.state(),
-                    pending.code(),
-                    pending.description(),
-                    pending.timestamp(),
-                    properties.failureLimit());
+                    new StateChange(
+                        pending.code(),
+                        pending.description(),
+                        pending.timestamp(),
+                        properties.failureLimit()));
             notifyStopped(pending.state(), updated);
           } else {
             org.slf4j.LoggerFactory.getLogger(getClass())
@@ -381,16 +408,16 @@ public final class AutoSleepService implements AutoCloseable {
           }
           pendingUpdates.remove(session.getKey());
         }
-        var state = sleep.autoState(session.getKey(), session.getValue());
+        var state = readState.apply(session.getKey(), session.getValue());
         if (state.stoppedAt() != null) {
           candidates.remove();
           continue;
         }
         if (SleepService.isRunning(session.getKey())) continue;
         var request = requested.get(session.getKey());
-        if (sleep.unsleptTurns(session.getKey())
+        if (unsleptTurns.applyAsLong(session.getKey())
             < (request == null ? properties.minimumTurns() : 1)) {
-          if (request != null) sleep.completeAutoSleepRequest(request);
+          if (request != null) completeRequest.test(request);
           attempts.remove(session.getKey());
           candidates.remove();
           continue;
@@ -413,19 +440,21 @@ public final class AutoSleepService implements AutoCloseable {
                         properties.totalTimeout());
                 var execution = new AutoSleepExecution(timeout, properties.totalTimeout());
                 var report =
-                    sleep.sleep(
-                        id,
-                        project,
-                        false,
-                        () ->
-                            closed
-                                || activity.isAgentBusy()
-                                || activity.activityVersion() != version,
-                        execution);
+                    performSleep.apply(
+                        new AutoRun(
+                            id,
+                            project,
+                            () ->
+                                closed
+                                    || activity.isAgentBusy()
+                                    || activity.activityVersion() != version,
+                            execution));
                 if (report.run().processedTurns() > 0 || execution.hasSavedProgress()) {
                   try {
-                    sleep.updateAutoState(
-                        state, null, null, clock.instant().toString(), properties.failureLimit());
+                    updateState.apply(
+                        state,
+                        new StateChange(
+                            null, null, clock.instant().toString(), properties.failureLimit()));
                   } catch (RuntimeException update) {
                     pendingUpdates.put(
                         id, new Pending(state, null, null, clock.instant().toString()));
@@ -434,7 +463,7 @@ public final class AutoSleepService implements AutoCloseable {
                 }
                 if (request != null)
                   try {
-                    if (sleep.unsleptTurns(id) == 0) sleep.completeAutoSleepRequest(request);
+                    if (unsleptTurns.applyAsLong(id) == 0) completeRequest.test(request);
                   } catch (RuntimeException update) {
                     warnState(id, update);
                   }
@@ -464,8 +493,10 @@ public final class AutoSleepService implements AutoCloseable {
                                 Math.min(12, cause.getStackTrace().length))));
                   try {
                     var updated =
-                        sleep.updateAutoState(
-                            state, code, description, failedAt, properties.failureLimit());
+                        updateState.apply(
+                            state,
+                            new StateChange(
+                                code, description, failedAt, properties.failureLimit()));
                     notifyStopped(state, updated);
                   } catch (RuntimeException update) {
                     pendingUpdates.put(id, new Pending(state, code, description, failedAt));
@@ -555,7 +586,7 @@ public final class AutoSleepService implements AutoCloseable {
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
   public synchronized String status(String session, String project) {
-    var state = sleep.autoState(session, project);
+    var state = readState.apply(session, project);
     return "Auto Sleep: "
         + (!properties.enabled() || !memory.enabled()
             ? "無効"
@@ -588,8 +619,9 @@ public final class AutoSleepService implements AutoCloseable {
   public synchronized String resume(String session, String project) {
     if (session.equals(runningSession) || SleepService.isRunning(session))
       throw new IllegalStateException("当該SessionのSleep実行中は再開できません");
-    var state = sleep.autoState(session, project);
-    sleep.updateAutoState(state, null, null, clock.instant().toString(), properties.failureLimit());
+    var state = readState.apply(session, project);
+    updateState.apply(
+        state, new StateChange(null, null, clock.instant().toString(), properties.failureLimit()));
     pendingUpdates.remove(session);
     sessions.put(session, project);
     return "Auto Sleepの停止状態・失敗回数・段階をリセットしました。"
@@ -622,7 +654,7 @@ public final class AutoSleepService implements AutoCloseable {
         }
         for (var entry : sessions.entrySet())
           try {
-            sleep.requestAutoSleep(entry.getKey(), entry.getValue(), "shutdown");
+            requestSleep.accept(new AutoRequest(entry.getKey(), entry.getValue(), "shutdown"));
           } catch (RuntimeException error) {
             org.slf4j.LoggerFactory.getLogger(getClass())
                 .warn(

@@ -134,9 +134,7 @@ public final class ClassificationTelemetryRepository {
       String entertainmentRule) {
     public Candidate {
       outcomes =
-          outcomes == null
-              ? null
-              : Collections.unmodifiableMap(new LinkedHashMap<>(outcomes));
+          outcomes == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(outcomes));
       reasons = reasons == null ? null : Collections.unmodifiableList(new ArrayList<>(reasons));
     }
   }
@@ -175,16 +173,36 @@ public final class ClassificationTelemetryRepository {
   }
 
   /** 後から参照できるよう、指定された情報を保存する。 */
+  record RegistryRetention(boolean enabled, int retentionDays, int maxEntries) {
+    static RegistryRetention from(ActivityProperties.Registry settings) {
+      return new RegistryRetention(
+          settings.isEnabled(), settings.getRetentionDays(), settings.getMaxEntries());
+    }
+  }
+
+  record Retention(RegistryRetention unknown, RegistryRetention entertainment) {
+    static Retention from(ActivityProperties.Classification settings) {
+      return new Retention(
+          RegistryRetention.from(settings.getUnknownRegistry()),
+          RegistryRetention.from(settings.getEntertainmentRegistry()));
+    }
+  }
+
   public synchronized void save(Row row, ActivityProperties.Classification settings, Instant now)
+      throws SQLException, JsonProcessingException {
+    save(row, Retention.from(settings), now);
+  }
+
+  synchronized void save(Row row, Retention settings, Instant now)
       throws SQLException, JsonProcessingException {
     initialize();
     String unknown =
-        !row.diagnostics().classificationUsable() && settings.getUnknownRegistry().isEnabled()
+        !row.diagnostics().classificationUsable() && settings.unknown().enabled()
             ? key(row, false)
             : null;
     String uncertain =
         row.diagnostics().entertainmentDisposition() == EntertainmentDisposition.UNCERTAIN
-                && settings.getEntertainmentRegistry().isEnabled()
+                && settings.entertainment().enabled()
             ? key(row, true)
             : null;
     try (var c = connections.open()) {
@@ -258,20 +276,17 @@ public final class ClassificationTelemetryRepository {
         }
         for (String kind : List.of("unknown", "uncertain")) {
           boolean unknownKind = kind.equals("unknown");
-          var p =
-              unknownKind
-                  ? settings.getUnknownRegistry()
-                  : settings.getEntertainmentRegistry();
+          var p = unknownKind ? settings.unknown() : settings.entertainment();
           long cutoff =
-              p.isEnabled()
-                  ? now.minus(Duration.ofDays(p.getRetentionDays())).toEpochMilli()
+              p.enabled()
+                  ? now.minus(Duration.ofDays(p.retentionDays())).toEpochMilli()
                   : Long.MAX_VALUE;
           try (var s =
               unknownKind
                   ? c.prepareStatement("SELECT DISTINCT unknown_key" + EXPIRED_UNKNOWN_KEYS)
                   : c.prepareStatement("SELECT DISTINCT uncertain_key" + EXPIRED_UNCERTAIN_KEYS)) {
             s.setLong(1, cutoff);
-            s.setInt(2, p.getMaxEntries());
+            s.setInt(2, p.maxEntries());
             try (var rs = s.executeQuery()) {
               while (rs.next()) dirty.get(kind).add(rs.getString(1));
             }
@@ -285,14 +300,12 @@ public final class ClassificationTelemetryRepository {
                       "UPDATE activity_classification_telemetry SET uncertain_key=NULL"
                           + EXPIRED_UNCERTAIN_FILTER)) {
             s.setLong(1, cutoff);
-            s.setInt(2, p.getMaxEntries());
+            s.setInt(2, p.maxEntries());
             s.executeUpdate();
           }
         }
         int days =
-            Math.max(
-                settings.getUnknownRegistry().getRetentionDays(),
-                settings.getEntertainmentRegistry().getRetentionDays());
+            Math.max(settings.unknown().retentionDays(), settings.entertainment().retentionDays());
         try (var s =
             c.prepareStatement(
                 "SELECT unknown_key,uncertain_key FROM activity_classification_telemetry WHERE at<? OR id IN (SELECT id FROM activity_classification_telemetry ORDER BY at DESC,id LIMIT -1 OFFSET 100000)")) {
@@ -369,10 +382,12 @@ public final class ClassificationTelemetryRepository {
     var rows = new ArrayList<Row>();
     try (var s =
         switch (kind) {
-          case "unknown" -> c.prepareStatement(
-              "SELECT payload FROM activity_classification_telemetry WHERE unknown_key=? AND at>=? ORDER BY at,id");
-          case "uncertain" -> c.prepareStatement(
-              "SELECT payload FROM activity_classification_telemetry WHERE uncertain_key=? AND at>=? ORDER BY at,id");
+          case "unknown" ->
+              c.prepareStatement(
+                  "SELECT payload FROM activity_classification_telemetry WHERE unknown_key=? AND at>=? ORDER BY at,id");
+          case "uncertain" ->
+              c.prepareStatement(
+                  "SELECT payload FROM activity_classification_telemetry WHERE uncertain_key=? AND at>=? ORDER BY at,id");
           default -> throw new IllegalArgumentException("Unknown registry");
         }) {
       s.setString(1, key);
