@@ -25,10 +25,13 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
   private static final Pattern JSON_STRING = Pattern.compile("\"((?:\\\\.|[^\"])*)\"");
 
   /** モデル提供元。 */
-  private final LlmModelProvider modelProvider;
+  private final java.util.function.Supplier<ChatModel> selectorModel;
+
+  private final java.util.function.Supplier<org.springframework.ai.openai.OpenAiChatOptions>
+      selectorOptions;
 
   /** 保存と検索の窓口。 */
-  private final AgentSkillRepository repository;
+  private final java.util.function.Supplier<List<AgentSkill>> enabledSkills;
 
   private final java.time.Duration selectorTimeout;
 
@@ -44,16 +47,13 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
   }
 
   @Autowired
-  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      justification =
-          "The shared Spring model provider is intentional; only the immutable timeout is retained from configuration.")
   public AgentSkillImplicitSelector(
       LlmModelProvider modelProvider,
       AgentSkillRepository repository,
       AgentSkillsProperties properties) {
-    this.modelProvider = modelProvider;
-    this.repository = repository;
+    this.selectorModel = () -> modelProvider.chatModel(LlmFeature.AGENT_SKILLS);
+    this.selectorOptions = () -> modelProvider.chatOptions(LlmFeature.AGENT_SKILLS, null);
+    this.enabledSkills = () -> repository.findEnabled();
     this.selectorTimeout = properties.getSelectorTimeout();
   }
 
@@ -72,7 +72,7 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
       List<AgentSkill> providedCandidates,
       Runnable beforeModelCall) {
     List<AgentSkill> candidates =
-        (providedCandidates == null ? repository.findEnabled() : providedCandidates)
+        (providedCandidates == null ? enabledSkills.get() : providedCandidates)
             .stream()
                 .sorted(
                     providedCandidates == null
@@ -94,13 +94,13 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
             : null;
     org.springframework.ai.chat.model.ChatResponse response;
     try {
-      var model = modelProvider.chatModel(LlmFeature.AGENT_SKILLS);
+      var model = selectorModel.get();
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
       // Apply feature options on every path; a plain String call uses model defaults instead.
       // Per-request output limits are independent of the optional total-token Run budget.
       var options =
-          modelProvider
-              .chatOptions(LlmFeature.AGENT_SKILLS, null)
+          selectorOptions
+              .get()
               .mutate()
               .streamUsage(true)
               .toolCallbacks(List.of())
