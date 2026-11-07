@@ -63,11 +63,11 @@ public final class ConversationInputRouter {
   }
 
   /** 要求取得記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the same capture lifecycle across request admission and completion.")
-  private dev.mikoto2000.rei.llm.capture.CaptureStore requestCaptures;
+  private record CaptureCompletion(
+      java.util.function.BiConsumer<String, String> finish,
+      java.util.function.Consumer<String> startFailed) {}
+
+  private CaptureCompletion captureCompletion;
 
   /** 受付台帳。 */
   private dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions;
@@ -81,7 +81,8 @@ public final class ConversationInputRouter {
   /** 会話の実行で使用する要求取得記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setRequestCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures) {
-    requestCaptures = captures;
+    captureCompletion =
+        captures == null ? null : new CaptureCompletion(captures::finish, captures::startFailed);
   }
 
   /** 後片付け観測先一覧。 */
@@ -318,7 +319,7 @@ public final class ConversationInputRouter {
     if (removed) {
       if (admissions != null)
         admissions.transition(runId, dev.mikoto2000.rei.application.run.RunStatus.CANCELLED);
-      if (requestCaptures != null) requestCaptures.finish(runId, "CANCELLED");
+      if (captureCompletion != null) captureCompletion.finish().accept(runId, "CANCELLED");
       var slot = agentSlots.remove(runId);
       if (slot != null) forget(slot);
     }
@@ -450,7 +451,8 @@ public final class ConversationInputRouter {
                 if (admissions != null)
                   admissions.transition(
                       context.runId(), dev.mikoto2000.rei.application.run.RunStatus.FAILED);
-                if (requestCaptures != null) requestCaptures.startFailed(context.runId());
+                if (captureCompletion != null)
+                  captureCompletion.startFailed().accept(context.runId());
                 try {
                   lifecycle.accept(rethrowDispatchFailure(error));
                 } finally {

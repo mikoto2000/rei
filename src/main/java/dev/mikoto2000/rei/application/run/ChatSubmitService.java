@@ -53,16 +53,20 @@ public final class ChatSubmitService {
   }
 
   /** 取得記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the same capture lifecycle across request admission and completion.")
-  private dev.mikoto2000.rei.llm.capture.CaptureStore captures;
+  @FunctionalInterface
+  private interface AcceptCapture {
+    void record(String client, String conversation, String submission, String run);
+  }
+
+  private record CaptureHooks(
+      AcceptCapture accept, java.util.function.Consumer<String> startFailed) {}
+
+  private CaptureHooks captureHooks;
 
   /** 実行の受付と状態管理で使用する取得記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore store) {
-    captures = store;
+    captureHooks = store == null ? null : new CaptureHooks(store::accept, store::startFailed);
   }
 
   /** 実行の受付と状態管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -158,20 +162,23 @@ public final class ChatSubmitService {
         key,
         fingerprint,
         context -> {
+          var capture = captureHooks;
           sessions.remember(context.conversationId(), project.id());
           try {
             registerRun.accept(context);
             if (dotDelegations != null)
               dotDelegations.ifAvailable(dot -> dot.authoriseHumanInput(context, message));
-            if (captures != null && clientId != null)
-              captures.accept(
-                  "cli:" + clientId,
-                  context.conversationId(),
-                  key == null ? context.runId() : key,
-                  context.runId());
+            if (capture != null && clientId != null)
+              capture
+                  .accept()
+                  .record(
+                      "cli:" + clientId,
+                      context.conversationId(),
+                      key == null ? context.runId() : key,
+                      context.runId());
             dispatch.accept(context, message);
           } catch (RuntimeException | Error error) {
-            if (captures != null) captures.startFailed(context.runId());
+            if (capture != null) capture.startFailed().accept(context.runId());
             forgetRun.accept(context.runId());
             sessions.forget(context.conversationId());
             throw error;
