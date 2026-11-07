@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.llm;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -67,7 +65,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
                 .<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>of(
                     builder ->
                         builder
-                            .interceptor(new ChatStreamTimeoutInterceptor(properties.getReadTimeout()))
+                            .interceptor(new ChatStreamTimeoutInterceptor(readTimeout.get()))
                             .interceptor(new ShowUiSdkRequestInterceptor()))
             : captureCustomizers;
     return new CapturingChatModel(
@@ -82,11 +80,10 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   private final ChatModel defaultChatModel;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the current model feature settings, endpoints, and output limits.")
-  private final LlmProperties properties;
+  private final java.util.function.Function<String, LlmProperties.Server> featureSettings;
+
+  private final java.util.function.Supplier<java.time.Duration> readTimeout;
+  private final java.util.function.IntSupplier defaultOutputTokens;
 
   /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
@@ -110,7 +107,9 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher) {
     this.defaultChatModel = defaultChatModel;
-    this.properties = properties;
+    this.featureSettings = feature -> properties.feature(feature);
+    this.readTimeout = () -> properties.getReadTimeout();
+    this.defaultOutputTokens = () -> properties.getMaxOutputTokens();
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
   }
@@ -152,8 +151,9 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       // server.
       // Reuse CHAT connection settings when no correction endpoint is configured, without its
       // capture wrapper.
-      var server = properties.feature(feature);
-      if (server == null || !server.hasCustomServer()) server = properties.feature(LlmFeature.CHAT);
+      var server = featureSettings.apply(feature);
+      if (server == null || !server.hasCustomServer())
+        server = featureSettings.apply(LlmFeature.CHAT);
       var model =
           server != null && server.hasCustomServer()
               ? createOpenAiCompatibleChatModel(server)
@@ -166,7 +166,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         || LlmFeature.ACTIVITY.equals(feature)
         || LlmFeature.ACTIVITY_BEHAVIOR.equals(feature))
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
-    LlmProperties.Server server = properties.feature(feature);
+    LlmProperties.Server server = featureSettings.apply(feature);
     ChatModel model =
         LlmFeature.CHAT.equals(feature) ? captureModel(defaultChatModel, false) : defaultChatModel;
     if (server != null && server.hasCustomServer()) {
@@ -187,7 +187,10 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   /** 用途に応じたモデル利用で用いるモデルを返す。 */
   public String model(String feature, String defaultModel) {
-    LlmProperties.Server server = properties.feature(feature);
+    return model(featureSettings.apply(feature), defaultModel);
+  }
+
+  private String model(LlmProperties.Server server, String defaultModel) {
     if (server == null || server.getModel() == null || server.getModel().isBlank()) {
       return defaultModel != null && !defaultModel.isBlank()
           ? defaultModel
@@ -227,7 +230,11 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   @Override
   public dev.mikoto2000.rei.secretary.SecretaryPrivateModel.Descriptor
       privateSecretaryDescriptor() {
-    var server = properties.feature("secretary-reply");
+    return privateSecretaryDescriptor(featureSettings.apply("secretary-reply"));
+  }
+
+  private dev.mikoto2000.rei.secretary.SecretaryPrivateModel.Descriptor privateSecretaryDescriptor(
+      LlmProperties.Server server) {
     if (server == null
         || !server.hasCustomServer()
         || server.getModel() == null
@@ -271,14 +278,14 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   /** No capture, fallback, memory advisors, observations or tool callbacks for private evidence. */
   public synchronized ChatModel privateSecretaryModel(String expectedFingerprint) {
-    var descriptor = privateSecretaryDescriptor();
+    var server = featureSettings.apply("secretary-reply");
+    var descriptor = privateSecretaryDescriptor(server);
     if (descriptor == null || !descriptor.fingerprint().equals(expectedFingerprint))
       throw new IllegalStateException("Private model configuration changed or unavailable");
     if (privateSecretaryModels.containsKey(expectedFingerprint))
       return privateSecretaryModels.get(expectedFingerprint);
     if (!privateSecretaryModels.isEmpty())
       throw new IllegalStateException("Private model changes require restarting the application");
-    var server = properties.feature("secretary-reply");
     var options =
         chatOptionsBuilder(server, server.getModel())
             .maxRetries(0)
@@ -314,7 +321,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         .httpClientBuilderCustomizer(
             builder ->
                 builder
-                    .interceptor(new ChatStreamTimeoutInterceptor(properties.getReadTimeout()))
+                    .interceptor(new ChatStreamTimeoutInterceptor(readTimeout.get()))
                     .interceptor(new ShowUiSdkRequestInterceptor()))
         .observationRegistry(ObservationRegistry.NOOP)
         .build();
@@ -337,11 +344,11 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   /** 用途に応じたモデル利用で用いるチャット選択可能な設定組み立てを返す。 */
   private OpenAiChatOptions.Builder chatOptionsBuilder(String feature, String defaultModel) {
     if (LlmFeature.VOICE_CORRECTION.equals(feature)) {
-      var correction = properties.feature(feature);
+      var correction = featureSettings.apply(feature);
       var connection =
           correction != null && correction.hasCustomServer()
               ? correction
-              : properties.feature(LlmFeature.CHAT);
+              : featureSettings.apply(LlmFeature.CHAT);
       var options =
           connection != null && connection.hasCustomServer()
               ? chatOptionsBuilder(connection, modelForServer(connection))
@@ -357,8 +364,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         options.temperature(correction.getTemperature());
       return options;
     }
-    LlmProperties.Server server = properties.feature(feature);
-    OpenAiChatOptions.Builder options = chatOptionsBuilder(server, model(feature, defaultModel));
+    LlmProperties.Server server = featureSettings.apply(feature);
+    OpenAiChatOptions.Builder options = chatOptionsBuilder(server, model(server, defaultModel));
     // AI 2 uses a request's options as-is, rather than merging them with model defaults.
     if ((server == null || !server.hasCustomServer())
         && defaultChatModel != null
@@ -381,7 +388,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   private Integer maxOutputTokens(LlmProperties.Server server) {
     return server != null && server.getMaxOutputTokens() != null
         ? server.getMaxOutputTokens()
-        : properties.getMaxOutputTokens();
+        : defaultOutputTokens.getAsInt();
   }
 
   /** 用途に応じたモデル利用で用いるチャット選択可能な設定組み立てを返す。 */

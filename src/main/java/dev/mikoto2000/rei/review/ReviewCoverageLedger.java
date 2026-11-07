@@ -192,6 +192,73 @@ public final class ReviewCoverageLedger {
           dev.mikoto2000.rei.durable.DurableTaskStore.Scope, String, String>
       taskGoalResolver = (scope, run) -> null;
 
+  /** Bind legacy review queries and transitions to one participant scope. */
+  public OwnedReview forScope(Scope scope) {
+    return new OwnedReview(scope);
+  }
+
+  public final class OwnedReview {
+    private final Scope scope;
+
+    private OwnedReview(Scope scope) {
+      this.scope = scope;
+    }
+
+    public Job create(String criteria, String version, List<Target> targets) {
+      return ReviewCoverageLedger.this.create(scope, criteria, version, targets);
+    }
+
+    public Job get(String id) {
+      return ReviewCoverageLedger.this.get(id, scope);
+    }
+
+    public List<String> jobs() {
+      return ReviewCoverageLedger.this.jobs(scope);
+    }
+
+    public Job rebuild(String id, List<Target> targets) {
+      return ReviewCoverageLedger.this.rebuild(id, scope, targets);
+    }
+
+    public Job invalidate(String id, String path, String version) {
+      return ReviewCoverageLedger.this.invalidate(id, scope, path, version);
+    }
+
+    public Job fetched(String id, Range range) {
+      return ReviewCoverageLedger.this.fetched(id, scope, range);
+    }
+
+    public Job fetchedBatch(String id, List<Range> ranges) {
+      return ReviewCoverageLedger.this.fetchedBatch(id, scope, ranges);
+    }
+
+    public Job delivered(String id, List<Range> ranges) {
+      return ReviewCoverageLedger.this.delivered(id, scope, ranges);
+    }
+
+    public Job reviewed(String id, Range range, String assessment, List<Finding> findings) {
+      return ReviewCoverageLedger.this.reviewed(id, scope, range, assessment, findings);
+    }
+
+    public Job reviewedBatch(String id, List<Assessment> assessments) {
+      return ReviewCoverageLedger.this.reviewedBatch(id, scope, assessments);
+    }
+
+    public FindingTransition dismissFindingTransition(
+        String id, String findingId, String path, String evidence, String reason) {
+      return ReviewCoverageLedger.this.dismissFindingTransition(
+          id, scope, findingId, path, evidence, reason);
+    }
+
+    public Job stop(String id, boolean cancelled) {
+      return ReviewCoverageLedger.this.stop(id, scope, cancelled);
+    }
+
+    public Job grant(String id, Scope child) {
+      return ReviewCoverageLedger.this.grant(id, scope, child);
+    }
+  }
+
   /** Startup-only host association; no model-supplied Goal identity is trusted. */
   public void setTaskGoalResolver(
       java.util.function.BiFunction<

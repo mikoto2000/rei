@@ -36,8 +36,6 @@ import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentProperties;
 import dev.mikoto2000.rei.websearch.WebSearchProperties;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -240,17 +238,16 @@ public class AiConfiguration {
   private ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> subAgentTools;
 
   /** 補助エージェント設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Passes the shared subagent configuration to the application's model wiring.")
-  private dev.mikoto2000.rei.subagent.SubAgentProperties subAgentProperties =
-      new dev.mikoto2000.rei.subagent.SubAgentProperties();
+  private java.util.function.Supplier<java.util.List<String>> parentToolNames =
+      () ->
+          dev.mikoto2000.rei.subagent.SubAgentParentToolCatalog.names(
+              new dev.mikoto2000.rei.subagent.SubAgentProperties());
 
   /** 機能の組み立てで使用する補助エージェント設定を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setSubAgentProperties(dev.mikoto2000.rei.subagent.SubAgentProperties settings) {
-    this.subAgentProperties = settings;
+    this.parentToolNames =
+        () -> dev.mikoto2000.rei.subagent.SubAgentParentToolCatalog.names(settings);
   }
 
   /** 機能の組み立てで使用する補助エージェントツール一覧を設定する。 */
@@ -478,8 +475,7 @@ public class AiConfiguration {
     if (dotTools != null && dotTools.getIfAvailable() != null)
       builder.defaultTools(java.util.Arrays.asList(dotTools.getObject().callbacks()));
     if (subAgentTools != null)
-      for (String name :
-          dev.mikoto2000.rei.subagent.SubAgentParentToolCatalog.names(subAgentProperties))
+      for (String name : parentToolNames.get())
         builder.defaultTools(
             new dev.mikoto2000.rei.subagent.LazyDelegationCallback(subAgentTools, name));
     if (computerUseTools != null) {

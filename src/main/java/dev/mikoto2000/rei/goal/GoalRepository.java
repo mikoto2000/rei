@@ -1191,7 +1191,8 @@ public class GoalRepository {
 
   static dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation chatReservation(
       ChatBudget budget) {
-    return (dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation) budget.reservation.get();
+    return (dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation)
+        budget.reservation.get();
   }
 
   /** Connect the durable owner to the already shared model budget. */

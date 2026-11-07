@@ -9,8 +9,6 @@ import dev.mikoto2000.rei.memory.model.MemoryCandidate;
 import dev.mikoto2000.rei.memory.model.MemoryScope;
 import dev.mikoto2000.rei.memory.model.MemoryType;
 import dev.mikoto2000.rei.memory.service.MemoryRepository;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HexFormat;
@@ -43,12 +41,19 @@ public class VerifiedReflectionMemoryService {
   private final GoalReflectionRepository reflections;
 
   /** 記憶一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the common repository for persisted memory and its transaction boundaries.")
-  private final MemoryRepository memories;
+  private final java.util.function.BiFunction<String, String, java.util.Optional<Promotion>>
+      previousPromotion;
+
+  private final java.util.function.BiFunction<MemoryCandidate, Verification, Promotion>
+      persistPromotion;
+
+  private record Verification(
+      String project,
+      String session,
+      String reflection,
+      String goal,
+      String digest,
+      Instant verifiedAt) {}
 
   /** 確認の窓口。 */
   private final Function<GoalRepository.Goal, FileGoalVerifier.Verification> verifyGoal;
@@ -73,7 +78,28 @@ public class VerifiedReflectionMemoryService {
       Clock clock) {
     this.goals = goals;
     this.reflections = reflections;
-    this.memories = memories;
+    this.previousPromotion =
+        (project, reflection) ->
+            memories
+                .verifiedReflectionProof(project, reflection)
+                .map(proof -> new Promotion(memories.find(proof.memoryId()).orElseThrow(), proof));
+    this.persistPromotion =
+        (candidate, verification) -> {
+          var memory =
+              memories.insertVerifiedReflection(
+                  candidate,
+                  verification.project(),
+                  verification.session(),
+                  verification.reflection(),
+                  verification.goal(),
+                  verification.digest(),
+                  verification.verifiedAt());
+          return new Promotion(
+              memory,
+              memories
+                  .verifiedReflectionProof(verification.project(), verification.reflection())
+                  .orElseThrow());
+        };
     this.verifyGoal = goal -> verifier.verify(goal);
     this.owner = owner;
     this.properties = properties;
@@ -102,9 +128,8 @@ public class VerifiedReflectionMemoryService {
         || !reflections.matchesCriteria(reflection, goal))
       throw new IllegalArgumentException(
           "Only matching completed and independently verified Goal reflections can be promoted");
-    var previous = memories.verifiedReflectionProof(project, reflectionId);
-    if (previous.isPresent())
-      return new Promotion(memories.find(previous.get().memoryId()).orElseThrow(), previous.get());
+    var previous = previousPromotion.apply(project, reflectionId);
+    if (previous.isPresent()) return previous.get();
     var verification = verifyGoal.apply(goal);
     if (!verification.satisfied())
       throw new IllegalStateException("Independent verification failed: " + verification.reason());
@@ -150,16 +175,9 @@ public class VerifiedReflectionMemoryService {
             .7,
             List.of(reflection.id()),
             List.of("verified-goal-observation", "historical-fact"));
-    var memory =
-        memories.insertVerifiedReflection(
-            candidate,
-            project,
-            reflection.sessionId(),
-            reflection.id(),
-            goal.id(),
-            digest,
-            verifiedAt);
-    return new Promotion(
-        memory, memories.verifiedReflectionProof(project, reflectionId).orElseThrow());
+    return persistPromotion.apply(
+        candidate,
+        new Verification(
+            project, reflection.sessionId(), reflection.id(), goal.id(), digest, verifiedAt));
   }
 }

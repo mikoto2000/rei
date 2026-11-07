@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.core;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -207,11 +205,13 @@ public final class TextDocumentChangeSetService {
   private final Clock clock;
 
   /** moveに関する値。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured filesystem move callback when applying a document transaction.")
-  private final TextDocumentTransaction.Move move;
+  private final ApplyTransaction applyTransaction;
+
+  @FunctionalInterface
+  private interface ApplyTransaction {
+    TextDocumentTransaction.Outcome apply(
+        Path root, String id, List<TextDocumentTransaction.Change> changes) throws IOException;
+  }
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final com.fasterxml.jackson.databind.ObjectMapper json =
@@ -240,7 +240,10 @@ public final class TextDocumentChangeSetService {
     this.repository = repository;
     db = repository.documentsDb();
     this.clock = clock;
-    this.move = move;
+    this.applyTransaction =
+        (root, id, changes) ->
+            TextDocumentTransaction.apply(
+                root, id, changes, (phase, stages) -> journal(id, phase, stages), move);
   }
 
   /** 後続の判断で選べる候補を用意するため、テキスト文書変更集合サービスを提案する。 */
@@ -415,9 +418,7 @@ public final class TextDocumentChangeSetService {
               .update();
       if (claim != 1)
         throw new IllegalStateException("Document or single-file apply requires inspection");
-      var outcome =
-          TextDocumentTransaction.apply(
-              root, id, row.saved().changes(), (phase, stages) -> journal(id, phase, stages), move);
+      var outcome = applyTransaction.apply(root, id, row.saved().changes());
       finish(row, "APPLYING", outcome.status(), outcome.warnings());
       if (outcome.status().equals("APPLIED")) {
         cleanupTerminal(row);

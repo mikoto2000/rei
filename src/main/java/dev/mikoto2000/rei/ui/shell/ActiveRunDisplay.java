@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.ui.shell;
 import dev.mikoto2000.rei.core.chat.ActiveRun;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.project.ProjectService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
@@ -14,12 +12,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class ActiveRunDisplay {
   /** 実行一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared input router so all operations use the same queue and active runs.")
-  private final ConversationInputRouter runs;
+  private final java.util.function.Supplier<List<dev.mikoto2000.rei.core.execution.ActiveExecution>>
+      activeExecutions;
+
+  private final java.util.function.Function<String, String> cancellationStatus;
 
   /** プロジェクト一覧。 */
   private final java.util.function.Supplier<String> currentProjectName;
@@ -48,7 +44,7 @@ public class ActiveRunDisplay {
   /** 各 Run の工程を全て表示する。完了済みの過去 Run は入力欄に残さない。 */
   public List<String> progressRows() {
     var rows = new java.util.ArrayList<String>();
-    for (var run : runs.activeExecutions()) {
+    for (var run : activeExecutions.get()) {
       if (run.type() != dev.mikoto2000.rei.core.execution.ExecutionType.AGENT) continue;
       var state = progress.apply(run.id());
       String identity = projectName(run.projectId()) + " / Run " + run.id();
@@ -89,7 +85,8 @@ public class ActiveRunDisplay {
 
   /** 指定された値や利用先を使って、ActiveRunDisplayを初期化する。 */
   public ActiveRunDisplay(ConversationInputRouter runs, ProjectService projects, Clock clock) {
-    this.runs = runs;
+    this.activeExecutions = () -> runs.activeExecutions();
+    this.cancellationStatus = id -> runs.cancellationDiagnostic(id).status();
     this.currentProjectName = () -> projects.currentContext().name();
     this.projectNameById =
         id -> {
@@ -109,13 +106,13 @@ public class ActiveRunDisplay {
     return "["
         + ActiveRun.summary(currentProjectName.get())
         + "] ["
-        + runs.activeExecutions().size()
+        + activeExecutions.get().size()
         + " running]";
   }
 
   /** ターミナルでの対話で用いる要約を返す。 */
   public String summary() {
-    return "Active runs: " + runs.activeExecutions().size() + " (/runs for details)";
+    return "Active runs: " + activeExecutions.get().size() + " (/runs for details)";
   }
 
   /** ターミナルでの対話で用いるプロジェクト名前を返す。 */
@@ -126,13 +123,13 @@ public class ActiveRunDisplay {
   /** 通常状態を維持しつつ、Agent の停止進行状況を同じ台帳から読む。 */
   private String status(dev.mikoto2000.rei.core.execution.ActiveExecution run) {
     if (run.type() != dev.mikoto2000.rei.core.execution.ExecutionType.AGENT) return run.status();
-    var diagnostic = runs.cancellationDiagnostic(run.id());
-    return diagnostic.status().equals("NOT_FOUND") ? run.status() : diagnostic.status();
+    String status = cancellationStatus.apply(run.id());
+    return status.equals("NOT_FOUND") ? run.status() : status;
   }
 
   /** ターミナルでの対話で用いる行一覧を返す。 */
   public List<String> rows() {
-    return runs.activeExecutions().stream()
+    return activeExecutions.get().stream()
         .map(
             run -> {
               long seconds =
