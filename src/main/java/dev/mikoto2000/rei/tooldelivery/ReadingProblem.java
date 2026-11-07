@@ -2,6 +2,20 @@ package dev.mikoto2000.rei.tooldelivery;
 
 /** Stable failure category and actionable recovery without exposing stored cursor bodies. */
 public record ReadingProblem(String code, String message, String recovery) {
+  private static final String PROJECT_PATH_EXCLUDED = "PROJECT_PATH_EXCLUDED";
+
+  public static ReadingProblem projectPathExcluded() {
+    return new ReadingProblem(
+        PROJECT_PATH_EXCLUDED,
+        "Excluded or outside Project path.",
+        "Retry with an allowed Project-relative path (use '.' for the root).");
+  }
+
+  public static String excludedPathMessage() {
+    var problem = projectPathExcluded();
+    return problem.code() + ": " + problem.message() + " " + problem.recovery();
+  }
+
   public static final class Failure extends IllegalArgumentException {
     private static final long serialVersionUID = 1L;
     public final String code;
@@ -18,6 +32,7 @@ public record ReadingProblem(String code, String message, String recovery) {
 
   public static ReadingProblem fromMessage(String message) {
     String text = java.util.Objects.toString(message, "Read failed");
+    if (text.startsWith(PROJECT_PATH_EXCLUDED + ":")) return projectPathExcluded();
     String code = "READ_FAILED";
     for (String candidate :
         java.util.List.of(
@@ -66,6 +81,7 @@ public record ReadingProblem(String code, String message, String recovery) {
                         : error instanceof IllegalArgumentException
                             ? "INVALID_ARGUMENT"
                             : fromMessage(error.getMessage()).code();
+    if (PROJECT_PATH_EXCLUDED.equals(code)) return projectPathExcluded();
     return new ReadingProblem(
         code,
         error.getMessage(),

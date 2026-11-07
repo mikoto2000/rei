@@ -2184,17 +2184,21 @@ public class Tools {
       if (dev.mikoto2000.rei.core.chat.AgentRunScope.current() != null)
         tokenLimit = Math.min(tokenLimit, fileDeliveryLimits.get().targetTokens());
       List<String> preferred = new ArrayList<>();
+      LinkedHashMap<String, String> fileErrors = new LinkedHashMap<>();
       if (request.preferredPaths() != null) {
         if (request.preferredPaths().size() > 20)
           throw new IllegalArgumentException("At most 20 preferred paths");
         var root = workingDirectory.toAbsolutePath().normalize();
-        for (String value : request.preferredPaths()) {
+        for (int i = 0; i < request.preferredPaths().size(); i++) {
+          String value = request.preferredPaths().get(i);
           if (value == null || value.length() > 1024)
             throw new IllegalArgumentException("Preferred path limit exceeded");
           var path = root.resolve(value).normalize();
-          if (!path.startsWith(root) || RepositoryMapService.sensitive(root.relativize(path)))
-            throw new IllegalArgumentException("Outside/excluded preferred path");
-          preferred.add(root.relativize(path).toString().replace('\\', '/'));
+          if (!path.startsWith(root) || RepositoryMapService.sensitive(root.relativize(path))) {
+            fileErrors.put("(preferred path " + i + ")", ReadingProblem.excludedPathMessage());
+          } else {
+            preferred.add(root.relativize(path).toString().replace('\\', '/'));
+          }
         }
       }
       int effectiveContextLines =
@@ -2221,7 +2225,6 @@ public class Tools {
         // 2. ファイルごとにヒットをまとめる（重複排除、queryIndex と line を保持）
         LinkedHashMap<String, List<SearchMatch>> fileMatches = new LinkedHashMap<>();
         LinkedHashMap<String, String> fileCharsets = new LinkedHashMap<>();
-        LinkedHashMap<String, String> fileErrors = new LinkedHashMap<>();
         for (GrepQueryResult queryResult : queryResults) {
           if (queryResult.error() != null) {
             fileErrors.put("(query " + queryResult.queryIndex() + ")", queryResult.error());
@@ -3063,6 +3066,10 @@ public class Tools {
           totalLines += result.content().size();
           results.add(result);
         } catch (IllegalArgumentException | IOException e) {
+          String error =
+              e instanceof FileSnapshots.ExcludedInventoryPathException
+                  ? e.getMessage()
+                  : ReadingProblem.from(e).code() + ": " + e.getMessage();
           results.add(
               new ReadFileResult(
                   request.path(),
@@ -3070,7 +3077,7 @@ public class Tools {
                   null,
                   List.of(),
                   false,
-                  ReadingProblem.from(e).code() + ": " + e.getMessage()));
+                  error));
         } finally {
           budget.reserve(byteBudget - fileBudget.remaining());
         }

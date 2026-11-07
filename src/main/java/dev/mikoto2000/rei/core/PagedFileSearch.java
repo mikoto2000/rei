@@ -55,9 +55,18 @@ final class PagedFileSearch {
       String resultCursor,
       String scanCursor,
       Progress progress,
-      ReadingProblem error) {
+      ReadingProblem error,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          ExcludedQueries excludedQueries) {
     public Page {
       files = List.copyOf(files);
+    }
+  }
+
+  public record ExcludedQueries(List<Integer> queryIndexes, ReadingProblem problem) {
+    public ExcludedQueries {
+      queryIndexes = List.copyOf(queryIndexes);
     }
   }
 
@@ -73,6 +82,9 @@ final class PagedFileSearch {
 
   public static final class State {
     public Request request;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private final List<Integer> excludedQueryIndexes = new ArrayList<>();
 
     @com.fasterxml.jackson.annotation.JsonProperty(
         access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
@@ -118,7 +130,7 @@ final class PagedFileSearch {
       State state;
       List<Prepared> prepared;
       if (input.cursor() == null) {
-        validate(input, root);
+        validate(input);
         state = new State();
         state.request =
             new Request(
@@ -129,7 +141,9 @@ final class PagedFileSearch {
                 null,
                 null,
                 null);
-        prepared = prepare(state.request.queries(), root);
+        prepared = prepare(state, root);
+        if (prepared.isEmpty())
+          return paused(state, List.of(), "FAILED", ReadingProblem.projectPathExcluded());
         state.inventory = inventory(prepared, root);
       } else {
         if (!input.cursor().matches("(?:RESULT|SCAN):[0-9a-f-]{36}"))
@@ -140,7 +154,7 @@ final class PagedFileSearch {
               store.load(owner, "search_inventory", state.inventoryId, Manifest.class).files();
         if (input.queries() != null && !input.queries().equals(state.request.queries()))
           throw ReadingProblem.fail("INVALID_CURSOR");
-        prepared = prepare(state.request.queries(), root);
+        prepared = prepare(state, root);
         ReadingMetrics.add("continuations", 1);
         long verificationStarted = System.nanoTime();
         verifyInventory(realRoot, state.inventory);
@@ -300,7 +314,7 @@ final class PagedFileSearch {
         failure = cause;
       Tools.checkReadingCancellation(failure);
       return new Page(
-          List.of(), null, null, new Progress(0, 0, 0, "FAILED"), ReadingProblem.from(failure));
+          List.of(), null, null, new Progress(0, 0, 0, "FAILED"), ReadingProblem.from(failure), null);
     }
   }
 
@@ -311,15 +325,14 @@ final class PagedFileSearch {
       String path,
       List<Prepared> prepared) {
     var result = new ArrayList<Tools.SearchMatch>();
-    for (int q = 0; q < prepared.size(); q++) {
-      var query = prepared.get(q);
+    for (var query : prepared) {
       if (!applies(query, path, root)) continue;
       var pattern = query.pattern();
       for (var section : sections)
         for (int line = section.startLine(); line <= section.endLine(); line++)
           if (BoundedRegex.find(pattern, lines.get(line - 1))
               != Boolean.TRUE.equals(query.query().invertMatch()))
-            result.add(new Tools.SearchMatch(q, line, ""));
+            result.add(new Tools.SearchMatch(query.queryIndex(), line, ""));
     }
     return List.copyOf(result);
   }
@@ -374,7 +387,11 @@ final class PagedFileSearch {
                     state.inventory.size(),
                     reason,
                     scanId),
-                error));
+                error,
+                state.excludedQueryIndexes.isEmpty()
+                    ? null
+                    : new ExcludedQueries(
+                        state.excludedQueryIndexes, ReadingProblem.projectPathExcluded())));
     ReadingMetrics.wire(page);
     return page;
   }
@@ -395,6 +412,7 @@ final class PagedFileSearch {
   }
 
   private record Prepared(
+      int queryIndex,
       Tools.GrepQuery query,
       Path base,
       boolean file,
@@ -402,12 +420,21 @@ final class PagedFileSearch {
       SearchGlob exclude,
       java.util.regex.Pattern pattern) {}
 
-  private List<Prepared> prepare(List<Tools.GrepQuery> queries, Path root) throws IOException {
+  private List<Prepared> prepare(State state, Path root) throws IOException {
     var prepared = new ArrayList<Prepared>();
-    for (var query : queries) {
-      Path base = FileSnapshots.resolveInventoryPath(root, Path.of(query.baseDir()));
+    var queries = state.request.queries();
+    for (int i = 0; i < queries.size(); i++) {
+      var query = queries.get(i);
+      Path base;
+      try {
+        base = FileSnapshots.resolveInventoryPath(root, Path.of(query.baseDir()));
+      } catch (FileSnapshots.ExcludedInventoryPathException excluded) {
+        state.excludedQueryIndexes.add(i);
+        continue;
+      }
       prepared.add(
           new Prepared(
+              i,
               query,
               base,
               Files.isRegularFile(base),
@@ -570,7 +597,7 @@ final class PagedFileSearch {
         Objects.toString(attrs.fileKey(), ""));
   }
 
-  private void validate(Request input, Path root) throws IOException {
+  private void validate(Request input) {
     if (input.queries() == null || input.queries().isEmpty() || input.queries().size() > 20)
       throw ReadingProblem.fail("INVALID_ARGUMENT");
     String charset = input.queries().getFirst().charset();
@@ -582,7 +609,6 @@ final class PagedFileSearch {
           || query.baseDir() == null
           || !Objects.equals(charset, query.charset()))
         throw ReadingProblem.fail("INVALID_ARGUMENT");
-      FileSnapshots.resolveInventoryPath(root, Path.of(query.baseDir()));
     }
   }
 

@@ -50,6 +50,68 @@ class ReadingSecurityTest {
     assertEquals("FILE_NOT_FOUND", result.problem().code());
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {".env", "../outside.txt"})
+  void excludedFileHasRecoveryAlongsideSuccessfulRead(String excluded) throws Exception {
+    Files.writeString(root.resolve("allowed.txt"), "allowed content\n");
+    var results =
+        new Tools()
+            .readMultiFile(
+                List.of(
+                    new Tools.ReadFileRequest(excluded, 1, 1),
+                    new Tools.ReadFileRequest("allowed.txt", 1, 1)),
+                root);
+
+    assertEquals(2, results.size());
+    var rejected = results.getFirst();
+    assertEquals(excluded, rejected.path());
+    assertEquals(List.of(), rejected.content());
+    assertEquals("PROJECT_PATH_EXCLUDED", rejected.problem().code());
+    assertTrue(rejected.problem().recovery().contains("Retry with an allowed Project-relative path"));
+    assertTrue(rejected.error().contains(rejected.problem().recovery()));
+    assertEquals(List.of("allowed content"), results.getLast().content());
+  }
+
+  @Test
+  void excludedSearchInputsKeepResultsFromOtherQueries() throws Exception {
+    Files.writeString(root.resolve("allowed.txt"), "needle\n");
+    var tools =
+        new Tools() {
+          @Override
+          List<String> gitLsFiles(List<String> specs, Path directory) {
+            return List.of("allowed.txt");
+          }
+        };
+    var queries =
+        List.of(
+            new Tools.GrepQuery("needle", ".env", false, true, false, false, 0, 0, null, true, null, null),
+            new Tools.GrepQuery("needle", ".", false, true, false, false, 0, 0, null, true, null, null));
+
+    var grep = tools.grepMultiQuery(queries, root);
+    assertEquals(2, grep.size());
+    assertEquals(0, grep.getFirst().queryIndex());
+    assertTrue(grep.getFirst().error().startsWith("PROJECT_PATH_EXCLUDED:"));
+    assertTrue(grep.getFirst().error().contains("Retry with an allowed Project-relative path"));
+    assertEquals("allowed.txt", grep.getLast().matches().getFirst().path());
+
+    var search =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                queries, 0, 2, null, null, null, List.of("../outside.txt", "allowed.txt")),
+            root);
+    assertEquals(3, search.size());
+    assertEquals("allowed.txt", search.getFirst().path());
+    assertEquals(1, search.getFirst().matches().getFirst().queryIndex());
+    assertEquals(List.of("needle"), search.getFirst().sections().getFirst().content());
+    assertEquals(
+        List.of("(preferred path 0)", "(query 0)"),
+        search.subList(1, 3).stream().map(Tools.SearchAndReadResult::path).toList());
+    for (var rejected : search.subList(1, 3)) {
+      assertTrue(rejected.error().startsWith("PROJECT_PATH_EXCLUDED:"));
+      assertTrue(rejected.error().contains("Retry with an allowed Project-relative path"));
+    }
+  }
+
   @Test
   void scanCoverageAdvancesWithoutRewardingReplaysOrRegressionsAcrossRestart() throws Exception {
     var evaluator = new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(root);
