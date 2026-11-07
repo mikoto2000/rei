@@ -11,6 +11,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.List;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -50,11 +51,7 @@ public class BlueskyReplyTextGenerator {
   private final LlmChatClientProvider chatClientProvider;
 
   /** モデル保持先サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the model selection shared by commands and the API.")
-  private final ModelHolderService modelHolderService;
+  private final Supplier<String> readSelectedModel;
 
   /** モデル提供元。 */
   @SuppressFBWarnings(
@@ -88,7 +85,7 @@ public class BlueskyReplyTextGenerator {
       LlmModelProvider modelProvider,
       BlueskyProperties properties) {
     this.chatClientProvider = chatClientProvider;
-    this.modelHolderService = modelHolderService;
+    this.readSelectedModel = () -> modelHolderService.get();
     this.modelProvider = modelProvider;
     this.properties = properties;
   }
@@ -212,7 +209,7 @@ public class BlueskyReplyTextGenerator {
   private OpenAiChatOptions replyOptions() {
     var options =
         modelProvider
-            .chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get())
+            .chatOptions(LlmFeature.BLUESKY_REPLY, readSelectedModel.get())
             .mutate()
             .toolChoice("none")
             .toolCallbacks(List.of())

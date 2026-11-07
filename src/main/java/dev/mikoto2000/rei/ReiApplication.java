@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 import org.jline.keymap.KeyMap;
 import org.jline.reader.Completer;
 import org.jline.reader.EndOfFileException;
@@ -87,11 +88,7 @@ public class ReiApplication {
   private final CommandLine.IFactory factory;
 
   /** 現在モデル保持先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the model selection shared by commands and the API.")
-  private final ModelHolderService currentModelHolder;
+  private final Supplier<String> readSelectedModel;
 
   /** escキャンセル排他制御。 */
   private final EscCancellationMonitor escCancellationMonitor;
@@ -186,7 +183,7 @@ public class ReiApplication {
       Environment environment) {
     this.rootCommand = rootCommand;
     this.factory = factory;
-    this.currentModelHolder = currentModelHolder;
+    this.readSelectedModel = () -> currentModelHolder.get();
     this.escCancellationMonitor = escCancellationMonitor;
     this.commandCancellationService = commandCancellationService;
     this.commandCompletionNotificationPolicy = commandCompletionNotificationPolicy;
@@ -784,7 +781,7 @@ public class ReiApplication {
         + (activeRunDisplay == null ? "" : activeRunDisplay.promptStatus() + "\n")
         + now().format(PROMPT_TIME_FORMATTER)
         + " "
-        + currentModelHolder.get()
+        + readSelectedModel.get()
         + "> ";
   }
 

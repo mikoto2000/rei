@@ -7,6 +7,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,11 +25,7 @@ public class AiBriefingNarrator implements BriefingNarrator {
   private final LlmModelProvider modelProvider;
 
   /** モデル保持先サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the model selection shared by commands and the API.")
-  private final ModelHolderService modelHolderService;
+  private final Supplier<String> readSelectedModel;
 
   /** 日次情報の案内を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AiBriefingNarrator(ChatModel chatModel, ModelHolderService modelHolderService) {
@@ -39,7 +36,7 @@ public class AiBriefingNarrator implements BriefingNarrator {
   @Autowired
   public AiBriefingNarrator(LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
     this.modelProvider = modelProvider;
-    this.modelHolderService = modelHolderService;
+    this.readSelectedModel = () -> modelHolderService.get();
   }
 
   /** 日次情報の案内で用いるnarrateを返す。 */
@@ -48,7 +45,7 @@ public class AiBriefingNarrator implements BriefingNarrator {
     Prompt prompt =
         new Prompt(
             buildPrompt(context),
-            modelProvider.chatOptions(LlmFeature.BRIEFING, modelHolderService.get()));
+            modelProvider.chatOptions(LlmFeature.BRIEFING, readSelectedModel.get()));
 
     var response = modelProvider.chatModel(LlmFeature.BRIEFING).call(prompt);
     var generation = response == null ? null : response.getResult();

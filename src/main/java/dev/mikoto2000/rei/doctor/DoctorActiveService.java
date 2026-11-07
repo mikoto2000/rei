@@ -40,6 +40,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -108,11 +109,7 @@ public class DoctorActiveService {
   private final LlmModelProvider models;
 
   /** 選択中モデル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the model selection shared by commands and the API.")
-  private final ModelHolderService selectedModel;
+  private final Supplier<String> readSelectedModel;
 
   /** HTTP通信。 */
   private final Function<ConnectivityRequest, JavaHttpDependencyProbe.Connectivity> connectivityProbe;
@@ -192,7 +189,7 @@ public class DoctorActiveService {
     this.passive = passive;
     this.environment = environment;
     this.models = models;
-    this.selectedModel = selectedModel;
+    this.readSelectedModel = () -> selectedModel.get();
     this.connectivityProbe =
         request -> http.connectivity(request.endpoint(), request.timeout(), request.checkActive());
     this.codex = codex;
@@ -254,7 +251,7 @@ public class DoctorActiveService {
       String target =
           switch (check) {
             case CONNECTIVITY -> passive.endpoint();
-            case INFERENCE -> selectedModel.get();
+            case INFERENCE -> readSelectedModel.get();
             case CODEX -> codex.getCommand();
             case CLAUDE -> claude.getCommand();
             case MICROPHONE -> voice.getDeviceId();
