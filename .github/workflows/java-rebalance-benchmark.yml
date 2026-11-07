@@ -1,0 +1,153 @@
+name: Java regression rebalance benchmark
+on:
+  push:
+    branches: [codex/java-ci-rebalance-benchmark]
+permissions:
+  contents: read
+jobs:
+  current:
+    name: current Windows regression (${{ matrix.shard }})
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [A, B]
+    steps:
+      - name: Preserve repository LF fixtures
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Use canonical temporary paths
+        shell: pwsh
+        run: |
+          $testTemp = Join-Path $env:RUNNER_TEMP 'rei-junit'
+          New-Item -ItemType Directory -Force -Path $testTemp | Out-Null
+          "TMP=$testTemp" >> $env:GITHUB_ENV
+          "TEMP=$testTemp" >> $env:GITHUB_ENV
+      - name: Architecture budgets and guard effectiveness
+        if: matrix.shard == 'A'
+        run: ./mvnw.cmd -B "-Dtest=PackageArchitectureTest,ArchitectureGuardTest,ArchitectureSourceReportTest" "-Darchitecture.report=true" test
+      - name: Preserve architecture evidence
+        if: always() && matrix.shard == 'A'
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-architecture-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          path: target/architecture/**
+      - name: Separate architecture reports
+        if: matrix.shard == 'A'
+        run: Move-Item -LiteralPath target/surefire-reports -Destination target/architecture-surefire-reports
+      - name: Full regression with process deadline
+        run: ./.github/ci/full-test.ps1 -Shard ${{ matrix.shard }}
+      - name: Export testcase evidence
+        run: ./.github/ci/export-regression-tests.ps1
+      - name: Upload testcase evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-regression-${{ matrix.shard }}
+          path: target/regression-tests/*.xml
+          retention-days: 7
+          if-no-files-found: error
+          overwrite: true
+  current-test:
+    runs-on: ubuntu-latest
+    needs: current
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: Require successful Windows regressions
+        if: needs.current.result != 'success'
+        run: exit 1
+      - uses: actions/checkout@v4
+      - name: Test report and partition checks
+        shell: pwsh
+        run: |
+          ./scripts/test-test-performance-report.ps1
+          ./scripts/test-check-test-partition.ps1
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: current-regression-*
+          path: target/shard-reports
+      - name: Verify regression coverage and expected skips
+        shell: pwsh
+        run: >
+          ./scripts/check-test-partition.ps1 -ShardA target/shard-reports/current-regression-A
+          -ShardB target/shard-reports/current-regression-B -ShardList .github/ci/java-shard-a.txt
+  rebalanced:
+    name: rebalanced Windows regression (${{ matrix.shard }})
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [A, B]
+    steps:
+      - name: Preserve repository LF fixtures
+        run: git config --global core.autocrlf false
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Use canonical temporary paths
+        shell: pwsh
+        run: |
+          $testTemp = Join-Path $env:RUNNER_TEMP 'rei-junit'
+          New-Item -ItemType Directory -Force -Path $testTemp | Out-Null
+          "TMP=$testTemp" >> $env:GITHUB_ENV
+          "TEMP=$testTemp" >> $env:GITHUB_ENV
+      - name: Architecture budgets and guard effectiveness
+        if: matrix.shard == 'A'
+        run: ./mvnw.cmd -B "-Dtest=PackageArchitectureTest,ArchitectureGuardTest,ArchitectureSourceReportTest" "-Darchitecture.report=true" test
+      - name: Preserve architecture evidence
+        if: always() && matrix.shard == 'A'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebalanced-architecture-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          path: target/architecture/**
+      - name: Separate architecture reports
+        if: matrix.shard == 'A'
+        run: Move-Item -LiteralPath target/surefire-reports -Destination target/architecture-surefire-reports
+      - name: Full regression with process deadline
+        run: ./.github/ci/full-test.ps1 -Shard ${{ matrix.shard }} -Rebalanced
+      - name: Export testcase evidence
+        run: ./.github/ci/export-regression-tests.ps1
+      - name: Upload testcase evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rebalanced-regression-${{ matrix.shard }}
+          path: target/regression-tests/*.xml
+          retention-days: 7
+          if-no-files-found: error
+          overwrite: true
+  rebalanced-test:
+    runs-on: ubuntu-latest
+    needs: rebalanced
+    if: always()
+    timeout-minutes: 5
+    steps:
+      - name: Require successful Windows regressions
+        if: needs.rebalanced.result != 'success'
+        run: exit 1
+      - uses: actions/checkout@v4
+      - name: Test report and partition checks
+        shell: pwsh
+        run: |
+          ./scripts/test-test-performance-report.ps1
+          ./scripts/test-check-test-partition.ps1
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: rebalanced-regression-*
+          path: target/shard-reports
+      - name: Verify regression coverage and expected skips
+        shell: pwsh
+        run: >
+          ./scripts/check-test-partition.ps1 -ShardA target/shard-reports/rebalanced-regression-A
+          -ShardB target/shard-reports/rebalanced-regression-B -ShardList .github/ci/java-rebalanced-shard-a.txt

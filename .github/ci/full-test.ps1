@@ -1,4 +1,4 @@
-param([ValidateRange(1, 1800)][int]$TimeoutSeconds = 1200, [ValidateSet("A", "B")][string]$Shard)
+param([ValidateRange(1, 1800)][int]$TimeoutSeconds = 1200, [ValidateSet("A", "B")][string]$Shard, [switch]$Rebalanced)
 
 $ErrorActionPreference = 'Stop'
 $repository = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -8,9 +8,10 @@ $stdout = Join-Path $artifacts 'ci-full.stdout.log'
 $stderr = Join-Path $artifacts 'ci-full.stderr.log'
 $wrapper = Join-Path $repository 'mvnw.cmd'
 # An explicit excludes file replaces Surefire's default nested-class exclusion.
+$shardList = if ($Rebalanced) { '.github/ci/java-rebalanced-shard-a.txt' } else { '.github/ci/java-shard-a.txt' }
 $selection = switch ($Shard) {
-    'A' { ' "-Dsurefire.includesFile=.github/ci/java-shard-a.txt"' }
-    'B' { ' "-Dsurefire.excludes=**/*$*" "-Dsurefire.excludesFile=.github/ci/java-shard-a.txt"' }
+    'A' { ' "-Dsurefire.includesFile=' + $shardList + '"' }
+    'B' { ' "-Dsurefire.excludes=**/*$*" "-Dsurefire.excludesFile=' + $shardList + '"' }
     default { '' }
 }
 $commandText = '"' + $wrapper + '" -B -Pfull "-Djava.io.tmpdir=' + $env:TEMP + '"' + $selection + ' test'
