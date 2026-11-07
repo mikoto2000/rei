@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.slack;
 import dev.mikoto2000.rei.application.run.RunNotFoundException;
 import dev.mikoto2000.rei.application.run.RunRegistry;
 import dev.mikoto2000.rei.application.run.RunService;
+import dev.mikoto2000.rei.application.run.RunSnapshot;
 import dev.mikoto2000.rei.application.run.RunStatus;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
@@ -15,15 +16,20 @@ import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 
@@ -34,11 +40,11 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
  */
 public final class SlackAgentService implements RunContinuation {
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared Slack agent settings for admission and tool operations.")
-  private final SlackAgentProperties settings;
+  private final Supplier<List<String>> configuredAgentNames;
+
+  private final Function<String, SlackAgentProperties.Agent> configuredAgent;
+  private final Predicate<String> configuredBotUser;
+  private final BiPredicate<SlackMessage, String> receiveReply;
 
   /** 要求一覧。 */
   private final SlackAgentRepository requests;
@@ -51,21 +57,19 @@ public final class SlackAgentService implements RunContinuation {
   private final SlackAgentContinuationStore continuations;
 
   /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
-  private final RunRegistry registry;
+  private final Function<String, RunSnapshot> findRun;
+
+  private final Predicate<String> ownsExecution;
+  private final Predicate<String> waitForExternalAgent;
+  private final Predicate<AgentRunContext> claimWaiting;
 
   /** 実行一覧。 */
   private final RunService runs;
 
   /** 入力の振り分け。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared input router so all operations use the same queue and active runs.")
-  private final ConversationInputRouter router;
+  private final BiPredicate<String, String> containsRun;
+
+  private final BiConsumer<AgentRunContext, Runnable> enqueueResume;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -125,7 +129,7 @@ public final class SlackAgentService implements RunContinuation {
       throw new IllegalStateException(
           "Verified Slack connection required before external request admission");
     if (dependencies == null || requests.dependency(q.id()) != null) return;
-    var owner = registry.get(q.run()).context();
+    var owner = findRun.apply(q.run()).context();
     validate.accept(owner);
     // 別のプロジェクトの情報を、この作業の対象として扱わせない。
     if (!owner.projectId().equals(q.project())
@@ -147,10 +151,11 @@ public final class SlackAgentService implements RunContinuation {
   /** 要求された条件を満たすか判断するため、識別情報一覧を確認する。 */
   public void verifyIdentities(String self, String team, Function<String, String> botId) {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-    if (settings.getAgents().isEmpty() || settings.getAgents().size() > 16)
+    var names = configuredAgentNames.get();
+    if (names.isEmpty() || names.size() > 16)
       throw new IllegalArgumentException("Explicit external agents required");
-    for (String name : settings.getAgents().keySet()) {
-      var a = settings.agent(name);
+    for (String name : names) {
+      var a = configuredAgent.apply(name);
       if (!a.workspaceId().equals(team)
           || a.botUserId().equals(self)
           || !a.botId().equals(botId.apply(a.botUserId())))
@@ -167,12 +172,26 @@ public final class SlackAgentService implements RunContinuation {
       RunService runs,
       ConversationInputRouter router,
       Clock clock) {
-    this.settings = settings;
+    this.configuredAgentNames = () -> new ArrayList<>(settings.getAgents().keySet());
+    this.configuredAgent = name -> settings.agent(name);
+    this.configuredBotUser =
+        user ->
+            settings.getAgents() != null
+                && settings.getAgents().values().stream()
+                    .filter(Objects::nonNull)
+                    .anyMatch(agent -> user.equals(agent.botUserId()));
     this.requests = requests;
+    this.receiveReply = (message, botUser) -> requests.receive(message, botUser, settings);
     this.continuations = continuations;
-    this.registry = registry;
+    this.findRun = id -> registry.get(id);
+    this.ownsExecution = id -> registry.ownsExecution(id);
+    this.waitForExternalAgent = id -> registry.transition(id, RunStatus.WAITING, null);
+    this.claimWaiting = owner -> registry.claimWaiting(owner);
     this.runs = runs;
-    this.router = router;
+    this.containsRun = (project, run) -> router.containsRun(project, run);
+    this.enqueueResume =
+        (owner, operation) ->
+            router.submitOperation(owner, operation, work -> runs.execute(owner, work));
     this.clock = clock;
   }
 
@@ -215,8 +234,8 @@ public final class SlackAgentService implements RunContinuation {
   /** Slackとの連携に関する関連付けを処理する。 */
   public void attach(
       String self, String team, SlackTransport transport, boolean acceptingRequests) {
-    for (String name : settings.getAgents().keySet()) {
-      var a = settings.agent(name);
+    for (String name : configuredAgentNames.get()) {
+      var a = configuredAgent.apply(name);
       if (!a.workspaceId().equals(team) || a.botUserId().equals(self))
         throw new IllegalArgumentException("External agent identity outside this installation");
     }
@@ -253,10 +272,7 @@ public final class SlackAgentService implements RunContinuation {
   public boolean isBotSender(String user) {
     if (user == null) return false;
     if (user.equals(self)) return true;
-    return settings.getAgents() != null
-        && settings.getAgents().values().stream()
-            .filter(Objects::nonNull)
-            .anyMatch(agent -> user.equals(agent.botUserId()));
+    return configuredBotUser.test(user);
   }
 
   /** Slackとの連携において、受信に該当するか判定する。 */
@@ -264,7 +280,7 @@ public final class SlackAgentService implements RunContinuation {
     return message != null
         && transport != null
         && Objects.equals(team, message.team())
-        && requests.receive(message, self, settings);
+        && receiveReply.test(message, self);
   }
 
   /** 保存済みの記録から、利用する状態を復元する。 */
@@ -307,10 +323,10 @@ public final class SlackAgentService implements RunContinuation {
       return false;
     var owner = e.runContext();
     validate.accept(owner);
-    var current = registry.get(owner.runId());
+    var current = findRun.apply(owner.runId());
     if (!current.context().equals(owner)
         || current.status() != RunStatus.RUNNING
-        || !registry.ownsExecution(owner.runId()))
+        || !ownsExecution.test(owner.runId()))
       throw new IllegalStateException("External wait lost parent ownership");
     if (e.hasParentReservation() && !managed.containsKey(owner.runId()))
       throw new IllegalStateException("Managed parent continuation required to retain Goal budget");
@@ -320,7 +336,7 @@ public final class SlackAgentService implements RunContinuation {
         history,
         e.budgetSnapshot(),
         managed.containsKey(owner.runId()) || e.hasParentReservation());
-    if (!registry.transition(owner.runId(), RunStatus.WAITING, null)) {
+    if (!waitForExternalAgent.test(owner.runId())) {
       continuations.cancel(owner.runId());
       requests.cancelRun(owner.runId());
       throw new java.util.concurrent.CancellationException();
@@ -354,7 +370,7 @@ public final class SlackAgentService implements RunContinuation {
   public void onEvent(AgentEvent event) {
     if (event.type() == AgentEventType.AGENT_RUN_CANCELLED && event.runId() != null) {
       try {
-        var o = registry.get(event.runId()).context();
+        var o = findRun.apply(event.runId()).context();
         if (Objects.equals(event.projectId(), o.projectId())
             && Objects.equals(event.sessionId(), o.conversationId())) cancel(event.runId());
       } catch (RunNotFoundException ignored) {
@@ -385,7 +401,7 @@ public final class SlackAgentService implements RunContinuation {
         if (!attempted.add(channel)) continue;
         SlackAgentProperties.Agent a;
         try {
-          a = settings.agent(q.agent());
+          a = configuredAgent.apply(q.agent());
         } catch (IllegalArgumentException invalid) {
           requests.cancelRun(q.run());
           continue;
@@ -396,7 +412,7 @@ public final class SlackAgentService implements RunContinuation {
             || !a.botId().equals(q.bot())
             || !a.botUserId().equals(q.botUser())
             || a.botUserId().equals(self)) continue;
-        var parent = registry.get(q.run());
+        var parent = findRun.apply(q.run());
         if (!parent.context().projectId().equals(q.project())
             || !parent.context().conversationId().equals(q.session())
             || !parent.context().projectRoot().toString().equals(q.root())
@@ -404,9 +420,8 @@ public final class SlackAgentService implements RunContinuation {
           requests.cancelRun(q.run());
           continue;
         }
-        if (parent.status() == RunStatus.WAITING && !registry.claimWaiting(parent.context()))
-          continue;
-        if (!registry.ownsExecution(q.run())) continue;
+        if (parent.status() == RunStatus.WAITING && !claimWaiting.test(parent.context())) continue;
+        if (!ownsExecution.test(q.run())) continue;
         if ("WAITING".equals(continuations.state(q.run()))
             && continuations.document(q.run()).managedParent()
             && !managed.containsKey(q.run())) {
@@ -442,13 +457,13 @@ public final class SlackAgentService implements RunContinuation {
     if (dependencies != null)
       for (String run : requests.terminalDependencyRuns()) updateDependencies(run);
     for (String run : continuations.waiting()) {
-      var current = registry.get(run);
+      var current = findRun.apply(run);
       var owner = current.context();
       if (current.status() == RunStatus.CANCELLED) {
         cancel(run);
         continue;
       }
-      if (current.status() != RunStatus.WAITING || router.containsRun(owner.projectId(), run))
+      if (current.status() != RunStatus.WAITING || containsRun.test(owner.projectId(), run))
         continue;
       if (continuations.document(run).managedParent() && !managed.containsKey(run)) {
         stopUnknown(owner);
@@ -462,10 +477,10 @@ public final class SlackAgentService implements RunContinuation {
       }
       if (requests.waiting(run)) continue;
       updateDependencies(run);
-      if (!registry.claimWaiting(owner) || !continuations.claim(run)) continue;
+      if (!claimWaiting.test(owner) || !continuations.claim(run)) continue;
       var saved = restore(owner);
       try {
-        router.submitOperation(
+        enqueueResume.accept(
             owner,
             () -> {
               ChatExecutionResult result;
@@ -489,8 +504,7 @@ public final class SlackAgentService implements RunContinuation {
                 var parent = managed.remove(run);
                 if (parent != null) parent.completed().accept(result);
               }
-            },
-            work -> runs.execute(owner, work));
+            });
       } catch (RuntimeException uncertain) {
         continuations.unknown(run);
         runs.finishMissingTerminal(owner, RunStatus.UNKNOWN);
@@ -501,7 +515,7 @@ public final class SlackAgentService implements RunContinuation {
 
   /** 処理の継続を終えるため、不明を停止する。 */
   private void stopUnknown(AgentRunContext owner) {
-    if (!registry.claimWaiting(owner)) return;
+    if (!claimWaiting.test(owner)) return;
     continuations.unknown(owner.runId());
     runs.finishMissingTerminal(owner, RunStatus.UNKNOWN);
     var parent = managed.remove(owner.runId());

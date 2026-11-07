@@ -12,11 +12,15 @@ import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.util.HashSet;
 import java.util.Objects;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * Slackとの連携に必要なSlack実行環境を扱う。
@@ -25,12 +29,9 @@ import java.util.Objects;
  */
 public final class SlackRuntime {
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Reads the application-bound SlackProperties shared by consumers of these settings.")
-  private final SlackProperties p;
+  private final BiPredicate<SlackMessage, Boolean> allowMessage;
+
+  private final Predicate<SlackStore.Outgoing> allowDelivery;
 
   /** 保存先。 */
   private final SlackStore store;
@@ -39,20 +40,10 @@ public final class SlackRuntime {
   private final String self;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  private final Function<SlackMessage, SlackStore.ThreadBinding> bindConversation;
 
   /** 会話一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared lifecycle service so session validation and submission use the same session state.")
-  private final SessionLifecycle sessions;
+  private final BiFunction<SlackRunRequest, Consumer<AgentRunContext>, AgentRunContext> admitRun;
 
   /** 登録台帳。 */
   private final java.util.function.Consumer<AgentRunContext> registerRun;
@@ -61,12 +52,9 @@ public final class SlackRuntime {
   private final RunService runs;
 
   /** 入力の振り分け。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared input router so all operations use the same queue and active runs.")
-  private final ConversationInputRouter router;
+  private final BiConsumer<AgentRunContext, String> enqueueMessage;
+
+  private final BiPredicate<String, String> containsRun;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -91,14 +79,40 @@ public final class SlackRuntime {
       RunService runs,
       ConversationInputRouter router,
       Clock clock) {
-    this.p = p;
+    this.allowMessage =
+        (message, knownThread) -> SlackAdmission.accept(p, self, message, knownThread);
+    this.allowDelivery =
+        row ->
+            p.getAllowedWorkspaceIds().contains(row.team())
+                && p.getAllowedChannelIds().contains(row.channel())
+                && p.getAllowedUserIds().contains(row.requester());
     this.store = store;
     this.self = self;
-    this.projects = projects;
-    this.sessions = sessions;
+    this.bindConversation =
+        message -> {
+          String id =
+              message.dm() ? p.getDmProjectId() : p.getChannelProjects().get(message.channel());
+          var project =
+              projects
+                  .resolveById(id)
+                  .orElseThrow(
+                      () -> new IllegalArgumentException("Slack Project is not registered"));
+          return store.bind(
+              message, id, sessions.create(project, "Slack conversation").sessionId());
+        };
+    this.admitRun =
+        (request, admission) ->
+            sessions.submit(
+                projects.resolveById(request.project()).orElseThrow(),
+                request.session(),
+                request.text(),
+                AgentRunContext.RequestSource.WEB,
+                admission);
     this.registerRun = context -> registry.register(context);
     this.runs = runs;
-    this.router = router;
+    this.enqueueMessage =
+        (context, text) -> router.submit(context, text, work -> runs.execute(context, work));
+    this.containsRun = (project, run) -> router.containsRun(project, run);
     this.clock = clock;
   }
 
@@ -108,7 +122,7 @@ public final class SlackRuntime {
    * <p>Called before ACK. No LLM, send or queue execution runs on this thread.
    */
   public boolean accept(SlackMessage m) {
-    if (!SlackAdmission.accept(p, self, m, store.knownThread(m))) return false;
+    if (!allowMessage.test(m, store.knownThread(m))) return false;
     var safe =
         new SlackMessage(
             m.eventId(),
@@ -129,7 +143,7 @@ public final class SlackRuntime {
   public void tick() {
     for (var receipt : store.pending()) {
       var m = receipt.message();
-      if (!SlackAdmission.accept(p, self, m, store.thread(m).isPresent())) {
+      if (!allowMessage.test(m, store.thread(m).isPresent())) {
         store.state(m, "REJECTED");
         continue;
       }
@@ -144,7 +158,7 @@ public final class SlackRuntime {
     for (var receipt : store.active()) {
       try {
         var run = runs.get(receipt.run());
-        boolean occupied = router.containsRun(receipt.project(), receipt.run());
+        boolean occupied = containsRun.test(receipt.project(), receipt.run());
         if (occupied) continue;
         // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
         if (!run.status().isTerminal()) {
@@ -207,35 +221,17 @@ public final class SlackRuntime {
       store.state(m, "REJECTED");
       return;
     }
-    var binding =
-        store
-            .thread(m)
-            .orElseGet(
-                () -> {
-                  String id = m.dm() ? p.getDmProjectId() : p.getChannelProjects().get(m.channel());
-                  var project =
-                      projects
-                          .resolveById(id)
-                          .orElseThrow(
-                              () ->
-                                  new IllegalArgumentException("Slack Project is not registered"));
-                  return store.bind(
-                      m, id, sessions.create(project, "Slack conversation").sessionId());
-                });
-    var project = projects.resolveById(binding.project()).orElseThrow();
+    var binding = store.thread(m).orElseGet(() -> bindConversation.apply(m));
     var accepted =
-        sessions.submit(
-            project,
-            binding.session(),
-            text,
-            AgentRunContext.RequestSource.WEB,
+        admitRun.apply(
+            new SlackRunRequest(binding.project(), binding.session(), text),
             context -> {
               if (!store.prepare(m, context.runId(), binding))
                 throw new IllegalStateException("Slack receipt already dispatched");
               registerRun.accept(context);
               try {
                 reply(context.runId() + ":accepted", m, "受付しました。Run: " + context.runId());
-                router.submit(context, text, work -> runs.execute(context, work));
+                enqueueMessage.accept(context, text);
               } catch (ProjectRunQueue.CapacityExceededException rejected) {
                 // Definitive rejection: only the existing Run lifecycle executes, with no chat/tool
                 // work.
@@ -245,7 +241,7 @@ public final class SlackRuntime {
                       throw new IllegalStateException("Run admission capacity reached");
                     });
               } catch (RuntimeException | Error uncertain) {
-                if (!router.containsRun(context.projectId(), context.runId())) {
+                if (!containsRun.test(context.projectId(), context.runId())) {
                   runs.execute(
                       context, () -> runs.finishMissingTerminal(context, RunStatus.UNKNOWN));
                   store.stateRun(context.runId(), "UNKNOWN");
@@ -353,9 +349,7 @@ public final class SlackRuntime {
   public void send(SlackTransport transport) {
     var attempted = new HashSet<String>();
     for (var row : store.outbox(clock.millis())) {
-      if (!p.getAllowedWorkspaceIds().contains(row.team())
-          || !p.getAllowedChannelIds().contains(row.channel())
-          || !p.getAllowedUserIds().contains(row.requester())) {
+      if (!allowDelivery.test(row)) {
         store.suppress(row.id());
         continue;
       }
@@ -373,4 +367,6 @@ public final class SlackRuntime {
       }
     }
   }
+
+  private record SlackRunRequest(String project, String session, String text) {}
 }
