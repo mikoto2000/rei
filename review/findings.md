@@ -144,6 +144,8 @@ List<String> listFile(String baseDir) throws IOException, InterruptedException {
 
 **対象**: `src/main/java/dev/mikoto2000/rei/llm/AgentEventChatModel.java`
 
+**状態**: 対応済み
+
 **根拠**
 
 ```java
@@ -155,9 +157,9 @@ var publisher = publisher(owner);
 
 コンパイルは通る（`owner(prompt)` はメソッド呼び出しとして解決される）が、`owner` が変数かメソッドか読み手に分かりにくい。
 
-**推奨対応**
+**対応結果**
 
-`resolvedOwner` / `eventPublisher` などへ改名する。
+`call` と `stream` の両方で、ローカル変数 `owner` を `resolvedOwner` に、`publisher` を `requestEventPublisher` に変更した。既存テスト29件が通過した。 [修正 PR #516](https://github.com/mikoto2000/rei/pull/516) · [テスト結果](./test-evidence.md#l-2-の既存テスト)
 
 ---
 

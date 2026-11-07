@@ -85,3 +85,16 @@ GitHub CI では初回の Windows 回帰 B で既存の `BackgroundProcessManage
 | `PagedFileSearchTest#excludedQueriesKeepSuccessfulPagesAndOriginalQueryIndexes` | 除外クエリが混在してもページを継続でき、一致結果と除外クエリの番号が入力時の番号と一致する。 |
 
 Windows / OpenJDK 25 で Maven Wrapper の `full` プロファイルを使い、追加分を含む検索・読み取り関連の147件が通過した。失敗・エラー・スキップは0件だった。GitHub CI でも Windows 回帰 A・B、静的解析、集約チェックがすべて通過した。 [PR の全チェック](https://github.com/mikoto2000/rei/pull/505/checks)
+
+## L-2 の既存テスト
+
+修正コミット `7ee43791` で、Windows / OpenJDK 25 上の Maven Wrapper の `full` プロファイルを使い、以下の既存テスト29件が通過した。失敗・エラー・スキップは0件だった。 [修正 PR #516](https://github.com/mikoto2000/rei/pull/516)
+
+| テスト | 通過件数 |
+|---|---:|
+| `AgentEventChatModelTest` | 17 |
+| `AgentEventChatModelTimingTest` | 10 |
+| `AgentEventClientRoutingTest` | 1 |
+| `TimingOverheadProbeTest` | 1 |
+
+GitHub CI でも Windows 回帰 A・B、静的解析、集約チェックがすべて通過した。 [PR の全チェック](https://github.com/mikoto2000/rei/pull/516/checks)
