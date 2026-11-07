@@ -170,7 +170,8 @@ class IntegrationRunSubmitServiceTest {
             any()))
         .thenAnswer(
             call -> {
-              ((java.util.function.Consumer<AgentRunContext>) call.getArgument(8)).accept(context);
+              java.util.function.Consumer<AgentRunContext> admit = call.getArgument(8);
+              admit.accept(context);
               return context;
             });
     var calendar = mock(GoogleCalendarService.class);

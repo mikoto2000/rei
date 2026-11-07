@@ -157,9 +157,8 @@ class HttpResponseCacheTest {
             invocation -> {
               if (calls.incrementAndGet() == 1)
                 return response(200, Map.of("last-modified", modified), "evidence", uri);
-              assertEquals(
-                  modified,
-                  ((Map<String, String>) invocation.getArgument(1)).get("if-modified-since"));
+              Map<String, String> requestHeaders = invocation.getArgument(1);
+              assertEquals(modified, requestHeaders.get("if-modified-since"));
               return response(304, Map.of(), "", uri);
             });
     try (var cache = cache()) {
