@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.externalagent;
 
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
@@ -12,11 +10,37 @@ import org.springframework.stereotype.Component;
 @Component
 public class ExternalAgentTools {
   /** サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared delegation service for review and implementation workflows.")
-  private final ExternalAgentDelegationService service;
+  private final java.util.function.BiFunction<
+          RunExecutionContext, String, IsolatedImplementationService.Receipt>
+      findImplementation;
+
+  private final java.util.function.BiFunction<
+          RunExecutionContext, String, IsolatedImplementationService.Preview>
+      previewImplementation;
+  private final java.util.function.BiFunction<
+          RunExecutionContext, ReviewRequest, ExternalAgentResult>
+      requestReview;
+  private final java.util.function.BiFunction<
+          RunExecutionContext, Batch, ExternalAgentDelegationService.ParallelResult>
+      requestBatch;
+
+  private enum ReviewAction {
+    START,
+    REREVIEW,
+    CONTINUE,
+    PROPOSE_FIX
+  }
+
+  private record ReviewRequest(
+      ExternalAgentRequest.Agent agent,
+      ReviewAction action,
+      String task,
+      String target,
+      String previous,
+      String decisions) {}
+
+  private record Batch(
+      boolean claude, java.util.List<ExternalAgentDelegationService.ParallelRequest> requests) {}
 
   /** 実装要求一覧。 */
   private ImplementationRequestService implementationRequests;
@@ -114,7 +138,48 @@ public class ExternalAgentTools {
 
   /** 指定された値や利用先を使って、ExternalAgentToolsを初期化する。 */
   public ExternalAgentTools(ExternalAgentDelegationService service) {
-    this.service = service;
+    this.findImplementation = (owner, id) -> service.implementation(owner, id);
+    this.previewImplementation = (owner, id) -> service.implementationPreview(owner, id);
+    this.requestBatch =
+        (owner, batch) ->
+            batch.claude()
+                ? service.reviewParallel(owner, ExternalAgentRequest.Agent.CLAUDE, batch.requests())
+                : service.reviewParallel(owner, batch.requests());
+    this.requestReview =
+        (owner, request) ->
+            switch (request.action()) {
+              case START ->
+                  request.agent() == null
+                      ? service.review(owner, request.task(), request.target(), request.decisions())
+                      : service.review(
+                          owner,
+                          request.agent(),
+                          request.task(),
+                          request.target(),
+                          request.decisions());
+              case REREVIEW ->
+                  service.rereview(owner, request.previous(), request.task(), request.decisions());
+              case CONTINUE ->
+                  request.agent() == null
+                      ? service.continueReview(
+                          owner, request.previous(), request.task(), request.decisions())
+                      : service.continueReview(
+                          owner,
+                          request.agent(),
+                          request.previous(),
+                          request.task(),
+                          request.decisions());
+              case PROPOSE_FIX ->
+                  request.agent() == null
+                      ? service.proposeFix(
+                          owner, request.previous(), request.task(), request.decisions())
+                      : service.proposeFix(
+                          owner,
+                          request.agent(),
+                          request.previous(),
+                          request.task(),
+                          request.decisions());
+            };
   }
 
   /** 外部エージェントへの委譲で参照する外部実装を返す。 */
@@ -127,7 +192,7 @@ public class ExternalAgentTools {
         context == null
             ? null
             : (RunExecutionContext) context.getContext().get(RunExecutionContext.KEY);
-    return service.implementation(run, implementationId);
+    return findImplementation.apply(run, implementationId);
   }
 
   /** 外部エージェントへの委譲で用いる状態確認外部実装を返す。 */
@@ -140,7 +205,7 @@ public class ExternalAgentTools {
         context == null
             ? null
             : (RunExecutionContext) context.getContext().get(RunExecutionContext.KEY);
-    return service.implementationPreview(run, implementationId);
+    return previewImplementation.apply(run, implementationId);
   }
 
   /** 外部エージェントへの委譲で用いる要求Claudeコードレビューを返す。 */
@@ -156,7 +221,10 @@ public class ExternalAgentTools {
         toolContext == null
             ? null
             : (RunExecutionContext) toolContext.getContext().get(RunExecutionContext.KEY);
-    return service.review(run, ExternalAgentRequest.Agent.CLAUDE, task, target, context);
+    return requestReview.apply(
+        run,
+        new ReviewRequest(
+            ExternalAgentRequest.Agent.CLAUDE, ReviewAction.START, task, target, null, context));
   }
 
   /** 外部エージェントへの委譲で用いる要求ClaudeコードContinueレビューを返す。 */
@@ -172,8 +240,15 @@ public class ExternalAgentTools {
         toolContext == null
             ? null
             : (RunExecutionContext) toolContext.getContext().get(RunExecutionContext.KEY);
-    return service.continueReview(
-        run, ExternalAgentRequest.Agent.CLAUDE, previousReviewId, task, context);
+    return requestReview.apply(
+        run,
+        new ReviewRequest(
+            ExternalAgentRequest.Agent.CLAUDE,
+            ReviewAction.CONTINUE,
+            task,
+            null,
+            previousReviewId,
+            context));
   }
 
   /** 外部エージェントへの委譲で用いる要求Claudeコード修正提案を返す。 */
@@ -189,8 +264,15 @@ public class ExternalAgentTools {
         toolContext == null
             ? null
             : (RunExecutionContext) toolContext.getContext().get(RunExecutionContext.KEY);
-    return service.proposeFix(
-        run, ExternalAgentRequest.Agent.CLAUDE, previousReviewId, task, context);
+    return requestReview.apply(
+        run,
+        new ReviewRequest(
+            ExternalAgentRequest.Agent.CLAUDE,
+            ReviewAction.PROPOSE_FIX,
+            task,
+            null,
+            previousReviewId,
+            context));
   }
 
   /** 外部エージェントへの委譲で用いる要求並列Claudeコードレビュー一覧を返す。 */
@@ -204,7 +286,7 @@ public class ExternalAgentTools {
         toolContext == null
             ? null
             : (RunExecutionContext) toolContext.getContext().get(RunExecutionContext.KEY);
-    return service.reviewParallel(run, ExternalAgentRequest.Agent.CLAUDE, requests);
+    return requestBatch.apply(run, new Batch(true, requests));
   }
 
   /** 外部エージェントへの委譲で用いる要求並列Codexレビュー一覧を返す。 */
@@ -218,7 +300,7 @@ public class ExternalAgentTools {
         toolContext == null
             ? null
             : (RunExecutionContext) toolContext.getContext().get(RunExecutionContext.KEY);
-    return service.reviewParallel(run, requests);
+    return requestBatch.apply(run, new Batch(false, requests));
   }
 
   /** 外部エージェントへの委譲で用いる要求Codexレビューを返す。 */
@@ -238,7 +320,8 @@ public class ExternalAgentTools {
         toolContext == null
             ? null
             : (RunExecutionContext) toolContext.getContext().get(RunExecutionContext.KEY);
-    return service.review(run, task, target, context);
+    return requestReview.apply(
+        run, new ReviewRequest(null, ReviewAction.START, task, target, null, context));
   }
 
   /** 外部エージェントへの委譲で用いる要求CodexReレビューを返す。 */
@@ -254,7 +337,8 @@ public class ExternalAgentTools {
         toolContext == null
             ? null
             : (RunExecutionContext) toolContext.getContext().get(RunExecutionContext.KEY);
-    return service.rereview(run, previousReviewId, task, context);
+    return requestReview.apply(
+        run, new ReviewRequest(null, ReviewAction.REREVIEW, task, null, previousReviewId, context));
   }
 
   /** 外部エージェントへの委譲で用いる要求CodexContinueレビューを返す。 */
@@ -270,7 +354,8 @@ public class ExternalAgentTools {
         toolContext == null
             ? null
             : (RunExecutionContext) toolContext.getContext().get(RunExecutionContext.KEY);
-    return service.continueReview(run, previousReviewId, task, context);
+    return requestReview.apply(
+        run, new ReviewRequest(null, ReviewAction.CONTINUE, task, null, previousReviewId, context));
   }
 
   /** 外部エージェントへの委譲で用いる要求Codex修正提案を返す。 */
@@ -286,7 +371,9 @@ public class ExternalAgentTools {
         toolContext == null
             ? null
             : (RunExecutionContext) toolContext.getContext().get(RunExecutionContext.KEY);
-    return service.proposeFix(run, previousReviewId, task, context);
+    return requestReview.apply(
+        run,
+        new ReviewRequest(null, ReviewAction.PROPOSE_FIX, task, null, previousReviewId, context));
   }
 
   /** 利用可能な対象を確認できるよう、Codexレビュー一覧を一覧にする。 */
