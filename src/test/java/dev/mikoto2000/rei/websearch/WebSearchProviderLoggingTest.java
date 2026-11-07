@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -18,6 +19,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import dev.mikoto2000.rei.http.HttpFetchException;
 import dev.mikoto2000.rei.http.SafeHttpFetcher;
+import dev.mikoto2000.rei.http.cache.HttpResponseCache;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -54,6 +56,24 @@ class WebSearchProviderLoggingTest {
     logger.detachAppender(appender);
     logger.setLevel(originalLevel);
     appender.stop();
+  }
+
+  @Test
+  void evictsTheOriginalOpenAiCacheRequestAfterTransportSettingsChange() {
+    properties.setProviders(List.of(provider("openai")));
+    var cache = mock(HttpResponseCache.class);
+    var fetched = new java.util.concurrent.atomic.AtomicReference<HttpResponseCache.Request>();
+    when(cache.fetch(any(), any(), any(), same(fetcher)))
+        .thenAnswer(
+            invocation -> {
+              fetched.set(invocation.getArgument(0));
+              properties.setTimeoutSeconds(12);
+              return response(200, "{}");
+            });
+    var service = new WebSearchService(properties, new JsonMapper(), fetcher, cache);
+
+    assertThrows(IllegalStateException.class, () -> service.search("query", 1));
+    verify(cache).invalidate(same(fetched.get()), same(fetcher));
   }
 
   @ParameterizedTest
