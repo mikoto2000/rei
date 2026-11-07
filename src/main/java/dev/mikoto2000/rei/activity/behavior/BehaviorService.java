@@ -16,6 +16,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
+import java.util.function.IntSupplier;
 
 /**
  * 作業習慣のユースケースを実現する。
@@ -29,18 +31,12 @@ public final class BehaviorService {
       org.slf4j.LoggerFactory.getLogger(BehaviorService.class);
 
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the shared behavior thresholds and scheduling settings for each evaluation.")
-  private final BehaviorProperties config;
+  private final BooleanSupplier configuredEnabled;
+
+  private final IntSupplier historyMinutes;
 
   /** 作業状況。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ActivityProperties shared by consumers of these settings.")
-  private final ActivityProperties activity;
+  private final BooleanSupplier activityEnabled;
 
   /** 取得記録。 */
   private final ActivityCapture capture;
@@ -107,8 +103,9 @@ public final class BehaviorService {
       AgentActivityTracker tracker,
       Clock clock) {
     config.validate();
-    this.config = config;
-    this.activity = activity;
+    this.configuredEnabled = () -> config.isEnabled();
+    this.historyMinutes = () -> config.getHistoryMinutes();
+    this.activityEnabled = () -> activity.isEnabled();
     this.capture = capture;
     this.timeline = timeline;
     this.persistence = persistence;
@@ -122,7 +119,7 @@ public final class BehaviorService {
 
   /** この機能を利用する設定が有効かどうかを返す。 */
   public synchronized boolean enabled() {
-    return override == null ? config.isEnabled() : override;
+    return override == null ? configuredEnabled.getAsBoolean() : override;
   }
 
   /** 作業習慣の支援で使用する有効状態を設定する。 */
@@ -133,12 +130,15 @@ public final class BehaviorService {
 
   /** 作業習慣の支援において、許可に該当するか判定する。 */
   private synchronized boolean allowed(long token) {
-    return enabled() && activity.isEnabled() && !capture.isPaused() && token == generation;
+    return enabled()
+        && activityEnabled.getAsBoolean()
+        && !capture.isPaused()
+        && token == generation;
   }
 
   /** 対象を判断基準に照らして評価する。 */
   public BehaviorAssessment evaluate() {
-    Instant now = clock.instant(), start = now.minusSeconds(config.getHistoryMinutes() * 60L);
+    Instant now = clock.instant(), start = now.minusSeconds(historyMinutes.getAsInt() * 60L);
     var fine = timeline.findBetween(start, now);
     var raw = timeline.findRecordsBetween(start, now);
     var result = evaluator.evaluate(fine, raw, now);

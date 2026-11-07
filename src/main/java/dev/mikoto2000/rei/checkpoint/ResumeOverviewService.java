@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.checkpoint;
 
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -14,6 +12,8 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BiFunction;
+import java.util.function.BooleanSupplier;
+import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -36,11 +36,9 @@ public class ResumeOverviewService {
   private final Supplier<List<ProjectContext>> registeredProjects;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ResumeOverviewProperties shared by consumers of these settings.")
-  private final ResumeOverviewProperties properties;
+  private final BooleanSupplier overviewEnabled;
+
+  private final IntSupplier failedMaxAgeDays;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -53,13 +51,14 @@ public class ResumeOverviewService {
       Clock clock) {
     this.selectOverview = (project, cutoff) -> repository.overviewSelection(project, cutoff);
     this.registeredProjects = () -> projects.registeredProjects();
-    this.properties = properties;
+    this.overviewEnabled = () -> properties.isEnabled();
+    this.failedMaxAgeDays = () -> properties.getFailedMaxAgeDays();
     this.clock = clock;
   }
 
   /** この機能を利用する設定が有効かどうかを返す。 */
   public boolean enabled() {
-    return properties.isEnabled();
+    return overviewEnabled.getAsBoolean();
   }
 
   /** 作業の中断と再開で用いるpreferredタイムゾーンを返す。 */
@@ -82,7 +81,7 @@ public class ResumeOverviewService {
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
     var selection =
         selectOverview.apply(
-            project.id(), clock.instant().minus(Duration.ofDays(properties.getFailedMaxAgeDays())));
+            project.id(), clock.instant().minus(Duration.ofDays(failedMaxAgeDays.getAsInt())));
     var latest = selection.latest();
     String key = project.id() + "|" + selection.count() + "|" + Objects.toString(latest, "");
     try {

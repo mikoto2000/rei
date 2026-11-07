@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.doctor;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import static dev.mikoto2000.rei.doctor.DoctorResult.Status.ERROR;
 import static dev.mikoto2000.rei.doctor.DoctorResult.Status.NOT_APPLICABLE;
 import static dev.mikoto2000.rei.doctor.DoctorResult.Status.NOT_CONFIGURED;
@@ -28,6 +26,8 @@ import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.OpenAiCompatibleEndpoint;
 import dev.mikoto2000.rei.voice.VoiceProperties;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;
@@ -39,6 +39,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -111,24 +112,21 @@ public class DoctorActiveService {
   private final Supplier<String> readSelectedModel;
 
   /** HTTP通信。 */
-  private final Function<ConnectivityRequest, JavaHttpDependencyProbe.Connectivity> connectivityProbe;
+  private final Function<ConnectivityRequest, JavaHttpDependencyProbe.Connectivity>
+      connectivityProbe;
 
   /** 接続性の診断に必要な入力。 */
   private record ConnectivityRequest(String endpoint, Duration timeout, Runnable checkActive) {}
 
   /** Codexの設定または実行の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound CodexProperties shared by consumers of these settings.")
-  private final CodexProperties codex;
+  private final BooleanSupplier codexEnabled;
+
+  private final Supplier<String> codexCommand;
 
   /** Claudeの設定または実行の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ClaudeCodeProperties shared by consumers of these settings.")
-  private final ClaudeCodeProperties claude;
+  private final BooleanSupplier claudeEnabled;
+
+  private final Supplier<String> claudeCommand;
 
   /** 音声。 */
   private final Supplier<String> microphoneDeviceId;
@@ -188,8 +186,10 @@ public class DoctorActiveService {
     this.readSelectedModel = () -> selectedModel.get();
     this.connectivityProbe =
         request -> http.connectivity(request.endpoint(), request.timeout(), request.checkActive());
-    this.codex = codex;
-    this.claude = claude;
+    this.codexEnabled = () -> codex.isEnabled();
+    this.codexCommand = () -> codex.getCommand();
+    this.claudeEnabled = () -> claude.isEnabled();
+    this.claudeCommand = () -> claude.getCommand();
     this.microphoneDeviceId = () -> voice.getDeviceId();
     this.microphone = microphone;
     this.processes = processes;
@@ -244,14 +244,14 @@ public class DoctorActiveService {
           switch (check) {
             case CONNECTIVITY -> passive.endpoint();
             case INFERENCE -> readSelectedModel.get();
-            case CODEX -> codex.getCommand();
-            case CLAUDE -> claude.getCommand();
+            case CODEX -> codexCommand.get();
+            case CLAUDE -> claudeCommand.get();
             case MICROPHONE -> microphoneDeviceId.get();
           };
       boolean enabled =
           switch (check) {
-            case CODEX -> codex.isEnabled();
-            case CLAUDE -> claude.isEnabled();
+            case CODEX -> codexEnabled.getAsBoolean();
+            case CLAUDE -> claudeEnabled.getAsBoolean();
             default -> true;
           };
       OpenAiChatOptions inferenceOptions = null;
@@ -424,7 +424,8 @@ public class DoctorActiveService {
   @SuppressFBWarnings(
       value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
       matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original inference failure when it is not classified as a timeout.")
+      justification =
+          "Preserves the original inference failure when it is not classified as a timeout.")
   private DoctorResult inference(
       RunExecutionContext run, OpenAiChatOptions captured, Duration timeout) {
     var model = subAgentModel.get();

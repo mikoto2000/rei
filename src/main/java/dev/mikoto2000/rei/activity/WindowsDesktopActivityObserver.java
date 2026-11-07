@@ -6,8 +6,6 @@ import dev.mikoto2000.rei.computeruse.DisplayCapture;
 import dev.mikoto2000.rei.computeruse.RobotScreenCapture;
 import dev.mikoto2000.rei.computeruse.ScreenCapture;
 import dev.mikoto2000.rei.computeruse.ScreenGeometry;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.awt.AWTException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -15,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 
 /**
  * Windowsデスクトップ作業状況の状況を観測し、記録や判断に必要な情報を提供する。
@@ -75,12 +74,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
   }
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Reads the application-bound ActivityProperties shared by consumers of these settings.")
-  private final ActivityProperties properties;
+  private final BooleanSupplier identifyBackgroundCapture;
 
   /** 直近付随情報。 */
   private volatile Metadata lastMetadata;
@@ -92,7 +86,8 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
 
   /** 指定された値や利用先を使って、WindowsDesktopActivityObserverを初期化する。 */
   public WindowsDesktopActivityObserver(ActivityProperties properties) {
-    this.properties = properties;
+    this.identifyBackgroundCapture =
+        () -> properties != null && properties.getDetection().isBackgroundFullScreenEnabled();
   }
 
   /** 取得記録。 */
@@ -101,8 +96,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
   /** 後から状況を確認できるよう、Windowsデスクトップ作業状況観測を記録する。 */
   private CapturedScreen readCapture() throws AWTException, IOException, InterruptedException {
     var metadata = lastMetadata;
-    boolean identified =
-        properties != null && properties.getDetection().isBackgroundFullScreenEnabled();
+    boolean identified = identifyBackgroundCapture.getAsBoolean();
     if (identified && (metadata == null || !metadata.complete()))
       throw new IllegalStateException("Desktop identity unavailable");
     var screen = capture.captureScreen();

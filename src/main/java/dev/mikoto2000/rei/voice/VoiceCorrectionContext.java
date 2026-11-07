@@ -7,8 +7,6 @@ import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.core.datasource.ReiDataDirectory;
 import dev.mikoto2000.rei.core.project.ProjectStorage;
 import dev.mikoto2000.rei.event.CredentialRedactor;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -20,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.function.BiFunction;
+import java.util.function.IntSupplier;
 
 /**
  * 音声による対話に必要な音声補正文脈を扱う。
@@ -65,12 +64,9 @@ public final class VoiceCorrectionContext {
   private final Path data;
 
   /** 上限一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Reads the application-bound VoiceCorrectionProperties shared by consumers of these settings.")
-  private final VoiceCorrectionProperties limits;
+  private final IntSupplier maxContextChars;
+
+  private final IntSupplier maxDictionaryEntries;
 
   /** 指定された値や利用先を使って、VoiceCorrectionContextを初期化する。 */
   public VoiceCorrectionContext(
@@ -80,14 +76,15 @@ public final class VoiceCorrectionContext {
             ? null
             : (project, session) -> history.recentConversation(project, session, 4);
     this.data = data;
-    this.limits = limits;
+    this.maxContextChars = () -> limits.getMaxContextChars();
+    this.maxDictionaryEntries = () -> limits.getMaxDictionaryEntries();
   }
 
   /** 後から状況を確認できるよう、音声補正文脈を記録する。 */
   public Snapshot capture(ConversationInput input) {
     var target = input.target();
     var recent = new ArrayList<String>();
-    int remaining = limits.getMaxContextChars();
+    int remaining = maxContextChars.getAsInt();
     if (recentHistory != null && remaining > 0) {
       var entries = recentHistory.apply(target.project().id(), target.sessionId());
       for (var entry : entries.reversed()) {
@@ -111,7 +108,7 @@ public final class VoiceCorrectionContext {
         dictionaries(
             base.resolve("voice/terms.json"),
             project.resolve("voice/terms.json"),
-            limits.getMaxDictionaryEntries()));
+            maxDictionaryEntries.getAsInt()));
   }
 
   /** 音声による対話で用いるdictionariesを返す。 */

@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.goal;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
@@ -13,6 +11,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.RowMapper;
@@ -278,11 +277,7 @@ public class GoalRepository {
   private final Clock clock;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound LlmProperties shared by consumers of these settings.")
-  private final dev.mikoto2000.rei.llm.LlmProperties properties;
+  private final LongSupplier goalTokenLimit;
 
   /** 目標の達成管理で用いる一括反映を返す。 */
   <T> T atomic(java.util.function.Supplier<T> action) {
@@ -306,7 +301,7 @@ public class GoalRepository {
       @Qualifier("memoryConsolidationDataSource") DataSource source,
       Clock clock,
       dev.mikoto2000.rei.llm.LlmProperties properties) {
-    this.properties = properties;
+    this.goalTokenLimit = () -> properties.getOutputLimit().getMaxTotalTokensPerGoal();
     db = JdbcClient.create(source);
     transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
     this.clock = clock;
@@ -537,7 +532,7 @@ public class GoalRepository {
               != 1) throw new IllegalStateException("Project goal limit reached (256)");
           history(id, "READY", "created");
           db.sql("UPDATE agent_goals SET max_tokens=? WHERE id=?")
-              .params(properties.getOutputLimit().getMaxTotalTokensPerGoal(), id)
+              .params(goalTokenLimit.getAsLong(), id)
               .update();
         });
     return get(owner.projectId(), id);
@@ -1130,7 +1125,8 @@ public class GoalRepository {
     var goal = get(project, id);
     if (goal.status().equals("RUNNING")) {
       String phase =
-          db.sql("SELECT COALESCE(completion_phase, 'RUNNING') FROM agent_goals WHERE project=? AND id=?")
+          db.sql(
+                  "SELECT COALESCE(completion_phase, 'RUNNING') FROM agent_goals WHERE project=? AND id=?")
               .params(project, id)
               .query(String.class)
               .single();
