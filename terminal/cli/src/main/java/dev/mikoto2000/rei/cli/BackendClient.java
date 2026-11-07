@@ -38,6 +38,8 @@ public final class BackendClient implements AutoCloseable {
 
   /** 軽量CLIでの対話を継続できないAPIの状況を伝える例外。 */
   public static final class ApiException extends IOException {
+    @java.io.Serial private static final long serialVersionUID = -259821403145068960L;
+
     /** 状態。 */
     private final int status;
 
@@ -60,6 +62,8 @@ public final class BackendClient implements AutoCloseable {
 
   /** 軽量CLIでの対話を継続できない不確実な受け入れ条件の状況を伝える例外。 */
   public static final class UncertainAcceptanceException extends IOException {
+    @java.io.Serial private static final long serialVersionUID = 9070497465153886926L;
+
     /** 受付記録キー。 */
     public final String receiptKey;
 
