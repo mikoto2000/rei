@@ -93,4 +93,31 @@ class OutputLimitReplannerTest {
         .isInstanceOf(RuntimeException.class);
     assertThat(tokens).hasValue(5);
   }
+
+  @Test
+  void fatalModelFailureRecordsUnknownUsageAndPreservesPrimaryFailure() {
+    var model = Mockito.mock(ChatModel.class);
+    var provider = Mockito.mock(LlmModelProvider.class);
+    var holder = Mockito.mock(ModelHolderService.class);
+    when(holder.get()).thenReturn("model");
+    when(provider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER)).thenReturn(model);
+    when(provider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, "model"))
+        .thenReturn(OpenAiChatOptions.builder().model("model").build());
+    var fatal = new AssertionError("model failed");
+    var accounting = new IllegalStateException("usage unknown");
+    when(model.call(any(Prompt.class))).thenThrow(fatal);
+    java.util.function.Consumer<Integer> usage = Mockito.mock(java.util.function.Consumer.class);
+    Mockito.doThrow(accounting).when(usage).accept(null);
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () ->
+                new OutputLimitReplanner(provider, holder, new LlmProperties())
+                    .replan(
+                        new OutputLimitReplanRequest(
+                            "task", "goal", "progress", "partial", 1, 2, 3),
+                        usage))
+        .isSameAs(fatal);
+    verify(usage).accept(null);
+    assertThat(fatal.getSuppressed()).containsExactly(accounting);
+  }
 }
