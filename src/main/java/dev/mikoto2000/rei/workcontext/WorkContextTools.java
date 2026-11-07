@@ -8,13 +8,12 @@ import dev.mikoto2000.rei.workcontext.WorkContext.Evidence;
 import dev.mikoto2000.rei.workcontext.WorkContext.Item;
 import dev.mikoto2000.rei.workcontext.WorkContext.Origin;
 import dev.mikoto2000.rei.workcontext.WorkContext.Status;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
@@ -25,16 +24,12 @@ public class WorkContextTools {
   private final WorkContextService service;
 
   /** やり取り一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent turn store for history and run lookups.")
-  private final ConversationTurnStore turns;
+  private final Function<String, List<ConversationTurnStore.Turn>> readTurns;
 
   /** 指定された値や利用先を使って、WorkContextToolsを初期化する。 */
   public WorkContextTools(WorkContextService service, ConversationTurnStore turns) {
     this.service = service;
-    this.turns = turns;
+    this.readTurns = conversation -> turns.read(conversation);
   }
 
   /** 作業文脈の引き継ぎで用いる対象を返す。 */
@@ -50,7 +45,7 @@ public class WorkContextTools {
       String user =
           run == null
               ? ""
-              : turns.read(run.conversationId()).stream()
+              : readTurns.apply(run.conversationId()).stream()
                   .filter(t -> t.runId().equals(run.runId()))
                   .map(ConversationTurnStore.Turn::request)
                   .findFirst()
@@ -126,7 +121,7 @@ public class WorkContextTools {
     var run = AgentRunScope.current();
     if (run == null) throw new IllegalArgumentException("Active user request required");
     var turn =
-        turns.read(run.conversationId()).stream()
+        readTurns.apply(run.conversationId()).stream()
             .filter(t -> t.runId().equals(run.runId()))
             .findFirst()
             .orElseThrow();

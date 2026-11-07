@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiFunction;
 
 /**
  * MCP要求の記録を保持し、後続の処理で参照できるようにする。
@@ -106,11 +107,7 @@ public final class McpRequestStore {
   private final ConversationAdmissionStore admissions;
 
   /** やり取り一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent turn store for history and run lookups.")
-  private final ConversationTurnStore turns;
+  private final BiFunction<String, String, Optional<ConversationTurnStore.Turn>> findTurn;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -128,7 +125,7 @@ public final class McpRequestStore {
       Duration auditRetention) {
     db = new StorageDatabase(root);
     this.admissions = admissions;
-    this.turns = turns;
+    this.findTurn = (conversation, run) -> turns.findRun(conversation, run);
     this.clock = clock;
     this.resultRetention = resultRetention;
     this.auditRetention = auditRetention;
@@ -251,7 +248,7 @@ public final class McpRequestStore {
     var run = status(request);
     // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
     if (!run.status().isTerminal()) return;
-    var turn = turns.findRun(request.session(), request.run());
+    var turn = findTurn.apply(request.session(), request.run());
     if (turn.isPresent() && turn.get().status() == ConversationTurnStore.Status.RUNNING) return;
     if (turn.isEmpty() && run.status() == RunStatus.COMPLETED) return;
     String content =
