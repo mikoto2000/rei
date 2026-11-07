@@ -334,6 +334,25 @@ class ToolEventCallbackDecoratorTest {
     assertEquals(received.get(0).correlationId(), received.get(1).correlationId());
   }
 
+  @Test
+  void fatalToolFailurePublishesTerminalEventAndPropagates() {
+    bus.subscribe(received::add);
+    var callback = delegate("readMultiFile", "unused");
+    var fatal = new AssertionError("tool failed");
+    fatal.initCause(new java.nio.file.NoSuchFileException("missing"));
+    when(callback.call("input")).thenThrow(fatal);
+
+    assertSame(
+        fatal,
+        assertThrows(
+            AssertionError.class,
+            () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
+    assertEquals(
+        List.of(AgentEventType.TOOL_STARTED, AgentEventType.TOOL_FAILED),
+        received.stream().map(AgentEvent::type).toList());
+    assertEquals(received.getFirst().correlationId(), received.getLast().correlationId());
+  }
+
   /** 未指定ファイルについて、失敗情報を返すことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
