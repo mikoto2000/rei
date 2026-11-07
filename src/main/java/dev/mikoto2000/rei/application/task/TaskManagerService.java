@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.application.session.CursorCodec;
 import dev.mikoto2000.rei.application.session.CursorKey;
 import dev.mikoto2000.rei.application.session.HistoryPage;
 import dev.mikoto2000.rei.application.session.Pagination;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository;
 import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
 import dev.mikoto2000.rei.core.project.ProjectContext;
@@ -29,6 +30,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
+import java.util.function.Function;
 
 /**
  * タスク管理のユースケースを実現する。
@@ -48,11 +52,10 @@ public final class TaskManagerService {
   private final java.util.function.Function<String, RunSnapshot> registeredRun;
 
   /** 再開用の記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared repository for checkpoint state and lease coordination.")
-  private final PersistentCheckpointRepository checkpoints;
+  private final Function<CheckpointPage, List<PersistentCheckpoint>> readCheckpointPage;
+
+  private final BiFunction<String, String, Optional<PersistentCheckpoint>> checkpointForRun;
+  private final BiPredicate<String, String> checkpointLeased;
 
   /** 目標一覧。 */
   private final GoalRepository goals;
@@ -96,7 +99,16 @@ public final class TaskManagerService {
     this.ownsExecution = id -> runs.ownsExecution(id);
     this.registeredRunIds = () -> runs.runIds();
     this.registeredRun = id -> runs.get(id);
-    this.checkpoints = checkpoints;
+    this.readCheckpointPage =
+        checkpoints == null
+            ? null
+            : page ->
+                checkpoints.taskPage(
+                    page.project(), page.root(), page.session(), page.after(), page.limit());
+    this.checkpointForRun =
+        (project, run) ->
+            checkpoints == null ? Optional.empty() : checkpoints.findByRun(project, run);
+    this.checkpointLeased = (project, task) -> checkpoints.leased(project, task);
     this.goals = goals;
     this.dependencies = dependencies;
     this.schedules = schedules;
@@ -150,18 +162,19 @@ public final class TaskManagerService {
     var result = new LinkedHashMap<String, TaskView>();
     var runTasks = new HashMap<String, String>();
     var checkpointRows =
-        checkpoints == null
-            ? List.<dev.mikoto2000.rei.checkpoint.PersistentCheckpoint>of()
+        readCheckpointPage == null
+            ? List.<PersistentCheckpoint>of()
             : sourceRows(
                 "run:",
                 exact,
                 after,
                 key ->
-                    checkpoints.taskPage(
-                        project.id(), project.root().toString(), session, key, limit),
+                    readCheckpointPage.apply(
+                        new CheckpointPage(
+                            project.id(), project.root().toString(), session, key, limit)),
                 key ->
-                    checkpoints
-                        .findByRun(project.id(), key)
+                    checkpointForRun
+                        .apply(project.id(), key)
                         .filter(saved -> saved.originalRunId().equals(key)));
     for (var saved : checkpointRows) {
       if (!sameRoot(project, saved.projectRoot())) continue;
@@ -176,7 +189,7 @@ public final class TaskManagerService {
       boolean resumable =
           !live
               && !"COMPLETED".equals(state)
-              && !checkpoints.leased(project.id(), saved.taskId())
+              && !checkpointLeased.test(project.id(), saved.taskId())
               && !Set.of("COMPLETED", "ABANDONED").contains(saved.status());
       String error =
           current != null && current.failure() != null
@@ -225,11 +238,10 @@ public final class TaskManagerService {
       if (after != null && ("run:" + id).compareTo(after) <= 0) continue;
       var current = run(project, session, id);
       if (current == null || runTasks.containsKey(id)) continue;
-      if (checkpoints != null
-          && checkpoints
-              .findByRun(project.id(), id)
-              .filter(saved -> sameRoot(project, saved.projectRoot()))
-              .isPresent()) continue;
+      if (checkpointForRun
+          .apply(project.id(), id)
+          .filter(saved -> sameRoot(project, saved.projectRoot()))
+          .isPresent()) continue;
       if (selectedRuns++ >= limit) break;
       var owner = current.context();
       String task = "run:" + id;
@@ -572,14 +584,12 @@ public final class TaskManagerService {
   /** 実行中タスクの操作で用いる参照先タスクを返す。 */
   private String referenceTask(ProjectContext project, String run) {
     if (run == null) return null;
-    if (checkpoints != null) {
-      var saved =
-          checkpoints
-              .findByRun(project.id(), run)
-              .filter(value -> sameRoot(project, value.projectRoot()));
-      if (saved.isPresent()) return "run:" + saved.get().originalRunId();
-    }
-    return "run:" + run;
+    return "run:"
+        + checkpointForRun
+            .apply(project.id(), run)
+            .filter(saved -> sameRoot(project, saved.projectRoot()))
+            .map(PersistentCheckpoint::originalRunId)
+            .orElse(run);
   }
 
   /** 実行中タスクの操作で用いる小文字を返す。 */
@@ -613,10 +623,10 @@ public final class TaskManagerService {
   }
 
   /** 実行中タスクの操作で用いる再開用の記録状態を返す。 */
-  private String checkpointState(dev.mikoto2000.rei.checkpoint.PersistentCheckpoint saved) {
+  private String checkpointState(PersistentCheckpoint saved) {
     return switch (saved.status()) {
       case "RUNNING" ->
-          checkpoints.leased(saved.projectId(), saved.taskId()) ? "RUNNING" : "UNKNOWN";
+          checkpointLeased.test(saved.projectId(), saved.taskId()) ? "RUNNING" : "UNKNOWN";
       case "INTERRUPTED" -> "SUSPENDED";
       case "ABANDONED" -> "CANCELLED";
       default -> saved.status();
@@ -660,4 +670,7 @@ public final class TaskManagerService {
     String text = dev.mikoto2000.rei.event.CredentialRedactor.redact(value);
     return text.substring(0, Math.min(1024, text.length()));
   }
+
+  private record CheckpointPage(
+      String project, String root, String session, String after, int limit) {}
 }

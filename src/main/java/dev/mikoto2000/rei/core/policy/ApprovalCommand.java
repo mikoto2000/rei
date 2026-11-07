@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -56,17 +58,21 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
       new java.util.WeakHashMap<>();
 
   /** 再開用の記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint state for run lookups and transitions.")
-  private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints;
+  private Function<ToolApprovalRepository.Request, Optional<CheckpointHint>> findCheckpoint =
+      request -> Optional.empty();
 
   /** ツール利用の権限制御で使用する再開用の記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setCheckpoints(
       dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints) {
-    this.checkpoints = checkpoints;
+    this.findCheckpoint =
+        request ->
+            checkpoints == null
+                ? Optional.empty()
+                : checkpoints
+                    .findByRun(request.projectId(), request.runId())
+                    .filter(state -> state.sessionId().equals(request.sessionId()))
+                    .map(state -> new CheckpointHint(state.taskId(), state.status()));
   }
 
   /** 仕様。 */
@@ -215,12 +221,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
       return;
     }
     try {
-      var task =
-          checkpoints == null
-              ? java.util.Optional.<dev.mikoto2000.rei.checkpoint.PersistentCheckpoint>empty()
-              : checkpoints
-                  .findByRun(request.projectId(), request.runId())
-                  .filter(state -> state.sessionId().equals(request.sessionId()));
+      var task = findCheckpoint.apply(request);
       if (task.isEmpty()) {
         writer.println("対応する task ID を取得できません。/resume list で確認してください（承認IDは /resume に使用できません）。");
         return;
@@ -275,4 +276,6 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
       super("list", "show", "approve", "deny");
     }
   }
+
+  private record CheckpointHint(String taskId, String status) {}
 }

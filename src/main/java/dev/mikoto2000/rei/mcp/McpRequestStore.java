@@ -2,12 +2,11 @@ package dev.mikoto2000.rei.mcp;
 
 import dev.mikoto2000.rei.application.run.RunSnapshot;
 import dev.mikoto2000.rei.application.run.RunStatus;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint;
 import dev.mikoto2000.rei.conversation.ConversationAdmissionStore;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.storage.StorageDatabase;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -21,6 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 /**
  * MCP要求の記録を保持し、後続の処理で参照できるようにする。
@@ -75,11 +75,8 @@ public final class McpRequestStore {
   private McpCompletionEvidence evidence = new McpCompletionEvidence(null, null, null);
 
   /** 再開用の記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint state for run lookups and transitions.")
-  private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints;
+  private Function<Request, Optional<PersistentCheckpoint>> findCheckpoint =
+      request -> Optional.empty();
 
   /** MCPによる機能の提供で使用する根拠を設定する。 */
   public void setEvidence(McpCompletionEvidence evidence) {
@@ -89,15 +86,18 @@ public final class McpRequestStore {
   /** MCPによる機能の提供で使用する再開用の記録一覧を設定する。 */
   public void setCheckpoints(
       dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints) {
-    this.checkpoints = checkpoints;
+    this.findCheckpoint =
+        request ->
+            checkpoints == null
+                ? Optional.empty()
+                : checkpoints
+                    .findByRun(request.project(), request.run())
+                    .filter(checkpoint -> checkpoint.sessionId().equals(request.session()));
   }
 
   /** MCPによる機能の提供で用いる再開用の記録を返す。 */
   public Optional<dev.mikoto2000.rei.checkpoint.PersistentCheckpoint> checkpoint(Request r) {
-    if (checkpoints == null) return Optional.empty();
-    return checkpoints
-        .findByRun(r.project(), r.run())
-        .filter(c -> c.sessionId().equals(r.session()));
+    return findCheckpoint.apply(r);
   }
 
   /** データベースへのアクセス。 */
