@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.conversation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -29,7 +27,6 @@ public class ConversationLogStore {
     return name != null && name.toString().endsWith(".jsonl");
   }
 
-
   /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(ConversationLogStore.class);
 
@@ -43,11 +40,18 @@ public class ConversationLogStore {
   private final Clock clock;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the caller-configured Jackson codecs to read and write the same conversation history.")
-  private final ObjectMapper objectMapper;
+  @FunctionalInterface
+  private interface ReadEntry {
+    ConversationLogEntry read(String line) throws IOException;
+  }
+
+  @FunctionalInterface
+  private interface WriteEntry {
+    String write(ConversationLogEntry entry) throws IOException;
+  }
+
+  private final ReadEntry readEntry;
+  private final WriteEntry writeEntry;
 
   /** 書き込み排他制御。 */
   private final Object writeLock = new Object();
@@ -93,7 +97,8 @@ public class ConversationLogStore {
   public ConversationLogStore(Path directory, Clock clock, ObjectMapper objectMapper) {
     this.directory = directory;
     this.clock = clock;
-    this.objectMapper = objectMapper;
+    this.readEntry = line -> objectMapper.readValue(line, ConversationLogEntry.class);
+    this.writeEntry = entry -> objectMapper.writeValueAsString(entry);
   }
 
   /** 既存の記録へ経緯を残すため、会話ログ保存先を追記する。 */
@@ -125,7 +130,7 @@ public class ConversationLogStore {
         Files.createDirectories(directory);
         Files.writeString(
             file,
-            objectMapper.writeValueAsString(entry) + System.lineSeparator(),
+            writeEntry.write(entry) + System.lineSeparator(),
             StandardCharsets.UTF_8,
             StandardOpenOption.CREATE,
             StandardOpenOption.APPEND);
@@ -165,8 +170,7 @@ public class ConversationLogStore {
         if (!Files.isDirectory(location)) continue;
         // Fail closed on unreadable history: never mistake an I/O failure for an absent id.
         try (var files = Files.list(location)) {
-          for (var file :
-              files.filter(ConversationLogStore::isJsonl).sorted().toList()) {
+          for (var file : files.filter(ConversationLogStore::isJsonl).sorted().toList()) {
             var found = notificationInFile(file, sourceId);
             if (found.isPresent()) return found;
           }
@@ -207,7 +211,7 @@ public class ConversationLogStore {
       String line;
       while ((line = lines.readLine()) != null) {
         if (line.isBlank()) continue;
-        var entry = objectMapper.readValue(line, ConversationLogEntry.class);
+        var entry = readEntry.read(line);
         if (!BEHAVIOR_NOTIFICATION.equals(entry.source())) continue;
         if (retain && entry.sourceId() != null && !entries.containsKey(entry.sourceId())) {
           if (entries.size() >= 1024
@@ -292,7 +296,7 @@ public class ConversationLogStore {
         Files.createDirectories(location);
         Files.writeString(
             file,
-            objectMapper.writeValueAsString(entry) + System.lineSeparator(),
+            writeEntry.write(entry) + System.lineSeparator(),
             StandardCharsets.UTF_8,
             StandardOpenOption.CREATE,
             StandardOpenOption.APPEND);
@@ -365,8 +369,7 @@ public class ConversationLogStore {
             .resolve("conversations");
     if (!Files.isDirectory(location)) return;
     try (var files = Files.list(location)) {
-      for (Path file :
-          files.filter(ConversationLogStore::isJsonl).sorted().toList()) {
+      for (Path file : files.filter(ConversationLogStore::isJsonl).sorted().toList()) {
         readFile(
             file,
             entry -> {
@@ -450,11 +453,7 @@ public class ConversationLogStore {
     }
     List<ConversationLogEntry> entries = new ArrayList<>();
     try (var files = Files.list(directory)) {
-      for (Path file :
-          files
-              .filter(ConversationLogStore::isJsonl)
-              .sorted()
-              .toList()) {
+      for (Path file : files.filter(ConversationLogStore::isJsonl).sorted().toList()) {
         readFile(file, entries);
       }
     } catch (IOException e) {
@@ -524,7 +523,7 @@ public class ConversationLogStore {
           continue;
         }
         try {
-          visitor.accept(objectMapper.readValue(line, ConversationLogEntry.class));
+          visitor.accept(readEntry.read(line));
         } catch (IOException e) {
           log.warn("Skipping malformed conversation log line in {}", file);
         }

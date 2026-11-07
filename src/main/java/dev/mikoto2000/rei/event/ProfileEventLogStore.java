@@ -33,11 +33,19 @@ public class ProfileEventLogStore implements AgentEventListener {
   private final Path file;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the caller-configured Jackson codecs to read and write the same event history.")
-  private final ObjectMapper objectMapper;
+  @FunctionalInterface
+  private interface ReadEntry {
+    ProfileEventLogEntry read(String line) throws IOException;
+  }
+
+  @FunctionalInterface
+  private interface WriteEntry {
+    String write(ProfileEventLogEntry entry) throws IOException;
+  }
+
+  private final ReadEntry readEntry;
+  private final WriteEntry writeEntry;
+  private final java.util.function.Function<AgentEventPayload, Map<String, Object>> payloadFields;
 
   /** 書き込み排他制御。 */
   private final Object writeLock = new Object();
@@ -77,7 +85,10 @@ public class ProfileEventLogStore implements AgentEventListener {
   /** 指定された値や利用先を使って、ProfileEventLogStoreを初期化する。 */
   public ProfileEventLogStore(Path file, ObjectMapper objectMapper) {
     this.file = file;
-    this.objectMapper = objectMapper;
+    this.readEntry = line -> objectMapper.readValue(line, ProfileEventLogEntry.class);
+    this.writeEntry = entry -> objectMapper.writeValueAsString(entry);
+    this.payloadFields =
+        payload -> objectMapper.convertValue(payload, new TypeReference<Map<String, Object>>() {});
   }
 
   /** 実行状況の通知で用いるファイルを返す。 */
@@ -121,7 +132,7 @@ public class ProfileEventLogStore implements AgentEventListener {
         if (parent != null) Files.createDirectories(parent);
         Files.writeString(
             file,
-            objectMapper.writeValueAsString(entry) + System.lineSeparator(),
+            writeEntry.write(entry) + System.lineSeparator(),
             StandardCharsets.UTF_8,
             StandardOpenOption.CREATE,
             StandardOpenOption.APPEND);
@@ -149,7 +160,7 @@ public class ProfileEventLogStore implements AgentEventListener {
           continue;
         }
         try {
-          entries.add(objectMapper.readValue(line, ProfileEventLogEntry.class));
+          entries.add(readEntry.read(line));
         } catch (IOException e) {
           log.warn("Skipping malformed profile event log line in {}", file);
         }
@@ -226,8 +237,7 @@ public class ProfileEventLogStore implements AgentEventListener {
     if (payload == null) {
       return Map.of();
     }
-    Map<String, Object> values =
-        objectMapper.convertValue(payload, new TypeReference<Map<String, Object>>() {});
+    Map<String, Object> values = payloadFields.apply(payload);
     replaceTextWithLength(values, "delta");
     replaceTextWithLength(values, "text");
     replaceTextWithLength(values, "argumentsSummary");
