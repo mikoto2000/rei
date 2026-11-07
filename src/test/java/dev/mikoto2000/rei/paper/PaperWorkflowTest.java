@@ -173,6 +173,27 @@ class PaperWorkflowTest {
     assertEquals(1, calls.get());
   }
 
+  /** 処理中の設定変更でも、保存する結果とキャッシュキーの設定を一致させる。 */
+  @Test
+  void summaryUsesOneSettingsSnapshotAndReadsChangesOnTheNextCall() {
+    var delegate = model(summary());
+    var changingModel = new PaperLanguageModel() {
+      public String model() {
+        return delegate.model();
+      }
+
+      public String generate(String system, String input, PaperOperation operation) {
+        config.setPromptVersion("2");
+        return delegate.generate(system, input, operation);
+      }
+    };
+    var service =
+        new PaperSummaryService(repo, content, changingModel, new PaperSummaryValidator(), config);
+    assertEquals("1", service.summarize(paper, PaperSummary.Mode.STANDARD, false, op).promptVersion());
+    assertEquals("2", service.summarize(paper, PaperSummary.Mode.STANDARD, false, op).promptVersion());
+    assertEquals(2, calls.get());
+  }
+
   /** 論文の調査と整理で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void summaryRefreshAndPromptVersion() {

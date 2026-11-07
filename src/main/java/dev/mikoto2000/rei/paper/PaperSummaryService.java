@@ -4,6 +4,7 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** 論文要約のユースケースを実現する。 */
@@ -26,11 +27,7 @@ public class PaperSummaryService {
   private final PaperSummaryValidator validator;
 
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
-  private final PaperProperties config;
+  private final Supplier<PaperSettings> settings;
 
   /** 指定された値や利用先を使って、PaperSummaryServiceを初期化する。 */
   public PaperSummaryService(
@@ -43,7 +40,7 @@ public class PaperSummaryService {
     this.content = content;
     this.llm = llm;
     this.validator = validator;
-    this.config = config;
+    this.settings = () -> PaperSettings.capture(config);
   }
 
   /** 対象の内容を、要点が分かる形にまとめる。 */
@@ -55,11 +52,12 @@ public class PaperSummaryService {
   /** 利用者が要点を把握できるよう、使用中を要約する。 */
   private PaperSummary summarizeLocked(
       Paper paper, PaperSummary.Mode mode, boolean refresh, PaperOperation op) {
-    if (mode == null) mode = config.getDefaultSummaryMode();
+    var config = settings.get();
+    if (mode == null) mode = config.defaultSummaryMode();
     if (repo.find(paper.id()).isEmpty())
       throw new PaperException(PaperException.Code.PAPER_NOT_FOUND, "論文が見つかりません");
     op.check();
-    String key = PaperCacheKey.of(repo, paper, mode, llm.model(), config.getPromptVersion());
+    String key = PaperCacheKey.of(repo, paper, mode, llm.model(), config.promptVersion());
     var cached = repo.artifact(paper.id(), "summary", key);
     org.slf4j.LoggerFactory.getLogger(getClass())
         .info(
@@ -81,7 +79,7 @@ public class PaperSummaryService {
     try {
       long started = System.nanoTime();
       List<PaperSection> excerpts = new ArrayList<>();
-      int budget = config.getSummaryInputLimit();
+      int budget = config.summaryInputLimit();
       // Sample every section fairly instead of silently dropping the end of a paper.
       int each = Math.max(1, budget / Math.max(1, source.sections().size()));
       boolean truncated = false;
@@ -111,7 +109,7 @@ public class PaperSummaryService {
               paper.id(),
               mode,
               llm.model(),
-              config.getPromptVersion(),
+              config.promptVersion(),
               java.time.Instant.now().toString(),
               source.availability(),
               validated.content(),

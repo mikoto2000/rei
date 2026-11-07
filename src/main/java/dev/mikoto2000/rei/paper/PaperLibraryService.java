@@ -5,6 +5,7 @@ import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** 論文保管資料のユースケースを実現する。 */
@@ -32,11 +33,7 @@ public class PaperLibraryService {
   private final PaperSessionReferences refs;
 
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
-  private final PaperProperties config;
+  private final Supplier<PaperSettings> settings;
 
   /** 指定された値や利用先を使って、PaperLibraryServiceを初期化する。 */
   public PaperLibraryService(
@@ -47,12 +44,12 @@ public class PaperLibraryService {
     this.repo = repo;
     this.store = store;
     this.refs = refs;
-    this.config = config;
+    this.settings = () -> PaperSettings.capture(config);
   }
 
   /** この機能を利用する設定が有効かどうかを返す。 */
   public void enabled() {
-    if (!config.isEnabled())
+    if (!settings.get().enabled())
       throw new PaperException(PaperException.Code.INVALID_QUERY, "Paper Research は無効です");
   }
 
@@ -162,7 +159,7 @@ public class PaperLibraryService {
   public List<Paper> search(String query, int limit, PaperOperation op) {
     enabled();
     op.check();
-    var result = repo.search(query, Math.min(limit, config.getMaxLibrarySearchResults()));
+    var result = repo.search(query, Math.min(limit, settings.get().maxLibrarySearchResults()));
     refs.replace(op.sessionId(), result.stream().map(Paper::id).toList());
     return result;
   }

@@ -1,8 +1,7 @@
 package dev.mikoto2000.rei.paper;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 
 /** 論文の調査と整理に必要な論文コマンド実行先を扱う。 */
@@ -12,16 +11,12 @@ public class PaperCommandExecutor {
   private final PaperResearchService service;
 
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
-  private final PaperProperties config;
+  private final Supplier<PaperSettings> settings;
 
   /** 指定された値や利用先を使って、PaperCommandExecutorを初期化する。 */
   public PaperCommandExecutor(PaperResearchService service, PaperProperties config) {
     this.service = service;
-    this.config = config;
+    this.settings = () -> PaperSettings.capture(config);
   }
 
   /** 論文の調査と整理で判断に用いるacceptsの条件を確認する。 */
@@ -33,12 +28,13 @@ public class PaperCommandExecutor {
   public String execute(String text, PaperOperation op) {
     try {
       service.library.enabled();
+      var config = settings.get();
       var words = new dev.mikoto2000.rei.core.command.UserInputParser().split(text);
       var r = PaperCommandRequest.parse(java.util.Arrays.copyOfRange(words, 1, words.length));
       Object result =
           switch (r.action) {
             case "search" -> {
-              var found = service.search.search(r.query(config.getDefaultLimit()), op);
+              var found = service.search.search(r.query(config.defaultLimit()), op);
               yield Map.of(
                   "papers", PaperViews.listing(found.papers()), "warnings", found.warnings());
             }
@@ -61,7 +57,7 @@ public class PaperCommandExecutor {
                           ? PaperSummary.Mode.QUICK
                           : r.detailed
                               ? PaperSummary.Mode.DETAILED
-                              : config.getDefaultSummaryMode(),
+                              : config.defaultSummaryMode(),
                       r.refresh,
                       op);
               yield Map.of(
@@ -83,12 +79,12 @@ public class PaperCommandExecutor {
                               ? PaperTranslation.Mode.NATURAL
                               : r.technical
                                   ? PaperTranslation.Mode.TECHNICAL
-                                  : config.getDefaultTranslationMode(),
+                                  : config.defaultTranslationMode(),
                       r.section,
                       r.refresh,
                       op));
             }
-            case "library" -> library(r, op);
+            case "library" -> library(r, op, config);
             case "import" -> {
               var run = op.runContext();
               if (run != null
@@ -100,7 +96,7 @@ public class PaperCommandExecutor {
               if (!path.isAbsolute() && run != null)
                 path = run.projectRoot().resolve(path).normalize();
               try (var stream = java.nio.file.Files.newInputStream(path)) {
-                var pdf = stream.readNBytes(config.getMaxPdfBytes() + 1);
+                var pdf = stream.readNBytes(config.maxPdfBytes() + 1);
                 service.content.importPdf(service.library.get(r.args.getFirst(), op), pdf, op);
               } catch (java.io.IOException e) {
                 throw new PaperException(
@@ -122,17 +118,17 @@ public class PaperCommandExecutor {
   }
 
   /** 論文の調査と整理で用いる保管資料を返す。 */
-  private Object library(PaperCommandRequest r, PaperOperation op) {
+  private Object library(PaperCommandRequest r, PaperOperation op, PaperSettings config) {
     if (r.args.isEmpty())
       return PaperViews.listing(
           service.library.search(
-              "", r.limit == null ? config.getMaxLibrarySearchResults() : r.limit, op));
+              "", r.limit == null ? config.maxLibrarySearchResults() : r.limit, op));
     return switch (r.args.getFirst()) {
       case "search" ->
           PaperViews.listing(
               service.library.search(
                   String.join(" ", r.args.subList(1, r.args.size())),
-                  r.limit == null ? config.getMaxLibrarySearchResults() : r.limit,
+                  r.limit == null ? config.maxLibrarySearchResults() : r.limit,
                   op));
       case "show" -> service.library.describe(service.library.get(r.args.get(1), op));
       case "remove", "purge" -> {
