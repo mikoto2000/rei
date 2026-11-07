@@ -433,7 +433,7 @@ class RawToolResultArgumentRepairTest {
     var client =
         ChatClient.builder(new StagnationChatModel(model))
             .defaultAdvisors(new RunAwareToolCallingAdvisor())
-            .defaultToolCallbacks(callback)
+            .defaultTools(callback)
             .build();
     var properties = new LlmProperties();
     properties.updateOutputLimit(limits -> limits.setMaxToolArgumentCorrectionsPerRun(2));

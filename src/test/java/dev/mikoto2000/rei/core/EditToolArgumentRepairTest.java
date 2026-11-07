@@ -348,7 +348,7 @@ class EditToolArgumentRepairTest {
     var client =
         ChatClient.builder(new StagnationChatModel(model))
             .defaultAdvisors(new RunAwareToolCallingAdvisor())
-            .defaultToolCallbacks(callbacks)
+            .defaultTools(callbacks)
             .build();
     var properties = new LlmProperties();
     properties.updateOutputLimit(limits -> limits.setMaxToolArgumentCorrectionsPerRun(2));

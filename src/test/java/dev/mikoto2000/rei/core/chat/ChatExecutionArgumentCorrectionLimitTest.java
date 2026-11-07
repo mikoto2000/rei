@@ -117,7 +117,7 @@ class ChatExecutionArgumentCorrectionLimitTest {
     var client =
         ChatClient.builder(new StagnationChatModel(model))
             .defaultAdvisors(new RunAwareToolCallingAdvisor())
-            .defaultToolCallbacks(tool)
+            .defaultTools(tool)
             .build();
     var properties = new LlmProperties();
     properties.updateOutputLimit(limits -> limits.setMaxToolArgumentCorrectionsPerRun(limit));
