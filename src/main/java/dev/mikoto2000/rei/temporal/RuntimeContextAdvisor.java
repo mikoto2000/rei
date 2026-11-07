@@ -58,12 +58,13 @@ public class RuntimeContextAdvisor implements BaseAdvisor {
   /** 利用者が内容を確認できるよう、文脈を表示する。 */
   private String renderContext() {
     ZonedDateTime now = ZonedDateTime.now(clock);
-    return ("# Runtime Context\n\nCurrent time: "
-            + now.toOffsetDateTime()
-            + "\nTimezone: "
-            + now.getZone().getId()
-            + "\n")
-        .stripTrailing();
+    return "# Runtime Context\n\nRequest start time: "
+        + now.toOffsetDateTime()
+        + "\nTimezone: "
+        + now.getZone().getId()
+        + "\n\nThis timestamp is fixed for this request; it is not the current time during execution."
+        + "\nInterpret relative dates in this request using its start time and timezone."
+        + "\nWhen the current time is needed, call getCurrentTime.";
   }
 
   /** 指定された内容へ切り替えるため、利用者メッセージを置き換える。 */

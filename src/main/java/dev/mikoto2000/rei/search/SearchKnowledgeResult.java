@@ -21,8 +21,10 @@ public record SearchKnowledgeResult(
     String webSearchSkippedMessage) {
   public SearchKnowledgeResult {
     vectorResults =
-        vectorResults == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(vectorResults));
+        vectorResults == null ? null : Collections.unmodifiableList(new ArrayList<>(vectorResults));
+  }
+
+  SearchKnowledgeResult withWeb(WebSearchContext context, String skippedMessage) {
+    return new SearchKnowledgeResult(query, vectorResults, context, skippedMessage);
   }
 }

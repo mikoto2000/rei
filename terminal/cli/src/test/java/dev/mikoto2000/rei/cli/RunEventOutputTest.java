@@ -5,9 +5,27 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /** 実行イベント出力の結果と状態の契約を検証するテスト。 */
 class RunEventOutputTest {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void llmFailureIsImmediateWithoutRepeatingTheThinkingHeader(boolean moreThinking) throws Exception {
+    event("thinking.delta", "t", "考え中");
+    output.accept("llm.request.failed", BackendClient.JSON.createObjectNode()
+        .put("durationMs", 2026).set("error", BackendClient.JSON.createObjectNode()
+            .put("type", "connection_failed").put("message", "接続先へ接続できませんでした。")));
+    assertEquals("考え中", lines.get(lines.size() - 2));
+    assertEquals("[llm] request failed (2026 ms): 接続先へ接続できませんでした。", lines.getLast());
+    if (moreThinking) event("thinking.delta", "t", "続き");
+    event("thinking.completed", "t", moreThinking ? "考え中続き" : "考え中");
+    assertEquals(1, headings.size());
+    if (moreThinking) assertEquals("続き", lines.getLast());
+    assertEquals(1, lines.stream().filter(line -> line.contains("request failed")).count());
+  }
+
   @Test
   void displaysConnectionLossForLlmAndRunFailures() {
     var error = BackendClient.JSON.createObjectNode()

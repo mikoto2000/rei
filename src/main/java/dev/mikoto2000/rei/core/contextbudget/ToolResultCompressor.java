@@ -3,14 +3,14 @@ package dev.mikoto2000.rei.core.contextbudget;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.Page;
 import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.PolicyValue;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 
@@ -22,11 +22,9 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
  */
 public class ToolResultCompressor {
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common tool result store for body references and cache state.")
-  private final RawToolResultStore store;
+  private final SaveRawResult saveRaw;
+
+  private final BiFunction<String, String, RawToolResultStore.Result> readRaw;
 
   /** 概算。 */
   private final TokenEstimator estimator;
@@ -35,22 +33,23 @@ public class ToolResultCompressor {
   private final int threshold, tokens;
 
   /** 配信。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the configured output limits when retaining and delivering tool results.")
-  private ToolResultDeliveryProperties delivery = new ToolResultDeliveryProperties();
+  private static final DeliveryLimits DEFAULT_LIMITS =
+      DeliveryLimits.capture(new ToolResultDeliveryProperties());
+
+  private Supplier<DeliveryLimits> deliveryLimits = () -> DEFAULT_LIMITS;
 
   /** モデルへ渡す文脈の管理で使用する配信設定を設定する。 */
   public void setDeliveryProperties(ToolResultDeliveryProperties properties) {
     properties.validate();
-    delivery = properties;
+    deliveryLimits = () -> DeliveryLimits.capture(properties);
   }
 
   /** 指定された値や利用先を使って、ToolResultCompressorを初期化する。 */
   public ToolResultCompressor(
       RawToolResultStore store, TokenEstimator estimator, int threshold, int tokens) {
-    this.store = store;
+    this.saveRaw =
+        (conversation, run, name, call, raw) -> store.save(conversation, run, name, call, raw);
+    this.readRaw = (conversation, ref) -> store.read(conversation, ref);
     this.estimator = estimator;
     this.threshold = threshold;
     this.tokens = tokens;
@@ -61,7 +60,7 @@ public class ToolResultCompressor {
     if (message instanceof ToolResponseMessage tool)
       for (var response : tool.getResponses())
         if (policy(tool, response.id()) != ResultDelivery.Kind.RAW_RESULT_PAGE)
-          store.save(
+          saveRaw.save(
               conversation,
               run,
               response.name(),
@@ -72,6 +71,7 @@ public class ToolResultCompressor {
   /** モデルへ渡す文脈の管理で用いる簡潔な形式を返す。 */
   public Message compact(Message message, String conversation, String run) {
     if (!(message instanceof ToolResponseMessage tool)) return message;
+    var limits = deliveryLimits.get();
     var pages = new HashMap<String, Page>();
     var responses = new ArrayList<ToolResponseMessage.ToolResponse>();
     boolean changed = false;
@@ -82,20 +82,22 @@ public class ToolResultCompressor {
         responses.add(response);
         continue;
       }
-      String ref = store.save(conversation, run, response.name(), response.id(), raw);
+      String ref = saveRaw.save(conversation, run, response.name(), response.id(), raw);
       if (lossless(policy)) {
         if (tool.getMetadata().get("rei.reviewReceipts") instanceof Map<?, ?> receipts
             && receipts.containsKey(response.id())) {
-          int reviewLimit = response.name().equals("readNextReviewWorkItem")
-                  || response.name().equals("readReviewWorkItem")
-              ? delivery.getReviewMaxTokens() : delivery.getPageMaxTokens();
+          int reviewLimit =
+              response.name().equals("readNextReviewWorkItem")
+                      || response.name().equals("readReviewWorkItem")
+                  ? limits.reviewMax()
+                  : limits.pageMax();
           if (estimator.text(raw) > reviewLimit)
             throw new IllegalStateException(
                 "CONTEXT_BUDGET_INSUFFICIENT: reduce readReviewFile tokenBudget");
           responses.add(response);
           continue;
         }
-        if (estimator.text(raw) <= fileReadLimit(tool, response)) {
+        if (estimator.text(raw) <= fileReadLimit(tool, response, limits)) {
           responses.add(response);
           continue;
         }
@@ -105,13 +107,7 @@ public class ToolResultCompressor {
                 response.id(),
                 response.name(),
                 new LosslessResultPager(estimator)
-                    .page(
-                        ref,
-                        response.id(),
-                        response.name(),
-                        raw,
-                        0,
-                        delivery.getPageTargetTokens())));
+                    .page(ref, response.id(), response.name(), raw, 0, limits.pageTarget())));
         pages.put(response.id(), new Page(ref, 0));
         continue;
       }
@@ -152,15 +148,15 @@ public class ToolResultCompressor {
         : message;
   }
 
-  private int fileReadLimit(ToolResponseMessage tool, ToolResponseMessage.ToolResponse response) {
+  private static int fileReadLimit(
+      ToolResponseMessage tool, ToolResponseMessage.ToolResponse response, DeliveryLimits limits) {
     if (response.name().equals("readMultiFile")
         && policy(tool, response.id()) == ResultDelivery.Kind.FILE_CONTENT
         && tool.getMetadata().get("rei.fileReadBudgets") instanceof Map<?, ?> grants
         && grants.get(response.id())
             instanceof dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.FileReadBudgetValue grant)
-      return Math.max(
-          delivery.getPageMaxTokens(), Math.min(delivery.getBulkMaxTokens(), grant.tokens()));
-    return delivery.getPageMaxTokens();
+      return Math.max(limits.pageMax(), Math.min(limits.bulkMax(), grant.tokens()));
+    return limits.pageMax();
   }
 
   /**
@@ -171,6 +167,7 @@ public class ToolResultCompressor {
    */
   public org.springframework.ai.chat.prompt.Prompt fit(
       org.springframework.ai.chat.prompt.Prompt prompt, String conversation, String run, int hard) {
+    var limits = deliveryLimits.get();
     var messages = new ArrayList<>(prompt.getInstructions());
     long total = ContextBudgetManager.estimateMessages(messages, estimator);
     for (int index = 0; index < messages.size() && total > hard; index++) {
@@ -189,11 +186,9 @@ public class ToolResultCompressor {
         if (tool.getMetadata().get("rei.reviewReceipts") instanceof Map<?, ?> receipts
             && receipts.containsKey(response.id())) continue;
         long remainder =
-            estimator.text(response.responseData())
-                - (total - hard)
-                - delivery.getPageSafetyTokens();
-        if (remainder < delivery.getPageMinTokens()) continue;
-        int budget = (int) Math.min(delivery.getPageMaxTokens(), remainder);
+            estimator.text(response.responseData()) - (total - hard) - limits.pageSafety();
+        if (remainder < limits.pageMin()) continue;
+        int budget = (int) Math.min(limits.pageMax(), remainder);
         String replacement;
         if (lossless(policy)) {
           var page = pages.get(response.id());
@@ -201,8 +196,9 @@ public class ToolResultCompressor {
           if (page == null) {
             source = response.responseData();
             page =
-                new Page(store.save(conversation, run, response.name(), response.id(), source), 0);
-          } else source = store.read(conversation, page.ref()).rawResult();
+                new Page(
+                    saveRaw.save(conversation, run, response.name(), response.id(), source), 0);
+          } else source = readRaw.apply(conversation, page.ref()).rawResult();
           replacement =
               new LosslessResultPager(estimator)
                   .page(page.ref(), response.id(), response.name(), source, page.offset(), budget);
@@ -212,13 +208,13 @@ public class ToolResultCompressor {
           // JSON.
           var page = RawResultPage.parse(response.responseData());
           replacement =
-              new RawToolResultTools(store, estimator)
-                  .pageText(
-                      page.rawResultRef(),
-                      store.read(conversation, page.rawResultRef()),
-                      page.offset(),
-                      Math.min(16000, page.nextOffset() - page.offset()),
-                      budget);
+              RawToolResultTools.pageText(
+                  estimator,
+                  page.rawResultRef(),
+                  readRaw.apply(conversation, page.rawResultRef()),
+                  page.offset(),
+                  Math.min(16000, page.nextOffset() - page.offset()),
+                  budget);
         }
         responses.set(
             r, new ToolResponseMessage.ToolResponse(response.id(), response.name(), replacement));
@@ -297,5 +293,23 @@ public class ToolResultCompressor {
     int end = text.length();
     while (end > 0 && estimator.text(text.substring(0, end)) > budget) end = end * 3 / 4;
     return text.substring(0, end);
+  }
+
+  @FunctionalInterface
+  private interface SaveRawResult {
+    String save(String conversation, String run, String tool, String call, String raw);
+  }
+
+  private record DeliveryLimits(
+      int reviewMax, int pageMax, int pageTarget, int bulkMax, int pageSafety, int pageMin) {
+    static DeliveryLimits capture(ToolResultDeliveryProperties properties) {
+      return new DeliveryLimits(
+          properties.getReviewMaxTokens(),
+          properties.getPageMaxTokens(),
+          properties.getPageTargetTokens(),
+          properties.getBulkMaxTokens(),
+          properties.getPageSafetyTokens(),
+          properties.getPageMinTokens());
+    }
   }
 }

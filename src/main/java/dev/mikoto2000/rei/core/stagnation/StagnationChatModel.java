@@ -642,7 +642,8 @@ public class StagnationChatModel implements ChatModel {
                             "readReviewPages",
                             "readRawToolResult",
                             "claimReviewWorkItem",
-                            "readNextReviewWorkItem")
+                            "readNextReviewWorkItem",
+                            "listFile")
                         .contains(name))
                   return context.toolReadCorrection(read.code(), read.getMessage());
                 if (rejected != null

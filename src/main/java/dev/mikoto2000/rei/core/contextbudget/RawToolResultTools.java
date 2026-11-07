@@ -61,11 +61,17 @@ public class RawToolResultTools {
     if (owner == null) throw new IllegalStateException("A run is required");
     if (offset < 0 || limit < 1 || limit > 16000) throw invalidCursor();
     var result = readResult.apply(owner.conversationId(), rawResultRef);
-    return pageText(rawResultRef, result, offset, limit, pageTokens);
+    return pageText(estimator, rawResultRef, result, offset, limit, pageTokens);
   }
 
   /** モデルへ渡す文脈の管理で用いるページテキストを返す。 */
-  String pageText(String ref, RawToolResultStore.Result result, int offset, int limit, int budget) {
+  static String pageText(
+      TokenEstimator estimator,
+      String ref,
+      RawToolResultStore.Result result,
+      int offset,
+      int limit,
+      int budget) {
     String raw = result.rawResult();
     if (offset < 0
         || offset > raw.length()
@@ -107,7 +113,7 @@ public class RawToolResultTools {
   }
 
   /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
-  private String encode(String ref, RawToolResultStore.Result result, int start, int end) {
+  private static String encode(String ref, RawToolResultStore.Result result, int start, int end) {
     return "toolName: "
         + safeHeader(result.toolName())
         + "\ntoolCallId: "

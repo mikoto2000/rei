@@ -6,8 +6,6 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.ContextCompressionPayload;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -54,11 +52,10 @@ public class ContextAssembler {
   private final ConversationSummaryRepository summaries;
 
   /** ツール一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured compressor for retention and delivery of tool results.")
-  private final ToolResultCompressor tools;
+  private final PreserveToolResult preserveToolResult;
+
+  private final CompactToolResult compactToolResult;
+  private final FitToolResults fitToolResults;
 
   /** 会話の要点を保ちながら文脈を圧縮する窓口。 */
   private final ConversationCompressor compressor;
@@ -144,7 +141,7 @@ public class ContextAssembler {
 
   /** モデルへ渡す文脈の管理に関するpreserveツールの結果一覧を処理する。 */
   public void preserveToolResults(List<Message> messages, String conversation, String run) {
-    if (!messages.isEmpty()) tools.preserve(messages.getLast(), conversation, run);
+    if (!messages.isEmpty()) preserveToolResult.apply(messages.getLast(), conversation, run);
   }
 
   /**
@@ -181,7 +178,12 @@ public class ContextAssembler {
     this.newStandaloneSummaryBudget = () -> StandaloneSummaryBudget.create(properties);
     this.estimator = estimator;
     this.summaries = summaries;
-    this.tools = tools;
+    this.preserveToolResult =
+        (message, conversation, run) -> tools.preserve(message, conversation, run);
+    this.compactToolResult =
+        (message, conversation, run) -> tools.compact(message, conversation, run);
+    this.fitToolResults =
+        (prompt, conversation, run, limit) -> tools.fit(prompt, conversation, run, limit);
     this.compressor = compressor;
     this.events = events;
     this.publisher = publisher;
@@ -208,13 +210,13 @@ public class ContextAssembler {
                                 response ->
                                     ToolResultCompressor.lossless(
                                         ToolResultCompressor.policy(tool, response.id()))))
-                      return tools.compact(message, conversation, run);
+                      return compactToolResult.apply(message, conversation, run);
                     return message;
                   })
               .toList();
       var projected =
-          tools.fit(
-              restoreSuppressed(new Prompt(messages, raw.getOptions())),
+          fitToolResults.apply(
+              withWorkingSetSnapshot(restoreSuppressed(new Prompt(messages, raw.getOptions()))),
               conversation,
               run,
               hardLimit(raw));
@@ -250,7 +252,7 @@ public class ContextAssembler {
       long historical = ContextHistoryAdvisor.sequence(message);
       if (historical > 0) history.add(new Entry(historical, message));
       else if (!(message instanceof SystemMessage) && !(message instanceof UserMessage))
-        active.add(new Entry(++sequence, tools.compact(message, conversation, run)));
+        active.add(new Entry(++sequence, compactToolResult.apply(message, conversation, run)));
     }
     String runKey = ConversationSummaryRepository.runKey(conversation, run);
     String historyKey = conversation;
@@ -307,7 +309,8 @@ public class ContextAssembler {
       trimOldest(h, costs.history, costs, hard, check);
       trimOldest(a, costs.active, costs, hard, check);
     }
-    Prompt result = tools.fit(restoreSuppressed(project(raw, h, a)), conversation, run, hard);
+    Prompt result =
+        fitToolResults.apply(restoreSuppressed(project(raw, h, a)), conversation, run, hard);
     long after = estimate(result);
     if (after > hard)
       throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
@@ -640,13 +643,7 @@ public class ContextAssembler {
           messages.add(runObservations);
           runObservations = null;
         }
-        if (Boolean.TRUE.equals(message.getMetadata().get("rei.workingSet")) && workingSet != null)
-          messages.add(
-              SystemMessage.builder()
-                  .text(workingSet.get())
-                  .metadata(message.getMetadata())
-                  .build());
-        else messages.add(message);
+        messages.add(message);
       } else {
         Message retained = activeBySequence.get(++sequence);
         if (retained != null) {
@@ -657,7 +654,24 @@ public class ContextAssembler {
       }
     }
     if (runObservations != null) messages.add(runObservations);
-    return new Prompt(messages, original.getOptions());
+    return withWorkingSetSnapshot(new Prompt(messages, original.getOptions()));
+  }
+
+  /** Keep changing working state after complete exchanges, outside the loop's raw history. */
+  private Prompt withWorkingSetSnapshot(Prompt prompt) {
+    var messages = new ArrayList<Message>();
+    Message marker = null;
+    for (var message : prompt.getInstructions()) {
+      if (Boolean.TRUE.equals(message.getMetadata().get("rei.workingSet"))) marker = message;
+      else messages.add(message);
+    }
+    if (marker == null) return prompt;
+    String snapshot = workingSet == null ? marker.getText() : workingSet.get();
+    if (snapshot == null || snapshot.isBlank())
+      snapshot = "## Current Working Set\n\nThe current working set is empty.";
+    messages.add(
+        SystemMessage.builder().text(snapshot).metadata(marker.getMetadata()).build());
+    return new Prompt(messages, prompt.getOptions());
   }
 
   /** モデルへ渡す文脈の管理で用いる発生順序開始位置を返す。 */
@@ -730,4 +744,19 @@ public class ContextAssembler {
       int safetyMargin,
       int retryCooldownSeconds,
       int contextLimit) {}
+
+  @FunctionalInterface
+  private interface PreserveToolResult {
+    void apply(Message message, String conversation, String run);
+  }
+
+  @FunctionalInterface
+  private interface CompactToolResult {
+    Message apply(Message message, String conversation, String run);
+  }
+
+  @FunctionalInterface
+  private interface FitToolResults {
+    Prompt apply(Prompt prompt, String conversation, String run, int limit);
+  }
 }

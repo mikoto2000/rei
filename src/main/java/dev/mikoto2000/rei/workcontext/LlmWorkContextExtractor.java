@@ -7,8 +7,6 @@ import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.OutputLimitDetector;
 import dev.mikoto2000.rei.workcontext.WorkContext.Evidence;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -45,10 +43,6 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
   }
 
   /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original extraction failure after checking for cancellation.")
   @Override
   public List<WorkContextCandidate> extract(
       List<Evidence> evidence, List<WorkContext.Item> existing, String runStatus) {
@@ -142,8 +136,14 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
       WorkContextRepository.checkCancellation();
       return output.parse(result.toString());
     } catch (RuntimeException error) {
+      var cause = reactor.core.Exceptions.unwrap(error);
+      if (cause instanceof Error fatal) throw fatal;
       RunCancellation.propagate(error);
-      throw error;
+      RunCancellation.propagateStopped(cause);
+      if (cause instanceof WorkContextExtractionException extraction) throw extraction;
+      if (cause instanceof IllegalStateException state) throw state;
+      if (cause instanceof IllegalArgumentException argument) throw argument;
+      throw new IllegalStateException("Work Context model execution failed", cause);
     }
   }
 }

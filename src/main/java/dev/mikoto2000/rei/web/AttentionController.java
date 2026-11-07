@@ -1,9 +1,9 @@
 package dev.mikoto2000.rei.web;
 
+import dev.mikoto2000.rei.attention.AttentionDeliveryRepository.Delivery;
 import dev.mikoto2000.rei.attention.AttentionRepository;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
+import java.util.function.BiFunction;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,16 +23,24 @@ public class AttentionController {
   private final AttentionRepository repository;
 
   /** 配信。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared attention delivery state when serving API operations.")
-  private dev.mikoto2000.rei.attention.AttentionDeliveryService delivery;
+  private BiFunction<String, String, Delivery> deliveryStatus;
+
+  private BiFunction<String, RequestedDelivery, Delivery> requestDelivery;
+
+  private record RequestedDelivery(String id, DeliveryRequest request) {}
 
   /** Web APIによる操作で使用する配信を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setDelivery(dev.mikoto2000.rei.attention.AttentionDeliveryService delivery) {
-    this.delivery = delivery;
+    this.deliveryStatus = delivery == null ? null : (project, id) -> delivery.status(project, id);
+    this.requestDelivery =
+        delivery == null
+            ? null
+            : (project, input) ->
+                input.request().retry()
+                    ? delivery.retry(
+                        project, input.id(), input.request().acknowledgeDuplicateRisk())
+                    : delivery.request(project, input.id());
   }
 
   /** 指定された値や利用先を使って、AttentionControllerを初期化する。 */
@@ -72,7 +80,7 @@ public class AttentionController {
   @GetMapping("/{id}/delivery")
   public dev.mikoto2000.rei.attention.AttentionDeliveryRepository.Delivery delivery(
       @PathVariable String projectId, @PathVariable String id) {
-    return requireDelivery().status(projectId, id);
+    return requireDelivery(deliveryStatus).apply(projectId, id);
   }
 
   /** Web APIによる操作で用いる要求配信を返す。 */
@@ -82,14 +90,11 @@ public class AttentionController {
       @PathVariable String id,
       @RequestBody DeliveryRequest request) {
     if (request == null) throw new IllegalArgumentException("Delivery request is required");
-    return request.retry()
-        ? requireDelivery().retry(projectId, id, request.acknowledgeDuplicateRisk())
-        : requireDelivery().request(projectId, id);
+    return requireDelivery(requestDelivery).apply(projectId, new RequestedDelivery(id, request));
   }
 
-  /** 条件を満たさない操作を拒否するため、配信の前提条件を確認する。 */
-  private dev.mikoto2000.rei.attention.AttentionDeliveryService requireDelivery() {
-    if (delivery == null) throw new IllegalArgumentException("Attention delivery is unavailable");
-    return delivery;
+  private static <T> T requireDelivery(T operation) {
+    if (operation == null) throw new IllegalArgumentException("Attention delivery is unavailable");
+    return operation;
   }
 }

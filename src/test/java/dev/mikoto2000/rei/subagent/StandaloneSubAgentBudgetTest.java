@@ -174,7 +174,8 @@ class StandaloneSubAgentBudgetTest {
   /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void partiallySettledTokenWaveCannotAdmitAnotherChild() {
-    var budget = StandaloneSubAgentBudget.create(limits(10, 5));
+    var budget =
+        StandaloneSubAgentBudget.create(StandaloneSubAgentBudget.Limits.from(limits(10, 5)));
     assertTrue(budget.tryReserve());
     assertTrue(budget.tryReserve());
     budget.recordTotalTokens(3);
@@ -367,7 +368,8 @@ class StandaloneSubAgentBudgetTest {
     assertEquals(5, properties.getStandaloneMaxTotalTokens());
     assertThrows(IllegalArgumentException.class, () -> properties.setStandaloneMaxLlmCalls(1001));
     assertThrows(IllegalArgumentException.class, () -> properties.setStandaloneMaxTotalTokens(-1));
-    var budget = StandaloneSubAgentBudget.create(limits(3, 5));
+    var budget =
+        StandaloneSubAgentBudget.create(StandaloneSubAgentBudget.Limits.from(limits(3, 5)));
     try (var pool = java.util.concurrent.Executors.newFixedThreadPool(8)) {
       var jobs = new ArrayList<java.util.concurrent.Future<Boolean>>();
       for (int i = 0; i < 8; i++) jobs.add(pool.submit(budget::tryReserve));
@@ -391,7 +393,8 @@ class StandaloneSubAgentBudgetTest {
     var disposed = new java.util.concurrent.CountDownLatch(1);
     var runner =
         fixture.runner(p -> Flux.<ChatResponse>never().doOnCancel(disposed::countDown), "100ms");
-    var budget = StandaloneSubAgentBudget.create(limits(2, 5));
+    var budget =
+        StandaloneSubAgentBudget.create(StandaloneSubAgentBudget.Limits.from(limits(2, 5)));
     assertEquals(
         SubAgentResult.Status.TIMEOUT, runner.run("reviewer", "task", null, budget).status());
     assertTrue(disposed.await(2, java.util.concurrent.TimeUnit.SECONDS));

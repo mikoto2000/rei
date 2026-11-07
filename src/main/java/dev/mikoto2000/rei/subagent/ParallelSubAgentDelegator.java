@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.subagent;
 
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -31,16 +29,16 @@ import org.springframework.stereotype.Component;
 @Component
 public final class ParallelSubAgentDelegator implements AutoCloseable {
   /** 独立した予算設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the configured standalone limits when starting delegated work.")
-  private SubAgentProperties standaloneBudgetProperties = new SubAgentProperties();
+  private static final StandaloneSubAgentBudget.Limits DEFAULT_LIMITS =
+      StandaloneSubAgentBudget.Limits.from(new SubAgentProperties());
+
+  private volatile java.util.function.Supplier<StandaloneSubAgentBudget.Limits> currentLimits =
+      () -> DEFAULT_LIMITS;
 
   /** 補助エージェントへの委譲で使用する独立した予算設定を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setStandaloneBudgetProperties(SubAgentProperties properties) {
-    standaloneBudgetProperties = properties;
+    currentLimits = () -> StandaloneSubAgentBudget.Limits.from(properties);
   }
 
   /** 外部タイムアウト。 */
@@ -286,7 +284,7 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
           Status.REJECTED, requests.stream().map(r -> item(r, Status.REJECTED, null)).toList());
     var effectiveReservation =
         reservation == null && parent == null
-            ? StandaloneSubAgentBudget.create(standaloneBudgetProperties)
+            ? StandaloneSubAgentBudget.create(currentLimits.get())
             : reservation;
     var stopped = new AtomicBoolean(Thread.currentThread().isInterrupted());
     var deadlineReached = new AtomicBoolean();

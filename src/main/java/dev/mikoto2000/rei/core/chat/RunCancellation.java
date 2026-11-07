@@ -74,6 +74,12 @@ public final class RunCancellation {
     throw cancelled;
   }
 
+  /** Preserve terminal model-budget and run-control signals across provider wrappers. */
+  public static void propagateStopped(Throwable error) {
+    for (Throwable cause : causes(error))
+      dev.mikoto2000.rei.core.stagnation.RunExecutionContext.propagateStopSignal(cause);
+  }
+
   /** 会話の実行で用いる原因一覧を返す。 */
   static java.util.List<Throwable> causes(Throwable error) {
     var causes = new java.util.ArrayList<Throwable>();

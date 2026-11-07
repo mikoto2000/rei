@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.skills;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.vectordocument.CandidateReranker;
 import dev.mikoto2000.rei.vectorstore.ReciprocalRankFusion;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -41,11 +39,10 @@ public final class SemanticSkillSearch {
   private final LongSupplier nanos;
 
   /** 位置。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Loads and updates the shared skill embedding index.")
-  private final SkillEmbeddingIndex index;
+  private final java.util.function.BiFunction<String, List<String>, Map<String, float[]>> loadIndex;
+
+  private final java.util.function.BiConsumer<String, Map<String, float[]>> replaceIndex;
+  private final java.util.function.Consumer<String> invalidateIndex;
 
   /** indexed利用者情報一覧。 */
   private volatile Set<String> indexedProfiles;
@@ -79,7 +76,11 @@ public final class SemanticSkillSearch {
     this.embedding = embedding;
     this.reranker = reranker;
     this.nanos = nanos;
-    this.index = index;
+    this.loadIndex =
+        index == null ? null : (namespace, profiles) -> index.load(namespace, profiles);
+    this.replaceIndex =
+        index == null ? null : (namespace, vectors) -> index.replace(namespace, vectors);
+    this.invalidateIndex = index == null ? null : namespace -> index.invalidate(namespace);
   }
 
   /** この機能を利用する設定が有効かどうかを返す。 */
@@ -110,7 +111,7 @@ public final class SemanticSkillSearch {
         cache = Map.of();
         if (persistent() && !Objects.equals(indexedProfiles, Set.of()))
           try {
-            index.replace(settings.indexNamespace(), Map.of());
+            replaceIndex.accept(settings.indexNamespace(), Map.of());
             RunCancellation.propagate(null);
             indexedProfiles = Set.of();
           } catch (RuntimeException error) {
@@ -130,7 +131,7 @@ public final class SemanticSkillSearch {
         var toLoad = profiles.stream().filter(p -> !vectors.containsKey(p)).toList();
         if (!toLoad.isEmpty())
           try {
-            var saved = index.load(settings.indexNamespace(), toLoad);
+            var saved = loadIndex.apply(settings.indexNamespace(), toLoad);
             RunCancellation.propagate(null);
             for (var profile : toLoad)
               if (saved.containsKey(profile)) vectors.put(profile, normalized(saved.get(profile)));
@@ -160,7 +161,7 @@ public final class SemanticSkillSearch {
           bypassPersistent = true;
           if (persistent())
             try {
-              index.invalidate(settings.indexNamespace());
+              invalidateIndex.accept(settings.indexNamespace());
             } catch (RuntimeException error) {
               RunCancellation.propagate(error);
               log.warn(
@@ -174,7 +175,7 @@ public final class SemanticSkillSearch {
       if (persistent()
           && (!Objects.equals(indexedProfiles, vectors.keySet()) || !missing.isEmpty()))
         try {
-          index.replace(settings.indexNamespace(), vectors);
+          replaceIndex.accept(settings.indexNamespace(), vectors);
           RunCancellation.propagate(null);
           indexedProfiles = Set.copyOf(vectors.keySet());
           bypassPersistent = false;
@@ -197,7 +198,10 @@ public final class SemanticSkillSearch {
               .toList();
     } catch (RuntimeException error) {
       RunCancellation.propagate(error);
-      if (error instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)
+      Throwable providerFailure =
+          error instanceof java.util.concurrent.CompletionException ? error.getCause() : error;
+      if (providerFailure
+          instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)
         throw stopped;
       cache = Map.of();
       failureAt = nanos.getAsLong();
@@ -265,7 +269,7 @@ public final class SemanticSkillSearch {
 
   /** スキルの利用において、保存されるに該当するか判定する。 */
   private boolean persistent() {
-    return settings.persistentIndexEnabled() && index != null;
+    return settings.persistentIndexEnabled() && loadIndex != null;
   }
 
   /** スキルの利用で用いる識別情報を返す。 */

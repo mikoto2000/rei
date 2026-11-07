@@ -6,10 +6,16 @@ import dev.mikoto2000.rei.memory.model.LongTermMemory;
 import dev.mikoto2000.rei.memory.model.MemoryScope;
 import dev.mikoto2000.rei.memory.service.MemoryRepository;
 import dev.mikoto2000.rei.memory.service.SleepService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.function.ToLongFunction;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,19 +27,32 @@ import org.springframework.stereotype.Component;
 @Component
 public class MemoryCommandSupport {
   /** 保存と検索の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the common repository for persisted memory and its transaction boundaries.")
-  private final MemoryRepository repository;
+  private final MemoryList listMemories;
+
+  private final MemorySearch searchMemories;
+  private final Function<String, Optional<LongTermMemory>> findMemory;
+  private final Function<String, List<String>> memoryRelations;
+  private final BiFunction<String, String, Optional<String>> reflectionProof;
+  private final Consumer<String> archiveMemory;
+  private final BiFunction<String, Integer, List<dev.mikoto2000.rei.memory.service.SleepRun>>
+      sleepHistory;
+  private final Function<String, Map<String, Long>> memoryCounts;
+
+  @FunctionalInterface
+  private interface MemoryList {
+    List<LongTermMemory> list(String project, int limit, int offset);
+  }
+
+  @FunctionalInterface
+  private interface MemorySearch {
+    List<LongTermMemory> search(String query, String project, int limit);
+  }
 
   /** 待機。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared sleep service and its persisted consolidation state.")
-  private final SleepService sleep;
+  private final Supplier<List<MemoryRepository.AutoSleepRequest>> pendingSleepRequests;
+
+  private final Predicate<MemoryRepository.AutoSleepRequest> completeSleepRequest;
+  private final ToLongFunction<String> unsleptTurns;
 
   /** プロジェクト一覧。 */
   private final java.util.function.Supplier<String> currentProjectId;
@@ -49,8 +68,19 @@ public class MemoryCommandSupport {
       SleepService sleep,
       ProjectService projects,
       MemoryProperties properties) {
-    this.repository = repository;
-    this.sleep = sleep;
+    this.listMemories = (project, limit, offset) -> repository.list(project, limit, offset);
+    this.searchMemories = (query, project, limit) -> repository.search(query, project, limit);
+    this.findMemory = id -> repository.find(id);
+    this.memoryRelations = id -> repository.relations(id);
+    this.reflectionProof =
+        (project, id) ->
+            repository.verifiedReflectionProofByMemory(project, id).map(Object::toString);
+    this.archiveMemory = id -> repository.archive(id);
+    this.sleepHistory = (project, limit) -> repository.history(project, limit);
+    this.memoryCounts = project -> repository.counts(project);
+    this.pendingSleepRequests = () -> sleep.pendingAutoSleepRequests();
+    this.completeSleepRequest = request -> sleep.completeAutoSleepRequest(request);
+    this.unsleptTurns = session -> sleep.unsleptTurns(session);
     this.currentProjectId = () -> projects.currentContext().id();
     this.currentSessionId = () -> projects.currentSessionId();
     this.properties = properties;
@@ -76,7 +106,7 @@ public class MemoryCommandSupport {
   public String autoSleepRequestsForProject(String project) {
     var format = new dev.mikoto2000.rei.conversation.HistoryFormatter();
     var rows =
-        sleep.pendingAutoSleepRequests().stream()
+        pendingSleepRequests.get().stream()
             .filter(r -> r.projectId().equals(project))
             .map(
                 r ->
@@ -101,7 +131,7 @@ public class MemoryCommandSupport {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (session == null || session.isBlank() || session.length() > 512 || revision < 1)
       throw new IllegalArgumentException("Session and positive revision are required");
-    if (!sleep.completeAutoSleepRequest(
+    if (!completeSleepRequest.test(
         new MemoryRepository.AutoSleepRequest(session, project, revision, "")))
       throw new IllegalStateException("Auto Sleep request changed or is not in this Project");
     return "Pending Auto Sleep request cancelled. An already running Sleep is unaffected.";
@@ -115,7 +145,7 @@ public class MemoryCommandSupport {
   /** 利用可能な対象を確認できるよう、対象プロジェクトを一覧にする。 */
   public String listForProject(String project, int limit, int offset) {
     enabled();
-    return render(repository.list(project, limit, offset));
+    return render(listMemories.list(project, limit, offset));
   }
 
   /** 指定された検索条件に合う情報を探し、候補を返す。 */
@@ -126,7 +156,7 @@ public class MemoryCommandSupport {
   /** 依頼に関連する情報を得るため、対象プロジェクトを検索する。 */
   public String searchForProject(String project, String query, int limit) {
     enabled();
-    return render(repository.search(query, project, limit));
+    return render(searchMemories.search(query, project, limit));
   }
 
   /** 利用者が対象の情報を確認できるように表示する。 */
@@ -173,9 +203,9 @@ public class MemoryCommandSupport {
         + "\ntags: "
         + m.tags()
         + "\nrelations: "
-        + repository.relations(id)
-        + repository
-            .verifiedReflectionProofByMemory(project, id)
+        + memoryRelations.apply(id)
+        + reflectionProof
+            .apply(project, id)
             .map(proof -> "\nverified reflection proof: " + proof)
             .orElse("");
   }
@@ -189,14 +219,14 @@ public class MemoryCommandSupport {
   public String forgetForProject(String project, String id) {
     enabled();
     visible(project, id);
-    repository.archive(id);
+    archiveMemory.accept(id);
     return "Archived: " + id;
   }
 
   /** 長期記憶の活用で用いる表示対象を返す。 */
   private LongTermMemory visible(String project, String id) {
-    return repository
-        .find(id)
+    return findMemory
+        .apply(id)
         .filter(m -> m.scope() == MemoryScope.GLOBAL || Objects.equals(m.projectId(), project))
         .orElseThrow(
             () -> new IllegalArgumentException("Memory not found in GLOBAL/current project"));
@@ -230,13 +260,13 @@ public class MemoryCommandSupport {
   /** 長期記憶の活用で用いる状態対象プロジェクトを返す。 */
   public String statusForProject(String project, String session) {
     enabled();
-    var runs = repository.history(project, 1);
+    var runs = sleepHistory.apply(project, 1);
     StringBuilder text = new StringBuilder("Memory Status\n");
-    repository
-        .counts(project)
+    memoryCounts
+        .apply(project)
         .forEach((key, count) -> text.append(key).append(": ").append(count).append('\n'));
     text.append("Last sleep: ").append(runs.isEmpty() ? "none" : runs.getFirst()).append('\n');
-    text.append("unslept turns: ").append(sleep.unsleptTurns(session));
+    text.append("unslept turns: ").append(unsleptTurns.applyAsLong(session));
     return text.toString();
   }
 
@@ -248,7 +278,7 @@ public class MemoryCommandSupport {
   /** 長期記憶の活用で用いる履歴対象プロジェクトを返す。 */
   public String historyForProject(String project) {
     enabled();
-    var runs = repository.history(project, 100);
+    var runs = sleepHistory.apply(project, 100);
     return "Sleep history\n"
         + (runs.isEmpty()
             ? "none"
