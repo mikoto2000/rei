@@ -1,16 +1,16 @@
 package dev.mikoto2000.rei.mcp;
 
+import dev.mikoto2000.rei.artifact.Artifact;
 import dev.mikoto2000.rei.artifact.ArtifactStore;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.reflection.GoalReflectionRepository;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * MCPによる機能の提供に必要なMCP入力補完根拠を扱う。
@@ -25,18 +25,20 @@ public final class McpCompletionEvidence {
   private final GoalReflectionRepository reflections;
 
   /** 成果物一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared artifact store for publication or lookup.")
-  private final ArtifactStore artifacts;
+  private final Function<McpRequestStore.Request, List<Artifact>> runArtifacts;
 
   /** 指定された値や利用先を使って、McpCompletionEvidenceを初期化する。 */
   public McpCompletionEvidence(
       GoalRepository goals, GoalReflectionRepository reflections, ArtifactStore artifacts) {
     this.goals = goals;
     this.reflections = reflections;
-    this.artifacts = artifacts;
+    this.runArtifacts =
+        request ->
+            artifacts == null
+                ? List.of()
+                : artifacts
+                    .list(request.project(), request.session(), request.run(), 100, null)
+                    .items();
   }
 
   /** MCPによる機能の提供で用いる入力補完を返す。 */
@@ -97,11 +99,7 @@ public final class McpCompletionEvidence {
 
   /** MCPによる機能の提供で用いる成果物一覧を返す。 */
   public List<Map<String, Object>> artifacts(McpRequestStore.Request request) {
-    if (artifacts == null) return List.of();
-    return artifacts
-        .list(request.project(), request.session(), request.run(), 100, null)
-        .items()
-        .stream()
+    return runArtifacts.apply(request).stream()
         .filter(a -> request.run().equals(a.runId()) && request.session().equals(a.sessionId()))
         .map(
             a ->

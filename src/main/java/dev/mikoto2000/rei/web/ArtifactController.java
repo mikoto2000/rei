@@ -4,9 +4,8 @@ import dev.mikoto2000.rei.application.session.HistoryPage;
 import dev.mikoto2000.rei.artifact.Artifact;
 import dev.mikoto2000.rei.artifact.ArtifactSourceExport;
 import dev.mikoto2000.rei.artifact.ArtifactStore;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
+import java.util.function.Function;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.CacheControl;
@@ -33,15 +32,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/artifacts")
 public class ArtifactController {
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared artifact store for publication and retrieval.")
-  private final ArtifactStore store;
+  private final Function<ArtifactPage, HistoryPage<Artifact>> listArtifacts;
+
+  private final Function<ArtifactKey, Artifact> findArtifact;
+  private final Function<ArtifactKey, byte[]> readContent;
+  private final Function<ArtifactKey, Artifact> deleteArtifact;
 
   /** 指定された値や利用先を使って、ArtifactControllerを初期化する。 */
   public ArtifactController(ArtifactStore store) {
-    this.store = store;
+    this.listArtifacts =
+        page -> store.list(page.project(), page.session(), page.run(), page.limit(), page.cursor());
+    this.findArtifact = key -> store.get(key.project(), key.session(), key.id());
+    this.readContent = key -> store.content(key.project(), key.session(), key.id());
+    this.deleteArtifact = key -> store.delete(key.project(), key.session(), key.id());
   }
 
   /** 出典を成果物として書き出す窓口。 */
@@ -91,7 +94,7 @@ public class ArtifactController {
       @RequestParam(required = false) String runId,
       @RequestParam(required = false) Integer limit,
       @RequestParam(required = false) String cursor) {
-    return store.list(projectId, sessionId, runId, limit, cursor);
+    return listArtifacts.apply(new ArtifactPage(projectId, sessionId, runId, limit, cursor));
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
@@ -100,7 +103,7 @@ public class ArtifactController {
       @PathVariable String id,
       @RequestParam String projectId,
       @RequestParam(required = false) String sessionId) {
-    return store.get(projectId, sessionId, id);
+    return findArtifact.apply(new ArtifactKey(projectId, sessionId, id));
   }
 
   /** Web APIによる操作で用いる内容を返す。 */
@@ -110,11 +113,12 @@ public class ArtifactController {
       @RequestParam String projectId,
       @RequestParam(required = false) String sessionId,
       @RequestHeader(value = "Range", required = false) String range) {
-    var item = store.get(projectId, sessionId, id);
+    var key = new ArtifactKey(projectId, sessionId, id);
+    var item = findArtifact.apply(key);
     if (range != null)
       throw new org.springframework.web.server.ResponseStatusException(
           HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE);
-    var bytes = store.content(projectId, sessionId, id);
+    var bytes = readContent.apply(key);
     return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType(item.mediaType()))
         .contentLength(bytes.length)
@@ -143,6 +147,11 @@ public class ArtifactController {
   /** 指定された対象を削除する。 */
   @DeleteMapping("/{id}")
   public Artifact delete(@PathVariable String id, @RequestBody DeleteRequest request) {
-    return store.delete(request.projectId(), request.sessionId(), id);
+    return deleteArtifact.apply(new ArtifactKey(request.projectId(), request.sessionId(), id));
   }
+
+  private record ArtifactPage(
+      String project, String session, String run, Integer limit, String cursor) {}
+
+  private record ArtifactKey(String project, String session, String id) {}
 }
