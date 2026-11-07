@@ -512,7 +512,6 @@ public class TextChangeSetService {
     }
   }
 
-  /** 共通の実行基盤で用いる編集を返す。 */
   /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(String text) {
     try {

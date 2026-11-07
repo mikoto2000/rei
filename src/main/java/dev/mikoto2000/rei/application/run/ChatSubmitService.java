@@ -15,8 +15,6 @@ public final class ChatSubmitService {
   /** プロジェクト一覧。 */
   private final Function<String, Optional<ProjectContext>> findProject;
 
-  /** 会話一覧。 */
-
   /** 実行一覧。 */
   private final java.util.function.Consumer<AgentRunContext> registerRun;
 
@@ -37,8 +35,6 @@ public final class ChatSubmitService {
       String session, String message, String key, String fingerprint, String client) {}
 
   private record McpMessage(String session, String message) {}
-
-  /** 実行先への引き渡し。 */
 
   /** 並行有効状態。 */
   private final boolean concurrentEnabled;
