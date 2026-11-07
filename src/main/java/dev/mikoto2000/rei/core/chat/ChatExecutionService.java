@@ -533,11 +533,6 @@ public class ChatExecutionService {
   }
 
   /** 依頼された操作を進めるため、入力先対象範囲を実行する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Preserves the execution failure type while recording run and checkpoint outcomes.")
   private ChatExecutionResult executeInScope(
       AgentRunContext context,
       String promptText,
@@ -670,7 +665,8 @@ public class ChatExecutionService {
         } catch (RuntimeException error) {
           eventPublisher.publish(
               eventFactory.toolFailed(callId, "materialReview", toolFailureError(error)));
-          throw error;
+          if (error instanceof RunWaitingException waiting) throw waiting;
+          result = failureResult(error);
         }
       } else if (doctorCommand) {
         String response = doctor.execute(promptText, execution);
@@ -709,7 +705,8 @@ public class ChatExecutionService {
           result = ChatRunResult.success(response);
         } catch (RuntimeException error) {
           eventPublisher.publish(eventFactory.toolFailed(callId, "paper", toolFailureError(error)));
-          throw error;
+          if (error instanceof RunWaitingException waiting) throw waiting;
+          result = failureResult(error);
         }
       } else {
         result =
@@ -851,10 +848,14 @@ public class ChatExecutionService {
         terminalEvents.add(eventFactory.runFailed(runId, knownFailure));
         return ChatExecutionResult.failed(knownFailure.message(), knownFailure.code());
       }
-      if (!RunCancellation.isCancellation(error) && !execution.isCancelled()) throw error;
-      execution.cancel();
-      terminalEvents.add(eventFactory.runFailed(runId, terminalError(ChatRunStatus.CANCELLED)));
-      return ChatExecutionResult.cancelled();
+      if (RunCancellation.isCancellation(error) || execution.isCancelled()) {
+        execution.cancel();
+        terminalEvents.add(eventFactory.runFailed(runId, terminalError(ChatRunStatus.CANCELLED)));
+        return ChatExecutionResult.cancelled();
+      }
+      var failure = terminalError(failureResult(error));
+      terminalEvents.add(eventFactory.runFailed(runId, failure));
+      return ChatExecutionResult.failed(failure.message(), failure.code());
     } finally {
       cancellationService.awaitChildren(context.runId());
       // Preserve interruption for the caller, but allow terminal metadata to be written during
