@@ -72,8 +72,10 @@ class DefaultIdleTopicTriggerTest {
   private TopicGeneratorProperties enabledProperties() {
     TopicGeneratorProperties properties = new TopicGeneratorProperties();
     properties.setEnabled(true);
-    properties.getIdleTrigger().setEnabled(true);
-    properties.getIdleTrigger().setMinimumIdle(Duration.ofMinutes(2));
+    var idleTrigger = properties.getIdleTrigger();
+    idleTrigger.setEnabled(true);
+    idleTrigger.setMinimumIdle(Duration.ofMinutes(2));
+    properties.setIdleTrigger(idleTrigger);
     return properties;
   }
 
