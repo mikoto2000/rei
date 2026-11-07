@@ -208,9 +208,9 @@ class ContextBudgetManagerTest {
   @Test
   void capturesNullableOptionsOnceWhenCalculatingInputLimit() {
     var options = org.mockito.Mockito.mock(org.springframework.ai.chat.prompt.ChatOptions.class);
-    org.mockito.Mockito.when(options.getMaxTokens()).thenReturn(8000, null);
+    org.mockito.Mockito.when(options.getMaxTokens()).thenReturn(8000).thenReturn(null);
     var prompt = org.mockito.Mockito.mock(org.springframework.ai.chat.prompt.Prompt.class);
-    org.mockito.Mockito.when(prompt.getOptions()).thenReturn(options, null);
+    org.mockito.Mockito.when(prompt.getOptions()).thenReturn(options).thenReturn(null);
     assertTrue(
         ContextBudgetManager.inputLimit(
                 new ContextCompressionProperties(), TokenEstimator.conservative(), prompt)
