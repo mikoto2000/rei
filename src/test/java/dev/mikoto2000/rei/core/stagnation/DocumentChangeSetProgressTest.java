@@ -61,16 +61,16 @@ class DocumentChangeSetProgressTest {
         JSON.writeValueAsString(
             java.util.Map.of("id", proposal.id(), "proposalSha256", proposal.proposalSha256()));
     context.beginIteration();
-    var before = evaluator.beforeTool(TOOL, args);
+    var before = context.evaluator().beforeTool(TOOL, args);
     var receipt = service.apply(owner, proposal.id(), proposal.proposalSha256());
     String result = JSON.writeValueAsString(receipt);
     context.recordTool(TOOL, args, result, before);
     context.endIteration();
     assertThat(context.detector().stagnationCount()).isZero();
     assertThat(context.progressVersion()).isPositive();
-    assertThat(observe(evaluator, result)).isEmpty();
+    assertThat(observe(context.evaluator(), result)).isEmpty();
     var restored = new ProgressEvaluator(root);
-    restored.restore(evaluator.snapshot());
+    restored.restore(context.evaluator().snapshot());
     assertThat(
             observe(
                 restored,

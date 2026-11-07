@@ -1006,11 +1006,6 @@ public class RunExecutionContext {
   private final StagnationDetector detector = new StagnationDetector();
 
   /** 評価の判断。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Owns the injected evaluator for this execution and updates it through the run lifecycle.")
   private final ProgressEvaluator evaluator;
 
   /** 生成元。 */
@@ -1321,7 +1316,7 @@ public class RunExecutionContext {
       AgentEventPublisher publisher) {
     this.runId = runId;
     this.budget = budget;
-    this.evaluator = evaluator;
+    this.evaluator = evaluator == null ? null : evaluator.copyForRun();
     this.factory = factory;
     this.publisher = publisher;
   }

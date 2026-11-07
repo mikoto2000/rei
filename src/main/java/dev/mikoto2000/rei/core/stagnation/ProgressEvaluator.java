@@ -299,6 +299,28 @@ public class ProgressEvaluator {
   /** 完了手順一覧。 */
   private final Set<String> completedSteps = new HashSet<>();
 
+  /** Takes an independent evidence snapshot while observing the same live project plan. */
+  synchronized ProgressEvaluator copyForRun() {
+    return new ProgressEvaluator(this);
+  }
+
+  private ProgressEvaluator(ProgressEvaluator source) {
+    this.root = source.root;
+    this.plan = source.plan;
+    this.information.restore(source.information.snapshot());
+    this.restoredRanges.restore(source.restoredRanges.snapshot());
+    this.restorationTargets = source.restorationTargets;
+    this.restorationReads = source.restorationReads;
+    this.scanCoverage.putAll(source.scanCoverage);
+    this.restoredCheckpoints.addAll(source.restoredCheckpoints);
+    this.startedSteps.addAll(source.startedSteps);
+    this.readObservations.addAll(source.readObservations);
+    this.readContentObserved = source.readContentObserved;
+    this.revisions.addAll(source.revisions);
+    this.failures.addAll(source.failures);
+    this.completedSteps.addAll(source.completedSteps);
+  }
+
   /** 実行の停滞への対処を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ProgressEvaluator(Path root) {
     this(root, null);
@@ -434,7 +456,9 @@ public class ProgressEvaluator {
               "Stage conditions independently verified; host retains completion authority",
               output.path("stageId").asText(),
               digest(canonical(output.path("observation")))));
-    if ((name.equals("readReviewFile") || name.equals("readReviewWorkItem") || name.equals("readNextReviewWorkItem"))
+    if ((name.equals("readReviewFile")
+            || name.equals("readReviewWorkItem")
+            || name.equals("readNextReviewWorkItem"))
         && output != null
         && !failed(output)
         && output.has("range")) {

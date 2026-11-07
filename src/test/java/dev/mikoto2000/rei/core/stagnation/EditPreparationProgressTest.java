@@ -128,7 +128,7 @@ class EditPreparationProgressTest {
     assertThat(context.detector().stagnationCount()).isZero();
     assertThat(plan.steps()).noneMatch(step -> "DONE".equals(step.status()));
     assertThat(root.resolve("file-0.md")).hasContent("old\r\n");
-    assertThat(observe(evaluator, "inspectTextDocumentChangeSet", proposalJson(proposal)))
+    assertThat(observe(context.evaluator(), "inspectTextDocumentChangeSet", proposalJson(proposal)))
         .isEmpty();
     var applied = documents.apply(owner, proposal.id(), proposal.proposalSha256());
     iteration(context, "applyTextDocumentChangeSet", applied);

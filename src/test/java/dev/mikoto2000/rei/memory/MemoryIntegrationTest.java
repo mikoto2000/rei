@@ -120,7 +120,7 @@ class MemoryIntegrationTest {
         new RunExecutionContext(
             "current",
             new OutputLimitRunBudget(2, 10),
-            mock(ProgressEvaluator.class),
+            new ProgressEvaluator(Path.of(".")),
             events,
             observed::add);
     execution.setRunContext(owner);

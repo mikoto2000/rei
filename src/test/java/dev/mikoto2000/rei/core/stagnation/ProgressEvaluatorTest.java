@@ -13,6 +13,20 @@ class ProgressEvaluatorTest {
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  @Test
+  void runsKeepIndependentProgressAfterTakingTheInitialEvidence() {
+    var initial = new ProgressEvaluator(root);
+    initial.completeSubgoal("already observed");
+    var initialSteps = initial.snapshot().completedSteps();
+    var first = new RunExecutionContext("first", null, initial, null, null);
+    var second = new RunExecutionContext("second", null, initial, null, null);
+
+    assertThat(first.evaluator().completeSubgoal("already observed")).isFalse();
+    assertThat(first.evaluator().completeSubgoal("first run")).isTrue();
+    assertThat(second.evaluator().snapshot().completedSteps()).isEqualTo(initialSteps);
+    assertThat(initial.snapshot().completedSteps()).isEqualTo(initialSteps);
+  }
+
   /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void planResetAtRunStartDoesNotRetainPreviousRunsCompletedStepIdentities() {

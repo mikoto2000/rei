@@ -66,7 +66,7 @@ class ContextCancellationTest {
     var events = new AgentEventFactory(Clock.systemUTC());
     var context =
         new RunExecutionContext(
-            "run", new OutputLimitRunBudget(2, 10), mock(ProgressEvaluator.class), events, e -> {});
+            "run", new OutputLimitRunBudget(2, 10), new ProgressEvaluator(dir), events, e -> {});
     context.setRunContext(new AgentRunContext("run", "chat", dir));
     var assembler =
         new ContextAssembler(

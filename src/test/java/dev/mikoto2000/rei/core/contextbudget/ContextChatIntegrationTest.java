@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
@@ -55,7 +54,7 @@ class ContextChatIntegrationTest {
         new RunExecutionContext(
             "current",
             new OutputLimitRunBudget(2, 10),
-            mock(ProgressEvaluator.class),
+            new ProgressEvaluator(Path.of(".")),
             events,
             observed::add);
     execution.setRunContext(owner);
