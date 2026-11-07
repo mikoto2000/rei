@@ -272,7 +272,6 @@ public class AttentionDeliveryRepository {
         });
   }
 
-  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   /** A privacy hold is not a failed transport attempt and keeps the durable pending item. */
   public void deferForLifePolicy(Delivery item) {
     db.sql(

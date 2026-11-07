@@ -15,7 +15,6 @@ public class WebSearchAndReadService {
   /** 既定本文を取得する上位件数。 */
   static final int DEFAULT_READ_TOP = 3;
 
-  /** Web検索サービス。 */
   /** URL内容取得サービス。 */
   private final Function<String, UrlContentFetchResult> fetchPage;
 

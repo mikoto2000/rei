@@ -28,8 +28,6 @@ public final class ActiveRunPrompt implements AutoCloseable {
   /** 購読。 */
   private final ConversationInputRouter.Subscription subscription;
 
-  /** prior初期化。 */
-
   /** 通常プロンプト。 */
   private volatile boolean normalPrompt;
 

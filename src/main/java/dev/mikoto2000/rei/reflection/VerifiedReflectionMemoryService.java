@@ -108,9 +108,9 @@ public class VerifiedReflectionMemoryService {
 
   /**
    * Human-facing only. A repeat returns the original historical proof, including archived memories.
+   *
+   * <p>Promotions are serialized because SQLite reads can otherwise race a sibling writer.
    */
-  // Serialize this singleton's human promotions; SQLite reads can otherwise race a sibling writer.
-  /** 作業の振り返りで用いるpromoteを返す。 */
   public synchronized Promotion promote(String project, String reflectionId) {
     if (!properties.enabled()) throw new IllegalStateException("Memory is disabled");
     var reflection = reflections.get(project, reflectionId);

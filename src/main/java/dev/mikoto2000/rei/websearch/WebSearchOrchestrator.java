@@ -8,11 +8,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class WebSearchOrchestrator {
 
-  /** Web検索サービス。 */
   /** Webページ情報の取得元。 */
   private final WebPageFetcher webPageFetcher;
 
-  /** Web検索検索条件計画の作成。 */
   /** Web検索集計。 */
   private final WebSearchAggregator webSearchAggregator;
 
