@@ -13,12 +13,11 @@ import dev.mikoto2000.rei.event.ExecutionProgressPayload;
 import dev.mikoto2000.rei.event.GoalLifecyclePayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
 import dev.mikoto2000.rei.temporal.MonotonicTimeSource;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -99,16 +98,32 @@ public class AttentionService implements dev.mikoto2000.rei.secretary.SecretaryN
   private AgentEventBus.Subscription subscription;
 
   /** 承認一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared approval state for requests and decisions.")
-  private dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals;
+  private record ApprovalNotice(
+      String id,
+      String sessionId,
+      String runId,
+      String tool,
+      String argumentsPreview,
+      Instant expiresAt) {}
+
+  private java.util.function.BiFunction<String, String, ApprovalNotice> approvalNotice;
 
   /** 注意の管理で使用する承認一覧を設定する。 */
   @Autowired(required = false)
   public void setApprovals(dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals) {
-    this.approvals = approvals;
+    this.approvalNotice =
+        approvals == null
+            ? null
+            : (project, id) -> {
+              var request = approvals.get(project, id);
+              return new ApprovalNotice(
+                  request.id(),
+                  request.sessionId(),
+                  request.runId(),
+                  request.tool(),
+                  request.argumentsPreview(),
+                  request.expiresAt());
+            };
   }
 
   /** 指定された値や利用先を使って、AttentionServiceを初期化する。 */
@@ -236,9 +251,9 @@ public class AttentionService implements dev.mikoto2000.rei.secretary.SecretaryN
     var match =
         java.util.regex.Pattern.compile("Approval required: ([0-9a-fA-F-]{36})")
             .matcher(Objects.toString(payload.error().message(), ""));
-    if (approvals != null && match.find()) {
+    if (approvalNotice != null && match.find()) {
       try {
-        var request = approvals.get(event.projectId(), match.group(1));
+        var request = approvalNotice.apply(event.projectId(), match.group(1));
         if (!request.sessionId().equals(event.sessionId())
             || !request.runId().equals(event.runId()))
           throw new IllegalArgumentException("Approval notification owner mismatch");

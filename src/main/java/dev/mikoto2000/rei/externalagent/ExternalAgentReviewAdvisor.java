@@ -79,11 +79,9 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
   private final ExternalAgentDelegationService service;
 
   /** 記憶。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared conversation memory for the current history.")
-  private final org.springframework.ai.chat.memory.ChatMemory memory;
+  private final java.util.function.Function<
+          String, java.util.List<org.springframework.ai.chat.messages.Message>>
+      readConversation;
 
   /** 外部エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ExternalAgentReviewAdvisor(ExternalAgentDelegationService service) {
@@ -95,7 +93,7 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
       ExternalAgentDelegationService service,
       org.springframework.ai.chat.memory.ChatMemory memory) {
     this.service = service;
-    this.memory = memory;
+    this.readConversation = memory == null ? null : session -> memory.get(session);
   }
 
   /** 他の補助処理と組み合わせる際の適用順序を返す。 */
@@ -109,8 +107,8 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     if (!(request.prompt().getOptions() instanceof ToolCallingChatOptions options)) return request;
     var values = options.getToolContext();
-    if (values == null || !(values.get(RunExecutionContext.KEY)
-            instanceof RunExecutionContext run)) return request;
+    if (values == null || !(values.get(RunExecutionContext.KEY) instanceof RunExecutionContext run))
+      return request;
     String extra = POLICY;
     if (run.userRequest().strip().startsWith("/agent")) {
       ExternalAgentResult result = run.externalReviewResult();
@@ -118,9 +116,9 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
         try {
           var command = ExternalAgentCommandRequest.parse(run.userRequest());
           var history =
-              memory == null || run.runContext() == null
+              readConversation == null || run.runContext() == null
                   ? request.prompt().getInstructions()
-                  : memory.get(run.runContext().conversationId());
+                  : readConversation.apply(run.runContext().conversationId());
           result =
               switch (command.action()) {
                 case "material-review" ->
