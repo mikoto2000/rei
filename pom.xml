@@ -180,12 +180,6 @@
 			<artifactId>picocli-shell-jline3</artifactId>
 			<version>${picocli.version}</version>
 		</dependency>
-		<dependency>
-			<groupId>info.picocli</groupId>
-			<artifactId>picocli-codegen</artifactId>
-			<version>${picocli.version}</version>
-			<scope>provided</scope>
-		</dependency>
 
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -307,25 +301,65 @@
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-clean-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>clear-delombok-output</id>
+						<phase>initialize</phase>
+						<goals><goal>clean</goal></goals>
+						<configuration>
+							<excludeDefaultDirectories>true</excludeDefaultDirectories>
+							<filesets>
+								<fileset><directory>${project.build.directory}/delombok</directory></fileset>
+							</filesets>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.projectlombok</groupId>
+				<artifactId>lombok-maven-plugin</artifactId>
+				<version>1.18.20.0</version>
+				<dependencies>
+					<dependency>
+						<groupId>org.projectlombok</groupId>
+						<artifactId>lombok</artifactId>
+						<version>${lombok.version}</version>
+					</dependency>
+				</dependencies>
+				<executions>
+					<execution>
+						<id>generate-lombok-sources</id>
+						<phase>generate-sources</phase>
+						<goals><goal>delombok</goal></goals>
+						<configuration>
+							<sourceDirectory>${project.build.sourceDirectory}</sourceDirectory>
+							<outputDirectory>${project.build.directory}/delombok</outputDirectory>
+							<addOutputDirectory>false</addOutputDirectory>
+							<formatPreferences>
+								<suppressWarnings>skip</suppressWarnings>
+								<generateDelombokComment>skip</generateDelombokComment>
+							</formatPreferences>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
-					<!-- Lombok uses Unsafe internally on JDK 25. Limit the allowance to javac. -->
 					<fork>true</fork>
-					<compilerArgs>
-						<arg>-J--sun-misc-unsafe-memory-access=allow</arg>
-					</compilerArgs>
-					<annotationProcessorPaths>
-						<path>
-							<groupId>org.projectlombok</groupId>
-							<artifactId>lombok</artifactId>
-						</path>
-						<path>
-							<groupId>info.picocli</groupId>
-							<artifactId>picocli-codegen</artifactId>
-							<version>${picocli.version}</version>
-						</path>
-					</annotationProcessorPaths>
 				</configuration>
+				<executions>
+					<execution>
+						<id>default-compile</id>
+						<configuration>
+							<compileSourceRoots>
+								<compileSourceRoot>${project.build.directory}/delombok</compileSourceRoot>
+							</compileSourceRoots>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.graalvm.buildtools</groupId>

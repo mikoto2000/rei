@@ -61,6 +61,12 @@ Episode の経緯・根拠・差分整理・横断検索は [Episode Memory](doc
 ./mvnw spring-boot:run
 ```
 
+Maven は `generate-sources` で `src/main/java` から Lombok のメンバーを生成し、
+`target/delombok` のソースを `javac` でコンパイルします。編集は `src/main/java` で行います。
+Picocli のコマンドや引数を変更した場合は、対応する GraalVM リフレクション設定も更新してください。
+[本番用](src/main/resources/META-INF/native-image/dev.mikoto2000/rei-picocli/reflect-config.json)と
+[テスト用](src/test/resources/META-INF/native-image/dev.mikoto2000/rei-picocli/reflect-config.json)に分かれています。
+
 テスト:
 
 ```bash
