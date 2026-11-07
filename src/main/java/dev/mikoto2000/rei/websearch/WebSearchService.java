@@ -272,10 +272,6 @@ public class WebSearchService {
   }
 
   /** Submit a Responses search using the shared bounded transport and search budget. */
-  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      justification =
-          "Evict invalid responses and rethrow the original failure so cancellation and provider semantics survive.")
   private List<WebSearchResult> searchOpenAi(
       ProviderProperties provider, String query, int limit, ProviderAttempt attempt) {
     String key = provider.getApiKey();
@@ -301,8 +297,12 @@ public class WebSearchService {
       var results = openai.parse(provider, json, limit);
       WebSearchMetrics.OBSERVED.add("openai_adopted_urls", results.size());
       return results;
-    } catch (RuntimeException failure) {
-      cache.invalidate(cacheRequest(request, provider, limit, body), fetcher);
+    } catch (RuntimeException | Error failure) {
+      try {
+        cache.invalidate(cacheRequest(request, provider, limit, body), fetcher);
+      } catch (RuntimeException | Error eviction) {
+        if (eviction != failure) failure.addSuppressed(eviction);
+      }
       throw failure;
     } finally {
       WebSearchMetrics.OBSERVED.duration("openai", System.nanoTime() - started);

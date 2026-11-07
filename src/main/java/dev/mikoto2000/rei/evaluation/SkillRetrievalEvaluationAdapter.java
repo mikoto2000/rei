@@ -8,8 +8,6 @@ import dev.mikoto2000.rei.skills.SkillCandidate;
 import dev.mikoto2000.rei.skills.SkillCandidateSelector;
 import dev.mikoto2000.rei.skills.SkillMetadataEmbedding;
 import dev.mikoto2000.rei.vectordocument.CandidateReranker;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -48,10 +46,6 @@ public final class SkillRetrievalEvaluationAdapter implements RetrievalQualityEv
   }
 
   /** 成果の評価で用いる取得を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the retrieval failure after recording it for the evaluation.")
   public List<String> retrieve(
       RetrievalQualityEvaluation.Case fixture,
       RetrievalQualityEvaluation.Mode mode,
@@ -81,7 +75,7 @@ public final class SkillRetrievalEvaluationAdapter implements RetrievalQualityEv
         throw new IllegalStateException("Explicit evaluation embedding/rerank provider required");
       // A single dense rank stream preserves dense ordering through existing RRF; no keyword
       // fallback can disguise an unavailable model.
-      var failure = new java.util.concurrent.atomic.AtomicReference<RuntimeException>();
+      var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
       var dimensions = new java.util.concurrent.atomic.AtomicInteger();
       SkillMetadataEmbedding strict =
           input -> {
@@ -98,8 +92,8 @@ public final class SkillRetrievalEvaluationAdapter implements RetrievalQualityEv
                   throw new IllegalStateException("Evaluation embedding dimensions changed");
               }
               return vectors;
-            } catch (RuntimeException error) {
-              RunCancellation.propagate(error);
+            } catch (RuntimeException | Error error) {
+              if (error instanceof RuntimeException runtime) RunCancellation.propagate(runtime);
               failure.set(error);
               throw error;
             }
@@ -115,10 +109,11 @@ public final class SkillRetrievalEvaluationAdapter implements RetrievalQualityEv
                   skills,
                   mode == RetrievalQualityEvaluation.Mode.DENSE ? List.of() : lexical,
                   pool);
-      if (failure.get() != null
-          || result.stream().anyMatch(c -> !c.matchedFields().contains("rrf")))
+      Throwable failed = failure.get();
+      if (failed instanceof Error fatal) throw fatal;
+      if (failed != null || result.stream().anyMatch(c -> !c.matchedFields().contains("rrf")))
         throw new IllegalStateException(
-            "Semantic evaluation fell back; no dense/RRF quality result", failure.get());
+            "Semantic evaluation fell back; no dense/RRF quality result", failed);
     }
     return result.stream().limit(fixture.topK()).map(c -> c.skill().name()).toList();
   }
@@ -135,21 +130,17 @@ public final class SkillRetrievalEvaluationAdapter implements RetrievalQualityEv
     private final CandidateReranker delegate;
 
     /** 失敗情報。 */
-    private final java.util.concurrent.atomic.AtomicReference<RuntimeException> failure;
+    private final java.util.concurrent.atomic.AtomicReference<Throwable> failure;
 
     /** 指定された値や利用先を使って、StrictRerankerを初期化する。 */
     StrictReranker(
         CandidateReranker delegate,
-        java.util.concurrent.atomic.AtomicReference<RuntimeException> failure) {
+        java.util.concurrent.atomic.AtomicReference<Throwable> failure) {
       this.delegate = delegate;
       this.failure = failure;
     }
 
     /** 成果の評価で用いる再評価を返す。 */
-    @SuppressFBWarnings(
-        value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-        matchType = SuppressMatchType.EXACT,
-        justification = "Preserves the reranker failure after recording it for evaluation.")
     public <T> List<T> rerank(
         String query, List<T> candidates, java.util.function.Function<T, String> text) {
       try {
@@ -160,8 +151,8 @@ public final class SkillRetrievalEvaluationAdapter implements RetrievalQualityEv
             || !new HashSet<>(result).equals(new HashSet<>(candidates)))
           throw new IllegalStateException("Evaluation reranker changed candidates");
         return result;
-      } catch (RuntimeException error) {
-        RunCancellation.propagate(error);
+      } catch (RuntimeException | Error error) {
+        if (error instanceof RuntimeException runtime) RunCancellation.propagate(runtime);
         failure.set(error);
         throw error;
       }

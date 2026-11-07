@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.task;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -50,28 +48,29 @@ public class TaskTools {
   }
 
   /** タスクの管理で用いるタスク作成を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original task failure after reporting its user-facing message.")
   @Tool(name = "taskCreate", description = "タスクを作成します。dueDate は yyyy-MM-dd 形式です。")
   Task taskCreate(String title, String dueDate, int priority) {
     IO.println(String.format("タスク %s を作成するよ。期限=%s、優先度=%d", title, dueDate, priority));
+    Task created;
     try {
-      Task created =
+      created =
           taskService.add(
               title,
               dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate),
               priority);
-      publish(
-          () ->
-              events.taskCreated(
-                  Long.toString(created.id()), null, created.title(), created.status().name()));
-      return created;
-    } catch (RuntimeException e) {
-      IO.println("[error] " + userFacingMessage(e, "Google Tasks へのタスク追加に失敗しました"));
-      throw e;
+    } catch (RuntimeException | Error failure) {
+      try {
+        IO.println("[error] " + userFacingMessage(failure, "Google Tasks へのタスク追加に失敗しました"));
+      } catch (RuntimeException | Error reporting) {
+        if (failure != reporting) failure.addSuppressed(reporting);
+      }
+      throw failure;
     }
+    publish(
+        () ->
+            events.taskCreated(
+                Long.toString(created.id()), null, created.title(), created.status().name()));
+    return created;
   }
 
   /** タスクの管理で用いるタスク更新を返す。 */
@@ -91,31 +90,32 @@ public class TaskTools {
   }
 
   /** タスクの管理で用いるタスク完了を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original task failure after emitting the failed operation event.")
   @Tool(name = "taskComplete", description = "タスクを完了にします")
   Task taskComplete(long id) {
     IO.println(String.format("タスク %d を完了にするよ", id));
     publish(() -> events.taskStarted(Long.toString(id)));
+    Task completed;
     try {
-      Task completed = taskService.complete(id);
+      completed = taskService.complete(id);
       if (completed.id() != id || completed.status() != TaskStatus.DONE)
         throw new IllegalStateException("Task completion was not confirmed");
-      publish(() -> events.taskCompleted(Long.toString(id), null));
-      return completed;
-    } catch (RuntimeException failure) {
-      publish(
-          () ->
-              events.taskFailed(
-                  Long.toString(id),
-                  new dev.mikoto2000.rei.event.ErrorInformation(
-                      failure.getClass().getSimpleName(),
-                      "Task completion operation failed",
-                      null)));
+    } catch (RuntimeException | Error failure) {
+      try {
+        publish(
+            () ->
+                events.taskFailed(
+                    Long.toString(id),
+                    new dev.mikoto2000.rei.event.ErrorInformation(
+                        failure.getClass().getSimpleName(),
+                        "Task completion operation failed",
+                        null)));
+      } catch (Error reporting) {
+        if (failure != reporting) failure.addSuppressed(reporting);
+      }
       throw failure;
     }
+    publish(() -> events.taskCompleted(Long.toString(id), null));
+    return completed;
   }
 
   /** タスクの管理で用いるタスク更新期限を返す。 */
