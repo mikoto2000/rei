@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.storage;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.storage.StorageObjectRegistry.StoredObject;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -258,11 +256,6 @@ public final class RetentionExecutor {
   }
 
   /** 指定された内容を、現在の対象へ反映する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Preserves unchecked apply failures while wrapping checked quarantine failures.")
   public Execution apply(String planId) {
     return registry.serialized(
         () -> {
@@ -377,9 +370,7 @@ public final class RetentionExecutor {
                   return null;
                 });
             return get(execution.id());
-          } catch (RuntimeException error) {
-            throw error;
-          } catch (Exception error) {
+          } catch (IOException | NoSuchAlgorithmException | InterruptedException error) {
             throw new IllegalStateException(
                 "Quarantine interrupted; retry apply or restore this execution", error);
           }
@@ -387,11 +378,6 @@ public final class RetentionExecutor {
   }
 
   /** 保存済みの記録から、利用する状態を復元する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Preserves unchecked restore failures while wrapping checked storage failures.")
   public Execution restore(String id) {
     return registry.serialized(
         () -> {
@@ -445,9 +431,7 @@ public final class RetentionExecutor {
                   return null;
                 });
             return get(id);
-          } catch (RuntimeException error) {
-            throw error;
-          } catch (Exception error) {
+          } catch (IOException | NoSuchAlgorithmException | InterruptedException error) {
             throw new IllegalStateException("Restore interrupted; retry this execution", error);
           }
         });
@@ -533,10 +517,6 @@ public final class RetentionExecutor {
   }
 
   /** データ保存の共通処理で用いる保持期限を過ぎた情報の削除を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves unchecked purge failures while wrapping checked storage failures.")
   public Execution purge(String id) {
     return registry.serialized(
         () -> {
@@ -590,9 +570,7 @@ public final class RetentionExecutor {
                   return null;
                 });
             return get(id);
-          } catch (RuntimeException error) {
-            throw error;
-          } catch (Exception error) {
+          } catch (IOException | InterruptedException error) {
             throw new IllegalStateException(
                 "Purge interrupted; retry the approved execution", error);
           }

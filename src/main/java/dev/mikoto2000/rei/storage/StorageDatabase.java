@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.storage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.security.NoSuchAlgorithmException;
@@ -238,10 +236,6 @@ public final class StorageDatabase {
   }
 
   /** データ保存の共通処理で用いる一連の更新を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Propagates unchecked transaction failures with their original types after rollback.")
   public <T> T transaction(Work<T> work) {
     synchronized (state) {
       if (state.transaction)
@@ -276,9 +270,7 @@ public final class StorageDatabase {
             throw error;
           }
         }
-      } catch (RuntimeException error) {
-        throw error;
-      } catch (Exception error) {
+      } catch (IOException | NoSuchAlgorithmException | SQLException | InterruptedException error) {
         throw new IllegalStateException("Cannot persist SQLite storage", error);
       } finally {
         state.transaction = false;
@@ -331,17 +323,11 @@ public final class StorageDatabase {
    *
    * <p>Explicit maintenance statements such as VACUUM require autocommit.
    */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Propagates unchecked storage failures with their original types.")
   <T> T maintenance(Work<T> work) {
     synchronized (state) {
       try (var connection = open(false)) {
         return work.run(connection);
-      } catch (RuntimeException error) {
-        throw error;
-      } catch (Exception error) {
+      } catch (IOException | NoSuchAlgorithmException | SQLException | InterruptedException error) {
         throw new IllegalStateException(
             "SQLite maintenance failed; retry in another window", error);
       }
