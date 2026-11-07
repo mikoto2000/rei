@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.paper;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -11,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.LongSupplier;
 import org.springframework.stereotype.Component;
 
 /** 論文成果物の記録を保持し、後続の処理で参照できるようにする。 */
@@ -20,11 +19,7 @@ public class PaperArtifactStore {
   private final Path root;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
-  private final PaperProperties properties;
+  private final LongSupplier maxArtifactBytes;
 
   /** 論文の調査と整理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
@@ -37,7 +32,8 @@ public class PaperArtifactStore {
   /** 指定された値や利用先を使って、PaperArtifactStoreを初期化する。 */
   public PaperArtifactStore(Path root, PaperProperties properties) {
     this.root = root.toAbsolutePath().normalize();
-    this.properties = properties;
+    this.maxArtifactBytes =
+        () -> Math.max(properties.getMaxPdfBytes(), properties.getMaxExtractedChars() * 8L);
   }
 
   /** 論文の調査と整理で用いるパスを返す。 */
@@ -59,7 +55,7 @@ public class PaperArtifactStore {
   public void write(String id, String kind, String ext, byte[] bytes, PaperOperation op) {
     op.check();
     if (bytes.length
-        > Math.max(properties.getMaxPdfBytes(), properties.getMaxExtractedChars() * 8L))
+        > maxArtifactBytes.getAsLong())
       throw new PaperException(PaperException.Code.LIBRARY_STORAGE_FAILED, "Artifact サイズ上限");
     Path target = path(id, kind, ext), tmp = null;
     try {
@@ -87,7 +83,7 @@ public class PaperArtifactStore {
         id,
         kind,
         ext,
-        Math.max(properties.getMaxPdfBytes(), properties.getMaxExtractedChars() * 8L));
+        maxArtifactBytes.getAsLong());
   }
 
   /** 必要な内容を参照できるよう、上限内に収めたを読み取る。 */
