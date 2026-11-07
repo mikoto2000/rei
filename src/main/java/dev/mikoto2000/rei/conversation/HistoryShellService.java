@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.conversation;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.llm.ConversationIds;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -27,11 +25,22 @@ public class HistoryShellService {
   private final java.util.function.Supplier<String> currentSessionId;
 
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common conversation log and its shared indexing state.")
-  private final ConversationLogStore store;
+  @FunctionalInterface
+  private interface ListConversations {
+    java.util.List<ConversationLogStore.ConversationSummary> read(
+        String project, int limit, int offset);
+  }
+
+  @FunctionalInterface
+  private interface ReadRecent {
+    java.util.List<ConversationLogEntry> read(String project, String conversation, int limit);
+  }
+
+  private final ListConversations conversations;
+  private final ReadRecent recentConversation;
+  private final java.util.function.BiConsumer<
+          String, java.util.function.Consumer<ConversationLogEntry>>
+      visitProject;
 
   /** 検索。 */
   private final Function<HistorySearchRequest, List<ConversationSearchResult>> searchHistory;
@@ -47,7 +56,10 @@ public class HistoryShellService {
     this.currentProjectRoot = () -> projects.currentProject();
     this.registeredProjects = () -> projects.registeredProjects();
     this.currentSessionId = () -> projects.currentSessionId();
-    this.store = store;
+    this.conversations =
+        (project, limit, offset) -> store.listConversations(project, limit, offset);
+    this.recentConversation = (project, id, limit) -> store.recentConversation(project, id, limit);
+    this.visitProject = (project, visitor) -> store.visitProject(project, visitor);
     this.searchHistory = request -> search.searchForShell(request);
   }
 
@@ -78,7 +90,7 @@ public class HistoryShellService {
     var project = project(reference);
     out.accept(
         "Conversations in project: " + format.label(project.name()) + " [" + project.id() + "]");
-    var rows = store.listConversations(project.id(), limit, offset);
+    var rows = conversations.read(project.id(), limit, offset);
     if (rows.isEmpty()) {
       out.accept("No conversations.");
       return;
@@ -116,13 +128,13 @@ public class HistoryShellService {
     String id = logical.startsWith("project:") ? logical : project.conversationId(logical);
     if (!id.startsWith("project:" + project.id() + ":"))
       throw new IllegalArgumentException("Conversation not found: " + logical);
-    var recent = store.recentConversation(project.id(), id, all ? 1 : last);
+    var recent = recentConversation.read(project.id(), id, all ? 1 : last);
     if (recent.isEmpty()) throw new IllegalArgumentException("Conversation not found: " + logical);
     out.accept("Project: " + format.label(project.name()) + " [" + project.id() + "]");
     out.accept("Conversation: " + format.label(format.logicalId(id)));
     out.accept("");
     if (all)
-      store.visitProject(
+      visitProject.accept(
           project.id(),
           entry -> {
             if (id.equals(entry.conversationId())) out.accept(format.message(entry));

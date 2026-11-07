@@ -20,11 +20,12 @@ public class EpisodeSleepService {
   private final EpisodeRepository repository;
 
   /** やり取り一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent turn store for history and run lookups.")
-  private final ConversationTurnStore turns;
+  private final java.util.function.ToLongFunction<String> turnCount;
+
+  private record TurnRange(String session, long from, int limit) {}
+
+  private final java.util.function.Function<TurnRange, java.util.List<ConversationTurnStore.Turn>>
+      readRange;
 
   /** 記録された経験を整理する処理の窓口。 */
   @SuppressFBWarnings(
@@ -74,7 +75,8 @@ public class EpisodeSleepService {
       EpisodeProperties properties,
       MemoryProperties memory) {
     this.repository = repository;
-    this.turns = turns;
+    this.turnCount = session -> turns.turnCount(session);
+    this.readRange = range -> turns.readRange(range.session(), range.from(), range.limit());
     this.processor = processor;
     this.properties = properties;
     this.memory = memory;
@@ -99,7 +101,8 @@ public class EpisodeSleepService {
       long from = repository.checkpoint(session), to = from;
       int tokens = 0;
       var batch = new ArrayList<ConversationTurnStore.Turn>();
-      for (var turn : turns.readRange(session, from, Math.min(50, memory.sleep().maxTurns()))) {
+      for (var turn :
+          readRange.apply(new TurnRange(session, from, Math.min(50, memory.sleep().maxTurns())))) {
         if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted())
           throw new java.util.concurrent.CancellationException();
         if (turn.status() == ConversationTurnStore.Status.RUNNING) break;
@@ -135,7 +138,7 @@ public class EpisodeSleepService {
   public long pending(String session) {
     return properties.enabled()
         ? Math.max(
-            Math.max(0, turns.turnCount(session) - repository.checkpoint(session)),
+            Math.max(0, turnCount.applyAsLong(session) - repository.checkpoint(session)),
             dense == null ? 0 : dense.pending(session))
         : 0;
   }

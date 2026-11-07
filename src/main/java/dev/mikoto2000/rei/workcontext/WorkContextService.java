@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.workcontext;
 
 import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.event.AgentEvent;
@@ -19,8 +20,6 @@ import dev.mikoto2000.rei.workcontext.WorkContext.GitState;
 import dev.mikoto2000.rei.workcontext.WorkContext.Kind;
 import dev.mikoto2000.rei.workcontext.WorkContext.Origin;
 import dev.mikoto2000.rei.workcontext.WorkContext.Status;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -32,7 +31,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
@@ -53,11 +54,10 @@ public class WorkContextService {
   private final Supplier<List<ProjectContext>> registeredProjects;
 
   /** やり取り一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent turn store for history and run lookups.")
-  private final ConversationTurnStore turns;
+  private final BiFunction<String, String, Optional<ConversationTurnStore.Turn>> findRun;
+
+  private final Function<String, List<ConversationTurnStore.Turn>> readTurns;
+  private final BiConsumer<AgentRunContext, Map<String, String>> recordTurnMetadata;
 
   /** イベント一覧。 */
   private final BiFunction<String, Integer, List<AgentEvent>> recentEvents;
@@ -99,7 +99,9 @@ public class WorkContextService {
     this.repository = repository;
     this.sessions = sessions;
     this.registeredProjects = () -> projects.registeredProjects();
-    this.turns = turns;
+    this.findRun = (session, run) -> turns.findRun(session, run);
+    this.readTurns = session -> turns.read(session);
+    this.recordTurnMetadata = (context, metadata) -> turns.recordMetadata(context, metadata);
     this.recentEvents = (project, limit) -> events.recent(project, limit);
     this.extractor = extractor;
     this.git = git;
@@ -132,7 +134,7 @@ public class WorkContextService {
     metadata.put("workContext.directory", state.directory());
     if (state.branch() != null) metadata.put("workContext.branch", state.branch());
     if (state.commit() != null) metadata.put("workContext.commit", state.commit());
-    turns.recordMetadata(context, metadata);
+    recordTurnMetadata.accept(context, metadata);
   }
 
   /** 過去の記録を、条件に従って参照できる形で返す。 */
@@ -189,17 +191,17 @@ public class WorkContextService {
       var selected = new ArrayList<ConversationTurnStore.Turn>();
       var history =
           onlyRun != null && !includeRunning
-              ? turns.findRun(sessionId, onlyRun).stream().toList()
+              ? findRun.apply(sessionId, onlyRun).stream().toList()
               : requestedRuns != null
                   ? requestedRuns.stream()
-                      .map(run -> turns.findRun(sessionId, run))
+                      .map(run -> findRun.apply(sessionId, run))
                       .flatMap(Optional::stream)
                       .sorted(
                           java.util.Comparator.comparing(
                               ConversationTurnStore.Turn::createdAt,
                               java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
                       .toList()
-                  : turns.read(sessionId);
+                  : readTurns.apply(sessionId);
       String latestRun =
           history.stream()
               .filter(t -> t.source() == null)
