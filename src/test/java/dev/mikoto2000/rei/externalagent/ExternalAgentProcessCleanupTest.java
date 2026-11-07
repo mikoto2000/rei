@@ -124,9 +124,8 @@ class ExternalAgentProcessCleanupTest {
     var child = child(999999, Instant.parse("2026-01-02T00:00:00Z"));
     var process = process(true, child);
     when(process.info().startInstant())
-        .thenReturn(
-            Optional.of(Instant.parse("2026-01-01T00:00:00Z")),
-            Optional.of(Instant.parse("2026-01-03T00:00:00Z")));
+        .thenReturn(Optional.of(Instant.parse("2026-01-01T00:00:00Z")))
+        .thenReturn(Optional.of(Instant.parse("2026-01-03T00:00:00Z")));
     cleanup(process, new LinkedHashSet<>());
     verify(child, never()).destroyForcibly();
   }

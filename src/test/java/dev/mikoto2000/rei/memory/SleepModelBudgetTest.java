@@ -99,8 +99,8 @@ class SleepModelBudgetTest {
     when(model.stream(any(Prompt.class)))
         .thenReturn(
             Flux.just(
-                response(MemoryOutputTest.VALID.replace("\"t\"", "\"turn1\""), extractionUsage)),
-            Flux.just(response("{\"action\":\"NEW\",\"targetIds\":[]}", resolutionUsage)));
+                response(MemoryOutputTest.VALID.replace("\"t\"", "\"turn1\""), extractionUsage)))
+        .thenReturn(Flux.just(response("{\"action\":\"NEW\",\"targetIds\":[]}", resolutionUsage)));
     var provider = mock(LlmModelProvider.class);
     when(provider.memoryChatModel()).thenReturn(model);
     when(provider.chatOptions(eq(LlmFeature.MEMORY), any()))

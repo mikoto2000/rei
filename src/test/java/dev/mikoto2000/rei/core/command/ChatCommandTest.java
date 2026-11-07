@@ -322,11 +322,10 @@ class ChatCommandTest {
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse())
-        .thenReturn(
-            Flux.just(responseWithFinishReason("partial", "length")),
-            Flux.just(response("subgoal-1 result")),
-            Flux.just(response("subgoal-2 result")),
-            Flux.just(response("final result")));
+        .thenReturn(Flux.just(responseWithFinishReason("partial", "length")))
+        .thenReturn(Flux.just(response("subgoal-1 result")))
+        .thenReturn(Flux.just(response("subgoal-2 result")))
+        .thenReturn(Flux.just(response("final result")));
     when(replanner.replan(any(OutputLimitReplanRequest.class)))
         .thenReturn(
             new OutputLimitReplanPlan(
@@ -384,9 +383,8 @@ class ChatCommandTest {
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse())
-        .thenReturn(
-            Flux.just(responseWithFinishReason("partial", "length")),
-            Flux.just(responseWithFinishReason("subgoal partial", "length")));
+        .thenReturn(Flux.just(responseWithFinishReason("partial", "length")))
+        .thenReturn(Flux.just(responseWithFinishReason("subgoal partial", "length")));
     when(replanner.replan(any(OutputLimitReplanRequest.class)))
         .thenReturn(
             new OutputLimitReplanPlan(
@@ -465,12 +463,11 @@ class ChatCommandTest {
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
     when(requestSpec.stream().chatResponse())
-        .thenReturn(
-            Flux.just(responseWithFinishReason("partial", "length")),
-            Flux.just(responseWithFinishReason("large subgoal partial", "length")),
-            Flux.just(response("nested subgoal result")),
-            Flux.just(response("nested final result")),
-            Flux.just(response("final result")));
+        .thenReturn(Flux.just(responseWithFinishReason("partial", "length")))
+        .thenReturn(Flux.just(responseWithFinishReason("large subgoal partial", "length")))
+        .thenReturn(Flux.just(response("nested subgoal result")))
+        .thenReturn(Flux.just(response("nested final result")))
+        .thenReturn(Flux.just(response("final result")));
     when(replanner.replan(any(OutputLimitReplanRequest.class)))
         .thenReturn(
             new OutputLimitReplanPlan(
