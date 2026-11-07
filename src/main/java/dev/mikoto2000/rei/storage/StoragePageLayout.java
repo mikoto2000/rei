@@ -6,6 +6,7 @@ import java.security.MessageDigest;
 import java.sql.Connection;
 import java.util.ArrayList;
 import java.util.HexFormat;
+import java.util.List;
 
 /** 起動時の検証済みバックアップの後だけ、小更新向けのページ配置へ原子的に再構築する。 */
 final class StoragePageLayout {
@@ -55,48 +56,29 @@ final class StoragePageLayout {
   }
 
   /** 物理ページ番号や暗黙rowidに依存せず、schemaと型付き全列の論理内容を照合する。 */
-  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
-      value = "SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE",
-      justification =
-          "Identifiers come only from sqlite_schema/table_info, are double-quote escaped, and cannot be bound as SQL parameters; quoted schema names are integration tested.")
   static String contents(Connection db)
       throws java.sql.SQLException, java.io.IOException, java.security.NoSuchAlgorithmException {
     var digest = MessageDigest.getInstance("SHA-256");
-    var tables = new ArrayList<String>();
+    var tables = new ArrayList<SchemaTable>();
     try (var sql = db.createStatement();
         var rows =
             sql.executeQuery(
-                "SELECT type,name,tbl_name,sql FROM sqlite_schema ORDER BY name COLLATE BINARY")) {
+                "SELECT type,name,tbl_name,sql FROM main.sqlite_schema ORDER BY name COLLATE BINARY")) {
       while (rows.next()) {
         for (int i = 1; i <= 4; i++) put(digest, rows.getString(i));
-        if ("table".equals(rows.getString(1))) tables.add(rows.getString(2));
+        if ("table".equals(rows.getString(1))) tables.add(new SchemaTable(rows.getString(2)));
       }
     }
-    for (String table : tables) {
-      put(digest, table);
+    for (SchemaTable table : tables) {
+      put(digest, table.name());
       var columns = new ArrayList<String>();
       try (var sql = db.createStatement();
-          var rows = sql.executeQuery("PRAGMA table_info(" + identifier(table) + ")")) {
+          var rows = sql.executeQuery(table.toColumnInfoSqlString())) {
         while (rows.next()) columns.add(rows.getString("name"));
       }
-      var values = new ArrayList<String>();
-      var order = new ArrayList<String>();
-      for (String column : columns) {
-        String name = identifier(column);
-        values.add("typeof(" + name + ")");
-        values.add(name);
-        order.add("typeof(" + name + ") COLLATE BINARY");
-        order.add(name + " COLLATE BINARY");
-      }
+      var query = new TableContentsQuery(table, List.copyOf(columns));
       try (var sql = db.createStatement();
-          var rows =
-              sql.executeQuery(
-                  "SELECT "
-                      + String.join(",", values)
-                      + " FROM "
-                      + identifier(table)
-                      + " ORDER BY "
-                      + String.join(",", order))) {
+          var rows = sql.executeQuery(query.toSqlString())) {
         long count = 0;
         while (rows.next()) {
           count = Math.addExact(count, 1);
@@ -129,7 +111,37 @@ final class StoragePageLayout {
     return HexFormat.of().formatHex(digest.digest());
   }
 
-  private static String identifier(String value) {
+  /** Identifier from the main schema catalog. A temporary table cannot replace its rows. */
+  private record SchemaTable(String name) {
+    String toColumnInfoSqlString() {
+      // Use the native PRAGMA so schema objects named pragma_table_info cannot shadow it.
+      return "PRAGMA main.table_info(" + quoteIdentifier(name) + ")";
+    }
+  }
+
+  /** A fixed read-only projection with all variable parts encoded as identifiers. */
+  private record TableContentsQuery(SchemaTable table, List<String> columns) {
+    String toSqlString() {
+      var values = new ArrayList<String>();
+      var order = new ArrayList<String>();
+      for (String column : columns) {
+        String name = "source." + quoteIdentifier(column);
+        values.add("typeof(" + name + ")");
+        values.add(name);
+        order.add("typeof(" + name + ") COLLATE BINARY");
+        order.add(name + " COLLATE BINARY");
+      }
+      return "SELECT "
+          + String.join(",", values)
+          + " FROM main."
+          + quoteIdentifier(table.name())
+          + " AS source ORDER BY "
+          + String.join(",", order);
+    }
+  }
+
+  private static String quoteIdentifier(String value) {
+    if (value.indexOf(0) >= 0) throw new IllegalArgumentException("NUL in SQLite identifier");
     return "\"" + value.replace("\"", "\"\"") + "\"";
   }
 
