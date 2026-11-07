@@ -145,7 +145,7 @@ public class WorkingSet {
   }
 
   /** 活動中検索識別子。 */
-  private final ThreadLocal<String> activeSearchId = new ThreadLocal<>();
+  private final ThreadLocal<SearchObservation> activeSearch = new ThreadLocal<>();
 
   /** 作業中の情報管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WorkingSet() {
@@ -331,7 +331,7 @@ public class WorkingSet {
               reference.path(),
               reference.path(),
               reference.accessType(),
-              activeSearchId.get()));
+              currentSearchId()));
     }
   }
 
@@ -340,16 +340,20 @@ public class WorkingSet {
    *
    * <p>Begins the observable lifecycle around the existing search-and-select path.
    */
-  public SearchObservation beginSearch(String query, String strategy) {
+  public Runnable beginSearch(String query, String strategy) {
     String searchId = "ws-search-" + UUID.randomUUID();
     SearchObservation observation =
         new SearchObservation(searchId, System.nanoTime(), files.size());
-    activeSearchId.set(searchId);
     if (events != null && eventBus != null) {
       eventBus.publish(
           events.workingSetSearchStarted(searchId, bounded(query, 500), strategy, files.size()));
     }
-    return observation;
+    var previous = activeSearch.get();
+    activeSearch.set(observation);
+    return () -> {
+      if (previous == null) activeSearch.remove();
+      else activeSearch.set(previous);
+    };
   }
 
   /**
@@ -358,11 +362,9 @@ public class WorkingSet {
    * <p>Completes a search using aggregate values already produced by the search algorithm.
    */
   public void completeSearch(
-      SearchObservation observation,
-      int hitCount,
-      int candidateCount,
-      int selectedCount,
-      int alreadyPresentCount) {
+      int hitCount, int candidateCount, int selectedCount, int alreadyPresentCount) {
+    var observation = activeSearch.get();
+    if (observation == null) throw new IllegalStateException("No working set search is active");
     long durationMs = Math.max(0L, (System.nanoTime() - observation.startedAtNanos()) / 1_000_000L);
     if (events != null && eventBus != null) {
       eventBus.publish(
@@ -376,16 +378,11 @@ public class WorkingSet {
               observation.workingSetSizeBefore(),
               files.size()));
     }
-    activeSearchId.remove();
   }
 
-  /**
-   * 作業中の情報管理に関するabandon検索を処理する。
-   *
-   * <p>Clears correlation state if the underlying search aborts before producing metrics.
-   */
-  public void abandonSearch(SearchObservation observation) {
-    activeSearchId.remove();
+  private String currentSearchId() {
+    var observation = activeSearch.get();
+    return observation == null ? null : observation.searchId();
   }
 
   /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
@@ -403,5 +400,6 @@ public class WorkingSet {
    * @param startedAtNanos 開始日時ナノ秒数
    * @param workingSetSizeBefore 作業中集合大きさ変更前
    */
-  public record SearchObservation(String searchId, long startedAtNanos, int workingSetSizeBefore) {}
+  private record SearchObservation(
+      String searchId, long startedAtNanos, int workingSetSizeBefore) {}
 }

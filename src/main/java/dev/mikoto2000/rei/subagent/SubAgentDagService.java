@@ -5,8 +5,6 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -70,12 +68,11 @@ public final class SubAgentDagService {
   }
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Reads the application-bound SubAgentProperties shared by consumers of these settings.")
-  private final SubAgentProperties properties;
+  private final java.util.function.BooleanSupplier dagEnabled;
+
+  private final java.util.function.LongSupplier durableTokenLimit;
+
+  private final java.util.function.Supplier<java.time.Duration> dagTimeout;
 
   /** 保存と検索の窓口。 */
   private final DurableSubAgentRepository repository;
@@ -112,7 +109,9 @@ public final class SubAgentDagService {
       SubAgentRegistry registry,
       ParallelSubAgentDelegator parallel,
       Clock clock) {
-    this.properties = properties;
+    this.dagEnabled = () -> properties.isDurableEnabled() && properties.isDagEnabled();
+    this.durableTokenLimit = () -> properties.getDurableMaxTotalTokens();
+    this.dagTimeout = () -> properties.getDagTimeout();
     this.repository = repository;
     this.resolveBaseline = (definition, owner) -> runner.durableBaseline(definition, owner);
     this.registry = registry;
@@ -151,7 +150,7 @@ public final class SubAgentDagService {
     }
     var parent = run.sharedLlmReservation();
     int calls = Math.min(maximum, parent.remaining());
-    long tokens = properties.getDurableMaxTotalTokens();
+    long tokens = durableTokenLimit.getAsLong();
     if (tokens == 0 && parent.tokenLimitEnabled()) tokens = Long.MAX_VALUE;
     String id = UUID.randomUUID().toString();
     var plan = new SavedPlan(1, id, spec, children);
@@ -277,7 +276,7 @@ public final class SubAgentDagService {
             parent.recordTotalTokens(tokens);
           }
         };
-    long deadline = System.nanoTime() + properties.getDagTimeout().toNanos();
+    long deadline = System.nanoTime() + dagTimeout.get().toNanos();
     String forced = null;
     try (var scope = AgentRunScope.open(owner)) {
       for (int wave = 0; wave < 16; wave++) {
@@ -472,8 +471,7 @@ public final class SubAgentDagService {
 
   /** 補助エージェントへの委譲で用いる所有者を返す。 */
   private AgentRunContext owner(RunExecutionContext run) {
-    if (!properties.isDurableEnabled()
-        || !properties.isDagEnabled()
+    if (!dagEnabled.getAsBoolean()
         || run == null
         || run.runContext() == null
         || run.runContext().projectId() == null

@@ -6,8 +6,6 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarService;
 import dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand;
 import dev.mikoto2000.rei.task.TaskService;
 import dev.mikoto2000.rei.task.command.TaskCommand;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.time.LocalDate;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -33,12 +31,11 @@ public final class GoogleOperationsController {
   private final GoogleCalendarService calendar;
 
   /** タスク一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared task service and its current account for command operations.")
-  private final TaskService tasks;
+  private final java.util.function.BiFunction<Integer, LocalDate, String> listTasks;
+
+  private final java.util.function.Function<Task, String> addTaskReport;
+  private final java.util.function.LongFunction<String> completeTask;
+  private final java.util.function.LongFunction<String> deleteTask;
 
   /** 実行一覧。 */
   private final java.util.function.BiFunction<Scope, String, ResponseEntity<ChatResponse>>
@@ -89,7 +86,16 @@ public final class GoogleOperationsController {
   public GoogleOperationsController(
       GoogleCalendarService calendar, TaskService tasks, IntegrationRunSubmitService runs) {
     this.calendar = calendar;
-    this.tasks = tasks;
+    this.listTasks = (priority, due) -> TaskCommand.reportList(tasks, priority, due);
+    this.addTaskReport =
+        request ->
+            TaskCommand.reportAdd(
+                tasks,
+                request.title(),
+                request.due(),
+                request.priority() == null ? 3 : request.priority());
+    this.completeTask = id -> TaskCommand.reportDone(tasks, id);
+    this.deleteTask = id -> TaskCommand.reportDelete(tasks, id);
     this.submitAuthorizeCalendar =
         (request, key) ->
             accepted(runs.authorizeCalendar(request.projectId(), request.sessionId(), key));
@@ -152,7 +158,7 @@ public final class GoogleOperationsController {
   public Text tasks(
       @RequestParam(required = false) Integer priority,
       @RequestParam(required = false) LocalDate dueBefore) {
-    return text(TaskCommand.reportList(tasks, priority, dueBefore));
+    return text(listTasks.apply(priority, dueBefore));
   }
 
   /** 新たな対象を管理できるよう、タスクを追加する。 */
@@ -160,24 +166,19 @@ public final class GoogleOperationsController {
   public Text addTask(@RequestBody Task request) {
     if (request == null) throw new IllegalArgumentException("Task required");
     required(request.title());
-    return text(
-        TaskCommand.reportAdd(
-            tasks,
-            request.title(),
-            request.due(),
-            request.priority() == null ? 3 : request.priority()));
+    return text(addTaskReport.apply(request));
   }
 
   /** Web APIによる操作で用いる完了を返す。 */
   @PostMapping("/google-tasks/{id}/complete")
   public Text done(@PathVariable long id) {
-    return text(TaskCommand.reportDone(tasks, id));
+    return text(completeTask.apply(id));
   }
 
   /** 指定された対象を削除する。 */
   @DeleteMapping("/google-tasks/{id}")
   public Text delete(@PathVariable long id) {
-    return text(TaskCommand.reportDelete(tasks, id));
+    return text(deleteTask.apply(id));
   }
 
   /** Web APIによる操作で用いる権限の確認タスク一覧を返す。 */

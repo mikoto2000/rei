@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.chatgpt;
 
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -28,47 +26,43 @@ public final class ChatGptCommand {
   private final ObjectProvider<PlanLogin> login;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project selection and client session state.")
-  private dev.mikoto2000.rei.core.project.ProjectService projects;
-
-  /** 権限一覧。 */
-  private java.util.function.BiConsumer<String, dev.mikoto2000.rei.core.chat.AgentRunContext>
-      authorizeInference;
+  private java.util.function.Consumer<String> authorizeSelectedProbe;
 
   /** ChatGPTとの連携に関する設定利用可否の確認を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void configureProbe(
       dev.mikoto2000.rei.core.project.ProjectService projects,
       dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {
-    this.projects = projects;
-    this.authorizeInference =
-        permissions == null
+    authorizeSelectedProbe =
+        projects == null || permissions == null
             ? null
-            : (digest, owner) -> permissions.check("requestChatGptPlanInference", digest, owner);
+            : digest -> {
+              synchronized (projects.currentClient()) {
+                var project = projects.currentContext();
+                String session = projects.currentSessionId();
+                if (session == null)
+                  throw ChatGptException.of(ChatGptException.Code.PERMISSION_DENIED);
+                var owner =
+                    new dev.mikoto2000.rei.core.chat.AgentRunContext(
+                        java.util.UUID.randomUUID().toString(),
+                        session,
+                        project.root(),
+                        project.id());
+                permissions.check("requestChatGptPlanInference", digest, owner);
+              }
+            };
   }
 
   /** ChatGPTとの連携に関する権限の確認利用可否の確認を処理する。 */
   private void authorizeProbe(String account, String model, String task) {
-    if (projects == null
-        || authorizeInference == null
+    if (authorizeSelectedProbe == null
         || !dev.mikoto2000.rei.event.CredentialRedactor.redact(task).equals(task))
       throw ChatGptException.of(ChatGptException.Code.PERMISSION_DENIED);
-    synchronized (projects.currentClient()) {
-      var project = projects.currentContext();
-      String session = projects.currentSessionId();
-      if (session == null) throw ChatGptException.of(ChatGptException.Code.PERMISSION_DENIED);
-      var owner =
-          new dev.mikoto2000.rei.core.chat.AgentRunContext(
-              java.util.UUID.randomUUID().toString(), session, project.root(), project.id());
-      String digest =
-          dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256(
-              (account + "\u0000" + model + "\u0000" + task)
-                  .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-      authorizeInference.accept(digest, owner);
-    }
+    String digest =
+        dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256(
+            (account + "\u0000" + model + "\u0000" + task)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    authorizeSelectedProbe.accept(digest);
   }
 
   /** ターミナルへの表示先。 */

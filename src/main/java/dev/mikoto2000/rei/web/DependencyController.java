@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.application.state.OperationConflictException;
 import dev.mikoto2000.rei.core.dependency.DependencyObservationService;
 import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -32,12 +30,9 @@ public class DependencyController {
   private final DependencyObservationService observations;
 
   /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared project registry so lookups use the same registered projects.")
-  private final dev.mikoto2000.rei.core.project.ProjectRegistry projects;
+  private final java.util.function.Function<
+          String, java.util.Optional<dev.mikoto2000.rei.core.project.ProjectContext>>
+      findProject;
 
   /** 利用条件の確認。 */
   private final java.util.function.BiConsumer<
@@ -59,7 +54,7 @@ public class DependencyController {
       dev.mikoto2000.rei.core.policy.ToolPermissionGuard guard) {
     this.repository = repository;
     this.observations = observations;
-    this.projects = projects;
+    this.findProject = projects == null ? null : id -> projects.resolveById(id);
     this.authorizeCheck =
         guard == null
             ? null
@@ -153,10 +148,10 @@ public class DependencyController {
 
   /** Web APIによる操作で用いるプロジェクトを返す。 */
   private dev.mikoto2000.rei.core.project.ProjectContext project(String id) {
-    if (projects == null || authorizeCheck == null)
+    if (findProject == null || authorizeCheck == null)
       throw new IllegalStateException("Dependency controls unavailable");
-    return projects
-        .resolveById(id)
+    return findProject
+        .apply(id)
         .orElseThrow(() -> new IllegalArgumentException("Unknown registered Project"));
   }
 

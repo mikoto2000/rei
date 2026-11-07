@@ -12,8 +12,6 @@ import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
 import dev.mikoto2000.rei.temporal.AgentSchedulerProperties;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -49,12 +47,12 @@ public final class DotResumeService {
   private final BiFunction<String, String, PersistentCheckpoint> findCheckpoint;
 
   /** 再開用の記録サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared checkpoint service for save, inspect, and resume operations.")
-  private final PersistentCheckpointService checkpointService;
+  private final BiFunction<String, String, Boolean> automaticResumeSafe;
+
+  private final java.util.function.Function<ResumeCheckpoint, String> resumeCheckpoint;
+
+  private record ResumeCheckpoint(
+      String project, String task, long revision, String run, String previousRun, String summary) {}
 
   private final BiFunction<String, String, String> scheduleResume;
   private final BiConsumer<String, String> activateSchedule;
@@ -89,7 +87,19 @@ public final class DotResumeService {
     this.repo = repo;
     this.delegation = delegation;
     this.findCheckpoint = (project, task) -> checkpoints.get(project, task);
-    this.checkpointService = checkpointService;
+    this.automaticResumeSafe =
+        (project, task) -> checkpointService.inspect(project, task).automaticResumeSafe();
+    this.resumeCheckpoint =
+        request ->
+            checkpointService
+                .resumeForDot(
+                    request.project(),
+                    request.task(),
+                    request.revision(),
+                    request.run(),
+                    request.previousRun(),
+                    request.summary())
+                .runId();
     this.scheduleResume =
         (request, session) ->
             schedules
@@ -202,7 +212,7 @@ public final class DotResumeService {
         || !state.status().equals("WAITING")
         || state.mode() != AgentRunContext.Mode.EXCLUSIVE)
       throw new DotException("CHECKPOINT_OWNER_CHANGED");
-    if (!checkpointService.inspect(owner.project(), owner.task()).automaticResumeSafe())
+    if (!automaticResumeSafe.apply(owner.project(), owner.task()))
       throw new DotException("RECONCILIATION_REQUIRED");
     return state;
   }
@@ -269,18 +279,19 @@ public final class DotResumeService {
     if (!repo.startResume(owner.project(), id, entry.task().id(), entry.runId()))
       throw new DotException("RESUME_ALREADY_STARTED");
     try {
-      var resumed =
-          checkpointService.resumeForDot(
-              owner.project(),
-              owner.task(),
-              state.revision(),
-              entry.runId(),
-              owner.run(),
-              "Untrusted external result (manual acceptance recorded): "
-                  + DotPayload.safe(Objects.toString(result.get("summary"), ""))
-                  + "; request_id="
-                  + id);
-      if (!resumed.runId().equals(entry.runId())) throw new DotException("RESUME_OWNER_CHANGED");
+      String resumedRun =
+          resumeCheckpoint.apply(
+              new ResumeCheckpoint(
+                  owner.project(),
+                  owner.task(),
+                  state.revision(),
+                  entry.runId(),
+                  owner.run(),
+                  "Untrusted external result (manual acceptance recorded): "
+                      + DotPayload.safe(Objects.toString(result.get("summary"), ""))
+                      + "; request_id="
+                      + id));
+      if (!resumedRun.equals(entry.runId())) throw new DotException("RESUME_OWNER_CHANGED");
       repo.finishResume(owner.project(), id, "ADMITTED");
       return ChatExecutionResult.success(
           "Checkpoint continuation admitted; completion is tracked separately", false);

@@ -24,8 +24,6 @@ import dev.mikoto2000.rei.temporal.RuntimeContextAdvisor;
 import dev.mikoto2000.rei.text.TextTools;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -320,17 +318,16 @@ public class LlmChatClientProvider {
   private ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> subAgentTools;
 
   /** 補助エージェント設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Supplies the configured subagent options when creating chat clients.")
-  private dev.mikoto2000.rei.subagent.SubAgentProperties subAgentProperties =
-      new dev.mikoto2000.rei.subagent.SubAgentProperties();
+  private java.util.function.Supplier<java.util.List<String>> parentToolNames =
+      () ->
+          dev.mikoto2000.rei.subagent.SubAgentParentToolCatalog.names(
+              new dev.mikoto2000.rei.subagent.SubAgentProperties());
 
   /** 用途に応じたモデル利用で使用する補助エージェント設定を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setSubAgentProperties(dev.mikoto2000.rei.subagent.SubAgentProperties settings) {
-    this.subAgentProperties = settings;
+    this.parentToolNames =
+        () -> dev.mikoto2000.rei.subagent.SubAgentParentToolCatalog.names(settings);
   }
 
   /** 用途に応じたモデル利用で使用する補助エージェントツール一覧を設定する。 */
@@ -583,8 +580,7 @@ public class LlmChatClientProvider {
     if (LlmFeature.CHAT.equals(feature)
         && subAgentTools != null
         && subAgentTools.getIfAvailable() != null) {
-      for (String name :
-          dev.mikoto2000.rei.subagent.SubAgentParentToolCatalog.names(subAgentProperties))
+      for (String name : parentToolNames.get())
         builder.defaultTools(
             new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
                 subAgentTools.getObject().callback(name), eventFactory, eventPublisher));

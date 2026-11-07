@@ -159,8 +159,9 @@ public final class ToolLoopSupport {
   }
 
   private static boolean rejectedRead(ToolResponseMessage.ToolResponse response) {
-    if (!java.util.Set.of("readReviewPages", "readRawToolResult", "claimReviewWorkItem", "readNextReviewWorkItem").contains(response.name()))
-      return false;
+    if (!java.util.Set.of(
+            "readReviewPages", "readRawToolResult", "claimReviewWorkItem", "readNextReviewWorkItem")
+        .contains(response.name())) return false;
     try {
       var result =
           tools.jackson.databind.json.JsonMapper.builder()
@@ -235,10 +236,6 @@ public final class ToolLoopSupport {
     }
   }
 
-  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      justification =
-          "Preserve the original callback failure after checking approval suspension; wrapping would change cancellation and tool failure semantics.")
   private ToolExecutionResult executePendingWithinBudget(
       Prompt prompt,
       RunContinuation.PendingTools pending,
@@ -313,7 +310,7 @@ public final class ToolLoopSupport {
             new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
                 call.id(), call.name(), result));
       } catch (RuntimeException error) {
-        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+        for (Throwable cause : RunCancellation.causes(error)) {
           if (cause instanceof dev.mikoto2000.rei.core.policy.ToolPermissionException permission
               && permission.approvalId() != null) {
             // 必要な承認が得られるまで、成功済みの結果と未実行の操作を保存して中断する。
@@ -326,9 +323,8 @@ public final class ToolLoopSupport {
                     java.util.List.copyOf(completed),
                     argumentCorrections))) throw new RunWaitingException();
           }
-          if (cause.getCause() == cause) break;
         }
-        throw error;
+        throw dev.mikoto2000.rei.core.stagnation.RunExecutionContext.toolCallbackFailure(error);
       }
     }
     var history = new java.util.ArrayList<>(prompt.getInstructions());

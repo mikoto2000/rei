@@ -6,12 +6,11 @@ import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy;
 import dev.mikoto2000.rei.conversation.HistorySearchRequest;
 import dev.mikoto2000.rei.conversation.HistorySearchScope;
+import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.memory.model.LongTermMemory;
 import dev.mikoto2000.rei.memory.service.MemoryRepository;
 import dev.mikoto2000.rei.vectorstore.ReciprocalRankFusion;
 import dev.mikoto2000.rei.workcontext.WorkContextService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -77,29 +76,24 @@ public class EpisodeSearchService {
   private boolean memoryEnabled = true;
 
   /** ベクトルによる。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Queries or updates the shared dense episode index.")
-  private EpisodeDenseIndex dense;
+  private Function<DenseQuery, List<Episode>> searchDense;
 
   /** 過去の経験の活用で使用するベクトルによるを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setDense(EpisodeDenseIndex dense) {
-    this.dense = dense;
+    this.searchDense =
+        dense == null
+            ? null
+            : query -> dense.search(query.query(), query.project(), query.limit(), query.range());
   }
 
   /** イベント一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads episode evidence from the same persistent project event store.")
-  private dev.mikoto2000.rei.event.ProjectAgentEventStore events;
+  private BiFunction<String, String, Optional<AgentEvent>> findEvent;
 
   /** 過去の経験の活用で使用するイベント一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setEvents(dev.mikoto2000.rei.event.ProjectAgentEventStore events) {
-    this.events = events;
+    this.findEvent = events == null ? null : events::findEvent;
   }
 
   /** 過去の経験の活用で使用するプロジェクト一覧を設定する。 */
@@ -213,9 +207,9 @@ public class EpisodeSearchService {
                   && episodeHits.size() >= 3)) continue;
       var lexical = episodes.search(query, project, local ? 8 : 3, range);
       List<Episode> denseCandidates = List.of();
-      if (dense != null)
+      if (searchDense != null)
         try {
-          denseCandidates = dense.search(query, project, local ? 8 : 3, range);
+          denseCandidates = searchDense.apply(new DenseQuery(query, project, local ? 8 : 3, range));
         } catch (RuntimeException error) {
           dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
           for (Throwable cause = error; cause != null; cause = cause.getCause())
@@ -365,10 +359,10 @@ public class EpisodeSearchService {
   /** 過去の経験の活用で用いるツール取得元を返す。 */
   private Optional<dev.mikoto2000.rei.event.ToolCompletedPayload> toolSource(
       Episode e, Episode.Claim c) {
-    var eventStore = events;
-    return eventStore == null
+    var eventLookup = findEvent;
+    return eventLookup == null
         ? Optional.empty()
-        : accessible(() -> eventStore.findEvent(e.projectId(), c.sourceId()))
+        : accessible(() -> eventLookup.apply(e.projectId(), c.sourceId()))
             .filter(
                 event -> e.sessionId().equals(event.sessionId()) && c.runId().equals(event.runId()))
             .map(dev.mikoto2000.rei.event.AgentEvent::payload)
@@ -596,4 +590,6 @@ public class EpisodeSearchService {
     var current = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
     return current != null && !current.id().equals(project);
   }
+
+  private record DenseQuery(String query, String project, int limit, EpisodeTimeRange range) {}
 }
