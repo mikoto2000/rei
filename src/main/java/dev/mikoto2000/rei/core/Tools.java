@@ -1373,9 +1373,18 @@ public class Tools {
   private record FileNameMatch(String path, int matchCount) {}
 
   /** 利用可能な対象を確認できるよう、ファイルを一覧にする。 */
-  @Tool(name = "listFile", description = "ファイル一覧を取得します（.gitignore を尊重）")
+  @Tool(
+      name = "listFile",
+      description = "Project 内のファイル一覧を取得します（.gitignore を尊重）。Project のルートは '.' を指定します。")
   List<String> listFile(String baseDir) throws IOException, InterruptedException {
-    return listFile(baseDir, currentWorkingDirectory());
+    try {
+      return listFile(baseDir, currentWorkingDirectory());
+    } catch (FileSnapshots.ExcludedInventoryPathException excluded) {
+      throw new dev.mikoto2000.rei.toolcontract.ToolReadRejectedException(
+          "PROJECT_PATH_EXCLUDED",
+          "baseDir が Project の外にあるか、除外対象です。Project 内の相対パス（ルートは '.'）を指定してください。"
+              + "Agent Skill の参照資料は、既知のスキル相対パスを readSkillResource に指定してください。");
+    }
   }
 
   /** 利用可能な対象を確認できるよう、ファイルを一覧にする。 */
