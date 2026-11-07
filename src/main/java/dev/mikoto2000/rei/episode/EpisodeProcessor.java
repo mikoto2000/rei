@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.episode;
 
 import dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn;
+import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
@@ -8,6 +9,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.function.BiFunction;
 import org.springframework.stereotype.Service;
 
 /** 過去の経験の活用に必要な経験の記録Processorを扱う。 */
@@ -20,11 +23,7 @@ public class EpisodeProcessor {
   private final EpisodeExtractor extractor;
 
   /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent turn store for history and run lookups.")
-  private final dev.mikoto2000.rei.conversation.ConversationTurnStore store;
+  private final BiFunction<String, String, Optional<ConversationTurnStore.Turn>> findTurn;
 
   /** イベント一覧。 */
   @SuppressFBWarnings(
@@ -52,7 +51,7 @@ public class EpisodeProcessor {
       dev.mikoto2000.rei.conversation.ConversationTurnStore store) {
     this.repository = repository;
     this.extractor = extractor;
-    this.store = store;
+    this.findTurn = store == null ? null : (conversation, run) -> store.findRun(conversation, run);
   }
 
   /** 過去の経験の活用に関するプロセスを処理する。 */
@@ -72,11 +71,11 @@ public class EpisodeProcessor {
         existing.stream()
             .filter(
                 e ->
-                    store != null
+                    findTurn != null
                         && e.claims().stream()
                             .allMatch(
                                 c ->
-                                    store.findRun(e.sessionId(), c.runId()).isPresent()
+                                    findTurn.apply(e.sessionId(), c.runId()).isPresent()
                                         && (!c.speaker().equals("tool")
                                             || events != null
                                                 && events
@@ -138,9 +137,9 @@ public class EpisodeProcessor {
             "A completed episode requires an explicit user decision or direct tool result");
       verified.add(candidate);
     }
-    if (store != null)
+    if (findTurn != null)
       for (var turn : turns)
-        if (!store.findRun(session, turn.runId()).filter(turn::equals).isPresent())
+        if (!findTurn.apply(session, turn.runId()).filter(turn::equals).isPresent())
           throw new IllegalStateException("Episode source changed during extraction; retry");
     if (Thread.currentThread().isInterrupted())
       throw new java.util.concurrent.CancellationException();

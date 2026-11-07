@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -33,11 +34,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   static final String LEGACY_HISTORY = "rei.legacyHistory";
 
   /** やり取り一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent turn store for history and run lookups.")
-  private final ConversationTurnStore turns;
+  private final Function<String, List<ConversationTurnStore.Turn>> readTurns;
 
   /** 記憶。 */
   @SuppressFBWarnings(
@@ -68,7 +65,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       ChatMemory memory,
       ConversationSummaryRepository summaries,
       dev.mikoto2000.rei.conversation.ConversationLogStore logs) {
-    this.turns = turns;
+    this.readTurns = conversation -> turns.read(conversation);
     this.memory = memory;
     this.summaries = summaries;
     this.logs = logs;
@@ -90,7 +87,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     request.prompt().getInstructions().stream()
         .filter(m -> m instanceof SystemMessage)
         .forEach(messages::add);
-    var history = turns.read(id);
+    var history = readTurns.apply(id);
     var cancelled = ConversationTurnStore.promptHistoryFor(history);
     if (!cancelled.generation().isEmpty())
       messages.add(
