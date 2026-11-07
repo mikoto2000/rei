@@ -10,6 +10,7 @@ import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.core.dependency.DependencyObservationService;
 import dev.mikoto2000.rei.core.dependency.DependencyState;
 import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
+import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.DependencyStatusPayload;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
@@ -23,8 +24,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import org.springframework.stereotype.Service;
 
 /**
@@ -53,12 +57,12 @@ public class GoalWaitService {
   /** 観測内容一覧。 */
   private final DependencyObservationService observations;
 
-  /** 予約されたエージェント実行を管理する窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared persistent schedule and claim state.")
-  private final PersistentAgentScheduler schedules;
+  private final Function<DependencyWait, String> scheduleDependencyWait;
+  private final BiConsumer<String, String> activateSchedule;
+  private final BiConsumer<AgentEvent, Path> signalScheduleEvent;
+  private final BiFunction<String, String, PersistentAgentScheduler.Entry> findSchedule;
+  private final Predicate<PersistentAgentScheduler.Entry> activeClaim;
+  private final BiConsumer<String, String> cancelSchedule;
 
   /** 再開用の記録一覧。 */
   @SuppressFBWarnings(
@@ -94,7 +98,21 @@ public class GoalWaitService {
     this.loop = loop;
     this.dependencies = dependencies;
     this.observations = observations;
-    this.schedules = schedules;
+    this.scheduleDependencyWait =
+        wait ->
+            schedules
+                .scheduleOnEvent(
+                    wait.dependency(),
+                    AgentEventType.DEPENDENCY_COMPLETED,
+                    wait.remaining(),
+                    wait.action(),
+                    wait.session())
+                .id();
+    this.activateSchedule = (project, id) -> schedules.activate(project, id);
+    this.signalScheduleEvent = (event, root) -> schedules.signalExternalEvent(event, root);
+    this.findSchedule = (project, id) -> schedules.get(project, id);
+    this.activeClaim = claim -> schedules.activeClaim(claim);
+    this.cancelSchedule = (project, id) -> schedules.cancel(project, id);
     this.checkpoints = checkpoints;
     this.checkpointForRun = (project, run) -> checkpointRepository.findByRun(project, run);
     this.clock = clock;
@@ -156,14 +174,9 @@ public class GoalWaitService {
             snapshot,
             () -> {
               try (var scope = AgentRunScope.open(owner)) {
-                return schedules
-                    .scheduleOnEvent(
-                        dependency,
-                        AgentEventType.DEPENDENCY_COMPLETED,
-                        remaining,
-                        "Resume verified Goal " + id,
-                        goal.sessionId())
-                    .id();
+                return scheduleDependencyWait.apply(
+                    new DependencyWait(
+                        dependency, remaining, "Resume verified Goal " + id, goal.sessionId()));
               }
             });
     events.publish(goals.get(project, id), "WAITING");
@@ -185,13 +198,13 @@ public class GoalWaitService {
     var wait = expected(project, id, version);
     requireWaiting(wait);
     loop.progress(project, id);
-    schedules.activate(project, wait.scheduleId());
+    activateSchedule.accept(project, wait.scheduleId());
     var fresh = observations.recheckForResume(project, wait.dependencyId());
     // A condition that was already met at activation needs a current observation, not an old event.
     if (fresh.state() == DependencyState.COMPLETED) {
       var dependency = dependencies.get(project, wait.dependencyId());
-      schedules.signalExternalEvent(
-          new dev.mikoto2000.rei.event.AgentEvent(
+      signalScheduleEvent.accept(
+          new AgentEvent(
               UUID.randomUUID().toString(),
               0,
               clock.instant(),
@@ -248,13 +261,13 @@ public class GoalWaitService {
     var dependency = dependencies.get(wait.project(), wait.dependencyId());
     if (!goal.projectRoot().equals(dependency.projectRoot())
         || !goal.sessionId().equals(dependency.sessionId())) blocked = "owner_unavailable";
-    var timer = schedules.get(wait.project(), wait.scheduleId());
+    var timer = findSchedule.apply(wait.project(), wait.scheduleId());
     if (!timer.projectRoot().equals(goal.projectRoot())
         || !timer.task().conversationId().equals(goal.sessionId())) blocked = "owner_unavailable";
     if (scheduled == null && timer.status().equals("RUNNING"))
       throw new IllegalStateException("Wait is owned by Scheduler");
     if (scheduled != null
-        && (!timer.runId().equals(scheduled.runId()) || !schedules.activeClaim(scheduled)))
+        && (!timer.runId().equals(scheduled.runId()) || !activeClaim.test(scheduled)))
       throw new IllegalStateException("Schedule claim inactive");
     if (goal.attempts() >= goal.maxRuns()
         || goal.llmCallsUsed() >= goal.maxLlmCalls()
@@ -284,7 +297,7 @@ public class GoalWaitService {
     var checkpoint = saved;
     try {
       if (scheduled == null && !Set.of("COMPLETED", "FAILED", "CANCELLED").contains(timer.status()))
-        schedules.cancel(wait.project(), wait.scheduleId());
+        cancelSchedule.accept(wait.project(), wait.scheduleId());
       var resumed =
           loop.resumeWaiting(
               goal,
@@ -332,11 +345,14 @@ public class GoalWaitService {
       throw new IllegalStateException("Stop or reconcile the Goal Run before releasing a wait");
     if (!Set.of("WAITING", "BLOCKED", "RESUMING").contains(wait.state()))
       throw new IllegalStateException("Wait is terminal");
-    var timer = schedules.get(project, wait.scheduleId());
+    var timer = findSchedule.apply(project, wait.scheduleId());
     if (timer.status().equals("RUNNING"))
       throw new IllegalStateException("Reconcile the exact Scheduler Run before releasing a wait");
     if (!Set.of("COMPLETED", "FAILED", "CANCELLED").contains(timer.status()))
-      schedules.cancel(project, wait.scheduleId());
+      cancelSchedule.accept(project, wait.scheduleId());
     return waits.transition(wait, "CANCELLED", "human_wait_cancelled", null);
   }
+
+  private record DependencyWait(
+      String dependency, Duration remaining, String action, String session) {}
 }
