@@ -4,8 +4,6 @@ import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.topic.AgentMessage;
 import dev.mikoto2000.rei.topic.AgentMessagePublisher;
 import dev.mikoto2000.rei.topic.MessageOrigin;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
@@ -27,12 +25,13 @@ public final class AutomaticPeriodCoaching {
   private final java.util.function.BooleanSupplier weeklyEnabled;
 
   /** 助言。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared coaching service for durable reservations and current status.")
-  private final PeriodCoachingService coaching;
+  private final BooleanSupplier coachingEnabled;
+
+  private final java.util.function.Function<
+          ActivityPeriodAnalysis.Period, PeriodCoachingService.Prepared>
+      prepareCoaching;
+  private final java.util.function.Function<PeriodCoachingService.Prepared, String> reserveCoaching;
+  private final java.util.function.Predicate<PeriodCoachingService.Prepared> currentCoaching;
 
   /** 通知先。 */
   private final AgentMessagePublisher publisher;
@@ -87,7 +86,10 @@ public final class AutomaticPeriodCoaching {
         () -> properties.isEnabled() && properties.getCoaching().isAutomaticEnabled();
     this.monthlyEnabled = () -> properties.getCoaching().isMonthlyEnabled();
     this.weeklyEnabled = () -> properties.getCoaching().isWeeklyEnabled();
-    this.coaching = coaching;
+    this.coachingEnabled = () -> coaching.status().settings().enabled();
+    this.prepareCoaching = period -> coaching.prepare(period, null);
+    this.reserveCoaching = prepared -> coaching.reserve(prepared);
+    this.currentCoaching = prepared -> coaching.current(prepared);
     this.publisher = publisher;
     this.tracker = tracker;
     this.paused = paused;
@@ -124,7 +126,7 @@ public final class AutomaticPeriodCoaching {
         status = enabled() ? "UNAVAILABLE_OR_BUSY" : "DISABLED";
         return;
       }
-      if (!coaching.status().settings().enabled()) {
+      if (!coachingEnabled.getAsBoolean()) {
         status = "DISABLED";
         return;
       }
@@ -140,17 +142,17 @@ public final class AutomaticPeriodCoaching {
           status = "CONTEXT_CHANGED";
           return;
         }
-        var prepared = coaching.prepare(period, null);
+        var prepared = prepareCoaching.apply(period);
         status = prepared.reason();
         if (!prepared.advice()) continue;
         if (!allowed() || tracker.activityVersion() != version) {
           status = "CONTEXT_CHANGED";
           return;
         }
-        status = coaching.reserve(prepared);
+        status = reserveCoaching.apply(prepared);
         if (!status.equals("RESERVED")) continue;
         // Never release the receipt: failure/context change after claim is not safe to replay.
-        if (!allowed() || tracker.activityVersion() != version || !coaching.current(prepared)) {
+        if (!allowed() || tracker.activityVersion() != version || !currentCoaching.test(prepared)) {
           status = "CONTEXT_CHANGED";
           return;
         }
