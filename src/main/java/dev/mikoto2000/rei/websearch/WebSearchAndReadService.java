@@ -2,10 +2,11 @@ package dev.mikoto2000.rei.websearch;
 
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.util.List;
+import java.util.function.Function;
+import java.util.function.IntSupplier;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** Web 検索と検索結果本文の取得を一つの操作として実行する。 */
@@ -15,20 +16,17 @@ public class WebSearchAndReadService {
   static final int DEFAULT_READ_TOP = 3;
 
   /** Web検索サービス。 */
-  private final WebSearchService webSearchService;
-
   /** URL内容取得サービス。 */
-  private final UrlContentFetchService urlContentFetchService;
+  private final Function<String, UrlContentFetchResult> fetchPage;
 
   /** Webページ情報の抽出。 */
   private final WebPageExtractor webPageExtractor;
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the current shared search provider, extraction, and request policy.")
-  private final WebSearchProperties properties;
+  private final IntSupplier maxSearchResults;
+
+  private final Supplier<WebResearchLimits> researchLimits;
+  private final Function<WebSearchQueryPlanner, WebResearchPipeline.SelectCandidates> candidates;
 
   /** 計画の作成。 */
   private final WebSearchQueryPlanner planner;
@@ -75,10 +73,14 @@ public class WebSearchAndReadService {
       WebSearchProperties properties,
       WebSearchQueryPlanner planner,
       WebFetchBatch batch) {
-    this.webSearchService = webSearchService;
-    this.urlContentFetchService = urlContentFetchService;
+    this.fetchPage = url -> urlContentFetchService.fetch(url, properties.fetchPolicy());
     this.webPageExtractor = webPageExtractor;
-    this.properties = properties;
+    this.maxSearchResults = () -> properties.getMaxResults();
+    this.researchLimits = () -> WebResearchLimits.capture(properties);
+    this.candidates =
+        queryPlanner ->
+            (query, limit) ->
+                WebSearchSelection.search(webSearchService, queryPlanner, query, limit, properties);
     this.planner = planner;
     this.batch = batch;
   }
@@ -115,9 +117,8 @@ public class WebSearchAndReadService {
             : planner;
     var research =
         WebResearchPipeline.run(
-            webSearchService,
-            metadataPlanner,
-            properties,
+            researchLimits.get(),
+            candidates.apply(metadataPlanner),
             batch,
             validated.query(),
             validated.maxResults(),
@@ -216,7 +217,7 @@ public class WebSearchAndReadService {
   /** 取得制約と中断要求を守ってURLを読み、通常の取得失敗を結果として返す。 */
   private UrlContentFetchResult safeFetch(String url) {
     try {
-      return urlContentFetchService.fetch(url, properties.fetchPolicy());
+      return fetchPage.apply(url);
     } catch (RuntimeException exception) {
       dev.mikoto2000.rei.http.FetchOperation.propagateControls(exception);
       return UrlContentFetchResult.failure("FETCH_ERROR", "Failed to fetch URL");
@@ -244,11 +245,10 @@ public class WebSearchAndReadService {
     if (request.query() == null || request.query().isBlank()) {
       throw new IllegalArgumentException("query must not be blank");
     }
-    int maxResults =
-        request.maxResults() == null ? properties.getMaxResults() : request.maxResults();
-    if (maxResults <= 0 || maxResults > properties.getMaxResults()) {
-      throw new IllegalArgumentException(
-          "maxResults must be between 1 and " + properties.getMaxResults());
+    int configuredLimit = maxSearchResults.getAsInt();
+    int maxResults = request.maxResults() == null ? configuredLimit : request.maxResults();
+    if (maxResults <= 0 || maxResults > configuredLimit) {
+      throw new IllegalArgumentException("maxResults must be between 1 and " + configuredLimit);
     }
     int readTop =
         request.readTop() == null ? Math.min(DEFAULT_READ_TOP, maxResults) : request.readTop();
