@@ -103,7 +103,8 @@ public class SlackNotificationProvider implements NotificationProvider, AutoClos
 
   /** 注意の管理で用いるdeliverを返す。 */
   @Override
-  public Receipt deliver(String id, String metadata) throws Exception {
+  public Receipt deliver(String id, String metadata)
+      throws java.io.IOException, InterruptedException {
     if (Thread.currentThread().isInterrupted())
       throw new InterruptedException("Notification delivery cancelled before send");
     if (!properties.enabled()) throw new IllegalArgumentException("Slack delivery is disabled");

@@ -73,11 +73,11 @@ public final class DocumentRendererService {
   @FunctionalInterface
   public interface Renderer {
     /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
-    @SuppressFBWarnings(
-        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-        matchType = SuppressMatchType.EXACT,
-        justification = "The renderer boundary accepts checked failures from the selected rendering implementation.")
-    Rendered render(String source) throws Exception;
+    Rendered render(String source)
+        throws IOException,
+            InterruptedException,
+            java.util.concurrent.ExecutionException,
+            TimeoutException;
   }
 
   /**
@@ -259,9 +259,7 @@ public final class DocumentRendererService {
         if (valid) {
           if (artifacts == null) warnings.add("ARTIFACT_DELIVERY_DISABLED");
           else
-            artifact =
-                artifacts.publish(
-                    owner, "renderer:" + id, "image/png", "diagram.png", png);
+            artifact = artifacts.publish(owner, "renderer:" + id, "image/png", "diagram.png", png);
         }
         return save(
             new Receipt(
@@ -290,7 +288,10 @@ public final class DocumentRendererService {
                 null,
                 clock.instant(),
                 List.of("RENDERER_DEADLINE_EXCEEDED")));
-      } catch (Exception failure) {
+      } catch (IOException
+          | InterruptedException
+          | java.util.concurrent.ExecutionException
+          | RuntimeException failure) {
         save(
             new Receipt(
                 id,
@@ -503,7 +504,11 @@ public final class DocumentRendererService {
     }
 
     /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
-    public Rendered render(String source) throws Exception {
+    public Rendered render(String source)
+        throws IOException,
+            InterruptedException,
+            java.util.concurrent.ExecutionException,
+            TimeoutException {
       safeInput(source);
       RunCancellation.propagate(null);
       Path executable =
