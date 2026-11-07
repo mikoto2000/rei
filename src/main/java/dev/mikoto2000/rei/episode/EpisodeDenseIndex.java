@@ -3,12 +3,12 @@ package dev.mikoto2000.rei.episode;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
 import dev.mikoto2000.rei.llm.ModelCallBudgetScope;
 import dev.mikoto2000.rei.vectorstore.LazySqliteVectorStore;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
@@ -23,11 +23,9 @@ public class EpisodeDenseIndex {
   private final EpisodeRepository repository;
 
   /** ベクトル一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads and updates the same lazily opened vector index.")
-  private final LazySqliteVectorStore vectors;
+  private final BiConsumer<Episode, Document> replaceVector;
+
+  private final Function<SearchRequest, List<Document>> findVectors;
 
   /** 生成。 */
   private final String generation;
@@ -44,7 +42,11 @@ public class EpisodeDenseIndex {
   public EpisodeDenseIndex(
       EpisodeRepository repository, LazySqliteVectorStore vectors, String generation) {
     this.repository = repository;
-    this.vectors = vectors;
+    this.replaceVector =
+        (episode, document) ->
+            vectors.replaceBySource(
+                episode.projectId(), episode.id(), episode.occurredAt(), List.of(document));
+    this.findVectors = request -> vectors.denseSearch(request);
     this.generation = generation;
   }
 
@@ -96,7 +98,7 @@ public class EpisodeDenseIndex {
                         "revision",
                         e.revision()))
                 .build();
-        vectors.replaceBySource(e.projectId(), e.id(), e.occurredAt(), List.of(document));
+        replaceVector.accept(e, document);
         if (!repository.markDense(e, generation)) repository.invalidateDense(e.id());
         else if (budget instanceof dev.mikoto2000.rei.memory.service.AutoSleepExecution auto)
           auto.progressSaved();
@@ -120,7 +122,7 @@ public class EpisodeDenseIndex {
             .filterExpression(new FilterExpressionBuilder().eq("docId", project).build())
             .build();
     var result = new LinkedHashMap<String, Episode>();
-    for (var document : vectors.denseSearch(request)) {
+    for (var document : findVectors.apply(request)) {
       var id = document.getMetadata().get("episodeId");
       var revision = document.getMetadata().get("revision");
       if (id instanceof String key)
