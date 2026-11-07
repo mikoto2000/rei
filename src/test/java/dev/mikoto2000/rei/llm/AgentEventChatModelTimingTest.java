@@ -206,9 +206,8 @@ class AgentEventChatModelTimingTest {
   void retryGroupsPhysicalAttemptsAndPreservesExistingStepBudget() {
     var delegate = mock(ChatModel.class);
     when(delegate.stream(prompt))
-        .thenReturn(
-            Flux.error(new com.openai.errors.OpenAIRetryableException("PRIVATE")),
-            Flux.just(response("OK")));
+        .thenReturn(Flux.error(new com.openai.errors.OpenAIRetryableException("PRIVATE")))
+        .thenReturn(Flux.just(response("OK")));
     var retries = new dev.mikoto2000.rei.core.chat.BoundedToolLoop.ModelRetries(1);
     assertEquals(
         "OK",

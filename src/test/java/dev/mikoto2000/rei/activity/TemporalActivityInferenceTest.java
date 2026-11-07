@@ -633,8 +633,9 @@ class TemporalActivityInferenceTest {
     var store = mock(ActivityStore.class);
     var supplements = mock(WorkActivityInferenceStore.class);
     when(store.findObservationsBetweenBounded(any(), any(), anyInt()))
-        .thenReturn(
-            List.of(a, record("b", AT, "テスト修正")), List.of(), List.of(a, record("b", AT, "テスト修正")));
+        .thenReturn(List.of(a, record("b", AT, "テスト修正")))
+        .thenReturn(List.of())
+        .thenReturn(List.of(a, record("b", AT, "テスト修正")));
     var service =
         new TemporalActivityInferenceService(
             p, store, supplements, null, time, () -> List.of(), () -> false);
