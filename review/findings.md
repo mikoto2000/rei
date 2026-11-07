@@ -1,6 +1,6 @@
 # 指摘詳細
 
-各指摘の根拠・影響・推奨対応。行番号はレビュー時点の作業ツリーに対応する。
+各指摘の根拠・影響・対応結果。指摘時のコード例はレビュー時点の作業ツリーに対応する。
 
 ---
 
@@ -8,7 +8,9 @@
 
 **対象**: `src/main/java/dev/mikoto2000/rei/llm/AgentEventChatModel.java`
 
-**根拠**
+**状態**: 対応済み
+
+**指摘時の根拠**
 
 `stream()` は購読前に呼び出し元の所有権を退避している。
 
@@ -24,7 +26,7 @@ return Flux.deferContextual(
 
 イベント発行はこの退避済み `owner` を使うため、別スレッドで購読しても呼び出し元の Run に紐づく。
 
-一方、計測とキャンセル判定は退避値を使わず、その場で `owner(prompt)` を再解決している。
+一方、計測では退避値を使わず、その場で `owner(prompt)` を再解決していた。
 
 ```java
 var measured = measurement(prompt, requestId, trace);
@@ -50,17 +52,12 @@ return dev.mikoto2000.rei.core.chat.AgentRunScope.current();
 
 - `measurement(...)` が `null` を返し、LLM Span が記録されない（`/timing` に当該呼び出しが出ない）
 - `observeChunk(...)` 内の `owner(prompt)` も `null` になり、`timing.markRun(...)` が呼ばれない
-- `cancelled(prompt)` は toolContext のみを見るため `false` を返し、`doOnCancel` が `CANCELLED` ではなく `DISCONNECTED` を記録する
 
-イベント（`llm.request.started` 等）は正しい Run に届くのに、計測だけ欠けるという不整合になる。今回の修正が対象とした「非同期境界で所有権を失う」問題の、計測側に残る同種の穴。
+その結果、イベント（`llm.request.started` 等）が正しい Run に届いても、計測だけが欠けることがあった。
 
-**推奨対応**
+**対応結果**
 
-`measurement` / `observeChunk` / `cancelled` にも解決済み `owner` を渡す。例えば `measurement(owner, prompt, requestId, trace)` のように引数化し、`owner(prompt)` の再解決を `call()` 経路だけに限定する。
-
-**検証状況**
-
-`AgentEventChatModelTest#asyncSignalsKeepTheCallingRunEvenOnAnotherClientsThread` はイベントの `runId` / `sessionId` / `projectId` のみを検証しており、Timing Span の有無は検証していない。この指摘はテストでは捕捉されない。
+呼び出し元から解決した `runId` をイベント発行、Timing Span、応答チャンクの計測に共通で使うようにした。非同期購読や応答処理が別の Run のスコープで行われても、Span とマイルストーンが呼び出し元の Run に記録されることを回帰テストで確認した。 [修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [検証証跡](./test-evidence.md#m-1-と-l-3-の検証)
 
 ---
 
@@ -101,7 +98,7 @@ messages.add(
 
 **検証結果**
 
-`main` の `7f32022b` からビルドした Rei 本体で、通常時の実リクエストが `user → system` で終わり、末尾の `system` に Working Set が含まれることを確認した。Provider は HTTP 200 を返し、Rei はツールを呼ばず期待したファイル名を返して Run を完了した。検証範囲は上記の接続先とモデル。 [実行証跡](./test-evidence.md#rei-本体からの実-provider-検証)
+`main` の `7f32022b` からビルドした Rei 本体で、通常時の実リクエストが `user → system` で終わり、末尾の `system` に Working Set が含まれることを確認した。Provider は HTTP 200 を返し、Rei はツールを呼ばず期待したファイル名を返して Run を完了した。検証範囲は上記の接続先とモデル。 [取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [証跡記録 PR #487](https://github.com/mikoto2000/rei/pull/487) · [実行証跡](./test-evidence.md#rei-本体からの実-provider-検証)
 
 **補足（既存挙動）**
 
@@ -184,7 +181,7 @@ private ... measurement(Prompt prompt, String request) {
 
 **確認結果**
 
-M-1 の修正で、`measurement` は呼び出し側が解決した `runId` を受け取るようになった。二重解決を起こしていたオーバーロードは削除されている。 [修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434)
+M-1 の修正で、`measurement` は呼び出し側が解決した `runId` を受け取るようになった。二重解決を起こしていたオーバーロードは削除されている。 [修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [検証証跡](./test-evidence.md#m-1-と-l-3-の検証)
 
 ---
 
@@ -209,7 +206,7 @@ private Prompt withWorkingSetSnapshot(Prompt prompt) {
 
 **検証結果**
 
-`main` の `7f32022b` からビルドした Rei 本体で `readMultiFile` を実行し、次の実リクエストが `assistant → tool → system` で終わることを確認した。末尾の `system` には読み取り後の Working Set が含まれていた。Provider は HTTP 200 を返し、Rei は期待したファイル内容を返して Run を完了した。検証範囲は上記の接続先とモデル。 [実行証跡](./test-evidence.md#rei-本体からの実-provider-検証)
+`main` の `7f32022b` からビルドした Rei 本体で `readMultiFile` を実行し、次の実リクエストが `assistant → tool → system` で終わることを確認した。末尾の `system` には読み取り後の Working Set が含まれていた。Provider は HTTP 200 を返し、Rei は期待したファイル内容を返して Run を完了した。検証範囲は上記の接続先とモデル。 [取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [証跡記録 PR #487](https://github.com/mikoto2000/rei/pull/487) · [実行証跡](./test-evidence.md#rei-本体からの実-provider-検証)
 
 ---
 
@@ -241,7 +238,9 @@ String snapshot = workingSet == null ? marker.getText() : workingSet.get();
 
 **対象**: `terminal/cli/src/main/java/dev/mikoto2000/rei/cli/RunEventOutput.java`
 
-**根拠**
+**状態**: 対応済み
+
+**指摘時の根拠**
 
 ```java
 if (active != null
@@ -270,9 +269,9 @@ void flush() {
 
 失敗を即時表示する修正自体は妥当（思考ストリームが中断したまま失敗が隠れる問題を解消）。ただし同じ `thinkingId` の delta が続くと `!key.equals(active)` が真になり、`=== thinking (HH:mm:ss) ===` ヘッダが再度出力され得る。
 
-**推奨対応**
+**対応結果**
 
-失敗描画後に `active` を保持する、または「ヘッダ出力済み」を別フラグで管理する。
+`llm.request.failed` を受け取ると、保留中の出力を流して失敗を即時表示し、処理中の思考ストリームは保持する。同じストリームが完了する場合と、追加の delta を受けてから完了する場合の両方で、見出しが1回だけ表示されることを回帰テストで確認した。 [修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [検証証跡](./test-evidence.md#l-6-の回帰テスト)
 
 ---
 
@@ -280,7 +279,9 @@ void flush() {
 
 **対象**: `src/main/java/dev/mikoto2000/rei/review/ReviewTools.java`
 
-**根拠**
+**状態**: 対応済み
+
+**指摘時の根拠**
 
 ```java
 var claim = workItems().running(taskScope(owner), taskId, owner.runId());
@@ -296,9 +297,9 @@ if (estimate(page) > budget)
 
 `claim == null` の分岐で新規 claim した場合でも「No new work was claimed」と表示される。実際には claim 済みで、RUNNING の作業単位が残る。モデルが「何も確保されていない」と誤解し、同じ taskId で再 claim を試みる可能性がある。
 
-**推奨対応**
+**対応結果**
 
-新規 claim か既存 claim かを区別してメッセージを分ける。新規の場合は「claim は作成済み。ID を保持したまま、文脈を圧縮して再読してください」と案内する。
+新規 claim は、実際に返す attempt ID を使ってページを見積もり、予算内に収まることを確認してから保存する。既存 claim は現在のリクエストの予算で判定する。初回に予算内のページが返り、再読み取りで同じ claim のページが返ることを回帰テストで確認した。 [修正 PR #418](https://github.com/mikoto2000/rei/pull/418) · [検証証跡](./test-evidence.md#l-7-の回帰テスト)
 
 ---
 

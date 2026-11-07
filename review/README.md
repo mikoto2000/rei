@@ -13,15 +13,15 @@
 
 | ID | 状態 | 対応・検証 |
 |---|---|---|
-| M-1 | 対応済み | イベントと計測を同じ Run に紐づけ、非同期購読・応答の回帰テストを追加した。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) |
-| M-2 | 実 Provider で確認済み | Rei 本体からの通常リクエストで Working Set が末尾の `system` に入り、正常に応答した。[検証証跡](./test-evidence.md#rei-本体からの実-provider-検証) |
+| M-1 | 対応済み | イベントと計測を同じ Run に紐づけ、非同期購読・応答の回帰テストを追加した。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [検証証跡](./test-evidence.md#m-1-と-l-3-の検証) |
+| M-2 | 実 Provider で確認済み | Rei 本体からの通常リクエストで Working Set が末尾の `system` に入り、正常に応答した。[取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [証跡記録 PR #487](https://github.com/mikoto2000/rei/pull/487) · [検証証跡](./test-evidence.md#rei-本体からの実-provider-検証) |
 | L-1 | 対応済み | 検索・読み取りの部分成功を維持し、除外項目に `PROJECT_PATH_EXCLUDED` と再試行の案内を返す。[修正 PR #505](https://github.com/mikoto2000/rei/pull/505) · [回帰テスト結果](./test-evidence.md#l-1-の回帰テスト) |
 | L-2 | 対応済み | `AgentEventChatModel` のローカル変数を `resolvedOwner` と `requestEventPublisher` に変更した。既存テスト29件が通過した。[修正 PR #516](https://github.com/mikoto2000/rei/pull/516) · [テスト結果](./test-evidence.md#l-2-の既存テスト) |
-| L-3 | 解消済み | M-1 の修正で、計測に解決済みの `runId` を渡すようになった。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) |
-| L-4 | 実 Provider で確認済み | Rei 本体が `readMultiFile` を実行した後、末尾が `tool → system` のリクエストで正常に応答した。[検証証跡](./test-evidence.md#rei-本体からの実-provider-検証) |
+| L-3 | 解消済み | M-1 の修正で、計測に解決済みの `runId` を渡すようになった。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [検証証跡](./test-evidence.md#m-1-と-l-3-の検証) |
+| L-4 | 実 Provider で確認済み | Rei 本体が `readMultiFile` を実行した後、末尾が `tool → system` のリクエストで正常に応答した。[取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [証跡記録 PR #487](https://github.com/mikoto2000/rei/pull/487) · [検証証跡](./test-evidence.md#rei-本体からの実-provider-検証) |
 | L-5 | 対応済み | 組み立てごとに Working Set を一度取得し、見積もりと最終プロンプトで共有する。次のモデル呼び出しで取り直す。[修正 PR #499](https://github.com/mikoto2000/rei/pull/499) · [回帰テスト結果](./test-evidence.md#l-5-の回帰テスト) |
-| L-6 | 対応済み | 失敗を即時表示しながら思考見出しの重複を防ぎ、回帰テストを追加した。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) |
-| L-7 | 対応済み | 確定時に使う attempt ID でページを見積もり、予算内に収めてから claim を保存するようにした。回帰テストも追加した。[修正 PR #418](https://github.com/mikoto2000/rei/pull/418) |
+| L-6 | 対応済み | 失敗を即時表示しながら思考見出しの重複を防ぎ、回帰テストを追加した。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [検証証跡](./test-evidence.md#l-6-の回帰テスト) |
+| L-7 | 対応済み | 確定時に使う attempt ID でページを見積もり、予算内に収めてから claim を保存するようにした。回帰テストも追加した。[修正 PR #418](https://github.com/mikoto2000/rei/pull/418) · [検証証跡](./test-evidence.md#l-7-の回帰テスト) |
 
 ## レビュー範囲と限界
 
@@ -33,5 +33,5 @@
 ## ファイル
 
 - 指摘一覧と対応状況。[code-review.md](./code-review.md)
-- 各指摘の根拠・影響・推奨対応。[findings.md](./findings.md)
+- 各指摘の根拠・影響・対応結果。[findings.md](./findings.md)
 - 回帰テストと実 Provider 検証の結果。[test-evidence.md](./test-evidence.md)
