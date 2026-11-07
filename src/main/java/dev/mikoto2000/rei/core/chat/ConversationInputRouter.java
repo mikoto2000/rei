@@ -4,8 +4,6 @@ import dev.mikoto2000.rei.core.execution.ActiveExecution;
 import dev.mikoto2000.rei.core.execution.ExecutionScope;
 import dev.mikoto2000.rei.core.execution.ExecutionType;
 import dev.mikoto2000.rei.core.project.ProjectContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -47,19 +45,35 @@ public final class ConversationInputRouter {
   }
 
   /** 実行の停止要求と資源の所有期間。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Coordinates admission with the same cancellation service that owns active commands.")
-  private dev.mikoto2000.rei.core.service.CommandCancellationService cancellation =
-      new dev.mikoto2000.rei.core.service.CommandCancellationService();
+  private java.util.function.Consumer<AgentRunContext> prepareCancellation;
+
+  private Runnable beginCancellation;
+  private java.util.function.BooleanSupplier cancellationRequested;
+  private Runnable clearCancellation;
+  private java.util.function.Consumer<String> finishCancellation;
+  private java.util.function.Function<
+          String, dev.mikoto2000.rei.core.service.CommandCancellationService.Diagnostic>
+      readCancellationDiagnostic;
+
+  {
+    configureCancellation(new dev.mikoto2000.rei.core.service.CommandCancellationService());
+  }
 
   /** アプリケーション全体のキャンセル管理を接続する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setCancellation(
       dev.mikoto2000.rei.core.service.CommandCancellationService cancellation) {
-    this.cancellation = Objects.requireNonNull(cancellation);
+    configureCancellation(Objects.requireNonNull(cancellation));
+  }
+
+  private void configureCancellation(
+      dev.mikoto2000.rei.core.service.CommandCancellationService cancellation) {
+    this.prepareCancellation = context -> cancellation.prepare(context);
+    this.beginCancellation = () -> cancellation.begin(Thread.currentThread());
+    this.cancellationRequested = () -> cancellation.isCancellationRequested();
+    this.clearCancellation = () -> cancellation.clear();
+    this.finishCancellation = run -> cancellation.finish(run);
+    this.readCancellationDiagnostic = run -> cancellation.diagnostic(run);
   }
 
   /** 要求取得記録一覧。 */
@@ -354,7 +368,7 @@ public final class ConversationInputRouter {
             }
           },
           () -> {
-            cancellation.prepare(context);
+            prepareCancellation.accept(context);
             active.put(context.runId(), ActiveRun.of(context, "operation"));
             changed();
           },
@@ -436,7 +450,7 @@ public final class ConversationInputRouter {
                 }
               },
               () -> {
-                cancellation.prepare(context);
+                prepareCancellation.accept(context);
                 active.put(context.runId(), ActiveRun.of(context, slot.prompt()));
                 changed();
               },
@@ -475,14 +489,14 @@ public final class ConversationInputRouter {
   private void executeCancellable(
       AgentRunContext context, Runnable operation, Consumer<Runnable> lifecycle) {
     try (var scope = AgentRunScope.open(context)) {
-      cancellation.begin(Thread.currentThread());
+      beginCancellation.run();
       try {
         lifecycle.accept(
             () -> {
-              if (!cancellation.isCancellationRequested()) operation.run();
+              if (!cancellationRequested.getAsBoolean()) operation.run();
             });
       } finally {
-        cancellation.clear();
+        clearCancellation.run();
       }
     }
   }
@@ -490,12 +504,12 @@ public final class ConversationInputRouter {
   /** 表示と API で同じ Run の停止進行状況を返す。 */
   public dev.mikoto2000.rei.core.service.CommandCancellationService.Diagnostic
       cancellationDiagnostic(String runId) {
-    return cancellation.diagnostic(runId);
+    return readCancellationDiagnostic.apply(runId);
   }
 
   /** 会話の実行に関する記憶の削除を処理する。 */
   private void forget(Slot slot) {
-    cancellation.finish(slot.context().runId());
+    finishCancellation.accept(slot.context().runId());
     if (admissions != null) admissions.release(slot.context().runId());
     active.remove(slot.context().runId());
     synchronized (mailboxes) {

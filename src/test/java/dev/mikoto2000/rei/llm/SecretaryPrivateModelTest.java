@@ -28,6 +28,28 @@ class SecretaryPrivateModelTest {
   }
 
   @Test
+  void privateModelUsesTheSameSettingsForFingerprintAndConstruction() {
+    var properties = org.mockito.Mockito.mock(LlmProperties.class);
+    var validated = new LlmProperties.Server();
+    validated.setBaseUrl("https://private.invalid/v1");
+    validated.setModel("private-model");
+    validated.setMaxOutputTokens(128);
+    var changed = new LlmProperties.Server();
+    changed.setBaseUrl("https://changed.invalid/v1");
+    changed.setModel("changed-model");
+    changed.setMaxOutputTokens(128);
+    org.mockito.Mockito.when(properties.feature("secretary-reply"))
+        .thenReturn(validated, validated, changed);
+    var provider = new LlmModelProvider(null, properties);
+    String fingerprint = provider.privateSecretaryDescriptor().fingerprint();
+
+    var model = provider.privateSecretaryModel(fingerprint);
+
+    org.junit.jupiter.api.Assertions.assertEquals("private-model", model.getOptions().getModel());
+    org.mockito.Mockito.verify(properties, org.mockito.Mockito.times(2)).feature("secretary-reply");
+  }
+
+  @Test
   void privateReplyNeverFallsBackToTheChatModel() {
     var provider = new LlmModelProvider(null, new LlmProperties());
     assertNull(provider.privateSecretaryDescriptor());

@@ -11,8 +11,6 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.memory.command.MemoryCommandSupport;
 import dev.mikoto2000.rei.memory.service.SleepService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.BiConsumer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -27,21 +25,13 @@ import org.springframework.stereotype.Service;
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class MemoryRunSubmitService {
-  /** プロジェクト一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Intentional shared project registry; consumers must resolve against the same registered projects.")
-  private final ProjectRegistry projects;
+  /** プロジェクトを解決し、所有するセッションの実行を受け付ける。 */
+  private final java.util.function.BiFunction<
+          MemoryAdmission, java.util.function.Consumer<AgentRunContext>, AgentRunContext>
+      admitMemory;
 
-  /** 受付から終了までの管理。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared lifecycle service so session validation and submission use the same session state.")
-  private final SessionLifecycle lifecycle;
+  private record MemoryAdmission(
+      String project, String session, String label, String key, String operation, boolean option) {}
 
   /** 登録台帳。 */
   private final java.util.function.Consumer<AgentRunContext> registerRun;
@@ -104,8 +94,6 @@ public final class MemoryRunSubmitService {
       AgentEventBus bus,
       SleepService sleep,
       MemoryCommandSupport support) {
-    this.projects = projects;
-    this.lifecycle = lifecycle;
     this.registerRun = context -> registry.register(context);
     this.forgetRun = run -> registry.forget(run);
     this.runs = runs;
@@ -128,6 +116,44 @@ public final class MemoryRunSubmitService {
           return new SleepOutput(true, support.report(report));
         };
     this.support = support;
+    this.admitMemory =
+        (request, execution) -> {
+          var project =
+              projects
+                  .resolveById(request.project())
+                  .orElseThrow(() -> new ResourceNotFoundException("Project"));
+          String fingerprint;
+          try {
+            fingerprint =
+                dev.mikoto2000.rei.conversation.ConversationAdmissionStore.hash(
+                    dev.mikoto2000.rei.storage.StorageDatabase.JSON.writeValueAsString(
+                        java.util.List.of(
+                            request.operation(),
+                            request.project(),
+                            request.session(),
+                            request.option())));
+          } catch (java.io.IOException error) {
+            throw new IllegalStateException("Cannot fingerprint memory request", error);
+          }
+          return lifecycle.submit(
+              project,
+              request.session(),
+              request.label(),
+              AgentRunContext.RequestSource.WEB,
+              AgentRunContext.Mode.EXCLUSIVE,
+              false,
+              request.key(),
+              fingerprint,
+              context -> {
+                registerRun.accept(context);
+                try {
+                  submitOperation.accept(context, () -> execution.accept(context));
+                } catch (RuntimeException | Error error) {
+                  forgetRun.accept(context.runId());
+                  throw error;
+                }
+              });
+        };
   }
 
   /** 実行の受付と状態管理で用いる待機を返す。 */
@@ -199,35 +225,8 @@ public final class MemoryRunSubmitService {
         || key == null
         || !key.matches("[A-Za-z0-9._:-]{1,128}"))
       throw new IllegalArgumentException("Selected Session and receipt key required");
-    var project =
-        projects.resolveById(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
-    String fingerprint;
-    try {
-      fingerprint =
-          dev.mikoto2000.rei.conversation.ConversationAdmissionStore.hash(
-              dev.mikoto2000.rei.storage.StorageDatabase.JSON.writeValueAsString(
-                  java.util.List.of(operation, projectId, sessionId, option)));
-    } catch (java.io.IOException error) {
-      throw new IllegalStateException("Cannot fingerprint memory request", error);
-    }
-    return lifecycle.submit(
-        project,
-        sessionId,
-        label,
-        AgentRunContext.RequestSource.WEB,
-        AgentRunContext.Mode.EXCLUSIVE,
-        false,
-        key,
-        fingerprint,
-        context -> {
-          registerRun.accept(context);
-          try {
-            submitOperation.accept(context, () -> execution.accept(context));
-          } catch (RuntimeException | Error error) {
-            forgetRun.accept(context.runId());
-            throw error;
-          }
-        });
+    return admitMemory.apply(
+        new MemoryAdmission(projectId, sessionId, label, key, operation, option), execution);
   }
 
   /** 依頼された操作を進めるため、レポートを実行する。 */

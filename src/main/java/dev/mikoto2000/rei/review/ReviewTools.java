@@ -14,8 +14,6 @@ import dev.mikoto2000.rei.review.ReviewCoverageLedger.Span;
 import dev.mikoto2000.rei.review.ReviewCoverageLedger.Target;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.toolcontract.ToolReadRejectedException;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -53,20 +51,29 @@ public final class ReviewTools {
       boolean truncated,
       String content,
       boolean reviewed) {
-    public Page(String reviewJobId, Range range, int offset, int nextOffset,
-        boolean truncated, String content) {
+    public Page(
+        String reviewJobId,
+        Range range,
+        int offset,
+        int nextOffset,
+        boolean truncated,
+        String content) {
       this(reviewJobId, range, offset, nextOffset, truncated, content, false);
     }
 
-    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    @com.fasterxml.jackson.annotation.JsonProperty(
+        access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
     public String workItemId() {
-      return reviewJobId != null && reviewJobId.startsWith("durable:") ? reviewJobId.split(":")[1]
+      return reviewJobId != null && reviewJobId.startsWith("durable:")
+          ? reviewJobId.split(":")[1]
           : reviewJobId == null || range == null ? null : legacyWorkId(reviewJobId, range);
     }
 
-    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    @com.fasterxml.jackson.annotation.JsonProperty(
+        access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
     public String attempt() {
-      return reviewJobId != null && reviewJobId.startsWith("durable:") ? reviewJobId.split(":")[2]
+      return reviewJobId != null && reviewJobId.startsWith("durable:")
+          ? reviewJobId.split(":")[2]
           : range == null ? null : range.version();
     }
 
@@ -94,11 +101,13 @@ public final class ReviewTools {
       implements dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.ReceiptValue {}
 
   /** 記録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads and records transitions in the shared review ledger.")
-  private final ReviewCoverageLedger ledger;
+  private final java.util.function.Function<
+          ReviewCoverageLedger.Scope, ReviewCoverageLedger.OwnedReview>
+      scopedReview;
+
+  private final java.util.function.BiFunction<
+          dev.mikoto2000.rei.durable.DurableTaskStore.Scope, String, String>
+      taskGoal;
 
   /** 元の。 */
   private final Consumer<String> clearRawResults;
@@ -112,31 +121,42 @@ public final class ReviewTools {
   private final dev.mikoto2000.rei.durable.DurableTaskStore tasks;
 
   // Production wiring supplies model-specific limits; retain the standalone default hard limit.
-  private java.util.function.ToIntFunction<org.springframework.ai.chat.prompt.Prompt> readingInputLimit =
-      prompt -> 85000;
+  private java.util.function.ToIntFunction<org.springframework.ai.chat.prompt.Prompt>
+      readingInputLimit = prompt -> 85000;
   private int reviewMaxTokens = 100000;
-  private static final org.slf4j.Logger METRICS = org.slf4j.LoggerFactory.getLogger("rei.review.metrics");
+  private static final org.slf4j.Logger METRICS =
+      org.slf4j.LoggerFactory.getLogger("rei.review.metrics");
 
   public void configureReading(
       java.util.function.ToIntFunction<org.springframework.ai.chat.prompt.Prompt> inputLimit,
       int maximum) {
-    if (maximum < 256 || maximum > 100000) throw new IllegalArgumentException("INVALID_REVIEW_BUDGET");
+    if (maximum < 256 || maximum > 100000)
+      throw new IllegalArgumentException("INVALID_REVIEW_BUDGET");
     readingInputLimit = java.util.Objects.requireNonNull(inputLimit);
     reviewMaxTokens = maximum;
   }
 
   private int readingBudget(Integer requested) {
     if (requested != null && (requested < 256 || requested > reviewMaxTokens))
-      throw new ToolReadRejectedException("INVALID_TOKEN_BUDGET",
-          "Use tokenBudget=null for the host-selected review budget, or 256.." + reviewMaxTokens + ".");
+      throw new ToolReadRejectedException(
+          "INVALID_TOKEN_BUDGET",
+          "Use tokenBudget=null for the host-selected review budget, or 256.."
+              + reviewMaxTokens
+              + ".");
     int limit = requested == null ? reviewMaxTokens : requested;
     if (!dev.mikoto2000.rei.tooldelivery.FileReadContext.active())
-      return Math.min(limit, Math.min(800000, readingInputLimit.applyAsInt(
-          new org.springframework.ai.chat.prompt.Prompt(""))) / 8);
+      return Math.min(
+          limit,
+          Math.min(
+                  800000,
+                  readingInputLimit.applyAsInt(new org.springframework.ai.chat.prompt.Prompt("")))
+              / 8);
     return dev.mikoto2000.rei.tooldelivery.FileReadContext.bulkBudget(
         limit,
         prompt -> Math.min(800000, readingInputLimit.applyAsInt(prompt)),
-        prompt -> prompt.getInstructions().stream().mapToLong(estimator::message).sum(), estimator::text, 8);
+        prompt -> prompt.getInstructions().stream().mapToLong(estimator::message).sum(),
+        estimator::text,
+        8);
   }
 
   /** 変更内容のレビューを利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -151,7 +171,8 @@ public final class ReviewTools {
       RawToolResultStore raw,
       java.util.function.Supplier<Tools> files,
       TokenEstimator estimator) {
-    this.ledger = ledger;
+    this.scopedReview = scope -> ledger.forScope(scope);
+    this.taskGoal = (scope, run) -> ledger.goalForTask(scope, run);
     this.clearRawResults = run -> raw.clearRun(run);
     this.files = files;
     this.estimator = estimator;
@@ -190,7 +211,7 @@ public final class ReviewTools {
     return tasks.beginForRun(
         capturedScope,
         owner.runId(),
-        ledger.goalForTask(capturedScope, owner.runId()),
+        taskGoal.apply(capturedScope, owner.runId()),
         mode,
         reference,
         excludes == null
@@ -244,14 +265,17 @@ public final class ReviewTools {
       description =
           "Claim one pending frozen review range at a semantic boundary. Omit tokenBudget for the host-selected budget (up to 100000 estimated tokens, at most 1/8 of the input window and current free space). Prefer readNextReviewWorkItem to claim and read in one call. Read with readReviewWorkItem and assess with submitReviewWorkItem using IDs; a claim is not review completion.")
   public dev.mikoto2000.rei.durable.WorkItemStore.Claim claimReviewWorkItem(
-      String taskId, @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer tokenBudget) {
+      String taskId,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer tokenBudget) {
     return claimReviewWorkItemWithinBudget(taskId, readingBudget(tokenBudget));
   }
 
   private dev.mikoto2000.rei.durable.WorkItemStore.Claim claimReviewWorkItemWithinBudget(
       String taskId, int budget) {
-    if (budget < 256) throw new ToolReadRejectedException("CONTEXT_BUDGET_INSUFFICIENT",
-        "No work was claimed. Reduce the active prompt before reading another review unit.");
+    if (budget < 256)
+      throw new ToolReadRejectedException(
+          "CONTEXT_BUDGET_INSUFFICIENT",
+          "No work was claimed. Reduce the active prompt before reading another review unit.");
     var owner = AgentRunScope.current();
     return workItems()
         .claim(
@@ -263,8 +287,8 @@ public final class ReviewTools {
               int low = item.start(), high = Math.min(item.end(), item.start() + budget * 4);
               while (low < high) {
                 int middle = low + (high - low + 1) / 2;
-                if (estimate(durablePage(item, attempt, source, middle, positions))
-                    <= budget) low = middle;
+                if (estimate(durablePage(item, attempt, source, middle, positions)) <= budget)
+                  low = middle;
                 else high = middle - 1;
               }
               if (low > item.start()
@@ -273,30 +297,37 @@ public final class ReviewTools {
                   && Character.isLowSurrogate(source.charAt(low))) low--;
               low = SemanticReviewSplitter.end(source, item.start(), low, item.end());
               if (low == item.start() && low < item.end()
-                  || estimate(durablePage(item, attempt, source, low, positions))
-                      > budget)
+                  || estimate(durablePage(item, attempt, source, low, positions)) > budget)
                 throw new IllegalArgumentException("REVIEW_PAGE_BUDGET_TOO_SMALL");
               return low;
             });
   }
 
   @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
-  @Tool(description = "Claim and read the next semantic review unit in ONE call. Existing reviewJobId: pass taskId=legacy:<reviewJobId> to keep its original ledger and assess only missing coverage; returned workItemId/attempt also work with submitReviewWorkItem. Use after the repository snapshot is SEALED. Omit tokenBudget to use up to 100000 estimated tokens, bounded by 1/8 of the model input window and free context. Small files are read whole; long files split at headings/paragraphs outside fences, then lines, with hard splitting only for oversized blocks. Returns workItemId and attempt for submitReviewWorkItem; never retype page coordinates. null means no pending work (inspect reviewTaskStatus; running claims can still remain). Submit assessments before requesting more units; batch submissions first and next reads in one response. Reading is not assessment.")
-  public Page readNextReviewWorkItem(String taskId,
+  @Tool(
+      description =
+          "Claim and read the next semantic review unit in ONE call. Existing reviewJobId: pass taskId=legacy:<reviewJobId> to keep its original ledger and assess only missing coverage; returned workItemId/attempt also work with submitReviewWorkItem. Use after the repository snapshot is SEALED. Omit tokenBudget to use up to 100000 estimated tokens, bounded by 1/8 of the model input window and free context. Small files are read whole; long files split at headings/paragraphs outside fences, then lines, with hard splitting only for oversized blocks. Returns workItemId and attempt for submitReviewWorkItem; never retype page coordinates. null means no pending work (inspect reviewTaskStatus; running claims can still remain). Submit assessments before requesting more units; batch submissions first and next reads in one response. Reading is not assessment.")
+  public Page readNextReviewWorkItem(
+      String taskId,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer tokenBudget) {
     int budget = readingBudget(tokenBudget);
     if (taskId.startsWith("legacy:")) {
-      try { return readNextLegacyUnit(taskId.substring(7), budget); }
-      catch (java.io.IOException error) { throw new java.io.UncheckedIOException(error); }
+      try {
+        return readNextLegacyUnit(taskId.substring(7), budget);
+      } catch (java.io.IOException error) {
+        throw new java.io.UncheckedIOException(error);
+      }
     }
-    if (tasks.status(taskScope(AgentRunScope.current()), taskId).state().equals("COMPLETE")) return null;
+    if (tasks.status(taskScope(AgentRunScope.current()), taskId).state().equals("COMPLETE"))
+      return null;
     var owner = AgentRunScope.current();
     var claim = workItems().running(taskScope(owner), taskId, owner.runId());
     if (claim == null) claim = claimReviewWorkItemWithinBudget(taskId, budget);
     if (claim == null) return null;
     var page = readReviewWorkItem(claim.item().id(), claim.attempt());
     if (estimate(page) > budget)
-      throw new ToolReadRejectedException("CONTEXT_BUDGET_INSUFFICIENT",
+      throw new ToolReadRejectedException(
+          "CONTEXT_BUDGET_INSUFFICIENT",
           "The existing frozen claim does not fit this request. Preserve its IDs; compact the active prompt or omit tokenBudget before redelivery. No new work was claimed or assessed.");
     return page;
   }
@@ -307,50 +338,102 @@ public final class ReviewTools {
 
   /** Keep the original coverage ledger and findings when continuing an existing review job. */
   private Page readNextLegacyUnit(String id, int budget) throws java.io.IOException {
-    if (budget < 256) throw new ToolReadRejectedException("CONTEXT_BUDGET_INSUFFICIENT",
-        "No source was acquired. Compact the active prompt before reading another unit.");
+    if (budget < 256)
+      throw new ToolReadRejectedException(
+          "CONTEXT_BUDGET_INSUFFICIENT",
+          "No source was acquired. Compact the active prompt before reading another unit.");
     var job = reviewStatus(id);
     if (job.status().equals("STALE_VERSION")) throw new IllegalStateException("STALE_VERSION");
     var unfinished = pending(job);
     if (unfinished.isEmpty()) return null;
     var next = unfinished.getFirst();
-    var target = job.targets().stream().filter(t -> t.path().equals(next.path())).findFirst().orElseThrow();
+    var target =
+        job.targets().stream().filter(t -> t.path().equals(next.path())).findFirst().orElseThrow();
     var source = readSource(next.path());
     if (!source.version().equals(next.version())) throw new IllegalStateException("STALE_VERSION");
-    var fitted = sizedPage(id, target, source.text(), source.positions(), next.start(), budget, null);
-    int end = SemanticReviewSplitter.end(source.text(), next.start(),
-        Math.min(next.end(), fitted.nextOffset()), next.end());
-    var page = pageAt(id, target, source.text(), next.start(), end,
-        source.positions().at(next.start()), source.positions().at(end));
+    var fitted =
+        sizedPage(id, target, source.text(), source.positions(), next.start(), budget, null);
+    int end =
+        SemanticReviewSplitter.end(
+            source.text(), next.start(), Math.min(next.end(), fitted.nextOffset()), next.end());
+    var page =
+        pageAt(
+            id,
+            target,
+            source.text(),
+            next.start(),
+            end,
+            source.positions().at(next.start()),
+            source.positions().at(end));
     if (estimate(page) > budget) throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
-    ledger.fetched(id, scope(AgentRunScope.current()), page.range());
-    METRICS.info("review_read run={} task={} work={} attempt={} chars={} estimatedTokens={}",
-        AgentRunScope.current().runId(), "legacy:" + id, page.workItemId(), page.attempt(),
-        page.content().length(), estimate(page));
+    scopedReview.apply(scope(AgentRunScope.current())).fetched(id, page.range());
+    METRICS.info(
+        "review_read run={} task={} work={} attempt={} chars={} estimatedTokens={}",
+        AgentRunScope.current().runId(),
+        "legacy:" + id,
+        page.workItemId(),
+        page.attempt(),
+        page.content().length(),
+        estimate(page));
     return page;
   }
 
-  private dev.mikoto2000.rei.durable.WorkItemStore.Result submitLegacyUnit(String workItemId,
-      String attempt, String assessment, List<dev.mikoto2000.rei.durable.WorkItemStore.Finding> findings)
+  private dev.mikoto2000.rei.durable.WorkItemStore.Result submitLegacyUnit(
+      String workItemId,
+      String attempt,
+      String assessment,
+      List<dev.mikoto2000.rei.durable.WorkItemStore.Finding> findings)
       throws java.io.IOException {
     String[] parts = workItemId.split(":", -1);
     if (parts.length != 3) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     var job = reviewStatus(parts[1]);
-    var range = job.ranges().stream().map(ReviewCoverageLedger.Entry::range)
-        .filter(r -> legacyWorkId(job.id(), r).equals(workItemId)).findFirst()
-        .orElseThrow(() -> new IllegalArgumentException("REVIEW_RESULT_INVALID"));
+    var range =
+        job.ranges().stream()
+            .map(ReviewCoverageLedger.Entry::range)
+            .filter(r -> legacyWorkId(job.id(), r).equals(workItemId))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("REVIEW_RESULT_INVALID"));
     if (!range.version().equals(attempt) || findings == null)
       throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     // Legacy continuation uses the existing exact-quote locator instead of model-counted offsets.
-    var saved = submitReviewPage(job.id(), range.path(), range.span().start(), range.span().end(),
-        assessment, findings.stream().map(f -> new PageFinding(f.id(), f.severity(), f.evidence(), f.assessment())).toList());
-    var located = saved.findings().stream().map(f -> new dev.mikoto2000.rei.durable.WorkItemStore.Finding(
-        f.id(), f.severity(), f.location().start(), f.location().end(), f.evidence(), f.assessment())).toList();
-    var body = new dev.mikoto2000.rei.durable.WorkItemStore.ReviewResult(workItemId, job.id(),
-        range.path(), range.span().start(), range.span().end(), range.version(), job.criteriaVersion(), assessment, located);
-    return new dev.mikoto2000.rei.durable.WorkItemStore.Result(body,
+    var saved =
+        submitReviewPage(
+            job.id(),
+            range.path(),
+            range.span().start(),
+            range.span().end(),
+            assessment,
+            findings.stream()
+                .map(f -> new PageFinding(f.id(), f.severity(), f.evidence(), f.assessment()))
+                .toList());
+    var located =
+        saved.findings().stream()
+            .map(
+                f ->
+                    new dev.mikoto2000.rei.durable.WorkItemStore.Finding(
+                        f.id(),
+                        f.severity(),
+                        f.location().start(),
+                        f.location().end(),
+                        f.evidence(),
+                        f.assessment()))
+            .toList();
+    var body =
+        new dev.mikoto2000.rei.durable.WorkItemStore.ReviewResult(
+            workItemId,
+            job.id(),
+            range.path(),
+            range.span().start(),
+            range.span().end(),
+            range.version(),
+            job.criteriaVersion(),
+            assessment,
+            located);
+    return new dev.mikoto2000.rei.durable.WorkItemStore.Result(
+        body,
         hash(StorageDatabase.JSON.valueToTree(body).toString()),
-        StorageDatabase.JSON.convertValue(saved,
+        StorageDatabase.JSON.convertValue(
+            saved,
             new com.fasterxml.jackson.core.type.TypeReference<java.util.Map<String, Object>>() {}));
   }
 
@@ -364,10 +447,17 @@ public final class ReviewTools {
     var claim = work.current(taskScope(owner), workItemId, owner.runId(), attempt);
     if (!claim.item().state().equals("RUNNING"))
       throw new IllegalArgumentException("WORK_NOT_RUNNING");
-    var page = durablePage(
-        claim.item(), attempt, work.source(taskScope(owner), claim.item()), claim.item().end());
-    METRICS.info("review_read run={} task={} work={} attempt={} chars={} estimatedTokens={}",
-        owner.runId(), claim.item().task(), workItemId, attempt, page.content().length(), estimate(page));
+    var page =
+        durablePage(
+            claim.item(), attempt, work.source(taskScope(owner), claim.item()), claim.item().end());
+    METRICS.info(
+        "review_read run={} task={} work={} attempt={} chars={} estimatedTokens={}",
+        owner.runId(),
+        claim.item().task(),
+        workItemId,
+        attempt,
+        page.content().length(),
+        estimate(page));
     return page;
   }
 
@@ -382,20 +472,31 @@ public final class ReviewTools {
     var owner = AgentRunScope.current();
     var work = workItems();
     try {
-      var result = workItemId != null && workItemId.startsWith("legacy:")
-          ? submitLegacyUnit(workItemId, attempt, assessment, findings) : work.commit(
-          taskScope(owner),
-          work.current(taskScope(owner), workItemId, owner.runId(), attempt),
-          assessment,
-          findings);
-      METRICS.info("review_submit run={} work={} attempt={} outcome=accepted chars={} findings={}",
-          owner.runId(), workItemId, attempt, result.body().end() - result.body().start(), result.body().findings().size());
+      var result =
+          workItemId != null && workItemId.startsWith("legacy:")
+              ? submitLegacyUnit(workItemId, attempt, assessment, findings)
+              : work.commit(
+                  taskScope(owner),
+                  work.current(taskScope(owner), workItemId, owner.runId(), attempt),
+                  assessment,
+                  findings);
+      METRICS.info(
+          "review_submit run={} work={} attempt={} outcome=accepted chars={} findings={}",
+          owner.runId(),
+          workItemId,
+          attempt,
+          result.body().end() - result.body().start(),
+          result.body().findings().size());
       return result;
     } catch (java.io.IOException error) {
       throw new java.io.UncheckedIOException(error);
     } catch (IllegalArgumentException invalid) {
-      METRICS.info("review_submit run={} work={} attempt={} outcome=rejected reason={}",
-          owner.runId(), workItemId, attempt, invalid.getMessage());
+      METRICS.info(
+          "review_submit run={} work={} attempt={} outcome=rejected reason={}",
+          owner.runId(),
+          workItemId,
+          attempt,
+          invalid.getMessage());
       if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw invalid;
       throw new ReviewResultRejectedException(
           "No assessment was accepted. Keep the current workItemId and attempt; provide an"
@@ -477,7 +578,7 @@ public final class ReviewTools {
               end[0],
               List.of(new Span(0, snapshot.text().length(), 1, end[0], 0, end[1]))));
     }
-    return ledger.create(scope, criteria, criteriaVersion, targets);
+    return scopedReview.apply(scope).create(criteria, criteriaVersion, targets);
   }
 
   /** 変更内容のレビューで用いる再開レビューを返す。 */
@@ -516,7 +617,7 @@ public final class ReviewTools {
               end[0],
               List.of(new Span(0, snapshot.text().length(), 1, end[0], 0, end[1]))));
     }
-    return ledger.rebuild(reviewJobId, scope, targets);
+    return scopedReview.apply(scope).rebuild(reviewJobId, targets);
   }
 
   /** 必要な内容を参照できるよう、レビューファイルを読み取る。 */
@@ -529,7 +630,7 @@ public final class ReviewTools {
       throws java.io.IOException {
     var owner = AgentRunScope.current();
     var scope = scope(owner);
-    var job = ledger.get(reviewJobId, scope);
+    var job = scopedReview.apply(scope).get(reviewJobId);
     var target =
         job.targets().stream()
             .filter(t -> t.path().equals(path))
@@ -540,7 +641,7 @@ public final class ReviewTools {
       throw new IllegalArgumentException("CONTEXT_BUDGET_INSUFFICIENT");
     var snapshot = files.get().reviewSnapshot(path);
     if (!target.version().equals(snapshot.version())) {
-      ledger.invalidate(reviewJobId, scope, path, snapshot.version());
+      scopedReview.apply(scope).invalidate(reviewJobId, path, snapshot.version());
       throw new IllegalStateException("STALE_VERSION");
     }
     String source = snapshot.text();
@@ -554,7 +655,7 @@ public final class ReviewTools {
     var page =
         sizedPage(
             reviewJobId, target, source, new SourcePositions(source), offset, tokenBudget, null);
-    ledger.fetched(reviewJobId, scope, page.range());
+    scopedReview.apply(scope).fetched(reviewJobId, page.range());
     return withReviewedCoverage(job, page);
   }
 
@@ -575,7 +676,7 @@ public final class ReviewTools {
           "INVALID_REVIEW_READ_ARGUMENTS",
           "No pages were fetched or delivered. Keep reviewJobId/path/expectedVersion/offset unchanged; set maxPages to 1..4 and totalTokenBudget to 512..2048 for the entire batch. Split larger requests into bounded reads, following the returned nextOffset.");
     var scope = scope(AgentRunScope.current());
-    var job = ledger.get(reviewJobId, scope);
+    var job = scopedReview.apply(scope).get(reviewJobId);
     var target =
         job.targets().stream()
             .filter(t -> t.path().equals(path))
@@ -584,7 +685,7 @@ public final class ReviewTools {
     if (!target.version().equals(expectedVersion)) throw new IllegalStateException("STALE_VERSION");
     var source = readSource(path);
     if (!target.version().equals(source.version())) {
-      ledger.invalidate(reviewJobId, scope, path, source.version());
+      scopedReview.apply(scope).invalidate(reviewJobId, path, source.version());
       throw new IllegalStateException("STALE_VERSION");
     }
     if (!boundary(source.text(), offset))
@@ -615,7 +716,7 @@ public final class ReviewTools {
     }
     if (estimate(pages) > totalTokenBudget)
       throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
-    ledger.fetchedBatch(reviewJobId, scope, pages.stream().map(Page::range).toList());
+    scopedReview.apply(scope).fetchedBatch(reviewJobId, pages.stream().map(Page::range).toList());
     return List.copyOf(pages);
   }
 
@@ -624,17 +725,27 @@ public final class ReviewTools {
     if ((!job.status().equals("REVIEW_PARTIAL") && !job.status().equals("COMPLETE"))
         || page.nextOffset() <= page.offset()) return page;
     int covered = page.offset();
-    for (var range : job.ranges().stream()
-        .filter(e -> e.reviewed() && e.delivered() && !e.stale())
-        .map(e -> e.range())
-        .filter(r -> r.path().equals(page.range().path())
-            && r.version().equals(page.range().version()))
-        .sorted(Comparator.comparingInt(r -> r.span().start())).toList()) {
+    for (var range :
+        job.ranges().stream()
+            .filter(e -> e.reviewed() && e.delivered() && !e.stale())
+            .map(e -> e.range())
+            .filter(
+                r ->
+                    r.path().equals(page.range().path())
+                        && r.version().equals(page.range().version()))
+            .sorted(Comparator.comparingInt(r -> r.span().start()))
+            .toList()) {
       if (range.span().start() > covered) break;
       covered = Math.max(covered, range.span().end());
       if (covered >= page.nextOffset())
-        return new Page(page.reviewJobId(), page.range(), page.offset(), page.nextOffset(),
-            page.truncated(), page.content(), true);
+        return new Page(
+            page.reviewJobId(),
+            page.range(),
+            page.offset(),
+            page.nextOffset(),
+            page.truncated(),
+            page.content(),
+            true);
     }
     return page;
   }
@@ -710,7 +821,7 @@ public final class ReviewTools {
       List<Finding> findings,
       Source source) {
     validateEvidence(range, findings, source);
-    return ledger.reviewed(reviewJobId, scope, range, assessment, findings);
+    return scopedReview.apply(scope).reviewed(reviewJobId, range, assessment, findings);
   }
 
   private void validateEvidence(Range range, List<Finding> findings, Source source) {
@@ -764,13 +875,17 @@ public final class ReviewTools {
       String findingId,
       String path,
       String reason,
-      @org.springframework.ai.tool.annotation.ToolParam(required = false,
-          description = "Optional exact ORIGINAL finding.evidence from reviewFindings; omit or leave blank for a unique findingId/path. Put counterevidence in reason, not here.") String evidence) {
+      @org.springframework.ai.tool.annotation.ToolParam(
+              required = false,
+              description =
+                  "Optional exact ORIGINAL finding.evidence from reviewFindings; omit or leave blank for a unique findingId/path. Put counterevidence in reason, not here.")
+          String evidence) {
     String originalEvidence = evidence == null || evidence.isBlank() ? null : evidence;
     try {
       var transition =
-          ledger.dismissFindingTransition(
-              reviewJobId, scope(AgentRunScope.current()), findingId, path, originalEvidence, reason);
+          scopedReview
+              .apply(scope(AgentRunScope.current()))
+              .dismissFindingTransition(reviewJobId, findingId, path, originalEvidence, reason);
       var job = transition.job();
       return new FindingDisposition(
           job.id(),
@@ -904,7 +1019,8 @@ public final class ReviewTools {
               page.findings(),
               validated.snapshots().get(page.path())));
     verifyUnchanged(reviewJobId, validated, pages.getLast().path());
-    var saved = ledger.reviewedBatch(reviewJobId, scope(AgentRunScope.current()), prepared);
+    var saved =
+        scopedReview.apply(scope(AgentRunScope.current())).reviewedBatch(reviewJobId, prepared);
     return prepared.stream().map(p -> submission(saved, p.range(), p.findings())).toList();
   }
 
@@ -1040,7 +1156,7 @@ public final class ReviewTools {
   private Validated validateSources(String reviewJobId, java.util.Set<String> decoded)
       throws java.io.IOException {
     var scope = scope(AgentRunScope.current());
-    var job = ledger.get(reviewJobId, scope);
+    var job = scopedReview.apply(scope).get(reviewJobId);
     var snapshots = new LinkedHashMap<String, Source>();
     for (var target : job.targets()) {
       String version;
@@ -1051,11 +1167,11 @@ public final class ReviewTools {
           version = snapshot.version();
         } else version = files.get().reviewVersion(target.path());
       } catch (java.io.IOException missing) {
-        job = ledger.invalidate(reviewJobId, scope, target.path(), "unavailable");
+        job = scopedReview.apply(scope).invalidate(reviewJobId, target.path(), "unavailable");
         continue;
       }
       if (!target.version().equals(version))
-        job = ledger.invalidate(reviewJobId, scope, target.path(), version);
+        job = scopedReview.apply(scope).invalidate(reviewJobId, target.path(), version);
     }
     return new Validated(job, snapshots);
   }
@@ -1064,7 +1180,7 @@ public final class ReviewTools {
   private void verifyUnchanged(String id, Validated prior, String lastPath)
       throws java.io.IOException {
     var scope = scope(AgentRunScope.current());
-    var job = ledger.get(id, scope);
+    var job = scopedReview.apply(scope).get(id);
     boolean changed = "STALE_VERSION".equals(job.status());
     for (var target :
         job.targets().stream()
@@ -1074,12 +1190,12 @@ public final class ReviewTools {
       try {
         version = files.get().reviewVersion(target.path());
       } catch (java.io.IOException missing) {
-        ledger.invalidate(id, scope, target.path(), "unavailable");
+        scopedReview.apply(scope).invalidate(id, target.path(), "unavailable");
         changed = true;
         continue;
       }
       if (!target.version().equals(version)) {
-        ledger.invalidate(id, scope, target.path(), version);
+        scopedReview.apply(scope).invalidate(id, target.path(), version);
         changed = true;
       }
       var snapshot = prior.snapshots().get(target.path());
@@ -1137,7 +1253,7 @@ public final class ReviewTools {
       } else
         grouped.computeIfAbsent(page.reviewJobId(), ignored -> new ArrayList<>()).add(page.range());
     }
-    grouped.forEach((job, ranges) -> ledger.delivered(job, scope(owner), ranges));
+    grouped.forEach((job, ranges) -> scopedReview.apply(scope(owner)).delivered(job, ranges));
   }
 
   private void confirmDurable(AgentRunContext owner, Page page) {
@@ -1368,7 +1484,7 @@ public final class ReviewTools {
               dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.REVIEW_PARTIAL);
       cursor = page.nextCursor();
     } while (cursor != null);
-    for (var id : ledger.jobs(scope(owner)))
+    for (var id : scopedReview.apply(scope(owner)).jobs())
       try {
         if (!reviewStatus(id).status().equals("COMPLETE"))
           throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
@@ -1382,7 +1498,10 @@ public final class ReviewTools {
   /** Saved range assessments survive prompt eviction; this snapshot does not mark new reviews. */
   public String continuationSummary(AgentRunContext owner) {
     var durable = tasks.tasks(taskScope(owner), null, 3);
-    var jobs = ledger.jobs(scope(owner)).stream().map(id -> ledger.get(id, scope(owner))).toList();
+    var jobs =
+        scopedReview.apply(scope(owner)).jobs().stream()
+            .map(id -> scopedReview.apply(scope(owner)).get(id))
+            .toList();
     var incomplete = jobs.stream().filter(job -> !job.status().equals("COMPLETE")).toList();
     var rows = new ArrayList<Map<String, Object>>();
     for (var job : incomplete) {
@@ -1411,10 +1530,21 @@ public final class ReviewTools {
         .valueToTree(
             Map.of(
                 "durableTasks",
-                durable.entries().stream().map(task -> Map.of(
-                    "taskId", task.id(), "state", task.state(), "enumeration", task.enumeration(),
-                    "nextAction", "Preserve this task ID. Resume in a new Run explicitly; scan until SEALED, then readNextReviewWorkItem and submitReviewWorkItem by IDs.")).toList(),
-                "durableTasksNextCursor", durable.nextCursor() == null ? "" : durable.nextCursor(),
+                durable.entries().stream()
+                    .map(
+                        task ->
+                            Map.of(
+                                "taskId",
+                                task.id(),
+                                "state",
+                                task.state(),
+                                "enumeration",
+                                task.enumeration(),
+                                "nextAction",
+                                "Preserve this task ID. Resume in a new Run explicitly; scan until SEALED, then readNextReviewWorkItem and submitReviewWorkItem by IDs."))
+                    .toList(),
+                "durableTasksNextCursor",
+                durable.nextCursor() == null ? "" : durable.nextCursor(),
                 "registeredJobs",
                 jobs.size(),
                 "completedJobs",
@@ -1448,15 +1578,15 @@ public final class ReviewTools {
       AgentRunContext owner, boolean cancelled, boolean failed, AgentRunContext parent) {
     if (owner == null || owner.projectId() == null) return;
     var scope = scope(owner);
-    for (var id : ledger.jobs(scope)) {
-      var job = ledger.get(id, scope);
+    for (var id : scopedReview.apply(scope).jobs()) {
+      var job = scopedReview.apply(scope).get(id);
       if (!job.participants().contains(scope)) continue;
       if (!job.status().equals("COMPLETE") && (cancelled || failed))
-        ledger.stop(id, scope, cancelled);
+        scopedReview.apply(scope).stop(id, cancelled);
       if (parent != null
           && parent.projectId() != null
           && parent.projectId().equals(owner.projectId())
-          && job.owner().equals(scope)) ledger.grant(id, scope, scope(parent));
+          && job.owner().equals(scope)) scopedReview.apply(scope).grant(id, scope(parent));
     }
     clearRawResults.accept(owner.runId());
   }

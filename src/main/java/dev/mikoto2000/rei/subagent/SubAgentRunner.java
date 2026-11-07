@@ -395,12 +395,19 @@ public final class SubAgentRunner {
   private final Supplier<List<ToolCallback>> toolFactory;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final Runnable beginCancellation;
+
+  private final Runnable clearCancellation;
+  private final java.util.function.BiFunction<String, Runnable, reactor.core.Disposable> onCancel;
+  private final java.util.function.Function<String, ChildLease> enterChild;
+
+  @FunctionalInterface
+  private interface ChildLease extends AutoCloseable {
+    @Override
+    void close();
+  }
+
+  private final java.util.function.Consumer<String> awaitChildren;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -430,7 +437,15 @@ public final class SubAgentRunner {
     this.models = models;
     this.options = options;
     this.toolFactory = toolFactory;
-    this.cancellation = cancellation;
+    this.beginCancellation = () -> cancellation.begin(null);
+    this.clearCancellation = () -> cancellation.clear();
+    this.onCancel = (run, action) -> cancellation.onCancel(run, action);
+    this.enterChild =
+        run -> {
+          var release = cancellation.acquireChildRelease(run);
+          return () -> release.run();
+        };
+    this.awaitChildren = run -> cancellation.awaitChildren(run);
     this.events = events;
     this.publisher = publisher;
     this.clock = clock;
@@ -616,15 +631,15 @@ public final class SubAgentRunner {
     if (claimed != null) durableChildren.put(runId, claimed.id());
     try (var scope = AgentRunScope.open(owner)) {
       if (tracked) {
-        cancellation.begin(null);
-        subscriptions.add(cancellation.onCancel(runId, cancel));
+        beginCancellation.run();
+        subscriptions.add(onCancel.apply(runId, cancel));
         if (!taskRuns.transition(runId, dev.mikoto2000.rei.application.run.RunStatus.RUNNING, null))
           cancel.run();
       }
       publisher.publish(
           events.subAgentLifecycle(
               AgentEventType.SUBAGENT_STARTED, parentId, runId, agent, task, "RUNNING", 0, null));
-      subscriptions.add(cancellation.onCancel(parentId, cancel));
+      subscriptions.add(onCancel.apply(parentId, cancel));
       var definition = registry.findById(agent);
       if (parent != null && parent.conversationId().startsWith("subagent:")) {
         finish.accept(SubAgentResult.Status.FAILED, "Recursive delegation is prohibited");
@@ -822,7 +837,7 @@ public final class SubAgentRunner {
       return claimed == null ? result : result.withDurableTask(claimed.id());
     } finally {
       subscriptions.dispose();
-      cancellation.awaitChildren(runId);
+      awaitChildren.accept(runId);
       active.remove(runId);
       durableChildren.remove(runId);
       if (claimed != null && durable.get(parent, claimed.id()).status().equals("RUNNING"))
@@ -831,7 +846,7 @@ public final class SubAgentRunner {
         taskLifecycle.finishMissingTerminal(
             owner, dev.mikoto2000.rei.application.run.RunStatus.FAILED);
         try (var scope = AgentRunScope.open(owner)) {
-          cancellation.clear();
+          clearCancellation.run();
         }
       }
     }
@@ -993,10 +1008,9 @@ public final class SubAgentRunner {
           /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input, ToolContext context) {
             try (var scope = AgentRunScope.open(owner);
-                var lease = cancellation.enterChild(owner.runId());
+                var lease = enterChild.apply(owner.runId());
                 var parentLease =
-                    cancellation.enterChild(
-                        approvalParent == null ? null : approvalParent.runId());
+                    enterChild.apply(approvalParent == null ? null : approvalParent.runId());
                 var budgetScope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(modelBudget)) {
               check.run();
               Runnable authorize =

@@ -6,8 +6,6 @@ import dev.mikoto2000.rei.core.policy.PermissionDecision;
 import dev.mikoto2000.rei.core.policy.ToolApprovalRepository;
 import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -148,11 +146,20 @@ public class ImplementationRequestService {
   private final IntSupplier implementationTestTimeoutSeconds;
 
   /** 委譲。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared delegation service for review and implementation workflows.")
-  private final ExternalAgentDelegationService delegation;
+  private final java.util.function.BiFunction<
+          RunExecutionContext, SpecificationExecution, IsolatedImplementationService.Receipt>
+      executeSpecification;
+
+  private final java.util.function.BiFunction<
+          RunExecutionContext, String, IsolatedImplementationService.Receipt>
+      findImplementation;
+
+  private record SpecificationExecution(
+      String id,
+      ImplementationSpecificationValidator.Validated validated,
+      String base,
+      String testCommand,
+      int testTimeoutSeconds) {}
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -190,7 +197,16 @@ public class ImplementationRequestService {
         () -> properties.isEnabled() && properties.isImplementationEnabled();
     this.implementationTestCommand = () -> properties.getImplementationTestCommand();
     this.implementationTestTimeoutSeconds = () -> properties.getImplementationTestTimeoutSeconds();
-    this.delegation = delegation;
+    this.executeSpecification =
+        (owner, request) ->
+            delegation.executeSpecification(
+                owner,
+                request.id(),
+                request.validated(),
+                request.base(),
+                request.testCommand(),
+                request.testTimeoutSeconds());
+    this.findImplementation = (owner, id) -> delegation.implementation(owner, id);
     this.clock = clock;
   }
 
@@ -457,13 +473,14 @@ public class ImplementationRequestService {
       // Baseline and recipe are checked again by the shared engine immediately before launch.
       var frozen = read(saved.executionEnvelope(), com.fasterxml.jackson.databind.JsonNode.class);
       var receipt =
-          delegation.executeSpecification(
+          executeSpecification.apply(
               run,
-              id,
-              validated,
-              saved.baseCommit(),
-              frozen.path("testCommand").textValue(),
-              frozen.path("testTimeoutSeconds").intValue());
+              new SpecificationExecution(
+                  id,
+                  validated,
+                  saved.baseCommit(),
+                  frozen.path("testCommand").textValue(),
+                  frozen.path("testTimeoutSeconds").intValue()));
       return complete(saved, validated.specification(), receipt);
     } catch (RuntimeException | Error error) {
       // Process/storage uncertainty is never turned into a fresh automatic attempt, including
@@ -500,7 +517,7 @@ public class ImplementationRequestService {
     if (saved.receiptId() == null) return null;
     IsolatedImplementationService.Receipt receipt;
     try {
-      receipt = delegation.implementation(run, saved.receiptId());
+      receipt = findImplementation.apply(run, saved.receiptId());
     } catch (IllegalArgumentException unavailable) {
       return null;
     }
@@ -573,7 +590,7 @@ public class ImplementationRequestService {
     var result = read(saved.result(), Outcome.class);
     if (!Objects.equals(result.patchSha256(), patch))
       throw new IllegalArgumentException("Evaluation patch differs from saved result");
-    var receipt = delegation.implementation(run, result.receiptId());
+    var receipt = findImplementation.apply(run, result.receiptId());
     if (!Objects.equals(receipt.patchHash(), patch))
       throw new IllegalArgumentException("Receipt patch changed");
     var values =

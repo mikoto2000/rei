@@ -16,8 +16,6 @@ import dev.mikoto2000.rei.event.ErrorInformation;
 import dev.mikoto2000.rei.event.ExecutionProgressPayload;
 import dev.mikoto2000.rei.event.ToolStartedPayload;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -860,21 +858,26 @@ public class RunExecutionContext {
   public static final String KEY = RunExecutionContext.class.getName();
 
   /** 権限一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared guard for current tool authorization.")
-  private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
+  private ToolPermissions toolPermissions;
+
+  private record ToolPermissions(
+      java.util.function.BiConsumer<String, String> validate,
+      java.util.function.BiConsumer<String, String> authorize) {}
 
   /** 実行の停滞への対処で使用するツール権限利用条件の確認を設定する。 */
   public void setToolPermissionGuard(
       dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {
-    this.permissions = permissions;
+    this.toolPermissions =
+        permissions == null
+            ? null
+            : new ToolPermissions(
+                (name, input) -> permissions.validateArguments(name, input, runContext),
+                (name, input) -> permissions.check(name, input, runContext));
   }
 
   /** 利用条件に合わない指定を受け付けないよう、ツール引数を検証する。 */
   public void validateToolArguments(String name, String input) {
-    if (permissions != null) permissions.validateArguments(name, input, runContext);
+    if (toolPermissions != null) toolPermissions.validate().accept(name, input);
     else {
       dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.validateCommonArguments(
           name, input, new dev.mikoto2000.rei.websearch.WebSearchProperties().getMaxResults());
@@ -946,8 +949,8 @@ public class RunExecutionContext {
 
   /** 後続の操作を進められるか判断するため、ツール権限を確認する。 */
   public void checkToolPermission(String name, String input) {
-    if (permissions != null) {
-      permissions.check(name, input, runContext);
+    if (toolPermissions != null) {
+      toolPermissions.authorize().accept(name, input);
       return;
     }
     if (runContext != null
