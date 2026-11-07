@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.core.completion;
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.io.IOException;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -70,11 +71,7 @@ public final class ApprovalActionMenu implements AutoCloseable {
   @FunctionalInterface
   public interface PendingSource {
     /** 後続の処理で判断できるよう、未完了の対象を返す。 */
-    @SuppressFBWarnings(
-        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
-        matchType = SuppressMatchType.EXACT,
-        justification = "The polling callback may report a checked source failure or interruption to the shell.")
-    List<String> pending(Owner owner) throws Exception;
+    List<String> pending(Owner owner) throws IOException, InterruptedException;
   }
 
   /** この機能を利用する設定が有効かどうかを返す。 */
@@ -130,7 +127,7 @@ public final class ApprovalActionMenu implements AutoCloseable {
             }
             var ids = source.pending(captured);
             reconcile(captured, ids, version);
-          } catch (Exception unavailable) {
+          } catch (IOException | InterruptedException | RuntimeException unavailable) {
             if (unavailable instanceof InterruptedException) Thread.currentThread().interrupt();
           }
         },
