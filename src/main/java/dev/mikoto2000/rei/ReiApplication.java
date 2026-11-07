@@ -28,6 +28,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 import org.jline.keymap.KeyMap;
 import org.jline.reader.Completer;
@@ -94,11 +95,7 @@ public class ReiApplication {
   private final EscCancellationMonitor escCancellationMonitor;
 
   /** コマンドキャンセルサービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService commandCancellationService;
+  private final BooleanSupplier cancelCommand;
 
   /** コマンド完了条件通知判断基準。 */
   private final CommandCompletionNotificationPolicy commandCompletionNotificationPolicy;
@@ -185,7 +182,7 @@ public class ReiApplication {
     this.factory = factory;
     this.readSelectedModel = () -> currentModelHolder.get();
     this.escCancellationMonitor = escCancellationMonitor;
-    this.commandCancellationService = commandCancellationService;
+    this.cancelCommand = () -> commandCancellationService.cancel();
     this.commandCompletionNotificationPolicy = commandCompletionNotificationPolicy;
     this.commandUserInputDisplayPolicy = commandUserInputDisplayPolicy;
     this.asyncVectorDocumentService = asyncVectorDocumentService;
@@ -668,7 +665,7 @@ public class ReiApplication {
                     ? ForegroundConsole.readCommandInput(terminal.reader(), timeoutMillis)
                     : terminal.reader().read(timeoutMillis),
             () -> {
-              boolean accepted = commandCancellationService.cancel();
+              boolean accepted = cancelCommand.getAsBoolean();
               cmd.getErr()
                   .println(
                       accepted
@@ -677,11 +674,11 @@ public class ReiApplication {
               cmd.getErr().flush();
             });
       } catch (UserInterruptException interrupted) {
-        commandCancellationService.cancel();
+        cancelCommand.getAsBoolean();
         future.cancel(true);
         throw interrupted;
       } catch (EndOfFileException closed) {
-        commandCancellationService.cancel();
+        cancelCommand.getAsBoolean();
         future.cancel(true);
         throw closed;
       }
