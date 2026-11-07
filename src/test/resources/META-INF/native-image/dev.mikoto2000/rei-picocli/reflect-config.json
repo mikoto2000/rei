@@ -1,0 +1,139 @@
+[
+  {
+    "name" : "dev.mikoto2000.rei.ChatGptCommandOutputTest$Root",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ReiApplicationCommandOutputTest$SubagentRoot",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ReiApplicationMultilineInputTest$NoopCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ReiApplicationShellOutputPolicyTest$Chat",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ReiApplicationShellOutputPolicyTest$Root",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ReiApplicationShellOutputPolicyTest$Status",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand$InitCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" },
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand$ReloadCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand$RunCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "account" },
+      { "name" : "backend" },
+      { "name" : "context" },
+      { "name" : "expected" },
+      { "name" : "model" },
+      { "name" : "parent" },
+      { "name" : "role" },
+      { "name" : "sources" },
+      { "name" : "task" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand$ShowCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" },
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand$ValidateCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "file" },
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.SessionBusyPresentationTest$BusyCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.ShellFailureDiagnosticsTest$Probe",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  }
+]

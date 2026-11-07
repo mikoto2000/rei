@@ -1,0 +1,2333 @@
+[
+  {
+    "name" : "dev.mikoto2000.rei.ReiVersionProvider",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.StartupOptions",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "backend" },
+      { "name" : "directory" },
+      { "name" : "mode" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "spec" },
+      { "name" : "verbose" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$ActionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$BehaviorCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "parent" },
+      { "name" : "spec" },
+      { "name" : "top" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$BehaviorCommand$BehaviorCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$ClassificationCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "parent" },
+      { "name" : "spec" },
+      { "name" : "top" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$ClassificationCommand$ClassificationCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$CoachingCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "categories" },
+      { "name" : "cooldownDays" },
+      { "name" : "coverage" },
+      { "name" : "date" },
+      { "name" : "observedMinutes" },
+      { "name" : "parent" },
+      { "name" : "spec" },
+      { "name" : "targetShare" },
+      { "name" : "unknownShare" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$CoachingCommand$CoachingCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$ContextCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "date" },
+      { "name" : "parent" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$MonthlyCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$PeriodCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "date" },
+      { "name" : "parent" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$SummaryCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "date" },
+      { "name" : "parent" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$SummaryCommand$DateCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.activity.ActivityCommand$WeeklyCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.application.cli.ActivityRequest$Behavior",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.application.cli.ActivityRequest$Classification",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.application.cli.ActivityRequest$Coaching",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "categories" },
+      { "name" : "cooldownDays" },
+      { "name" : "coverage" },
+      { "name" : "date" },
+      { "name" : "observedMinutes" },
+      { "name" : "targetShare" },
+      { "name" : "unknownShare" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.application.cli.ActivityRequest$Context",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.application.cli.ActivityRequest$Date",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "date" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.application.cli.ActivityRequest$Monthly",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.application.cli.ActivityRequest$Operational",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "top" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.application.cli.ActivityRequest$Options",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "verbose" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.application.cli.ActivityRequest$Summary",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.application.cli.ActivityRequest$Weekly",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.attention.AttentionCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "duplicateRisk" },
+      { "name" : "id" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.attention.AttentionCommand$ActionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.bluesky.command.BskyCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.bluesky.command.BskyCommand$HistoryCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "handle" },
+      { "name" : "limit" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.bluesky.command.BskyCommand$HistoryUsersCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.bluesky.command.BskyCommand$ReplyCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "targetPost" },
+      { "name" : "textParts" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.briefing.command.BriefingCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.briefing.command.BriefingCommand$TodayCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.chatgpt.ChatGptCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" }
+    ],
+    "methods" : [
+      { "name" : "infer", "parameterTypes" : ["java.lang.String", "java.lang.String", "java.lang.String"] },
+      { "name" : "login", "parameterTypes" : ["java.lang.String"] },
+      { "name" : "logout", "parameterTypes" : ["java.lang.String"] },
+      { "name" : "models", "parameterTypes" : ["java.lang.String"] },
+      { "name" : "status", "parameterTypes" : [] }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.checkpoint.CheckpointCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.checkpoint.CheckpointCommand$Cleanup",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "apply" },
+      { "name" : "force" },
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.checkpoint.CheckpointCommand$Status",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.checkpoint.ResumeCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" },
+      { "name" : "task" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.checkpoint.ResumeCommand$Abandon",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" },
+      { "name" : "task" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.checkpoint.ResumeCommand$ListTasks",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.checkpoint.ResumeCommand$Overview",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.checkpoint.ResumeCommand$Show",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" },
+      { "name" : "task" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.chat.AgentRunContext$Mode",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ConfigCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ConfigCommand$InitCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "force" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ConfigCommand$PathCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.DocumentCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "hash" },
+      { "name" : "id" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.DocumentCommand$ActionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.EmbedCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "documents" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.EmbedCommand$AddCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "documents" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.EmbedCommand$DeleteCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "docId" },
+      { "name" : "source" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.EmbedCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.EmbedCommand$SearchCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "queryParts" },
+      { "name" : "source" },
+      { "name" : "threshold" },
+      { "name" : "topK" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ModelCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "modelName" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ModelsCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ProfileCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ProfileCommand$ChartCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "bucketSeconds" },
+      { "name" : "width" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ProfileCommand$MermaidCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "limit" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ProfileCommand$PathCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ProfileCommand$SummaryCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ProjectCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ProjectCommand$AddCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "directory" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ProjectCommand$CdCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "directory" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ProjectCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ProjectCommand$ProjectDirectoryCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ProjectCommand$RegisteredProjectCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ProjectCommand$RemoveCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "directory" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.RepairCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "hash" },
+      { "name" : "id" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.RepairCommand$ActionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.SearchCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "queryParts" },
+      { "name" : "source" },
+      { "name" : "threshold" },
+      { "name" : "vectorTopK" },
+      { "name" : "webTopK" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.ShCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$Apply",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$Approve",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$ApprovePurge",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$Auto",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$AutoAction",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$AutoApprove",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$AutoDisable",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$AutoHistory",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$AutoPropose",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "bytes" },
+      { "name" : "category" },
+      { "name" : "objects" },
+      { "name" : "project" },
+      { "name" : "seconds" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$Checkpoint",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$ExecutionAction",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$History",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$IncrementalVacuum",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "pages" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$Maintenance",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$MaintenanceAction",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$MaintenanceStatus",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$Plan",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "bytes" },
+      { "name" : "category" },
+      { "name" : "objects" },
+      { "name" : "project" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$Policy",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "bytes" },
+      { "name" : "category" },
+      { "name" : "clearBytes" },
+      { "name" : "clearCount" },
+      { "name" : "count" },
+      { "name" : "days" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$Purge",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$Restore",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$Retention",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$RetentionAction",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$Status",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" },
+      { "name" : "project" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.command.StorageCommand$Vacuum",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "seconds" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.completion.PathCompletionCandidates$Any",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.completion.PathCompletionCandidates$Directory",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.completion.PathCompletionCandidates$File",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.dependency.DependencyCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "id" },
+      { "name" : "spec" },
+      { "name" : "value" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.dependency.DependencyCommand$ActionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.policy.ApprovalCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "continueRun" },
+      { "name" : "id" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.core.policy.ApprovalCommand$ActionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.doctor.DoctorCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "arguments" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.doctor.DoctorRequest$Check",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.doctor.DoctorRequest$Options",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "checks" },
+      { "name" : "details" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.dot.DotCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "arguments" },
+      { "name" : "category" },
+      { "name" : "confirmed" },
+      { "name" : "constraints" },
+      { "name" : "context" },
+      { "name" : "creationId" },
+      { "name" : "criteria" },
+      { "name" : "expected" },
+      { "name" : "note" },
+      { "name" : "projectId" },
+      { "name" : "reviewStatus" },
+      { "name" : "satisfied" },
+      { "name" : "spec" },
+      { "name" : "timeout" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.dot.DotCommand$ActionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.externalagent.BeginnerReviewCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "arguments" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.externalagent.BeginnerReviewRequest$Format",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.externalagent.BeginnerReviewRequest$Mode",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.externalagent.BeginnerReviewRequest$Options",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "audience" },
+      { "name" : "chapters" },
+      { "name" : "entry" },
+      { "name" : "format" },
+      { "name" : "mode" },
+      { "name" : "os" },
+      { "name" : "perspective" },
+      { "name" : "prerequisites" },
+      { "name" : "root" },
+      { "name" : "shell" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.externalagent.ExternalAgentCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "arguments" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.externalagent.ExternalAgentCompletionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.feed.command.FeedCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.feed.command.FeedCommand$AddCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "displayName" },
+      { "name" : "url" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.feed.command.FeedCommand$DeleteCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.feed.command.FeedCommand$EditCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "disabled" },
+      { "name" : "displayName" },
+      { "name" : "enabled" },
+      { "name" : "id" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.feed.command.FeedCommand$ImportOpmlCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "path" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.feed.command.FeedCommand$ItemCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.feed.command.FeedCommand$ItemCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "from" },
+      { "name" : "limit" },
+      { "name" : "to" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.feed.command.FeedCommand$ItemCommand$SummarizeCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "itemId" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.feed.command.FeedCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.feed.command.FeedCommand$SummaryCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.feed.command.FeedCommand$UpdateCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.goal.GoalCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "acknowledgeUncertain" },
+      { "name" : "action" },
+      { "name" : "completionJson" },
+      { "name" : "criteriaJson" },
+      { "name" : "dependencyId" },
+      { "name" : "digest" },
+      { "name" : "expectedRunId" },
+      { "name" : "file" },
+      { "name" : "maxCalls" },
+      { "name" : "maxRuns" },
+      { "name" : "planVersion" },
+      { "name" : "proofJson" },
+      { "name" : "spec" },
+      { "name" : "stageId" },
+      { "name" : "stageVersion" },
+      { "name" : "stagesJson" },
+      { "name" : "value" },
+      { "name" : "waitReason" },
+      { "name" : "waitVersion" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.goal.GoalCommand$ActionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand$AddCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "description" },
+      { "name" : "end" },
+      { "name" : "location" },
+      { "name" : "start" },
+      { "name" : "titleParts" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand$AuthCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "date" },
+      { "name" : "from" },
+      { "name" : "to" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand$RefreshTokenCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.image.command.GenerateCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "model" },
+      { "name" : "outputPath" },
+      { "name" : "promptParts" },
+      { "name" : "raw" },
+      { "name" : "size" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.image.command.ImageCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "promptParts" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.interest.command.InterestCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.interest.command.InterestCommand$DiscoverCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.interest.command.InterestCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "hours" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.llm.capture.LlmCaptureCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$ActionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$Capture",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "args" },
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.MemoryCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.MemoryCommand$ConsolidateCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "approve" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.MemoryCommand$ExportCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "exportDir" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.MemoryCommand$ForgetCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.MemoryCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "offset" },
+      { "name" : "pageLimit" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.MemoryCommand$SearchCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "limit" },
+      { "name" : "queryWords" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.MemoryCommand$ShowCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.MemoryCommand$SummarizeCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "approve" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.SleepCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.SleepCommand$Auto",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.SleepCommand$AutoResume",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "auto" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.SleepCommand$AutoStatus",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "auto" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.SleepCommand$CancelRequest",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" },
+      { "name" : "revision" },
+      { "name" : "session" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.SleepCommand$History",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.SleepCommand$Preview",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.SleepCommand$Requests",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.memory.command.SleepCommand$Status",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.paper.PaperCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "arguments" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.paper.PaperCommandRequest",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "args" },
+      { "name" : "detailed" },
+      { "name" : "limit" },
+      { "name" : "literal" },
+      { "name" : "natural" },
+      { "name" : "oa" },
+      { "name" : "quick" },
+      { "name" : "refresh" },
+      { "name" : "section" },
+      { "name" : "since" },
+      { "name" : "sort" },
+      { "name" : "technical" },
+      { "name" : "until" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.reflection.ReflectionCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "evidence" },
+      { "name" : "evidenceHash" },
+      { "name" : "id" },
+      { "name" : "kind" },
+      { "name" : "note" },
+      { "name" : "observation" },
+      { "name" : "revision" },
+      { "name" : "sourceKind" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.reflection.ReflectionCommand$ActionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.reflection.ReflectionLessonService$Kind",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.reminder.command.ReminderCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.reminder.command.ReminderCommand$AddCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "at" },
+      { "name" : "messageParts" },
+      { "name" : "minutesBefore" },
+      { "name" : "target" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.reminder.command.ReminderCommand$DeleteCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.reminder.command.ReminderCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.secretary.SecretaryAutonomy$Kind",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.secretary.SecretaryCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "action" },
+      { "name" : "allowModelContent" },
+      { "name" : "autoKind" },
+      { "name" : "autoPrepare" },
+      { "name" : "autonomyEnabled" },
+      { "name" : "briefingTime" },
+      { "name" : "connectionEnabled" },
+      { "name" : "connectionId" },
+      { "name" : "connectionName" },
+      { "name" : "connectionVersion" },
+      { "name" : "delaySeconds" },
+      { "name" : "destination" },
+      { "name" : "due" },
+      { "name" : "externalArguments" },
+      { "name" : "externalOperation" },
+      { "name" : "forceAuth" },
+      { "name" : "goal" },
+      { "name" : "id" },
+      { "name" : "importCandidates" },
+      { "name" : "intent" },
+      { "name" : "json" },
+      { "name" : "key" },
+      { "name" : "kind" },
+      { "name" : "lifeJson" },
+      { "name" : "limit" },
+      { "name" : "maxConcurrent" },
+      { "name" : "maxDailyCalls" },
+      { "name" : "maxLevel" },
+      { "name" : "maxLlmCalls" },
+      { "name" : "maxRetries" },
+      { "name" : "maxSeconds" },
+      { "name" : "meetingReview" },
+      { "name" : "minimumSeconds" },
+      { "name" : "notificationPriority" },
+      { "name" : "notificationsEnabled" },
+      { "name" : "offset" },
+      { "name" : "pollSeconds" },
+      { "name" : "priority" },
+      { "name" : "project" },
+      { "name" : "proposalsEnabled" },
+      { "name" : "reaction" },
+      { "name" : "references" },
+      { "name" : "repeatSeconds" },
+      { "name" : "reportDate" },
+      { "name" : "resource" },
+      { "name" : "reviewTime" },
+      { "name" : "revision" },
+      { "name" : "selected" },
+      { "name" : "service" },
+      { "name" : "session" },
+      { "name" : "snoozedUntil" },
+      { "name" : "spec" },
+      { "name" : "status" },
+      { "name" : "stopped" },
+      { "name" : "tags" },
+      { "name" : "title" },
+      { "name" : "watchEnabled" },
+      { "name" : "zone" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.secretary.SecretaryCommand$ActionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.secretary.SecretaryOrchestrator$Feedback",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.secretary.SecretaryProvider$Service",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.secretary.SecretaryTask$Intent",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.secretary.SecretaryTask$Status",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.skills.command.SkillCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.skills.command.SkillCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.skills.command.SkillCommand$ReloadCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.skills.command.SkillCommand$ShowCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "name" },
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand$InitCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" },
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand$ReloadCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand$RunCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "account" },
+      { "name" : "backend" },
+      { "name" : "context" },
+      { "name" : "expected" },
+      { "name" : "model" },
+      { "name" : "parent" },
+      { "name" : "role" },
+      { "name" : "sources" },
+      { "name" : "task" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand$ShowCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" },
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.subagent.SubAgentCommand$ValidateCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "file" },
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.summarize.command.SummarizeCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" },
+      { "name" : "url" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.task.command.TaskCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.task.command.TaskCommand$AddCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "dueDate" },
+      { "name" : "priority" },
+      { "name" : "titleParts" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.task.command.TaskCommand$AuthCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.task.command.TaskCommand$DeleteCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.task.command.TaskCommand$DoneCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "id" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.task.command.TaskCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "dueBefore" },
+      { "name" : "priority" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.temporal.TimerCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "acknowledgeUncertain" },
+      { "name" : "action" },
+      { "name" : "expectedRunId" },
+      { "name" : "id" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.temporal.TimerCommand$ActionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.timing.TimingCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "arguments" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.CancelCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "runId" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.ChatCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "mode" },
+      { "name" : "prompts" },
+      { "name" : "targetRun" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.ConversationModeCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" }
+    ],
+    "methods" : [
+      { "name" : "auto", "parameterTypes" : [] },
+      { "name" : "conversation", "parameterTypes" : ["boolean"] },
+      { "name" : "normal", "parameterTypes" : [] },
+      { "name" : "status", "parameterTypes" : [] }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.HistoryCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "cursor" },
+      { "name" : "limit" },
+      { "name" : "projectId" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.HistoryCommand$ListCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "limit" },
+      { "name" : "offset" },
+      { "name" : "parent" },
+      { "name" : "project" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.HistoryCommand$SearchCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "limit" },
+      { "name" : "parent" },
+      { "name" : "query" },
+      { "name" : "scope" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.HistoryCommand$SearchCommand$Scope",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "all" },
+      { "name" : "current" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.HistoryCommand$ShowCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "conversation" },
+      { "name" : "cursor" },
+      { "name" : "limit" },
+      { "name" : "parent" },
+      { "name" : "project" },
+      { "name" : "range" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.HistoryCommand$ShowCommand$Range",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "all" },
+      { "name" : "last" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.NewConversationCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" },
+      { "name" : "title" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.ResumeConversationCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "sessionId" },
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.RootCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.RunsCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.SessionCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" }
+    ],
+    "methods" : [
+      { "name" : "end", "parameterTypes" : [] },
+      { "name" : "list", "parameterTypes" : [] },
+      { "name" : "show", "parameterTypes" : [] }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.SessionCompletionCandidates",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.ui.shell.SessionCompletionCandidates$CurrentProject",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "dev.mikoto2000.rei.voice.VoiceCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" }
+    ],
+    "methods" : [
+      { "name" : "config", "parameterTypes" : ["java.lang.Float", "java.lang.Integer", "java.lang.Integer", "java.lang.Integer", "java.lang.Integer", "java.lang.Integer", "java.lang.Boolean", "java.lang.Integer", "java.lang.Integer"] },
+      { "name" : "confirm", "parameterTypes" : ["java.util.UUID", "java.lang.String"] },
+      { "name" : "correction", "parameterTypes" : ["java.lang.Boolean", "java.util.UUID"] },
+      { "name" : "devices", "parameterTypes" : [] },
+      { "name" : "features", "parameterTypes" : ["java.lang.Boolean", "java.lang.String", "java.lang.Boolean", "java.lang.Boolean", "java.lang.String", "java.lang.Integer"] },
+      { "name" : "off", "parameterTypes" : [] },
+      { "name" : "on", "parameterTypes" : [] },
+      { "name" : "status", "parameterTypes" : [] },
+      { "name" : "test", "parameterTypes" : [] }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.voice.VoiceCommand$Device",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ],
+    "methods" : [
+      { "name" : "set", "parameterTypes" : ["java.lang.String"] }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.voice.VoiceCommand$Models",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ],
+    "methods" : [
+      { "name" : "cancel", "parameterTypes" : [] },
+      { "name" : "info", "parameterTypes" : [] },
+      { "name" : "install", "parameterTypes" : ["java.lang.String"] },
+      { "name" : "status", "parameterTypes" : [] },
+      { "name" : "verify", "parameterTypes" : [] }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.voice.VoiceCommand$Pending",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ],
+    "methods" : [
+      { "name" : "cancel", "parameterTypes" : ["java.util.UUID"] }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.workcontext.WorkCommand",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "spec" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.workcontext.WorkCommand$History",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.workcontext.WorkCommand$Show",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "dev.mikoto2000.rei.workcontext.WorkCommand$Update",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" }
+    ]
+  },
+  {
+    "name" : "java.lang.Boolean",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "java.lang.Double",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "java.lang.Float",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "java.lang.Integer",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "java.lang.Long",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "java.util.Collections$UnmodifiableRandomAccessList",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "java.util.Optional",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "java.util.UUID",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true
+  },
+  {
+    "name" : "picocli.CommandLine$AutoHelpMixin",
+    "allDeclaredConstructors" : true,
+    "allPublicConstructors" : true,
+    "allDeclaredMethods" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "helpRequested" },
+      { "name" : "versionRequested" }
+    ]
+  }
+]
