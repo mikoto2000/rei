@@ -1,9 +1,8 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.ChatSubmitService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
+import java.util.function.BiFunction;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,11 +20,10 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class ChatController {
   /** チャット。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits operations through the shared chat run entry point.")
-  private final ChatSubmitService chat;
+  private final BiFunction<ChatRequest, SubmissionHeaders, ChatResponse> submitChat;
+
+  /** 受付キーと呼び出し元識別子。 */
+  private record SubmissionHeaders(String key, String clientId) {}
 
   /** 受付台帳。 */
   private dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions;
@@ -38,7 +36,25 @@ public class ChatController {
 
   /** 指定された値や利用先を使って、ChatControllerを初期化する。 */
   public ChatController(ChatSubmitService chat) {
-    this.chat = chat;
+    this.submitChat =
+        (request, headers) -> {
+          var run =
+              headers.clientId() == null
+                  ? chat.submit(
+                      request.message(),
+                      request.projectId(),
+                      request.sessionId(),
+                      request.mode(),
+                      headers.key())
+                  : chat.submit(
+                      request.message(),
+                      request.projectId(),
+                      request.sessionId(),
+                      request.mode(),
+                      headers.key(),
+                      headers.clientId());
+          return new ChatResponse(run.runId(), run.conversationId(), run.runId());
+        };
   }
 
   /** 会話の実行を受け付け、実行状態を照会する識別子と参照先を返す。 */
@@ -57,20 +73,10 @@ public class ChatController {
       @RequestBody ChatRequest request,
       @RequestHeader(value = "Idempotency-Key", required = false) String key,
       @RequestHeader(value = "X-Rei-Client-Id", required = false) String clientId) {
-    var run =
-        clientId == null
-            ? chat.submit(
-                request.message(), request.projectId(), request.sessionId(), request.mode(), key)
-            : chat.submit(
-                request.message(),
-                request.projectId(),
-                request.sessionId(),
-                request.mode(),
-                key,
-                clientId);
+    var response = submitChat.apply(request, new SubmissionHeaders(key, clientId));
     return ResponseEntity.accepted()
-        .location(URI.create("/api/v1/runs/" + run.runId()))
-        .body(new ChatResponse(run.runId(), run.conversationId(), run.runId()));
+        .location(URI.create("/api/v1/runs/" + response.runId()))
+        .body(response);
   }
 
   /** 重複受付防止キーから、受け付け済みの実行を照会する。 */

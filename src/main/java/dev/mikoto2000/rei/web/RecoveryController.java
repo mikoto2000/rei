@@ -2,10 +2,9 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.ChatSubmitService;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.Set;
+import java.util.function.BiFunction;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
@@ -24,11 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class RecoveryController {
   /** チャット。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Submits operations through the shared chat run entry point.")
-  private final ChatSubmitService chat;
+  private final BiFunction<ChatRequest, String, ChatResponse> submitChat;
 
   /**
    * Web APIによる操作で受け渡す要求を表す。
@@ -44,7 +39,13 @@ public final class RecoveryController {
 
   /** 指定された値や利用先を使って、RecoveryControllerを初期化する。 */
   public RecoveryController(ChatSubmitService chat) {
-    this.chat = chat;
+    this.submitChat =
+        (request, key) -> {
+          var run =
+              chat.submit(
+                  request.message(), request.projectId(), request.sessionId(), request.mode(), key);
+          return new ChatResponse(run.runId(), run.conversationId(), run.runId());
+        };
   }
 
   /** Web APIによる操作で用いる文書を返す。 */
@@ -82,20 +83,21 @@ public final class RecoveryController {
 
   /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   private ResponseEntity<ChatResponse> submit(String name, Request request, String key) {
-    var run =
-        chat.submit(
-            name
-                + " "
-                + request.action()
-                + " "
-                + request.id()
-                + (request.hash() == null ? "" : " " + request.hash()),
-            request.projectId(),
-            request.sessionId(),
-            AgentRunContext.Mode.EXCLUSIVE,
+    var response =
+        submitChat.apply(
+            new ChatRequest(
+                name
+                    + " "
+                    + request.action()
+                    + " "
+                    + request.id()
+                    + (request.hash() == null ? "" : " " + request.hash()),
+                request.projectId(),
+                request.sessionId(),
+                AgentRunContext.Mode.EXCLUSIVE),
             key);
     return ResponseEntity.accepted()
-        .location(URI.create("/api/v1/runs/" + run.runId()))
-        .body(new ChatResponse(run.runId(), run.conversationId(), run.runId()));
+        .location(URI.create("/api/v1/runs/" + response.runId()))
+        .body(response);
   }
 }
