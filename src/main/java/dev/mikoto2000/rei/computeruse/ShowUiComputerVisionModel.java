@@ -98,7 +98,8 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
 
   /** 画面操作の支援で用いる判断を返す。 */
   @Override
-  public ComputerAction decide(ComputerObservation observation) throws Exception {
+  public ComputerAction decide(ComputerObservation observation)
+      throws IOException, InterruptedException {
     checkCancelled();
     // The planner also receives bounded images; geometry and display identities remain unchanged.
     var overview =

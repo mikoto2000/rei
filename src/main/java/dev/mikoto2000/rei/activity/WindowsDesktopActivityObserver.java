@@ -65,7 +65,8 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ActivityProperties shared by consumers of these settings.")
+      justification =
+          "Reads the application-bound ActivityProperties shared by consumers of these settings.")
   private final ActivityProperties properties;
 
   /** 直近付随情報。 */
@@ -85,7 +86,8 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
   private final ScreenCapture capture = new RobotScreenCapture(new AwtRobotDriver());
 
   /** 後から状況を確認できるよう、Windowsデスクトップ作業状況観測を記録する。 */
-  private CapturedScreen readCapture() throws Exception {
+  private CapturedScreen readCapture()
+      throws java.awt.AWTException, java.io.IOException, InterruptedException {
     var metadata = lastMetadata;
     boolean identified =
         properties != null && properties.getDetection().isBackgroundFullScreenEnabled();
