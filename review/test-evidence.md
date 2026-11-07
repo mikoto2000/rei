@@ -58,3 +58,18 @@
 | L-4 ツール実行後 | `assistant → tool → system`。初回の応答で `readMultiFile` が要求され、次のリクエストでは同じ呼び出し ID のツール結果に続く `system` に、読み取り後の Working Set と検証用ファイル名が含まれていた。 | Rei が実際にファイルを読み、2 回目のリクエストへの応答で期待したファイル内容を返した。Run は `COMPLETED`。 |
 
 両ケースの最終応答で HTTP 200、SSE の `finish_reason: stop`、`[DONE]` を確認した。検証範囲は上記の接続先・モデルと Rei のチャット経路。検証用の Rei を停止し、一時 worktree を削除した。
+
+## L-5 の回帰テスト
+
+追加した `ContextAssemblerTest#takesOneWorkingSetSnapshotPerAssembly` は、取得するたびに異なるリビジョンを返す Working Set を使う。修正前は最初の組み立てで期待したリビジョン1に対してリビジョン4が返り、テストが失敗した。修正後は初回がリビジョン1、次回がリビジョン2となり、各組み立てでの取得が1回であることを確認した。 [修正 PR #499](https://github.com/mikoto2000/rei/pull/499)
+
+Windows / OpenJDK 25 で Maven Wrapper の `full` プロファイルを使い、以下の対象50件が通過した。失敗・エラー・スキップは0件だった。
+
+| テスト | 通過件数 |
+|---|---:|
+| `ContextAssemblerTest` | 18 |
+| `DeliveryPolicyTest` | 9 |
+| `WorkingSetAdvisorTest` | 3 |
+| `WorkingSetTest` | 20 |
+
+GitHub CI では初回の Windows 回帰 B で既存の `BackgroundProcessManagerTest#spawnReturnsImmediatelyAndCapturesOutput` が標準エラーのアサーションで失敗した。失敗ジョブの再実行で通過し、Windows 回帰 A・B、静的解析、集約チェックの成功を確認してからマージした。 [Windows 回帰の実行結果](https://github.com/mikoto2000/rei/actions/runs/42364944855) · [PR の全チェック](https://github.com/mikoto2000/rei/pull/499/checks)
