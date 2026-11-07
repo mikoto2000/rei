@@ -10,15 +10,15 @@
 
 | ID | 重大度 | 対象 | 指摘時の要約 | 対応・検証状況 |
 |---|---|---|---|---|
-| M-1 | MEDIUM | `llm/AgentEventChatModel.java` | イベントと計測で Run の解決方法が異なり、非同期購読時に Timing Span が欠落し得る | 対応済み。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) |
-| M-2 | MEDIUM | `core/working/WorkingSetAdvisor.java` / `ContextAssembler.java` | 通常経路で Working Set がユーザー本文の先頭から末尾の独立した `SystemMessage` へ移る | 実 Provider で確認済み。通常時の末尾は `user → system`。[検証証跡](./test-evidence.md#rei-本体からの実-provider-検証) |
+| M-1 | MEDIUM | `llm/AgentEventChatModel.java` | イベントと計測で Run の解決方法が異なり、非同期購読時に Timing Span が欠落し得る | 対応済み。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [検証証跡](./test-evidence.md#m-1-と-l-3-の検証) |
+| M-2 | MEDIUM | `core/working/WorkingSetAdvisor.java` / `ContextAssembler.java` | 通常経路で Working Set がユーザー本文の先頭から末尾の独立した `SystemMessage` へ移る | 実 Provider で確認済み。通常時の末尾は `user → system`。[取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [証跡記録 PR #487](https://github.com/mikoto2000/rei/pull/487) · [検証証跡](./test-evidence.md#rei-本体からの実-provider-検証) |
 | L-1 | LOW | `core/Tools.java` | `ExcludedInventoryPathException` の型付き拒否への変換が単一引数 `listFile` のみ | 対応済み。部分成功を維持し、除外項目にエラーコードと再試行の案内を返す。[修正 PR #505](https://github.com/mikoto2000/rei/pull/505) · [回帰テスト結果](./test-evidence.md#l-1-の回帰テスト) |
 | L-2 | LOW | `llm/AgentEventChatModel.java` | ローカル変数 `owner` / `publisher` が同名メソッドを隠蔽し可読性を下げる | 対応済み。同期・ストリーミングの両経路で変数名を変更した。既存テスト29件が通過した。[修正 PR #516](https://github.com/mikoto2000/rei/pull/516) · [テスト結果](./test-evidence.md#l-2-の既存テスト) |
-| L-3 | LOW | `llm/AgentEventChatModel.java` | `measurement(prompt, request)` が `owner(prompt)` を二重解決する | 解消済み。M-1 の修正で解決済みの `runId` を計測に渡す。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) |
-| L-4 | LOW | `core/contextbudget/ContextAssembler.java` | 末尾の `ToolResponseMessage` の後ろに Working Set の `SystemMessage` が付く | 実 Provider で確認済み。ツール実行後の末尾は `assistant → tool → system`。[検証証跡](./test-evidence.md#rei-本体からの実-provider-検証) |
+| L-3 | LOW | `llm/AgentEventChatModel.java` | `measurement(prompt, request)` が `owner(prompt)` を二重解決する | 解消済み。M-1 の修正で解決済みの `runId` を計測に渡す。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [検証証跡](./test-evidence.md#m-1-と-l-3-の検証) |
+| L-4 | LOW | `core/contextbudget/ContextAssembler.java` | 末尾の `ToolResponseMessage` の後ろに Working Set の `SystemMessage` が付く | 実 Provider で確認済み。ツール実行後の末尾は `assistant → tool → system`。[取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [証跡記録 PR #487](https://github.com/mikoto2000/rei/pull/487) · [検証証跡](./test-evidence.md#rei-本体からの実-provider-検証) |
 | L-5 | LOW | `core/contextbudget/ContextAssembler.java` | `estimate(project(...))` のたびに `workingSet.get()` を再描画し、推定と最終投影がずれ得る | 対応済み。組み立てにつき1回の取得に揃え、次の呼び出しで取り直す。[修正 PR #499](https://github.com/mikoto2000/rei/pull/499) · [回帰テスト結果](./test-evidence.md#l-5-の回帰テスト) |
-| L-6 | LOW | `terminal/cli/.../RunEventOutput.java` | `llm.request.failed` の即時描画後に、同じ思考ストリームの見出しが再表示され得る | 対応済み。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) |
-| L-7 | LOW | `review/ReviewTools.java` | 予算超過メッセージが、新規 claim 済みの場合に事実と異なる | 対応済み。[修正 PR #418](https://github.com/mikoto2000/rei/pull/418) |
+| L-6 | LOW | `terminal/cli/.../RunEventOutput.java` | `llm.request.failed` の即時描画後に、同じ思考ストリームの見出しが再表示され得る | 対応済み。[修正 PR #417](https://github.com/mikoto2000/rei/pull/417) · [main 取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [検証証跡](./test-evidence.md#l-6-の回帰テスト) |
+| L-7 | LOW | `review/ReviewTools.java` | 予算超過メッセージが、新規 claim 済みの場合に事実と異なる | 対応済み。[修正 PR #418](https://github.com/mikoto2000/rei/pull/418) · [検証証跡](./test-evidence.md#l-7-の回帰テスト) |
 
 重大度の基準: HIGH=データ破壊・権限逸脱・無制限消費、MEDIUM=機能欠落や観測不能、LOW=保守性・周辺互換。
 

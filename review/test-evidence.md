@@ -57,7 +57,7 @@
 | M-2 通常時 | `user → system`。末尾の `system` に `## Current Working Set` と検証用ファイル名が含まれていた。 | 1 リクエストで、ツールを呼ばず期待したファイル名を返した。Run は `COMPLETED`。 |
 | L-4 ツール実行後 | `assistant → tool → system`。初回の応答で `readMultiFile` が要求され、次のリクエストでは同じ呼び出し ID のツール結果に続く `system` に、読み取り後の Working Set と検証用ファイル名が含まれていた。 | Rei が実際にファイルを読み、2 回目のリクエストへの応答で期待したファイル内容を返した。Run は `COMPLETED`。 |
 
-両ケースの最終応答で HTTP 200、SSE の `finish_reason: stop`、`[DONE]` を確認した。検証範囲は上記の接続先・モデルと Rei のチャット経路。検証用の Rei を停止し、一時 worktree を削除した。
+両ケースの最終応答で HTTP 200、SSE の `finish_reason: stop`、`[DONE]` を確認した。検証範囲は上記の接続先・モデルと Rei のチャット経路。検証用の Rei を停止し、一時 worktree を削除した。 [取り込み PR #434](https://github.com/mikoto2000/rei/pull/434) · [証跡記録 PR #487](https://github.com/mikoto2000/rei/pull/487)
 
 ## L-5 の回帰テスト
 
@@ -98,3 +98,17 @@ Windows / OpenJDK 25 で Maven Wrapper の `full` プロファイルを使い、
 | `TimingOverheadProbeTest` | 1 |
 
 GitHub CI でも Windows 回帰 A・B、静的解析、集約チェックがすべて通過した。 [PR の全チェック](https://github.com/mikoto2000/rei/pull/516/checks)
+
+## M-1 と L-3 の検証
+
+`main` の `0fe6d217` で、Windows / OpenJDK 25 上の Maven Wrapper の `full` プロファイルを使い、`AgentEventChatModelTimingTest#streamingTimingStaysWithTheInvocationAcrossSubscriptionAndSignalScopes` の1件が通過した。購読や応答処理が別スレッドや別 Run のスコープで実行されても、呼び出し元の Run に Span と応答マイルストーンが記録され、別 Run には記録されないことを確認した。 [回帰テスト](https://github.com/mikoto2000/rei/blob/0fe6d2175063f1d20a8fca834a1cab8e417a2ea0/src/test/java/dev/mikoto2000/rei/llm/AgentEventChatModelTimingTest.java#L116) · [取り込み PR #434 の CI](https://github.com/mikoto2000/rei/pull/434/checks)
+
+L-3 はコードで確認した。`call` と `stream` は解決済みの `runId` を唯一の `measurement` メソッドに渡す。このメソッド内に `owner(prompt)` の再呼び出しはない。 [計測メソッド](https://github.com/mikoto2000/rei/blob/0fe6d2175063f1d20a8fca834a1cab8e417a2ea0/src/main/java/dev/mikoto2000/rei/llm/AgentEventChatModel.java#L205) · [修正 PR #417](https://github.com/mikoto2000/rei/pull/417)
+
+## L-6 の回帰テスト
+
+同じコミットの CLI モジュールで、`RunEventOutputTest#llmFailureIsImmediateWithoutRepeatingTheThinkingHeader` の2ケースが通過した。失敗通知が即時表示され、通知の後に同じ思考ストリームの delta が追加される場合と、すぐに完了する場合の両方で、見出しは1回だけ出力された。 [CLI 回帰テスト](https://github.com/mikoto2000/rei/blob/0fe6d2175063f1d20a8fca834a1cab8e417a2ea0/terminal/cli/src/test/java/dev/mikoto2000/rei/cli/RunEventOutputTest.java#L15) · [修正 PR #417](https://github.com/mikoto2000/rei/pull/417)
+
+## L-7 の回帰テスト
+
+同じコミットで Maven Wrapper の `full` プロファイルを使い、`DurableReviewProtocolTest#sizesNewClaimUsingTheAttemptIdReturnedToTheModel` の1件が通過した。実際の attempt ID が仮の ID より多くのトークンを消費する条件でも、初回の読み取りで予算内のページが返り、再読み取りで同じページが返ることを確認した。 [回帰テスト](https://github.com/mikoto2000/rei/blob/0fe6d2175063f1d20a8fca834a1cab8e417a2ea0/src/test/java/dev/mikoto2000/rei/review/DurableReviewProtocolTest.java#L24) · [修正 PR #418 の CI](https://github.com/mikoto2000/rei/pull/418/checks)
