@@ -18,7 +18,7 @@ jobs:
         shell: pwsh
     steps:
       - uses: actions/checkout@v4
-      - name: Test baseline gate
+      - name: Test static analysis gate
         run: ./.github/ci/test-static-analysis-gate.ps1
       - uses: actions/setup-java@v4
         with:
@@ -44,7 +44,7 @@ jobs:
           CHECKSTYLE_OUTCOME: ${{ steps.checkstyle.outcome }}
           SPOTBUGS_OUTCOME: ${{ steps.spotbugs.outcome }}
         run: ./.github/ci/static-analysis-summary.ps1
-      - name: Gate new findings against existing debt
+      - name: Require zero static analysis findings
         id: gate
         if: always()
         continue-on-error: true

@@ -15,7 +15,7 @@ Run from the repository root (PowerShell):
 .\.github\ci\static-analysis-summary.ps1
 .\.github\ci\static-analysis-gate.ps1
 
-# Verify the baseline gate's regression fixtures.
+# Verify the static analysis gate's regression fixtures.
 .\.github\ci\test-static-analysis-gate.ps1
 
 # Strict gates: nonzero exit status if findings exist.
@@ -51,18 +51,16 @@ Resource files are excluded because these are Java source rules.
 SpotBugs analyzes main bytecode at Max effort and Low threshold. Test bytecode
 is outside the initial bug gate: assertion-heavy test fixtures have different
 intent from application code. No detector, application class or finding is
-suppressed by analyzer configuration. No exclusion filter is used. Existing debt
-is recorded separately in `config/static-analysis-baseline.json`; full findings
-remain visible in every report.
+suppressed by analyzer configuration. No exclusion filter is used.
 
 ## GitHub Actions
 
 `Java static analysis` runs on main pushes and pull requests targeting main,
 using Temurin 25 on Windows as the existing regression workflow does. Each tool
 runs independently so a Checkstyle failure does not prevent SpotBugs analysis.
-The final step fails the job if either analysis or the new-findings gate failed. `continue-on-error`
+The final step fails the job if either analysis or the zero-findings gate failed. `continue-on-error`
 on the analysis steps only allows both reports to be collected; it does not
-turn the job green. Summary generation, the baseline gate and report/log artifact upload use
+turn the job green. Summary generation, the zero-findings gate and report/log artifact upload use
 `always()` and therefore also run after failures. A cancelled job or runner
 loss can still prevent upload; compilation failure may leave no SpotBugs report.
 Artifacts are retained for 14 days.
@@ -84,29 +82,11 @@ Largest SpotBugs types: EI_EXPOSE_REP2 840, EI_EXPOSE_REP 308,
 NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE 199. These are analyzer findings, not
 confirmed defects; Spring/Lombok ownership conventions require review.
 
-The initial rollout gates new findings against this measured snapshot. The
-snapshot records technical debt, not verified false positives. It avoids making
-every unrelated PR fail for 28,957 existing findings or requiring bulk rewrites.
-The `quality` Maven profile remains an optional strict zero-findings gate.
-Review the 14 high-priority SpotBugs findings first in separate fixes.
-
-Checkstyle fingerprints repository-relative path, check type and the offending
-source line with surrounding whitespace removed, and preserves multiplicity.
-Line numbers and localized messages do not affect fingerprints. Changing an
-offending line requires fixing its finding; moving unchanged text does not.
-SpotBugs fingerprints bug type and the analyzer's instance hash, with multiplicity.
-Replacing an existing finding with another identical signature cannot be
-distinguished; this is a debt regression guard, not proof that no bug was added.
-Line/column shifts do not create false new findings. Analyzer upgrades require
-review and explicit remeasurement.
-
-To update the snapshot after approved debt work, generate both complete reports,
-run `.\.github\ci\static-analysis-gate.ps1 -WriteBaseline`, inspect the JSON diff
-and complete XML reports, then commit the reviewed update. CI never regenerates
-the baseline. Avoid expanding it to accept new findings. Missing/malformed
-reports, source paths outside the repository and SpotBugs analysis errors or
-missing classes fail closed. Fixes should shrink the snapshot on maintenance;
-otherwise an old identical signature may later be reintroduced within its allowance.
+The initial rollout used a baseline to tolerate existing findings while they
+were being addressed. Both reports reached zero on main in
+[the November 6 run](https://github.com/mikoto2000/rei/actions/runs/42305351834).
+The CI gate now requires zero findings from both analyzers. Missing or malformed
+reports and SpotBugs analysis errors or missing classes also fail the gate.
 
 ## Java 25 evidence
 
