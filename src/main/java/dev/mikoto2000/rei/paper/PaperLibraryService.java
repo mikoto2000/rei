@@ -1,36 +1,30 @@
 package dev.mikoto2000.rei.paper;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** 論文保管資料のユースケースを実現する。 */
 @Service
 public class PaperLibraryService {
-  /** リポジトリ。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared paper repository for the library and its artifacts.")
-  private final PaperRepository repo;
+  private final Function<String, List<PaperRepository.Version>> listVersions;
+  private final Function<String, List<String>> artifactIds;
+  private final PaperArtifactAccess.FindMetadata findMetadata;
 
-  /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common artifact store for paper content and cleanup.")
-  private final PaperArtifactStore store;
+  private final Predicate<String> hasOriginal;
+  private final Predicate<String> hasExtracted;
+  private final PaperArtifactAccess.Read readExport;
 
-  /** 参照先一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the same session references for result indexing and resolution.")
-  private final PaperSessionReferences refs;
+  private final BiFunction<String, String, Optional<Paper>> findByReference;
+  private final BiFunction<String, String, String> resolveCanonicalId;
+  private final SearchAndIndex searchAndIndex;
+  private final RemovePaper removePaper;
 
   /** 設定。 */
   private final Supplier<PaperSettings> settings;
@@ -41,9 +35,29 @@ public class PaperLibraryService {
       PaperArtifactStore store,
       PaperSessionReferences refs,
       PaperProperties config) {
-    this.repo = repo;
-    this.store = store;
-    this.refs = refs;
+    this.listVersions = id -> repo.versions(id);
+    this.artifactIds = id -> repo.artifactIds(id);
+    this.findMetadata = (id, kind, key) -> repo.artifact(id, kind, key);
+    this.hasOriginal = id -> store.exists(id, "originals", "pdf");
+    this.hasExtracted = id -> store.exists(id, "extracted", "json");
+    this.readExport =
+        (id, folder, extension) -> store.readBounded(id, folder, extension, 32L * 1024 * 1024);
+    this.findByReference = (session, ref) -> repo.find(refs.resolve(session, ref));
+    this.resolveCanonicalId = (session, ref) -> repo.canonicalId(refs.resolve(session, ref));
+    this.searchAndIndex =
+        (query, limit, session) -> {
+          var result = repo.search(query, limit);
+          refs.replace(session, result.stream().map(Paper::id).toList());
+          return result;
+        };
+    this.removePaper =
+        (id, purge, op) -> {
+          if (purge) {
+            repo.beginPurge(id, op);
+            for (String artifactId : repo.artifactIds(id)) store.purge(artifactId, op);
+            repo.delete(id, op);
+          } else repo.remove(id, op);
+        };
     this.settings = () -> PaperSettings.capture(config);
   }
 
@@ -55,11 +69,9 @@ public class PaperLibraryService {
 
   /** 論文の調査と整理で用いる説明を返す。 */
   public Object describe(Paper paper) {
-    var versions = repo.versions(paper.id());
-    boolean original =
-        repo.artifactIds(paper.id()).stream().anyMatch(id -> store.exists(id, "originals", "pdf"));
-    boolean extracted =
-        repo.artifactIds(paper.id()).stream().anyMatch(id -> store.exists(id, "extracted", "json"));
+    var versions = listVersions.apply(paper.id());
+    boolean original = artifactIds.apply(paper.id()).stream().anyMatch(hasOriginal);
+    boolean extracted = artifactIds.apply(paper.id()).stream().anyMatch(hasExtracted);
     return Map.of(
         "paper",
         PaperViews.detail(paper),
@@ -79,7 +91,8 @@ public class PaperLibraryService {
   public Paper get(String ref, PaperOperation op) {
     enabled();
     op.check();
-    return repo.find(refs.resolve(op.sessionId(), ref))
+    return findByReference
+        .apply(op.sessionId(), ref)
         .orElseThrow(() -> new PaperException(PaperException.Code.PAPER_NOT_FOUND, "論文が見つかりません"));
   }
 
@@ -118,7 +131,8 @@ public class PaperLibraryService {
     if (kind.equals("summary")) {
       if (version == null) throw new IllegalArgumentException("Exact summary version required");
       var text =
-          repo.artifact(id, "summary", version)
+          findMetadata
+              .find(id, "summary", version)
               .orElseThrow(
                   () -> new PaperException(PaperException.Code.ARTIFACT_NOT_FOUND, "保存済み要約がありません"));
       return new CachedExport(
@@ -130,7 +144,8 @@ public class PaperLibraryService {
     if (kind.equals("translation")) {
       if (version == null) throw new IllegalArgumentException("Exact translation version required");
       extension =
-          repo.artifact(id, "translation", version)
+          findMetadata
+              .find(id, "translation", version)
               .orElseThrow(
                   () -> new PaperException(PaperException.Code.ARTIFACT_NOT_FOUND, "保存済み翻訳がありません"));
       folder = "translations";
@@ -143,9 +158,9 @@ public class PaperLibraryService {
       extension = kind.equals("original") ? "pdf" : "json";
       media = kind.equals("original") ? "application/pdf" : "application/json";
     }
-    for (String artifact : repo.artifactIds(id)) {
+    for (String artifact : artifactIds.apply(id)) {
       op.check();
-      var bytes = store.readBounded(artifact, folder, extension, 32L * 1024 * 1024);
+      var bytes = readExport.read(artifact, folder, extension);
       if (bytes.isPresent())
         return new CachedExport(
             media,
@@ -159,16 +174,14 @@ public class PaperLibraryService {
   public List<Paper> search(String query, int limit, PaperOperation op) {
     enabled();
     op.check();
-    var result = repo.search(query, Math.min(limit, settings.get().maxLibrarySearchResults()));
-    refs.replace(op.sessionId(), result.stream().map(Paper::id).toList());
-    return result;
+    return searchAndIndex.search(
+        query, Math.min(limit, settings.get().maxLibrarySearchResults()), op.sessionId());
   }
 
   /** 指定された対象を管理から取り除く。 */
   public void remove(String ref, boolean purge, PaperOperation op) {
     enabled();
-    String resolved = refs.resolve(op.sessionId(), ref);
-    String id = repo.canonicalId(resolved);
+    String id = resolveCanonicalId.apply(op.sessionId(), ref);
     PaperLocks.with(
         id,
         op,
@@ -181,10 +194,16 @@ public class PaperLibraryService {
   /** 対象を管理から外すため、使用中を取り除く。 */
   private void removeLocked(String id, boolean purge, PaperOperation op) {
     op.check();
-    if (purge) {
-      repo.beginPurge(id, op);
-      for (String artifactId : repo.artifactIds(id)) store.purge(artifactId, op);
-      repo.delete(id, op);
-    } else repo.remove(id, op);
+    removePaper.remove(id, purge, op);
+  }
+
+  @FunctionalInterface
+  private interface SearchAndIndex {
+    List<Paper> search(String query, int limit, String sessionId);
+  }
+
+  @FunctionalInterface
+  private interface RemovePaper {
+    void remove(String paperId, boolean purge, PaperOperation operation);
   }
 }
