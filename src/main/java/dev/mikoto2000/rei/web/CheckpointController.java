@@ -4,8 +4,6 @@ import dev.mikoto2000.rei.checkpoint.CheckpointReconciler;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpointService;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -24,21 +22,34 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/projects/{projectId}/checkpoints")
 public class CheckpointController {
   /** サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
-  private final PersistentCheckpointService service;
+  private final java.util.function.Function<String, java.util.List<PersistentCheckpoint>>
+      listCheckpoints;
+
+  private final java.util.function.BiFunction<String, String, PersistentCheckpoint> findCheckpoint;
+  private final java.util.function.BiFunction<String, String, CheckpointReconciler.Result>
+      inspectCheckpoint;
+  private final java.util.function.BiFunction<String, String, PersistentCheckpoint>
+      abandonCheckpoint;
+  private final java.util.function.BiFunction<String, String, PersistentCheckpoint> saveCheckpoint;
+  private final java.util.function.BiFunction<
+          String, String, PersistentCheckpointService.ResumeResult>
+      resumeCheckpoint;
 
   /** 指定された値や利用先を使って、CheckpointControllerを初期化する。 */
   public CheckpointController(PersistentCheckpointService service) {
-    this.service = service;
+    this.listCheckpoints = project -> service.list(project);
+    this.findCheckpoint = (project, task) -> service.get(project, task);
+    this.inspectCheckpoint = (project, task) -> service.inspect(project, task);
+    this.abandonCheckpoint = (project, task) -> service.abandon(project, task);
+    this.saveCheckpoint = (project, session) -> service.saveCurrent(project, session);
+    this.resumeCheckpoint =
+        (project, task) -> service.resumeForUser(project, task, AgentRunContext.RequestSource.WEB);
   }
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @GetMapping
   public List<PersistentCheckpoint> list(@PathVariable String projectId) {
-    return service.list(projectId);
+    return listCheckpoints.apply(projectId);
   }
 
   /**
@@ -56,7 +67,7 @@ public class CheckpointController {
   /** Web APIによる操作で用いるレポートを返す。 */
   @GetMapping("/report")
   public Text report(@PathVariable String projectId) {
-    return new Text(String.valueOf(service.list(projectId)));
+    return new Text(String.valueOf(listCheckpoints.apply(projectId)));
   }
 
   /** Web APIによる操作で用いるレポート一覧を返す。 */
@@ -64,7 +75,7 @@ public class CheckpointController {
   public Text reportList(@PathVariable String projectId) {
     return new Text(
         String.valueOf(
-            service.list(projectId).stream()
+            listCheckpoints.apply(projectId).stream()
                 .map(
                     state ->
                         state.taskId()
@@ -78,20 +89,23 @@ public class CheckpointController {
   /** Web APIによる操作で用いるレポート表示を返す。 */
   @GetMapping("/{taskId}/report")
   public Text reportShow(@PathVariable String projectId, @PathVariable String taskId) {
-    return new Text(service.get(projectId, taskId) + "\n" + service.inspect(projectId, taskId));
+    return new Text(
+        findCheckpoint.apply(projectId, taskId)
+            + "\n"
+            + inspectCheckpoint.apply(projectId, taskId));
   }
 
   /** 利用者が対象の情報を確認できるように表示する。 */
   @GetMapping("/{taskId}")
   public PersistentCheckpoint show(@PathVariable String projectId, @PathVariable String taskId) {
-    return service.get(projectId, taskId);
+    return findCheckpoint.apply(projectId, taskId);
   }
 
   /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   @GetMapping("/{taskId}/reconciliation")
   public CheckpointReconciler.Result inspect(
       @PathVariable String projectId, @PathVariable String taskId) {
-    return service.inspect(projectId, taskId);
+    return inspectCheckpoint.apply(projectId, taskId);
   }
 
   /**
@@ -105,7 +119,7 @@ public class CheckpointController {
   @PostMapping
   public PersistentCheckpoint save(
       @PathVariable String projectId, @RequestBody SaveRequest request) {
-    return service.saveCurrent(projectId, request.sessionId());
+    return saveCheckpoint.apply(projectId, request.sessionId());
   }
 
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
@@ -113,12 +127,12 @@ public class CheckpointController {
   @ResponseStatus(org.springframework.http.HttpStatus.ACCEPTED)
   public PersistentCheckpointService.ResumeResult resume(
       @PathVariable String projectId, @PathVariable String taskId) {
-    return service.resumeForUser(projectId, taskId, AgentRunContext.RequestSource.WEB);
+    return resumeCheckpoint.apply(projectId, taskId);
   }
 
   /** Web APIによる操作で用いるabandonを返す。 */
   @PostMapping("/{taskId}/abandon")
   public PersistentCheckpoint abandon(@PathVariable String projectId, @PathVariable String taskId) {
-    return service.abandon(projectId, taskId);
+    return abandonCheckpoint.apply(projectId, taskId);
   }
 }

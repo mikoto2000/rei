@@ -50,12 +50,12 @@ public final class TaskControlService {
   private final ConversationInputRouter inputs;
 
   /** 再開用の記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared checkpoint service for save, inspect, and resume operations.")
-  private final PersistentCheckpointService checkpoints;
+  @FunctionalInterface
+  private interface ResumeCheckpoint {
+    void resume(String project, String task, long revision);
+  }
+
+  private final ResumeCheckpoint resumeCheckpoint;
 
   /** 目標一覧。 */
   @SuppressFBWarnings(
@@ -90,7 +90,9 @@ public final class TaskControlService {
     this.runs = runs;
     this.ownsExecution = run -> registry.ownsExecution(run);
     this.inputs = inputs;
-    this.checkpoints = checkpoints;
+    this.resumeCheckpoint =
+        (project, task, revision) ->
+            checkpoints.resume(project, task, AgentRunContext.RequestSource.WEB, revision);
     this.goals = goals;
     this.dependencies = dependencies;
     this.schedules = schedules;
@@ -153,8 +155,7 @@ public final class TaskControlService {
     expected(task, expectedRun, revision);
     if (!task.resumeSupported()) throw new OperationConflictException();
     switch (task.kind()) {
-      case "CHECKPOINT" ->
-          checkpoints.resume(project, task.sourceId(), AgentRunContext.RequestSource.WEB, revision);
+      case "CHECKPOINT" -> resumeCheckpoint.resume(project, task.sourceId(), revision);
       case "GOAL" -> {
         synchronized (goals) {
           expected(tasks.get(project, session, id), expectedRun, revision);

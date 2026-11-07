@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.checkpoint.CheckpointHistoryReport;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpointService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,15 +21,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/checkpoints/history")
 public final class CheckpointHistoryController {
   /** サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
-  private final PersistentCheckpointService service;
+  private final java.util.function.Supplier<String> reportUsage;
+
+  private final java.util.function.Function<Boolean, String> reportCleanup;
 
   /** 指定された値や利用先を使って、CheckpointHistoryControllerを初期化する。 */
   public CheckpointHistoryController(PersistentCheckpointService service) {
-    this.service = service;
+    this.reportUsage = () -> CheckpointHistoryReport.usage(service.historyUsage());
+    this.reportCleanup = apply -> CheckpointHistoryReport.cleanup(service.cleanupHistory(apply));
   }
 
   /**
@@ -56,13 +53,13 @@ public final class CheckpointHistoryController {
   /** 対象の現在の状態を、照会用の情報として返す。 */
   @GetMapping("/status")
   public Text status() {
-    return new Text(CheckpointHistoryReport.usage(service.historyUsage()));
+    return new Text(reportUsage.get());
   }
 
   /** Web APIによる操作で用いる事前確認を返す。 */
   @GetMapping("/cleanup")
   public Text preview() {
-    return new Text(CheckpointHistoryReport.cleanup(service.cleanupHistory(false)));
+    return new Text(reportCleanup.apply(false));
   }
 
   /** 指定された内容を、現在の対象へ反映する。 */
@@ -71,6 +68,6 @@ public final class CheckpointHistoryController {
     if (request == null || !request.apply())
       throw new IllegalArgumentException(
           "整理候補を /checkpoint cleanup で確認し、実行する場合は /checkpoint cleanup --apply を指定してください。");
-    return new Text(CheckpointHistoryReport.cleanup(service.cleanupHistory(true)));
+    return new Text(reportCleanup.apply(true));
   }
 }

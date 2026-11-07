@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.checkpoint;
 
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -22,22 +20,22 @@ import org.springframework.stereotype.Component;
 @Component
 public class ResumeContextAdvisor implements BaseAdvisor {
   /** サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
-  private final PersistentCheckpointService service;
+  private final java.util.function.Function<String, PersistentCheckpointService.ModelHandoff>
+      modelHandoff;
+
+  private final java.util.function.BiPredicate<String, String> supersededRequest;
 
   /** 指定された値や利用先を使って、ResumeContextAdvisorを初期化する。 */
   public ResumeContextAdvisor(PersistentCheckpointService service) {
-    this.service = service;
+    this.modelHandoff = run -> service.modelHandoff(run);
+    this.supersededRequest = (run, text) -> service.isSupersededResumeRequest(run, text);
   }
 
   /** 作業の中断と再開の本処理へ渡す文脈を準備する。 */
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     var run = AgentRunScope.current();
     if (run == null) return request;
-    var handoff = service.modelHandoff(run.runId());
+    var handoff = modelHandoff.apply(run.runId());
     String context = handoff.text();
     if (context.isBlank()) return request;
     var messages = new ArrayList<Message>(request.prompt().getInstructions());
@@ -48,7 +46,7 @@ public class ResumeContextAdvisor implements BaseAdvisor {
         m ->
             m != current
                 && m instanceof org.springframework.ai.chat.messages.UserMessage
-                && service.isSupersededResumeRequest(run.runId(), m.getText()));
+                && supersededRequest.test(run.runId(), m.getText()));
     messages.addFirst(
         SystemMessage.builder()
             .text(context)

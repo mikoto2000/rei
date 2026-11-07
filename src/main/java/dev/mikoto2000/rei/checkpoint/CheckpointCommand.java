@@ -2,8 +2,6 @@ package dev.mikoto2000.rei.checkpoint;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.concurrent.Callable;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -20,12 +18,10 @@ import picocli.CommandLine.Spec;
     subcommands = {CheckpointCommand.Status.class, CheckpointCommand.Cleanup.class})
 public class CheckpointCommand implements Callable<Integer> {
   /** サービス。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared checkpoint service for save, inspect, and resume operations.")
-  private final PersistentCheckpointService service;
+  private final java.util.function.Supplier<String> reportUsage;
+
+  private final java.util.function.BiFunction<Boolean, Boolean, String> reportCleanup;
+  private final java.util.function.BiFunction<String, String, PersistentCheckpoint> saveCheckpoint;
 
   /** プロジェクト一覧。 */
   private final java.util.function.Supplier<String> currentProjectId;
@@ -46,7 +42,12 @@ public class CheckpointCommand implements Callable<Integer> {
   /** 指定された値や利用先を使って、CheckpointCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public CheckpointCommand(PersistentCheckpointService service, ProjectService projects) {
-    this.service = service;
+    this.reportUsage = () -> CheckpointHistoryReport.usage(service.historyUsage());
+    this.reportCleanup =
+        (apply, force) ->
+            CheckpointHistoryReport.cleanup(
+                force ? service.cleanupHistory(apply, true) : service.cleanupHistory(apply));
+    this.saveCheckpoint = (project, session) -> service.saveCurrent(project, session);
     this.currentProjectId = () -> projects.currentContext().id();
     this.currentSessionId = () -> projects.currentSessionId();
   }
@@ -78,7 +79,7 @@ public class CheckpointCommand implements Callable<Integer> {
 
     /** 全プロジェクトのチェックポイント保存量と上限を表示。 */
     public Integer call() {
-      return parent.print(() -> CheckpointHistoryReport.usage(parent.service.historyUsage()));
+      return parent.print(() -> parent.reportUsage.get());
     }
   }
 
@@ -98,12 +99,7 @@ public class CheckpointCommand implements Callable<Integer> {
 
     /** 過去の保存履歴の整理候補を確認。--apply を付けると整理を実行。 */
     public Integer call() {
-      return parent.print(
-          () ->
-              CheckpointHistoryReport.cleanup(
-                  force
-                      ? parent.service.cleanupHistory(apply, true)
-                      : parent.service.cleanupHistory(apply)));
+      return parent.print(() -> parent.reportCleanup.apply(apply, force));
     }
   }
 
@@ -111,7 +107,7 @@ public class CheckpointCommand implements Callable<Integer> {
   public Integer call() {
     var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
-      var state = service.saveCurrent(currentProjectId.get(), currentSessionId.get());
+      var state = saveCheckpoint.apply(currentProjectId.get(), currentSessionId.get());
       writer.println("Checkpoint saved: task=" + state.taskId() + " revision=" + state.revision());
       return 0;
     } catch (RuntimeException e) {
