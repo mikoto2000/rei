@@ -5,8 +5,6 @@ import dev.mikoto2000.rei.summarize.SummarizationException;
 import dev.mikoto2000.rei.summarize.SummaryResult;
 import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -30,11 +28,11 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
   private ChatResponseNarrator chatResponseNarrator;
 
   /** バックグラウンド。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared background command dispatcher and its current results.")
-  private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
+  private record BackgroundSummary(
+      java.util.function.Consumer<URI> submit,
+      java.util.function.Consumer<java.util.function.Consumer<String>> showLast) {}
+
+  private BackgroundSummary backgroundSummary;
 
   /** ターミナルへの表示先。 */
   private CommandOutput shellOutput;
@@ -43,7 +41,10 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
   @Autowired(required = false)
   public void setBackgroundCommands(
       dev.mikoto2000.rei.core.execution.BackgroundCommands background) {
-    this.background = background;
+    this.backgroundSummary =
+        background == null
+            ? null
+            : new BackgroundSummary(background::summarize, background::showLastSummary);
   }
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
@@ -77,16 +78,16 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
   /** Web ページを要約しますを行う。 */
   @Override
   public Integer call() {
-    if (background != null) {
+    if (backgroundSummary != null) {
       var out = shellOutput == null ? CommandOutput.from(spec.commandLine().getOut()) : shellOutput;
       try {
         if (url == null || url.isBlank()) {
-          background.showLastSummary(out::println);
+          backgroundSummary.showLast().accept(out::println);
           return 0;
         }
         URI source = parseUrl();
         if (source == null) return 2;
-        background.summarize(source);
+        backgroundSummary.submit().accept(source);
         return 0;
       } catch (RuntimeException error) {
         out.println(

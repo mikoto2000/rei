@@ -14,8 +14,6 @@ import dev.mikoto2000.rei.image.ImageGenerationService;
 import dev.mikoto2000.rei.image.ImageProperties;
 import dev.mikoto2000.rei.image.ImageSize;
 import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.Optional;
 import java.util.UUID;
@@ -70,11 +68,11 @@ public final class BackgroundRunSubmitService {
   private dev.mikoto2000.rei.core.project.ProjectRunStateStore states;
 
   /** バックグラウンド。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared background command dispatcher and its current results.")
-  private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
+  private java.util.function.BiFunction<
+          dev.mikoto2000.rei.core.project.ProjectContext,
+          java.util.List<dev.mikoto2000.rei.core.execution.ActiveExecution>,
+          String>
+      renderLatestSummary;
 
   /** 実行の受付と状態管理で使用するシェル状態を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -82,7 +80,14 @@ public final class BackgroundRunSubmitService {
       dev.mikoto2000.rei.core.project.ProjectRunStateStore states,
       dev.mikoto2000.rei.core.execution.BackgroundCommands background) {
     this.states = states;
-    this.background = background;
+    this.renderLatestSummary =
+        background == null
+            ? null
+            : (project, active) -> {
+              var output = new java.util.ArrayList<String>();
+              background.showLastSummary(project, output::add, false, active);
+              return String.join(System.lineSeparator(), output);
+            };
   }
 
   /** 活動中要約一覧。 */
@@ -115,8 +120,8 @@ public final class BackgroundRunSubmitService {
   public String latestSummaryForCli(String projectId) {
     var project =
         findProject.apply(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
-    if (background == null) throw new IllegalStateException("Background runtime unavailable");
-    var output = new java.util.ArrayList<String>();
+    if (renderLatestSummary == null)
+      throw new IllegalStateException("Background runtime unavailable");
     var active =
         activeSummaries.entrySet().stream()
             .map(
@@ -133,8 +138,7 @@ public final class BackgroundRunSubmitService {
                 })
             .filter(item -> registeredRun.apply(item.id()).context().projectId().equals(projectId))
             .toList();
-    background.showLastSummary(project, output::add, false, active);
-    return String.join(System.lineSeparator(), output);
+    return renderLatestSummary.apply(project, active);
   }
 
   /** 実行の受付と状態管理で用いる画像対象軽量CLIを返す。 */
