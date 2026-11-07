@@ -22,7 +22,7 @@ class CodexAppServerRoutingTest {
   void explicitBackendRoutesBothEntrypointsAndRetainsOwnerBudget() {
     var runner = mock(SubAgentRunner.class, CALLS_REAL_METHODS);
     var external = mock(CodexAppServerSubAgentBackend.class);
-    ObjectProvider<CodexAppServerSubAgentBackend> provider = mock(ObjectProvider.class);
+    ObjectProvider<CodexAppServerSubAgentBackend> provider = mock();
     when(provider.getIfAvailable()).thenReturn(external);
     runner.configureAppServerBackend(provider);
     var owner = new AgentRunContext("run", "session", Path.of(".").toAbsolutePath(), "project");
@@ -40,7 +40,7 @@ class CodexAppServerRoutingTest {
   @Test
   void unavailableAppServerNeverFallsBackToCliOrHttpPlan() {
     var runner = mock(SubAgentRunner.class, CALLS_REAL_METHODS);
-    ObjectProvider<ChatGptSubAgentBackend> plan = mock(ObjectProvider.class);
+    ObjectProvider<ChatGptSubAgentBackend> plan = mock();
     runner.configurePlanBackend(plan);
     var request =
         new ChatGptSubAgentBackend.Request(

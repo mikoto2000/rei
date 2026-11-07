@@ -90,7 +90,7 @@ class AdaptiveFileReadTest {
     for (var file : files) {
       assertThat(file.path("truncated").asBoolean()).isFalse();
       assertThat(file.path("content").size()).isEqualTo(1600);
-      assertThat(json.convertValue(file.path("content"), List.class)).isEqualTo(source);
+      assertThat(file.path("content")).isEqualTo(json.valueToTree(source));
     }
     assertThat(estimator.text(message.getResponses().getFirst().responseData()))
         .isGreaterThan(16000);

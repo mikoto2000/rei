@@ -48,7 +48,7 @@ class FixtureTimingExtensionTest {
   void disabledProbeDoesNotObserveOrChangeTheTestLifecycle() {
     var context = mock(ExtensionContext.class);
     var clock = mock(java.util.function.LongSupplier.class);
-    var output = mock(java.util.function.Consumer.class);
+    java.util.function.Consumer<FixtureTimingExtension.Measurement> output = mock();
     var timing = new FixtureTimingExtension(false, clock, output);
     timing.beforeEach(context);
     timing.beforeTestExecution(context);

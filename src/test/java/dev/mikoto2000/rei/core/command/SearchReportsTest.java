@@ -13,8 +13,11 @@ import dev.mikoto2000.rei.search.SearchKnowledgeResult;
 import dev.mikoto2000.rei.search.SearchKnowledgeService;
 import dev.mikoto2000.rei.websearch.WebSearchContext;
 import java.util.List;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClient.AdvisorSpec;
 import org.springframework.ai.chat.prompt.Prompt;
 
 /** 検索伝えるの結果と状態の契約を検証するテスト。 */
@@ -36,7 +39,8 @@ class SearchReportsTest {
                 WebSearchContext.primaryOnly(List.of()),
                 null));
     when(client.prompt(any(Prompt.class))).thenReturn(request);
-    when(request.advisors(any(java.util.function.Consumer.class))).thenReturn(request);
+    when(request.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(request);
     when(request.stream().content()).thenReturn(reactor.core.publisher.Flux.just("an ", "answer"));
     var command = new SearchCommand(client, model, knowledge, new CommandCancellationService());
     var text = new StringBuilder();

@@ -18,8 +18,11 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClient.AdvisorSpec;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -35,7 +38,8 @@ class ChatExecutionTimingTest {
     var models = mock(ModelHolderService.class);
     when(models.get()).thenReturn("test");
     when(client.prompt(any(Prompt.class))).thenReturn(request);
-    when(request.advisors(any(java.util.function.Consumer.class))).thenReturn(request);
+    when(request.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(request);
     when(request.stream().chatResponse()).thenReturn(stream);
     return new ChatExecutionService(
         client, models, new CommandCancellationService(), Optional.empty());

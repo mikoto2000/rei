@@ -20,7 +20,7 @@ class ActiveRunActivityTest {
     var tasks = new ArrayList<Runnable>();
     var router = new ConversationInputRouter(tasks::add, (c, p, q) -> {});
     var tracker = new DefaultAgentActivityTracker(Clock.systemUTC());
-    var provider = mock(org.springframework.beans.factory.ObjectProvider.class);
+    org.springframework.beans.factory.ObjectProvider<ConversationInputRouter> provider = mock();
     when(provider.getIfAvailable()).thenReturn(router);
     tracker.setActiveRuns(provider);
     router.submit(Path.of("a"), "project:" + UUID.randomUUID() + ":chat:main", "A");

@@ -224,8 +224,8 @@ class SelfPatchReviewGitTest {
     assertEquals(2, Files.readAllLines(root.resolve("build/runs.txt")).size());
     var goals = new dev.mikoto2000.rei.goal.GoalRepository(ds, java.time.Clock.systemUTC());
     var verifier = new dev.mikoto2000.rei.goal.FileGoalVerifier();
-    var artifacts =
-        org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+    org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.artifact.ArtifactStore>
+        artifacts = org.mockito.Mockito.mock();
     var gate =
         new dev.mikoto2000.rei.goal.GoalCompletionGate(
             goals, service, artifacts, java.time.Clock.systemUTC(), false);

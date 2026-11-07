@@ -106,7 +106,7 @@ class OutputLimitReplannerTest {
     var fatal = new AssertionError("model failed");
     var accounting = new IllegalStateException("usage unknown");
     when(model.call(any(Prompt.class))).thenThrow(fatal);
-    java.util.function.Consumer<Integer> usage = Mockito.mock(java.util.function.Consumer.class);
+    java.util.function.Consumer<Integer> usage = Mockito.mock();
     Mockito.doThrow(accounting).when(usage).accept(null);
 
     org.assertj.core.api.Assertions.assertThatThrownBy(

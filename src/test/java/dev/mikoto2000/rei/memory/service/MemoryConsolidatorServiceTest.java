@@ -10,10 +10,13 @@ import dev.mikoto2000.rei.memory.model.MemoryScope;
 import dev.mikoto2000.rei.memory.model.MemoryType;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.function.Consumer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClient.AdvisorSpec;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
@@ -62,7 +65,7 @@ class MemoryConsolidatorServiceTest {
     Mockito.when(
             chatClient
                 .prompt(Mockito.anyString())
-                .advisors(Mockito.any(java.util.function.Consumer.class))
+                .advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())
                 .call()
                 .content())
         .thenThrow(new RuntimeException("boom"));
@@ -90,7 +93,7 @@ class MemoryConsolidatorServiceTest {
     Mockito.when(
             chatClient
                 .prompt(Mockito.anyString())
-                .advisors(Mockito.any(java.util.function.Consumer.class))
+                .advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())
                 .call()
                 .content())
         .thenThrow(new RuntimeException("boom"));
