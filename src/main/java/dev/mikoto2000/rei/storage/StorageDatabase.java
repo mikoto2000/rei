@@ -312,6 +312,7 @@ public final class StorageDatabase {
         } catch (java.util.concurrent.ExecutionException failure) {
           Throwable cause = failure.getCause();
           if (cause instanceof Error fatal) throw fatal;
+          if (cause instanceof ArithmeticException overflow) throw overflow;
           if (cause instanceof IllegalArgumentException invalid) throw invalid;
           if (cause instanceof IllegalStateException stateFailure) throw stateFailure;
           if (cause instanceof java.io.UncheckedIOException ioFailure) throw ioFailure;
