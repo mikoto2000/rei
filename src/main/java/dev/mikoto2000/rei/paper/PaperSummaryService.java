@@ -1,21 +1,21 @@
 package dev.mikoto2000.rei.paper;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** 論文要約のユースケースを実現する。 */
 @Service
 public class PaperSummaryService {
-  /** リポジトリ。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared paper repository for the library and its artifacts.")
-  private final PaperRepository repo;
+  private final Predicate<String> paperExists;
+  private final BiFunction<String, String, Optional<String>> readSummary;
+  private final SaveSummary saveSummary;
+  private final Function<String, Optional<String>> sourceRevision;
 
   /** 内容。 */
   private final PaperContentService content;
@@ -36,7 +36,10 @@ public class PaperSummaryService {
       PaperLanguageModel llm,
       PaperSummaryValidator validator,
       PaperProperties config) {
-    this.repo = repo;
+    this.paperExists = id -> repo.find(id).isPresent();
+    this.readSummary = (id, key) -> repo.artifact(id, "summary", key);
+    this.saveSummary = (id, key, summary, op) -> repo.saveArtifact(id, "summary", key, summary, op);
+    this.sourceRevision = id -> repo.artifact(id, "source", "revision");
     this.content = content;
     this.llm = llm;
     this.validator = validator;
@@ -54,11 +57,17 @@ public class PaperSummaryService {
       Paper paper, PaperSummary.Mode mode, boolean refresh, PaperOperation op) {
     var config = settings.get();
     if (mode == null) mode = config.defaultSummaryMode();
-    if (repo.find(paper.id()).isEmpty())
+    if (!paperExists.test(paper.id()))
       throw new PaperException(PaperException.Code.PAPER_NOT_FOUND, "論文が見つかりません");
     op.check();
-    String key = PaperCacheKey.of(repo, paper, mode, llm.model(), config.promptVersion());
-    var cached = repo.artifact(paper.id(), "summary", key);
+    String key =
+        PaperCacheKey.of(
+            paper,
+            () -> sourceRevision.apply(paper.id()),
+            mode,
+            llm.model(),
+            config.promptVersion());
+    var cached = readSummary.apply(paper.id(), key);
     org.slf4j.LoggerFactory.getLogger(getClass())
         .info(
             "paper summary paperId={} cache={}",
@@ -115,7 +124,7 @@ public class PaperSummaryService {
               validated.content(),
               validated.evidence(),
               warnings);
-      repo.saveArtifact(paper.id(), "summary", key, PaperJson.write(result), op);
+      saveSummary.save(paper.id(), key, PaperJson.write(result), op);
       org.slf4j.LoggerFactory.getLogger(getClass())
           .info(
               "paper summary paperId={} durationMs={}",
@@ -129,5 +138,10 @@ public class PaperSummaryService {
     } catch (RuntimeException e) {
       throw new PaperException(PaperException.Code.SUMMARY_FAILED, "要約生成に失敗しました", e);
     }
+  }
+
+  @FunctionalInterface
+  private interface SaveSummary {
+    void save(String paperId, String key, String summary, PaperOperation operation);
   }
 }

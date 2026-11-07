@@ -1,24 +1,23 @@
 package dev.mikoto2000.rei.paper;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** 論文内容のユースケースを実現する。 */
 @Service
 public class PaperContentService {
-  /** 保存先。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common artifact store for paper content and cleanup.")
-  private final PaperArtifactStore store;
+  private final PaperArtifactAccess.Read readArtifact;
+  private final PaperArtifactAccess.Write writeArtifact;
+  private final Consumer<String> deleteExtraction;
 
   /** HTTP通信。 */
   private final PaperHttpClient http;
@@ -34,12 +33,9 @@ public class PaperContentService {
   /** 設定。 */
   private final Supplier<PaperSettings> settings;
 
-  /** 保存と検索の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared paper repository for the library and its artifacts.")
-  private final PaperRepository repository;
+  private final Function<String, List<String>> artifactIds;
+  private final Predicate<String> paperExists;
+  private final BiConsumer<String, PaperOperation> recordSourceRevision;
 
   /** 提供元一覧。 */
   private final List<PaperContentProvider> providers =
@@ -62,11 +58,20 @@ public class PaperContentService {
       PaperExtractionService extraction,
       PaperProperties config,
       PaperRepository repository) {
-    this.store = store;
+    this.readArtifact = (id, kind, extension) -> store.read(id, kind, extension);
+    this.writeArtifact =
+        (id, kind, extension, bytes, op) -> store.write(id, kind, extension, bytes, op);
+    this.deleteExtraction = id -> store.delete(id, "extracted", "json");
     this.http = http;
     this.extractPaper = (title, pdf, operation) -> extraction.extract(title, pdf, operation);
     this.settings = () -> PaperSettings.capture(config);
-    this.repository = repository;
+    this.artifactIds = id -> repository == null ? List.of(id) : repository.artifactIds(id);
+    this.paperExists = id -> repository == null || repository.find(id).isPresent();
+    this.recordSourceRevision =
+        (id, op) -> {
+          if (repository != null)
+            repository.saveArtifact(id, "source", "revision", UUID.randomUUID().toString(), op);
+        };
   }
 
   /** 論文の調査と整理で用いる内容を返す。 */
@@ -76,9 +81,8 @@ public class PaperContentService {
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private Optional<byte[]> read(Paper paper, String kind, String extension) {
-    for (String id :
-        repository == null ? List.of(paper.id()) : repository.artifactIds(paper.id())) {
-      var bytes = store.read(id, kind, extension);
+    for (String id : artifactIds.apply(paper.id())) {
+      var bytes = readArtifact.read(id, kind, extension);
       if (bytes.isPresent()) return bytes;
     }
     return Optional.empty();
@@ -88,7 +92,7 @@ public class PaperContentService {
   private StructuredPaper contentLocked(Paper paper, PaperOperation op) {
     var config = settings.get();
     op.check();
-    if (repository != null && repository.find(paper.id()).isEmpty())
+    if (!paperExists.test(paper.id()))
       throw new PaperException(PaperException.Code.PAPER_NOT_FOUND, "論文が見つかりません");
     List<String> warnings = new ArrayList<>();
     try {
@@ -113,14 +117,14 @@ public class PaperContentService {
           var uri = provider.resolve(paper);
           if (uri.isPresent()) {
             pdf = Optional.of(http.get(uri.get(), "application/pdf", config.maxPdfBytes(), op));
-            store.write(paper.id(), "originals", "pdf", pdf.get(), op);
+            writeArtifact.write(paper.id(), "originals", "pdf", pdf.get(), op);
             break;
           }
         }
       }
       if (pdf.isPresent()) {
         var parsed = extractPaper.apply(paper.title(), pdf.get(), op);
-        store.write(
+        writeArtifact.write(
             paper.id(),
             "extracted",
             "json",
@@ -155,16 +159,15 @@ public class PaperContentService {
 
   /** 論文の調査と整理に関する取り込み使用中を処理する。 */
   private void importLocked(Paper paper, byte[] pdf, PaperOperation op) {
-    if (repository != null && repository.find(paper.id()).isEmpty())
+    if (!paperExists.test(paper.id()))
       throw new PaperException(PaperException.Code.PAPER_NOT_FOUND, "論文が見つかりません");
     var parsed = extractPaper.apply(paper.title(), pdf, op);
-    if (repository != null)
-      repository.saveArtifact(paper.id(), "source", "revision", UUID.randomUUID().toString(), op);
+    recordSourceRevision.accept(paper.id(), op);
     // Invalidate the prior extraction first. An interrupted replacement can then reparse the
     // original.
-    store.delete(paper.id(), "extracted", "json");
-    store.write(paper.id(), "originals", "pdf", pdf, op);
-    store.write(
+    deleteExtraction.accept(paper.id());
+    writeArtifact.write(paper.id(), "originals", "pdf", pdf, op);
+    writeArtifact.write(
         paper.id(),
         "extracted",
         "json",
