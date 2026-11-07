@@ -3,8 +3,6 @@ package dev.mikoto2000.rei.github;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Optional;
 import java.util.function.Function;
 
@@ -15,11 +13,11 @@ import java.util.function.Function;
  */
 public final class GitHubNotificationOutbox {
   /** 事実一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common repository for GitHub deliveries and notification state.")
-  private final GitHubFactRepository facts;
+  private final java.util.function.Supplier<java.util.List<GitHubFactRepository.Notification>>
+      pendingNotifications;
+
+  private final java.util.function.Consumer<String> markSent;
+  private final java.util.function.Consumer<String> markSuppressed;
 
   /** プロジェクト一覧。 */
   private final Function<String, Optional<ProjectContext>> findProject;
@@ -30,7 +28,9 @@ public final class GitHubNotificationOutbox {
   /** 指定された値や利用先を使って、GitHubNotificationOutboxを初期化する。 */
   public GitHubNotificationOutbox(
       GitHubFactRepository facts, ProjectRegistry projects, AgentEventPublisher publisher) {
-    this.facts = facts;
+    this.pendingNotifications = () -> facts.pendingNotifications();
+    this.markSent = id -> facts.notificationSent(id);
+    this.markSuppressed = id -> facts.notificationSuppressed(id);
     this.findProject = id -> projects.resolveById(id);
     this.publisher = publisher;
   }
@@ -39,16 +39,17 @@ public final class GitHubNotificationOutbox {
   @org.springframework.scheduling.annotation.Scheduled(
       fixedDelayString = "${rei.github.webhook.notification-poll-ms:5000}")
   public synchronized void flush() {
-    for (var notice : facts.pendingNotifications()) {
-      if (findProject.apply(notice.projectId())
+    for (var notice : pendingNotifications.get()) {
+      if (findProject
+          .apply(notice.projectId())
           .filter(project -> project.root().toString().equals(notice.root()))
           .isEmpty()) {
-        facts.notificationSuppressed(notice.id());
+        markSuppressed.accept(notice.id());
         continue;
       }
       try {
         publisher.publishBoundary(notice.event());
-        facts.notificationSent(notice.id());
+        markSent.accept(notice.id());
       } catch (RuntimeException failure) {
         org.slf4j.LoggerFactory.getLogger(getClass())
             .warn(
