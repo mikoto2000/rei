@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -95,5 +96,29 @@ class ConversationInputRouterTest {
     tasks.removeFirst().run();
     tasks.removeFirst().run();
     assertThat(prompts).containsExactly("start", "late");
+  }
+
+  /** 実行先の Error でも受付枠を解放し、後続の入力を実行できることを確認する。 */
+  @Test
+  void executorErrorReleasesAdmissionAndPreservesTheFailure() {
+    var scheduled = new ArrayList<Runnable>();
+    var reject = new java.util.concurrent.atomic.AtomicBoolean(true);
+    var failure = new AssertionError("fixture");
+    var router =
+        new ConversationInputRouter(
+            work -> {
+              if (reject.getAndSet(false)) throw failure;
+              scheduled.add(work);
+            },
+            (owner, prompt, inputs) -> {});
+    var owner = new AgentRunContext("failed", "session", Path.of("."), "project");
+    assertThatThrownBy(() -> router.submit(owner, "first")).isSameAs(failure);
+    assertThat(router.containsRun("project", "failed")).isFalse();
+    assertThat(router.activeRuns()).isEmpty();
+    var next = new AgentRunContext("next", "session", Path.of("."), "project");
+    assertThat(router.submit(next, "next")).isEqualTo(ConversationInputRouter.Disposition.STARTED);
+    assertThat(scheduled).hasSize(1);
+    scheduled.getFirst().run();
+    assertThat(router.containsRun("project", "next")).isFalse();
   }
 }

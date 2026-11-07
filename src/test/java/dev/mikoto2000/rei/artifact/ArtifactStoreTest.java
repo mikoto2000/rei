@@ -17,6 +17,8 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.sqlite.SQLiteDataSource;
 
 /** 成果物保存先の結果と状態の契約を検証するテスト。 */
@@ -180,5 +182,34 @@ class ArtifactStoreTest {
         .isInstanceOf(dev.mikoto2000.rei.application.state.OperationConflictException.class);
     Files.writeString(root.resolve("delivery").resolve(draft.id() + ".bin"), "tampered");
     assertThat(store.verify(project.id(), "session", draft)).isFalse();
+  }
+
+  /** 書き出し途中の Error を伝播し、成果物の状態を不確定として保存する。 */
+  @ParameterizedTest
+  @EnumSource(ArtifactStore.PublishStage.class)
+  void publicationErrorRetainsAnUnknownReceipt(ArtifactStore.PublishStage failureStage) {
+    var projects = new ProjectRegistry(root.resolve("projects.json"));
+    var project = projects.resolve(root);
+    var source = new SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + root.resolve("error.db"));
+    var failure = new AssertionError("fixture");
+    var id = new java.util.concurrent.atomic.AtomicReference<String>();
+    var store =
+        new ArtifactStore(
+            source,
+            projects,
+            root.resolve("delivery"),
+            Clock.systemUTC(),
+            new ArtifactProperties(),
+            (stage, artifactId) -> {
+              id.set(artifactId);
+              if (stage == failureStage) throw failure;
+            });
+    var owner = new AgentRunContext("run", "session", root, project.id());
+    assertThatThrownBy(
+            () -> store.publish(owner, "source", "text/plain", "result.txt", new byte[] {1}))
+        .isSameAs(failure);
+    assertThat(store.get(project.id(), "session", id.get()).status()).isEqualTo("UNKNOWN");
+    assertThat(store.list(project.id(), "session", null, 100, null).items()).hasSize(1);
   }
 }

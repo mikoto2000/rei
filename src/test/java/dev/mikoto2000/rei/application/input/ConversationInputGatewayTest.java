@@ -216,6 +216,31 @@ class ConversationInputGatewayTest {
     assertThat(tasks).hasSize(1);
   }
 
+  /** 致命的な受付失敗の後も、同じ入力を再受付できることを確認する。 */
+  @Test
+  void admissionErrorCanBeRetriedWithoutPoisoningId() {
+    var attempts = new java.util.concurrent.atomic.AtomicInteger();
+    var failure = new AssertionError("fixture");
+    var gateway =
+        new ConversationInputGateway(
+            lifecycle,
+            (owner, prompt) -> {
+              if (attempts.getAndIncrement() == 0) throw failure;
+              router.submit(owner, prompt);
+            },
+            router,
+            clock);
+    ConversationTarget target;
+    try (var scope = projects.newClient().open()) {
+      target = shell.captureTarget();
+    }
+    var input = voice(target, "retry after Error");
+    assertThatThrownBy(() -> gateway.submit(input, AgentRunContext.Mode.EXCLUSIVE))
+        .isSameAs(failure);
+    assertThat(gateway.submit(input, AgentRunContext.Mode.EXCLUSIVE)).isNotNull();
+    assertThat(tasks).hasSize(1);
+  }
+
   /** 会話入力の受付で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void foreignProjectSessionIsRejectedBeforeDispatch() {

@@ -33,7 +33,8 @@ public class BackgroundCommands {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared input router so all operations use the same queue and active runs.")
+      justification =
+          "Uses the shared input router so all operations use the same queue and active runs.")
   private final ConversationInputRouter runs;
 
   /** プロジェクト一覧。 */
@@ -109,10 +110,6 @@ public class BackgroundCommands {
   }
 
   /** 要求された処理を開始する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original dispatch failure after publishing the failed run status.")
   private ActiveExecution start(ExecutionType type, String source, Supplier<String> operation) {
     var project = currentProject.get();
     var registered = new java.util.concurrent.atomic.AtomicReference<ActiveExecution>();
@@ -142,7 +139,7 @@ public class BackgroundCommands {
                   .debug("Background execution failed: {}", e.id(), error);
             }
           });
-    } catch (RuntimeException error) {
+    } catch (RuntimeException | Error error) {
       if (registered.get() != null)
         publish(
             registered.get(),

@@ -308,6 +308,7 @@ public final class ProjectRunQueue {
       justification = "Propagates the first dispatch failure after attempting all ready entries.")
   private void dispatchAll(List<Job> selected, Job submitting) {
     RuntimeException failure = null;
+    Error fatal = null;
     for (var job : selected)
       try {
         dispatch(job);
@@ -316,15 +317,15 @@ public final class ProjectRunQueue {
         else
           org.slf4j.LoggerFactory.getLogger(ProjectRunQueue.class)
               .warn("Queued Run dispatch rejected: {}", error.getClass().getSimpleName());
+      } catch (Error error) {
+        if (fatal == null) fatal = error;
+        else if (fatal != error) fatal.addSuppressed(error);
       }
+    if (fatal != null) throw fatal;
     if (failure != null) throw failure;
   }
 
   /** 予約がまだ有効な作業だけを開始し、完了または拒否の後に実行枠を解放する。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the dispatch failure after rejecting and completing the queue entry.")
   private void dispatch(Job job) {
     try {
       if (!isReserved(job)) {
@@ -356,11 +357,22 @@ public final class ProjectRunQueue {
               complete(job);
             }
           });
-    } catch (RuntimeException error) {
+    } catch (RuntimeException | Error error) {
       try {
-        if (!job.running) job.rejected.accept(error);
+        if (!job.running)
+          job.rejected.accept(
+              error instanceof RuntimeException runtime
+                  ? runtime
+                  : new java.util.concurrent.RejectedExecutionException(
+                      "Run dispatch failed", error));
+      } catch (RuntimeException | Error rejected) {
+        if (rejected != error) error.addSuppressed(rejected);
       } finally {
-        complete(job);
+        try {
+          complete(job);
+        } catch (RuntimeException | Error cleanup) {
+          if (cleanup != error) error.addSuppressed(cleanup);
+        }
       }
       throw error;
     }
