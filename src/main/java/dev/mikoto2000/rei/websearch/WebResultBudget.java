@@ -6,8 +6,6 @@ import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.http.FetchScope;
 import dev.mikoto2000.rei.http.HttpFetchException;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -24,18 +22,17 @@ import org.springframework.stereotype.Component;
 @Component
 public final class WebResultBudget {
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound WebSearchProperties shared by consumers of these settings.")
-  private final WebSearchProperties properties;
+  private final java.util.function.IntSupplier maxOutputTokens;
+
+  private final java.util.function.IntSupplier maxOutputCharacters;
+  private final java.util.function.IntSupplier pageMaxCharacters;
+  private final java.util.function.IntSupplier pageMaxTokens;
 
   /** 文脈。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the application-bound ContextCompressionProperties shared by consumers of these settings.")
-  private final ContextCompressionProperties context;
+  private record ContextLimits(
+      int modelLimit, int hardLimit, int completionReserve, int safetyMargin, int toolReserve) {}
+
+  private final java.util.function.Supplier<ContextLimits> contextLimits;
 
   /** 管理。 */
   private final ContextBudgetManager manager;
@@ -48,8 +45,24 @@ public final class WebResultBudget {
       WebSearchProperties properties,
       ContextCompressionProperties context,
       ContextBudgetManager manager) {
-    this.properties = properties;
-    this.context = context;
+    this.maxOutputTokens = () -> properties.getMaxOutputTokens();
+    this.maxOutputCharacters = () -> properties.getMaxOutputCharacters();
+    this.pageMaxCharacters = () -> properties.getPageMaxCharacters();
+    this.pageMaxTokens = () -> properties.getPageMaxTokens();
+    this.contextLimits =
+        () -> {
+          int smallest =
+              context.getModelContextLimits().values().stream()
+                  .mapToInt(Integer::intValue)
+                  .min()
+                  .orElse(context.getModelContextLimit());
+          return new ContextLimits(
+              Math.min(smallest, context.getModelContextLimit()),
+              context.getHardLimit(),
+              context.getCompletionReserve(),
+              context.getSafetyMargin(),
+              context.getToolReserve());
+        };
     this.manager = manager;
   }
 
@@ -73,19 +86,15 @@ public final class WebResultBudget {
 
   /** Web上の情報の調査で用いるトークン数を返す。 */
   public int tokens(ToolContext tool) {
-    int smallest =
-        context.getModelContextLimits().values().stream()
-            .mapToInt(Integer::intValue)
-            .min()
-            .orElse(context.getModelContextLimit());
-    smallest = Math.min(smallest, context.getModelContextLimit());
+    var context = contextLimits.get();
+    int smallest = context.modelLimit();
     long remaining =
         Math.min(
                 manager.inputBudget(),
                 Math.min(
-                    context.getHardLimit(),
-                    (long) smallest - context.getCompletionReserve() - context.getSafetyMargin()))
-            - Math.max(4096, context.getToolReserve())
+                    context.hardLimit(),
+                    (long) smallest - context.completionReserve() - context.safetyMargin()))
+            - Math.max(4096, context.toolReserve())
             - 64;
     Object execution = tool == null ? null : tool.getContext().get(RunExecutionContext.KEY);
     if (execution instanceof RunExecutionContext run) {
@@ -96,14 +105,12 @@ public final class WebResultBudget {
     }
     return (int)
         Math.max(
-            0,
-            Math.min(
-                remaining, Math.min(properties.getMaxOutputTokens(), context.getToolReserve())));
+            0, Math.min(remaining, Math.min(maxOutputTokens.getAsInt(), context.toolReserve())));
   }
 
   /** Web上の情報の調査において、fitsに該当するか判定する。 */
   public boolean fits(Object value, ToolContext tool) {
-    return fits(value, properties.getMaxOutputCharacters(), tokens(tool));
+    return fits(value, maxOutputCharacters.getAsInt(), tokens(tool));
   }
 
   /** Web上の情報の調査において、fitsに該当するか判定する。 */
@@ -145,7 +152,7 @@ public final class WebResultBudget {
                   : original.publishedAt(),
               original.evidenceType());
       int size = TokenEstimator.conservative().text(encoded(alias));
-      if (aliasTokens + size > properties.getPageMaxTokens() / 3) continue;
+      if (aliasTokens + size > pageMaxTokens.getAsInt() / 3) continue;
       aliases.add(alias);
       aliasTokens += size;
     }
@@ -192,15 +199,14 @@ public final class WebResultBudget {
   private WebSearchPage page(WebSearchPage page, int chars) {
     for (int cap = chars; cap >= 0; cap = cap == 0 ? -1 : cap / 2) {
       var value = trim(page, cap);
-      if (fits(value, properties.getMaxOutputCharacters(), properties.getPageMaxTokens()))
-        return value;
+      if (fits(value, maxOutputCharacters.getAsInt(), pageMaxTokens.getAsInt())) return value;
     }
     return null; // The intact source URL alone can exceed the per-page budget.
   }
 
   /** 残っている予算に収めるため、ページを利用可能な量に整える。 */
   public WebSearchPage fitPage(WebSearchPage page) {
-    return page(page, properties.getPageMaxCharacters());
+    return page(page, pageMaxCharacters.getAsInt());
   }
 
   /** Web上の情報の調査で用いる項目を返す。 */
@@ -220,15 +226,14 @@ public final class WebResultBudget {
                 List.copyOf(new LinkedHashSet<>(omissions)));
       }
       var value = WebSearchAndReadItem.fromPage(page, type, error);
-      if (fits(value, properties.getMaxOutputCharacters(), properties.getPageMaxTokens()))
-        return value;
+      if (fits(value, maxOutputCharacters.getAsInt(), pageMaxTokens.getAsInt())) return value;
     }
     return null;
   }
 
   /** 残っている予算に収めるため、Web結果予算を利用可能な量に整える。 */
   public WebSearchAndReadResponse fit(WebSearchAndReadResponse response, ToolContext tool) {
-    for (int cap = properties.getPageMaxCharacters(); cap >= 0; cap = cap == 0 ? -1 : cap / 2) {
+    for (int cap = pageMaxCharacters.getAsInt(); cap >= 0; cap = cap == 0 ? -1 : cap / 2) {
       var rows = new ArrayList<WebSearchAndReadItem>();
       var omitted = new ArrayList<>(response.omissions());
       for (var item : response.results()) {
@@ -304,7 +309,7 @@ public final class WebResultBudget {
   /** 残っている予算に収めるため、Web結果予算を利用可能な量に整える。 */
   public dev.mikoto2000.rei.urlfetch.UrlContentFetchResult fit(
       dev.mikoto2000.rei.urlfetch.UrlContentFetchResult original, ToolContext tool) {
-    for (int cap = properties.getPageMaxCharacters(); cap >= 0; cap = cap == 0 ? -1 : cap / 2) {
+    for (int cap = pageMaxCharacters.getAsInt(); cap >= 0; cap = cap == 0 ? -1 : cap / 2) {
       String content = clip(original.content(), cap);
       boolean changed = !Objects.equals(content, original.content());
       var value =
@@ -322,8 +327,7 @@ public final class WebResultBudget {
               changed ? List.of("output_budget") : original.omissions(),
               "external_untrusted");
       if (fits(value, tool)
-          && fits(value, properties.getMaxOutputCharacters(), properties.getPageMaxTokens()))
-        return value;
+          && fits(value, maxOutputCharacters.getAsInt(), pageMaxTokens.getAsInt())) return value;
     }
     throw new HttpFetchException(HttpFetchException.Code.OUTPUT_BUDGET);
   }
