@@ -20,8 +20,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 
@@ -66,11 +68,7 @@ public class GoalWaitService {
   private final PersistentCheckpointService checkpoints;
 
   /** 再開用の記録保存と検索の窓口。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared checkpoint state for run lookups and transitions.")
-  private final PersistentCheckpointRepository checkpointRepository;
+  private final BiFunction<String, String, Optional<PersistentCheckpoint>> checkpointForRun;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
@@ -97,7 +95,7 @@ public class GoalWaitService {
     this.observations = observations;
     this.schedules = schedules;
     this.checkpoints = checkpoints;
-    this.checkpointRepository = checkpointRepository;
+    this.checkpointForRun = (project, run) -> checkpointRepository.findByRun(project, run);
     this.clock = clock;
     this.events = events;
   }
@@ -129,8 +127,7 @@ public class GoalWaitService {
     PersistentCheckpoint saved = null;
     if (goal.currentRunId() != null) {
       saved =
-          checkpointRepository
-              .findByRun(project, goal.currentRunId())
+          checkpointForRun.apply(project, goal.currentRunId())
               .orElseThrow(
                   () ->
                       new IllegalStateException(

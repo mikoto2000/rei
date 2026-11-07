@@ -24,6 +24,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiFunction;
 import org.springframework.stereotype.Service;
 
 /**
@@ -43,11 +44,7 @@ public final class DotResumeService {
   private final DotDelegationService delegation;
 
   /** 再開用の記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared repository for checkpoint state and lease coordination.")
-  private final PersistentCheckpointRepository checkpoints;
+  private final BiFunction<String, String, PersistentCheckpoint> findCheckpoint;
 
   /** 再開用の記録サービス。 */
   @SuppressFBWarnings(
@@ -94,7 +91,7 @@ public final class DotResumeService {
     this.dependencies = dependencies;
     this.repo = repo;
     this.delegation = delegation;
-    this.checkpoints = checkpoints;
+    this.findCheckpoint = (project, task) -> checkpoints.get(project, task);
     this.checkpointService = checkpointService;
     this.schedules = schedules;
     this.runs = runs;
@@ -196,7 +193,7 @@ public final class DotResumeService {
     if (ownedDependency(owner).state()
         != dev.mikoto2000.rei.core.dependency.DependencyState.COMPLETED)
       throw new DotException("DEPENDENCY_NOT_VERIFIED");
-    var state = checkpoints.get(owner.project(), owner.task());
+    var state = findCheckpoint.apply(owner.project(), owner.task());
     if (!state.runId().equals(owner.run())
         || !state.sessionId().equals(owner.session())
         || !state.projectRoot().equals(owner.root())
