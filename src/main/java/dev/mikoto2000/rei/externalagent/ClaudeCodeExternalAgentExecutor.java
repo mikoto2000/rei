@@ -10,8 +10,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -48,12 +46,18 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Reads the application-bound ClaudeCodeProperties shared by consumers of these settings.")
-  private final ClaudeCodeProperties properties;
+  private record Settings(
+      boolean enabled,
+      boolean persistSessions,
+      String command,
+      Duration totalTimeout,
+      Duration inactivityTimeout,
+      int maxOutputBytes,
+      boolean fixProposalsEnabled,
+      boolean implementationEnabled,
+      Path nativeSessionDirectory) {}
+
+  private final java.util.function.Supplier<Settings> settings;
 
   /** 実行の担当。 */
   private final ExternalAgentProcessRunner runner;
@@ -61,14 +65,26 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
   /** 指定された値や利用先を使って、ClaudeCodeExternalAgentExecutorを初期化する。 */
   public ClaudeCodeExternalAgentExecutor(
       ClaudeCodeProperties properties, ExternalAgentProcessRunner runner) {
-    this.properties = properties;
+    this.settings =
+        () ->
+            new Settings(
+                properties.isEnabled(),
+                properties.isPersistSessions(),
+                properties.getCommand(),
+                properties.getTotalTimeout(),
+                properties.getInactivityTimeout(),
+                properties.getMaxOutputBytes(),
+                properties.isFixProposalsEnabled(),
+                properties.isImplementationEnabled(),
+                properties.getNativeSessionDirectory());
     this.runner = runner;
   }
 
   /** 外部エージェントへの委譲において、継続入力への対応可否を返す。 */
   @Override
   public boolean supportsContinuation() {
-    return properties.isEnabled() && properties.isPersistSessions();
+    var config = settings.get();
+    return config.enabled() && config.persistSessions();
   }
 
   /** 要求された処理を実行する。 */
@@ -81,52 +97,50 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
   @Override
   public ExternalAgentResult execute(
       ExternalAgentRequest request, BooleanSupplier cancelled, ModelCallBudget budget) {
-    if (!properties.isEnabled())
-      return ExternalAgentResult.rejected("Claude Code reviews are disabled");
+    var config = settings.get();
+    if (!config.enabled()) return ExternalAgentResult.rejected("Claude Code reviews are disabled");
     if (request.action() == ExternalAgentRequest.Action.MATERIAL_REVIEW)
       return ExternalAgentResult.rejected("Material review is supported only by Codex");
     boolean fix = request.action() == ExternalAgentRequest.Action.PROPOSE_FIX;
     boolean implementation = request.action() == ExternalAgentRequest.Action.IMPLEMENT;
     if (request.agent() != ExternalAgentRequest.Agent.CLAUDE
-        || implementation && !properties.isImplementationEnabled()
-        || fix && !properties.isFixProposalsEnabled())
+        || implementation && !config.implementationEnabled()
+        || fix && !config.fixProposalsEnabled())
       return ExternalAgentResult.rejected("Claude Code action is disabled or unsupported");
     if (request.externalSessionId() != null
-        && (!supportsContinuation()
+        && (!config.persistSessions()
             || !ExternalAgentResult.validSessionId(request.externalSessionId())
             || fix
             || implementation))
       return ExternalAgentResult.rejected("An enabled saved review session UUID is required");
-    if (properties.isPersistSessions()
-        && !implementation
-        && properties.getNativeSessionDirectory() == null)
+    if (config.persistSessions() && !implementation && config.nativeSessionDirectory() == null)
       return ExternalAgentResult.rejected("Native session storage required");
-    if (properties.getTotalTimeout() == null
-        || properties.getTotalTimeout().isNegative()
-        || properties.getTotalTimeout().isZero()
-        || properties.getTotalTimeout().compareTo(Duration.ofMinutes(20)) > 0
-        || properties.getInactivityTimeout() == null
-        || properties.getInactivityTimeout().isNegative()
-        || properties.getInactivityTimeout().isZero()
-        || properties.getMaxOutputBytes() < 1
-        || properties.getMaxOutputBytes() > 4194304)
+    if (config.totalTimeout() == null
+        || config.totalTimeout().isNegative()
+        || config.totalTimeout().isZero()
+        || config.totalTimeout().compareTo(Duration.ofMinutes(20)) > 0
+        || config.inactivityTimeout() == null
+        || config.inactivityTimeout().isNegative()
+        || config.inactivityTimeout().isZero()
+        || config.maxOutputBytes() < 1
+        || config.maxOutputBytes() > 4194304)
       return ExternalAgentResult.rejected("Invalid Claude Code execution limits");
     Path isolated = null;
     boolean invoked = false, reported = false, persistent = false;
     String nativeId = null;
-    long deadline = System.nanoTime() + properties.getTotalTimeout().toNanos();
+    long deadline = System.nanoTime() + config.totalTimeout().toNanos();
     try {
       var root = request.projectRoot().toRealPath();
       var target =
           ExternalAgentRequest.resolveTarget(
               root, request.target() == null ? null : request.target().toString());
       var snapshot = snapshot(root, target, cancelled, deadline);
-      if (properties.isPersistSessions() && !implementation) {
+      if (config.persistSessions() && !implementation) {
         nativeId =
             request.externalSessionId() == null
                 ? UUID.randomUUID().toString()
                 : request.externalSessionId();
-        Path base = nativeBase(root);
+        Path base = nativeBase(root, config.nativeSessionDirectory());
         isolated = base.resolve(nativeId);
         String ownerHash = hash(root.toString().getBytes(StandardCharsets.UTF_8));
         Path marker = isolated.resolve("rei-source-root.sha256");
@@ -150,7 +164,7 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
       } else isolated = Files.createTempDirectory("rei-claude-review-");
       var version =
           runner.run(
-              List.of(executable(), "--version"),
+              List.of(executable(config.command()), "--version"),
               isolated,
               "",
               remaining(deadline, Duration.ofSeconds(10)),
@@ -168,7 +182,7 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
             version.duration(),
             null,
             "");
-      var selectedCommand = command(request, nativeId);
+      var selectedCommand = command(request, nativeId, config);
       var probe = new ArrayList<>(selectedCommand);
       probe.add("--help");
       var help =
@@ -192,7 +206,7 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
             "");
       var authentication =
           runner.run(
-              List.of(executable(), "auth", "status"),
+              List.of(executable(config.command()), "auth", "status"),
               isolated,
               "",
               remaining(deadline, Duration.ofSeconds(10)),
@@ -221,9 +235,9 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
               selectedCommand,
               isolated,
               input,
-              remaining(deadline, properties.getTotalTimeout()),
-              properties.getInactivityTimeout(),
-              properties.getMaxOutputBytes(),
+              remaining(deadline, config.totalTimeout()),
+              config.inactivityTimeout(),
+              config.maxOutputBytes(),
               cancelled);
       if (output.status() == Status.CANCELLED)
         throw new java.util.concurrent.CancellationException();
@@ -356,9 +370,8 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
   }
 
   /** 外部エージェントへの委譲で用いるOSの機能基準を返す。 */
-  private Path nativeBase(Path root) throws IOException {
-    Path configured = properties.getNativeSessionDirectory().toAbsolutePath().normalize(),
-        ancestor = configured;
+  private Path nativeBase(Path root, Path nativeSessionDirectory) throws IOException {
+    Path configured = nativeSessionDirectory.toAbsolutePath().normalize(), ancestor = configured;
     if (configured.startsWith(root))
       throw new IOException("Native session storage must be outside the source root");
     // Resolve existing ancestors before mkdir: a missing suffix can still traverse a junction into
@@ -379,7 +392,10 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
 
   /** 外部エージェントへの委譲で用いる実行可能なを返す。 */
   String executable() {
-    String configured = properties.getCommand();
+    return executable(settings.get().command());
+  }
+
+  private static String executable(String configured) {
     if (configured == null || configured.isBlank()) throw new IllegalArgumentException();
     if (System.getProperty("os.name", "").startsWith("Windows")) {
       if (configured.toLowerCase(Locale.ROOT).endsWith(".cmd")
@@ -392,8 +408,12 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
 
   /** 外部エージェントへの委譲で用いるコマンドを返す。 */
   List<String> command() throws IOException {
+    return command(settings.get());
+  }
+
+  private List<String> command(Settings config) throws IOException {
     return List.of(
-        executable(),
+        executable(config.command()),
         "--safe-mode",
         "--print",
         "--tools",
@@ -421,7 +441,12 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
 
   /** 外部エージェントへの委譲で用いるコマンドを返す。 */
   List<String> command(ExternalAgentRequest request, String nativeId) throws IOException {
-    var selected = new ArrayList<>(command());
+    return command(request, nativeId, settings.get());
+  }
+
+  private List<String> command(ExternalAgentRequest request, String nativeId, Settings config)
+      throws IOException {
+    var selected = new ArrayList<>(command(config));
     if (request.action() == ExternalAgentRequest.Action.IMPLEMENT) {
       selected.set(selected.indexOf("--json-schema") + 1, resource("implementation-schema.json"));
       selected.set(selected.indexOf("--system-prompt") + 1, resource("implementation.txt"));

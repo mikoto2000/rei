@@ -6,8 +6,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -28,12 +26,15 @@ import java.util.function.BooleanSupplier;
  */
 public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
   /** この機能の動作設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Reads the application-bound CodexProperties shared by consumers of these settings.")
-  private final CodexProperties properties;
+  private record Settings(
+      boolean enabled,
+      boolean persistSessions,
+      String command,
+      Duration totalTimeout,
+      Duration inactivityTimeout,
+      int maxOutputBytes) {}
+
+  private final java.util.function.Supplier<Settings> settings;
 
   /** 実行の担当。 */
   private final ExternalAgentProcessRunner runner;
@@ -57,14 +58,23 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
 
   /** 指定された値や利用先を使って、CodexExternalAgentExecutorを初期化する。 */
   public CodexExternalAgentExecutor(CodexProperties properties, ExternalAgentProcessRunner runner) {
-    this.properties = properties;
+    this.settings =
+        () ->
+            new Settings(
+                properties.isEnabled(),
+                properties.isPersistSessions(),
+                properties.getCommand(),
+                properties.getTotalTimeout(),
+                properties.getInactivityTimeout(),
+                properties.getMaxOutputBytes());
     this.runner = runner;
   }
 
   /** 外部エージェントへの委譲において、継続入力への対応可否を返す。 */
   @Override
   public boolean supportsContinuation() {
-    return properties.isEnabled() && properties.isPersistSessions();
+    var config = settings.get();
+    return config.enabled() && config.persistSessions();
   }
 
   /** 要求された処理を実行する。 */
@@ -79,37 +89,39 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
       ExternalAgentRequest request,
       BooleanSupplier cancelled,
       dev.mikoto2000.rei.llm.ModelCallBudget budget) {
-    if (!properties.isEnabled())
+    var config = settings.get();
+    if (!config.enabled())
       return ExternalAgentResult.rejected("Codex external reviews are disabled");
     if (request.action() == ExternalAgentRequest.Action.IMPLEMENT
         && (request.externalSessionId() != null
-            || properties.getTotalTimeout() == null
-            || properties.getTotalTimeout().compareTo(Duration.ofMinutes(20)) > 0))
+            || config.totalTimeout() == null
+            || config.totalTimeout().compareTo(Duration.ofMinutes(20)) > 0))
       return ExternalAgentResult.rejected(
           "Implementation requires a fresh ephemeral session and at most 20 minutes of CLI execution");
     if (request.externalSessionId() != null
-        && (!supportsContinuation()
+        && (!config.persistSessions()
             || !ExternalAgentResult.validSessionId(request.externalSessionId())))
       return ExternalAgentResult.rejected("An enabled, saved native session UUID is required");
-    if (properties.getTotalTimeout() == null
-        || properties.getTotalTimeout().isNegative()
-        || properties.getTotalTimeout().isZero()
-        || properties.getInactivityTimeout() == null
-        || properties.getInactivityTimeout().isNegative()
-        || properties.getInactivityTimeout().isZero()
-        || properties.getMaxOutputBytes() < 1)
+    if (config.totalTimeout() == null
+        || config.totalTimeout().isNegative()
+        || config.totalTimeout().isZero()
+        || config.inactivityTimeout() == null
+        || config.inactivityTimeout().isNegative()
+        || config.inactivityTimeout().isZero()
+        || config.maxOutputBytes() < 1)
       return ExternalAgentResult.rejected("Invalid Codex execution limits");
     long start = System.nanoTime();
     var capability =
         runner.run(
-            List.of(executable(), "exec", "--help"),
+            List.of(executable(config.command()), "exec", "--help"),
             request.projectRoot(),
             "",
-            min(properties.getTotalTimeout(), Duration.ofSeconds(10)),
-            min(properties.getInactivityTimeout(), Duration.ofSeconds(10)),
+            min(config.totalTimeout(), Duration.ofSeconds(10)),
+            min(config.inactivityTimeout(), Duration.ofSeconds(10)),
             65536,
             cancelled);
-    if (capability.status() != Status.SUCCESS) return parse(capability);
+    if (capability.status() != Status.SUCCESS)
+      return parse(capability, false, config.persistSessions());
     if (!List.of(
             "--ignore-user-config",
             "--ignore-rules",
@@ -128,7 +140,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
           null,
           "");
     if (request.externalSessionId() != null) {
-      Duration remaining = properties.getTotalTimeout().minusNanos(System.nanoTime() - start);
+      Duration remaining = config.totalTimeout().minusNanos(System.nanoTime() - start);
       if (remaining.isNegative() || remaining.isZero())
         return new ExternalAgentResult(
             Status.TOTAL_TIMEOUT,
@@ -140,14 +152,14 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
             "");
       var resume =
           runner.run(
-              List.of(executable(), "exec", "resume", "--help"),
+              List.of(executable(config.command()), "exec", "resume", "--help"),
               request.projectRoot(),
               "",
               min(remaining, Duration.ofSeconds(10)),
-              min(properties.getInactivityTimeout(), Duration.ofSeconds(10)),
+              min(config.inactivityTimeout(), Duration.ofSeconds(10)),
               65536,
               cancelled);
-      if (resume.status() != Status.SUCCESS) return parse(resume);
+      if (resume.status() != Status.SUCCESS) return parse(resume, false, config.persistSessions());
       if (!List.of(
               "--ignore-user-config",
               "--ignore-rules",
@@ -187,7 +199,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
                           : request.projectRoot().relativize(request.target()).toString(),
                       "context",
                       request.context()));
-      Duration remaining = properties.getTotalTimeout().minusNanos(System.nanoTime() - start);
+      Duration remaining = config.totalTimeout().minusNanos(System.nanoTime() - start);
       if (remaining.isNegative() || remaining.isZero())
         return new ExternalAgentResult(
             Status.TOTAL_TIMEOUT,
@@ -201,12 +213,12 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
       invoked = true;
       var output =
           runner.run(
-              command(request, schema),
+              command(request, schema, config),
               request.projectRoot(),
               prompt,
               remaining,
-              properties.getInactivityTimeout(),
-              properties.getMaxOutputBytes(),
+              config.inactivityTimeout(),
+              config.maxOutputBytes(),
               cancelled);
       if (budget != null && output.status() == Status.CANCELLED)
         throw new java.util.concurrent.CancellationException();
@@ -216,8 +228,10 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
       }
       var result =
           implementation
-              ? parseImplementation(output)
-              : material ? parseMaterialReview(output) : parse(output, fix);
+              ? parseImplementation(output, config.persistSessions())
+              : material
+                  ? parseMaterialReview(output, config.persistSessions())
+                  : parse(output, fix, config.persistSessions());
       if (request.externalSessionId() != null
           && result.success()
           && !request.externalSessionId().equals(result.externalSessionId()))
@@ -256,7 +270,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
   }
 
   /** 外部エージェントへの委譲で用いる実行可能なを返す。 */
-  private String executable() {
+  private static String executable(String configured) {
     List<Path> directories = new ArrayList<>();
     for (String entry :
         Objects.toString(System.getenv("PATH"), "").split(java.io.File.pathSeparator)) {
@@ -266,7 +280,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
       } catch (InvalidPathException ignored) {
       }
     }
-    return resolveCommand(properties.getCommand(), System.getProperty("os.name", ""), directories);
+    return resolveCommand(configured, System.getProperty("os.name", ""), directories);
   }
 
   /**
@@ -300,11 +314,15 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
 
   /** 外部エージェントへの委譲で用いるコマンドを返す。 */
   List<String> command(ExternalAgentRequest request, Path schema) {
+    return command(request, schema, settings.get());
+  }
+
+  private List<String> command(ExternalAgentRequest request, Path schema, Settings config) {
     String project = request.projectRoot().toString().replace('\\', '/').replace("\"", "\\\"");
     List<String> command =
         new ArrayList<>(
             List.of(
-                executable(),
+                executable(config.command()),
                 "--ask-for-approval",
                 "never",
                 "exec",
@@ -355,7 +373,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
       command.add(command.size() - 1, "-c");
       command.add(command.size() - 1, "windows.sandbox=\"elevated\"");
     }
-    if (properties.isPersistSessions() && request.action() != ExternalAgentRequest.Action.IMPLEMENT)
+    if (config.persistSessions() && request.action() != ExternalAgentRequest.Action.IMPLEMENT)
       command.remove("--ephemeral");
     if (request.externalSessionId() != null) {
       int color = command.indexOf("--color");
@@ -393,11 +411,12 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
 
   /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   ExternalAgentResult parse(ExternalAgentProcessRunner.Output output) {
-    return parse(output, false);
+    return parse(output, false, settings.get().persistSessions());
   }
 
   /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
-  private ExternalAgentResult parse(ExternalAgentProcessRunner.Output output, boolean fixProposal) {
+  private ExternalAgentResult parse(
+      ExternalAgentProcessRunner.Output output, boolean fixProposal, boolean persistSessions) {
     List<String> warnings = new ArrayList<>();
     if (output.truncated())
       warnings.add("Process output was truncated at the configured byte limit");
@@ -497,9 +516,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
           output.exitCode(),
           output.stdout(),
           null,
-          properties.isPersistSessions() && !invalidSession && !output.truncated()
-              ? sessionId
-              : null,
+          persistSessions && !invalidSession && !output.truncated() ? sessionId : null,
           proposal,
           null);
     } catch (JsonProcessingException | RuntimeException error) {
@@ -537,8 +554,9 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
   }
 
   /** 入力を機能内で扱えるよう、教材レビューを解釈する。 */
-  private ExternalAgentResult parseMaterialReview(ExternalAgentProcessRunner.Output output) {
-    if (output.status() != Status.SUCCESS) return parse(output);
+  private ExternalAgentResult parseMaterialReview(
+      ExternalAgentProcessRunner.Output output, boolean persistSessions) {
+    if (output.status() != Status.SUCCESS) return parse(output, false, persistSessions);
     try {
       if (output.truncated()) throw new IllegalArgumentException("Incomplete material review");
       String finalText = null, sessionId = null;
@@ -566,7 +584,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
           output.exitCode(),
           "",
           null,
-          properties.isPersistSessions() && !invalidSession ? sessionId : null,
+          persistSessions && !invalidSession ? sessionId : null,
           null,
           null,
           null,
@@ -584,8 +602,9 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
   }
 
   /** 入力を機能内で扱えるよう、実装を解釈する。 */
-  private ExternalAgentResult parseImplementation(ExternalAgentProcessRunner.Output output) {
-    if (output.status() != Status.SUCCESS) return parse(output);
+  private ExternalAgentResult parseImplementation(
+      ExternalAgentProcessRunner.Output output, boolean persistSessions) {
+    if (output.status() != Status.SUCCESS) return parse(output, false, persistSessions);
     if (output.truncated() || CodexTokenUsage.total(output) == null)
       return new ExternalAgentResult(
           Status.FAILED,
@@ -611,7 +630,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
           || !structured.path("findings").isArray()
           || !structured.path("warnings").isArray()) throw new IllegalArgumentException();
       var proposal = ImplementationProposal.parse(structured.get("implementation"));
-      var evaluated = parse(output);
+      var evaluated = parse(output, false, persistSessions);
       if (!evaluated.success()
           || evaluated.warnings().stream().anyMatch(w -> w.contains("Could not parse")))
         throw new IllegalArgumentException();
