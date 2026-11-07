@@ -341,6 +341,16 @@ public class DoctorActiveService {
                 "Configuration, provider or runtime limitation; cause not established",
                 "Inspect local configuration and explicitly retry"));
         if (begun) run.failDurableTool(call, plan.tool(), failure);
+      } catch (Error fatal) {
+        if (begun) {
+          try {
+            run.failDurableTool(
+                call, plan.tool(), new IllegalStateException("Fatal diagnostic failure", fatal));
+          } catch (RuntimeException | Error audit) {
+            if (audit != fatal) fatal.addSuppressed(audit);
+          }
+        }
+        throw fatal;
       }
     }
     return new Report(results);
@@ -421,11 +431,6 @@ public class DoctorActiveService {
   }
 
   /** 実行環境の診断で用いる推定を返す。 */
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Preserves the original inference failure when it is not classified as a timeout.")
   private DoctorResult inference(
       RunExecutionContext run, OpenAiChatOptions captured, Duration timeout) {
     var model = subAgentModel.get();
@@ -469,9 +474,14 @@ public class DoctorActiveService {
                   cancelled.then(reactor.core.publisher.Mono.<BoundedToolLoop.Outcome>never()))
               .timeout(timeout)
               .block(timeout.plusSeconds(1));
+    } catch (BoundedToolLoop.SharedBudgetExceeded exhausted) {
+      throw exhausted;
     } catch (RuntimeException failure) {
+      var underlying = reactor.core.Exceptions.unwrap(failure);
+      if (underlying instanceof Error fatal) throw fatal;
       RunCancellation.propagate(failure);
-      for (Throwable cause = failure; cause != null; cause = cause.getCause())
+      RunCancellation.propagateStopped(underlying);
+      for (Throwable cause = underlying; cause != null; cause = cause.getCause())
         if (cause instanceof java.util.concurrent.TimeoutException)
           return result(
               "llm.inference",
@@ -480,7 +490,8 @@ public class DoctorActiveService {
               "TIMEOUT; model response not completed",
               "Model pipeline or network timeout; internal state unverified",
               "Check existing model settings and explicitly retry");
-      throw failure;
+      if (underlying instanceof IllegalStateException state) throw state;
+      throw new IllegalStateException("Diagnostic inference failed", underlying);
     }
     boolean answered = outcome != null && !outcome.output().isBlank();
     return result(
