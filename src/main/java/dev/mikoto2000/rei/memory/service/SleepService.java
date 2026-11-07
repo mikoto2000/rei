@@ -56,16 +56,32 @@ public class SleepService {
   private MemoryEvents events;
 
   /** 経験の記録一覧。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Runs pending processing through the shared episode sleep service.")
-  private dev.mikoto2000.rei.episode.EpisodeSleepService episodes;
+  private EpisodeOperations episodes;
+
+  private record EpisodeScope(
+      String session, String project, java.util.function.BooleanSupplier cancelled) {}
+
+  private record MemoryLink(
+      String project, String session, java.util.List<String> turns, String memory) {}
+
+  private record EpisodeOperations(
+      java.util.function.BiConsumer<EpisodeScope, Runnable> process,
+      java.util.function.Consumer<MemoryLink> linkMemory,
+      java.util.function.ToLongFunction<String> pending) {}
 
   /** 長期記憶の保存と検索で使用する経験の記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setEpisodes(dev.mikoto2000.rei.episode.EpisodeSleepService service) {
-    episodes = service;
+    episodes =
+        service == null
+            ? null
+            : new EpisodeOperations(
+                (scope, budget) ->
+                    service.processWithMemoryBudget(
+                        scope.session(), scope.project(), budget, scope.cancelled()),
+                link ->
+                    service.linkMemory(link.project(), link.session(), link.turns(), link.memory()),
+                service::pending);
   }
 
   /** 長期記憶の保存と検索で使用するイベント一覧を設定する。 */
@@ -206,7 +222,8 @@ public class SleepService {
                   ? new SleepModelBudget(properties.sleep(), check)
                   : null;
       if (execution != null) budget = execution.accounting(budget);
-      if (!preview && episodes != null) episodes.process(session, project, budget, cancellation);
+      if (!preview && episodes != null)
+        episodes.process().accept(new EpisodeScope(session, project, cancellation), budget);
       var candidates =
           batch.isEmpty()
               ? List.<MemoryCandidate>of()
@@ -394,7 +411,11 @@ public class SleepService {
     if (episodeStore != null && r.action() != MemoryAction.IGNORE)
       repository
           .exact(c, project)
-          .ifPresent(m -> episodeStore.linkMemory(project, session, c.sourceTurnIds(), m.id()));
+          .ifPresent(
+              m ->
+                  episodeStore
+                      .linkMemory()
+                      .accept(new MemoryLink(project, session, c.sourceTurnIds(), m.id())));
   }
 
   /** 長期記憶の保存と検索の操作を実行する。 */
@@ -438,7 +459,7 @@ public class SleepService {
         ? 0
         : Math.max(
             Math.max(0, turnCount.applyAsLong(session) - repository.lastProcessed(session)),
-            episodes == null ? 0 : episodes.pending(session));
+            episodes == null ? 0 : episodes.pending().applyAsLong(session));
   }
 
   /** 長期記憶の保存と検索に関する要求自動待機を処理する。 */

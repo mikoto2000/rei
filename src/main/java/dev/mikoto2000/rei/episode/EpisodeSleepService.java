@@ -80,6 +80,15 @@ public class EpisodeSleepService {
     this.memory = memory;
   }
 
+  /** Processes pending episodes using the memory run's existing model-call accounting. */
+  public void processWithMemoryBudget(
+      String session,
+      String project,
+      Runnable beforeModelCall,
+      java.util.function.BooleanSupplier cancelled) {
+    process(session, project, ModelCallBudget.fromCallback(beforeModelCall), cancelled);
+  }
+
   /** 過去の経験の活用に関するプロセスを処理する。 */
   public void process(
       String session,
