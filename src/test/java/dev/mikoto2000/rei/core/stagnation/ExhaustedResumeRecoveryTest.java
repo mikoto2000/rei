@@ -41,8 +41,9 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
 class ExhaustedResumeRecoveryTest {
-  @Test
-  void durableReviewRecoveryRequiresCommitForTheExactPendingWorkId() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"readReviewWorkItem", "readNextReviewWorkItem"})
+  void durableReviewRecoveryRequiresCommitForTheExactPendingWorkId(String reader) throws Exception {
     var c = context(0, 2, 8, true);
     fillResumeBatch(c);
     String page = identifiedPage();
@@ -53,10 +54,17 @@ class ExhaustedResumeRecoveryTest {
       page = node.toString();
     } catch (Exception invalid) { throw new AssertionError(invalid); }
     c.beginIteration();
-    c.recordTool("readNextReviewWorkItem", "{}", page, c.evaluator().beforeTool("readNextReviewWorkItem", "{}"));
+    c.recordTool(reader, "{}", page, c.evaluator().beforeTool(reader, "{}"));
     c.endIteration();
+    var json = new ObjectMapper();
+    var saved =
+        json.readValue(
+            json.writeValueAsString(c.progressSnapshot()), RunExecutionContext.ProgressState.class);
+    assertThat(saved.continuity().resumeBatch().reviewPageReadKey()).startsWith(reader + ":");
+    c.restoreProgress(saved);
     assertThat(c.hasPendingResumeContentWork()).isTrue();
-    assertThat(c.resumeAcquisitionBlocked("readNextReviewWorkItem", "{\"taskId\":\"another\"}")).isTrue();
+    assertThat(c.resumeAcquisitionBlocked(reader, "{}")).isFalse();
+    assertThat(c.resumeAcquisitionBlocked(reader, "{\"taskId\":\"another\"}")).isTrue();
     String receipt = "{\"body\":{\"work\":\"wrong\",\"path\":\"docs/intro.md\"},\"sha256\":\"" + "a".repeat(64) + "\"}";
     c.beginIteration();
     c.recordTool("submitReviewWorkItem", "{}", receipt, c.evaluator().beforeTool("submitReviewWorkItem", "{}"));

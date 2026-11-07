@@ -1,6 +1,5 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.core.working.WorkingSet;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -10,6 +9,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * 共通の実行基盤に必要な検索順位付けを扱う。
@@ -35,7 +35,7 @@ final class SearchRanking {
       Path root,
       FileSnapshots snapshots,
       RepositoryMapService maps,
-      WorkingSet working)
+      Predicate<Path> inWorkingSet)
       throws IOException {
     var words =
         queries.stream()
@@ -53,7 +53,7 @@ final class SearchRanking {
                         entry.getValue(),
                         words,
                         preferred,
-                        working.contains(root.resolve(entry.getKey())),
+                        inWorkingSet.test(root.resolve(entry.getKey())),
                         null,
                         false))
             .sorted(order())
@@ -74,7 +74,7 @@ final class SearchRanking {
               candidate.matches(),
               words,
               preferred,
-              working.contains(root.resolve(candidate.path())),
+              inWorkingSet.test(root.resolve(candidate.path())),
               metadata,
               candidate.path().endsWith(".java") && !enriched.contains(candidate.path())));
     }

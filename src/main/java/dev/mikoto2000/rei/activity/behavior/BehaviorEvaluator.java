@@ -5,8 +5,6 @@ import dev.mikoto2000.rei.activity.ActivityRecord;
 import dev.mikoto2000.rei.activity.ActivityRolePolicy;
 import dev.mikoto2000.rei.activity.ActivitySession;
 import dev.mikoto2000.rei.activity.EntertainmentDisposition;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -24,11 +22,47 @@ import java.util.Set;
  */
 public final class BehaviorEvaluator {
   /** 設定。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Reads the shared behavior thresholds and scheduling settings for each evaluation.")
-  private final BehaviorProperties config;
+  private final java.util.function.Supplier<EvaluationSettings> settings;
+
+  private record EvaluationSettings(
+      Set<String> entertainmentCategories,
+      long historySeconds,
+      long workResetSeconds,
+      long noiseToleranceSeconds,
+      long noticeSeconds,
+      long warningSeconds,
+      long strongWarningSeconds,
+      WindowLimits shortWindow,
+      WindowLimits longWindow) {
+    private static EvaluationSettings from(BehaviorProperties properties) {
+      var thresholds = properties.getContinuous();
+      var windows = properties.getWindows();
+      var interruption = properties.getInterruption();
+      return new EvaluationSettings(
+          Set.copyOf(properties.getEntertainmentCategories()),
+          properties.getHistoryMinutes() * 60L,
+          interruption.getResetAfterWorkMinutes() * 60L,
+          interruption.getNoiseToleranceSeconds(),
+          thresholds.getNoticeMinutes() * 60L,
+          thresholds.getWarningMinutes() * 60L,
+          thresholds.getStrongWarningMinutes() * 60L,
+          WindowLimits.from(windows.getShortWindow()),
+          WindowLimits.from(windows.getLongWindow()));
+    }
+
+    private BehaviorSeverity continuousSeverity(long seconds) {
+      if (seconds >= strongWarningSeconds) return BehaviorSeverity.STRONG_WARNING;
+      if (seconds >= warningSeconds) return BehaviorSeverity.WARNING;
+      return seconds >= noticeSeconds ? BehaviorSeverity.NOTICE : BehaviorSeverity.NONE;
+    }
+  }
+
+  private record WindowLimits(int durationMinutes, long minimumObservedSeconds, double ratio) {
+    private static WindowLimits from(BehaviorProperties.Window window) {
+      return new WindowLimits(
+          window.getDurationMinutes(), window.getMinimumObservedMinutes() * 60L, window.getRatio());
+    }
+  }
 
   /** 役割一覧。 */
   private final ActivityRolePolicy roles;
@@ -42,7 +76,7 @@ public final class BehaviorEvaluator {
    * @param service サービス
    * @param confidence 確信度
    * @param continuity 継続性
-   * @param disposition 扱い
+   * @param entertainmentCategory 娯楽として分類されたか
    */
   private record Sample(
       Instant start,
@@ -51,7 +85,7 @@ public final class BehaviorEvaluator {
       String service,
       double confidence,
       String continuity,
-      EntertainmentDisposition disposition) {
+      boolean entertainmentCategory) {
     /** 作業習慣の支援で用いる秒数を返す。 */
     long seconds() {
       return Duration.between(start, end).getSeconds();
@@ -61,24 +95,29 @@ public final class BehaviorEvaluator {
     boolean eligible() {
       return !Set.of("unknown", "other", "idle").contains(category);
     }
+
+    boolean entertainment() {
+      return eligible() && entertainmentCategory;
+    }
   }
 
   /** 指定された値や利用先を使って、BehaviorEvaluatorを初期化する。 */
   public BehaviorEvaluator(BehaviorProperties config, double minimumConfidence) {
     config.validate();
-    this.config = config;
+    this.settings = () -> EvaluationSettings.from(config);
     roles = new ActivityRolePolicy(minimumConfidence);
   }
 
   /** 対象を判断基準に照らして評価する。 */
   public BehaviorAssessment evaluate(
       List<ActivitySession> sessions, List<ActivityRecord> records, Instant now) {
-    var samples = samples(sessions, records, now);
+    var settings = this.settings.get();
+    var samples = samples(sessions, records, now, settings);
     long continuous = 0, interruption = 0, noise = 0;
     Instant recovery = null, episode = null;
     Sample previous = null;
-    long resetSeconds = config.getInterruption().getResetAfterWorkMinutes() * 60L;
-    long tolerance = config.getInterruption().getNoiseToleranceSeconds();
+    long resetSeconds = settings.workResetSeconds();
+    long tolerance = settings.noiseToleranceSeconds();
     boolean recoveredDuringInterruption = false;
     for (var sample : samples) {
       if (previous != null) {
@@ -90,7 +129,7 @@ public final class BehaviorEvaluator {
           recoveredDuringInterruption = false;
         }
       }
-      if (entertainment(sample)) {
+      if (sample.entertainment()) {
         continuous += sample.seconds();
         interruption = 0;
         noise = 0;
@@ -121,14 +160,12 @@ public final class BehaviorEvaluator {
     Instant latest = previous == null ? null : previous.end();
     boolean active =
         previous != null
-            && entertainment(previous)
+            && previous.entertainment()
             && Duration.between(latest, now).getSeconds() <= tolerance;
     if (latest != null && Duration.between(latest, now).getSeconds() > tolerance) continuous = 0;
-    var shortWindow =
-        window(samples, now, config.getWindows().getShortWindow(), BehaviorSeverity.NOTICE, null);
-    var longWindow =
-        window(samples, now, config.getWindows().getLongWindow(), BehaviorSeverity.WARNING, null);
-    var continuousSeverity = continuousSeverity(continuous);
+    var shortWindow = window(samples, now, settings.shortWindow(), BehaviorSeverity.NOTICE, null);
+    var longWindow = window(samples, now, settings.longWindow(), BehaviorSeverity.WARNING, null);
+    var continuousSeverity = settings.continuousSeverity(continuous);
     var windowSeverity = BehaviorSeverity.max(shortWindow.severity(), longWindow.severity());
     var severity = BehaviorSeverity.max(continuousSeverity, windowSeverity);
     var reason =
@@ -141,31 +178,20 @@ public final class BehaviorEvaluator {
                     : BehaviorAssessment.Reason.NONE;
     boolean qualified =
         continuousSeverity != BehaviorSeverity.NONE
-            || window(
-                        samples,
-                        now,
-                        config.getWindows().getShortWindow(),
-                        BehaviorSeverity.NOTICE,
-                        recovery)
+            || window(samples, now, settings.shortWindow(), BehaviorSeverity.NOTICE, recovery)
                     .severity()
                 != BehaviorSeverity.NONE
-            || window(
-                        samples,
-                        now,
-                        config.getWindows().getLongWindow(),
-                        BehaviorSeverity.WARNING,
-                        recovery)
+            || window(samples, now, settings.longWindow(), BehaviorSeverity.WARNING, recovery)
                     .severity()
                 != BehaviorSeverity.NONE;
     var categories = new HashMap<String, Long>();
     var services = new HashMap<String, Long>();
     double weighted = 0;
     long eligible = 0;
-    Instant contextStart =
-        now.minusSeconds(config.getWindows().getLongWindow().getDurationMinutes() * 60L);
+    Instant contextStart = now.minusSeconds(settings.longWindow().durationMinutes() * 60L);
     for (var sample : samples) {
       long seconds = overlap(sample, contextStart, now);
-      if (entertainment(sample)) {
+      if (sample.entertainment()) {
         eligible += seconds;
         weighted += sample.confidence() * seconds;
         categories.merge(sample.category(), seconds, Long::sum);
@@ -191,7 +217,10 @@ public final class BehaviorEvaluator {
 
   /** 作業習慣の支援で用いるサンプル一覧を返す。 */
   private List<Sample> samples(
-      List<ActivitySession> sessions, List<ActivityRecord> records, Instant now) {
+      List<ActivitySession> sessions,
+      List<ActivityRecord> records,
+      Instant now,
+      EvaluationSettings settings) {
     var membership = new HashMap<String, List<ActivitySession>>();
     for (var session : sessions)
       for (String id : session.recordIds())
@@ -203,7 +232,7 @@ public final class BehaviorEvaluator {
                 Comparator.comparing(ActivityRecord::capturedAt).thenComparing(ActivityRecord::id))
             .toList();
     var result = new ArrayList<Sample>();
-    Instant covered = now.minusSeconds(config.getHistoryMinutes() * 60L);
+    Instant covered = now.minusSeconds(settings.historySeconds());
     var remaining = new HashMap<String, Long>();
     for (int i = 0; i < sorted.size(); i++) {
       var r = sorted.get(i);
@@ -222,6 +251,11 @@ public final class BehaviorEvaluator {
         String service =
             role.primary() == null ? "" : ActivityDisplayLabels.label(role.primary().service());
         var diagnostics = r.detection() == null ? null : r.detection().diagnostics();
+        var disposition = diagnostics == null ? null : diagnostics.entertainmentDisposition();
+        boolean entertainmentCategory =
+            disposition == null
+                ? settings.entertainmentCategories().contains(role.category())
+                : disposition == EntertainmentDisposition.ENTERTAINMENT;
         result.add(
             new Sample(
                 start,
@@ -230,7 +264,7 @@ public final class BehaviorEvaluator {
                 service,
                 role.confidence(),
                 r.continuityId(),
-                diagnostics == null ? null : diagnostics.entertainmentDisposition()));
+                entertainmentCategory));
         covered = end;
         remaining.put(session.id(), budget - Duration.between(start, end).getSeconds());
       }
@@ -238,34 +272,14 @@ public final class BehaviorEvaluator {
     return result;
   }
 
-  /** 作業習慣の支援において、娯楽に該当するか判定する。 */
-  private boolean entertainment(Sample s) {
-    return s.eligible()
-        && (s.disposition() == null
-            ? config.getEntertainmentCategories().contains(s.category())
-            : s.disposition() == EntertainmentDisposition.ENTERTAINMENT);
-  }
-
-  /** 作業習慣の支援で用いる継続重大度を返す。 */
-  private BehaviorSeverity continuousSeverity(long seconds) {
-    var c = config.getContinuous();
-    return seconds >= c.getStrongWarningMinutes() * 60L
-        ? BehaviorSeverity.STRONG_WARNING
-        : seconds >= c.getWarningMinutes() * 60L
-            ? BehaviorSeverity.WARNING
-            : seconds >= c.getNoticeMinutes() * 60L
-                ? BehaviorSeverity.NOTICE
-                : BehaviorSeverity.NONE;
-  }
-
   /** 作業習慣の支援で用いる範囲を返す。 */
   private BehaviorAssessment.Window window(
       List<Sample> samples,
       Instant now,
-      BehaviorProperties.Window window,
+      WindowLimits window,
       BehaviorSeverity severity,
       Instant floor) {
-    Instant start = now.minusSeconds(window.getDurationMinutes() * 60L);
+    Instant start = now.minusSeconds(window.durationMinutes() * 60L);
     if (floor != null) start = max(start, floor);
     long observed = 0, eligible = 0, entertainment = 0;
     for (var s : samples) {
@@ -273,16 +287,16 @@ public final class BehaviorEvaluator {
       observed += seconds;
       if (s.eligible()) {
         eligible += seconds;
-        if (entertainment(s)) entertainment += seconds;
+        if (s.entertainment()) entertainment += seconds;
       }
     }
     double ratio = eligible == 0 ? 0 : (double) entertainment / eligible;
     return new BehaviorAssessment.Window(
-        window.getDurationMinutes(),
+        window.durationMinutes(),
         entertainment,
         eligible,
         ratio,
-        eligible >= window.getMinimumObservedMinutes() * 60L && ratio >= window.getRatio()
+        eligible >= window.minimumObservedSeconds() && ratio >= window.ratio()
             ? severity
             : BehaviorSeverity.NONE,
         observed);

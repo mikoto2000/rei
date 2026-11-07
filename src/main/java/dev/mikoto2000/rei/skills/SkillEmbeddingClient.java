@@ -1,11 +1,10 @@
 package dev.mikoto2000.rei.skills;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -47,10 +46,6 @@ public final class SkillEmbeddingClient implements SkillMetadataEmbedding, AutoC
 
   /** スキルの利用で用いる埋め込み表現の生成を返す。 */
   @Override
-  @SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Preserves the original unchecked failure from the embedding future.")
   public List<float[]> embed(List<String> texts) {
     var budget = dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
     var future =
@@ -74,8 +69,11 @@ public final class SkillEmbeddingClient implements SkillMetadataEmbedding, AutoC
       future.cancel(true);
       throw new IllegalStateException("Skill embedding timed out");
     } catch (ExecutionException error) {
-      if (error.getCause() instanceof RuntimeException cause) throw cause;
-      throw new IllegalStateException("Skill embedding failed", error.getCause());
+      Throwable cause = error.getCause();
+      if (cause instanceof Error fatal) throw fatal;
+      if (cause instanceof IllegalArgumentException invalid) throw invalid;
+      if (cause instanceof IllegalStateException stateFailure) throw stateFailure;
+      throw new CompletionException(cause);
     } finally {
       executor.purge();
     }

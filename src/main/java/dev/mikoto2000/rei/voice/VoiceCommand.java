@@ -36,15 +36,21 @@ public class VoiceCommand {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Reads and updates the shared voice settings when handling user configuration commands.")
+      justification =
+          "Reads and updates the shared voice settings when handling user configuration commands.")
   private final VoiceProperties properties;
 
   /** シェル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Shares the shell session and routes operations for its selected conversation.")
-  private final ShellConversationService shell;
+  private final java.util.function.Supplier<dev.mikoto2000.rei.core.project.ProjectClient>
+      captureClient;
+
+  private final java.util.function.Supplier<ConversationTarget> captureTarget;
+  private final java.util.function.BiPredicate<
+          dev.mikoto2000.rei.core.project.ProjectClient, ConversationTarget>
+      selectedTarget;
+  private final java.util.function.Function<ConversationTarget, java.util.List<String>>
+      pendingInputs;
+  private final java.util.function.BiPredicate<ConversationTarget, java.util.UUID> cancelPending;
 
   /** モデル一覧。 */
   @SuppressFBWarnings(
@@ -57,7 +63,8 @@ public class VoiceCommand {
   @SuppressFBWarnings(
       value = "EI_EXPOSE_REP2",
       matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared voice delivery state for binding, cancellation, and confirmations.")
+      justification =
+          "Uses the shared voice delivery state for binding, cancellation, and confirmations.")
   private final VoiceDeliveryService delivery;
 
   /** 排他制御。 */
@@ -191,7 +198,11 @@ public class VoiceCommand {
     this.voice = voice;
     this.devices = devices;
     this.properties = properties;
-    this.shell = shell;
+    this.captureClient = shell == null ? null : () -> shell.captureClient();
+    this.captureTarget = () -> shell.captureTarget();
+    this.selectedTarget = (client, destination) -> shell.isSelected(client, destination);
+    this.pendingInputs = destination -> VoiceDeliveryService.pendingInputLines(shell, destination);
+    this.cancelPending = (destination, id) -> shell.cancelPending(destination, id);
     this.models = models;
     this.delivery = delivery;
     this.monitor = monitor;
@@ -201,7 +212,7 @@ public class VoiceCommand {
   private void bindDelivery() {
     if (delivery != null) {
       delivery.setConfirmation(properties.isConfirmation());
-      delivery.bind(shell.captureClient(), target);
+      delivery.bind(captureClient.get(), target);
     }
   }
 
@@ -231,7 +242,7 @@ public class VoiceCommand {
   /** 音声による対話で用いる試行を返す。 */
   private int attempt(IntSupplier action) {
     try {
-      if (voice == null || devices == null || properties == null || shell == null)
+      if (voice == null || devices == null || properties == null || captureClient == null)
         throw new IllegalStateException("Voice service is unavailable");
       return action.getAsInt();
     } catch (IllegalArgumentException | IllegalStateException e) {
@@ -296,8 +307,8 @@ public class VoiceCommand {
       try {
         if (voice.state() != VoiceInputCoordinator.State.OFF) return;
         var selected = devices.selected();
-        var client = shell.captureClient();
-        var initialTarget = shell.captureTarget();
+        var client = captureClient.get();
+        var initialTarget = captureTarget.get();
         long generation = ++startGeneration;
         autoStartThread =
             Thread.ofVirtual()
@@ -353,9 +364,9 @@ public class VoiceCommand {
       if (shellClosed || generation != startGeneration)
         throw new IllegalStateException("Voice startup cancelled");
       requireOff();
-      if (automatic && !shell.isSelected(client, initialTarget))
+      if (automatic && !selectedTarget.test(client, initialTarget))
         throw new IllegalStateException("選択Project/Sessionが変わったため自動開始を取り消しました");
-      target = automatic ? initialTarget : shell.captureTarget();
+      target = automatic ? initialTarget : captureTarget.get();
       bindDelivery();
       startup =
           diagnostic
@@ -761,8 +772,8 @@ public class VoiceCommand {
         parent.spec.commandLine().getOut().println("音声入力の送信先は未設定です");
         return;
       }
-      for (var input : parent.shell.pending(parent.target))
-        parent.spec.commandLine().getOut().println(input.inputId() + " " + input.text());
+      for (String input : parent.pendingInputs.apply(parent.target))
+        parent.spec.commandLine().getOut().println(input);
     }
 
     /** 対象の実行をキャンセルする。 */
@@ -772,7 +783,7 @@ public class VoiceCommand {
           () -> {
             if (!(parent.voice != null && parent.voice.cancelPendingCorrection(id))
                 && !(parent.delivery != null && parent.delivery.cancel(id))
-                && (parent.target == null || !parent.shell.cancelPending(parent.target, id))) {
+                && (parent.target == null || !parent.cancelPending.test(parent.target, id))) {
               parent.spec.commandLine().getErr().println("待機中の入力が見つかりません");
               return 2;
             }

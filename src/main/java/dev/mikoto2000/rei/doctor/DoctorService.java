@@ -13,8 +13,6 @@ import dev.mikoto2000.rei.externalagent.CodexProperties;
 import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.voice.VoiceModelManifest;
 import dev.mikoto2000.rei.voice.VoiceProperties;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
@@ -45,12 +43,10 @@ public class DoctorService {
   private final Environment environment;
 
   /** 音声。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Reads the application-bound VoiceProperties shared by consumers of these settings.")
-  private final VoiceProperties voice;
+  private final java.util.function.Supplier<String> microphoneId;
+
+  private final java.util.function.Supplier<String> bundleDirectory;
+  private final java.util.function.BooleanSupplier autoStartVoice;
 
   /** Codexの設定または実行の窓口。 */
   private final BooleanSupplier codexEnabled;
@@ -101,7 +97,9 @@ public class DoctorService {
       Clock clock,
       VoiceModelManifest manifest) {
     this.environment = environment;
-    this.voice = voice;
+    this.microphoneId = () -> voice.getDeviceId();
+    this.bundleDirectory = () -> voice.getBundleDirectory();
+    this.autoStartVoice = () -> voice.isAutoStart();
     this.codexEnabled = () -> codex.isEnabled();
     this.codexCommand = () -> codex.getCommand();
     this.claudeEnabled = () -> claude.isEnabled();
@@ -270,16 +268,18 @@ public class DoctorService {
         results,
         "voice.microphone",
         "effective configuration",
-        () ->
-            configured(
-                "voice.microphone",
-                present(voice.getDeviceId()) ? UNVERIFIED : NOT_CONFIGURED,
-                present(voice.getDeviceId())
-                    ? "Microphone selection configured; capture not tested"
-                    : "No explicit microphone selection",
-                details,
-                "rei.voice.device-id",
-                "Select a device with /voice device; capture requires explicit active diagnosis"));
+        () -> {
+          boolean selected = present(microphoneId.get());
+          return configured(
+              "voice.microphone",
+              selected ? UNVERIFIED : NOT_CONFIGURED,
+              selected
+                  ? "Microphone selection configured; capture not tested"
+                  : "No explicit microphone selection",
+              details,
+              "rei.voice.device-id",
+              "Select a device with /voice device; capture requires explicit active diagnosis");
+        });
     for (String feature :
         List.of(
             "rei.embedding.enabled",
@@ -364,7 +364,8 @@ public class DoctorService {
 
   /** 実行環境の診断で用いるまとまりを返す。 */
   private DoctorResult bundle(boolean details) throws IOException {
-    if (!present(voice.getBundleDirectory()))
+    String directory = bundleDirectory.get();
+    if (!present(directory))
       return configured(
           "voice.bundle",
           NOT_CONFIGURED,
@@ -372,7 +373,7 @@ public class DoctorService {
           details,
           "rei.voice.bundle-directory",
           "Configure or explicitly install the optional voice bundle");
-    if (remotePath(voice.getBundleDirectory()))
+    if (remotePath(directory))
       return result(
           "voice.bundle",
           SKIPPED,
@@ -380,7 +381,7 @@ public class DoctorService {
           "Network-share path not inspected",
           "Passive diagnosis does not probe network shares",
           "Use a local model directory or inspect the share separately");
-    Path root = Path.of(voice.getBundleDirectory());
+    Path root = Path.of(directory);
     Path managed = VoiceModelManifest.assetPath(root, "managed/" + manifest.id());
     int best = 0;
     for (Path candidate : List.of(managed, root)) {
@@ -395,7 +396,7 @@ public class DoctorService {
     var status =
         best == manifest.assets().size()
             ? OK
-            : voice.isAutoStart() ? ERROR : best == 0 ? NOT_CONFIGURED : WARNING;
+            : autoStartVoice.getAsBoolean() ? ERROR : best == 0 ? NOT_CONFIGURED : WARNING;
     return configured(
         "voice.bundle",
         status,

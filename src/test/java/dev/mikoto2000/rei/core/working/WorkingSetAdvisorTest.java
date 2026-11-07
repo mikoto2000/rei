@@ -28,7 +28,7 @@ class WorkingSetAdvisorTest {
 
   /** 作業中の情報管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
-  void workingSetIsInjectedIntoUserMessage() {
+  void workingSetIsAppendedWithoutChangingUserMessage() {
     Clock clock = Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE);
     WorkingSet ws = new WorkingSet(20, clock);
     ws.recordRead(Path.of("src/foo.java"));
@@ -44,10 +44,13 @@ class WorkingSetAdvisorTest {
 
     ChatClientRequest result = advisor.before(request, new NoopAdvisorChain());
 
-    String text = result.prompt().getUserMessage().getText();
+    assertEquals("fix the bug", result.prompt().getUserMessage().getText());
+    assertEquals(userMessage, result.prompt().getInstructions().getFirst());
+    var snapshot = result.prompt().getInstructions().getLast();
+    assertEquals(true, snapshot.getMetadata().get("rei.workingSet"));
+    String text = snapshot.getText();
     assertTrue(text.contains(Path.of("src/foo.java").toAbsolutePath().normalize().toString()));
     assertTrue(text.contains(Path.of("src/fooTest.java").toAbsolutePath().normalize().toString()));
-    assertTrue(text.contains("fix the bug"));
     assertEquals(1, received.size());
     assertEquals(AgentEventType.WORKING_SET_CONTEXT_INJECTED, received.getFirst().type());
     WorkingSetContextInjectedPayload payload =

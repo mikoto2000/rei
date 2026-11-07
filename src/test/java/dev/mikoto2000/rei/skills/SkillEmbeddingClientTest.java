@@ -35,6 +35,21 @@ class SkillEmbeddingClientTest {
     }
   }
 
+  @Test
+  void fatalProviderFailureReachesTheCallerUnchanged() {
+    var fatal = new AssertionError("embedding provider invariant");
+    try (var client =
+        new SkillEmbeddingClient(
+            () ->
+                input -> {
+                  throw fatal;
+                },
+            Duration.ofSeconds(1))) {
+      org.junit.jupiter.api.Assertions.assertSame(
+          fatal, assertThrows(AssertionError.class, () -> client.embed(List.of("metadata"))));
+    }
+  }
+
   /** スキルの利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledSearchNeverResolvesProvider() {

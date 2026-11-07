@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.core.stagnation;
 
 import dev.mikoto2000.rei.llm.OutputLimitDetector;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -604,11 +602,6 @@ public class StagnationChatModel implements ChatModel {
           }
 
           /** 実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
-          @SuppressFBWarnings(
-              value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-              matchType = SuppressMatchType.EXACT,
-              justification =
-                  "Preserves the original tool failure when it cannot be handled as a review correction.")
           public String call(String input, ToolContext toolContext) {
             try (var scope =
                 dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
@@ -665,7 +658,8 @@ public class StagnationChatModel implements ChatModel {
                             "readReviewPages",
                             "readRawToolResult",
                             "claimReviewWorkItem",
-                            "readNextReviewWorkItem")
+                            "readNextReviewWorkItem",
+                            "listFile")
                         .contains(name))
                   return context.toolReadCorrection(read.code(), read.getMessage());
                 if (rejected != null
@@ -678,7 +672,15 @@ public class StagnationChatModel implements ChatModel {
                             "restartReview")
                         .contains(name))
                   return context.reviewSubmissionCorrection(rejected.getMessage());
-                throw error;
+                throw RunExecutionContext.toolCallbackFailure(error);
+              } catch (Error fatal) {
+                try {
+                  if (!decorated) context.failDurableTool(durableCall, name, fatal);
+                  context.recordFailure(name, input, fatal);
+                } catch (RuntimeException | Error observationFailure) {
+                  if (observationFailure != fatal) fatal.addSuppressed(observationFailure);
+                }
+                throw fatal;
               }
               if (!decorated) context.completeDurableTool(durableCall, name, result);
               context.recordTool(name, input, result, before);

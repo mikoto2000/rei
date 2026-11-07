@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.core.completion;
 
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -34,11 +32,15 @@ public final class ApprovalActionMenu implements AutoCloseable {
   private record Request(Owner owner, String id) {}
 
   /** 読み取り元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the live JLine reader for the current terminal session.")
-  private final LineReader reader;
+  private final Supplier<String> readInput;
+
+  private final Runnable clearInput;
+  private final java.util.function.Consumer<String> replaceInput;
+  private final java.util.function.Consumer<String> callWidget;
+  private final java.util.function.Consumer<String> printAbove;
+  private final java.util.function.Consumer<String> showStatus;
+  private final java.util.function.Consumer<String> showMenu;
+  private final Runnable clearMenu;
 
   /** 所有者。 */
   private final Supplier<Owner> owner;
@@ -90,16 +92,15 @@ public final class ApprovalActionMenu implements AutoCloseable {
   /** 入力候補の提示に関する再確認状態を処理する。 */
   private void refreshStatus() {
     int count = pendingCount();
-    if (reader instanceof ApprovalMenuLineReader menuReader)
-      menuReader.approvalStatus(
-          !closed && count > 0
-              ? "[APPROVAL PENDING: "
-                  + count
-                  + "] /approval list | "
-                  + (enabled
-                      ? "\u7a7a\u306e\u5165\u529b\u6b04: \u2191\u2193 \u3067\u9078\u629e / Enter \u3067\u5b9f\u884c (\u6700\u521d\u306f\u8a73\u7d30\u78ba\u8a8d)"
-                      : "\u901a\u5e38\u306e\u5165\u529b\u6b04\u3067\u64cd\u4f5c\u3067\u304d\u307e\u3059")
-              : "");
+    showStatus.accept(
+        !closed && count > 0
+            ? "[APPROVAL PENDING: "
+                + count
+                + "] /approval list | "
+                + (enabled
+                    ? "\u7a7a\u306e\u5165\u529b\u6b04: \u2191\u2193 \u3067\u9078\u629e / Enter \u3067\u5b9f\u884c (\u6700\u521d\u306f\u8a73\u7d30\u78ba\u8a8d)"
+                    : "\u901a\u5e38\u306e\u5165\u529b\u6b04\u3067\u64cd\u4f5c\u3067\u304d\u307e\u3059")
+            : "");
   }
 
   /**
@@ -177,7 +178,25 @@ public final class ApprovalActionMenu implements AutoCloseable {
 
   /** 指定された値や利用先を使って、ApprovalActionMenuを初期化する。 */
   public ApprovalActionMenu(LineReader reader, Supplier<Owner> owner) {
-    this.reader = reader;
+    this.readInput = () -> reader.getBuffer().toString();
+    this.clearInput = () -> reader.getBuffer().clear();
+    this.replaceInput =
+        value -> {
+          var buffer = reader.getBuffer();
+          buffer.clear();
+          buffer.write(value);
+        };
+    this.callWidget = name -> reader.callWidget(name);
+    this.printAbove = text -> reader.printAbove(text);
+    if (reader instanceof ApprovalMenuLineReader menuReader) {
+      this.showStatus = text -> menuReader.approvalStatus(text);
+      this.showMenu = text -> menuReader.approvalMenu(text);
+      this.clearMenu = () -> menuReader.clearApprovalMenu();
+    } else {
+      this.showStatus = text -> {};
+      this.showMenu = text -> {};
+      this.clearMenu = () -> {};
+    }
     this.owner = owner;
     reader.getWidgets().put("rei-approval-up", () -> move(-1));
     reader.getWidgets().put("rei-approval-down", () -> move(1));
@@ -205,18 +224,18 @@ public final class ApprovalActionMenu implements AutoCloseable {
       if (added) revision++;
     }
     refreshStatus();
-    if (added) reader.printAbove("承認メニュー: 入力欄が空のとき ↑↓ で選択、Enter で実行（最初は詳細確認）。");
+    if (added) printAbove.accept("承認メニュー: 入力欄が空のとき ↑↓ で選択、Enter で実行（最初は詳細確認）。");
   }
 
   /** 入力候補の提示において、moveに該当するか判定する。 */
   synchronized boolean move(int direction) {
     if (!enabled) return history(direction);
-    String buffer = reader.getBuffer().toString();
+    String buffer = readInput.get();
     if (!buffer.isEmpty() && !Objects.equals(buffer, inserted)) return history(direction);
     Owner current = owner.get();
     var visible = requests.stream().filter(r -> r.owner.equals(current)).toList();
     if (visible.isEmpty()) {
-      if (Objects.equals(buffer, inserted)) reader.getBuffer().clear();
+      if (Objects.equals(buffer, inserted)) clearInput.run();
       selected = null;
       inserted = null;
       return history(direction);
@@ -232,20 +251,18 @@ public final class ApprovalActionMenu implements AutoCloseable {
       action = next % LABELS.size();
     }
     inserted = command(selected.id, action);
-    reader.getBuffer().clear();
-    reader.getBuffer().write(inserted);
+    replaceInput.accept(inserted);
     var display = new StringBuilder("承認 [" + selected.id + "]　↑↓: 選択 / Enter: 実行\n");
     for (int i = 0; i < LABELS.size(); i++)
       display.append(i == action ? "▶ " : "  ").append(LABELS.get(i)).append('\n');
-    if (reader instanceof ApprovalMenuLineReader menuReader)
-      menuReader.approvalMenu(display.toString().stripTrailing());
+    showMenu.accept(display.toString().stripTrailing());
     return true;
   }
 
   /** 過去の記録を、条件に従って参照できる形で返す。 */
   private boolean history(int direction) {
     clearDisplay();
-    reader.callWidget(
+    callWidget.accept(
         direction < 0 ? LineReader.UP_LINE_OR_HISTORY : LineReader.DOWN_LINE_OR_HISTORY);
     return true;
   }
@@ -253,24 +270,24 @@ public final class ApprovalActionMenu implements AutoCloseable {
   /** 入力候補の提示において、利用開始に該当するか判定する。 */
   synchronized boolean enter() {
     clearDisplay();
-    if (enabled && selected != null && Objects.equals(reader.getBuffer().toString(), inserted)) {
+    if (enabled && selected != null && Objects.equals(readInput.get(), inserted)) {
       if (!selected.owner.equals(owner.get()) || !requests.contains(selected)) {
-        reader.getBuffer().clear();
+        clearInput.run();
         selected = null;
         inserted = null;
-        reader.printAbove("Project/Session が変わったため、承認の選択を取り消しました。");
+        printAbove.accept("Project/Session が変わったため、承認の選択を取り消しました。");
         return true;
       }
       selected = null;
       inserted = null;
     }
-    reader.callWidget(LineReader.ACCEPT_LINE);
+    callWidget.accept(LineReader.ACCEPT_LINE);
     return true;
   }
 
   /** 保持している情報を初期状態へ戻すため、表示を消去する。 */
   private void clearDisplay() {
-    if (reader instanceof ApprovalMenuLineReader menuReader) menuReader.clearApprovalMenu();
+    clearMenu.run();
   }
 
   /** 入力候補の提示で用いるコマンドを返す。 */

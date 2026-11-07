@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -37,6 +38,7 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
 /** エージェントイベント応答生成に使うモデル時間計測の結果と状態の契約を検証するテスト。 */
 class AgentEventChatModelTimingTest {
@@ -108,6 +110,51 @@ class AgentEventChatModelTimingTest {
     assertNull(span.generationTps());
     assertEquals(Status.SUCCESS, span.status());
     assertFalse(run.toString().contains("SECRET"));
+  }
+
+  @Test
+  void streamingTimingStaysWithTheInvocationAcrossSubscriptionAndSignalScopes() {
+    var unrelated = new AgentRunContext("other-run", "other-session", owner.projectRoot(), "project");
+    store.beginRun(unrelated.runId(), unrelated.projectId(), unrelated.conversationId());
+    var lexicalPrompt = new Prompt("stream without tool context");
+    var delegate = mock(ChatModel.class);
+    var model = model(delegate);
+    var scheduler = Schedulers.newSingle("llm-timing-test");
+    try {
+      when(delegate.stream(lexicalPrompt))
+          .thenReturn(
+              Flux.create(
+                  sink -> {
+                    try (var scope = AgentRunScope.open(unrelated)) {
+                      tick.set(7);
+                      sink.next(response("ok"));
+                      sink.complete();
+                    }
+                  }));
+      Flux<ChatResponse> stream;
+      try (var scope = AgentRunScope.open(owner)) {
+        stream = model.stream(lexicalPrompt);
+      }
+      stream.subscribeOn(scheduler).blockLast(Duration.ofSeconds(5));
+      try (var scope = AgentRunScope.open(unrelated)) {
+        stream.blockLast(Duration.ofSeconds(5));
+      }
+
+      var run = store.latest(owner.projectId(), owner.conversationId()).orElseThrow();
+      assertEquals(2, run.spans().size());
+      for (var span : run.spans()) {
+        assertEquals(Status.SUCCESS, span.status());
+        assertTrue(span.milestones().containsKey(Metric.FIRST_FRAMEWORK_CHUNK));
+        assertTrue(span.milestones().containsKey(Metric.FIRST_GENERATION_TEXT));
+      }
+      assertEquals(7, run.milestones().get(Metric.FIRST_FRAMEWORK_CHUNK));
+      assertEquals(7, run.milestones().get(Metric.FIRST_GENERATION_TEXT));
+      var other = store.latest(unrelated.projectId(), unrelated.conversationId()).orElseThrow();
+      assertEquals(List.of(), other.spans());
+      assertEquals(Map.of(), other.milestones());
+    } finally {
+      scheduler.dispose();
+    }
   }
 
   /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */

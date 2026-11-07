@@ -60,6 +60,10 @@ public class RunExecutionContext {
   /** Allow forward pagination before requiring one consolidated outcome. */
   static final int RESUME_BATCH_READ_LIMIT = 8;
 
+  private static final java.util.Set<String> RESUME_REVIEW_READ_TOOLS =
+      java.util.Set.of(
+          "readReviewFile", "readReviewPages", "readReviewWorkItem", "readNextReviewWorkItem");
+
   /** Bound text-only outcome responses separately from already counted duplicate reads. */
   static final int RESUME_BATCH_COMMIT_LIMIT = 4;
 
@@ -342,7 +346,8 @@ public class RunExecutionContext {
           || reviewPageKeys.stream().anyMatch(k -> !k.matches("readReviewFile:[0-9a-f]{64}"))
           || reviewPageReadKey != null
               && (!reviewPagePending
-                  || !reviewPageReadKey.matches("readReview(File|Pages):[0-9a-f]{64}"))
+                  || !reviewPageReadKey.matches("[^:]+:[0-9a-f]{64}")
+                  || !RESUME_REVIEW_READ_TOOLS.contains(reviewPageReadKey.split(":", 2)[0]))
           || reviewPageReadArguments != null
               && (reviewPageReadKey == null
                   || reviewPageReadArguments.length() > 4096
@@ -584,11 +589,7 @@ public class RunExecutionContext {
   public synchronized boolean resumeAcquisitionBlocked(String name, String arguments) {
     // Exact edit baselines and proposed diffs are necessary to turn the assessed unit into
     // an applied repair. They are not broad source reacquisition.
-    if (needsResumeContentWork()
-        && (name.equals("readReviewFile")
-            || name.equals("readReviewPages")
-            || name.equals("readReviewWorkItem")
-            || name.equals("readNextReviewWorkItem")))
+    if (needsResumeContentWork() && RESUME_REVIEW_READ_TOOLS.contains(name))
       return resumeReviewPagePending
           && (arguments == null
               || resumeReviewPageReadKey != null
@@ -606,11 +607,7 @@ public class RunExecutionContext {
 
   /** A saved page may need exact redelivery after prompt eviction or a process restart. */
   public synchronized boolean resumeToolHidden(String name) {
-    return !(name.equals("readReviewFile")
-            || name.equals("readReviewPages")
-            || name.equals("readReviewWorkItem")
-            || name.equals("readNextReviewWorkItem"))
-        && resumeAcquisitionBlocked(name);
+    return !RESUME_REVIEW_READ_TOOLS.contains(name) && resumeAcquisitionBlocked(name);
   }
 
   public synchronized String resumeBatchFeedback() {
@@ -1111,12 +1108,27 @@ public class RunExecutionContext {
   }
 
   /** 実行の停滞への対処に関するfail永続化されたツールを処理する。 */
-  public void failDurableTool(String call, String name, RuntimeException error) {
+  public void failDurableTool(String call, String name, Throwable error) {
     publisher.publishBoundary(
         factory
             .toolFailed(
                 call, name, dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(error))
             .withOwnership(runContext));
+  }
+
+  /**
+   * Tool controls keep their type across dispatch, with an explicit failure for unknown callbacks.
+   */
+  public static IllegalStateException toolCallbackFailure(RuntimeException error) {
+    if (error instanceof ExecutionStoppedException stopped) throw stopped;
+    if (error instanceof dev.mikoto2000.rei.core.chat.RunWaitingException waiting) throw waiting;
+    if (error instanceof dev.mikoto2000.rei.chatgpt.ChatGptException denied) throw denied;
+    if (error instanceof org.springframework.ai.tool.execution.ToolExecutionException toolFailure)
+      throw toolFailure;
+    if (error instanceof IllegalArgumentException invalid) throw invalid;
+    if (error instanceof SecurityException forbidden) throw forbidden;
+    if (error instanceof IllegalStateException stateFailure) return stateFailure;
+    return new IllegalStateException("Tool callback failed", error);
   }
 
   /** 待機中。 */
@@ -1549,10 +1561,7 @@ public class RunExecutionContext {
       boolean wasPending = hasPendingResumeContentWork();
       resumeBatchReads = Math.min(RESUME_BATCH_READ_LIMIT, resumeBatchReads + 1);
       resumeBatchReadInIteration = true;
-      if ((name.equals("readReviewFile")
-          || name.equals("readReviewPages")
-          || name.equals("readReviewWorkItem")
-          || name.equals("readNextReviewWorkItem"))) {
+      if (RESUME_REVIEW_READ_TOOLS.contains(name)) {
         resumeReviewPagePending = true;
         resumeReviewPageReadKey = ProgressEvaluator.actionKey(name, arguments);
         resumeReviewPageReadArguments =
@@ -1582,7 +1591,7 @@ public class RunExecutionContext {
   }
 
   /** 後から経緯や使用量を確認できるよう、失敗情報を記録する。 */
-  public synchronized void recordFailure(String name, String arguments, RuntimeException error) {
+  public synchronized void recordFailure(String name, String arguments, Throwable error) {
     iterationFailed = true;
     if (closed) return;
     evaluator.recordFailure(name, arguments);

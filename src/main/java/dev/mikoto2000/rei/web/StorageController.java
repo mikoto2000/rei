@@ -5,8 +5,6 @@ import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.command.StorageCommand;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -33,11 +31,33 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/storage")
 public final class StorageController {
   /** 保存。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Runs storage operations against the shared storage command and its services.")
-  private final StorageCommand storage;
+  private final Function<String, String> readStatus;
+
+  private final RetentionReports retention;
+  private final AutomaticReports automatic;
+  private final MaintenanceReports maintenance;
+
+  private record RetentionReports(
+      Function<Plan, String> plan,
+      Function<String, String> approve,
+      Function<String, String> apply,
+      Supplier<String> history,
+      Function<String, String> restore,
+      Function<String, String> approvePurge,
+      Function<String, String> purge,
+      Function<Policy, String> policy) {}
+
+  private record AutomaticReports(
+      Function<Automatic, String> propose,
+      Function<String, String> approve,
+      Function<String, String> disable,
+      Supplier<String> history) {}
+
+  private record MaintenanceReports(
+      Supplier<String> status,
+      Supplier<String> checkpoint,
+      java.util.function.IntFunction<String> incrementalVacuum,
+      java.util.function.LongFunction<String> vacuum) {}
 
   /** プロジェクト一覧。 */
   private final Function<String, Optional<ProjectContext>> findProject;
@@ -116,7 +136,47 @@ public final class StorageController {
 
   /** 指定された値や利用先を使って、StorageControllerを初期化する。 */
   public StorageController(StorageCommand storage, ProjectRegistry projects) {
-    this.storage = storage;
+    this.readStatus = selected -> storage.reportStatus(selected);
+    this.retention =
+        new RetentionReports(
+            request ->
+                storage.reportPlan(
+                    request.category() == null ? "raw-results" : request.category(),
+                    request.current() ? "current" : null,
+                    request.maxObjects() == null ? 100 : request.maxObjects(),
+                    request.maxBytes() == null ? 16777216 : request.maxBytes()),
+            id -> storage.reportApprove(id),
+            id -> storage.reportApply(id),
+            () -> storage.reportRetentionHistory(),
+            id -> storage.reportRestore(id),
+            id -> storage.reportApprovePurge(id),
+            id -> storage.reportPurge(id),
+            request ->
+                storage.reportPolicy(
+                    request.category(),
+                    request.retentionDays(),
+                    request.maxCount(),
+                    request.maxPolicyBytes(),
+                    request.clearCount(),
+                    request.clearPolicyBytes()));
+    this.automatic =
+        new AutomaticReports(
+            request ->
+                storage.reportAutoPropose(
+                    request.category(),
+                    request.current() ? "current" : null,
+                    request.maxObjects(),
+                    request.maxBytes(),
+                    request.intervalSeconds()),
+            id -> storage.reportAutoApprove(id),
+            id -> storage.reportAutoDisable(id),
+            () -> storage.reportAutoHistory());
+    this.maintenance =
+        new MaintenanceReports(
+            () -> storage.reportMaintenanceStatus(),
+            () -> storage.reportCheckpoint(),
+            pages -> storage.reportIncrementalVacuum(pages),
+            seconds -> storage.reportVacuum(seconds));
     this.findProject = id -> projects.resolveById(id);
   }
 
@@ -125,7 +185,7 @@ public final class StorageController {
   public Text status(
       @RequestParam(required = false) String projectId,
       @RequestParam(defaultValue = "false") boolean current) {
-    return scoped(projectId, current, () -> storage.reportStatus(current ? "current" : null));
+    return scoped(projectId, current, () -> readStatus.apply(current ? "current" : null));
   }
 
   /** 依頼を進めるための候補や手順を組み立てる。 */
@@ -133,56 +193,48 @@ public final class StorageController {
   public Text plan(@RequestBody Plan request) {
     if (request == null) throw new IllegalArgumentException("Plan required");
     optional(request.category());
-    return scoped(
-        request.projectId(),
-        request.current(),
-        () ->
-            storage.reportPlan(
-                request.category() == null ? "raw-results" : request.category(),
-                request.current() ? "current" : null,
-                request.maxObjects() == null ? 100 : request.maxObjects(),
-                request.maxBytes() == null ? 16777216 : request.maxBytes()));
+    return scoped(request.projectId(), request.current(), () -> retention.plan().apply(request));
   }
 
   /** Web APIによる操作で用いる承認を返す。 */
   @PostMapping("/retention/plans/{id}/approve")
   public Text approve(@PathVariable String id) {
     required(id);
-    return text(storage.reportApprove(id));
+    return text(retention.approve().apply(id));
   }
 
   /** 指定された内容を、現在の対象へ反映する。 */
   @PostMapping("/retention/plans/{id}/apply")
   public Text apply(@PathVariable String id) {
     required(id);
-    return text(storage.reportApply(id));
+    return text(retention.apply().apply(id));
   }
 
   /** 過去の記録を、条件に従って参照できる形で返す。 */
   @GetMapping("/retention/history")
   public Text history() {
-    return text(storage.reportRetentionHistory());
+    return text(retention.history().get());
   }
 
   /** 保存済みの記録から、利用する状態を復元する。 */
   @PostMapping("/retention/executions/{id}/restore")
   public Text restore(@PathVariable String id) {
     required(id);
-    return text(storage.reportRestore(id));
+    return text(retention.restore().apply(id));
   }
 
   /** Web APIによる操作で用いる承認保持期限を過ぎた情報の削除を返す。 */
   @PostMapping("/retention/executions/{id}/approve-purge")
   public Text approvePurge(@PathVariable String id) {
     required(id);
-    return text(storage.reportApprovePurge(id));
+    return text(retention.approvePurge().apply(id));
   }
 
   /** Web APIによる操作で用いる保持期限を過ぎた情報の削除を返す。 */
   @PostMapping("/retention/executions/{id}/purge")
   public Text purge(@PathVariable String id) {
     required(id);
-    return text(storage.reportPurge(id));
+    return text(retention.purge().apply(id));
   }
 
   /** Web APIによる操作で用いる判断基準を返す。 */
@@ -191,14 +243,7 @@ public final class StorageController {
     if (request == null) throw new IllegalArgumentException("Policy required");
     required(request.category());
     optional(request.retentionDays());
-    return text(
-        storage.reportPolicy(
-            request.category(),
-            request.retentionDays(),
-            request.maxCount(),
-            request.maxPolicyBytes(),
-            request.clearCount(),
-            request.clearPolicyBytes()));
+    return text(retention.policy().apply(request));
   }
 
   /** 後続の判断で選べる候補を用意するため、保存受付窓口を提案する。 */
@@ -210,48 +255,39 @@ public final class StorageController {
         || request.intervalSeconds() == null)
       throw new IllegalArgumentException("Explicit automatic retention limits required");
     required(request.category());
-    return scoped(
-        request.projectId(),
-        request.current(),
-        () ->
-            storage.reportAutoPropose(
-                request.category(),
-                request.current() ? "current" : null,
-                request.maxObjects(),
-                request.maxBytes(),
-                request.intervalSeconds()));
+    return scoped(request.projectId(), request.current(), () -> automatic.propose().apply(request));
   }
 
   /** Web APIによる操作で用いる承認自動を返す。 */
   @PostMapping("/retention/automatic/{id}/approve")
   public Text approveAutomatic(@PathVariable String id) {
     required(id);
-    return text(storage.reportAutoApprove(id));
+    return text(automatic.approve().apply(id));
   }
 
   /** Web APIによる操作で用いる無効化自動を返す。 */
   @PostMapping("/retention/automatic/{id}/disable")
   public Text disableAutomatic(@PathVariable String id) {
     required(id);
-    return text(storage.reportAutoDisable(id));
+    return text(automatic.disable().apply(id));
   }
 
   /** Web APIによる操作で用いる自動履歴を返す。 */
   @GetMapping("/retention/automatic/history")
   public Text automaticHistory() {
-    return text(storage.reportAutoHistory());
+    return text(automatic.history().get());
   }
 
   /** Web APIによる操作で用いる保守状態を返す。 */
   @GetMapping("/maintenance/status")
   public Text maintenanceStatus() {
-    return text(storage.reportMaintenanceStatus());
+    return text(maintenance.status().get());
   }
 
   /** Web APIによる操作で用いる再開用の記録を返す。 */
   @PostMapping("/maintenance/checkpoint")
   public Text checkpoint() {
-    return text(storage.reportCheckpoint());
+    return text(maintenance.checkpoint().get());
   }
 
   /** Web APIによる操作で用いるincremental保存領域の整理を返す。 */
@@ -259,7 +295,7 @@ public final class StorageController {
   public Text incrementalVacuum(@RequestBody Pages request) {
     if (request == null || request.pages() == null)
       throw new IllegalArgumentException("Explicit page budget required");
-    return text(storage.reportIncrementalVacuum(request.pages()));
+    return text(maintenance.incrementalVacuum().apply(request.pages()));
   }
 
   /** Web APIによる操作で用いる保存領域の整理を返す。 */
@@ -267,7 +303,7 @@ public final class StorageController {
   public Text vacuum(@RequestBody Window request) {
     if (request == null || request.windowSeconds() == null)
       throw new IllegalArgumentException("Explicit maintenance window required");
-    return text(storage.reportVacuum(request.windowSeconds()));
+    return text(maintenance.vacuum().apply(request.windowSeconds()));
   }
 
   /** Web APIによる操作で用いる対象を限定したを返す。 */
@@ -278,7 +314,8 @@ public final class StorageController {
     }
     required(projectId);
     var project =
-        findProject.apply(projectId)
+        findProject
+            .apply(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
     try (var scope =

@@ -290,10 +290,6 @@ public final class StorageDatabase {
    * for the entire commit/rollback before returning, preserving the caller's interrupt flag. Other
    * I/O and SQL failures still propagate; interrupted or changed files are never adopted.
    */
-  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      justification =
-          "Preserve the original transaction failure across FutureTask; wrapping would change cancellation semantics.")
   <T> T activityTransaction(Work<T> work) {
     if (Thread.holdsLock(state))
       throw new IllegalStateException("Activity commit cannot start inside a storage operation");
@@ -314,9 +310,13 @@ public final class StorageDatabase {
         } catch (InterruptedException cancellation) {
           interrupted = true;
         } catch (java.util.concurrent.ExecutionException failure) {
-          if (failure.getCause() instanceof RuntimeException runtime) throw runtime;
-          if (failure.getCause() instanceof Error error) throw error;
-          throw new IllegalStateException("Cannot commit Activity storage", failure.getCause());
+          Throwable cause = failure.getCause();
+          if (cause instanceof Error fatal) throw fatal;
+          if (cause instanceof ArithmeticException overflow) throw overflow;
+          if (cause instanceof IllegalArgumentException invalid) throw invalid;
+          if (cause instanceof IllegalStateException stateFailure) throw stateFailure;
+          if (cause instanceof java.io.UncheckedIOException ioFailure) throw ioFailure;
+          throw new IllegalStateException("Cannot commit Activity storage", cause);
         }
       }
     } finally {

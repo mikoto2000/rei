@@ -12,11 +12,17 @@ import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
  * <p>One explicit ownerless invocation or batch, including repair and semantic judgement.
  */
 final class StandaloneSubAgentBudget implements OutputLimitRunBudget.LlmCallReservation {
+  record Limits(int calls, long tokens) {
+    static Limits from(SubAgentProperties properties) {
+      return new Limits(
+          properties.getStandaloneMaxLlmCalls(), properties.getStandaloneMaxTotalTokens());
+    }
+  }
+
   /** 指定された内容から新しい対象を作成する。 */
-  static OutputLimitRunBudget.LlmCallReservation create(SubAgentProperties properties) {
-    if (properties.getStandaloneMaxLlmCalls() == 0 && properties.getStandaloneMaxTotalTokens() == 0)
-      return null;
-    return new StandaloneSubAgentBudget(properties);
+  static OutputLimitRunBudget.LlmCallReservation create(Limits limits) {
+    if (limits.calls() == 0 && limits.tokens() == 0) return null;
+    return new StandaloneSubAgentBudget(limits);
   }
 
   /** 予算。 */
@@ -29,15 +35,10 @@ final class StandaloneSubAgentBudget implements OutputLimitRunBudget.LlmCallRese
   private boolean settled;
 
   /** 指定された値や利用先を使って、StandaloneSubAgentBudgetを初期化する。 */
-  private StandaloneSubAgentBudget(SubAgentProperties properties) {
+  private StandaloneSubAgentBudget(Limits limits) {
     budget =
         new OutputLimitRunBudget(
-            0,
-            properties.getStandaloneMaxLlmCalls() == 0
-                ? Integer.MAX_VALUE
-                : properties.getStandaloneMaxLlmCalls(),
-            null,
-            properties.getStandaloneMaxTotalTokens());
+            0, limits.calls() == 0 ? Integer.MAX_VALUE : limits.calls(), null, limits.tokens());
   }
 
   /** 補助エージェントへの委譲で判断に用いる試行予約の条件を確認する。 */

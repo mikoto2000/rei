@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.project.ProjectQueryService;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -22,16 +20,34 @@ public class ProjectController {
   private final ProjectQueryService projects;
 
   /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared project registry so lookups use the same registered projects.")
-  private dev.mikoto2000.rei.core.project.ProjectRegistry registry;
+  private java.util.function.Function<String, ProjectResponse> removeProject;
+
+  private java.util.function.Function<java.nio.file.Path, ProjectResponse> registerProject;
 
   /** Web APIによる操作で使用する登録台帳を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setRegistry(dev.mikoto2000.rei.core.project.ProjectRegistry registry) {
-    this.registry = registry;
+    removeProject =
+        registry == null
+            ? null
+            : id -> {
+              var project =
+                  registry
+                      .resolveById(id)
+                      .orElseThrow(
+                          () ->
+                              new dev.mikoto2000.rei.application.run.ResourceNotFoundException(
+                                  "Project"));
+              registry.remove(project.root());
+              return new ProjectResponse(project.id(), project.name(), project.root().toString());
+            };
+    registerProject =
+        registry == null
+            ? null
+            : path -> {
+              var project = registry.resolve(path);
+              return new ProjectResponse(project.id(), project.name(), project.root().toString());
+            };
   }
 
   /** 指定された値や利用先を使って、ProjectControllerを初期化する。 */
@@ -60,14 +76,8 @@ public class ProjectController {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (id == null || id.isBlank() || id.length() > 128)
       throw new IllegalArgumentException("Project ID required");
-    if (registry == null) throw new IllegalStateException("Project registry unavailable");
-    var project =
-        registry
-            .resolveById(id)
-            .orElseThrow(
-                () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
-    registry.remove(project.root());
-    return new ProjectResponse(project.id(), project.name(), project.root().toString());
+    if (removeProject == null) throw new IllegalStateException("Project registry unavailable");
+    return removeProject.apply(id);
   }
 
   /** 後から対象を参照できるよう、プロジェクト受付窓口を登録する。 */
@@ -78,10 +88,9 @@ public class ProjectController {
         || request.path().isBlank()
         || request.path().length() > 4096)
       throw new IllegalArgumentException("Invalid Project path");
-    if (registry == null) throw new IllegalStateException("Project registry unavailable");
+    if (registerProject == null) throw new IllegalStateException("Project registry unavailable");
     var path = java.nio.file.Path.of(request.path());
     if (!path.isAbsolute()) throw new IllegalArgumentException("Absolute Project path required");
-    var project = registry.resolve(path);
-    return new ProjectResponse(project.id(), project.name(), project.root().toString());
+    return registerProject.apply(path);
   }
 }

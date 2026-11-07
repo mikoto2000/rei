@@ -1,11 +1,8 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.Supplier;
 import org.jline.reader.LineReader;
-import org.jline.reader.Widget;
 import org.jline.reader.impl.LineReaderImpl;
 
 /**
@@ -19,11 +16,11 @@ public final class ActiveRunPrompt implements AutoCloseable {
   private static final String REFRESH = "rei-active-run-prompt";
 
   /** 読み取り元。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the live JLine reader for the current terminal session.")
-  private final LineReader reader;
+  private final java.util.function.Function<String, String> readInput;
+
+  private final java.util.function.BooleanSupplier reading;
+  private final Runnable refreshWidget;
+  private final Runnable removeWidgets;
 
   /** プロンプト。 */
   private final Supplier<String> prompt;
@@ -32,7 +29,6 @@ public final class ActiveRunPrompt implements AutoCloseable {
   private final ConversationInputRouter.Subscription subscription;
 
   /** prior初期化。 */
-  private final Widget priorInit;
 
   /** 通常プロンプト。 */
   private volatile boolean normalPrompt;
@@ -41,9 +37,11 @@ public final class ActiveRunPrompt implements AutoCloseable {
 
   /** 指定された値や利用先を使って、ActiveRunPromptを初期化する。 */
   public ActiveRunPrompt(LineReader reader, ConversationInputRouter runs, Supplier<String> prompt) {
-    this.reader = reader;
+    this.readInput = value -> reader.readLine(value);
+    this.reading = () -> reader.isReading();
+    this.refreshWidget = () -> reader.callWidget(REFRESH);
     this.prompt = prompt;
-    priorInit = reader.getWidgets().get(LineReader.CALLBACK_INIT);
+    var priorInit = reader.getWidgets().get(LineReader.CALLBACK_INIT);
     reader
         .getWidgets()
         .put(
@@ -67,6 +65,12 @@ public final class ActiveRunPrompt implements AutoCloseable {
                 impl.setPrompt(prompt.get());
               return initialized;
             });
+    removeWidgets =
+        () -> {
+          reader.getWidgets().remove(REFRESH);
+          if (priorInit == null) reader.getWidgets().remove(LineReader.CALLBACK_INIT);
+          else reader.getWidgets().put(LineReader.CALLBACK_INIT, priorInit);
+        };
     subscription = runs == null ? () -> {} : runs.onChange(this::refresh);
   }
 
@@ -83,7 +87,7 @@ public final class ActiveRunPrompt implements AutoCloseable {
   public String readLine() {
     normalPrompt = true;
     try {
-      return reader.readLine(prompt.get());
+      return readInput.apply(prompt.get());
     } finally {
       normalPrompt = false;
     }
@@ -91,9 +95,9 @@ public final class ActiveRunPrompt implements AutoCloseable {
 
   /** ターミナルでの対話に関する再確認を処理する。 */
   private void refresh() {
-    if (!normalPrompt || !reader.isReading()) return;
+    if (!normalPrompt || !reading.getAsBoolean()) return;
     try {
-      reader.callWidget(REFRESH);
+      refreshWidget.run();
     } catch (IllegalStateException endedRead) {
       /* The input finished between isReading and the JLine lock. */
     }
@@ -101,14 +105,15 @@ public final class ActiveRunPrompt implements AutoCloseable {
 
   /** ターミナルでの対話で利用した資源や登録を解放し、利用を終了する。 */
   public void close() {
-    subscription.close();
     try {
-      progressSubscription.close();
-    } catch (Exception error) {
-      throw new IllegalStateException("Could not unsubscribe task progress", error);
+      subscription.close();
+      try {
+        progressSubscription.close();
+      } catch (Exception error) {
+        throw new IllegalStateException("Could not unsubscribe task progress", error);
+      }
+    } finally {
+      removeWidgets.run();
     }
-    reader.getWidgets().remove(REFRESH);
-    if (priorInit == null) reader.getWidgets().remove(LineReader.CALLBACK_INIT);
-    else reader.getWidgets().put(LineReader.CALLBACK_INIT, priorInit);
   }
 }
