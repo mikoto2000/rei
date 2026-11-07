@@ -1,5 +1,21 @@
 # DEVELOP
 
+Rei の開発者向けドキュメントです。利用手順は [README.md](README.md) を参照してください。
+
+## 構成
+
+| 場所 | 責務 |
+| --- | --- |
+| [ルートの Maven プロジェクト](pom.xml) | Spring Boot Backend。従来 Shell、認証付き Web API、会話受付と Run 実行、ツール、永続化を担当します。 |
+| [軽量 CLI の Maven reactor](terminal/pom.xml) | `contract` は接続・コマンドの契約、`completion` は共通補完、`cli` は JLine と HTTP/SSE、`launcher` は Backend の検出・起動・停止を担当します。 |
+| [Native Client](client/README.md) | Tauri 2・Rust・React・TypeScript。Web API 経由で会話履歴・Run・Workspace を操作し、SSE を画面表示に反映します。 |
+
+Backend が Session と Run を所有します。軽量 CLI の Project / Session の選択はプロセスごとに独立し、会話の送信は Backend の受付を通ります。Backend は同じ Session での実行を排他制御し、永続 receipt の照会期間内に同じ受付キーと内容で再送されると元の Run を返します。[CLI と Backend の境界](docs/lightweight-cli-client.md)・[Native Client と Web API](docs/native-web-api.md)
+
+パッケージの責務や会話処理の順序は [図解付きプログラム構造ガイド](docs/program-structure.md) を参照してください。
+
+## 機能別の設計資料
+
 明示指定時の暗黙選択省略・モデル完了待ち上限・比較方法は
 [スキル選択の待ち時間](docs/skill-selection-latency.md)を参照してください。
 
@@ -18,21 +34,15 @@ YAMLの生活設定とProject横断の朝夕レポートは [全体秘書設定]
 
 秘書の約束・タスク台帳と段階的な統合は [秘書機能](docs/secretary.md) を参照してください。
 
-Checkstyle / SpotBugs の実行手順、CI レポートと導入方針は [静的解析ガイド](docs/static-analysis.md) を参照してください。
-
 デスクトップ監視の軽量観測・設定・限界・検証は [入力状態による軽量観測](docs/activity-lightweight-observation.md)を参照してください。
 前面画像認識の頻度制御・時刻診断・性能比較は [画像認識キュー](docs/activity-vision-queue.md)を参照してください。
 直近5分の証拠による補足推定・LLM予算・集計への影響は [時系列作業推定](docs/activity-temporal-inference.md)を参照してください。
-
-Rei の開発者向けドキュメントです。利用手順は [README.md](./README.md) を参照してください。
 
 進捗イベント、Read範囲、局所・目標停滞、再開時の復元と復旧予算は [進捗・停滞判定ガイド](docs/progress-stagnation.md) を参照してください。
 
 Episode の経緯・根拠・差分整理・横断検索は [Episode Memory](docs/episode-memory.md) を参照してください。
 
 回答生成中の SQLite 接続再利用・耐久性・I/O 計測は [ディスク I/O の改善記録](docs/answer-generation-disk-io.md)を参照してください。
-
-初めてコードを読む場合は、[図解付きプログラム構造ガイド](docs/program-structure.md)から始めてください。全体構成、会話の実行経路、状態と保存先、機能別の変更箇所を説明しています。
 
 パッケージ依存の実測、循環、ArchUnitの既存負債予算と更新手順は [パッケージ構成改善 Phase 0](docs/architecture/README.md) を参照してください。
 
@@ -55,11 +65,13 @@ Episode の経緯・根拠・差分整理・横断検索は [Episode Memory](doc
 - OpenAI 互換 API へ接続できる環境
 - Web 検索や Google Calendar を使う場合は対応する認証情報
 
-起動:
+従来 Shell をソースから起動します。Windows では `./mvnw.cmd` を使用してください。
 
 ```bash
 ./mvnw spring-boot:run
 ```
+
+`build.bat` / `sh ./build.sh` は、ルートの Backend と独立した `terminal/pom.xml` の reactor を順に `package` します。既定では両方のテスト実行を省略します。`-DskipTests=false` を渡すと、ルートでは選択したプロファイル、軽量 CLI では reactor の設定に従ってテストを実行します。Native Client のビルド手順は [client/README.md](client/README.md) を参照してください。
 
 Maven は `generate-sources` で `src/main/java` から Lombok のメンバーを生成し、
 `target/delombok` のソースを `javac` でコンパイルします。編集は `src/main/java` で行います。
@@ -69,17 +81,17 @@ Picocli のコマンドや引数を変更した場合は、対応する GraalVM 
 [本番用](src/main/resources/META-INF/native-image/dev.mikoto2000/rei-picocli/reflect-config.json)と
 [テスト用](src/test/resources/META-INF/native-image/dev.mikoto2000/rei-picocli/reflect-config.json)に分かれています。
 
-テスト:
+## テストと静的解析
 
-```bash
-./mvnw test -q
-```
+| コマンド | 対象 |
+| --- | --- |
+| `./mvnw test -q` | Backend の日常用 Unit / 軽量 Component |
+| `./mvnw verify -Pintegration` または `./mvnw test -Pfull` | Backend の回帰一式（SQLite、ファイルシステム、Spring Context、HTTP、実プロセスを含み、`live` を除外） |
+| `./mvnw test -Pintegration-only` | Backend の `integration` / `e2e` のみ（`live` を除外） |
+| `./mvnw -f terminal/pom.xml test` | 軽量 CLI の独立した reactor |
+| `./mvnw -Pquality verify` | Backend の既定テストと Checkstyle・SpotBugs・Spotless の検査 |
 
-日常用の Unit / 軽量 Component を実行します。SQLite、filesystem、Spring Context、HTTP、
-実プロセスを含む全テストは `./mvnw verify -Pintegration`（テストのみなら
-`./mvnw test -Pfull`）、Integration / System のみは `./mvnw test -Pintegration-only` です。
-変更を完了する前に全テストを実行してください。分類、計測結果、再計測手順は
-[テスト性能レポート](docs/test-performance.md) を参照してください。
+実装変更を完了する前に対象の回帰一式を実行してください。外部サービスを使う `live-e2e` は明示的に実行します。[テスト分類と計測](docs/test-performance.md)・[実サービスを使うテスト](docs/live-environment-e2e.md)・[軽量 CLI の Windows E2E](docs/lightweight-cli-client.md#テストと実装状況)
 
 CI の Java 全件回帰は Windows の2ジョブで実行します。Shard A は
 [`.github/ci/java-shard-a.txt`](.github/ci/java-shard-a.txt) にあるクラスを実行し、
@@ -88,21 +100,29 @@ Shard B は Surefire の既定対象からそのクラスを除いた残りを�
 両ジョブの成功後、`test` ジョブがクラスの割り当て、テスト ID の重複、
 および [想定スキップ](config/test-expected-skips.json) の ID と理由を照合します。
 
+別の Java 静的解析ワークフローは Checkstyle と SpotBugs を実行し、両方の指摘が 0 件であることを確認します。レポートの欠落・形式不正や SpotBugs の解析エラーも失敗として扱います。[ローカル実行と CI レポート](docs/static-analysis.md)
+
 ## ローカルデータ
 
 OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%\Rei`、他 OS と移行方法は [設計メモ](docs/agent-run-project-state.md) を参照してください。`REI_DATA_DIR` で上書きできます。
 
+- `<rei-data-dir>/storage.db`
+  - Session・Turn・Project イベント・再送カーソル、会話受付と receipt などを管理する SQLite。起動時の Storage gate がデータディレクトリの排他ロックを取り、必要な移行を普通の Bean の初期化前に実行します。[ストレージ構成と移行](docs/storage-architecture.md)・[受付と排他](docs/lightweight-cli-client.md#session-admission-と冪等受付)
 - `<rei-data-dir>/command-history/<project-id>.history`
   - プロジェクト別の JLine 入力履歴（各 1,000 件まで）。プロジェクトの UUID を使うため、同名プロジェクトも分離されます。
   - 次の入力受付前にプロジェクトの変更を確認し、変更前の履歴を保存して、変更先のファイルとメモリ上の履歴を切り替えます。終了時にも保存します。
   - `/project cd` 自体は切り替え前のプロジェクトに記録されます。Session の切り替えでは同じプロジェクトの入力履歴を使います。
   - 旧 `<rei-data-dir>/history` は残します。複数プロジェクトの入力が混ざっている可能性があるため、自動移行はしません。
 - `<rei-data-dir>/memory.db`
-  - アプリ本体の SQLite
+  - 互換 ChatMemory などの SQLite
+- `<rei-data-dir>/memory-consolidation.db`
+  - 長期記憶・Sleep の履歴と要求、Work Context などの SQLite
 - `<rei-data-dir>/vectorstore.db`
   - ベクトルストア専用 SQLite
 - `<rei-data-dir>/extensions/sqlite-vec/...`
   - `sqlite-vec` のキャッシュ
+
+軽量 CLI の入力履歴はクライアントのユーザーホーム配下の `.rei-cli/history` に保存します。[保存形式と無効化設定](docs/lightweight-cli-client.md#入力履歴と秘密)
 
 ## ベクトルストア実装
 
@@ -119,6 +139,8 @@ OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%
 - `source` / `docId` フィルタ
 - adjacent chunk を考慮した snippet 生成
 
+設定で dense と lexical の候補を別々に検索し、RRF で順位を統合する経路を有効化できます。lexical 候補には SQLite FTS5 の BM25 も選べます。[RRF の設定](docs/hybrid-rrf-retrieval.md)・[BM25 の設定](docs/document-bm25-retrieval.md)
+
 ## Web 検索実装
 
 計測方法、品質回帰 fixture、現行経路と制約は
@@ -127,7 +149,7 @@ OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%
 主なクラス:
 
 - [`WebSearchService.java`](./src/main/java/dev/mikoto2000/rei/websearch/WebSearchService.java)
-  - Web 検索プロバイダ呼び出し (`duckduckgo` / `brave`)
+  - Web 検索プロバイダ呼び出し（`duckduckgo` / `brave` / `openai`）
 - [`WebSearchQueryPlanner.java`](./src/main/java/dev/mikoto2000/rei/websearch/WebSearchQueryPlanner.java)
   - クエリ展開
 - [`WebPageFetcher.java`](./src/main/java/dev/mikoto2000/rei/websearch/WebPageFetcher.java)
@@ -167,6 +189,18 @@ OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%
 - `*`, `?`, `[]` を含む引数は Java 側で glob 展開
 - 終了時に埋め込みが進行中なら警告を出して確認
 
+## Run の停止と計測
+
+会話 Run を一覧へ公開する前に停止対象を登録し、runner と所有する子処理の後片付けが完了してから終端を確定します。`POST /api/v1/runs/{runId}/cancel` の HTTP 202 は停止要求の受付を表し、完了は Run の状態照会または SSE で確認します。[停止のライフサイクル](docs/run-cancellation-lifecycle.md)
+
+`AgentEventChatModel` は LLM イベントと時間計測を同じ Run ID に紐づけます。ストリーム購読を解除した場合、停止要求や割り込みなどのキャンセル状態があれば LLM Span を `CANCELLED`、通常の購読解除は `DISCONNECTED` として記録します。Span の状態と Run の終端状態はそれぞれのライフサイクルで確定します。[時間計測](docs/run-timing.md)・[キャンセル判定の回帰テスト](review/test-evidence.md#m-1-のキャンセル判定の回帰テスト)
+
+## プロンプト組み立てとファイル読み取り
+
+`ContextAssembler` は組み立てごとに Working Set を一度取得し、サイズの見積もりと最終プロンプトで共有します。ツール呼び出しと結果を組にした履歴の後ろに独立した `system` メッセージとして配置し、次のモデル呼び出しで取得し直します。[プロンプトとキャッシュ計測](docs/llm-prompt-cache.md)
+
+`grepMultiQuery`、`searchAndRead`、`readMultiFile` は有効な項目の結果を返し、除外された項目には `PROJECT_PATH_EXCLUDED` と許可された Project 相対パスでの再試行案内を返します。ページ付き検索では、除外と一致結果を入力時のクエリ番号で参照できます。[変更と検証証跡](review/README.md)
+
 ## 終了開始イベント
 
 グレースフルシャットダウンの開始時に `application.shutdown.started` を一度だけ発行します。
@@ -179,11 +213,10 @@ Web API は接続中の `/api/v1/runs/{runId}/events` SSE に同じイベント�
 これは Run の成功・失敗・キャンセルを意味しません。Run 単位の replay には保存しません。
 SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断済み・送信不能な接続への配送や、強制終了時の通知は保証しません。
 
-## MCP
+## MCP クライアントとサーバー
 
-- Spring AI MCP client を使用
-- `<rei-data-dir>/mcp-servers.json` の静的設定を起動時に読み込み
-- 動的登録やホットリロードは未実装
+- Spring AI の MCP クライアントは、起動時に既定で `<rei-data-dir>/mcp-servers.json` から静的設定を読み込みます。[クライアントの設定](docs/configuration.md#mcp)
+- 本人専用 MCP サーバーは明示的に有効化すると、同じ Backend の loopback 専用ポートに Streamable HTTP で 6 ツールを公開します。許可済みの Project に限定し、会話受付と実行には共通の Session・Run 基盤を使います。[サーバーの設定と契約](docs/mcp-server.md)・[安全境界](docs/mcp-server-security.md)
 
 ## AI ツール
 
@@ -218,12 +251,13 @@ SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断
 - `SqliteVectorStoreTest`
   - `sqlite-vec` ベースの保存と検索
 
-## 長期記憶 / Manual Sleep
+## 長期記憶と Sleep
 
 プロジェクト固有の作業状態は [Work Context](docs/project-work-context.md) を参照してください。同じSQLite DataSourceに独立テーブルを追加し、Session所有権・Tool登録・Run終端・ContextAssemblerに統合します。Sleepの実行を前提としません。[設計とTDD記録](.kiro/specs/project-work-context/design.md)も参照してください。
 
-`/sleep` で現在 Session の未処理 Turn を整理し、`/memory search` / `show` / `list` / `forget` で管理します。
-設定、DB 互換性、出典追跡、Context Budget、失敗時の動作は [長期記憶の設計・利用ガイド](docs/long-term-memory.md) を参照してください。Auto Sleep はありません。
+`/sleep` で現在の Session の未処理 Turn を整理し、`/memory search` / `show` / `list` / `forget` で管理します。[長期記憶の設計と利用](docs/long-term-memory.md)
+
+Auto Sleep は既定で無効です。`rei.memory.auto-sleep.enabled=true` の場合、アイドル時間・実行状況・未処理 Turn 数などを確認して一度に 1 バッチ処理します。Session 終了時とアプリの正常終了時に Sleep 要求を保存する設定も個別に有効化できます。保存した要求は再起動後にも引き継がれ、条件を満たすアイドル時に処理します。[記憶のライフサイクル](docs/memory-lifecycle-guide.md)・[終了時の Sleep 要求](docs/auto-sleep-end-requests.md)
 
 ## 補足
 
