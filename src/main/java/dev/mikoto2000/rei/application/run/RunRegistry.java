@@ -24,11 +24,65 @@ public final class RunRegistry implements AutoCloseable {
 
   /** 実行の受付と状態管理で使用する受付台帳を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  public synchronized void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions) {
+  public synchronized void setAdmissions(
+      dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions) {
     this.admissions = admissions;
   }
 
   /** 実行と cleanup 中の終端イベントは RunService が一度だけ確定する。 */
+  private synchronized <T> T ordered(java.util.function.Supplier<T> action) {
+    return action.get();
+  }
+
+  Lifecycle lifecycle() {
+    return new Lifecycle();
+  }
+
+  /** RunService operations sharing the registry lock and run ownership. */
+  final class Lifecycle {
+    private Lifecycle() {}
+
+    <T> T ordered(java.util.function.Supplier<T> action) {
+      return RunRegistry.this.ordered(action);
+    }
+
+    RunSnapshot get(String runId) {
+      return RunRegistry.this.get(runId);
+    }
+
+    RunStatus streamStatus(String runId) {
+      return RunRegistry.this.streamStatus(runId);
+    }
+
+    boolean restored(String runId) {
+      return RunRegistry.this.restored(runId);
+    }
+
+    List<String> purgeExpired() {
+      return RunRegistry.this.purgeExpired();
+    }
+
+    Set<String> runIds() {
+      return RunRegistry.this.runIds();
+    }
+
+    boolean claimWaiting(RunSnapshot current) {
+      return RunRegistry.this.claimWaiting(current.context());
+    }
+
+    boolean transition(String runId, RunStatus next, RunFailure failure) {
+      return RunRegistry.this.transition(runId, next, failure);
+    }
+
+    void beginExecution(String runId) {
+      RunRegistry.this.beginExecution(runId);
+    }
+
+    void endExecution(String runId) {
+      RunRegistry.this.endExecution(runId);
+    }
+  }
+
   public void beginExecution(String runId) {
     var store = admissionStore();
     if (store != null) store.deferTerminalEvents(runId, true);

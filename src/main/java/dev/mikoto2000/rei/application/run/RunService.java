@@ -6,19 +6,12 @@ import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.ErrorInformation;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.Predicate;
 
 /** 実行のユースケースを実現する。 */
 public class RunService implements AutoCloseable {
   /** 登録台帳。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification =
-          "Uses the shared run registry so participants observe the same run lifecycle.")
-  private final RunRegistry registry;
+  private final RunRegistry.Lifecycle registry;
 
   /** 通知の連携先。 */
   private final AgentEventBus bus;
@@ -81,7 +74,7 @@ public class RunService implements AutoCloseable {
       AgentEventFactory events,
       CommandCancellationService cancellation,
       Predicate<String> cancelQueued) {
-    this.registry = registry;
+    this.registry = registry == null ? null : registry.lifecycle();
     this.bus = bus;
     this.events = events;
     this.forgetCancellation = run -> cancellation.forgetPendingCancellation(run);
@@ -95,9 +88,7 @@ public class RunService implements AutoCloseable {
   /** 実行の受付と状態管理で用いる排他制御を返す。 */
   private <T> T atomically(java.util.function.Supplier<T> action) {
     if (bus != null) return bus.withReplaySnapshot(action);
-    synchronized (registry) {
-      return action.get();
-    }
+    return registry.ordered(action);
   }
 
   private void runAtomically(Runnable action) {
@@ -200,7 +191,7 @@ public class RunService implements AutoCloseable {
               CancellationResult outcome;
               purgeExpired();
               var current = registry.get(runId);
-              if (current.status().isWaiting() && !registry.claimWaiting(current.context()))
+              if (current.status().isWaiting() && !registry.claimWaiting(current))
                 return new CancellationResult(false, current);
               boolean queuedRemoved =
                   current.status() == RunStatus.QUEUED && cancelQueued.test(runId);
