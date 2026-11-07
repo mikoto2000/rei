@@ -8,14 +8,18 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.databind.ObjectWriter;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Responses wire format only; provider ordering and page retrieval remain in the pipeline. */
 final class OpenAiWebSearch {
-  private final JsonMapper mapper;
+  private final ObjectReader reader;
+  private final ObjectWriter writer;
 
   OpenAiWebSearch(JsonMapper mapper) {
-    this.mapper = mapper;
+    this.reader = mapper.reader();
+    this.writer = mapper.writer();
   }
 
   /** Deterministic JSON also supplies the POST cache identity. */
@@ -41,7 +45,7 @@ final class OpenAiWebSearch {
     body.put("tool_choice", "required");
     body.put("include", List.of("web_search_call.action.sources"));
     body.put("store", false);
-    return mapper.writeValueAsString(body);
+    return writer.writeValueAsString(body);
   }
 
   /**
@@ -51,7 +55,7 @@ final class OpenAiWebSearch {
       WebSearchProperties.ProviderProperties provider, String body, int limit) {
     JsonNode root;
     try {
-      root = mapper.readTree(body);
+      root = reader.readTree(body);
     } catch (RuntimeException malformed) {
       // Do not attach parser exceptions: their messages can contain response fragments or secrets.
       throw failure("INVALID_JSON");
@@ -95,7 +99,7 @@ final class OpenAiWebSearch {
   void recordUsage(String body) {
     JsonNode root;
     try {
-      root = mapper.readTree(body);
+      root = reader.readTree(body);
     } catch (RuntimeException invalid) {
       return;
     }
