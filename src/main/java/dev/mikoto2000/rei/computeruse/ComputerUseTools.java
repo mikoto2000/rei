@@ -5,11 +5,11 @@ import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+import java.util.function.BiFunction;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
+import reactor.core.Disposable;
 
 /** 画面操作利用をモデルから呼び出せるツールとして提供する。 */
 public final class ComputerUseTools {
@@ -17,11 +17,7 @@ public final class ComputerUseTools {
   private final ComputerUseService service;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final BiFunction<String, Runnable, Disposable> onCancel;
 
   /** 生成元。 */
   private final AgentEventFactory factory;
@@ -36,7 +32,7 @@ public final class ComputerUseTools {
       AgentEventFactory factory,
       AgentEventPublisher publisher) {
     this.service = service;
-    this.cancellation = cancellation;
+    this.onCancel = (runId, action) -> cancellation.onCancel(runId, action);
     this.factory = factory;
     this.publisher = publisher;
   }
@@ -59,7 +55,7 @@ public final class ComputerUseTools {
     var owner = AgentRunScope.current();
     Thread worker = Thread.currentThread();
     var registration =
-        cancellation.onCancel(owner == null ? null : owner.runId(), worker::interrupt);
+        onCancel.apply(owner == null ? null : owner.runId(), worker::interrupt);
     try {
       return service.run(goal);
     } finally {

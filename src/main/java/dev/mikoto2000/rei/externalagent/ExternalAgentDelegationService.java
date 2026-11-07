@@ -9,8 +9,6 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.event.ExternalAgentLifecyclePayload;
-import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
-import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -36,7 +34,9 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import org.springframework.stereotype.Service;
+import reactor.core.Disposable;
 
 /**
  * 外部エージェント委譲のユースケースを実現する。
@@ -201,11 +201,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
   private final ExternalAgentExecutor executor;
 
   /** キャンセル。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
-  private final CommandCancellationService cancellation;
+  private final BiFunction<String, Runnable, Disposable> onCancel;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -289,7 +285,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
       AgentEventPublisher publisher,
       Optional<WorkingSet> workingSet) {
     this.executor = executor;
-    this.cancellation = cancellation;
+    this.onCancel = (runId, action) -> cancellation.onCancel(runId, action);
     this.events = events;
     this.publisher = publisher;
     this.workingSet = workingSet;
@@ -370,7 +366,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
         return ExternalAgentResult.rejected("Only one external delegation per Run");
       var flag = new AtomicBoolean(run.isCancelled());
       var hook =
-          cancellation.onCancel(
+          onCancel.apply(
               owner.runId(),
               () -> {
                 flag.set(true);
@@ -474,7 +470,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
       throw new IllegalArgumentException("Only one external delegation per Run");
     var flag = new AtomicBoolean(run.isCancelled());
     var hook =
-        cancellation.onCancel(
+        onCancel.apply(
             owner.runId(),
             () -> {
               flag.set(true);
@@ -1042,7 +1038,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
               id,
               continuation ? previous.result().externalSessionId() : null);
       AtomicBoolean cancelled = new AtomicBoolean(run.isCancelled());
-      var hook = cancellation.onCancel(owner.runId(), () -> cancelled.set(true));
+      var hook = onCancel.apply(owner.runId(), () -> cancelled.set(true));
       publisher.publish(
           events
               .delegation(
