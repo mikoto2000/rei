@@ -42,11 +42,13 @@ public final class BehaviorService {
   private final ActivityCapture capture;
 
   /** 時系列の記録。 */
-  @SuppressFBWarnings(
-      value = "EI_EXPOSE_REP2",
-      matchType = SuppressMatchType.EXACT,
-      justification = "Uses the common timeline store for activity observations.")
-  private final ActivityStore timeline;
+  private final java.util.function.BiFunction<
+          Instant, Instant, java.util.List<dev.mikoto2000.rei.activity.ActivitySession>>
+      timelineSessions;
+
+  private final java.util.function.BiFunction<
+          Instant, Instant, java.util.List<dev.mikoto2000.rei.activity.ActivityRecord>>
+      timelineObservations;
 
   /** 状態の保存先。 */
   @SuppressFBWarnings(
@@ -107,7 +109,8 @@ public final class BehaviorService {
     this.historyMinutes = () -> config.getHistoryMinutes();
     this.activityEnabled = () -> activity.isEnabled();
     this.capture = capture;
-    this.timeline = timeline;
+    this.timelineSessions = (start, end) -> timeline.findBetween(start, end);
+    this.timelineObservations = (start, end) -> timeline.findRecordsBetween(start, end);
     this.persistence = persistence;
     this.generator = generator;
     this.publisher = publisher;
@@ -139,8 +142,8 @@ public final class BehaviorService {
   /** 対象を判断基準に照らして評価する。 */
   public BehaviorAssessment evaluate() {
     Instant now = clock.instant(), start = now.minusSeconds(historyMinutes.getAsInt() * 60L);
-    var fine = timeline.findBetween(start, now);
-    var raw = timeline.findRecordsBetween(start, now);
+    var fine = timelineSessions.apply(start, now);
+    var raw = timelineObservations.apply(start, now);
     var result = evaluator.evaluate(fine, raw, now);
     assessment = result;
     return result;
