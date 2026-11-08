@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.event;
 
+import dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -135,15 +136,19 @@ public class ToolEventCallbackDecorator
               e instanceof RuntimeException
                       && !Thread.currentThread().isInterrupted()
                       && !dev.mikoto2000.rei.core.stagnation.RunExecutionContext.isControlFailure(e)
-                  ? dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.toolFailureResult(e)
+                  ? FailureDiagnostics.toolFailureResult(e)
                   : null;
+          var diagnostic = FailureDiagnostics.safeError(e);
           try {
             eventPublisher.publishBoundary(
                 eventFactory.toolFailed(
                     toolCallId,
                     toolName,
-                    searchFailure != null || structuredFailure != null
-                        ? dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(e)
+                    searchFailure != null
+                            || structuredFailure != null
+                            || FailureDiagnostics.GOOGLE_REAUTHORIZATION_REQUIRED.equals(
+                                diagnostic.code())
+                        ? diagnostic
                         : new ErrorInformation(
                             e.getClass().getSimpleName(), summarize(e.getMessage()), null)));
           } catch (RuntimeException | Error recording) {
@@ -158,7 +163,6 @@ public class ToolEventCallbackDecorator
           if (e instanceof RuntimeException
               && FILE_TOOLS.contains(toolName)
               && !Thread.currentThread().isInterrupted()) {
-            var diagnostic = dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(e);
             if (diagnostic.code().equals("source_missing")
                 || diagnostic.code().equals("file_unavailable")) {
               // Return an explicit failure to the model, never a successful/empty read.
