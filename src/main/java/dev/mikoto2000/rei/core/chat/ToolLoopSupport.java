@@ -188,6 +188,16 @@ public final class ToolLoopSupport {
     var generation = response.getResult();
     var output = generation == null ? null : generation.getOutput();
     if (output == null) throw new IllegalArgumentException("Missing generation for tool calls");
+    for (var call : output.getToolCalls()) {
+      if (registeredCallback(prompt, call.name()) == null) {
+        // Reject the batch before dispatch and keep invalid tool-call messages out of history.
+        var history = new java.util.ArrayList<>(prompt.getInstructions());
+        history.add(
+            new org.springframework.ai.chat.messages.SystemMessage(
+                context.unavailableToolCorrection(call.id(), call.name())));
+        return ToolExecutionResult.builder().conversationHistory(history).returnDirect(false).build();
+      }
+    }
     if (!context.hasApprovalContinuation()
         && output.getToolCalls().stream()
             .noneMatch(
@@ -208,12 +218,16 @@ public final class ToolLoopSupport {
   }
 
   private String schema(Prompt prompt, String name) {
+    var callback = registeredCallback(prompt, name);
+    return callback == null ? null : callback.getToolDefinition().inputSchema();
+  }
+
+  private org.springframework.ai.tool.ToolCallback registeredCallback(Prompt prompt, String name) {
     if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return null;
     var callbacks = options.getToolCallbacks();
     if (callbacks == null) return null;
     return callbacks.stream()
         .filter(callback -> callback.getToolDefinition().name().equals(name))
-        .map(callback -> callback.getToolDefinition().inputSchema())
         .findFirst()
         .orElse(null);
   }

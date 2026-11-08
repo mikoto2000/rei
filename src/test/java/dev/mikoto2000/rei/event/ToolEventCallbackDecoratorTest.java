@@ -9,6 +9,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.google.api.client.auth.oauth2.RefreshTokenRequest;
+import com.google.api.client.auth.oauth2.TokenResponseException;
+import com.google.api.client.http.GenericUrl;
+import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.client.testing.http.MockHttpTransport;
+import com.google.api.client.testing.http.MockLowLevelHttpResponse;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -24,6 +30,39 @@ import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
 /** ツールイベント完了時の処理Decoratorの結果と状態の契約を検証するテスト。 */
 class ToolEventCallbackDecoratorTest {
+
+  /** Google のトークン拒否を、レスポンス本文を公開せず再認可の案内にする。 */
+  @Test
+  void calendarTokenRejectionStopsTheToolAndReportsReauthorization() {
+    var response =
+        new MockLowLevelHttpResponse()
+            .setStatusCode(400)
+            .setContentType("application/json")
+            .setContent("""
+                {"error":"invalid_grant","error_description":"PRIVATE_PROVIDER_BODY"}
+                """);
+    var refresh =
+        new RefreshTokenRequest(
+            new MockHttpTransport.Builder().setLowLevelHttpResponse(response).build(),
+            GsonFactory.getDefaultInstance(),
+            new GenericUrl("https://oauth2.googleapis.com/token"),
+            "test-token");
+    var provider = assertThrows(TokenResponseException.class, refresh::execute);
+    var failure = new IllegalStateException("PRIVATE_WRAPPER", provider);
+    var callback = delegate("googleCalendarListEventsForDate", "unused");
+    when(callback.call("{}")).thenThrow(failure);
+    bus.subscribe(received::add);
+
+    var decorated = new ToolEventCallbackDecorator(callback, factory, bus);
+    assertSame(failure, assertThrows(IllegalStateException.class, () -> decorated.call("{}")));
+    assertEquals(
+        List.of(AgentEventType.TOOL_STARTED, AgentEventType.TOOL_FAILED),
+        received.stream().map(AgentEvent::type).toList());
+    var error = ((ToolFailedPayload) received.getLast().payload()).error();
+    assertEquals("google_reauthorization_required", error.code());
+    assertTrue(error.message().contains("/schedule auth"));
+    assertTrue(!error.message().contains("PRIVATE"));
+  }
 
   @Test
   void fileReadDiagnosticsKeepPagesAndVersionsWithoutSourceText() throws Exception {

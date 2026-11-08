@@ -9,6 +9,9 @@ import dev.mikoto2000.rei.event.ErrorInformation;
  * exposed.
  */
 public final class FailureDiagnostics {
+  /** 保存済みの Google OAuth 認可が拒否されたときの診断コード。 */
+  public static final String GOOGLE_REAUTHORIZATION_REQUIRED = "google_reauthorization_required";
+
   /** 通信接続の喪失時に表示する固定メッセージ。 */
   public static final String CONNECTION_LOST_MESSAGE =
       "通信接続が切断された、または利用できなくなりました。ネットワークと接続先の稼働状況を確認し、実行結果を確認してから再開してください。";
@@ -82,6 +85,12 @@ public final class FailureDiagnostics {
         return page.diagnostic();
       if (cause instanceof dev.mikoto2000.rei.workcontext.WorkContextExtractionException extraction)
         return extraction.diagnostic();
+      if (cause instanceof com.google.api.client.auth.oauth2.TokenResponseException response
+          && response.getDetails() != null
+          && "invalid_grant".equals(response.getDetails().getError()))
+        return diagnostic(
+            GOOGLE_REAUTHORIZATION_REQUIRED,
+            "Google が OAuth 認可を拒否しました。Google Calendar は /schedule auth、Google Tasks は /task auth で再認可してからやり直してください。");
       if (cause instanceof com.openai.errors.OpenAIServiceException response) {
         String code = "";
         try {

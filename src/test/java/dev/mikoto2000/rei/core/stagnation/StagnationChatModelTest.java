@@ -2,19 +2,29 @@ package dev.mikoto2000.rei.core.stagnation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.ToolFailedPayload;
+import dev.mikoto2000.rei.event.ToolStartedPayload;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import dev.mikoto2000.rei.temporal.ClockTools;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -27,10 +37,81 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import reactor.core.publisher.Flux;
 
 /** 停滞応答生成に使うモデルの結果と状態の契約を検証するテスト。 */
 class StagnationChatModelTest {
+  /** 未登録の today が混じっても、実行前に組を拒否し、補正予算内で正しい呼び出しに戻る。 */
+  @ParameterizedTest
+  @ValueSource(ints = {0, 1})
+  void rejectsUnavailableToolBeforeExecutingAnyCallInTheBatch(int corrections) {
+    var events = new ArrayList<AgentEvent>();
+    var budget = new OutputLimitRunBudget(2, 5, null, 0, corrections);
+    var context = context(budget, events);
+    var clock = Clock.fixed(Instant.parse("2026-11-08T11:52:55Z"), ZoneId.of("Asia/Tokyo"));
+    var callbacks =
+        MethodToolCallbackProvider.builder()
+            .toolObjects(new ClockTools(clock))
+            .build()
+            .getToolCallbacks();
+    var options =
+        ToolCallingChatOptions.builder()
+            .toolCallbacks(callbacks)
+            .toolContext(Map.of(RunExecutionContext.KEY, context))
+            .build();
+    var time = new AssistantMessage.ToolCall("time", "function", "getCurrentTime", "{}");
+    var today = new AssistantMessage.ToolCall("today", "function", "today", "{}");
+    var corrected = new AssistantMessage.ToolCall("corrected", "function", "getCurrentTime", "{}");
+    var requests = new ArrayList<Prompt>();
+    var delegate = mock(ChatModel.class);
+    when(delegate.stream(any(Prompt.class)))
+        .thenAnswer(
+            invocation -> {
+              Prompt request = invocation.getArgument(0);
+              requests.add(request);
+              var reply =
+                  switch (requests.size()) {
+                    case 1 -> AssistantMessage.builder().toolCalls(List.of(time, today)).build();
+                    case 2 -> AssistantMessage.builder().toolCalls(List.of(corrected)).build();
+                    case 3 -> new AssistantMessage("done");
+                    default -> throw new AssertionError("Unexpected model request");
+                  };
+              return Flux.just(new ChatResponse(List.of(new Generation(reply))));
+            });
+
+    var stream = new StagnationChatModel(delegate).stream(new Prompt("weekend dates", options));
+    if (corrections == 0) {
+      assertThatThrownBy(stream::blockLast)
+          .isInstanceOf(ExecutionStoppedException.class)
+          .hasMessageContaining("TOOL_ARGUMENT_REPAIR_EXHAUSTED");
+      assertThat(requests).hasSize(1);
+    } else {
+      assertThat(stream.blockLast().getResult().getOutput().getText()).isEqualTo("done");
+      assertThat(requests).hasSize(3);
+      assertThat(requests.get(1).getInstructions())
+          .anyMatch(message -> message.getText().contains("No tool calls from that response ran"))
+          .noneMatch(message -> message instanceof AssistantMessage || message instanceof ToolResponseMessage);
+      assertThat(requests.get(2).getInstructions().getLast())
+          .isInstanceOfSatisfying(
+              ToolResponseMessage.class,
+              message ->
+                  assertThat(message.getResponses().getFirst().responseData())
+                      .contains("2026-11-08T20:52:55+09:00", "Asia/Tokyo"));
+    }
+    assertThat(events.stream().filter(event -> event.type() == AgentEventType.TOOL_STARTED))
+        .extracting(event -> ((ToolStartedPayload) event.payload()).toolCallId())
+        .containsExactlyElementsOf(corrections == 0 ? List.of() : List.of("corrected"));
+    assertThat(events.stream().filter(event -> event.type() == AgentEventType.TOOL_FAILED))
+        .singleElement()
+        .satisfies(
+            event -> {
+              var failure = (ToolFailedPayload) event.payload();
+              assertThat(failure.toolName()).isEqualTo("today");
+              assertThat(failure.error().code()).isEqualTo("tool_unavailable");
+            });
+  }
+
   /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void completedToolBatchSuspendsBeforeAnotherModelCall() {
@@ -353,7 +434,10 @@ class StagnationChatModelTest {
 
   /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   private RunExecutionContext context(int limit, List<AgentEvent> events) {
-    var budget = new OutputLimitRunBudget(2, limit);
+    return context(new OutputLimitRunBudget(2, limit), events);
+  }
+
+  private RunExecutionContext context(OutputLimitRunBudget budget, List<AgentEvent> events) {
     budget.tryConsumeLlmCall(); // top-level prompt is reserved by ChatExecutionService
     return new RunExecutionContext(
         "test-run",

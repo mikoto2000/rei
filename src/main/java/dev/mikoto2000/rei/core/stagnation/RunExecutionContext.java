@@ -918,8 +918,7 @@ public class RunExecutionContext {
       String name,
       dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException error) {
     // 引数の修正を無制限に繰り返さないよう、実行全体で共有する修正回数の予算を守る。
-    if (!budget.tryCorrectArguments())
-      throw new ExecutionStoppedException(TOOL_ARGUMENT_REPAIR_EXHAUSTED);
+    consumeToolCorrection();
     // モデルや画面へ修正理由を返す前に、認証情報が説明へ漏れないようにする。
     String guidance = dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage());
     publisher.publish(
@@ -945,6 +944,24 @@ public class RunExecutionContext {
                 budget.remainingArgumentCorrections(),
                 "maxCorrections",
                 budget.maxArgumentCorrections()));
+  }
+
+  /** 未登録のツールを含む新規呼び出しの組を拒否し、モデルに組み直しを求める。 */
+  public String unavailableToolCorrection(String callId, String name) {
+    publisher.publish(
+        factory
+            .toolFailed(
+                callId,
+                name,
+                new ErrorInformation(
+                    "UnavailableTool",
+                    "この依頼で利用できるツールの一覧にありません。同じ応答のツールは実行されていません。",
+                    "tool_unavailable"))
+            .withOwnership(runContext));
+    consumeToolCorrection();
+    return "The previous response requested a tool that is unavailable for this request. "
+        + "No tool calls from that response ran. Continue the original request and reissue "
+        + "any still-needed calls using only the tool definitions available in this request.";
   }
 
   /** 後続の操作を進められるか判断するため、ツール権限を確認する。 */
@@ -979,8 +996,7 @@ public class RunExecutionContext {
   }
 
   private String rejectedOperationCorrection(String code, String guidance, String instruction) {
-    if (!budget.tryCorrectArguments())
-      throw new ExecutionStoppedException(TOOL_ARGUMENT_REPAIR_EXHAUSTED);
+    consumeToolCorrection();
     return tools.jackson.databind.json.JsonMapper.builder()
         .build()
         .writeValueAsString(
@@ -997,6 +1013,11 @@ public class RunExecutionContext {
                 instruction,
                 "correctionsRemaining",
                 budget.remainingArgumentCorrections()));
+  }
+
+  private void consumeToolCorrection() {
+    if (!budget.tryCorrectArguments())
+      throw new ExecutionStoppedException(TOOL_ARGUMENT_REPAIR_EXHAUSTED);
   }
 
   /** 実行の識別子。 */
