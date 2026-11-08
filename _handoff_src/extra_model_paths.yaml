@@ -1,9 +1,0 @@
-# F:/ai-image 驟堺ｸ九・繝｢繝・Ν繧・ComfyUI 縺九ｉ蜿ら・縺吶ｋ
-ai_image:
-    base_path: F:/ai-image
-    checkpoints: models/checkpoints
-    loras: models/loras
-    vae: models/vae
-    controlnet: models/controlnet
-    upscale_models: models/upscale_models
-    embeddings: models/embeddings
