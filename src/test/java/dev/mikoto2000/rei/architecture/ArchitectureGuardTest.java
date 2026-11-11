@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.tngtech.archunit.core.importer.ClassFileImporter;
-import dev.mikoto2000.rei.core.chat.AgentRunConfiguration;
+import dev.mikoto2000.rei.bootstrap.AgentRunConfiguration;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;

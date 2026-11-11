@@ -62,11 +62,11 @@ public class BackgroundCommands {
   private final Clock clock;
 
   /** 読み上げの案内。 */
-  private dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator narrator;
+  private CompletedRunNarrator narrator;
 
   /** 処理の実行制御で使用する読み上げの案内を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  public void setNarrator(dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator narrator) {
+  public void setNarrator(CompletedRunNarrator narrator) {
     this.narrator = narrator;
   }
 
@@ -161,7 +161,9 @@ public class BackgroundCommands {
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
   private String status(Throwable error) {
-    for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+    var seen =
+        java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
+    for (Throwable cause = error; cause != null && seen.add(cause); cause = cause.getCause()) {
       if (cause instanceof java.util.concurrent.CancellationException
           || cause instanceof InterruptedException) return "CANCELLED";
       if (cause instanceof java.util.concurrent.TimeoutException

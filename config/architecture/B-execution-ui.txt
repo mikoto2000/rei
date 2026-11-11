@@ -1,1 +1,0 @@
-dev.mikoto2000.rei.core.execution.BackgroundCommands -> dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator

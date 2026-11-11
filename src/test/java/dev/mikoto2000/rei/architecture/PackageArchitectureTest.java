@@ -23,6 +23,23 @@ class PackageArchitectureTest {
     if (classes.size() < 100)
       throw new AssertionError("Production import unexpectedly empty/small");
     var edges = ArchitectureModel.edges(classes);
+    var bootstrapReferences =
+        edges.stream()
+            .filter(
+                e ->
+                    e.targetPackage().equals(ArchitectureModel.ROOT + "bootstrap")
+                        || e.targetPackage().startsWith(ArchitectureModel.ROOT + "bootstrap."))
+            .filter(
+                e ->
+                    !e.sourcePackage().equals(ArchitectureModel.ROOT + "bootstrap")
+                        && !e.sourcePackage().startsWith(ArchitectureModel.ROOT + "bootstrap."))
+            .map(ArchitectureModel.Edge::pair)
+            .distinct()
+            .sorted()
+            .toList();
+    org.junit.jupiter.api.Assertions.assertTrue(
+        bootstrapReferences.isEmpty(),
+        () -> "Production code must not depend on bootstrap: " + bootstrapReferences);
     var violations = ArchitectureModel.violations(edges);
     Path report = Path.of("target/architecture");
     Files.createDirectories(report);

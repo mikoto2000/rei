@@ -8,7 +8,7 @@ import dev.mikoto2000.rei.application.run.RunService;
 import dev.mikoto2000.rei.application.run.RunStatus;
 import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.conversation.FileSessionRepository;
-import dev.mikoto2000.rei.core.chat.AgentRunConfiguration;
+import dev.mikoto2000.rei.bootstrap.AgentRunConfiguration;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.project.ProjectClientScope;

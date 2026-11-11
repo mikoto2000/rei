@@ -10,7 +10,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @RequiredArgsConstructor
-public class ChatResponseNarrator {
+public class ChatResponseNarrator
+    implements dev.mikoto2000.rei.core.execution.CompletedRunNarrator {
 
   /** 音通知通知サービス。 */
   private final SoundNotificationService soundNotificationService;
@@ -28,6 +29,7 @@ public class ChatResponseNarrator {
    *
    * <p>Background run narration does not alter the synchronous Shell command's notification flag.
    */
+  @Override
   public void narrateCompletedRun(String responseText) {
     if (responseText == null || responseText.isBlank()) return;
     String sanitized = sanitize(responseText);

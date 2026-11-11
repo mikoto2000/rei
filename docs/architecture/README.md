@@ -145,7 +145,7 @@ flowchart LR
   Config -.-> Session
 ```
 
-`AgentRunConfiguration`のUI参照は配線です（[import](../../src/main/java/dev/mikoto2000/rei/core/chat/AgentRunConfiguration.java#L3)）。
+`AgentRunConfiguration`のUI参照は配線です（[import](../../src/main/java/dev/mikoto2000/rei/bootstrap/AgentRunConfiguration.java#L3)）。
 `SessionLifecycle`がRun例外を使い、`ChatSubmitService`がSessionLifecycleを作るため、
 [SessionLifecycle:58](../../src/main/java/dev/mikoto2000/rei/application/session/SessionLifecycle.java#L58) と
 [ChatSubmitService:60](../../src/main/java/dev/mikoto2000/rei/application/run/ChatSubmitService.java#L60) には処理本体の相互参照があります。

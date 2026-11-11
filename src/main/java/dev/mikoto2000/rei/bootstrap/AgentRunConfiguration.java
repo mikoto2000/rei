@@ -1,5 +1,9 @@
-package dev.mikoto2000.rei.core.chat;
+package dev.mikoto2000.rei.bootstrap;
 
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.chat.ChatExecutionService;
+import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
