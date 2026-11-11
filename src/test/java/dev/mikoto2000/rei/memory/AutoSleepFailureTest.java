@@ -19,13 +19,25 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.episode.EpisodeProcessor;
+import dev.mikoto2000.rei.episode.EpisodeProperties;
+import dev.mikoto2000.rei.episode.EpisodeRepository;
+import dev.mikoto2000.rei.episode.EpisodeSleepService;
+import dev.mikoto2000.rei.episode.LlmEpisodeExtractor;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.memory.configuration.AutoSleepProperties;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.memory.service.AutoSleepExecution;
 import dev.mikoto2000.rei.memory.service.AutoSleepService;
+import dev.mikoto2000.rei.memory.service.LlmMemoryProcessor;
 import dev.mikoto2000.rei.memory.service.MemoryCandidateExtractor;
 import dev.mikoto2000.rei.memory.service.MemoryEvents;
 import dev.mikoto2000.rei.memory.service.MemoryRepository;
@@ -50,7 +62,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import reactor.core.publisher.Flux;
 
 /** 自動待機失敗情報の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
@@ -127,8 +147,12 @@ class AutoSleepFailureTest {
 
   /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
   MemoryRepository repository() {
-    var ds = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("memory.db"));
+    var ds = memoryDataSource();
     return new MemoryRepository(ds, new MemoryService(ds, memory));
+  }
+
+  DriverManagerDataSource memoryDataSource() {
+    return new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("memory.db"));
   }
 
   /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
@@ -517,6 +541,60 @@ class AutoSleepFailureTest {
     runAttempt();
     assertEquals("UNKNOWN", repository.autoState("s", "p").code());
     assertEquals(0, repository.autoState("s", "p").stage());
+  }
+
+  @Test
+  void logsEpisodeClaimFieldAndReasonWithoutModelResponse() throws Exception {
+    var turn = turns.readRange("s", 0, 1).getFirst();
+    String output =
+        """
+        {"episodes":[{"occurredAt":"%s","status":"UNVERIFIED","title":"CLI",
+          "summary":"Compare CLI options","confidence":0.8,
+          "claims":[{"kind":"private-model-kind","text":"private-model-text",
+            "evidence":"MODEL_PROPOSAL","runId":"%s","speaker":"assistant"}]}]}
+        """
+            .formatted(turn.createdAt(), turn.runId());
+    var model = mock(ChatModel.class);
+    when(model.stream(any(Prompt.class)))
+        .thenReturn(Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage(output))))));
+    var provider = mock(LlmModelProvider.class);
+    when(provider.memoryChatModel()).thenReturn(model);
+    when(provider.chatOptions(LlmFeature.MEMORY, null))
+        .thenReturn(OpenAiChatOptions.builder().build());
+    var episodeRepository = new EpisodeRepository(memoryDataSource());
+    var extractor = new LlmEpisodeExtractor(new LlmMemoryProcessor(provider, memory));
+    sleep.setEpisodes(
+        new EpisodeSleepService(
+            episodeRepository,
+            turns,
+            new EpisodeProcessor(episodeRepository, extractor, turns),
+            new EpisodeProperties(true),
+            memory));
+
+    var logger = (Logger) LoggerFactory.getLogger(AutoSleepService.class);
+    var appender = new ListAppender<ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      runAttempt();
+      assertEquals("OUTPUT_INVALID", repository.autoState("s", "p").code());
+      var expectedFields =
+          List.of("session=s", "code=OUTPUT_INVALID", "field=claims.kind", "reason=unsupported_value");
+      assertTrue(
+          appender.list.stream()
+              .map(ILoggingEvent::getFormattedMessage)
+              .anyMatch(message -> List.of(message.split("\\s+")).containsAll(expectedFields)),
+          "Expected the validation fields in the same log event");
+      assertTrue(
+          appender.list.stream()
+              .noneMatch(
+                  event ->
+                      event.getFormattedMessage().contains("private-model-")
+                          || event.getThrowableProxy() != null));
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
   }
 
   /** 検証条件を再現するための変更可能な時刻の取得元。 */

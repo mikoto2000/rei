@@ -96,6 +96,26 @@ public record Episode(
    */
   public record Claim(
       String kind, String text, Evidence evidence, String runId, String speaker, String sourceId) {
+    /** 検証で失敗したフィールドと固定の理由コードを保持する。 */
+    public static final class ValidationException extends IllegalArgumentException {
+      private final String field;
+      private final String reason;
+
+      private ValidationException(String field, String reason) {
+        super("Invalid episode claim");
+        this.field = field;
+        this.reason = reason;
+      }
+
+      public String field() {
+        return field;
+      }
+
+      public String reason() {
+        return reason;
+      }
+    }
+
     /** 過去の経験の活用を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Claim(String kind, String text, Evidence evidence, String runId, String speaker) {
       this(kind, text, evidence, runId, speaker, null);
@@ -103,25 +123,28 @@ public record Episode(
 
     /** 受け取った情報からClaimを作成する。 */
     public Claim {
-      if (kind == null
-          || !Set.of(
-                  "background", "alternative", "decision", "reason", "action", "result", "unknown")
-              .contains(kind)
-          || text == null
-          || text.isBlank()
-          || text.length() > 2000
-          || evidence == null
-          || runId == null
-          || runId.isBlank()
-          || !Set.of("user", "assistant", "tool").contains(speaker))
-        throw new IllegalArgumentException("Invalid episode claim");
-      if (evidence == Evidence.USER_EXPLICIT && !speaker.equals("user")
-          || evidence == Evidence.TOOL_OBSERVED && !speaker.equals("tool"))
-        throw new IllegalArgumentException("Evidence does not match speaker");
-      if (speaker.equals("tool") && (sourceId == null || sourceId.isBlank()))
-        throw new IllegalArgumentException("Tool evidence needs an event ID");
-      if (!speaker.equals("tool") && sourceId != null)
-        throw new IllegalArgumentException("Conversation evidence uses the real Run ID only");
+      if (kind == null) throw new ValidationException("kind", "missing");
+      if (!Set.of("background", "alternative", "decision", "reason", "action", "result", "unknown")
+          .contains(kind)) throw new ValidationException("kind", "unsupported_value");
+      if (text == null) throw new ValidationException("text", "missing");
+      if (text.isBlank()) throw new ValidationException("text", "blank");
+      if (text.length() > 2000) throw new ValidationException("text", "length_exceeds_2000");
+      if (evidence == null) throw new ValidationException("evidence", "missing");
+      if (runId == null) throw new ValidationException("runId", "missing");
+      if (runId.isBlank()) throw new ValidationException("runId", "blank");
+      if (speaker == null) throw new ValidationException("speaker", "missing");
+      if (!Set.of("user", "assistant", "tool").contains(speaker))
+        throw new ValidationException("speaker", "unsupported_value");
+      if (evidence == Evidence.USER_EXPLICIT && !speaker.equals("user"))
+        throw new ValidationException("speaker", "user_required_for_user_explicit");
+      if (evidence == Evidence.TOOL_OBSERVED && !speaker.equals("tool"))
+        throw new ValidationException("speaker", "tool_required_for_tool_observed");
+      if (speaker.equals("tool")) {
+        if (sourceId == null) throw new ValidationException("sourceId", "missing");
+        if (sourceId.isBlank()) throw new ValidationException("sourceId", "blank");
+      } else if (sourceId != null) {
+        throw new ValidationException("sourceId", "forbidden_for_conversation_speaker");
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.memory.service;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.episode.Episode;
 import dev.mikoto2000.rei.memory.configuration.AutoSleepProperties;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
@@ -479,9 +480,9 @@ public final class AutoSleepService implements AutoCloseable {
                   String code = classify(error),
                       description = description(code, state.stage()),
                       failedAt = clock.instant().toString();
-                  // Log types and frames, never provider messages or response/request bodies.
+                  // Log types, frames and fixed validation codes, never model input or output.
                   var logger = org.slf4j.LoggerFactory.getLogger(getClass());
-                  for (Throwable cause = error; cause != null; cause = cause.getCause())
+                  for (Throwable cause = error; cause != null; cause = cause.getCause()) {
                     logger.warn(
                         "Auto Sleep session={} code={} exception={} frames={}",
                         id,
@@ -491,6 +492,14 @@ public final class AutoSleepService implements AutoCloseable {
                             Arrays.copyOf(
                                 cause.getStackTrace(),
                                 Math.min(12, cause.getStackTrace().length))));
+                    if (cause instanceof Episode.Claim.ValidationException validation)
+                      logger.warn(
+                          "Auto Sleep session={} code={} field=claims.{} reason={}",
+                          id,
+                          code,
+                          validation.field(),
+                          validation.reason());
+                  }
                   try {
                     var updated =
                         updateState.apply(
