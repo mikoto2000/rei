@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.core.chat;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.mikoto2000.rei.bootstrap.AgentRunConfiguration;
 import dev.mikoto2000.rei.core.execution.ActiveExecution;
 import dev.mikoto2000.rei.core.execution.ExecutionScope;
 import dev.mikoto2000.rei.core.execution.ExecutionType;
@@ -39,8 +40,7 @@ class BackgroundExecutionRegistryTest {
         new dev.mikoto2000.rei.summarize.CurrentConversationHistoryAppender(
             memory, Optional.empty());
     var router = new ConversationInputRouter(tasks::add, (c, p, q) -> {});
-    var client =
-        dev.mikoto2000.rei.core.project.ProjectClientScope.open(projects.newClient());
+    var client = dev.mikoto2000.rei.core.project.ProjectClientScope.open(projects.newClient());
     try (client) {
       var project = projects.currentContext();
       String session = project.conversationId("chat:" + UUID.randomUUID());

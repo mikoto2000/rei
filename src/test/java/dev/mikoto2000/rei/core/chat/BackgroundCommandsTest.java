@@ -105,7 +105,7 @@ class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClie
   /** 会話の実行で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void narratesOnlyWhenSavedSummaryIsDisplayedForCurrentProject() {
-    var narrator = mock(dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator.class);
+    var narrator = mock(dev.mikoto2000.rei.core.execution.CompletedRunNarrator.class);
     commands.setNarrator(narrator);
     when(summaries.summarize(any()))
         .thenReturn(new SummaryResult(URI.create("https://a.example"), "summary A", null));
@@ -225,6 +225,39 @@ class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClie
         .anyMatch(e -> e.type() == AgentEventType.EXECUTION_CANCELLED);
     assertThat(new ConversationInputRouter(tasks::add, (c, p, q) -> {}).activeExecutions())
         .isEmpty();
+  }
+
+  @Test
+  void narrationCanBeDisabledForRemoteSummaryDisplay() {
+    var narrator = mock(dev.mikoto2000.rei.core.execution.CompletedRunNarrator.class);
+    commands.setNarrator(narrator);
+    when(summaries.summarize(any()))
+        .thenReturn(new SummaryResult(URI.create("https://a.example"), "summary A", null));
+    commands.summarize(URI.create("https://a.example"));
+    tasks.removeFirst().run();
+    var out = new ArrayList<String>();
+
+    commands.showLastSummary(a, out::add, false, List.of());
+
+    assertThat(String.join("\n", out)).contains("summary A");
+    assertThat(tasks).isEmpty();
+    verifyNoInteractions(narrator);
+  }
+
+  @Test
+  @org.junit.jupiter.api.Timeout(5)
+  void cyclicFailureCausesStillNotifyAndReleaseExecution() {
+    var outer = new IllegalStateException("outer");
+    var inner = new IllegalStateException("inner", outer);
+    outer.initCause(inner);
+    doThrow(outer).when(summaries).summarize(any());
+
+    commands.summarize(URI.create("https://fail.example"));
+    tasks.removeFirst().run();
+
+    assertThat(router.activeExecutions()).isEmpty();
+    assertThat(events).anyMatch(e -> e.type() == AgentEventType.EXECUTION_FAILED);
+    assertThat(states.latestCompleted(a.id(), ExecutionType.SUMMARIZE)).isEmpty();
   }
 
   /** 会話の実行で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */

@@ -7,11 +7,14 @@ Phase 3の契約棚卸し・互換snapshotだけはPhase 1と同時に始めら�
 
 ## Phase 1: 横断配線をbootstrapへ
 
+2026-11-11: 最初の項目であるAgentRunConfigurationのbootstrap移動を実施。
+[レビュー記録](../../review/module-boundaries-2026-11-11.md)を参照。以下の他Configurationや後続Phaseは引き続き移行対象。
+
 対象は `core.chat.AgentRunConfiguration`、`web.WebApiConfiguration`、`web.BackgroundRunConfiguration`、
 `core.configuration.AiConfiguration`。全Configurationを機械的に移す方針ではなく、機能内に閉じた設定・Propertiesは残します。
 
 - 最初のPR: AgentRunConfigurationのBean配線を`bootstrap`へ。UIのChatResponseNarrator、Session、Run、voiceを結ぶため、
-  [import:3](../../src/main/java/dev/mikoto2000/rei/core/chat/AgentRunConfiguration.java#L3)から境界の混在が明確です。
+  [import:3](../../src/main/java/dev/mikoto2000/rei/bootstrap/AgentRunConfiguration.java#L3)から境界の混在が明確です。
 - 次のPR: WebApiConfiguration / BackgroundRunConfigurationから共通Run/Sessionの組立だけを切り出す。
   Web固有security/servlet条件はWeb側に残し、[BackgroundRunConfiguration:22](../../src/main/java/dev/mikoto2000/rei/web/BackgroundRunConfiguration.java#L22)の条件を維持する。
 - 次のPR: AiConfigurationのTool登録とAdvisor順序を独立したProviderへ。モデル設定・Bean名・条件を固定する。

@@ -1,5 +1,4 @@
 business: dev.mikoto2000.rei.ExternalConfigSupport -> dev.mikoto2000.rei.core.datasource.ReiDataDirectory
-wiring: dev.mikoto2000.rei.temporal.holiday.HolidayConfiguration -> dev.mikoto2000.rei.core.datasource.ReiDataDirectory
 business: dev.mikoto2000.rei.ExternalConfigSupport -> dev.mikoto2000.rei.core.datasource.ReiPaths
 business: dev.mikoto2000.rei.StartupOptions -> dev.mikoto2000.rei.core.project.ProjectService
 business: dev.mikoto2000.rei.activity.ActivityCommand -> dev.mikoto2000.rei.core.project.ProjectService
@@ -804,6 +803,7 @@ business: dev.mikoto2000.rei.ui.shell.ShellProjectCommands -> dev.mikoto2000.rei
 business: dev.mikoto2000.rei.ui.shell.ShellProjectCommands -> dev.mikoto2000.rei.core.project.ProjectClient
 business: dev.mikoto2000.rei.ui.shell.ShellProjectCommands -> dev.mikoto2000.rei.core.project.ProjectClientScope
 business: dev.mikoto2000.rei.ui.shell.ShellProjectCommands -> dev.mikoto2000.rei.core.project.ProjectService
+business: dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator -> dev.mikoto2000.rei.core.execution.CompletedRunNarrator
 business: dev.mikoto2000.rei.vectordocument.RerankService -> dev.mikoto2000.rei.core.chat.RunCancellation
 business: dev.mikoto2000.rei.vectordocument.RerankService -> dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException
 business: dev.mikoto2000.rei.vectorstore.SparseRetrieval -> dev.mikoto2000.rei.core.chat.RunCancellation
@@ -988,6 +988,14 @@ wiring: dev.mikoto2000.rei.application.task.TaskManagerConfiguration -> dev.miko
 wiring: dev.mikoto2000.rei.application.task.TaskManagerConfiguration -> dev.mikoto2000.rei.core.project.ProjectRegistry
 wiring: dev.mikoto2000.rei.artifact.ArtifactConfiguration -> dev.mikoto2000.rei.core.TextChangeSetService
 wiring: dev.mikoto2000.rei.artifact.ArtifactConfiguration -> dev.mikoto2000.rei.core.project.ProjectRegistry
+wiring: dev.mikoto2000.rei.bootstrap.AgentRunConfiguration -> dev.mikoto2000.rei.core.chat.AgentRunContext
+wiring: dev.mikoto2000.rei.bootstrap.AgentRunConfiguration -> dev.mikoto2000.rei.core.chat.AgentRunContext$RequestSource
+wiring: dev.mikoto2000.rei.bootstrap.AgentRunConfiguration -> dev.mikoto2000.rei.core.chat.AgentRunScope
+wiring: dev.mikoto2000.rei.bootstrap.AgentRunConfiguration -> dev.mikoto2000.rei.core.chat.ChatExecutionResult
+wiring: dev.mikoto2000.rei.bootstrap.AgentRunConfiguration -> dev.mikoto2000.rei.core.chat.ChatExecutionService
+wiring: dev.mikoto2000.rei.bootstrap.AgentRunConfiguration -> dev.mikoto2000.rei.core.chat.ConversationInputRouter
+wiring: dev.mikoto2000.rei.bootstrap.AgentRunConfiguration -> dev.mikoto2000.rei.core.chat.UserInterventionQueue$Entry
+wiring: dev.mikoto2000.rei.bootstrap.AgentRunConfiguration -> dev.mikoto2000.rei.core.project.ProjectService
 wiring: dev.mikoto2000.rei.chatgpt.PlanConfiguration -> dev.mikoto2000.rei.core.policy.ToolPermissionGuard
 wiring: dev.mikoto2000.rei.chatgpt.PlanConfiguration -> dev.mikoto2000.rei.core.service.CommandCancellationService
 wiring: dev.mikoto2000.rei.computeruse.ComputerUseConfiguration -> dev.mikoto2000.rei.core.datasource.ReiDataDirectory
@@ -1028,6 +1036,7 @@ wiring: dev.mikoto2000.rei.storage.StorageMigrationConfiguration -> dev.mikoto20
 wiring: dev.mikoto2000.rei.storage.StorageMigrationConfiguration$StartupGate -> dev.mikoto2000.rei.core.datasource.ReiDataDirectory
 wiring: dev.mikoto2000.rei.subagent.SubAgentConfiguration -> dev.mikoto2000.rei.core.service.CommandCancellationService
 wiring: dev.mikoto2000.rei.subagent.SubAgentConfiguration -> dev.mikoto2000.rei.core.service.ModelHolderService
+wiring: dev.mikoto2000.rei.temporal.holiday.HolidayConfiguration -> dev.mikoto2000.rei.core.datasource.ReiDataDirectory
 wiring: dev.mikoto2000.rei.topic.CuriosityQueueConfiguration -> dev.mikoto2000.rei.core.datasource.ReiPaths
 wiring: dev.mikoto2000.rei.topic.TopicGeneratorConfiguration -> dev.mikoto2000.rei.core.service.ModelHolderService
 wiring: dev.mikoto2000.rei.ui.shell.ShellUiConfiguration -> dev.mikoto2000.rei.core.command.ReiLineReaderFactory

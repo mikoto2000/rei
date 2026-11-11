@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.bootstrap.AgentRunConfiguration;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import java.nio.file.Path;

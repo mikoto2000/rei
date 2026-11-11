@@ -1,5 +1,4 @@
 dev.mikoto2000.rei.ApplicationShutdownNotifier -> dev.mikoto2000.rei.event.AgentEventBus
-dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools
 dev.mikoto2000.rei.ApplicationShutdownNotifier -> dev.mikoto2000.rei.event.AgentEventFactory
 dev.mikoto2000.rei.StartupOptions -> dev.mikoto2000.rei.core.project.ProjectService
 dev.mikoto2000.rei.activity.ActivityAgentEvidenceSource -> dev.mikoto2000.rei.event.AgentEvent
@@ -993,7 +992,6 @@ dev.mikoto2000.rei.core.execution.BackgroundCommands -> dev.mikoto2000.rei.image
 dev.mikoto2000.rei.core.execution.BackgroundCommands -> dev.mikoto2000.rei.image.ImageGenerationService
 dev.mikoto2000.rei.core.execution.BackgroundCommands -> dev.mikoto2000.rei.summarize.SummaryResult
 dev.mikoto2000.rei.core.execution.BackgroundCommands -> dev.mikoto2000.rei.summarize.WebPageSummarizerService
-dev.mikoto2000.rei.core.execution.BackgroundCommands -> dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator
 dev.mikoto2000.rei.core.filesummary.FileSummaryAdvisor -> dev.mikoto2000.rei.event.AgentEventFactory
 dev.mikoto2000.rei.core.filesummary.FileSummaryAdvisor -> dev.mikoto2000.rei.event.AgentEventPublisher
 dev.mikoto2000.rei.core.filesummary.FileSummaryCache -> dev.mikoto2000.rei.event.AgentEvent
@@ -1747,6 +1745,7 @@ dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.summarize.Sum
 dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.task.TaskTools
 dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.temporal.RuntimeContextAdvisor
 dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.temporal.SchedulerTools
+dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools
 dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.urlfetch.UrlContentFetchTools
 dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.websearch.WebSearchTools
 dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.workcontext.WorkContextAdvisor
@@ -2649,6 +2648,7 @@ dev.mikoto2000.rei.ui.shell.ShellProjectCommands -> dev.mikoto2000.rei.core.proj
 dev.mikoto2000.rei.ui.shell.ShellProjectCommands -> dev.mikoto2000.rei.event.FailureMessages
 dev.mikoto2000.rei.ui.shell.sound.AgentMessageNarrator -> dev.mikoto2000.rei.topic.AgentMessage
 dev.mikoto2000.rei.ui.shell.sound.AgentMessageNarrator -> dev.mikoto2000.rei.topic.MessageOrigin
+dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator -> dev.mikoto2000.rei.core.execution.CompletedRunNarrator
 dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService -> dev.mikoto2000.rei.voice.VoiceAudioGate
 dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService -> dev.mikoto2000.rei.voice.VoiceAudioGate$Playback
 dev.mikoto2000.rei.urlfetch.UrlContentFetchService -> dev.mikoto2000.rei.http.FetchOperation
