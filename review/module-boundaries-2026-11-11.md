@@ -28,4 +28,9 @@
 
 ## 検証
 
-検証完了後に実行結果を記録する。
+- 対象回帰: `mvnw.cmd -B -Pfull -Dtest=PackageArchitectureTest,ArchitectureGuardTest,ActiveRunNarrationTest,BackgroundCommandsTest test`。動作・guardテストは成功し、明示的な予算更新後のPackageArchitectureTestも全件回帰内で成功。
+- 読み上げの非同期実行・所有権、Web入力の抑止、リモート要約表示での読み上げ抑止、循環例外からの失敗通知と実行解放を検証した。
+- Checkstyle: 指摘0件。変更したJavaファイルにSpotlessを適用。
+- terminal: CLI 153件とlauncher 6件の最終クラス別レポートは失敗0件。初回にPTY入力の `//sh` 誤入力と終了直後の一時ディレクトリロックの2失敗があったが、該当2クラスの再実行（3件）は成功。変更したBackendクラスはterminalのコンパイル対象には含まれない。
+- 全件回帰コマンド: `.github/ci/full-test.ps1 -TimeoutSeconds 1200`（`-Pfull`、外部実サービスのliveを除外）。SpotBugsも実行対象。
+- 最終のCI証跡: [PR #531のChecks](https://github.com/mikoto2000/rei/pull/531/checks)。Java回帰2分割と静的解析を確認してからマージする。実LLM、実マイク、Native Client実機操作は今回の検証に含めない。
