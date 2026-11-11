@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.episode;
 
+import dev.mikoto2000.rei.output.OutputValidationDiagnostic;
 import java.util.List;
 import java.util.Set;
 
@@ -97,7 +98,8 @@ public record Episode(
   public record Claim(
       String kind, String text, Evidence evidence, String runId, String speaker, String sourceId) {
     /** 検証で失敗したフィールドと固定の理由コードを保持する。 */
-    public static final class ValidationException extends IllegalArgumentException {
+    public static final class ValidationException extends IllegalArgumentException
+        implements OutputValidationDiagnostic {
       private final String field;
       private final String reason;
 
@@ -111,6 +113,12 @@ public record Episode(
         return field;
       }
 
+      @Override
+      public String fieldPath() {
+        return "claims." + field;
+      }
+
+      @Override
       public String reason() {
         return reason;
       }

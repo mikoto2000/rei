@@ -1,9 +1,9 @@
 package dev.mikoto2000.rei.memory.service;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.episode.Episode;
 import dev.mikoto2000.rei.memory.configuration.AutoSleepProperties;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
+import dev.mikoto2000.rei.output.OutputValidationDiagnostic;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import java.time.Clock;
 import java.time.Duration;
@@ -492,12 +492,12 @@ public final class AutoSleepService implements AutoCloseable {
                             Arrays.copyOf(
                                 cause.getStackTrace(),
                                 Math.min(12, cause.getStackTrace().length))));
-                    if (cause instanceof Episode.Claim.ValidationException validation)
+                    if (cause instanceof OutputValidationDiagnostic validation)
                       logger.warn(
-                          "Auto Sleep session={} code={} field=claims.{} reason={}",
+                          "Auto Sleep session={} code={} field={} reason={}",
                           id,
                           code,
-                          validation.field(),
+                          validation.fieldPath(),
                           validation.reason());
                   }
                   try {
