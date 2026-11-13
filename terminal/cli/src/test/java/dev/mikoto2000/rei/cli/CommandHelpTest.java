@@ -9,7 +9,7 @@ import java.net.URI;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import org.jline.terminal.TerminalBuilder;
+import org.jline.terminal.impl.DumbTerminal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -29,11 +29,7 @@ class CommandHelpTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), output)
-                    .build())) {
+                new DumbTerminal(new ByteArrayInputStream(new byte[0]), output))) {
       for (var path : paths) {
         if (path.isEmpty()) continue;
         output.reset();

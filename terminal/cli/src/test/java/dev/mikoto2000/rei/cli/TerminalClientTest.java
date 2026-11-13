@@ -6,7 +6,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.io.*;
 import java.net.*;
 import java.nio.file.Path;
-import org.jline.terminal.TerminalBuilder;
+import org.jline.terminal.impl.DumbTerminal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -42,11 +42,7 @@ class TerminalClientTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), output)
-                    .build())) {
+                new DumbTerminal(new ByteArrayInputStream(new byte[0]), output))) {
       client.command("/watch run");
       long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
       while (!output.toString(java.nio.charset.StandardCharsets.UTF_8).contains("グレースフルシャットダウン")
@@ -85,11 +81,8 @@ class TerminalClientTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-                    .build())) {
+                new DumbTerminal(
+                    new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream()))) {
       client.refreshRunStatus();
       assertEquals(
           "[none] [3 running]\n12:34 unknown> ",
@@ -125,11 +118,7 @@ class TerminalClientTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), output)
-                    .build())) {
+                new DumbTerminal(new ByteArrayInputStream(new byte[0]), output))) {
       client.printUserInput("こんにちは\n続き");
       String text = output.toString(java.nio.charset.StandardCharsets.UTF_8);
       assertTrue(text.contains("┌ User ("));
@@ -187,11 +176,8 @@ class TerminalClientTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-                    .build())) {
+                new DumbTerminal(
+                    new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream()))) {
       client.command("/activity coaching on");
       assertEquals(java.util.List.of("read", "write"), calls);
       assertEquals(7, written.get().path("expectedRevision").asLong());
@@ -227,11 +213,7 @@ class TerminalClientTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), output)
-                    .build())) {
+                new DumbTerminal(new ByteArrayInputStream(new byte[0]), output))) {
       client.command("/models");
       assertTrue(output.toString().contains("* chosen"));
       assertFalse(output.toString().contains("currentModel"));
@@ -288,11 +270,8 @@ class TerminalClientTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-                    .build())) {
+                new DumbTerminal(
+                    new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream()))) {
       client.selectInitialProject(null);
       assertEquals("cwd", client.projectId());
       assertTrue(client.buildPrompt(java.time.LocalTime.NOON).startsWith("[Current] ["));
@@ -342,11 +321,8 @@ class TerminalClientTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-                    .build())) {
+                new DumbTerminal(
+                    new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream()))) {
       client.refreshCatalog();
       assertEquals(1, requests.get());
       var readerField = TerminalClient.class.getDeclaredField("reader");
@@ -436,11 +412,7 @@ class TerminalClientTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), output)
-                    .build())) {
+                new DumbTerminal(new ByteArrayInputStream(new byte[0]), output))) {
       client.command("/project select one");
       pages.set(0);
       client.command("/session list");
@@ -492,11 +464,8 @@ class TerminalClientTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-                    .build())) {
+                new DumbTerminal(
+                    new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream()))) {
       client.command("/project select one");
       client.command("/session select chosen");
       client.command("/project cd .");
@@ -551,11 +520,8 @@ class TerminalClientTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-                    .build())) {
+                new DumbTerminal(
+                    new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream()))) {
       client.command("/project select one");
       client.command("/project add child");
       assertEquals("one", client.projectId());
@@ -601,11 +567,8 @@ class TerminalClientTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-                    .build())) {
+                new DumbTerminal(
+                    new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream()))) {
       assertThrows(
           IllegalArgumentException.class, () -> client.command("/unsupported do something"));
       assertEquals(0, requests.get());
@@ -644,21 +607,15 @@ class TerminalClientTest {
                 firstBackend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-                    .build());
+                new DumbTerminal(
+                    new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream()));
         var second =
             new TerminalClient(
                 secondBackend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-                    .build())) {
+                new DumbTerminal(
+                    new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream()))) {
       first.command("/project select one");
       second.command("/project select two");
       assertEquals("one", first.projectId());

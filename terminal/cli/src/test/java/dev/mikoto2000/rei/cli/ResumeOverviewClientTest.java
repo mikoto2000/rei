@@ -7,7 +7,7 @@ import java.io.*;
 import java.net.*;
 import java.nio.file.Path;
 import java.util.*;
-import org.jline.terminal.TerminalBuilder;
+import org.jline.terminal.impl.DumbTerminal;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -81,11 +81,7 @@ class ResumeOverviewClientTest {
                     backend,
                     directory,
                     true,
-                    TerminalBuilder.builder()
-                        .system(false)
-                        .dumb(true)
-                        .streams(new ByteArrayInputStream(new byte[0]), output)
-                        .build())) {
+                    new DumbTerminal(new ByteArrayInputStream(new byte[0]), output))) {
           client.command("/project select one");
           assertTrue(
               output.toString(java.nio.charset.StandardCharsets.UTF_8).contains("request-one"));

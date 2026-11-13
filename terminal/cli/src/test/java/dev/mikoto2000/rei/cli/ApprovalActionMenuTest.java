@@ -5,9 +5,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import dev.mikoto2000.rei.core.completion.ApprovalActionMenu;
 import dev.mikoto2000.rei.core.completion.ApprovalMenuLineReader;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
 import org.jline.reader.*;
-import org.jline.terminal.TerminalBuilder;
+import org.jline.terminal.impl.DumbTerminal;
 import org.junit.jupiter.api.Test;
 
 /** 承認操作操作の選択肢の結果と状態の契約を検証するテスト。 */
@@ -46,11 +47,12 @@ class ApprovalActionMenuTest {
   void movingUpdatesOneMenuWithoutAppendingOutputAndEnterRemovesIt() throws Exception {
     var output = new ByteArrayOutputStream();
     try (var terminal =
-        TerminalBuilder.builder()
-            .system(false)
-            .type("xterm")
-            .streams(new ByteArrayInputStream(new byte[0]), output)
-            .build()) {
+        new DumbTerminal(
+            "fixture",
+            "xterm",
+            new ByteArrayInputStream(new byte[0]),
+            output,
+            StandardCharsets.UTF_8)) {
       var reader = new ApprovalMenuLineReader(terminal);
       var menu = new ApprovalActionMenu(reader, () -> new ApprovalActionMenu.Owner("p", "s"));
       menu.enabled(true);
@@ -77,13 +79,12 @@ class ApprovalActionMenuTest {
   /** 検証用に、指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private String read(String input, boolean sameOwner) throws Exception {
     try (var terminal =
-        TerminalBuilder.builder()
-            .system(false)
-            .type("xterm")
-            .streams(
-                new ByteArrayInputStream(input.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
-                new ByteArrayOutputStream())
-            .build()) {
+        new DumbTerminal(
+            "fixture",
+            "xterm",
+            new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)),
+            new ByteArrayOutputStream(),
+            StandardCharsets.UTF_8)) {
       var reader = new ApprovalMenuLineReader(terminal);
       var menu = new ApprovalActionMenu(reader, () -> new ApprovalActionMenu.Owner("p", "s"));
       menu.enabled(true);
@@ -96,11 +97,7 @@ class ApprovalActionMenuTest {
   @Test
   void aProjectChangeCancelsTheSelectedActionBeforeEnter() throws Exception {
     try (var terminal =
-        TerminalBuilder.builder()
-            .system(false)
-            .dumb(true)
-            .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-            .build()) {
+        new DumbTerminal(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())) {
       var reader = new ApprovalMenuLineReader(terminal);
       var owner = new AtomicReference<>(new ApprovalActionMenu.Owner("p", "s"));
       var menu = new ApprovalActionMenu(reader, owner::get);
@@ -118,11 +115,7 @@ class ApprovalActionMenuTest {
   @Test
   void aNewNotificationDoesNotChangeTheSelectedRequest() throws Exception {
     try (var terminal =
-        TerminalBuilder.builder()
-            .system(false)
-            .dumb(true)
-            .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-            .build()) {
+        new DumbTerminal(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())) {
       var reader = new ApprovalMenuLineReader(terminal);
       var menu = new ApprovalActionMenu(reader, () -> new ApprovalActionMenu.Owner("p", "s"));
       menu.enabled(true);

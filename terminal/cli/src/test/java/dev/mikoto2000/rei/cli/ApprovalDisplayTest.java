@@ -4,8 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import dev.mikoto2000.rei.core.completion.*;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
-import org.jline.terminal.TerminalBuilder;
+import org.jline.terminal.impl.DumbTerminal;
 import org.junit.jupiter.api.Test;
 
 /** 承認表示の結果と状態の契約を検証するテスト。 */
@@ -40,11 +41,12 @@ class ApprovalDisplayTest {
   @Test
   void readOnlyRefreshRemovesResolvedRequestsAndRetainsStateOnFailure() throws Exception {
     try (var terminal =
-        TerminalBuilder.builder()
-            .system(false)
-            .type("xterm")
-            .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-            .build()) {
+        new DumbTerminal(
+            "fixture",
+            "xterm",
+            new ByteArrayInputStream(new byte[0]),
+            new ByteArrayOutputStream(),
+            StandardCharsets.UTF_8)) {
       var reader = new ApprovalMenuLineReader(terminal, true);
       var source = new java.util.concurrent.atomic.AtomicReference<List<String>>(List.of(ID));
       try (var menu =
@@ -80,11 +82,12 @@ class ApprovalDisplayTest {
   @Test
   void aNotificationDuringSnapshotReadIsNotLost() throws Exception {
     try (var terminal =
-        TerminalBuilder.builder()
-            .system(false)
-            .type("xterm")
-            .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-            .build()) {
+        new DumbTerminal(
+            "fixture",
+            "xterm",
+            new ByteArrayInputStream(new byte[0]),
+            new ByteArrayOutputStream(),
+            StandardCharsets.UTF_8)) {
       var reader = new ApprovalMenuLineReader(terminal, true);
       var reading = new java.util.concurrent.CountDownLatch(1);
       var release = new java.util.concurrent.CountDownLatch(1);
@@ -123,11 +126,12 @@ class ApprovalDisplayTest {
     for (String type : List.of("dumb", "xterm")) {
       var bytes = new ByteArrayOutputStream();
       try (var terminal =
-          TerminalBuilder.builder()
-              .system(false)
-              .type(type)
-              .streams(new ByteArrayInputStream(new byte[0]), bytes)
-              .build()) {
+          new DumbTerminal(
+              "fixture",
+              type,
+              new ByteArrayInputStream(new byte[0]),
+              bytes,
+              StandardCharsets.UTF_8)) {
         assertFalse(ApprovalDisplayState.interactive(terminal));
         var reader = new ApprovalMenuLineReader(terminal);
         reader.approvalStatus("[APPROVAL PENDING: 1]");
@@ -150,13 +154,14 @@ class ApprovalDisplayTest {
             var keys = new PipedOutputStream(input);
             try (keys;
                 var terminal =
-                    TerminalBuilder.builder()
-                        .system(false)
-                        .type("xterm")
-                        .streams(input, new ByteArrayOutputStream())
-                        .size(new org.jline.terminal.Size(90, 24))
-                        .build();
+                    new DumbTerminal(
+                        "fixture",
+                        "xterm",
+                        input,
+                        new ByteArrayOutputStream(),
+                        StandardCharsets.UTF_8);
                 var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+              terminal.setSize(new org.jline.terminal.Size(90, 24));
               var reader = new ApprovalMenuLineReader(terminal, true);
               try (var menu =
                   new ApprovalActionMenu(reader, () -> new ApprovalActionMenu.Owner("p", "s"))) {
@@ -224,11 +229,12 @@ class ApprovalDisplayTest {
   @Test
   void statusSurvivesMenuClearingAndLogsWithoutTouchingInput() throws Exception {
     try (var terminal =
-        TerminalBuilder.builder()
-            .system(false)
-            .type("xterm")
-            .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-            .build()) {
+        new DumbTerminal(
+            "fixture",
+            "xterm",
+            new ByteArrayInputStream(new byte[0]),
+            new ByteArrayOutputStream(),
+            StandardCharsets.UTF_8)) {
       var reader = new ApprovalMenuLineReader(terminal, true);
       try (var menu =
           new ApprovalActionMenu(reader, () -> new ApprovalActionMenu.Owner("p", "s"))) {
@@ -257,11 +263,12 @@ class ApprovalDisplayTest {
   void staleOwnerSnapshotCannotReplaceCurrentRequestsAndMultipleRequestsAreCounted()
       throws Exception {
     try (var terminal =
-        TerminalBuilder.builder()
-            .system(false)
-            .type("xterm")
-            .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-            .build()) {
+        new DumbTerminal(
+            "fixture",
+            "xterm",
+            new ByteArrayInputStream(new byte[0]),
+            new ByteArrayOutputStream(),
+            StandardCharsets.UTF_8)) {
       var owner =
           new java.util.concurrent.atomic.AtomicReference<>(new ApprovalActionMenu.Owner("p", "s"));
       var reader = new ApprovalMenuLineReader(terminal, true);

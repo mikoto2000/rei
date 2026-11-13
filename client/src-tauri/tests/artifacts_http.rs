@@ -9,7 +9,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 const ID: &str = "00000000-0000-4000-8000-000000000001";
 fn receipt() -> Value {
-    json!({"artifactId":ID,"owner":"RUN","projectId":"p","sessionId":"日本語?&s","runId":"r","taskId":null,"mediaType":"text/plain","filename":"結果.txt","size":4,"sha256":"8b3369944dd2a3fab39e32d1aeb1f763946a458ae3e6368a46432adc8f3a0860","createdAt":"2026-10-07T01:00:00Z","expiresAt":"2026-11-06T01:00:00Z","storageReference":format!("artifact:{ID}"),"status":"AVAILABLE"})
+    json!({"artifactId":ID,"owner":"RUN","projectId":"p","sessionId":"日本語?&s","runId":"r","taskId":null,"mediaType":"text/plain","filename":"結果.txt","size":4,"sha256":"8b3369944dd2a3fab39e32d1aeb1f763946a458ae3e6368a46432adc8f3a0860","createdAt":"2026-10-07T01:00:00Z","expiresAt":null,"storageReference":format!("artifact:{ID}"),"status":"AVAILABLE"})
 }
 async fn serve(router: Router) -> HttpReiClient {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
