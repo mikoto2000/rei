@@ -174,13 +174,13 @@ class BackendClientTest {
   /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"", "not-json", "{\"message\":\"Bearer test-key\"}"})
+      strings = {"", "not-json", "{\"message\":\"Bearer test-key\"}", "oversized"})
   void unstructuredConflictBodiesAreNotExposed(String body) throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext(
         "/api/v1/projects",
         exchange -> {
-          var bytes = body.getBytes();
+          var bytes = ("oversized".equals(body) ? "x".repeat(20_000) : body).getBytes();
           exchange.sendResponseHeaders(409, bytes.length == 0 ? -1 : bytes.length);
           if (bytes.length > 0) exchange.getResponseBody().write(bytes);
           exchange.close();

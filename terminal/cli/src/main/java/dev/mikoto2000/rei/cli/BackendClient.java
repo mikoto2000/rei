@@ -143,11 +143,13 @@ public final class BackendClient implements AutoCloseable {
   JsonNode response(HttpRequest request) throws IOException, InterruptedException {
     int limit =
         request.uri().getPath().startsWith("/api/v1/llm/capture/attempts/") ? 8 * 1048576 : 1048576;
+    var conflictHeaders = new AtomicBoolean();
     var pending =
         http.sendAsync(
             request,
             info -> {
               var status = info.statusCode();
+              if (status == 409) conflictHeaders.set(true);
               if (status == 409 || (status >= 200 && status < 300))
                 return HttpResponse.BodySubscribers.limiting(
                     HttpResponse.BodySubscribers.ofByteArray(), status == 409 ? 16385 : limit);
@@ -163,11 +165,13 @@ public final class BackendClient implements AutoCloseable {
       response = pending.get(request.timeout().orElseThrow().toNanos(), TimeUnit.NANOSECONDS);
     } catch (TimeoutException timeout) {
       pending.cancel(true);
+      if (conflictHeaders.get()) throw new ApiException(409);
       throw new HttpTimeoutException("Backend response deadline exceeded");
     } catch (InterruptedException interrupted) {
       pending.cancel(true);
       throw interrupted;
     } catch (ExecutionException failure) {
+      if (conflictHeaders.get()) throw new ApiException(409);
       if (failure.getCause() instanceof IOException io) throw io;
       throw new IOException("Backend response failed", failure.getCause());
     }
