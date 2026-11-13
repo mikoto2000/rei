@@ -64,10 +64,8 @@ impl HttpReiClient {
             .get("location")
             .and_then(|v| v.to_str().ok())
             .map(str::to_owned);
-        let receipt: BackgroundReceipt = response
-            .json()
-            .await
-            .map_err(|_| AppError::InvalidResponse)?;
+        let receipt: BackgroundReceipt =
+            Self::decode_json(response, RUN_RECEIPT_JSON_LIMIT).await?;
         let expected =
             Self::run_path(&receipt.run_id, "").map_err(|_| AppError::InvalidResponse)?;
         if location.as_deref() != Some(expected.as_str()) {

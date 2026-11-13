@@ -25,22 +25,7 @@ impl HttpReiClient {
         {
             return Err(AppError::InvalidResponse);
         }
-        let mut stream = response.bytes_stream();
-        let mut bytes = Vec::new();
-        while let Some(chunk) = stream.next().await {
-            let chunk = chunk.map_err(|e| {
-                if e.is_timeout() {
-                    AppError::RequestTimeout
-                } else {
-                    AppError::InvalidResponse
-                }
-            })?;
-            if bytes.len() + chunk.len() > 8 * 1024 * 1024 {
-                return Err(AppError::InvalidResponse);
-            }
-            bytes.extend_from_slice(&chunk);
-        }
-        serde_json::from_slice(&bytes).map_err(|_| AppError::InvalidResponse)
+        Self::decode_json(response, RESOURCE_JSON_LIMIT).await
     }
     pub(super) async fn task_list(&self, query: TaskQuery) -> Result<TaskPage> {
         TaskQuery::new(

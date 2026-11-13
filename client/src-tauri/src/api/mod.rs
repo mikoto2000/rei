@@ -17,6 +17,10 @@ mod tasks;
 mod workspace;
 use history::*;
 
+const RESOURCE_JSON_LIMIT: usize = 8 * 1024 * 1024;
+const HISTORY_JSON_LIMIT: usize = 64 * 1024 * 1024;
+const RUN_RECEIPT_JSON_LIMIT: usize = 1024 * 1024;
+
 pub struct HttpReiClient {
     client: Client,
     base_url: String,
@@ -85,13 +89,36 @@ impl HttpReiClient {
         {
             return Err(AppError::InvalidResponse);
         }
-        response.json().await.map_err(|error| {
-            if error.is_timeout() {
-                AppError::RequestTimeout
-            } else {
-                AppError::InvalidResponse
+        let limit = match op {
+            Operation::Sessions | Operation::Session => HISTORY_JSON_LIMIT,
+            Operation::Run | Operation::Chat => RUN_RECEIPT_JSON_LIMIT,
+            _ => RESOURCE_JSON_LIMIT,
+        };
+        Self::decode_json(response, limit).await
+    }
+    async fn decode_json<T: DeserializeOwned>(response: Response, limit: usize) -> Result<T> {
+        if response
+            .content_length()
+            .is_some_and(|size| size > limit as u64)
+        {
+            return Err(AppError::InvalidResponse);
+        }
+        let mut stream = response.bytes_stream();
+        let mut bytes = Vec::new();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.map_err(|error| {
+                if error.is_timeout() {
+                    AppError::RequestTimeout
+                } else {
+                    AppError::InvalidResponse
+                }
+            })?;
+            if chunk.len() > limit - bytes.len() {
+                return Err(AppError::InvalidResponse);
             }
-        })
+            bytes.extend_from_slice(&chunk);
+        }
+        serde_json::from_slice(&bytes).map_err(|_| AppError::InvalidResponse)
     }
     fn run_path(run: &str, suffix: &str) -> Result<String> {
         if run.is_empty() || !run.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
@@ -267,7 +294,7 @@ impl ReiClient for HttpReiClient {
         if response.status() != reqwest::StatusCode::ACCEPTED {
             return Err(AppError::InvalidResponse);
         }
-        response.json().await.map_err(|_| AppError::InvalidResponse)
+        Self::decode_json(response, RUN_RECEIPT_JSON_LIMIT).await
     }
     async fn run(&self, run: &str) -> Result<RunSnapshot> {
         Self::json(
@@ -305,10 +332,7 @@ impl ReiClient for HttpReiClient {
         if !accepted && response.status() != reqwest::StatusCode::OK {
             return Err(AppError::InvalidResponse);
         }
-        let snapshot = response
-            .json()
-            .await
-            .map_err(|_| AppError::InvalidResponse)?;
+        let snapshot = Self::decode_json(response, RUN_RECEIPT_JSON_LIMIT).await?;
         Ok(CancelReceipt { accepted, snapshot })
     }
     async fn events(&self, run: &str, last: Option<u64>) -> Result<ByteStream> {
