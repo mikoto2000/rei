@@ -7,6 +7,11 @@ import java.net.http.*;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -15,6 +20,9 @@ import java.util.function.Consumer;
  * <p>HTTP/SSE only; no backend data files or provider credentials are accessed.
  */
 public final class BackendClient implements AutoCloseable {
+  private static final Duration DEFAULT_EVENT_IDLE = Duration.ofSeconds(60);
+  private static final Duration DEFAULT_EVENT_HEADERS = Duration.ofSeconds(15);
+
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   public static final ObjectMapper JSON = new ObjectMapper();
 
@@ -32,6 +40,11 @@ public final class BackendClient implements AutoCloseable {
 
   /** 逐次データ一覧。 */
   private final Set<InputStream> streams = new HashSet<>();
+
+  private final ScheduledThreadPoolExecutor deadlines =
+      new ScheduledThreadPoolExecutor(1, Thread.ofPlatform().daemon().factory());
+  private final Duration eventHeaders;
+  private final Duration eventIdle;
 
   /** 購読生成。 */
   private long subscriptionGeneration;
@@ -79,6 +92,10 @@ public final class BackendClient implements AutoCloseable {
 
   /** 指定された値や利用先を使って、BackendClientを初期化する。 */
   public BackendClient(URI endpoint, String key) {
+    this(endpoint, key, DEFAULT_EVENT_HEADERS, DEFAULT_EVENT_IDLE);
+  }
+
+  BackendClient(URI endpoint, String key, Duration eventHeaders, Duration eventIdle) {
     new dev.mikoto2000.rei.launcher.BackendEndpoint(
         1,
         UUID.randomUUID().toString(),
@@ -91,6 +108,9 @@ public final class BackendClient implements AutoCloseable {
       throw new IllegalArgumentException("REI_API_KEY is required");
     this.endpoint = endpoint;
     this.key = key;
+    this.eventHeaders = eventHeaders;
+    this.eventIdle = eventIdle;
+    deadlines.setRemoveOnCancelPolicy(true);
     http =
         HttpClient.newBuilder()
             .followRedirects(HttpClient.Redirect.NEVER)
@@ -120,44 +140,69 @@ public final class BackendClient implements AutoCloseable {
   }
 
   /** 軽量CLIでの対話で用いる応答を返す。 */
-  private JsonNode response(HttpRequest request) throws IOException, InterruptedException {
-    var response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
-    try (var body = response.body()) {
-      if (response.statusCode() == 409) {
-        byte[] bytes = body.readNBytes(16385);
-        if (bytes.length > 0 && bytes.length <= 16384)
-          try {
-            var conflict = JSON.readTree(bytes);
-            String project = conflict.path("projectId").asText(),
-                session = conflict.path("sessionId").asText(),
-                run = conflict.path("runId").asText();
-            if (safeIdentity(project) && safeIdentity(session) && safeIdentity(run))
-              throw new ApiException(
-                  409,
-                  "Session busy (HTTP 409): Project "
-                      + project
-                      + ", Session "
-                      + session
-                      + ", Run "
-                      + run
-                      + ". Select another Session or explicitly send /chat --run "
-                      + run
-                      + " MESSAGE.");
-          } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
-            /* Never expose arbitrary error bodies. */
-          }
-        throw new ApiException(409);
-      }
-      if (response.statusCode() < 200 || response.statusCode() >= 300)
-        throw new ApiException(response.statusCode());
-      int limit =
-          request.uri().getPath().startsWith("/api/v1/llm/capture/attempts/")
-              ? 8 * 1048576
-              : 1048576;
-      byte[] bytes = body.readNBytes(limit + 1);
-      if (bytes.length > limit) throw new IOException("Backend response capacity exceeded");
-      return bytes.length == 0 ? JSON.nullNode() : JSON.readTree(bytes);
+  JsonNode response(HttpRequest request) throws IOException, InterruptedException {
+    int limit =
+        request.uri().getPath().startsWith("/api/v1/llm/capture/attempts/") ? 8 * 1048576 : 1048576;
+    var conflictHeaders = new AtomicBoolean();
+    var pending =
+        http.sendAsync(
+            request,
+            info -> {
+              var status = info.statusCode();
+              if (status == 409) conflictHeaders.set(true);
+              if (status == 409 || (status >= 200 && status < 300))
+                return HttpResponse.BodySubscribers.limiting(
+                    HttpResponse.BodySubscribers.ofByteArray(), status == 409 ? 16385 : limit);
+              return HttpResponse.BodySubscribers.mapping(
+                  HttpResponse.BodySubscribers.ofInputStream(),
+                  input -> {
+                    closeStream(input);
+                    return new byte[0];
+                  });
+            });
+    HttpResponse<byte[]> response;
+    try {
+      response = pending.get(request.timeout().orElseThrow().toNanos(), TimeUnit.NANOSECONDS);
+    } catch (TimeoutException timeout) {
+      pending.cancel(true);
+      if (conflictHeaders.get()) throw new ApiException(409);
+      throw new HttpTimeoutException("Backend response deadline exceeded");
+    } catch (InterruptedException interrupted) {
+      pending.cancel(true);
+      throw interrupted;
+    } catch (ExecutionException failure) {
+      if (conflictHeaders.get()) throw new ApiException(409);
+      if (failure.getCause() instanceof IOException io) throw io;
+      throw new IOException("Backend response failed", failure.getCause());
     }
+    byte[] bytes = response.body();
+    if (response.statusCode() == 409) {
+      if (bytes.length > 0 && bytes.length <= 16384)
+        try {
+          var conflict = JSON.readTree(bytes);
+          String project = conflict.path("projectId").asText(),
+              session = conflict.path("sessionId").asText(),
+              run = conflict.path("runId").asText();
+          if (safeIdentity(project) && safeIdentity(session) && safeIdentity(run))
+            throw new ApiException(
+                409,
+                "Session busy (HTTP 409): Project "
+                    + project
+                    + ", Session "
+                    + session
+                    + ", Run "
+                    + run
+                    + ". Select another Session or explicitly send /chat --run "
+                    + run
+                    + " MESSAGE.");
+        } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
+          /* Never expose arbitrary error bodies. */
+        }
+      throw new ApiException(409);
+    }
+    if (response.statusCode() < 200 || response.statusCode() >= 300)
+      throw new ApiException(response.statusCode());
+    return bytes.length == 0 ? JSON.nullNode() : JSON.readTree(bytes);
   }
 
   /** 軽量CLIでの対話において、安全性識別情報に該当するか判定する。 */
@@ -337,6 +382,7 @@ public final class BackendClient implements AutoCloseable {
     }
     var request =
         request("/api/v1/runs/" + segment(run) + "/events")
+            .timeout(eventHeaders)
             .setHeader("Accept", "text/event-stream")
             .header("Last-Event-ID", Long.toString(after))
             .GET()
@@ -349,12 +395,49 @@ public final class BackendClient implements AutoCloseable {
       }
       if (response.statusCode() != 200) throw new ApiException(response.statusCode());
       var decoder = new SseDecoder(after);
-      decoder.read(new InputStreamReader(body, StandardCharsets.UTF_8), consumer);
+      decoder.read(new InputStreamReader(withIdleTimeout(body), StandardCharsets.UTF_8), consumer);
       return decoder.sequence();
     } finally {
       synchronized (streams) {
         streams.remove(response.body());
       }
+    }
+  }
+
+  private InputStream withIdleTimeout(InputStream body) {
+    return new FilterInputStream(body) {
+      @Override
+      public int read() throws IOException {
+        var single = new byte[1];
+        return read(single, 0, 1) == -1 ? -1 : Byte.toUnsignedInt(single[0]);
+      }
+
+      @Override
+      public int read(byte[] bytes, int offset, int length) throws IOException {
+        var pending = new AtomicBoolean(true);
+        var timeout =
+            deadlines.schedule(
+                () -> {
+                  if (pending.getAndSet(false)) closeStream(body);
+                },
+                eventIdle.toNanos(),
+                TimeUnit.NANOSECONDS);
+        try {
+          return body.read(bytes, offset, length);
+        } finally {
+          timeout.cancel(false);
+          if (!pending.getAndSet(false))
+            throw new HttpTimeoutException("Backend SSE stream stopped sending data");
+        }
+      }
+    };
+  }
+
+  private static void closeStream(InputStream stream) {
+    try {
+      stream.close();
+    } catch (IOException ignored) {
+      // Closing a failed or detached response is best effort.
     }
   }
 
@@ -370,11 +453,7 @@ public final class BackendClient implements AutoCloseable {
       current = List.copyOf(streams);
       streams.clear();
     }
-    for (var stream : current)
-      try {
-        stream.close();
-      } catch (IOException ignored) {
-      }
+    current.forEach(BackendClient::closeStream);
   }
 
   /** 軽量CLIでの対話で用いるredactを返す。 */
@@ -392,5 +471,6 @@ public final class BackendClient implements AutoCloseable {
   public void close() {
     detach();
     http.close();
+    deadlines.shutdownNow();
   }
 }
