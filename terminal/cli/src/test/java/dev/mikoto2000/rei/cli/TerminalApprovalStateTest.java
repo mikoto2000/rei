@@ -9,7 +9,7 @@ import java.net.*;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.*;
-import org.jline.terminal.TerminalBuilder;
+import org.jline.terminal.impl.DumbTerminal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -52,11 +52,7 @@ class TerminalApprovalStateTest {
         });
     server.start();
     try (var terminal =
-            TerminalBuilder.builder()
-                .system(false)
-                .dumb(true)
-                .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
-                .build();
+            new DumbTerminal(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream());
         var backend =
             new BackendClient(
                 URI.create("http://127.0.0.1:" + server.getAddress().getPort()), "fixture");

@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import org.jline.terminal.TerminalBuilder;
+import org.jline.terminal.impl.DumbTerminal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -87,11 +87,7 @@ class ResumeSessionClientTest {
                 backend,
                 directory,
                 true,
-                TerminalBuilder.builder()
-                    .system(false)
-                    .dumb(true)
-                    .streams(new ByteArrayInputStream(new byte[0]), output)
-                    .build())) {
+                new DumbTerminal(new ByteArrayInputStream(new byte[0]), output))) {
       client.command("/project select one");
       client.command("/session switch previous");
       if (fail)
