@@ -129,17 +129,15 @@ impl HttpReiClient {
                         segment(task)?
                     ),
                     true,
-                )?,
+                )?
+                .timeout(Duration::from_secs(30)),
                 Operation::Resource,
             )
             .await?;
             if response.status() != reqwest::StatusCode::ACCEPTED {
                 return Err(AppError::InvalidResponse);
             }
-            let receipt: Resume = response
-                .json()
-                .await
-                .map_err(|_| AppError::InvalidResponse)?;
+            let receipt: Resume = Self::decode_json(response, RUN_RECEIPT_JSON_LIMIT).await?;
             if receipt.task_id != task
                 || receipt.run_id.is_empty()
                 || receipt.previous_run_id.is_empty()

@@ -2,7 +2,7 @@ use super::*;
 use crate::{domain::*, ports::*};
 use serde::Serialize;
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -51,6 +51,7 @@ pub struct Application {
     credentials: Arc<dyn CredentialFactory>,
     clients: Arc<dyn ClientFactory>,
     submitting: Mutex<HashSet<String>>,
+    pending_chats: Mutex<HashMap<String, PendingChat>>,
 }
 impl Application {
     pub async fn tasks_list(
@@ -356,6 +357,7 @@ impl Application {
             credentials,
             clients,
             submitting: Mutex::new(HashSet::new()),
+            pending_chats: Mutex::new(HashMap::new()),
         })
     }
     pub fn unlock(&self, password: Secret) -> Result<()> {
@@ -581,10 +583,38 @@ impl Application {
                 project_id: c.project_id.clone(),
             },
         };
-        let receipt = match api
-            .chat_mode(target.project_id(), target.session_id(), message, mode)
-            .await
+        let (key, retrying) = {
+            let mut pending = self.pending_chats.lock().unwrap();
+            let retrying = pending.contains_key(id);
+            let entry = pending.entry(id.into()).or_insert_with(|| PendingChat {
+                project: target.project_id().into(),
+                session: target.session_id().map(str::to_owned),
+                message: message.into(),
+                mode,
+                key: uuid::Uuid::new_v4(),
+            });
+            if entry.project != target.project_id()
+                || entry.session.as_deref() != target.session_id()
+                || entry.message != message
+                || entry.mode != mode
+            {
+                return Err(AppError::ChatAcceptanceUnconfirmed);
+            }
+            (entry.key, retrying)
+        };
+        let result = api
+            .chat_with_key(target.project_id(), target.session_id(), message, mode, key)
+            .await;
+        if result.is_ok()
+            || (!retrying
+                && !matches!(
+                    result,
+                    Err(AppError::ChatAcceptanceUnconfirmed | AppError::ChatReceiptExpired)
+                ))
         {
+            self.pending_chats.lock().unwrap().remove(id);
+        }
+        let receipt = match result {
             Err(AppError::SessionProjectConflict) => {
                 if let Some(session) = target.session_id() {
                     if let Ok(summary) = api.get_session(session).await {
@@ -636,7 +666,9 @@ impl Application {
         {
             return Err(AppError::Busy);
         }
-        self.conversations.delete(id)
+        self.conversations.delete(id)?;
+        self.pending_chats.lock().unwrap().remove(id);
+        Ok(())
     }
     pub fn notifications(&self, enabled: bool) -> Result<()> {
         self.conversations.store.transact(|data| {
@@ -645,6 +677,14 @@ impl Application {
         })
     }
 }
+struct PendingChat {
+    project: String,
+    session: Option<String>,
+    message: String,
+    mode: RunMode,
+    key: uuid::Uuid,
+}
+
 struct Submission<'a> {
     ids: &'a Mutex<HashSet<String>>,
     id: String,

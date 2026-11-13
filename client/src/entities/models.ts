@@ -154,6 +154,10 @@ export const canSubmit = (
   pending: boolean,
 ) => !!message.trim() && !pending;
 const errors: Record<string, string> = {
+  ChatAcceptanceUnconfirmed:
+    "送信の受付を確認できませんでした。接続が回復したら、同じ内容と実行モードで再試行してください。",
+  ChatReceiptExpired:
+    "送信の受付記録が期限切れです。サーバーの会話履歴で実行結果を確認してください。",
   Conflict: "既存のリソースと競合しています。入力内容を確認してください。",
   InvalidCursor: "ページ情報が無効です。一覧を更新してください。",
   InvalidLimit: "取得件数は1〜100件で指定してください。",

@@ -105,10 +105,96 @@ async fn chat_retains_ids_and_never_retries_expired_sessions() {
         AppError::SessionProjectConflict
     );
 }
+
+#[tokio::test]
+async fn lost_chat_acceptance_recovers_the_same_run_for_new_and_existing_sessions() {
+    use std::sync::{Arc, Mutex};
+
+    for session in [None, Some("existing")] {
+        let key = uuid::Uuid::new_v4();
+        let accepted = Arc::new(Mutex::new(None));
+        let recorded = accepted.clone();
+        let app = Router::new()
+            .route(
+                "/api/v1/chat",
+                post(move |headers: HeaderMap, Json(body): Json<Value>| {
+                    let recorded = recorded.clone();
+                    async move {
+                        assert_eq!(headers["idempotency-key"], key.to_string());
+                        assert_eq!(body["sessionId"].as_str(), session);
+                        let mut recorded = recorded.lock().unwrap();
+                        assert!(recorded.is_none(), "receipt recovery posted twice");
+                        *recorded = Some(json!({
+                            "runId": "r1", "turnId": "t1", "projectId": "p1",
+                            "sessionId": session.unwrap_or("new"), "status": "QUEUED"
+                        }));
+                        let body =
+                            axum::body::Body::from_stream(futures_util::stream::once(async {
+                                Err::<String, _>(std::io::Error::other("lost response"))
+                            }));
+                        (StatusCode::ACCEPTED, body)
+                    }
+                }),
+            )
+            .route(
+                "/api/v1/chat/receipts/{key}",
+                get(
+                    move |axum::extract::Path(requested): axum::extract::Path<String>| {
+                        let accepted = accepted.clone();
+                        async move {
+                            assert_eq!(requested, key.to_string());
+                            Json(accepted.lock().unwrap().clone().unwrap())
+                        }
+                    },
+                ),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let api = HttpReiClient::new(&url, Some(Secret::new("test-key".into()))).unwrap();
+        let reply = api
+            .chat_with_key("p1", session, "hello", RunMode::Exclusive, key)
+            .await
+            .unwrap();
+        assert_eq!(reply.run_id, "r1");
+        assert_eq!(reply.session_id, session.unwrap_or("new"));
+        task.abort();
+    }
+}
 #[tokio::test]
 async fn unreachable_is_a_safe_application_error() {
     let api = HttpReiClient::new("http://127.0.0.1:1", None).unwrap();
     assert_eq!(api.health().await.unwrap_err(), AppError::ServerUnreachable);
+}
+
+#[tokio::test]
+async fn run_json_responses_enforce_the_byte_limit_with_or_without_content_length() {
+    const LIMIT: usize = 1024 * 1024;
+    let app = Router::new().route(
+        "/api/v1/runs/{id}",
+        get(|axum::extract::Path(id): axum::extract::Path<String>| async move {
+            let mut json = br#"{"runId":"r","sessionId":"s","turnId":"t","projectId":"p","status":"RUNNING"}"#.to_vec();
+            json.resize(if id == "fits" { LIMIT } else { LIMIT + 1 }, b' ');
+            if id == "known" {
+                axum::body::Body::from(json)
+            } else {
+                let chunks: Vec<_> = json
+                    .chunks(64 * 1024)
+                    .map(|bytes| Ok::<_, std::convert::Infallible>(bytes.to_vec()))
+                    .collect();
+                axum::body::Body::from_stream(futures_util::stream::iter(chunks))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let api = HttpReiClient::new(&url, Some(Secret::new("test-key".into()))).unwrap();
+    assert_eq!(api.run("fits").await.unwrap().run_id, "r");
+    for id in ["known", "chunked"] {
+        assert_eq!(api.run(id).await.unwrap_err(), AppError::InvalidResponse);
+    }
+    task.abort();
 }
 
 #[tokio::test]

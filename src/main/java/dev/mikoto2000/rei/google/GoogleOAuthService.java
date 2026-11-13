@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.google;
 
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.Credential;
+import com.google.api.client.auth.oauth2.TokenResponseException;
 import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInstalledApp;
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
@@ -16,10 +17,10 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import java.awt.Desktop;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.security.GeneralSecurityException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.GeneralSecurityException;
 import java.time.Duration;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -250,11 +251,20 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
       Long expires = credential.getExpiresInSeconds();
       if (expires == null || expires <= 60) refresh(credential);
       return credential;
-    } catch (Failure denied) {
-      throw denied;
-    } catch (java.io.IOException
-        | java.security.GeneralSecurityException
-        | IllegalStateException unavailable) {
+    } catch (TokenResponseException unavailable) {
+      var details = unavailable.getDetails();
+      String code = details == null ? null : details.getError();
+      if ("invalid_grant".equals(code)
+          || "invalid_scope".equals(code)
+          || "invalid_client".equals(code)
+          || "unauthorized_client".equals(code)) {
+        secretaryAuthFailed = true;
+        throw new Failure("AUTH_REQUIRED", 0, false);
+      }
+      throw new Failure(unavailable.getStatusCode() == 429 ? "RATE_LIMITED" : "NETWORK", 60, false);
+    } catch (IOException unavailable) {
+      throw new Failure("NETWORK", 60, false);
+    } catch (GeneralSecurityException | IllegalStateException unavailable) {
       secretaryAuthFailed = true;
       throw new Failure("AUTH_REQUIRED", 0, false);
     }
