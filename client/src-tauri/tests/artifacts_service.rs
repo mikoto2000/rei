@@ -49,7 +49,7 @@ async fn image_preview_returns_only_a_verified_bounded_data_url() {
 }
 #[tokio::test]
 async fn text_preview_and_explicit_save_use_verified_bytes_without_reexecution_or_overwrite() {
-    let router=Router::new().route("/api/v1/artifacts/{id}",get(||async{Json(json!({"artifactId":ID,"owner":"RUN","projectId":"p","sessionId":"s","runId":"r","taskId":null,"mediaType":"text/plain","filename":"結果.txt","size":4,"sha256":"8b3369944dd2a3fab39e32d1aeb1f763946a458ae3e6368a46432adc8f3a0860","createdAt":"2026-10-07T01:00:00Z","expiresAt":"2026-11-06T01:00:00Z","storageReference":format!("artifact:{ID}"),"status":"AVAILABLE"}))}))
+    let router=Router::new().route("/api/v1/artifacts/{id}",get(||async{Json(json!({"artifactId":ID,"owner":"RUN","projectId":"p","sessionId":"s","runId":"r","taskId":null,"mediaType":"text/plain","filename":"結果.txt","size":4,"sha256":"8b3369944dd2a3fab39e32d1aeb1f763946a458ae3e6368a46432adc8f3a0860","createdAt":"2026-10-07T01:00:00Z","expiresAt":null,"storageReference":format!("artifact:{ID}"),"status":"AVAILABLE"}))}))
         .route("/api/v1/artifacts/{id}/content",get(||async{([("content-type","text/plain")],"safe")}));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
