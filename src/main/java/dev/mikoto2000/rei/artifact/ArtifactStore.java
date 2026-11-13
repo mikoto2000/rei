@@ -58,6 +58,8 @@ public final class ArtifactStore implements dev.mikoto2000.rei.secretary.Secreta
   enum PublishStage {
     /** 予約済み。 */
     RESERVED,
+    /** 一時ファイルへの書き込み済み。 */
+    TEMP_WRITTEN,
     /** ファイルMOVED。 */
     FILE_MOVED
   }
@@ -273,8 +275,9 @@ public final class ArtifactStore implements dev.mikoto2000.rei.secretary.Secreta
       Files.createDirectories(root);
       safeRoot();
       var destination = path(id);
-      temporary = Files.createTempFile(root, ".artifact-", ".tmp");
+      temporary = Files.createFile(temporaryPath(id));
       Files.write(temporary, bytes);
+      checkpoint.accept(PublishStage.TEMP_WRITTEN, id);
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
       safeRoot();
       if (Files.exists(destination, LinkOption.NOFOLLOW_LINKS))
@@ -332,12 +335,14 @@ public final class ArtifactStore implements dev.mikoto2000.rei.secretary.Secreta
     if (!Set.of("AVAILABLE", "UNKNOWN", "MISSING", "STALE", "EXPIRED").contains(item.status()))
       throw new ArtifactException(ArtifactException.Code.UNAVAILABLE);
     Path file = path(id);
+    Path temporary = temporaryPath(id);
     if (db.sql(
                 "UPDATE rei_artifacts SET status='DELETING',pid=?,process_start=? WHERE id=? AND status=?")
             .params(ProcessHandle.current().pid(), processStart(), id, item.status())
             .update()
         != 1) throw new OperationConflictException();
     try {
+      Files.deleteIfExists(temporary);
       Files.deleteIfExists(file);
       mark(id, "DELETING", "DELETED");
       return get(project, session, id);
@@ -461,9 +466,17 @@ public final class ArtifactStore implements dev.mikoto2000.rei.secretary.Secreta
 
   /** 成果物の管理で用いるパスを返す。 */
   private Path path(String id) {
+    return storagePath(id, id + ".bin");
+  }
+
+  private Path temporaryPath(String id) {
+    return storagePath(id, ".artifact-" + id + ".tmp");
+  }
+
+  private Path storagePath(String id, String name) {
     if (!id(id)) throw new ResourceNotFoundException("Artifact");
     safeRoot();
-    var path = root.resolve(id + ".bin");
+    var path = root.resolve(name);
     if (Files.isSymbolicLink(path))
       throw new ArtifactException(ArtifactException.Code.UNSAFE_STORAGE);
     return path;

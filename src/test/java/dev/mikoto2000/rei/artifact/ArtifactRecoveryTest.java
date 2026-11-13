@@ -26,12 +26,12 @@ class ArtifactRecoveryTest {
   void hardKillNeverPublishesAnUnconfirmedReceiptOrRetriesItsSource() throws Exception {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
     var project = projects.resolve(root);
-    for (String window : new String[] {"RESERVED", "FILE_MOVED"}) {
-      var directory = Files.createDirectory(root.resolve(window));
+    for (var window : ArtifactStore.PublishStage.values()) {
+      var directory = Files.createDirectory(root.resolve(window.name()));
       var process =
           new ProcessBuilder(
                   dev.mikoto2000.rei.testsupport.JavaFixtureCommand.command(
-                      directory, Probe.class, root.toString(), directory.toString(), window))
+                      directory, Probe.class, root.toString(), directory.toString(), window.name()))
               .redirectErrorStream(true)
               .redirectOutput(directory.resolve("owner.log").toFile())
               .start();
@@ -66,6 +66,15 @@ class ArtifactRecoveryTest {
                         "safe".getBytes()))
             .isInstanceOf(ArtifactException.class);
         assertThat(observer.list(project.id(), "session", null, 100, null).items()).hasSize(1);
+        var delivery = directory.resolve("delivery");
+        if (window == ArtifactStore.PublishStage.TEMP_WRITTEN)
+          assertThat(delivery.resolve(".artifact-" + id + ".tmp"))
+              .hasBinaryContent("safe".getBytes());
+        assertThat(observer.delete(project.id(), "session", id).status()).isEqualTo("DELETED");
+        if (Files.exists(delivery))
+          try (var files = Files.list(delivery)) {
+            assertThat(files.toList()).isEmpty();
+          }
       } finally {
         if (process.isAlive()) process.destroyForcibly();
         assertThat(process.waitFor(5, TimeUnit.SECONDS)).isTrue();
