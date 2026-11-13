@@ -130,6 +130,16 @@ pub trait ReiClient: Send + Sync {
         }
         self.chat(project, session, message).await
     }
+    async fn chat_with_key(
+        &self,
+        project: &str,
+        session: Option<&str>,
+        message: &str,
+        mode: RunMode,
+        _key: uuid::Uuid,
+    ) -> Result<ChatReceipt> {
+        self.chat_mode(project, session, message, mode).await
+    }
     async fn run(&self, run: &str) -> Result<RunSnapshot>;
     async fn input(
         &self,
