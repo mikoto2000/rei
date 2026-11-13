@@ -348,6 +348,22 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(files.contains("docs/untracked.txt"));
   }
 
+  @Test
+  void inventoryOmitsDeletedTrackedFilesAndReturnsPathsRelativeToTheProject() throws Exception {
+    initGitRepo();
+    var project = Files.createDirectories(tempDir.resolve("project"));
+    Files.writeString(project.resolve("review-kept.md"), "present");
+    Files.writeString(project.resolve("review-deleted.md"), "removed");
+    runGit("add", "project");
+    Files.delete(project.resolve("review-deleted.md"));
+
+    var tools = new Tools();
+    assertEquals(List.of("review-kept.md"), tools.listFile(".", project));
+    assertEquals(
+        List.of("review-kept.md"),
+        tools.findFile(new FindFileRequest(List.of("review"), 10), project));
+  }
+
   /** 一覧ファイルについて、空のを返すことを確認する。 */
   @Test
   void listFileReturnsEmptyWhenBaseDirectoryDoesNotExistWithoutGit() throws Exception {

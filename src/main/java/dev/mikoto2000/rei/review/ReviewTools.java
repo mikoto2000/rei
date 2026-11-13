@@ -233,7 +233,7 @@ public final class ReviewTools {
 
   @Tool(
       description =
-          "Inspect durable review identity, frozen Snapshot ID, enumeration status, errors, exclusion count and unscanned directories. SEALED only proves target enumeration, not completed review.")
+          "Inspect durable review identity, frozen Snapshot ID, enumeration status, errors, exclusion count and unscanned directories. SEALED only proves target enumeration, not completed review. Use listReviewTaskResults to summarize saved assessments and findings.")
   public dev.mikoto2000.rei.durable.DurableTaskStore.Task reviewTaskStatus(String taskId) {
     return tasks.status(taskScope(AgentRunScope.current()), taskId);
   }
@@ -259,6 +259,31 @@ public final class ReviewTools {
 
   private dev.mikoto2000.rei.durable.WorkItemStore workItems() {
     return new dev.mikoto2000.rei.durable.WorkItemStore(tasks);
+  }
+
+  @Tool(
+      description =
+          "Page saved assessments and findings for a durable repository review taskId from listReviewTasks. Use this to summarize work so far, even while the task is incomplete. Results refer to the frozen Snapshot. No resume, claim, or source reread is needed. Omit afterWork for the first page, then pass nextCursor unchanged as afterWork until null. limit is 1..10, default 1.")
+  public dev.mikoto2000.rei.durable.DurableTaskStore.Page<
+          dev.mikoto2000.rei.durable.WorkItemStore.Result>
+      listReviewTaskResults(
+          String taskId,
+          @org.springframework.ai.tool.annotation.ToolParam(required = false) String afterWork,
+          @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) {
+    try {
+      return workItems()
+          .results(
+              taskScope(AgentRunScope.current()),
+              taskId,
+              afterWork,
+              limit == null ? 1 : Math.max(1, Math.min(10, limit)));
+    } catch (IllegalArgumentException failure) {
+      if (!"TASK_ACCESS_DENIED".equals(failure.getMessage())) throw failure;
+      throw new dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException(
+          "TASK_ACCESS_DENIED",
+          "現在の Project・会話で参照可能なレビュータスクが見つかりません。",
+          "listReviewTasks で現在の Project・会話の taskId を確認してください。");
+    }
   }
 
   @Tool(
@@ -1220,13 +1245,23 @@ public final class ReviewTools {
   /** Return candidates without replaying every target and saved assessment. */
   @Tool(
       description =
-          "Get preserved review findings directly, without rereading the full coverage ledger. "
+          "Get preserved findings for a legacy reviewJobId returned by beginReview. "
+              + "For a durable taskId returned by beginRepositoryReview or listReviewTasks, use listReviewTaskResults instead. "
               + "Use offset=0 and limit=5 initially, then nextOffset until null. Includes original evidence, "
               + "assessment and verificationStatus (VERIFIED means source quote matched, not semantic correctness). "
               + "Revalidates current source versions; corroborate candidates before repairs or dismissReviewFinding.")
   public FindingsPage reviewFindings(String reviewJobId, int offset, int limit)
       throws java.io.IOException {
-    var job = reviewStatus(reviewJobId);
+    Job job;
+    try {
+      job = reviewStatus(reviewJobId);
+    } catch (IllegalArgumentException failure) {
+      if (!"REVIEW_JOB_NOT_FOUND".equals(failure.getMessage())) throw failure;
+      throw new dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException(
+          "REVIEW_JOB_NOT_FOUND",
+          "指定された reviewJobId のレビューを参照できません。",
+          "永続レビューの taskId で保存済みの評価・指摘を取得する場合は listReviewTaskResults を使ってください。taskId は listReviewTasks で確認できます。");
+    }
     int start = Math.min(Math.max(0, offset), job.findings().size());
     int end = Math.min(start + Math.max(1, Math.min(10, limit)), job.findings().size());
     return new FindingsPage(
@@ -1541,7 +1576,7 @@ public final class ReviewTools {
                                 "enumeration",
                                 task.enumeration(),
                                 "nextAction",
-                                "Preserve this task ID. Resume in a new Run explicitly; scan until SEALED, then readNextReviewWorkItem and submitReviewWorkItem by IDs."))
+                                "Use listReviewTaskResults(taskId) to report saved assessments and findings. Only if more review work is requested, resumeRepositoryReview, scan until SEALED, then readNextReviewWorkItem and submitReviewWorkItem by IDs."))
                     .toList(),
                 "durableTasksNextCursor",
                 durable.nextCursor() == null ? "" : durable.nextCursor(),

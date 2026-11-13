@@ -23,6 +23,7 @@ final class CheckpointOperationRecovery {
           "reviewFindings",
           "reviewTaskStatus",
           "listReviewTasks",
+          "listReviewTaskResults",
           "listReviewTargets",
           "findFile",
           "listFile",

@@ -1467,7 +1467,7 @@ public class Tools {
     }
 
     // git ls-files already applies baseDir as a pathspec. Filtering the returned
-    // repository-relative paths again breaks root pathspecs such as ".", because
+    // Project-relative paths again breaks root pathspecs such as ".", because
     // entries like "src/main/App.java" do not start with ".".
     return gitListedFiles;
   }
@@ -3898,8 +3898,7 @@ public class Tools {
                 "-z",
                 "--cached",
                 "--others",
-                "--exclude-standard",
-                "--full-name"));
+                "--exclude-standard"));
     if (pathSpecs != null && !pathSpecs.isEmpty()) {
       commandLine.add("--");
       commandLine.addAll(pathSpecs);
@@ -3924,7 +3923,13 @@ public class Tools {
       return null;
     }
 
-    return Arrays.stream(output.split("\0")).filter(s -> !s.isEmpty()).toList();
+    // Cached entries include tracked files deleted from the working tree.
+    return Arrays.stream(output.split("\0"))
+        .filter(path -> !path.isEmpty())
+        .filter(
+            path ->
+                Files.exists(workingDirectory.resolve(path), java.nio.file.LinkOption.NOFOLLOW_LINKS))
+        .toList();
   }
 
   /** 必要な内容を参照できるよう、テキストファイルを読み取る。 */

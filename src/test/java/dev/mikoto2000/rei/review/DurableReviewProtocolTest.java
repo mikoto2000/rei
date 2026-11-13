@@ -78,7 +78,10 @@ class DurableReviewProtocolTest {
         assertThatThrownBy(() -> tools.submitReviewWorkItem(claim.item().id(), claim.attempt(), "checked", List.of()))
             .hasMessageContaining("SOURCE_NOT_DELIVERED");
         tools.confirmed(owner, List.of(firstPage));
-        tools.submitReviewWorkItem(claim.item().id(), claim.attempt(), "checked", List.of());
+        tools.submitReviewWorkItem(
+            claim.item().id(), claim.attempt(), "checked",
+            List.of(new dev.mikoto2000.rei.durable.WorkItemStore.Finding(
+                "F1", "LOW", 0, 3, "abc", "saved finding")));
         assertThat(tools.reviewTaskStatus(task).state()).isEqualTo("ACTIVE");
       }
     }
@@ -87,6 +90,26 @@ class DurableReviewProtocolTest {
     var active = AgentRunScope.open(resumed);
     try (active) {
       assertThat(tools.listReviewTasks(null, 100).entries()).extracting(t -> t.id()).containsExactly(task);
+      var callbackProvider = new dev.mikoto2000.rei.event.ToolEventCallbackProvider(
+          org.springframework.ai.tool.method.MethodToolCallbackProvider.builder().toolObjects(tools).build(),
+          new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+          event -> {});
+      var legacyFindings = java.util.Arrays.stream(callbackProvider.getToolCallbacks())
+          .filter(callback -> callback.getToolDefinition().name().equals("reviewFindings"))
+          .findFirst().orElseThrow();
+      var feedback = StorageDatabase.JSON.readTree(legacyFindings.call(
+          StorageDatabase.JSON.writeValueAsString(java.util.Map.of(
+              "reviewJobId", task, "offset", 0, "limit", 5))));
+      assertThat(feedback.path("success").asBoolean()).isFalse();
+      assertThat(feedback.path("error").asText()).isEqualTo("REVIEW_JOB_NOT_FOUND");
+      assertThat(feedback.path("guidance").asText()).contains("listReviewTaskResults");
+      var saved = tools.listReviewTaskResults(task, null, null);
+      assertThat(saved.entries()).singleElement().satisfies(result -> {
+        assertThat(result.body().assessment()).isEqualTo("checked");
+        assertThat(result.body().findings()).singleElement()
+            .satisfies(finding -> assertThat(finding.assessment()).isEqualTo("saved finding"));
+      });
+      assertThat(saved.nextCursor()).isNull();
       tools.resumeRepositoryReview(task);
       tools.confirmed(resumed, List.of(firstPage)); // retired receipt cannot poison replayed prompt history
       int end = firstPage.nextOffset();
@@ -100,7 +123,16 @@ class DurableReviewProtocolTest {
         end = page.nextOffset();
       }
       assertThat(end).isEqualTo(source.length());
+      var first = tools.listReviewTaskResults(task, null, 1);
+      assertThat(first.nextCursor()).isEqualTo(first.entries().getFirst().body().work());
+      var next = tools.listReviewTaskResults(task, first.nextCursor(), 1);
+      assertThat(next.entries().getFirst().body().work()).isNotEqualTo(first.nextCursor());
       tools.requireComplete(resumed);
+    }
+    try (var unrelated = AgentRunScope.open(new AgentRunContext("other", "other-session", root, "project"))) {
+      assertThatThrownBy(() -> tools.listReviewTaskResults(task, null, null))
+          .isInstanceOf(dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException.class)
+          .hasMessage("TASK_ACCESS_DENIED");
     }
   }
 }

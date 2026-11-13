@@ -164,6 +164,10 @@ Checkpoint IDや元Runの生存は必要ない。`resumeRepositoryReview(taskId)
 関連付け、旧Runの書込み権限を失効させる。Runの履歴は追加式で保持し、固定の参加者数で制限しない。
 既存の小規模ReviewJobも、参加履歴と現在の参加者を分離し、101回の再開を検証した。
 
+`listReviewTaskResults(taskId, afterWork, limit)` は、保存済みの評価と指摘を固定スナップショットの版情報とともに返す。
+最初は `afterWork` を省略し、次のページには `nextCursor` を渡す。`limit` は1〜10件で、既定は1件。
+途中結果の集計にも使え、作業項目の確保やTaskの再開を伴わない。
+
 対象がSEALEDになった後は、次の手順で処理する。
 
 1. 通常は `readNextReviewWorkItem(taskId, tokenBudget=null)` で未完了範囲の確保と原文取得を1回で行う。
