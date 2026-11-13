@@ -17,17 +17,23 @@ import static org.mockito.Mockito.when;
 
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.Credential;
+import com.google.api.client.auth.oauth2.TokenErrorResponse;
 import com.google.api.client.auth.oauth2.TokenResponse;
+import com.google.api.client.auth.oauth2.TokenResponseException;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.testing.http.MockHttpTransport;
 import com.google.api.client.testing.http.MockLowLevelHttpResponse;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
+import dev.mikoto2000.rei.secretary.SecretaryProvider.Failure;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.time.Duration;
+import java.util.HexFormat;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -140,6 +146,53 @@ class GoogleOAuthServiceTest {
     assertThrows(
         IllegalStateException.class, () -> service.refreshIfExpiring(Duration.ofMinutes(5)));
     assertTrue(service.refreshIfExpiring(Duration.ofMinutes(5)));
+  }
+
+  @Test
+  void secretaryRecoversFromTemporaryRefreshFailures() throws Exception {
+    GoogleOAuthService service = service(true, true);
+    configureSecretaryScopes(service);
+    Credential credential = stored(service, 0L);
+    var temporaryFailure = tokenError(503, "temporarily_unavailable");
+    when(credential.refreshToken())
+        .thenThrow(new IOException("offline"))
+        .thenThrow(temporaryFailure)
+        .thenReturn(true);
+    for (int attempt = 0; attempt < 2; attempt++) {
+      assertEquals("NETWORK", assertThrows(Failure.class, service::secretaryCredential).code());
+      assertEquals("CONFIGURED", service.secretaryGoogleStatus(true).state());
+    }
+    assertTrue(service.refreshIfExpiring(Duration.ofMinutes(5)));
+    when(credential.getExpiresInSeconds()).thenReturn(3600L);
+    assertSame(credential, service.secretaryCredential());
+  }
+
+  @Test
+  void secretaryRequiresReauthorizationForRevokedGrant() throws Exception {
+    GoogleOAuthService service = service(true, true);
+    configureSecretaryScopes(service);
+    Credential credential = stored(service, 0L);
+    var revokedGrant = tokenError(400, "invalid_grant");
+    when(credential.refreshToken()).thenThrow(revokedGrant);
+    assertEquals("AUTH_REQUIRED", assertThrows(Failure.class, service::secretaryCredential).code());
+    assertEquals("REAUTH_REQUIRED", service.secretaryGoogleStatus(true).state());
+    assertEquals("AUTH_REQUIRED", assertThrows(Failure.class, service::secretaryCredential).code());
+    verify(credential).refreshToken();
+  }
+
+  private void configureSecretaryScopes(GoogleOAuthService service) throws Exception {
+    var scopes = String.join("\n", service.secretaryScopes());
+    var hash = MessageDigest.getInstance("SHA-256").digest(scopes.getBytes(StandardCharsets.UTF_8));
+    Files.writeString(
+        directory.resolve("rei-requested-scopes.sha256"), HexFormat.of().formatHex(hash));
+    Files.writeString(directory.resolve("StoredCredential"), "fixture");
+  }
+
+  private static TokenResponseException tokenError(int status, String code) {
+    var error = mock(TokenResponseException.class);
+    when(error.getStatusCode()).thenReturn(status);
+    when(error.getDetails()).thenReturn(new TokenErrorResponse().setError(code));
+    return error;
   }
 
   /** Googleサービスの認証で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
