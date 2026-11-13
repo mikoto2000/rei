@@ -4,11 +4,67 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.sun.net.httpserver.HttpServer;
 import java.net.*;
+import java.net.http.HttpRequest;
+import java.net.http.HttpTimeoutException;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 /** バックエンドクライアントの結果と状態の契約を検証するテスト。 */
 class BackendClientTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"json-body", "sse-headers", "sse-idle"})
+  void stalledResponsesReachTheirDeadline(String scenario) throws Exception {
+    var release = new CountDownLatch(1);
+    var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/api/v1/",
+        exchange -> {
+          try (exchange) {
+            if ("json-body".equals(scenario)) {
+              exchange.sendResponseHeaders(200, 100);
+              exchange.getResponseBody().write('{');
+              exchange.getResponseBody().flush();
+            } else if ("sse-idle".equals(scenario)) {
+              exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+              exchange.sendResponseHeaders(200, 0);
+              exchange.getResponseBody().write(": heartbeat\n\n".getBytes());
+              exchange.getResponseBody().flush();
+            }
+            release.await();
+          } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+          }
+        });
+    server.start();
+    var endpoint = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
+    var deadline = Duration.ofMillis(500);
+    try (var client = new BackendClient(endpoint, "test-key", deadline, deadline)) {
+      var failure =
+          assertTimeoutPreemptively(
+              Duration.ofSeconds(5),
+              () ->
+                  assertThrows(
+                      HttpTimeoutException.class,
+                      () -> {
+                        if ("json-body".equals(scenario)) {
+                          client.response(
+                              HttpRequest.newBuilder(endpoint.resolve("/api/v1/projects"))
+                                  .timeout(deadline)
+                                  .build());
+                        } else {
+                          client.events("run", 3, event -> fail("unexpected event"));
+                        }
+                      }));
+      if ("sse-idle".equals(scenario))
+        assertEquals("Backend SSE stream stopped sending data", failure.getMessage());
+    } finally {
+      release.countDown();
+      server.stop(0);
+    }
+  }
+
   /** 軽量CLIでの対話で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void namedDiagnosticRunRecoversTheSameReceiptWithoutPostingAgain() throws Exception {
