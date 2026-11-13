@@ -122,7 +122,11 @@ impl Application {
         no_links(&directory)?;
         std::fs::create_dir_all(&directory).map_err(|_| AppError::Storage)?;
         no_links(&directory)?;
-        let file = directory.join(&item.filename);
+        #[cfg(windows)]
+        let filename = windows_save_name(&item.filename);
+        #[cfg(not(windows))]
+        let filename = &item.filename;
+        let file = directory.join(filename);
         no_links(&file)?;
         if file.exists() {
             let metadata = std::fs::metadata(&file).map_err(|_| AppError::Storage)?;
@@ -156,6 +160,65 @@ impl Application {
             size: item.size,
             sha256: item.sha256,
         })
+    }
+}
+
+#[cfg(any(test, windows))]
+fn windows_save_name(filename: &str) -> String {
+    let sanitized: String = filename
+        .chars()
+        .map(|character| match character {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => '_',
+            character => character,
+        })
+        .collect();
+    let name = sanitized.trim_end_matches([' ', '.']);
+    if name.is_empty() {
+        return "artifact".into();
+    }
+    let stem = name
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches(' ');
+    let stem = stem.to_ascii_uppercase();
+    let reserved = matches!(
+        stem.as_str(),
+        "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$"
+    ) || stem
+        .strip_prefix("COM")
+        .or_else(|| stem.strip_prefix("LPT"))
+        .is_some_and(|suffix| {
+            matches!(
+                suffix,
+                "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+            )
+        });
+    if reserved {
+        format!("_{name}")
+    } else {
+        name.into()
+    }
+}
+
+#[cfg(test)]
+mod windows_filename_tests {
+    use super::windows_save_name;
+
+    #[test]
+    fn windows_save_names_handle_invalid_characters_device_names_and_suffixes() {
+        for (original, expected) in [
+            ("report?.txt", "report_.txt"),
+            ("report.txt. ", "report.txt"),
+            ("nul.log.txt", "_nul.log.txt"),
+            ("aux .txt", "_aux .txt"),
+            ("LPT²", "_LPT²"),
+            ("COM10.txt", "COM10.txt"),
+            ("...", "artifact"),
+            ("報告書.md", "報告書.md"),
+        ] {
+            assert_eq!(windows_save_name(original), expected);
+        }
     }
 }
 fn no_links(path: &Path) -> Result<()> {
