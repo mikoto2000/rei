@@ -168,6 +168,36 @@ async fn unreachable_is_a_safe_application_error() {
 }
 
 #[tokio::test]
+async fn run_json_responses_enforce_the_byte_limit_with_or_without_content_length() {
+    const LIMIT: usize = 1024 * 1024;
+    let app = Router::new().route(
+        "/api/v1/runs/{id}",
+        get(|axum::extract::Path(id): axum::extract::Path<String>| async move {
+            let mut json = br#"{"runId":"r","sessionId":"s","turnId":"t","projectId":"p","status":"RUNNING"}"#.to_vec();
+            json.resize(if id == "fits" { LIMIT } else { LIMIT + 1 }, b' ');
+            if id == "known" {
+                axum::body::Body::from(json)
+            } else {
+                let chunks: Vec<_> = json
+                    .chunks(64 * 1024)
+                    .map(|bytes| Ok::<_, std::convert::Infallible>(bytes.to_vec()))
+                    .collect();
+                axum::body::Body::from_stream(futures_util::stream::iter(chunks))
+            }
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let api = HttpReiClient::new(&url, Some(Secret::new("test-key".into()))).unwrap();
+    assert_eq!(api.run("fits").await.unwrap().run_id, "r");
+    for id in ["known", "chunked"] {
+        assert_eq!(api.run(id).await.unwrap_err(), AppError::InvalidResponse);
+    }
+    task.abort();
+}
+
+#[tokio::test]
 async fn health_timeout_is_distinct_from_http_failure() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());

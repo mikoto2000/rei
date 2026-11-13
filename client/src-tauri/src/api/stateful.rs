@@ -146,13 +146,7 @@ impl HttpReiClient {
         {
             return Err(AppError::InvalidResponse);
         }
-        response.json().await.map_err(|e| {
-            if e.is_timeout() {
-                AppError::RequestTimeout
-            } else {
-                AppError::InvalidResponse
-            }
-        })
+        Self::decode_json(response, RESOURCE_JSON_LIMIT).await
     }
     async fn remove_resource(&self, path: &str, title: &str) -> Result<WorkspaceResult> {
         let response = Self::checked(
