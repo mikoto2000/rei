@@ -105,6 +105,62 @@ async fn chat_retains_ids_and_never_retries_expired_sessions() {
         AppError::SessionProjectConflict
     );
 }
+
+#[tokio::test]
+async fn lost_chat_acceptance_recovers_the_same_run_for_new_and_existing_sessions() {
+    use std::sync::{Arc, Mutex};
+
+    for session in [None, Some("existing")] {
+        let key = uuid::Uuid::new_v4();
+        let accepted = Arc::new(Mutex::new(None));
+        let recorded = accepted.clone();
+        let app = Router::new()
+            .route(
+                "/api/v1/chat",
+                post(move |headers: HeaderMap, Json(body): Json<Value>| {
+                    let recorded = recorded.clone();
+                    async move {
+                        assert_eq!(headers["idempotency-key"], key.to_string());
+                        assert_eq!(body["sessionId"].as_str(), session);
+                        let mut recorded = recorded.lock().unwrap();
+                        assert!(recorded.is_none(), "receipt recovery posted twice");
+                        *recorded = Some(json!({
+                            "runId": "r1", "turnId": "t1", "projectId": "p1",
+                            "sessionId": session.unwrap_or("new"), "status": "QUEUED"
+                        }));
+                        let body =
+                            axum::body::Body::from_stream(futures_util::stream::once(async {
+                                Err::<String, _>(std::io::Error::other("lost response"))
+                            }));
+                        (StatusCode::ACCEPTED, body)
+                    }
+                }),
+            )
+            .route(
+                "/api/v1/chat/receipts/{key}",
+                get(
+                    move |axum::extract::Path(requested): axum::extract::Path<String>| {
+                        let accepted = accepted.clone();
+                        async move {
+                            assert_eq!(requested, key.to_string());
+                            Json(accepted.lock().unwrap().clone().unwrap())
+                        }
+                    },
+                ),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let task = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let api = HttpReiClient::new(&url, Some(Secret::new("test-key".into()))).unwrap();
+        let reply = api
+            .chat_with_key("p1", session, "hello", RunMode::Exclusive, key)
+            .await
+            .unwrap();
+        assert_eq!(reply.run_id, "r1");
+        assert_eq!(reply.session_id, session.unwrap_or("new"));
+        task.abort();
+    }
+}
 #[tokio::test]
 async fn unreachable_is_a_safe_application_error() {
     let api = HttpReiClient::new("http://127.0.0.1:1", None).unwrap();

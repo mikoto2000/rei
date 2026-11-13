@@ -270,6 +270,17 @@ impl ReiClient for HttpReiClient {
         message: &str,
         mode: RunMode,
     ) -> Result<ChatReceipt> {
+        self.chat_with_key(project, session, message, mode, uuid::Uuid::new_v4())
+            .await
+    }
+    async fn chat_with_key(
+        &self,
+        project: &str,
+        session: Option<&str>,
+        message: &str,
+        mode: RunMode,
+        key: uuid::Uuid,
+    ) -> Result<ChatReceipt> {
         let mut body = serde_json::json!({"projectId":project,"message":message});
         if mode != RunMode::Exclusive {
             body["mode"] = serde_json::to_value(mode).map_err(|_| AppError::InvalidInput)?;
@@ -279,22 +290,60 @@ impl ReiClient for HttpReiClient {
         }
         let response = Self::checked(
             self.request(Method::POST, "/api/v1/chat", true)?
+                .header("Idempotency-Key", key.to_string())
                 .json(&body)
                 .timeout(Duration::from_secs(30)),
             Operation::Chat,
         )
-        .await
-        .map_err(|error| {
-            if session.is_none() && error == AppError::SessionNotFound {
-                AppError::ProjectNotFound
-            } else {
-                error
+        .await;
+        let receipt = match response {
+            Ok(response) if response.status() == reqwest::StatusCode::ACCEPTED => {
+                Self::decode_json::<ChatReceipt>(response, RUN_RECEIPT_JSON_LIMIT)
+                    .await
+                    .ok()
+                    .filter(|receipt| {
+                        !receipt.run_id.is_empty()
+                            && !receipt.session_id.is_empty()
+                            && !receipt.turn_id.is_empty()
+                            && session.is_none_or(|id| id == receipt.session_id)
+                    })
             }
-        })?;
-        if response.status() != reqwest::StatusCode::ACCEPTED {
-            return Err(AppError::InvalidResponse);
+            Ok(_)
+            | Err(
+                AppError::ServerUnreachable
+                | AppError::RequestTimeout
+                | AppError::UnexpectedServerError,
+            ) => None,
+            Err(AppError::SessionNotFound) if session.is_none() => {
+                return Err(AppError::ProjectNotFound);
+            }
+            Err(error) => return Err(error),
+        };
+        if let Some(receipt) = receipt {
+            return Ok(receipt);
         }
-        Self::decode_json(response, RUN_RECEIPT_JSON_LIMIT).await
+        let snapshot: RunSnapshot = Self::json(
+            self.request(Method::GET, &format!("/api/v1/chat/receipts/{key}"), true)?,
+            Operation::Chat,
+        )
+        .await
+        .map_err(|error| match error {
+            AppError::ChatReceiptExpired => error,
+            _ => AppError::ChatAcceptanceUnconfirmed,
+        })?;
+        if snapshot.project_id != project
+            || snapshot.run_id.is_empty()
+            || snapshot.session_id.is_empty()
+            || snapshot.turn_id.is_empty()
+            || session.is_some_and(|id| id != snapshot.session_id)
+        {
+            return Err(AppError::ChatAcceptanceUnconfirmed);
+        }
+        Ok(ChatReceipt {
+            run_id: snapshot.run_id,
+            session_id: snapshot.session_id,
+            turn_id: snapshot.turn_id,
+        })
     }
     async fn run(&self, run: &str) -> Result<RunSnapshot> {
         Self::json(

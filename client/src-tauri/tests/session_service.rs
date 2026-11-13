@@ -1,6 +1,6 @@
 use axum::{
     extract::Path,
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     routing::{get, post},
     Json, Router,
 };
@@ -8,7 +8,7 @@ use rei_client_lib::{application::*, domain::*, ports::*};
 use serde_json::{json, Value};
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
-    Arc,
+    Arc, Mutex,
 };
 struct Sink;
 impl RunObserver for Sink {
@@ -25,6 +25,7 @@ fn metadata(id: &str) -> Value {
 async fn setup() -> (tempfile::TempDir, Application, String, Arc<AtomicUsize>) {
     let posts = Arc::new(AtomicUsize::new(0));
     let count = posts.clone();
+    let pending = Arc::new(Mutex::new(None::<String>));
     let router = Router::new()
         .route("/api/v1/runs/long-task/input", post(|Json(body):Json<Value>| async move {
             assert_eq!(body, json!({"projectId":"server-project","sessionId":"remote","message":"guidance"}));
@@ -36,9 +37,19 @@ async fn setup() -> (tempfile::TempDir, Application, String, Arc<AtomicUsize>) {
             else { (StatusCode::OK, Json(metadata(&id))) }
         }))
         .route("/api/v1/sessions/{id}/turns", get(|Path(id):Path<String>| async move { Json(json!({"sessionId":id,"items":[{"turnId":"old","runId":"old","userMessage":"old question","assistantMessage":"old answer","createdAt":"2026-09-16T08:00:00Z"}],"nextCursor":null})) }))
-        .route("/api/v1/chat", post(move |Json(body):Json<Value>| { let count=count.clone(); async move {
+        .route("/api/v1/chat", post(move |headers: HeaderMap, Json(body):Json<Value>| { let count=count.clone(); let pending=pending.clone(); async move {
             count.fetch_add(1,Ordering::SeqCst);
             assert_eq!(body["projectId"], "server-project"); assert_eq!(body["sessionId"], "remote");
+            if body["message"] == "uncertain" {
+                let key = headers["idempotency-key"].to_str().unwrap();
+                let mut pending = pending.lock().unwrap();
+                if let Some(previous) = pending.as_deref() {
+                    assert_eq!(key, previous);
+                } else {
+                    *pending = Some(key.into());
+                    return (StatusCode::BAD_GATEWAY, Json(json!({})));
+                }
+            }
             if body["message"] == "question" { assert_eq!(body["mode"], "CONVERSATION"); }
             if body["message"] == "conflict" { return (StatusCode::CONFLICT, Json(json!({}))); }
             if body["message"] == "gone" { return (StatusCode::NOT_FOUND, Json(json!({}))); }
@@ -62,6 +73,25 @@ async fn setup() -> (tempfile::TempDir, Application, String, Arc<AtomicUsize>) {
     app.set_credential(&server, Secret::new("key".into()))
         .unwrap();
     (dir, app, server, posts)
+}
+
+#[tokio::test]
+async fn retry_after_unavailable_receipt_reuses_the_pending_submission_key() {
+    let (_dir, app, server, posts) = setup().await;
+    let c = app.resume_session(&server, "remote").await.unwrap();
+    assert!(matches!(
+        app.submit(&c.local_id, "uncertain").await,
+        Err(AppError::ChatAcceptanceUnconfirmed)
+    ));
+    assert!(matches!(
+        app.submit(&c.local_id, "changed prompt").await,
+        Err(AppError::ChatAcceptanceUnconfirmed)
+    ));
+    assert_eq!(posts.load(Ordering::SeqCst), 1);
+    let run = app.submit(&c.local_id, "uncertain").await.unwrap();
+    assert_eq!(run.run_id, "r");
+    assert_eq!(posts.load(Ordering::SeqCst), 2);
+    assert_eq!(app.runs.all().len(), 1);
 }
 #[tokio::test]
 async fn guidance_uses_the_selected_run_owner_without_creating_a_chat() {

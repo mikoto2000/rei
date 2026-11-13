@@ -22,6 +22,8 @@ pub enum RunMode {
 pub enum AppError {
     ServerUnreachable,
     RequestTimeout,
+    ChatAcceptanceUnconfirmed,
+    ChatReceiptExpired,
     PermissionDenied,
     HealthAuthenticationRequired,
     EndpointNotFound,
@@ -221,6 +223,8 @@ pub fn http_error(status: u16, op: Operation) -> AppError {
         (404, Operation::Projects) => AppError::EndpointNotFound,
         (404, Operation::Run | Operation::Stream) => AppError::RunNotFound,
         (409, Operation::Chat) => AppError::SessionProjectConflict,
+        (408, Operation::Chat) => AppError::RequestTimeout,
+        (410, Operation::Chat) => AppError::ChatReceiptExpired,
         (409, Operation::Stream) => AppError::ReplayGap,
         (409, Operation::Resource) => AppError::Conflict,
         (404, Operation::Resource) => AppError::NotFound,

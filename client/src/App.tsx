@@ -273,7 +273,7 @@ export function App({
         ...(mode ? { mode } : {}),
       });
       setData((d) => ({ ...d, runs: mergeRun(d.runs, run) }));
-      await reload();
+      await reload().catch(() => {});
       void history.pager.refresh();
       void turns.pager.refresh();
       return true;
