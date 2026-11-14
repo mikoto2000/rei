@@ -489,19 +489,25 @@ pub fn run() {
     #[cfg(desktop)]
     let builder = builder.plugin(tauri_plugin_window_state::Builder::default().build());
 
-    builder
+    let result = builder
         .setup(|app| {
             let flag = Arc::new(AtomicBool::new(false));
             let handle = app.handle().clone();
+            let data_directory = app.path().app_data_dir()?;
             let application = Application::open(
-                app.path().app_data_dir()?,
+                data_directory.clone(),
                 Arc::new(NativeObserver(handle.clone())),
                 Arc::new(NativeNotifications {
                     app: handle,
                     enabled: flag.clone(),
                 }),
             )
-            .map_err(|_| std::io::Error::other("Rei app data could not be opened"))?;
+            .map_err(|_| {
+                std::io::Error::other(format!(
+                    "Could not read app.json in {}. Check access permissions and JSON format.",
+                    data_directory.display()
+                ))
+            })?;
             flag.store(
                 application.conversations.store.snapshot().notifications,
                 Ordering::Relaxed,
@@ -553,6 +559,26 @@ pub fn run() {
             run_list_active,
             notification_settings
         ])
-        .run(tauri::generate_context!())
-        .expect("Rei Client runtime failed");
+        .run(tauri::generate_context!());
+    if let Err(error) = result {
+        eprintln!("Rei Client could not start: {error}");
+        #[cfg(windows)]
+        show_windows_startup_error();
+        std::process::exit(1);
+    }
+}
+
+#[cfg(windows)]
+fn show_windows_startup_error() {
+    #[link(name = "user32")]
+    extern "system" {
+        fn MessageBoxW(window: isize, message: *const u16, title: *const u16, style: u32) -> i32;
+    }
+
+    let title: Vec<_> = "Rei Client\0".encode_utf16().collect();
+    let message: Vec<_> = "Rei Client を起動できませんでした。アプリデータへのアクセス権限と app.json の形式を確認してください。\0"
+        .encode_utf16()
+        .collect();
+    // The two UTF-16 buffers remain alive and nul-terminated for the duration of the call.
+    unsafe { MessageBoxW(0, message.as_ptr(), title.as_ptr(), 0x10) };
 }
