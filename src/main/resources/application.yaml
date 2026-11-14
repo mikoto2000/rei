@@ -532,4 +532,3 @@ logging:
     # SDK debug/error messages may contain Socket URLs or raw payloads. Adapter diagnostics are fixed codes.
     com.slack.api: "OFF"
     org.java_websocket: "OFF"
-    dev.mikoto2000.rei.bluesky: DEBUG
