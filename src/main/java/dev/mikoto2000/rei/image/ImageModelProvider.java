@@ -73,14 +73,14 @@ public class ImageModelProvider {
   private ImageModel createImageModel() {
     ImageModel defaultImageModel = defaultImageModel();
     LlmProperties.Server server = imageSettings.get();
-    ImageModel model =
-        server == null || !server.hasCustomServer()
-            ? defaultImageModel
-            : new FallbackImageModel(
-                LlmFeature.IMAGE_GENERATION,
-                createOpenAiCompatibleImageModel(server),
-                defaultImageModel,
-                server.getModel());
+    ImageModel model = defaultImageModel;
+    if (server != null && server.hasCustomServer()) {
+      model = createOpenAiCompatibleImageModel(server);
+      if (server.isFallbackToDefault()) {
+        model = new FallbackImageModel(
+            LlmFeature.IMAGE_GENERATION, model, defaultImageModel, server.getModel());
+      }
+    }
     return eventFactory == null || eventPublisher == null
         ? model
         : new AgentEventImageModel(

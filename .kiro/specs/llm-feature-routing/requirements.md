@@ -44,8 +44,8 @@
 
 #### 受け入れ基準
 
-1. WHEN 機能別 LLM の同期呼び出しが失敗したとき、THE system SHALL `spring.ai.openai` で構成された既定 LLM へフォールバックする。
-2. WHEN 機能別 LLM のストリーミング呼び出しが失敗したとき、THE system SHALL `spring.ai.openai` で構成された既定 LLM へフォールバックする。
+1. WHEN `fallback-to-default: true` が設定され、機能別 LLM の同期呼び出しが失敗したとき、THE system SHALL `spring.ai.openai` で構成された既定 LLM へフォールバックする。
+2. WHEN `fallback-to-default: true` が設定され、機能別 LLM のストリーミング呼び出しが失敗したとき、THE system SHALL `spring.ai.openai` で構成された既定 LLM へフォールバックする。
 3. WHEN 機能別 `model` が指定されておりフォールバックが発生したとき、THE system SHALL 機能別モデル名を既定 LLM へ引き継がない。
 4. THE system SHALL フォールバック発生をログに記録する。
 

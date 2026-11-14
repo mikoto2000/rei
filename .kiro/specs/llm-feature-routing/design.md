@@ -47,6 +47,8 @@ rei:
   - 機能キーごとに `ChatClient` を返す。
   - Tool Bean は `ObjectProvider` で遅延取得し、機能サービスとの循環依存を避ける。
 
+接続先間の再送は `fallback-to-default: true` の機能だけで有効。`FallbackChatModel` は再送が有効な機能に適用する。
+
 ## 対象機能
 
 - `ChatCommand`: `chat`
@@ -63,7 +65,7 @@ rei:
 
 - 機能別 `base-url` が未設定なら既定 `ChatModel` を使う。
 - 機能別 `model` が未設定なら既存の `ModelHolderService` または既定モデルを使う。
-- 機能別 LLM が接続失敗した場合は既定 `ChatModel` へフォールバックする。
+- 機能別 LLM が接続失敗し、再送を明示的に許可している場合は既定 `ChatModel` へフォールバックする。
 - 既存テスト向けの旧コンストラクタは維持し、Spring DI では Provider 経由のコンストラクタを使用する。
 
 ## テスト方針
@@ -71,6 +73,6 @@ rei:
 - 機能別 `base-url` 未指定時に既定 `ChatModel` が返ること。
 - 機能別 `base-url` 指定時に OpenAI 互換 `ChatModel` が生成され、同一機能ではキャッシュされること。
 - 機能別 `model` 指定時に指定モデルが優先されること。
-- 機能別 `call` / `stream` 失敗時に既定 `ChatModel` へフォールバックすること。
+- 再送を明示的に許可した機能の `call` / `stream` 失敗時に既定 `ChatModel` へフォールバックすること。
 - フォールバック時に機能別モデル名を既定 `ChatModel` へ引き継がないこと。
 - Spring Context 起動時に `LlmChatClientProvider` と Tool 系 Bean の循環依存が発生しないこと。

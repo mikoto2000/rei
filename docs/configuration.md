@@ -180,8 +180,8 @@ Web 検索の順位には適用しません。
 
 LLM を利用する機能ごとに、既定の `spring.ai.openai` とは別の OpenAI 互換 API サーバーとモデルを指定できます。
 `base-url` を空にした機能は、従来どおり既定の LLM 設定を使います。
-機能別に指定した LLM サーバーへの `call` / `stream` が失敗した場合は、`spring.ai.openai` の既定 LLM へフォールバックします。
-ただし、`computer-use` と `computer-use-planner` はフォールバックせず、解析に失敗した場合は Computer Use タスクを `MODEL_ERROR` で終了します。
+機能別に指定した接続先でエラーが発生すると、その機能の処理が失敗します。既定接続先へ同じ入力を再送してよい場合は、`rei.llm.features.<feature>.fallback-to-default: true` を設定してください。画像生成の機能名は `image-generation` です。再送先も入力を受信し、利用料が発生する場合があります。
+Computer Use、Activity、非公開の証拠を扱う専用モデルは再送しません。Computer Use の解析失敗時はタスクを `MODEL_ERROR` で終了します。
 機能別 `model` を指定している場合、フォールバック時はそのモデル名を既定 LLM へ引き継がず、既定 LLM 側のデフォルトモデルを使います。
 
 ```yaml
