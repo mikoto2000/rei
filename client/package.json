@@ -20,7 +20,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.65.0",
     "@tauri-apps/cli": "^2.11.4",
     "@testing-library/react": "^16.0.0",
     "@testing-library/user-event": "^14.0.0",
