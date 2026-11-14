@@ -4,6 +4,13 @@
 分析対象は `bb4f49247370ed3e6cd9cc3ee06209aa060e5075` の本番コードです。
 テストのソース件数はPhase 0追加分を含みます。
 
+以下の計測値と検証結果は対象コミットの記録です。
+現行 CI の条件は [開発ガイド](../../DEVELOP.md#テストと静的解析)、
+ArchUnit の現行基準は [config/architecture](../../config/architecture) を参照してください。
+A と B の基準ファイルは空です。Phase 0 で記録した `BackgroundCommands` から
+`ChatResponseNarrator` への依存は、`CompletedRunNarrator` ポートの導入で解消しました。
+現行の静的解析ゲートは Checkstyle と SpotBugs の合計を 0 件に制限します。
+
 - [全パッケージ統計・Configuration配置・依存集中](package-dependencies.md)
 - [循環の強連結成分と全方向の代表クラス](dependency-cycles.md)
 - [coreの責務分類](core-responsibilities.md)
