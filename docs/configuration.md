@@ -570,3 +570,11 @@ the real-renderer test command. No renderer or model is installed automatically.
 ## 音声認識のLLM補正
 
 `rei.voice.correction.enabled` は既定falseです。マイクOFF時の `/voice correction --enabled=true|false` はプロセス内の切替です。専用接続は `rei.llm.features.voice-correction` に設定し、省略すると通常会話の接続を継承します。有効時はASR原文・限定した文脈・辞書がリモートへ送られる場合があります。timeout、予算、辞書保存先、自動採用と重要操作の確認、メモリ内診断は [音声LLM補正](voice-llm-correction.md) を参照してください。
+
+## sqlite-vec の自動取得
+
+ベクトル DB を初めて開くときに sqlite-vec が未配置の場合、Rei は対応する
+バージョンと OS のアーカイブを HTTPS で取得し、同梱の SHA-256 と照合します。
+`REI_SQLITE_VEC_RELEASE_BASE_URL` で HTTPS ミラーを指定する場合も同じ SHA-256 が必要です。
+自動取得の対象外のバージョンや管理者が配布したライブラリを利用する場合は、
+検証済みのライブラリを `REI_SQLITE_VEC_EXTENSION_PATH` に指定してください。
