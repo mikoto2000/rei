@@ -11,20 +11,20 @@
 	<groupId>dev.mikoto2000</groupId>
 	<artifactId>rei</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
-	<name/>
-	<description/>
-	<url/>
+	<name>Rei</name>
+	<description>Personal AI assistant and agent runtime</description>
+	<url>https://github.com/mikoto2000/rei</url>
 	<licenses>
-		<license/>
+		<license><name>MIT License</name><url>https://github.com/mikoto2000/rei/blob/main/LICENSE</url></license>
 	</licenses>
 	<developers>
-		<developer/>
+		<developer><id>mikoto2000</id><url>https://github.com/mikoto2000</url></developer>
 	</developers>
 	<scm>
-		<connection/>
-		<developerConnection/>
-		<tag/>
-		<url/>
+		<connection>scm:git:https://github.com/mikoto2000/rei.git</connection>
+		<developerConnection>scm:git:ssh://git@github.com/mikoto2000/rei.git</developerConnection>
+		<tag>HEAD</tag>
+		<url>https://github.com/mikoto2000/rei</url>
 	</scm>
 	<properties>
 		<rei.build.final-name>${project.artifactId}-${project.version}</rei.build.final-name>

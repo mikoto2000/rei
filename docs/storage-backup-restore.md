@@ -19,7 +19,8 @@ metadata; state includes their raw results and persisted execution metadata.
 Memory is included because its existing startup helper can update its schema after
 the gate. The coordinator does not modify that database. Unchanged Vector DBs,
 voice models, images, paper originals, rotating logs,
-worktrees and external exports are not transformed by Phase 2 and are outside this
+worktrees, lightweight CLI input history under `~/.rei-cli/history`, and external
+exports are outside this
 backup set. Later migrations must extend the set if they change those sources.
 
 SQLite files are recognized by `.db` / `.sqlite` / `.sqlite3` extensions or their
