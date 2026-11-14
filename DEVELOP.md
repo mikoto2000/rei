@@ -58,7 +58,7 @@ Episode の経緯・根拠・差分整理・横断検索は [Episode Memory](doc
 
 ## 開発環境
 
-現在の基盤は Spring Boot 4.1.1 / Spring AI 2.0.1 です。接続設定と既存履歴の互換対応は [更新ガイド](docs/spring-ai-2-upgrade.md) を参照してください。
+現在の基盤は Spring Boot 4.1.2 / Spring AI 2.0.1 です。接続設定と既存履歴の互換対応は [更新ガイド](docs/spring-ai-2-upgrade.md) を参照してください。
 
 - JDK 25 以上
 - Maven Wrapper または Maven
