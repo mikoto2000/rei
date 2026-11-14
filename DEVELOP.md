@@ -295,3 +295,7 @@ Session単位の会話スタイル、音声限定設定、実行能力・承認�
 音声入力・会話モードのPR一覧、利用手順、実測結果と未対応範囲は [実装記録](docs/voice-input-implementation-report.md) を参照してください。
 
 Goal / Stage の責務、永続化、再開と操作は [Goal Stage実装](docs/goal-stage-implementation.md)、比較評価は [Goal Stage評価](docs/goal-stage-evaluation.md) を参照してください。
+
+依存脆弱性スキャンはルートの Maven 依存（推移的依存を含む）と npm・Cargo の lockfile を検査します。
+軽量 CLI は reactor 内の依存が公開されていないため、各 POM の直接依存を検査し、
+結果を別の Actions artifact に残します。
