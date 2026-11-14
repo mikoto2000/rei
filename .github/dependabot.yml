@@ -1,0 +1,14 @@
+version: 2
+updates:
+  - package-ecosystem: maven
+    directories: ["/", "/terminal"]
+    schedule:
+      interval: weekly
+  - package-ecosystem: npm
+    directory: /client
+    schedule:
+      interval: weekly
+  - package-ecosystem: cargo
+    directory: /client/src-tauri
+    schedule:
+      interval: weekly
