@@ -139,7 +139,10 @@ public class ApiExceptionHandler {
     if (exception instanceof org.springframework.web.ErrorResponse response)
       return ResponseEntity.status(response.getStatusCode()).body(new Error("Request rejected"));
     org.slf4j.LoggerFactory.getLogger(ApiExceptionHandler.class)
-        .error("Unexpected Web API failure: {}", exception.getClass().getName());
+        .error(
+            "Unexpected Web API failure: {} at {}",
+            exception.getClass().getName(),
+            java.util.Arrays.toString(exception.getStackTrace()));
     return ResponseEntity.status(500).body(new Error("Internal server error"));
   }
 
