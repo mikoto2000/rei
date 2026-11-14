@@ -13,6 +13,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -199,10 +202,7 @@ public class SqliteVecInstaller {
           HttpRequest request =
               HttpRequest.newBuilder(destination).timeout(Duration.ofSeconds(30)).GET().build();
           HttpResponse<byte[]> response =
-              httpClient.send(
-                  request,
-                  HttpResponse.BodyHandlers.limiting(
-                      HttpResponse.BodyHandlers.ofByteArray(), MAX_ARCHIVE_BYTES));
+              fetch(request);
           int status = response.statusCode();
           if (status >= 200 && status < 300) return response.body();
           if (status != 301 && status != 302 && status != 303 && status != 307 && status != 308) {
@@ -219,6 +219,26 @@ public class SqliteVecInstaller {
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
         throw new IOException("sqlite-vec ダウンロードが中断されました", e);
+      }
+    }
+
+    /** JDK 25 のヘッダー受信タイムアウトに加え、本文完了までの期限を設ける。 */
+    private HttpResponse<byte[]> fetch(HttpRequest request)
+        throws IOException, InterruptedException {
+      var transfer = httpClient.sendAsync(
+          request,
+          HttpResponse.BodyHandlers.limiting(
+              HttpResponse.BodyHandlers.ofByteArray(), MAX_ARCHIVE_BYTES));
+      try {
+        return transfer.get(30, TimeUnit.SECONDS);
+      } catch (TimeoutException e) {
+        transfer.cancel(true);
+        throw new IOException("sqlite-vec のダウンロードがタイムアウトしました", e);
+      } catch (ExecutionException e) {
+        throw new IOException("sqlite-vec のダウンロードに失敗しました", e.getCause());
+      } catch (InterruptedException e) {
+        transfer.cancel(true);
+        throw e;
       }
     }
 
