@@ -10,20 +10,17 @@ spring:
           jdbc:
             initialize-schema: always
     openai:
-      # base-url: ${REI_OPENAI_BASE_URL:https://api.openai.com}
-      base-url: ${REI_OPENAI_BASE_URL:http://192.168.1.50:11434}
+      base-url: ${REI_OPENAI_BASE_URL:http://127.0.0.1:11434}
       api-key: ${REI_OPENAI_API_KEY:dummy-key}
       chat:
         options:
-          # model: ${REI_OPENAI_CHAT_MODEL:gpt-5.4}
-          model: ${REI_OPENAI_CHAT_MODEL:qwen3.5:122b}
+          model: ${REI_OPENAI_CHAT_MODEL:qwen3.5:9b}
           temperature: 0.3
       embedding:
         base-url: ${REI_OPENAI_EMBEDDING_BASE_URL:}
         api-key: ${REI_OPENAI_EMBEDDING_API_KEY:}
         embeddings-path: ${REI_OPENAI_EMBEDDING_PATH:/v1/embeddings}
         options:
-          # model: ${REI_OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
           model: ${REI_OPENAI_EMBEDDING_MODEL:qwen3-embedding:8b}
       image:
         options:
