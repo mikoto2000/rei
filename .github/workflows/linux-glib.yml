@@ -24,6 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: rustup default stable
-      - run: pkg-config --modversion glib-2.0
+      - name: Install GLib headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev
       - name: Exercise the patched iterator in an optimized build
         run: cargo test --release --manifest-path client/src-tauri/vendor/glib-0.18.5/Cargo.toml --lib variant_iter
