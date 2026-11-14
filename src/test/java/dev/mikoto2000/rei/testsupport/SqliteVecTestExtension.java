@@ -5,7 +5,6 @@ import dev.mikoto2000.rei.core.sqlitevec.PlatformDetector;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecAssetResolver;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecInstaller;
 import java.nio.file.Path;
-import tools.jackson.databind.json.JsonMapper;
 
 /**
  * 検証条件を再現するためのSQLiteベクトル検証拡張子。
@@ -21,7 +20,7 @@ public final class SqliteVecTestExtension {
     var properties = new SqliteVecProperties();
     properties.setCacheDir(Path.of("target", "sqlite-vec-test-cache").toAbsolutePath().toString());
     return new SqliteVecInstaller(
-            properties, new PlatformDetector(), new SqliteVecAssetResolver(), new JsonMapper())
+            properties, new PlatformDetector(), new SqliteVecAssetResolver())
         .resolveExtensionPath();
   }
 }

@@ -53,7 +53,7 @@ class EpisodeDenseSqliteTest {
         dev.mikoto2000.rei.testsupport.SqliteVecTestExtension.resolve().toString());
     var installer =
         new SqliteVecInstaller(
-            properties, new PlatformDetector(), new SqliteVecAssetResolver(), new JsonMapper());
+            properties, new PlatformDetector(), new SqliteVecAssetResolver());
     return new LazySqliteVectorStore(
         new SqliteVecDataSource(source, new SqliteVecExtensionLoader(properties, installer)),
         model,

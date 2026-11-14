@@ -11,13 +11,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.util.HashMap;
 import java.util.Map;
 import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import tools.jackson.databind.json.JsonMapper;
 
 /** SQLiteベクトルInstallerの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
@@ -41,7 +39,7 @@ class SqliteVecInstallerTest {
             properties,
             () -> SqliteVecPlatform.LINUX_X86_64,
             new SqliteVecAssetResolver(),
-            new JsonMapper(),
+            asset -> null,
             downloadClient);
 
     assertEquals(cached, installer.resolveExtensionPath());
@@ -51,7 +49,7 @@ class SqliteVecInstallerTest {
             properties,
             () -> SqliteVecPlatform.LINUX_X86_64,
             new SqliteVecAssetResolver(),
-            new JsonMapper(),
+            asset -> null,
             downloadClient);
     assertEquals(cached, nextFixture.resolveExtensionPath());
     assertEquals(0, downloadClient.requestCount());
@@ -59,32 +57,13 @@ class SqliteVecInstallerTest {
 
   /** 文書検索用の保存基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
-  void downloadsManifestAndArchiveThenExtractsLibrary() throws Exception {
+  void verifiesPinnedArchiveThenExtractsLibrary() throws Exception {
     SqliteVecProperties properties = properties();
     properties.setCacheDir(tempDir.toString());
     String assetName = "sqlite-vec-0.1.9-loadable-linux-x86_64.tar.gz";
     byte[] archiveBytes = createTarGz("vec0.so", "sqlite-vec");
     String checksum = sha256(archiveBytes);
-    String manifest =
-        """
-        {
-          "artifacts": [
-            {
-              "kind": "github-release-loadable",
-              "name": "%s",
-              "checksum_sha256": "%s"
-            }
-          ]
-        }
-        """
-            .formatted(assetName, checksum);
-
-    Map<URI, byte[]> responses = new HashMap<>();
-    responses.put(
-        URI.create(
-            "https://github.com/asg017/sqlite-vec/releases/download/v0.1.9/sqlite-dist-manifest.json"),
-        manifest.getBytes(StandardCharsets.UTF_8));
-    responses.put(
+    Map<URI, byte[]> responses = Map.of(
         URI.create("https://github.com/asg017/sqlite-vec/releases/download/v0.1.9/" + assetName),
         archiveBytes);
 
@@ -94,7 +73,7 @@ class SqliteVecInstallerTest {
             properties,
             () -> SqliteVecPlatform.LINUX_X86_64,
             new SqliteVecAssetResolver(),
-            new JsonMapper(),
+            asset -> assetName.equals(asset) ? checksum : null,
             downloadClient);
 
     Path installed = installer.resolveExtensionPath();
@@ -110,26 +89,7 @@ class SqliteVecInstallerTest {
     properties.setCacheDir(tempDir.toString());
     String assetName = "sqlite-vec-0.1.9-loadable-linux-x86_64.tar.gz";
     byte[] archiveBytes = "bad".getBytes(StandardCharsets.UTF_8);
-    String manifest =
-        """
-        {
-          "artifacts": [
-            {
-              "kind": "github-release-loadable",
-              "name": "%s",
-              "checksum_sha256": "%s"
-            }
-          ]
-        }
-        """
-            .formatted(assetName, "deadbeef");
-
-    Map<URI, byte[]> responses = new HashMap<>();
-    responses.put(
-        URI.create(
-            "https://github.com/asg017/sqlite-vec/releases/download/v0.1.9/sqlite-dist-manifest.json"),
-        manifest.getBytes(StandardCharsets.UTF_8));
-    responses.put(
+    Map<URI, byte[]> responses = Map.of(
         URI.create("https://github.com/asg017/sqlite-vec/releases/download/v0.1.9/" + assetName),
         archiveBytes);
 
@@ -138,7 +98,7 @@ class SqliteVecInstallerTest {
             properties,
             () -> SqliteVecPlatform.LINUX_X86_64,
             new SqliteVecAssetResolver(),
-            new JsonMapper(),
+            asset -> "deadbeef",
             new RecordingDownloadClient(responses));
 
     assertThrows(IllegalStateException.class, installer::resolveExtensionPath);
