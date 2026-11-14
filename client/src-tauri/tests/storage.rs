@@ -44,3 +44,36 @@ fn corrupt_settings_are_not_silently_replaced() {
     std::fs::write(&path, "broken").unwrap();
     assert!(JsonRepository::new(path).load().is_err());
 }
+
+#[test]
+fn reopening_does_not_rewrite_and_two_handles_preserve_updates() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("secrets.vault");
+    let password = || Secret::new("correct horse battery staple".into());
+    let mut first = EncryptedVault::open(path.clone(), password()).unwrap();
+    let before = std::fs::read(&path).unwrap();
+    let mut second = EncryptedVault::open(path.clone(), password()).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+
+    first.set("first", Secret::new("key-one".into())).unwrap();
+    second.set("second", Secret::new("key-two".into())).unwrap();
+    assert!(first.exists("second").unwrap());
+    assert!(second.exists("first").unwrap());
+    first.delete("second").unwrap();
+    assert!(!second.exists("second").unwrap());
+}
+
+#[test]
+fn rejects_oversized_vault() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("secrets.vault");
+    std::fs::File::create(&path)
+        .unwrap()
+        .set_len(1024 * 1024 + 1)
+        .unwrap();
+    let password = Secret::new("correct horse battery staple".into());
+    assert!(matches!(
+        EncryptedVault::open(path, password),
+        Err(AppError::Storage)
+    ));
+}
