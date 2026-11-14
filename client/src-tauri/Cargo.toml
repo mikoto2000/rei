@@ -45,3 +45,7 @@ tauri-build = { version = "2", features = [] }
 
 [dev-dependencies]
 axum = "0.8"
+
+[patch.crates-io]
+# GTK3 still requires glib 0.18. This crate carries the upstream VariantStrIter fix.
+glib = { path = "vendor/glib-0.18.5" }
