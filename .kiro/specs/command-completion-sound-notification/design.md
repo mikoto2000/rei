@@ -143,7 +143,7 @@ flowchart TD
 
 ### プロパティ 1: コマンド実行結果によらず固定メッセージで通知される
 
-*任意の* コマンド引数と実行結果（正常完了・RuntimeException スロー）に対して、`executeInterruptibly()` が完了したとき、`SoundNotificationService.notify()` が常に「コマンド実行が完了しました」というメッセージで呼び出される。
+完了通知の対象となるコマンド引数と任意の実行結果（正常完了・RuntimeException スロー）に対して、`executeInterruptibly()` が完了したとき、`SoundNotificationService.notify()` が常に「コマンド実行が完了しました」というメッセージで呼び出される。
 
 **Validates: 要件 1.1, 1.2, 3.1, 3.2**
 
@@ -200,17 +200,17 @@ jqwik を使用してプロパティベーステストを実装する。
 
 ### 設計方針
 - `ReiApplication.executeInterruptibly(..., String... args)` の `finally` で通知する直前に、コマンド名ベースのスキップ判定を追加する。
-- 既存の `chatResponseNarrator.wasNarrated()` 判定はそのまま維持し、条件を合成する。
+- `chat-response-narration` の設計で導入された `chatResponseNarrator.wasNarrated()` と通知ポリシーを組み合わせる。
 
 ### 仕様詳細
-- 追加メソッド: `shouldSkipCompletionNotification(String... args)`
+- 実装: `CommandCompletionNotificationPolicy.shouldNotify(String... args)`
 - 判定条件:
-1. `args` が空または先頭が `null` の場合は `false`
-2. 先頭引数が `"model"` または `"models"` の場合は `true`
-3. それ以外は `false`
+1. `args` が空または先頭が `null` の場合は `true`
+2. Shell が渡した先頭のルートコマンドが `model`、`models`、`project`、`sh` の場合は `false`
+3. それ以外は `true`
 
 - 通知実行条件（更新後）:
-- `!chatResponseNarrator.wasNarrated() && !shouldSkipCompletionNotification(args)`
+- `!chatResponseNarrator.wasNarrated() && commandCompletionNotificationPolicy.shouldNotify(args)`
 
 ### テスト方針
 - `ReiApplicationCommandNotificationTest` に以下を追加:

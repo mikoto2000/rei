@@ -31,7 +31,7 @@ SQLite + sqlite-vec を使用したローカルベクトルストアにより、
 2. THE AsyncVectorDocumentService SHALL ドキュメントの追加処理を非同期で実行する
 3. WHEN ドキュメントの追加が完了したとき、THE AsyncVectorDocumentService SHALL docId・ソース・チャンク数を標準出力に表示する
 4. WHEN ドキュメントの追加に失敗したとき、THE AsyncVectorDocumentService SHALL エラーメッセージを標準出力に表示する
-5. WHEN 同一ソースのドキュメントが既に登録されているとき、THE VectorDocumentService SHALL 既存のドキュメントを削除してから新しいドキュメントを登録する
+5. WHEN 同一ソースのドキュメントが既に登録されているとき、THE VectorDocumentService SHALL 既存文書の削除と新規文書の登録を1トランザクションで行い、失敗時は既存文書を保持する
 
 ---
 

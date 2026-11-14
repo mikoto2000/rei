@@ -30,7 +30,7 @@
 3. THE BriefingService SHALL ブリーフィングに未完了タスクの一覧を含める
 4. THE BriefingService SHALL ブリーフィングに期限切れタスクの一覧を含める
 5. THE BriefingService SHALL ブリーフィングに予定・タスクに関連するベクトルストア文書を最大 3 件含める
-6. THE BriefingService SHALL ブリーフィングに昨日 00:00 から翌日 00:00 までの新着フィード記事を含める
+6. THE BriefingService SHALL ブリーフィングに対象日の前日 00:00 UTC から対象日の翌日 00:00 UTC までの新着フィード記事を含める
 7. THE BriefingService SHALL ブリーフィングに直近 24 時間以内の興味関心トピック更新を含める
 
 ---

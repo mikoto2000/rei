@@ -76,5 +76,5 @@
 3. THE GoogleCalendarService SHALL 取得したトークンを設定されたディレクトリに保存して再利用する
 4. WHEN ブラウザが利用可能なとき、THE GoogleCalendarService SHALL OAuth2 認証 URL をブラウザで自動的に開く
 5. WHEN ブラウザが利用できないとき、THE GoogleCalendarService SHALL OAuth2 認証 URL をコンソールに表示する
-6. THE GoogleCalendarService SHALL 認証情報ファイルのデフォルトパスを起動ディレクトリ配下の `.rei/google-calendar-credentials.json` とする
-7. THE GoogleCalendarService SHALL OAuth トークンのデフォルト保存先を起動ディレクトリ配下の `.rei/google-calendar-tokens` とする
+6. THE GoogleCalendarService SHALL 認証情報ファイルのデフォルトパスを`${rei.data-dir}/google-credentials.json` とする
+7. THE GoogleCalendarService SHALL OAuth トークンのデフォルト保存先を`${rei.data-dir}/google-tokens` とする。Calendar 利用時は `CALENDAR_EVENTS` スコープを要求する
