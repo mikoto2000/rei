@@ -111,7 +111,7 @@ public class SqliteVecInstaller {
       byte[] archiveBytes = downloadClient.download(assetUri(artifact.assetName()));
       verifyChecksum(archiveBytes, checksum);
       Files.createDirectories(installDir);
-      extractLibrary(archiveBytes, libraryPath);
+      extractLibrary(archiveBytes, installDir, artifact.libraryFileName());
       return libraryPath;
     } catch (IOException e) {
       throw new IllegalStateException("sqlite-vec extension の準備に失敗しました", e);
@@ -139,20 +139,22 @@ public class SqliteVecInstaller {
   }
 
   /** 必要なライブラリだけを一時ファイルへ展開し、完全に書き込んだ後で公開する。 */
-  private void extractLibrary(byte[] archiveBytes, Path libraryPath) throws IOException {
+  private void extractLibrary(byte[] archiveBytes, Path installDir, String libraryName)
+      throws IOException {
+    Path libraryPath = installDir.resolve(libraryName);
     try (InputStream inputStream = new java.io.ByteArrayInputStream(archiveBytes);
         var gzipInputStream = new java.util.zip.GZIPInputStream(inputStream);
         var tarInputStream = new TarArchiveInputStream(gzipInputStream)) {
       org.apache.commons.compress.archivers.tar.TarArchiveEntry entry;
       while ((entry = tarInputStream.getNextEntry()) != null) {
         if (!entry.isFile()
-            || !libraryPath.getFileName().toString().equals(entry.getName())) {
+            || !libraryName.equals(entry.getName())) {
           continue;
         }
         if (entry.getSize() <= 0 || entry.getSize() > HttpDownloadClient.MAX_ARCHIVE_BYTES) {
           throw new IOException("sqlite-vec ライブラリのサイズが不正です");
         }
-        Path temporary = Files.createTempFile(libraryPath.getParent(), "sqlite-vec-", ".tmp");
+        Path temporary = Files.createTempFile(installDir, "sqlite-vec-", ".tmp");
         try {
           Files.copy(tarInputStream, temporary, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
           Files.move(temporary, libraryPath, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
