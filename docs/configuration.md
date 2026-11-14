@@ -570,3 +570,11 @@ the real-renderer test command. No renderer or model is installed automatically.
 ## 音声認識のLLM補正
 
 `rei.voice.correction.enabled` は既定falseです。マイクOFF時の `/voice correction --enabled=true|false` はプロセス内の切替です。専用接続は `rei.llm.features.voice-correction` に設定し、省略すると通常会話の接続を継承します。有効時はASR原文・限定した文脈・辞書がリモートへ送られる場合があります。timeout、予算、辞書保存先、自動採用と重要操作の確認、メモリ内診断は [音声LLM補正](voice-llm-correction.md) を参照してください。
+
+## 機能別 LLM のフォールバック
+
+機能別に `base-url` を指定した場合、接続先でエラーが発生すると、その機能の処理が失敗します。
+既定 LLM へ同じ入力を再送してよい機能には、`rei.llm.features.<feature>.fallback-to-default: true`
+を指定できます。画像生成では `<feature>` は `image-generation` です。
+再送先も入力を受信し、利用料が発生する場合があります。
+非公開の証拠を扱う処理、Computer Use、Activity の専用モデルは再送しません。

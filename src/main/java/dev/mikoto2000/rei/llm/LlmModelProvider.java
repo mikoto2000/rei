@@ -181,7 +181,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       ChatModel primary = createOpenAiCompatibleChatModel(server);
       if (LlmFeature.CHAT.equals(feature)) primary = captureModel(primary, true);
       model =
-          (LlmFeature.COMPUTER_USE.equals(feature)
+          (!server.isFallbackToDefault()
+                  || LlmFeature.COMPUTER_USE.equals(feature)
                   || LlmFeature.COMPUTER_USE_PLANNER.equals(feature)
                   || LlmFeature.ACTIVITY.equals(feature)
                   || LlmFeature.ACTIVITY_BEHAVIOR.equals(feature))

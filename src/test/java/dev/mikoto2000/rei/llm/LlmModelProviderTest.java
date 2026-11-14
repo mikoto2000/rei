@@ -227,6 +227,10 @@ class LlmModelProviderTest {
     server.setApiKey("feature-key");
     server.setModel("feature-model");
     properties.setFeature(LlmFeature.SEARCH, server);
+    assertThat(new LlmModelProvider(defaultModel, properties).chatModel(LlmFeature.SEARCH))
+        .isNotInstanceOf(FallbackChatModel.class);
+    server.setFallbackToDefault(true);
+    properties.setFeature(LlmFeature.SEARCH, server);
 
     LlmModelProvider provider = new LlmModelProvider(defaultModel, properties);
 
