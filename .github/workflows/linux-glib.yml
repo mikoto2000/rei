@@ -1,0 +1,32 @@
+name: Linux GLib backport
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'client/src-tauri/vendor/glib-0.18.5/**'
+      - 'client/src-tauri/Cargo.toml'
+      - '.github/workflows/linux-glib.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'client/src-tauri/vendor/glib-0.18.5/**'
+      - 'client/src-tauri/Cargo.toml'
+      - '.github/workflows/linux-glib.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  variant-iterator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup default stable
+      - name: Install GLib headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libglib2.0-dev
+      - name: Exercise the patched iterator in an optimized build
+        run: cargo test --release --manifest-path client/src-tauri/vendor/glib-0.18.5/Cargo.toml --lib variant_iter
