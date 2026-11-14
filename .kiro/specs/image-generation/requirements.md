@@ -72,7 +72,7 @@
 2. THE system SHALL `rei.llm.features.image-generation.api-key` で画像生成用 API キーを指定できる。
 3. THE system SHALL `rei.llm.features.image-generation.model` で画像生成用モデルを指定できる。
 4. WHEN `rei.llm.features.image-generation.base-url` が未指定または空文字のとき、THE system SHALL `spring.ai.openai` で構成された既定接続先を使用する。
-5. WHEN 画像生成用接続先への呼び出しが失敗したとき、THE system SHALL 既定接続先へフォールバックする。
+5. WHEN `fallback-to-default: true` が設定され、画像生成用接続先への呼び出しが失敗したとき、THE system SHALL 既定接続先へフォールバックする。
 6. WHEN フォールバックが発生したとき、THE system SHALL フォールバック発生をログに記録する。
 7. THE system SHALL `rei.image.response-format` で画像生成 API へ `response_format` を送信するか制御できる。
 8. WHEN `rei.image.response-format` が `auto` のとき、THE system SHALL `gpt-image-*` モデルまたは既定 OpenAI 接続先では `response_format` を送信しない。
