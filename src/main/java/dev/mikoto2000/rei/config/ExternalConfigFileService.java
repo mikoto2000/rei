@@ -78,7 +78,7 @@ public class ExternalConfigFileService {
               api-key: ${REI_OPENAI_API_KEY:dummy-key}
               chat:
                 options:
-                  model: ${REI_OPENAI_CHAT_MODEL:qwen3.5:122b}
+                  model: ${REI_OPENAI_CHAT_MODEL:qwen3.5:9b}
               embedding:
                 base-url: ${REI_OPENAI_EMBEDDING_BASE_URL:}
                 api-key: ${REI_OPENAI_EMBEDDING_API_KEY:}

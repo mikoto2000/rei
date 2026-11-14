@@ -45,7 +45,7 @@ spring:
       base-url: http://127.0.0.1:11434
       chat:
         options:
-          model: qwen3.5:122b
+          model: qwen3.5:9b
       image:
         options:
           model: gpt-image-1
@@ -122,9 +122,9 @@ export REI_OPENAI_IMAGE_MODEL=gpt-image-1
 
 | 変数 | 要否 | デフォルト | 説明 |
 | --- | --- | --- | --- |
-| `REI_OPENAI_BASE_URL` | 接続先に合わせて指定 | `http://192.168.1.50:11434` | OpenAI 互換 API のベース URL |
+| `REI_OPENAI_BASE_URL` | 接続先に合わせて指定 | `http://127.0.0.1:11434` | OpenAI 互換 API のベース URL |
 | `REI_OPENAI_API_KEY` | 必須 | `dummy-key` | API キー |
-| `REI_OPENAI_CHAT_MODEL` | 利用モデルに合わせて指定 | `qwen3.5:122b` | chat 用モデル名 |
+| `REI_OPENAI_CHAT_MODEL` | 利用モデルに合わせて指定 | `qwen3.5:9b` | chat 用モデル名 |
 | `REI_OPENAI_EMBEDDING_MODEL` | 文書検索時に指定 | `qwen3-embedding:8b` | embedding 用モデル名 |
 | `REI_OPENAI_IMAGE_MODEL` | 画像生成時必須 | `gpt-image-1` | 既定接続先で使う画像生成モデル名 |
 | `REI_IMAGE_RESPONSE_FORMAT` | 任意 | `auto` | 画像生成 API に `response_format` を送るかを制御。`auto`, `b64_json`, `none` |
