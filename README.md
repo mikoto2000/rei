@@ -94,7 +94,7 @@ Rei の入力プロンプトが表示されたら、文章をそのまま入力�
 
 | クライアント | 起動・接続 |
 | --- | --- |
-| 軽量 CLI | ビルド後、`REI_API_KEY` を設定して Windows では `.\rei.bat`、Linux では `sh ./rei.sh` を実行します。既定の `auto` は同じデータディレクトリの Backend に接続するか、Backend を別プロセスで起動します。`--mode=client` は接続のみ、`--mode=server` は Backend の起動、`--mode=legacy-shell` は従来 Shell の起動です。[起動・停止と OS ごとの制約](docs/lightweight-cli-client.md) |
+| 軽量 CLI | ビルド後、`REI_API_KEY` を設定して Windows では `.\rei.bat`、Linux では `sh ./rei.sh` を実行します。既定の `auto` は同じデータディレクトリの Backend に接続するか、Backend を別プロセスで起動します。`--mode=client` は接続のみ、`--mode=server` は Backend の起動、`--mode=legacy-shell` は従来 Shell の起動です。macOS では `sh ./rei.sh --mode=legacy-shell` で従来 Shell を起動できます。[起動・停止と OS ごとの制約](docs/lightweight-cli-client.md) |
 | Native Client | Tauri 2 のクライアントを起動し、`REI_API_KEY` を設定した Rei の Web API に接続します。Web API Phase 1〜4 に対応し、会話履歴・Run・SSE の再接続・Workspace 操作を提供します。[起動・ビルド](client/README.md)・[API と対応機能](docs/native-web-api.md) |
 
 `REI_API_KEY` は Rei のクライアントと Backend の間の認証に使います。モデル接続用のキーは `REI_OPENAI_API_KEY` に設定します。

@@ -43,7 +43,7 @@ flowchart LR
 
 Backend だけが Storage、Migration、LLM、MCP、Tool Permission、Run、Session、Checkpoint を所有する。CLI は Spring、SQLite、provider SDK を依存に持たず、Backend の会話データを直接読まない。launcher が discovery と OS lock の状態を読む。CLI の Project/Session 選択は process ごとの local state であり、Shell や別 CLI の選択を変えない。
 
-`terminal/pom.xml` は既存ルートビルドとは独立した reactor。`contract` は discovery・固定 catalog・純粋引数文法の Java クラス、`completion` は `core.completion`、`cli` は JLine + Java HttpClient、`launcher` は OS 起動を扱う。既存 Backend クラスの大量移動は行っていない。CLI は文字・通常の端末出力を中心とし、全面再描画 TUI は使用しない。
+`terminal/pom.xml` は既存ルートビルドとは独立した reactor。`contract` は discovery・固定 catalog・純粋引数文法の Java クラス、`completion` は `core.completion`、`cli` は JLine + Java HttpClient、`launcher` は OS 起動を扱う。`contract` と `completion` は、それぞれの POM に指定した共有ソースをルートの `src/main/java` から再コンパイルする。CLI は文字・通常の端末出力を中心とし、全面再描画 TUI は使用しない。
 
 ## ビルドと起動
 
