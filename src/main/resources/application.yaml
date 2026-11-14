@@ -483,7 +483,7 @@ rei:
     auto-present: ${REI_WORK_CONTEXT_AUTO_PRESENT:true}
     max-context-tokens: ${REI_WORK_CONTEXT_MAX_CONTEXT_TOKENS:1200}
     max-input-tokens: ${REI_WORK_CONTEXT_MAX_INPUT_TOKENS:12000}
-    timeout-seconds: ${REI_WORK_CONTEXT_TIMEOUT_SECONDS:120}
+    timeout-seconds: ${REI_WORK_CONTEXT_TIMEOUT_SECONDS:240}
     max-turns: ${REI_WORK_CONTEXT_MAX_TURNS:20}
   memory:
     episodes:

@@ -58,7 +58,7 @@ rei:
     auto-present: true
     max-context-tokens: 1200
     max-input-tokens: 12000
-    timeout-seconds: 120
+    timeout-seconds: 240
     max-turns: 20
 ```
 
