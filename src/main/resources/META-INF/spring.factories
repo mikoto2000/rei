@@ -1,0 +1,1 @@
+org.springframework.boot.EnvironmentPostProcessor=dev.mikoto2000.rei.core.datasource.ReiDataDirectoryEnvironment
