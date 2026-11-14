@@ -107,7 +107,7 @@ public class ApiExceptionHandler {
       dev.mikoto2000.rei.checkpoint.CheckpointException.CapacityDetail usage) {}
 
   /** Web APIによる操作で用いる作業文脈競合を返す。 */
-  @ExceptionHandler(java.util.ConcurrentModificationException.class)
+  @ExceptionHandler(dev.mikoto2000.rei.workcontext.WorkContextConflictException.class)
   public ResponseEntity<Error> workContextConflict() {
     return ResponseEntity.status(409).body(new Error("Work Context revision changed"));
   }
@@ -138,6 +138,8 @@ public class ApiExceptionHandler {
   public ResponseEntity<Error> unexpected(Exception exception) {
     if (exception instanceof org.springframework.web.ErrorResponse response)
       return ResponseEntity.status(response.getStatusCode()).body(new Error("Request rejected"));
+    org.slf4j.LoggerFactory.getLogger(ApiExceptionHandler.class)
+        .error("Unexpected Web API failure: {}", exception.getClass().getName());
     return ResponseEntity.status(500).body(new Error("Internal server error"));
   }
 
