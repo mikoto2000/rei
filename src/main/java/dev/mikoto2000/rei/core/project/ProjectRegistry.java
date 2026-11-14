@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.WeakHashMap;
 import java.util.UUID;
 
 /**
@@ -19,40 +20,46 @@ import java.util.UUID;
  * <p>Small, atomic JSON registry. Failed writes leave both the file and published state unchanged.
  */
 public final class ProjectRegistry {
-  // Shell and HTTP use separate registry instances in the same Backend. A bounded
-  // lock stripe prevents overlapping read/modify/replace transactions for a file.
-  /** ファイル排他制御一覧。 */
-  private static final Object[] FILE_LOCKS =
-      java.util.stream.IntStream.range(0, 64).mapToObj(ignored -> new Object()).toArray();
+  /** ファイルが同じレジストリ間で排他と補完用の状態を共有する。 */
+  private static final WeakHashMap<Path, RegistryState> REGISTRIES = new WeakHashMap<>();
 
-  /** ファイル。 */
+  /** ファイルと状態の対応をレジストリの生存中に維持する。 */
   private final Path file;
 
-  /** ファイル排他制御。 */
-  private final Object fileLock;
+  /** ファイル単位の排他と読み取り専用スナップショット。 */
+  private final RegistryState state;
+
+  private static final class RegistryState {
+    private volatile List<ProjectContext> completionSnapshot = List.of();
+  }
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper = new ObjectMapper();
 
-  /** 完了条件状態の記録。 */
-  private volatile List<ProjectContext> completionSnapshot = List.of();
-
   /** 指定された値や利用先を使って、ProjectRegistryを初期化する。 */
   public ProjectRegistry(Path file) {
-    this.file = file.toAbsolutePath().normalize();
-    this.fileLock = FILE_LOCKS[Math.floorMod(this.file.hashCode(), FILE_LOCKS.length)];
-    synchronized (fileLock) {
+    Path normalized = file.toAbsolutePath().normalize();
+    synchronized (REGISTRIES) {
+      // Keep the actual weak key alive while any registry for this path uses the state.
+      this.file = REGISTRIES.keySet().stream()
+          .filter(normalized::equals)
+          .findFirst()
+          .orElse(normalized);
+      this.state = REGISTRIES.computeIfAbsent(this.file, ignored -> new RegistryState());
+    }
+    synchronized (state) {
       try {
         read();
-      } catch (RuntimeException ignored) {
-        /* Optional startup completion snapshot. */
+      } catch (RuntimeException failure) {
+        org.slf4j.LoggerFactory.getLogger(ProjectRegistry.class)
+            .warn("Cannot initialize project registry snapshot: {}", this.file, failure);
       }
     }
   }
 
   /** プロジェクトごとの作業環境で用いる完了条件状態の記録を返す。 */
   public List<ProjectContext> completionSnapshot() {
-    return List.copyOf(completionSnapshot);
+    return state.completionSnapshot;
   }
 
   /**
@@ -82,7 +89,7 @@ public final class ProjectRegistry {
 
   /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   public synchronized ProjectContext resolve(Path path) {
-    synchronized (fileLock) {
+    synchronized (state) {
       Path canonical = canonical(path);
       var entries = read();
       for (var entry : entries) if (Path.of(entry.path()).equals(canonical)) return entry.context();
@@ -99,7 +106,7 @@ public final class ProjectRegistry {
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public synchronized List<ProjectContext> list() {
-    synchronized (fileLock) {
+    synchronized (state) {
       return read().stream().map(Entry::context).toList();
     }
   }
@@ -110,14 +117,14 @@ public final class ProjectRegistry {
    * <p>Web callers may resolve registered identities only; never interpret input as a path.
    */
   public synchronized Optional<ProjectContext> resolveById(String id) {
-    synchronized (fileLock) {
+    synchronized (state) {
       return read().stream().filter(entry -> entry.id().equals(id)).findFirst().map(Entry::context);
     }
   }
 
   /** プロジェクトごとの作業環境に関するrelocateを処理する。 */
   public synchronized void relocate(String id, Path path) {
-    synchronized (fileLock) {
+    synchronized (state) {
       Path canonical = canonical(path);
       var entries = read();
       if (entries.stream()
@@ -136,9 +143,11 @@ public final class ProjectRegistry {
 
   /** 指定された対象を管理から取り除く。 */
   public synchronized void remove(Path path) {
-    synchronized (fileLock) {
+    synchronized (state) {
       var entries = read();
-      entries.removeIf(e -> Path.of(e.path()).equals(path.toAbsolutePath().normalize()));
+      Path normalized = path.toAbsolutePath().normalize();
+      Path target = Files.exists(normalized) ? canonical(normalized) : normalized;
+      entries.removeIf(e -> Path.of(e.path()).equals(target));
       save(entries);
     }
   }
@@ -146,13 +155,13 @@ public final class ProjectRegistry {
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private List<Entry> read() {
     if (!Files.exists(file)) {
-      completionSnapshot = List.of();
+      state.completionSnapshot = List.of();
       return new ArrayList<>();
     }
     try {
       var entries =
           new ArrayList<>(mapper.readValue(Files.readString(file), Document.class).projects());
-      completionSnapshot = entries.stream().map(Entry::context).toList();
+      state.completionSnapshot = entries.stream().map(Entry::context).toList();
       return entries;
     } catch (IOException e) {
       throw new IllegalStateException("Cannot read project registry: " + file, e);
@@ -182,7 +191,7 @@ public final class ProjectRegistry {
       } catch (AtomicMoveNotSupportedException e) {
         Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
       }
-      completionSnapshot = entries.stream().map(Entry::context).toList();
+      state.completionSnapshot = entries.stream().map(Entry::context).toList();
     } catch (IOException e) {
       throw new IllegalStateException("Cannot save project registry: " + file, e);
     } finally {
