@@ -40,8 +40,11 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm run format:check
       - run: npm test
       - run: npm run build
+      - run: npx playwright install chrome
+      - run: npm run test:e2e
 
   native:
     name: Native Client Rust

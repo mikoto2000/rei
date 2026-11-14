@@ -97,7 +97,8 @@ CI の Java 全件回帰は Windows の2ジョブで実行します。Shard A �
 [`.github/ci/java-shard-a.txt`](.github/ci/java-shard-a.txt) にあるクラスを実行し、
 Shard B は Surefire の既定対象からそのクラスを除いた残りを実行します。
 新規クラスは既定で Shard B に入り、Shard A のクラスを改名・削除する場合は一覧も更新します。
-両ジョブの成功後、`test` ジョブがクラスの割り当て、テスト ID の重複、
+Ubuntu では別ジョブが `sh ./build.sh` と両起動スクリプトの `--help` を検証します。
+両 Windows ジョブの成功後、`test` ジョブがクラスの割り当て、テスト ID の重複、
 および [想定スキップ](config/test-expected-skips.json) の ID と理由を照合します。
 
 別の Java 静的解析ワークフローは Checkstyle と SpotBugs を実行し、両方の指摘が 0 件であることを確認します。レポートの欠落・形式不正や SpotBugs の解析エラーも失敗として扱います。[ローカル実行と CI レポート](docs/static-analysis.md)
