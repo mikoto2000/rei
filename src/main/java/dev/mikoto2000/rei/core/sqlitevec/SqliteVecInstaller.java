@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.core.sqlitevec;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import dev.mikoto2000.rei.core.configuration.SqliteVecProperties;
 import java.io.IOException;
 import java.io.InputStream;
@@ -13,11 +11,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.List;
+import java.time.Duration;
+import java.util.Map;
+import java.util.function.Function;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import tools.jackson.databind.json.JsonMapper;
 
 /** 文書検索用の保存基盤に必要なSQLiteベクトルInstallerを扱う。 */
 @Component
@@ -32,8 +31,22 @@ public class SqliteVecInstaller {
   /** 素材対象の解決。 */
   private final SqliteVecAssetResolver assetResolver;
 
-  /** 保存や受け渡しに用いるデータ形式の変換。 */
-  private final JsonMapper objectMapper;
+  /** GitHub release v0.1.9 の asset digest。取得時に配信元から読み直さない。 */
+  private static final Map<String, String> CHECKSUMS =
+      Map.of(
+          "sqlite-vec-0.1.9-loadable-linux-aarch64.tar.gz",
+          "ea03d39541e478fab5974253c461e1cb5d77742f69e40cf96e3fad5bc309a37c",
+          "sqlite-vec-0.1.9-loadable-linux-x86_64.tar.gz",
+          "b959baa1d8dc88861b1edb337b8587178cdcb12d60b4998f9d10b6a82052d5d7",
+          "sqlite-vec-0.1.9-loadable-macos-aarch64.tar.gz",
+          "8282126333399ddfe98bbbcc7a1936e7252625aac49df056a98be602e46bfd29",
+          "sqlite-vec-0.1.9-loadable-macos-x86_64.tar.gz",
+          "53ad76e400786515e2edcaed2f01271dda846316390b761fadbd2dcf56aa4713",
+          "sqlite-vec-0.1.9-loadable-windows-x86_64.tar.gz",
+          "51581189d52066b4dfc6631f6d7a3eab7dedc2260656ab09ca97ab3fb8165983");
+
+  /** ダウンロードを許可するアーカイブの SHA-256。 */
+  private final Function<String, String> checksums;
 
   /** 取得クライアント。 */
   private final DownloadClient downloadClient;
@@ -43,13 +56,12 @@ public class SqliteVecInstaller {
   public SqliteVecInstaller(
       SqliteVecProperties properties,
       PlatformDetector platformDetector,
-      SqliteVecAssetResolver assetResolver,
-      JsonMapper objectMapper) {
+      SqliteVecAssetResolver assetResolver) {
     this(
         properties,
         platformDetector::detect,
         assetResolver,
-        objectMapper,
+        CHECKSUMS::get,
         new HttpDownloadClient());
   }
 
@@ -58,12 +70,12 @@ public class SqliteVecInstaller {
       SqliteVecProperties properties,
       PlatformSupplier platformSupplier,
       SqliteVecAssetResolver assetResolver,
-      JsonMapper objectMapper,
+      Function<String, String> checksums,
       DownloadClient downloadClient) {
     this.properties = properties;
     this.platformSupplier = platformSupplier;
     this.assetResolver = assetResolver;
-    this.objectMapper = objectMapper;
+    this.checksums = checksums;
     this.downloadClient = downloadClient;
   }
 
@@ -89,28 +101,21 @@ public class SqliteVecInstaller {
       throw new IllegalStateException("sqlite-vec extension が未配置で、自動ダウンロードも無効です: " + libraryPath);
     }
 
+    String checksum = checksums.apply(artifact.assetName());
+    if (checksum == null) {
+      throw new IllegalStateException(
+          "sqlite-vec の自動取得に対応していない version/platform です。extension-path を設定してください");
+    }
+
     try {
-      Files.createDirectories(installDir);
-      Manifest manifest =
-          objectMapper.readValue(downloadClient.download(manifestUri()), Manifest.class);
-      ManifestArtifact manifestArtifact = manifest.findArtifact(artifact.assetName());
       byte[] archiveBytes = downloadClient.download(assetUri(artifact.assetName()));
-      verifyChecksum(archiveBytes, manifestArtifact.checksumSha256());
-      extractArchive(archiveBytes, installDir);
-      if (!Files.exists(libraryPath)) {
-        throw new IllegalStateException("sqlite-vec extension の展開に失敗しました: " + libraryPath);
-      }
+      verifyChecksum(archiveBytes, checksum);
+      Files.createDirectories(installDir);
+      extractLibrary(archiveBytes, libraryPath);
       return libraryPath;
     } catch (IOException e) {
       throw new IllegalStateException("sqlite-vec extension の準備に失敗しました", e);
     }
-  }
-
-  /** 文書検索用の保存基盤で用いるmanifestURIを返す。 */
-  private URI manifestUri() {
-    return URI.create(
-        "%s/v%s/sqlite-dist-manifest.json"
-            .formatted(properties.getReleaseBaseUrl(), properties.getVersion()));
   }
 
   /** 文書検索用の保存基盤で用いる素材URIを返す。 */
@@ -133,31 +138,37 @@ public class SqliteVecInstaller {
     }
   }
 
-  /** 後続の判断に必要な情報を得るため、保管を抽出する。 */
-  private void extractArchive(byte[] archiveBytes, Path installDir) throws IOException {
+  /** 必要なライブラリだけを一時ファイルへ展開し、完全に書き込んだ後で公開する。 */
+  private void extractLibrary(byte[] archiveBytes, Path libraryPath) throws IOException {
     try (InputStream inputStream = new java.io.ByteArrayInputStream(archiveBytes);
         var gzipInputStream = new java.util.zip.GZIPInputStream(inputStream);
         var tarInputStream = new TarArchiveInputStream(gzipInputStream)) {
       org.apache.commons.compress.archivers.tar.TarArchiveEntry entry;
       while ((entry = tarInputStream.getNextEntry()) != null) {
-        if (entry.isDirectory()) {
+        if (!entry.isFile()
+            || !libraryPath.getFileName().toString().equals(entry.getName())) {
           continue;
         }
-        Path name = Path.of(entry.getName()).getFileName();
-        if (name == null) throw new IOException("sqlite-vec archive entry has no file name");
-        Path outputPath = installDir.resolve(name).normalize();
-        if (!outputPath.startsWith(installDir.normalize())) {
-          throw new IOException("sqlite-vec archive に不正な entry があります: " + entry.getName());
+        if (entry.getSize() <= 0 || entry.getSize() > HttpDownloadClient.MAX_ARCHIVE_BYTES) {
+          throw new IOException("sqlite-vec ライブラリのサイズが不正です");
         }
-        Files.copy(tarInputStream, outputPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        Path temporary = Files.createTempFile(libraryPath.getParent(), "sqlite-vec-", ".tmp");
+        try {
+          Files.copy(tarInputStream, temporary, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+          Files.move(temporary, libraryPath, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } finally {
+          Files.deleteIfExists(temporary);
+        }
+        return;
       }
+      throw new IOException("sqlite-vec archive 内にライブラリがありません: " + libraryPath);
     }
   }
 
-  /** 文書検索用の保存基盤に必要な実行環境取得元を扱う。 */
+  /** 実行中の OS とアーキテクチャを取得する。 */
   @FunctionalInterface
   interface PlatformSupplier {
-    /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
+    /** 現在の実行環境を返す。 */
     SqliteVecPlatform get();
   }
 
@@ -167,56 +178,62 @@ public class SqliteVecInstaller {
     byte[] download(URI uri) throws IOException;
   }
 
-  /** HTTP通信取得を外部の接続先へ依頼する窓口。 */
+  /** HTTPS でアーカイブを取得し、転送先と応答サイズを制限する。 */
   private static final class HttpDownloadClient implements DownloadClient {
 
-    /** 外部情報を取得するHTTP通信の窓口。 */
-    private final HttpClient httpClient =
-        HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+    /** 圧縮済みアーカイブと展開対象のサイズ上限。 */
+    private static final int MAX_ARCHIVE_BYTES = 16 * 1024 * 1024;
 
-    /** 文書検索用の保存基盤で用いる取得を返す。 */
+    /** リダイレクト先のホストを確認するため、自動追従は使用しない。 */
+    private final HttpClient httpClient =
+        HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build();
+
     @Override
     public byte[] download(URI uri) throws IOException {
-      HttpRequest request = HttpRequest.newBuilder(uri).GET().build();
+      URI destination = uri;
       try {
-        HttpResponse<byte[]> response =
-            httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-          throw new IOException("HTTP " + response.statusCode() + " for " + uri);
+        for (int redirects = 0; redirects <= 3; redirects++) {
+          validateDestination(uri, destination);
+          HttpRequest request =
+              HttpRequest.newBuilder(destination).timeout(Duration.ofSeconds(30)).GET().build();
+          HttpResponse<byte[]> response =
+              httpClient.send(
+                  request,
+                  HttpResponse.BodyHandlers.limiting(
+                      HttpResponse.BodyHandlers.ofByteArray(), MAX_ARCHIVE_BYTES));
+          int status = response.statusCode();
+          if (status >= 200 && status < 300) return response.body();
+          if (status != 301 && status != 302 && status != 303 && status != 307 && status != 308) {
+            throw new IOException("sqlite-vec download HTTP " + status);
+          }
+          String location =
+              response.headers().firstValue("Location")
+                  .orElseThrow(() -> new IOException("sqlite-vec redirect に Location がありません"));
+          destination = destination.resolve(location);
         }
-        return response.body();
+        throw new IOException("sqlite-vec redirect の回数が上限を超えました");
+      } catch (IllegalArgumentException e) {
+        throw new IOException("sqlite-vec download URL が不正です", e);
       } catch (InterruptedException e) {
-        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
-        throw new IOException("ダウンロードが中断されました: " + uri, e);
+        throw new IOException("sqlite-vec ダウンロードが中断されました", e);
+      }
+    }
+
+    /** 明示的に設定した HTTPS origin と GitHub Releases の配信先のみを許可する。 */
+    private void validateDestination(URI requested, URI destination) throws IOException {
+      String host = destination.getHost();
+      if (!"https".equalsIgnoreCase(destination.getScheme())
+          || destination.getUserInfo() != null
+          || host == null
+          || (destination.getPort() != -1 && destination.getPort() != 443)) {
+        throw new IOException("sqlite-vec download は標準ポートの HTTPS URL が必要です");
+      }
+      if (!host.equalsIgnoreCase(requested.getHost())
+          && !("github.com".equalsIgnoreCase(requested.getHost())
+              && "release-assets.githubusercontent.com".equalsIgnoreCase(host))) {
+        throw new IOException("sqlite-vec redirect の接続先は許可されていません");
       }
     }
   }
-
-  /**
-   * 文書検索用の保存基盤で受け渡すManifestを表す。
-   *
-   * @param artifacts 成果物一覧
-   */
-  @JsonIgnoreProperties(ignoreUnknown = true)
-  private record Manifest(List<ManifestArtifact> artifacts) {
-    /** 対象を特定できるよう、成果物を探す。 */
-    private ManifestArtifact findArtifact(String assetName) {
-      return artifacts.stream()
-          .filter(artifact -> assetName.equals(artifact.name()))
-          .findFirst()
-          .orElseThrow(
-              () -> new IllegalStateException("sqlite-vec asset が manifest にありません: " + assetName));
-    }
-  }
-
-  /**
-   * 文書検索用の保存基盤で受け渡すManifest成果物を表す。
-   *
-   * @param name 名前
-   * @param checksumSha256 検査値内容の同一性を照合するSHA-256ハッシュ
-   */
-  @JsonIgnoreProperties(ignoreUnknown = true)
-  private record ManifestArtifact(
-      String name, @JsonProperty("checksum_sha256") String checksumSha256) {}
 }

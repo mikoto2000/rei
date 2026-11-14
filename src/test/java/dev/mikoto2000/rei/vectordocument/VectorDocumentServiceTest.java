@@ -469,8 +469,7 @@ class VectorDocumentServiceTest {
         new SqliteVecInstaller(
             properties,
             new PlatformDetector(),
-            new SqliteVecAssetResolver(),
-            new tools.jackson.databind.json.JsonMapper());
+            new SqliteVecAssetResolver());
     SqliteVecExtensionLoader loader = new SqliteVecExtensionLoader(properties, installer);
     SqliteVectorStore vectorStore =
         new SqliteVectorStore(
