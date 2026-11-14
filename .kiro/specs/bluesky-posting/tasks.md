@@ -104,3 +104,9 @@
 - `dry-run=true` で外部投稿が発生しない。
 - `enabled=false` で処理が停止する。
 - テストが通る。
+
+
+## 要件との対応
+
+- [x] 要件6の URL・ハッシュタグ facet と UTF-8 バイト位置を `DefaultBlueskyApiClient` で実装する。
+- [x] `BlueskyReplyTextGenerator` の返信文生成に `generation-timeout-seconds` を適用する。

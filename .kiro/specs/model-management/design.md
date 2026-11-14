@@ -46,3 +46,11 @@
   - 同一モデル指定時は `unload` が呼ばれない。
 - `OpenAiCompatibleModelUnloadService`
   - `base-url` が `/v1` なし/ありの双方で `.../api/generate` が正しく生成される。
+
+
+## 通常のモデル操作
+
+- `model` は選択中のモデルを表示し、`model <MODEL>` は現在のモデルを切り替える。
+- `models` は接続先が公開するモデル一覧を表示する。
+- アンロード要求は Ollama 互換の拡張操作。非対応のサーバーでは切替時に警告を出し、モデル選択を継続する。
+- `keep_alive` は JSON 数値の `0` を送る。認証ヘッダの値は診断に出さない。

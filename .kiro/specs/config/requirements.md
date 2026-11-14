@@ -11,7 +11,7 @@
 - **ExternalConfigFileService**: 外部設定ファイルのパス解決・初期化を担うサービス。
 - **ExternalConfigSupport**: アプリケーション起動時に外部設定ファイルのパスを Spring Boot に渡すサポートクラス。
 - **ReiPaths**: アプリケーションが使用するファイルパスを解決するユーティリティ。
-- **設定ファイル**: YAML 形式の外部設定ファイル。作業ディレクトリ配下の所定パスに配置する。
+- **設定ファイル**: YAML 形式の外部設定ファイル。Rei データディレクトリ配下の `application.yaml` に配置する。
 
 ## 要件
 
@@ -22,7 +22,7 @@
 #### 受け入れ基準
 
 1. WHEN ユーザーが `config path` コマンドを実行したとき、THE ConfigCommand SHALL 設定ファイルの絶対パスを標準出力に表示する
-2. THE ExternalConfigFileService SHALL 作業ディレクトリを基準として設定ファイルのパスを解決する
+2. THE ExternalConfigFileService SHALL Rei データディレクトリを基準として設定ファイルのパスを解決する
 
 ---
 
@@ -49,7 +49,7 @@
 1. THE ExternalConfigFileService SHALL テンプレートに OpenAI 互換 API のベース URL・API キー・チャットモデル・埋め込みモデルの設定を含める
 2. THE ExternalConfigFileService SHALL テンプレートに Web 検索の有効フラグ・プロバイダー設定（DuckDuckGo・Brave）を含める
 3. THE ExternalConfigFileService SHALL テンプレートに興味関心機能・フィード機能・Google カレンダー機能の設定を含める
-4. THE ExternalConfigFileService SHALL テンプレートの各設定値を環境変数で上書き可能な形式（`${ENV_VAR:デフォルト値}`）で記述する
+4. THE ExternalConfigFileService SHALL テンプレートの各設定値を環境変数で上書き可能な形式（`${ENV_VAR:デフォルト値}`）で記述する。認証情報には環境変数の参照またはダミー値を使う。対応する環境変数、外部 YAML、組み込み YAML の順で優先する
 5. THE ExternalConfigFileService SHALL テンプレートに LLM が必要な機能ごとの接続先設定（`rei.llm.features`）を含める
 
 ---

@@ -8,7 +8,7 @@
 
 ## 用語集
 
-- **CommandCompletionNotifier**: コマンド完了時に音声通知を実行するコンポーネント。`SoundNotificationService` に委譲して通知を行う。
+- **コマンド完了通知**: `ReiApplication` と `CommandCompletionNotificationPolicy` が判定する。`SoundNotificationService` に委譲して通知を行う。
 - **SoundNotificationService**: 既存の音声通知実行サービス。外部プログラム呼び出しとフォールバック処理を担う。
 - **SoundNotificationProperties**: 既存の音声通知設定プロパティ。`rei.sound-notification.enabled` および `rei.sound-notification.command` を保持する。
 - **コマンド完了通知メッセージ**: コマンド完了時に音声通知するメッセージ。固定値「コマンド実行が完了しました」を使用する。
@@ -22,9 +22,9 @@
 
 #### 受け入れ基準
 
-1. WHEN rei の CLI コマンドが正常に完了したとき、THE CommandCompletionNotifier SHALL `SoundNotificationService` を通じて「コマンド実行が完了しました」と音声通知する
-2. WHEN rei の CLI コマンドが例外をスローして終了したとき、THE CommandCompletionNotifier SHALL `SoundNotificationService` を通じて「コマンド実行が完了しました」と音声通知する
-3. THE CommandCompletionNotifier SHALL すべての picocli コマンドの完了に対して横断的に通知を実行する（コマンドごとの個別実装は不要）
+1. WHEN rei の CLI コマンドが正常に完了したとき、THE ReiApplication SHALL `SoundNotificationService` を通じて「コマンド実行が完了しました」と音声通知する
+2. WHEN rei の CLI コマンドが例外をスローして終了したとき、THE ReiApplication SHALL `SoundNotificationService` を通じて「コマンド実行が完了しました」と音声通知する
+3. THE ReiApplication SHALL 通知対象の picocli コマンドに横断的に完了通知を実行する。回答を通知した場合と、ルートコマンドが `model`、`models`、`project`、`sh` の場合は通常の完了通知を省略する（コマンドごとの個別実装は不要）
 
 ---
 
@@ -34,8 +34,8 @@
 
 #### 受け入れ基準
 
-1. WHEN `rei.sound-notification.enabled` が `false` に設定されているとき、THE CommandCompletionNotifier SHALL コマンド完了時に音声通知を実行しない（`SoundNotificationService` のフォールバック動作に委ねる）
-2. WHEN `rei.sound-notification.enabled` が `true` に設定されているとき、THE CommandCompletionNotifier SHALL コマンド完了時に音声通知を実行する
+1. WHEN `rei.sound-notification.enabled` が `false` に設定されているとき、THE ReiApplication SHALL コマンド完了時に音声通知を実行しない（`SoundNotificationService` のフォールバック動作に委ねる）
+2. WHEN `rei.sound-notification.enabled` が `true` に設定されているとき、THE ReiApplication SHALL コマンド完了時に音声通知を実行する
 
 ---
 
@@ -45,8 +45,8 @@
 
 #### 受け入れ基準
 
-1. THE CommandCompletionNotifier SHALL コマンド完了時の通知メッセージとして常に「コマンド実行が完了しました」を使用する
-2. THE CommandCompletionNotifier SHALL 通知メッセージをコマンドの種類や実行結果によって変更しない
+1. THE ReiApplication SHALL コマンド完了時の通知メッセージとして常に「コマンド実行が完了しました」を使用する
+2. THE ReiApplication SHALL 通知メッセージをコマンドの種類や実行結果によって変更しない
 
 ---
 
@@ -57,6 +57,6 @@
 **ユーザーストーリー:** ユーザーとして、`model` / `models` は状態確認系で短時間に繰り返し実行するため、完了時の音声通知は不要にしたい。
 
 #### 受け入れ基準
-1. WHEN `model` コマンドが完了したとき、THE CommandCompletionNotifier SHALL コマンド完了音声通知を実行しない。
-2. WHEN `models` コマンドが完了したとき、THE CommandCompletionNotifier SHALL コマンド完了音声通知を実行しない。
-3. WHEN 上記以外のコマンドが完了したとき、THE CommandCompletionNotifier SHALL 従来どおり完了音声通知を実行する（既存の読み上げスキップ条件は維持）。
+1. WHEN `model` コマンドが完了したとき、THE ReiApplication SHALL コマンド完了音声通知を実行しない。
+2. WHEN `models` コマンドが完了したとき、THE ReiApplication SHALL コマンド完了音声通知を実行しない。
+3. WHEN 上記以外のコマンドが完了したとき、THE ReiApplication SHALL 従来どおり完了音声通知を実行する（既存の読み上げスキップ条件は維持）。

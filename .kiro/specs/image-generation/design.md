@@ -50,15 +50,6 @@
 
 ## 設定
 
-### 画像生成設定
-
-```yaml
-rei:
-  image:
-    output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${user.dir}/.rei/images}
-    size: ${REI_IMAGE_SIZE:1024x1024}
-```
-
 ### 接続先設定
 
 ```yaml
@@ -82,7 +73,7 @@ rei:
 ```yaml
 rei:
   image:
-    output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:./images}
+    output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${rei.data-dir}/images}
     size: ${REI_IMAGE_SIZE:1024x1024}
     response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
     timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}

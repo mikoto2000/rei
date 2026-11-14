@@ -67,8 +67,8 @@
 #### 受け入れ基準
 
 1. WHEN `ChatCommand` が AI 回答の音声読み上げを実行したとき、THE ReiApplication SHALL `executeInterruptibly()` の `finally` ブロックでコマンド完了通知（「コマンド実行が完了しました」）を実行しない
-2. WHEN `ChatCommand` が音声読み上げを実行しなかったとき（タイムアウト・キャンセル・エラー・空回答・`enabled=false` の場合）、THE ReiApplication SHALL 従来どおりコマンド完了通知を実行する
-3. WHEN `ChatCommand` 以外の picocli コマンドが実行されたとき、THE ReiApplication SHALL 従来どおりコマンド完了通知を実行する
+2. WHEN `ChatCommand` が音声読み上げを実行しなかったとき（タイムアウト・キャンセル・エラー・空回答の場合）、THE ReiApplication SHALL 従来どおりコマンド完了通知を実行する。音声無効時に回答が標準出力への通知に渡された場合は、その通知を完了の合図として扱う。
+3. WHEN `ChatCommand` 以外の picocli コマンドが実行されたとき、THE ReiApplication SHALL 従来どおりコマンド完了通知を実行する。音声無効時に回答が標準出力への通知に渡された場合は、その通知を完了の合図として扱う。
 
 ---
 
@@ -91,6 +91,6 @@
 #### 受け入れ基準
 
 1. THE ChatResponseNarrator SHALL 音声読み上げを実行した場合に読み上げスキップフラグを `true` に設定する
-2. THE ChatResponseNarrator SHALL 音声読み上げを実行しなかった場合に読み上げスキップフラグを `false` に設定する
+2. THE ChatResponseNarrator SHALL 通知サービスへ非空の回答を渡さなかった場合に読み上げスキップフラグを `false` に設定する
 3. THE ChatResponseNarrator SHALL `ChatCommand` の実行開始時に読み上げスキップフラグを `false` にリセットする
 4. WHEN 複数の `ChatCommand` が連続して実行されるとき、THE ChatResponseNarrator SHALL 前回の実行の読み上げスキップフラグが次回の実行に影響しないことを保証する

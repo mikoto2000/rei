@@ -15,6 +15,7 @@ rei:
         base-url: ${REI_LLM_CHAT_BASE_URL:}
         api-key: ${REI_LLM_CHAT_API_KEY:}
         model: ${REI_LLM_CHAT_MODEL:}
+        temperature: 0.3
       search:
         base-url: ${REI_LLM_SEARCH_BASE_URL:}
         api-key: ${REI_LLM_SEARCH_API_KEY:}
@@ -36,6 +37,7 @@ rei:
 - **LlmModelProvider**
   - 機能キーごとに `ChatModel` を返す。
   - 機能別 `base-url` がある場合は OpenAI 互換 `OpenAiChatModel` を生成し、既定 `ChatModel` へのフォールバック付き `FallbackChatModel` としてキャッシュする。
+  - 機能別 `temperature` が設定されている場合は、その値をチャットオプションに設定する。
   - 機能別 `model` がある場合はリクエストオプションのモデル名として返す。
 - **FallbackChatModel**
   - 機能別 `ChatModel` の `call` / `stream` が失敗した場合、`spring.ai.openai` で構成された既定 `ChatModel` へ再実行する。

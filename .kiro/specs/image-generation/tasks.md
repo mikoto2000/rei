@@ -27,7 +27,7 @@
 
 - [x] 3. `ImageProperties` を追加する
   - Red: `rei.image.output-directory` と `rei.image.size` を binding できるテストを追加する。
-  - Red: 未指定時に `.rei/images` と `1024x1024` を既定値として扱うテストを追加する。
+  - Red: 未指定時に `${rei.data-dir}/images` と `1024x1024` を既定値として扱うテストを追加する。
   - Green: `ImageProperties` と configuration properties 登録を実装する。
   - Refactor: パス解決責務を service 側へ寄せ、properties は設定保持に限定する。
 

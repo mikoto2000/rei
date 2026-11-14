@@ -106,9 +106,9 @@ rei:
    - 既返信除外 (`bluesky_replied_posts`)
 8. 確率判定（`ThreadLocalRandom.current().nextDouble() < probability`）
 9. 日次上限判定（`count < maxRepliesPerDay`）
-10. `dry-run=true` ならログのみ
+10. `dry-run=true` ならログのみ。投稿、既返信記録、日次カウンターの更新を行わない
 11. `dry-run=false` なら `BlueskyPostService` 経由で返信投稿
-12. 成功時に `replied_posts` と `daily_count` を更新
+12. 投稿成功時に `replied_posts` と `daily_count` を更新する。日次カウンターの日付は UTC を使う
 13. 最後に `last_seen_*` 更新
 
 ## 7. 返信生成
@@ -132,7 +132,7 @@ rei:
   - 当該投稿への返信をスキップして次へ
 - 永続化エラー時:
   - ERROR ログ
-  - 再実行時に整合が崩れないよう、書き込み順序を `投稿成功 -> replied_posts -> daily_count` に固定
+  - 書き込み順序は `投稿成功 → replied_posts → daily_count`。投稿成功後に既返信記録が失敗すると、次回実行で重複返信し得る。補償処理は未実装
 
 ## 9. ログ設計
 - INFO
