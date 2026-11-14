@@ -211,7 +211,7 @@ async fn remote_session_discovery_resume_and_sse_use_existing_run_manager() {
 }
 #[tokio::test]
 async fn session_not_found_and_conflict_never_create_a_replacement_or_retry_post() {
-    let (_, app, server, posts) = setup().await;
+    let (_dir, app, server, posts) = setup().await;
     assert!(matches!(
         app.resume_session(&server, "missing").await,
         Err(AppError::SessionNotFound)
