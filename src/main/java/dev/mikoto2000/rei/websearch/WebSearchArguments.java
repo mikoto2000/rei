@@ -1,8 +1,10 @@
 package dev.mikoto2000.rei.websearch;
 
 import dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException;
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import tools.jackson.core.StreamReadConstraints;
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.core.json.JsonFactory;
@@ -47,7 +49,7 @@ public final class WebSearchArguments {
     if (!supports(tool)) return;
     if (configuredMaxResults < 1 || configuredMaxResults > 20)
       throw new IllegalStateException("Invalid web search maxResults configuration");
-    var problems = new ArrayList<String>();
+    var problems = new ArrayList<ArgumentIssue>();
     JsonNode root;
     try {
       // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
@@ -56,52 +58,72 @@ public final class WebSearchArguments {
       root = JSON.readTree(input);
       if (root == null || !root.isObject()) throw new IllegalArgumentException();
     } catch (RuntimeException invalid) {
-      throw invalid("引数はサイズ・深さ制限内の単一JSONオブジェクトにしてください。重複キーや末尾の追加データは使用できません。");
+      throw invalid(
+          new ArgumentIssue(
+              "arguments",
+              "specify one bounded JSON object without duplicate keys or trailing data"),
+          "引数はサイズ・深さ制限内の単一JSONオブジェクトにしてください。重複キーや末尾の追加データは使用できません。");
     }
     var request = root.path("request");
     if (!request.isObject())
       throw invalid(
+          new ArgumentIssue("request", "must be an object"),
           "request オブジェクトが必要です。例: {\"request\":{\"query\":\"Void full-stack framework\"}}");
     var query = request.path("query");
     if (!query.isString() || query.asString().isBlank() || query.asString().trim().length() > 2048)
-      problems.add("query must contain 1..2048 characters");
+      problems.add(new ArgumentIssue("request.query", "must be a string of 1..2048 characters"));
     Integer maxResults = integer(request, "maxResults", problems);
     Integer readTop = integer(request, "readTop", problems);
     problems.addAll(rangeProblems(maxResults, readTop, configuredMaxResults));
     var refresh = request.path("forceRefresh");
     if (!refresh.isMissingNode() && !refresh.isNull() && !refresh.isBoolean())
-      problems.add("forceRefresh must be a boolean or null");
-    if (!problems.isEmpty()) throw invalid(String.join("\n", problems));
+      problems.add(new ArgumentIssue("request.forceRefresh", "must be a boolean or null"));
+    if (!problems.isEmpty())
+      throw invalid(
+          problems,
+          problems.stream()
+              .map(issue -> issue.path() + " " + issue.requirement())
+              .collect(Collectors.joining("\n")));
   }
 
   /** Web上の情報の調査で用いる整数を返す。 */
-  private static Integer integer(JsonNode request, String name, List<String> problems) {
+  private static Integer integer(JsonNode request, String name, List<ArgumentIssue> problems) {
     var value = request.path(name);
     if (value.isMissingNode() || value.isNull()) return null;
     if (!value.isIntegralNumber() || !value.canConvertToInt()) {
-      problems.add(name + " must be an integer or null; do not quote numbers");
+      problems.add(
+          new ArgumentIssue("request." + name, "must be an integer or null; do not quote numbers"));
       return null;
     }
     return value.intValue();
   }
 
   /** Web上の情報の調査で用いる対象範囲問題一覧を返す。 */
-  private static List<String> rangeProblems(
+  private static List<ArgumentIssue> rangeProblems(
       Integer maxResults, Integer readTop, int configuredMaxResults) {
     int effectiveMax = maxResults == null ? configuredMaxResults : maxResults;
-    var problems = new ArrayList<String>();
+    var problems = new ArrayList<ArgumentIssue>();
     if (effectiveMax < 1 || effectiveMax > configuredMaxResults)
-      problems.add("maxResults must be between 1 and " + configuredMaxResults);
+      problems.add(
+          new ArgumentIssue("request.maxResults", "must be between 1 and " + configuredMaxResults));
     if (readTop != null && (readTop < 0 || readTop > effectiveMax))
-      problems.add("readTop must be between 0 and maxResults (" + effectiveMax + ")");
+      problems.add(
+          new ArgumentIssue(
+              "request.readTop", "must be between 0 and maxResults (" + effectiveMax + ")"));
     return problems;
   }
 
   /** 受け付けられない指定について、入力の問題を伝える。 */
-  private static InvalidToolArgumentsException invalid(String guidance) {
+  private static InvalidToolArgumentsException invalid(ArgumentIssue issue, String guidance) {
+    return invalid(List.of(issue), guidance);
+  }
+
+  private static InvalidToolArgumentsException invalid(
+      List<ArgumentIssue> issues, String guidance) {
     return new InvalidToolArgumentsException(
         "webSearchAndRead: "
             + guidance
-            + "\nrequest 内の引数を修正してください。maxResults は省略または null で設定上限、readTop は省略または null で min(3, maxResults) です。検索・本文取得は実行していません。");
+            + "\nrequest 内の引数を修正してください。maxResults は省略または null で設定上限、readTop は省略または null で min(3, maxResults) です。検索・本文取得は実行していません。",
+        issues);
   }
 }

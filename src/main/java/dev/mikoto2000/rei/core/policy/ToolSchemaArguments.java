@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.policy;
 
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
 import java.util.ArrayList;
 import java.util.List;
 import tools.jackson.core.StreamReadConstraints;
@@ -44,22 +45,25 @@ public final class ToolSchemaArguments {
       throw new InvalidToolArgumentsException(
           tool
               + ": specify one bounded JSON object without duplicate keys or trailing data. "
-              + "The tool has not executed; correct its arguments, keeping the registered field names.");
+              + "The tool has not executed; correct its arguments, keeping the registered field names.",
+          "arguments",
+          "specify one bounded JSON object without duplicate keys or trailing data");
     }
   }
 
   public static void validate(String tool, String schema, String input) {
     if (!supports(schema)) return;
     var contract = schema(schema);
-    var problems = new ArrayList<String>();
+    var problems = new ArrayList<ArgumentIssue>();
     check(contract, contract, input(tool, input), "arguments", problems, 0, new int[1]);
     if (!problems.isEmpty())
       throw new InvalidToolArgumentsException(
           tool
               + ": "
-              + String.join("; ", problems)
+              + ArgumentIssue.describe(problems, "; ")
               + ". The tool has not executed. Supply the required fields in their declared objects; "
-              + "correct only this call and preserve completed sibling results.");
+              + "correct only this call and preserve completed sibling results.",
+          problems);
   }
 
   private static JsonNode schema(String text) {
@@ -78,12 +82,12 @@ public final class ToolSchemaArguments {
       JsonNode schema,
       JsonNode value,
       String path,
-      List<String> problems,
+      List<ArgumentIssue> problems,
       int depth,
       int[] visited) {
     if (problems.size() >= 8) return;
     if (depth > 48 || ++visited[0] > 10_000) {
-      problems.add("argument shape exceeds the preflight limit");
+      problems.add(new ArgumentIssue(path, "argument shape exceeds the preflight limit"));
       return;
     }
     if (schema.path("$ref").isString()) {
@@ -102,7 +106,7 @@ public final class ToolSchemaArguments {
         var child = value.path(field);
         String at = path + "." + field;
         if (at.length() > 256) at = "required field";
-        if (child.isMissingNode()) problems.add(at + " is required");
+        if (child.isMissingNode()) problems.add(new ArgumentIssue(at, "is required"));
         else
           check(
               root, schema.path("properties").path(field), child, at, problems, depth + 1, visited);
@@ -125,7 +129,7 @@ public final class ToolSchemaArguments {
       }
     } else if (value.isArray()) {
       if (value.size() > 10_000) {
-        problems.add("argument array exceeds the preflight limit");
+        problems.add(new ArgumentIssue(path, "argument array exceeds the preflight limit"));
         return;
       }
       int i = 0;
@@ -154,6 +158,6 @@ public final class ToolSchemaArguments {
           case "null" -> value.isNull();
           default -> true;
         };
-    if (!valid && problems.size() < 8) problems.add(path + " must be " + type);
+    if (!valid && problems.size() < 8) problems.add(new ArgumentIssue(path, "must be " + type));
   }
 }

@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.policy;
 
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -42,7 +43,7 @@ public final class TextEditArguments {
   public static void validate(String tool, String input) {
     if (!supports(tool)) return;
     var root = ToolSchemaArguments.input(tool, input);
-    var errors = new ArrayList<String>();
+    var errors = new ArrayList<ArgumentIssue>();
     if (tool.equals("proposeTextChangeSet")) {
       var request = root.path("request");
       path(request, "path", "request.path", 1024, errors);
@@ -56,7 +57,7 @@ public final class TextEditArguments {
           path(op, "path", at + ".path", 1024, errors);
           String kind = op.path("kind").asString("");
           if (!Set.of("UPDATE", "CREATE", "DELETE", "RENAME").contains(kind))
-            errors.add(at + ".kind must be UPDATE/CREATE/DELETE/RENAME");
+            errors.add(new ArgumentIssue(at + ".kind", "must be UPDATE/CREATE/DELETE/RENAME"));
           else if (kind.equals("UPDATE")) {
             edit(op, at, false, errors);
             absent(op, "target", at, errors);
@@ -90,18 +91,20 @@ public final class TextEditArguments {
           String at = "files[" + i++ + "]";
           path(file, "path", at + ".path", 4096, errors);
           if (file.path("path").isString() && !seen.add(file.path("path").asString()))
-            errors.add(at + ".path duplicates an earlier entry");
+            errors.add(new ArgumentIssue(at + ".path", "duplicates an earlier entry"));
           text(file, "content", at, false, errors);
           if (file.path("content").isString()) {
             int length = file.path("content").asString().length();
             total += length;
-            if (length > 100_000) errors.add(at + ".content exceeds 100000 characters");
+            if (length > 100_000)
+              errors.add(new ArgumentIssue(at + ".content", "exceeds 100000 characters"));
           }
           if (present(file, "append") && !file.path("append").isBoolean())
-            errors.add(at + ".append must be boolean");
+            errors.add(new ArgumentIssue(at + ".append", "must be boolean"));
           charset(file, "charset", at, errors);
         }
-        if (total > 500_000) errors.add("files content exceeds 500000 characters in total");
+        if (total > 500_000)
+          errors.add(new ArgumentIssue("files", "content exceeds 500000 characters in total"));
       }
     } else if (tool.equals("applyTextDiff")) {
       path(root, "pathStr", "pathStr", 4096, errors);
@@ -112,17 +115,19 @@ public final class TextEditArguments {
       if (tool.equals("copyFile") || tool.equals("moveFile")) {
         path(root, "sourcePath", "sourcePath", 4096, errors);
         path(root, "destPath", "destPath", 4096, errors);
-        if (!root.path("overwrite").isBoolean()) errors.add("overwrite must be boolean");
+        if (!root.path("overwrite").isBoolean())
+          errors.add(new ArgumentIssue("overwrite", "must be boolean"));
       } else {
         path(root, "pathStr", "pathStr", 4096, errors);
         if (tool.equals("writeBinaryFile")) {
-          if (!root.path("append").isBoolean()) errors.add("append must be boolean");
+          if (!root.path("append").isBoolean())
+            errors.add(new ArgumentIssue("append", "must be boolean"));
           var contents = root.path("contents");
           if (contents.isString()) {
             try {
               java.util.Base64.getDecoder().decode(contents.asString());
             } catch (IllegalArgumentException invalid) {
-              errors.add("contents must encode valid base64 bytes");
+              errors.add(new ArgumentIssue("contents", "must encode valid base64 bytes"));
             }
           } else if (contents.isArray()) {
             for (var value : contents)
@@ -130,10 +135,10 @@ public final class TextEditArguments {
                   || !value.canConvertToInt()
                   || value.intValue() < -128
                   || value.intValue() > 255) {
-                errors.add("contents must contain byte integers");
+                errors.add(new ArgumentIssue("contents", "must contain byte integers"));
                 break;
               }
-          } else errors.add("contents must be base64 text or a byte array");
+          } else errors.add(new ArgumentIssue("contents", "must be base64 text or a byte array"));
         }
       }
     } else {
@@ -145,18 +150,21 @@ public final class TextEditArguments {
         integer(root, "maxBytes", 256, 65536, errors);
       }
     }
-    if (!errors.isEmpty())
+    if (!errors.isEmpty()) {
+      var issues = errors.stream().limit(8).toList();
       throw new InvalidToolArgumentsException(
           tool
               + ": "
-              + String.join("; ", errors.stream().limit(8).toList())
+              + ArgumentIssue.describe(issues, "; ")
               + ". The edit tool has not executed or saved a proposal. Correct only this call. "
               + "For proposals put path inside request (or each request.operations entry), and use either "
               + "expectedText/replacement or baseVersion/edits. Use saved IDs/hashes for receipt operations; "
-              + "never invent them, repeat completed siblings, or replay an unknown Apply outcome.");
+              + "never invent them, repeat completed siblings, or replay an unknown Apply outcome.",
+          issues);
+    }
   }
 
-  private static void edit(JsonNode node, String at, boolean single, List<String> errors) {
+  private static void edit(JsonNode node, String at, boolean single, List<ArgumentIssue> errors) {
     if (present(node, "edits")) {
       absent(node, "expectedText", at, errors);
       absent(node, "replacement", at, errors);
@@ -175,7 +183,7 @@ public final class TextEditArguments {
       text(node, "replacement", at, false, errors);
       if (node.path("expectedText").isString()
           && node.path("expectedText").equals(node.path("replacement")))
-        errors.add(at + " must describe an actual change");
+        errors.add(new ArgumentIssue(at, "must describe an actual change"));
     }
   }
 
@@ -183,71 +191,76 @@ public final class TextEditArguments {
     return node.has(field) && !node.path(field).isNull();
   }
 
-  private static void charset(JsonNode node, String field, String at, List<String> errors) {
+  private static void charset(JsonNode node, String field, String at, List<ArgumentIssue> errors) {
     if (!present(node, field)) return;
-    if (!node.path(field).isString()) errors.add(at + "." + field + " must be string");
+    if (!node.path(field).isString())
+      errors.add(new ArgumentIssue(at + "." + field, "must be string"));
     else if (!node.path(field).asString().isBlank()) {
       try {
         java.nio.charset.Charset.forName(node.path(field).asString());
       } catch (IllegalArgumentException invalid) {
-        errors.add(at + "." + field + " must name a supported charset, such as UTF-8");
+        errors.add(
+            new ArgumentIssue(at + "." + field, "must name a supported charset, such as UTF-8"));
       }
     }
   }
 
-  private static void absent(JsonNode node, String field, String at, List<String> errors) {
+  private static void absent(JsonNode node, String field, String at, List<ArgumentIssue> errors) {
     if (present(node, field))
-      errors.add(at + "." + field + " is incompatible with the selected edit mode");
+      errors.add(
+          new ArgumentIssue(at + "." + field, "is incompatible with the selected edit mode"));
   }
 
-  private static void path(JsonNode node, String field, String at, int limit, List<String> errors) {
+  private static void path(
+      JsonNode node, String field, String at, int limit, List<ArgumentIssue> errors) {
     var value = node.path(field);
     if (!value.isString()
         || value.asString().isBlank()
         || value.asString().length() > limit
         || value.asString().codePoints().anyMatch(Character::isISOControl))
       errors.add(
-          at
-              + " must be a nonblank path/identifier without control characters (max "
-              + limit
-              + ")");
+          new ArgumentIssue(
+              at,
+              "must be a nonblank path/identifier without control characters (max " + limit + ")"));
   }
 
   private static void text(
-      JsonNode node, String field, String at, boolean nonempty, List<String> errors) {
+      JsonNode node, String field, String at, boolean nonempty, List<ArgumentIssue> errors) {
     var value = node.path(field);
     if (!value.isString() || nonempty && value.asString().isEmpty())
       errors.add(
-          at
-              + "."
-              + field
-              + " must be "
-              + (nonempty ? "nonempty " : "")
-              + "string (empty replacement is allowed)");
+          new ArgumentIssue(
+              at + "." + field,
+              "must be "
+                  + (nonempty ? "nonempty " : "")
+                  + "string (empty replacement is allowed)"));
   }
 
-  private static boolean array(JsonNode value, String at, int maximum, List<String> errors) {
+  private static boolean array(JsonNode value, String at, int maximum, List<ArgumentIssue> errors) {
     boolean valid = value.isArray() && !value.isEmpty() && value.size() <= maximum;
-    if (!valid) errors.add(at + " must be an array with 1.." + maximum + " entries");
+    if (!valid)
+      errors.add(new ArgumentIssue(at, "must be an array with 1.." + maximum + " entries"));
     return valid;
   }
 
   private static void hash(
-      JsonNode node, String field, String at, boolean prefix, List<String> errors) {
+      JsonNode node, String field, String at, boolean prefix, List<ArgumentIssue> errors) {
     var value = node.path(field);
     if (!value.isString()
         || !value.asString().matches((prefix ? "(sha256:)?" : "") + "[a-f0-9]{64}"))
-      errors.add(at + " must be the saved SHA-256" + (prefix ? " (optional sha256: prefix)" : ""));
+      errors.add(
+          new ArgumentIssue(
+              at, "must be the saved SHA-256" + (prefix ? " (optional sha256: prefix)" : "")));
   }
 
   private static void integer(
-      JsonNode node, String field, int minimum, int maximum, List<String> errors) {
+      JsonNode node, String field, int minimum, int maximum, List<ArgumentIssue> errors) {
     var value = node.path(field);
     if (present(node, field)
         && (!value.isIntegralNumber()
             || !value.canConvertToInt()
             || value.intValue() < minimum
             || value.intValue() > maximum))
-      errors.add(field + " must be an integer in " + minimum + ".." + maximum);
+      errors.add(new ArgumentIssue(field, "must be an integer in " + minimum + ".." + maximum));
   }
 }

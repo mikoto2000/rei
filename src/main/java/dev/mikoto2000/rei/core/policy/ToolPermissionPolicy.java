@@ -217,7 +217,12 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
   public void validateDelegation(String tool, String input) {
     try {
       if (delegation != null) delegation.validate(tool, input);
-      else dev.mikoto2000.rei.subagent.DelegationArguments.validate(tool, input);
+      else {
+        var issues = dev.mikoto2000.rei.subagent.DelegationArguments.problems(tool, input);
+        if (!issues.isEmpty())
+          throw new InvalidToolArgumentsException(
+              dev.mikoto2000.rei.subagent.DelegationArguments.guidance(issues), issues);
+      }
     } catch (InvalidToolArgumentsException invalid) {
       throw invalid;
     } catch (IllegalArgumentException invalid) {
@@ -227,7 +232,13 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
               == dev.mikoto2000.rei.chatgpt.ChatGptException.PermissionReason.ACCOUNT_REQUIRED
           || denied.permissionReason()
               == dev.mikoto2000.rei.chatgpt.ChatGptException.PermissionReason.MODEL_REQUIRED)
-        throw new InvalidToolArgumentsException(denied.getMessage());
+        throw new InvalidToolArgumentsException(
+            denied.getMessage(),
+            denied.permissionReason()
+                    == dev.mikoto2000.rei.chatgpt.ChatGptException.PermissionReason.ACCOUNT_REQUIRED
+                ? "accountRef"
+                : "modelId",
+            denied.getMessage());
       throw denied;
     }
   }

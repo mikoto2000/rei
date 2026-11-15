@@ -136,7 +136,10 @@ class WaitForShellProcessArgumentCorrectionTest {
         .contains("2回", "/resume <taskId>", "同じタスク", "累積使用量");
     assertThat(calls).hasValue(3);
     assertThat(remaining).containsExactly(1, 0);
-    assertThat(invalidArgumentEvents(fixture.events())).hasSize(2);
+    var rejections = invalidArgumentEvents(fixture.events());
+    assertThat(rejections).hasSize(3);
+    assertThat(rejections.getLast().toolCallId()).isEqualTo("invalid-wait-3");
+    assertThat(rejections.getLast().error().message()).contains("timeoutSeconds", "60");
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(processes, fixture.approvals());
   }

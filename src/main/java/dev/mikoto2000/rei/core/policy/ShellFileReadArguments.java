@@ -8,6 +8,7 @@ import tools.jackson.core.StreamReadConstraints;
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.core.json.JsonFactory;
 import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -63,22 +64,30 @@ public final class ShellFileReadArguments {
   /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public static void validate(String tool, String input) {
     if (!supports(tool)) return;
-    String command;
+    JsonNode root;
     try {
       // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (input == null || input.length() > MAX_CHARS) throw new IllegalArgumentException();
-      var root = JSON.readTree(input);
-      if (root == null
-          || !root.isObject()
-          || !root.path("request").isObject()
-          || !root.path("request").path("command").isString()) throw new IllegalArgumentException();
-      command = root.path("request").path("command").asString();
+      root = JSON.readTree(input);
+      if (root == null || !root.isObject()) throw new IllegalArgumentException();
     } catch (RuntimeException invalid) {
       throw new InvalidToolArgumentsException(
           "runCommand: request.command must be a string in one JSON object, "
-              + "for example {\"request\":{\"command\":\"git status --short\"}}; duplicate keys and oversized arguments are not allowed");
+              + "for example {\"request\":{\"command\":\"git status --short\"}}; duplicate keys and oversized arguments are not allowed",
+          "arguments",
+          "specify one bounded JSON object without duplicate keys or trailing data");
     }
-    validateCommand(command);
+    var request = root.path("request");
+    if (!request.isObject())
+      throw new InvalidToolArgumentsException(
+          "runCommand: request must be an object containing command",
+          "request",
+          "must be an object containing command");
+    var command = request.path("command");
+    if (!command.isString())
+      throw new InvalidToolArgumentsException(
+          "runCommand: request.command must be a string", "request.command", "must be a string");
+    validateCommand(command.asString());
   }
 
   /**
@@ -90,9 +99,12 @@ public final class ShellFileReadArguments {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (command != null && command.length() > MAX_CHARS)
       throw new InvalidToolArgumentsException(
-          "runCommand: command exceeds the argument size limit");
+          "runCommand: command exceeds the argument size limit",
+          "request.command",
+          "must fit within the command size limit");
     if (command != null && containsReader(command, 0))
-      throw new InvalidToolArgumentsException(GUIDANCE);
+      throw new InvalidToolArgumentsException(
+          GUIDANCE, "request.command", "use readMultiFile for reading file contents");
   }
 
   /** ツール利用の権限制御で判断に用いる含有読み取り元の条件を確認する。 */

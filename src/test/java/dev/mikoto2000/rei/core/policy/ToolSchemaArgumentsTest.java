@@ -54,7 +54,13 @@ class ToolSchemaArgumentsTest {
     assertThatThrownBy(
             () -> ToolSchemaArguments.validate("arrayTool", schema, "{\"entries\":[{}]}"))
         .isInstanceOf(InvalidToolArgumentsException.class)
-        .hasMessageContaining("entries[0].id");
+        .hasMessageContaining("entries[0].id")
+        .satisfies(
+            error ->
+                assertThat(((InvalidToolArgumentsException) error).issues())
+                    .containsExactly(
+                        new dev.mikoto2000.rei.toolcontract.ArgumentIssue(
+                            "arguments.entries[0].id", "is required")));
     assertThatCode(
             () ->
                 ToolSchemaArguments.validate(

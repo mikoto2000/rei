@@ -1430,7 +1430,10 @@ public class Tools {
       throw new dev.mikoto2000.rei.toolcontract.ToolReadRejectedException(
           "PROJECT_PATH_EXCLUDED",
           "baseDir が Project の外にあるか、除外対象です。Project 内の相対パス（ルートは '.'）を指定してください。"
-              + "Agent Skill の参照資料は、既知のスキル相対パスを readSkillResource に指定してください。");
+              + "Agent Skill の参照資料は、既知のスキル相対パスを readSkillResource に指定してください。",
+          new dev.mikoto2000.rei.toolcontract.ArgumentIssue(
+              "baseDir",
+              "specify a visible Project-relative directory, or '.' for the Project root"));
     }
   }
 

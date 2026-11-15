@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
 import dev.mikoto2000.rei.toolcontract.ToolReadRejectedException;
 import java.util.function.BiFunction;
 import org.springframework.ai.tool.annotation.Tool;
@@ -59,7 +60,13 @@ public class RawToolResultTools {
           int limit) {
     var owner = AgentRunScope.current();
     if (owner == null) throw new IllegalStateException("A run is required");
-    if (offset < 0 || limit < 1 || limit > 16000) throw invalidCursor();
+    if (offset < 0 || limit < 1 || limit > 16000) {
+      var issues = new java.util.ArrayList<ArgumentIssue>();
+      if (offset < 0) issues.add(offsetIssue());
+      if (limit < 1 || limit > 16000)
+        issues.add(new ArgumentIssue("limit", "must be an integer from 1 to 16000"));
+      throw invalidCursor(issues.toArray(ArgumentIssue[]::new));
+    }
     var result = readResult.apply(owner.conversationId(), rawResultRef);
     return pageText(estimator, rawResultRef, result, offset, limit, pageTokens);
   }
@@ -78,7 +85,7 @@ public class RawToolResultTools {
         || offset > 0
             && offset < raw.length()
             && Character.isHighSurrogate(raw.charAt(offset - 1))
-            && Character.isLowSurrogate(raw.charAt(offset))) throw invalidCursor();
+            && Character.isLowSurrogate(raw.charAt(offset))) throw invalidCursor(offsetIssue());
     int end = (int) Math.min(raw.length(), (long) offset + limit);
     if (end > offset
         && end < raw.length()
@@ -97,10 +104,17 @@ public class RawToolResultTools {
     return encoded;
   }
 
-  private static ToolReadRejectedException invalidCursor() {
+  private static ArgumentIssue offsetIssue() {
+    return new ArgumentIssue(
+        "offset",
+        "use 0 or the previous page's nextOffset at a UTF-16 code point boundary in the saved text");
+  }
+
+  private static ToolReadRejectedException invalidCursor(ArgumentIssue... issues) {
     return new ToolReadRejectedException(
         "INVALID_CURSOR",
-        "No content was returned. Keep the same rawResultRef; use offset=0 initially or copy the previous page's numeric nextOffset while hasMore=true. The offset must be within the saved text at a UTF-16 code point boundary, and limit must be 1..16000. Do not invent offsets or continue after hasMore=false.");
+        "No content was returned. Keep the same rawResultRef; use offset=0 initially or copy the previous page's numeric nextOffset while hasMore=true. The offset must be within the saved text at a UTF-16 code point boundary, and limit must be 1..16000. Do not invent offsets or continue after hasMore=false.",
+        issues);
   }
 
   /** モデルへ渡す文脈の管理で用いる安全性ヘッダーを返す。 */

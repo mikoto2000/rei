@@ -13,6 +13,7 @@ import dev.mikoto2000.rei.review.ReviewCoverageLedger.Scope;
 import dev.mikoto2000.rei.review.ReviewCoverageLedger.Span;
 import dev.mikoto2000.rei.review.ReviewCoverageLedger.Target;
 import dev.mikoto2000.rei.storage.StorageDatabase;
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
 import dev.mikoto2000.rei.toolcontract.ToolReadRejectedException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -142,7 +143,9 @@ public final class ReviewTools {
           "INVALID_TOKEN_BUDGET",
           "Use tokenBudget=null for the host-selected review budget, or 256.."
               + reviewMaxTokens
-              + ".");
+              + ".",
+          new ArgumentIssue(
+              "tokenBudget", "must be null or an integer from 256 to " + reviewMaxTokens));
     int limit = requested == null ? reviewMaxTokens : requested;
     if (!dev.mikoto2000.rei.tooldelivery.FileReadContext.active())
       return Math.min(
@@ -696,10 +699,16 @@ public final class ReviewTools {
       int maxPages,
       int totalTokenBudget)
       throws java.io.IOException {
-    if (maxPages < 1 || maxPages > 4 || totalTokenBudget < 512 || totalTokenBudget > 2048)
+    var issues = new ArrayList<ArgumentIssue>();
+    if (maxPages < 1 || maxPages > 4)
+      issues.add(new ArgumentIssue("maxPages", "must be an integer from 1 to 4"));
+    if (totalTokenBudget < 512 || totalTokenBudget > 2048)
+      issues.add(new ArgumentIssue("totalTokenBudget", "must be an integer from 512 to 2048"));
+    if (!issues.isEmpty())
       throw new ToolReadRejectedException(
           "INVALID_REVIEW_READ_ARGUMENTS",
-          "No pages were fetched or delivered. Keep reviewJobId/path/expectedVersion/offset unchanged; set maxPages to 1..4 and totalTokenBudget to 512..2048 for the entire batch. Split larger requests into bounded reads, following the returned nextOffset.");
+          "No pages were fetched or delivered. Keep reviewJobId/path/expectedVersion/offset unchanged; set maxPages to 1..4 and totalTokenBudget to 512..2048 for the entire batch. Split larger requests into bounded reads, following the returned nextOffset.",
+          issues.toArray(ArgumentIssue[]::new));
     var scope = scope(AgentRunScope.current());
     var job = scopedReview.apply(scope).get(reviewJobId);
     var target =
@@ -716,7 +725,10 @@ public final class ReviewTools {
     if (!boundary(source.text(), offset))
       throw new ToolReadRejectedException(
           "INVALID_CURSOR",
-          "No pages were fetched or delivered. Keep the review identity unchanged; use offset=0 initially or the last returned nextOffset at a UTF-16 code point boundary within the source.");
+          "No pages were fetched or delivered. Keep the review identity unchanged; use offset=0 initially or the last returned nextOffset at a UTF-16 code point boundary within the source.",
+          new ArgumentIssue(
+              "offset",
+              "use 0 or the previous page's nextOffset at a UTF-16 code point boundary in the source"));
     int count = Math.min(maxPages, Math.max(1, (totalTokenBudget - 64) / 256));
     var pages = new ArrayList<Page>();
     for (int i = 0; i < count; i++) {

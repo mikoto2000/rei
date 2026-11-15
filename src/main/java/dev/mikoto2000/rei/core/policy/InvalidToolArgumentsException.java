@@ -1,5 +1,8 @@
 package dev.mikoto2000.rei.core.policy;
 
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
+import java.util.List;
+
 /**
  * ツール利用の権限制御を継続できない不正ツール引数の状況を伝える例外。
  *
@@ -19,19 +22,33 @@ public final class InvalidToolArgumentsException extends IllegalArgumentExceptio
   /** 種類。 */
   private final Kind kind;
 
+  private final List<ArgumentIssue> issues;
+
   /** ツール利用の権限制御を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public InvalidToolArgumentsException(String guidance) {
-    this(guidance, Kind.VALIDATION);
+    this(guidance, "arguments", guidance);
   }
 
-  /** 指定された値や利用先を使って、InvalidToolArgumentsExceptionを初期化する。 */
-  public InvalidToolArgumentsException(String guidance, Kind kind) {
+  public InvalidToolArgumentsException(String guidance, String path, String requirement) {
+    this(guidance, List.of(new ArgumentIssue(path, requirement)));
+  }
+
+  public InvalidToolArgumentsException(String guidance, List<ArgumentIssue> issues) {
+    this(guidance, issues, Kind.VALIDATION);
+  }
+
+  public InvalidToolArgumentsException(String guidance, List<ArgumentIssue> issues, Kind kind) {
     super(guidance);
     this.kind = kind;
+    this.issues = List.copyOf(issues);
   }
 
   /** ツール利用の権限制御で用いる種類を返す。 */
   public Kind kind() {
     return kind;
+  }
+
+  public List<ArgumentIssue> issues() {
+    return issues;
   }
 }

@@ -662,8 +662,7 @@ public class StagnationChatModel implements ChatModel {
                             "claimReviewWorkItem",
                             "readNextReviewWorkItem",
                             "listFile")
-                        .contains(name))
-                  return context.toolReadCorrection(read.code(), read.getMessage());
+                        .contains(name)) return context.toolReadCorrection(actualId, name, read);
                 if (rejected != null
                     && java.util.Set.of(
                             "submitReviewResult",
@@ -673,7 +672,7 @@ public class StagnationChatModel implements ChatModel {
                             "dismissReviewFinding",
                             "restartReview")
                         .contains(name))
-                  return context.reviewSubmissionCorrection(rejected.getMessage());
+                  return context.reviewSubmissionCorrection(actualId, name, rejected);
                 throw RunExecutionContext.toolCallbackFailure(error);
               } catch (Error fatal) {
                 try {

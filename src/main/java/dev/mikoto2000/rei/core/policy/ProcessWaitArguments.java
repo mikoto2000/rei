@@ -63,7 +63,9 @@ public final class ProcessWaitArguments {
       throw new InvalidToolArgumentsException(
           "waitForShellProcess: 引数はサイズ・深さ制限内の単一JSONオブジェクトにしてください。"
               + " 重複キーや末尾の追加データは使用できません。"
-              + GUIDANCE);
+              + GUIDANCE,
+          "arguments",
+          "specify one bounded JSON object without duplicate keys or trailing data");
     }
     var timeout = root.path("timeoutSeconds");
     if (timeout.isMissingNode() || timeout.isNull()) return;
@@ -71,6 +73,11 @@ public final class ProcessWaitArguments {
         || !timeout.canConvertToInt()
         || timeout.intValue() < 0
         || timeout.intValue() > DependencyAwaiter.MAX_TIMEOUT_SECONDS)
-      throw new InvalidToolArgumentsException(GUIDANCE);
+      throw new InvalidToolArgumentsException(
+          GUIDANCE,
+          "timeoutSeconds",
+          "must be an integer between 0 and "
+              + DependencyAwaiter.MAX_TIMEOUT_SECONDS
+              + ", null, or omitted");
   }
 }

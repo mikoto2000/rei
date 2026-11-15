@@ -14,11 +14,18 @@ import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.chat.ChatExecutionService;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.chat.RunScopedAdvisor;
+import dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException;
+import dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException;
+import dev.mikoto2000.rei.core.stagnation.ProgressEvaluator;
+import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
+import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
+import dev.mikoto2000.rei.toolcontract.ToolReadRejectedException;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -135,6 +142,56 @@ class PersistentCheckpointServiceTest {
     service.preserveResults(owner, List.of(), changed);
     assertEquals(saved.revision() + 1, state().revision());
     assertEquals(changed, state().progress());
+  }
+
+  @Test
+  void repairExhaustionPersistsLastToolAndSanitizedValidationReason() {
+    var budget = new OutputLimitRunBudget(2, 20, null, 0, 1);
+    var execution =
+        new RunExecutionContext(
+            owner.runId(),
+            budget,
+            new ProgressEvaluator(root),
+            new AgentEventFactory(Clock.systemUTC()),
+            bus);
+    execution.setRunContext(owner);
+    var correction =
+        execution.argumentCorrection(
+            "first",
+            "readRawToolResult",
+            new InvalidToolArgumentsException(
+                "Invalid offset; password=first-secret",
+                List.of(new ArgumentIssue("offset", "Use a numeric offset; token=field-secret"))));
+    assertFalse(correction.contains("first-secret"));
+    assertFalse(correction.contains("field-secret"));
+    assertTrue(correction.contains("[REDACTED]"));
+
+    var stopped =
+        assertThrows(
+            ExecutionStoppedException.class,
+            () ->
+                execution.toolReadCorrection(
+                    "last",
+                    "readRawToolResult",
+                    new ToolReadRejectedException(
+                        "INVALID_CURSOR", "Offset splits a UTF-16 code point; token=last-secret")));
+    assertEquals(ExecutionStoppedException.Reason.TOOL_ARGUMENT_REPAIR_EXHAUSTED, stopped.reason());
+    assertEquals(1, budget.snapshot().argumentCorrections());
+    service.finish(owner, "FAILED");
+
+    var saved = state();
+    var operation = saved.operations().getLast();
+    assertEquals("last", operation.toolCallId());
+    assertEquals("readRawToolResult", operation.toolName());
+    var diagnostic =
+        saved.evidence().stream()
+            .filter(evidence -> "TOOL_FAILED".equals(evidence.origin()))
+            .reduce((first, last) -> last)
+            .orElseThrow();
+    assertEquals("last", diagnostic.toolCallId());
+    assertTrue(diagnostic.summary().contains("Offset splits a UTF-16 code point"));
+    assertTrue(diagnostic.summary().contains("[REDACTED]"));
+    assertFalse(diagnostic.summary().contains("last-secret"));
   }
 
   @Test
@@ -480,7 +537,7 @@ class PersistentCheckpointServiceTest {
     execution.beginContextRestoration();
     assertEquals(5, budget.snapshot().argumentCorrections());
     assertEquals(5, budget.snapshot().argumentCorrectionBaseline());
-    assertEquals(5, budget.remainingArgumentCorrections());
+    assertEquals(10, budget.remainingArgumentCorrections());
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     var model =
         new org.springframework.ai.chat.model.ChatModel() {
@@ -556,7 +613,7 @@ class PersistentCheckpointServiceTest {
     assertEquals("DISMISSED", after.findings().getFirst().verificationStatus());
     assertEquals("original evidence", after.findings().getFirst().evidence());
     assertEquals(6, budget.snapshot().argumentCorrections());
-    assertEquals(4, budget.remainingArgumentCorrections());
+    assertEquals(9, budget.remainingArgumentCorrections());
     assertEquals(progress.budget().llmCalls() + 2, budget.snapshot().llmCalls());
     assertEquals(progress.budget().stagnationReplans(), budget.snapshot().stagnationReplans());
     assertEquals(progress.budget().totalTokens(), budget.snapshot().totalTokens());

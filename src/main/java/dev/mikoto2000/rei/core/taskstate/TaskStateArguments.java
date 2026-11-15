@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.taskstate;
 
 import dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException;
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -64,31 +65,37 @@ public final class TaskStateArguments {
       if (root == null || !root.isObject()) throw new IllegalArgumentException();
     } catch (RuntimeException invalid) {
       throw new InvalidToolArgumentsException(
-          "updateTaskState arguments: expected exactly one JSON object within size and nesting limits; duplicate keys are not allowed");
+          "updateTaskState arguments: expected exactly one JSON object within size and nesting limits; duplicate keys are not allowed",
+          "arguments",
+          "specify one bounded JSON object without duplicate keys or trailing data");
     }
-    var problems = new ArrayList<String>();
+    var problems = new ArrayList<ArgumentIssue>();
     var goal = root.path("goal");
     if (!goal.isMissingNode() && !goal.isNull() && !goal.isString())
-      problems.add("goal: must be a string, null, or omitted");
+      problems.add(new ArgumentIssue("goal", "must be a string, null, or omitted"));
     var status = root.path("status");
     if (!status.isString() || !STATUSES.contains(status.asString()))
-      problems.add("status: required string; choose IDLE, IN_PROGRESS, COMPLETED, or BLOCKED");
+      problems.add(
+          new ArgumentIssue(
+              "status", "required string; choose IDLE, IN_PROGRESS, COMPLETED, or BLOCKED"));
     array(root, "completed", problems);
     array(root, "pending", problems);
     if (!problems.isEmpty())
       throw new InvalidToolArgumentsException(
           "Invalid updateTaskState arguments; correct all listed problems together:\n"
-              + String.join("\n", problems));
+              + ArgumentIssue.describe(problems, "\n"),
+          problems);
   }
 
   /** 作業状態の記録に関するarrayを処理する。 */
-  private static void array(JsonNode root, String field, List<String> problems) {
+  private static void array(JsonNode root, String field, List<ArgumentIssue> problems) {
     var value = root.path(field);
     if (value.isMissingNode() || value.isNull()) return;
     if (!value.isArray()) {
       problems.add(
-          field
-              + ": must be a JSON array of strings, for example [\"review\",\"verify\"]. Use [] or omit when empty; do not send a comma-separated string or a JSON-encoded array string");
+          new ArgumentIssue(
+              field,
+              "must be a JSON array of strings, for example [\"review\",\"verify\"]. Use [] or omit when empty; do not send a comma-separated string or a JSON-encoded array string"));
       return;
     }
     int index = 0, invalid = 0;
@@ -96,13 +103,15 @@ public final class TaskStateArguments {
       // The existing TaskState implementation ignores null items; retain that compatibility.
       if (!item.isString() && !item.isNull()) {
         if (invalid < 8)
-          problems.add(field + "[" + index + "]: must be a string or null (ignored)");
+          problems.add(
+              new ArgumentIssue(field + "[" + index + "]", "must be a string or null (ignored)"));
         invalid++;
       }
       index++;
     }
     if (invalid > 8)
       problems.add(
-          field + ": " + (invalid - 8) + " additional items must be strings or null (ignored)");
+          new ArgumentIssue(
+              field, (invalid - 8) + " additional items must be strings or null (ignored)"));
   }
 }

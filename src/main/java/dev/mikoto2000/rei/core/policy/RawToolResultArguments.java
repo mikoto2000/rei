@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.policy;
 
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
 import java.util.ArrayList;
 import java.util.List;
 import tools.jackson.core.StreamReadConstraints;
@@ -61,38 +62,42 @@ public final class RawToolResultArguments {
       throw new InvalidToolArgumentsException(
           "readRawToolResult: サイズ・深さ制限内の単一JSONオブジェクトを指定してください。"
               + " 重複キーや末尾の追加データは使用できません。"
-              + CONTINUATION);
+              + CONTINUATION,
+          "arguments",
+          "specify one bounded JSON object without duplicate keys or trailing data");
     }
-    var problems = new ArrayList<String>();
+    var problems = new ArrayList<ArgumentIssue>();
     var reference = root.path("rawResultRef");
     if (!reference.isString() || reference.asString().isBlank())
-      problems.add("rawResultRef: required nonempty string from the saved result reference");
+      problems.add(
+          new ArgumentIssue(
+              "rawResultRef", "required nonempty string from the saved result reference"));
     integer(root, "offset", 0, Integer.MAX_VALUE, problems);
     integer(root, "limit", 1, 16000, problems);
     if (root.has("nextOffset"))
-      problems.add("nextOffset: output-only field; pass its numeric value as offset instead");
+      problems.add(
+          new ArgumentIssue(
+              "nextOffset", "output-only field; pass its numeric value as offset instead"));
     if (!problems.isEmpty())
       throw new InvalidToolArgumentsException(
           "Invalid readRawToolResult arguments; correct all listed problems together:\n"
-              + String.join("\n", problems)
+              + ArgumentIssue.describe(problems, "\n")
               + "\n"
-              + CONTINUATION);
+              + CONTINUATION,
+          problems);
   }
 
   /** ツール利用の権限制御に関する整数を処理する。 */
   private static void integer(
-      JsonNode root, String name, int minimum, int maximum, List<String> problems) {
+      JsonNode root, String name, int minimum, int maximum, List<ArgumentIssue> problems) {
     var value = root.path(name);
     if (!value.isIntegralNumber()
         || !value.canConvertToInt()
         || value.intValue() < minimum
         || value.intValue() > maximum)
       problems.add(
-          name
-              + ": required integer from "
-              + minimum
-              + " to "
-              + maximum
-              + " (not a string or null)");
+          new ArgumentIssue(
+              name,
+              "required integer from " + minimum + " to " + maximum + " (not a string or null)"));
   }
 }

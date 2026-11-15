@@ -16,6 +16,9 @@ import dev.mikoto2000.rei.event.ErrorInformation;
 import dev.mikoto2000.rei.event.ExecutionProgressPayload;
 import dev.mikoto2000.rei.event.ToolStartedPayload;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
+import dev.mikoto2000.rei.toolcontract.ToolReadRejectedException;
+import dev.mikoto2000.rei.toolcontract.ToolResultRejectedException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -917,17 +920,16 @@ public class RunExecutionContext {
       String callId,
       String name,
       dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException error) {
-    // 引数の修正を無制限に繰り返さないよう、実行全体で共有する修正回数の予算を守る。
-    consumeToolCorrection();
-    // モデルや画面へ修正理由を返す前に、認証情報が説明へ漏れないようにする。
-    String guidance = dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage());
-    publisher.publish(
+    String guidance = CredentialRedactor.redact(error.getMessage());
+    var rejection =
         factory
             .toolFailed(
                 callId,
-                name,
+                CredentialRedactor.redact(name),
                 new ErrorInformation("InvalidToolArguments", guidance, "invalid_tool_arguments"))
-            .withOwnership(runContext));
+            .withOwnership(runContext);
+    consumeToolCorrection(rejection);
+    publisher.publish(rejection);
     return tools.jackson.databind.json.JsonMapper.builder()
         .build()
         .writeValueAsString(
@@ -938,6 +940,8 @@ public class RunExecutionContext {
                 false,
                 "guidance",
                 guidance,
+                "errors",
+                redactIssues(error.issues()),
                 "instruction",
                 "Correct only the invalid call arguments and issue a new tool call. Do not repeat successful sibling calls. This is not permission; normal authorization and approval still apply.",
                 "correctionsRemaining",
@@ -948,17 +952,18 @@ public class RunExecutionContext {
 
   /** 未登録のツールを含む新規呼び出しの組を拒否し、モデルに組み直しを求める。 */
   public String unavailableToolCorrection(String callId, String name) {
-    publisher.publish(
+    var rejection =
         factory
             .toolFailed(
                 callId,
-                name,
+                CredentialRedactor.redact(name),
                 new ErrorInformation(
                     "UnavailableTool",
                     "この依頼で利用できるツールの一覧にありません。同じ応答のツールは実行されていません。",
                     "tool_unavailable"))
-            .withOwnership(runContext));
-    consumeToolCorrection();
+            .withOwnership(runContext);
+    consumeToolCorrection(rejection);
+    publisher.publish(rejection);
     return "The previous response requested a tool that is unavailable for this request. "
         + "No tool calls from that response ran. Continue the original request and reissue "
         + "any still-needed calls using only the tool definitions available in this request.";
@@ -980,23 +985,40 @@ public class RunExecutionContext {
   }
 
   /** A rejected ledger submission ran validation but accepted no assessment. */
-  public String reviewSubmissionCorrection(String guidance) {
+  public String reviewSubmissionCorrection(
+      String callId, String name, ToolResultRejectedException error) {
     return rejectedOperationCorrection(
+        callId,
+        name,
         "REVIEW_RESULT_INVALID",
-        guidance,
+        error,
         "Correct only this rejected review operation. Preserve successful sibling calls and saved assessments. Follow the operation-specific guidance; do not invent evidence, hashes or coordinates.");
   }
 
   /** A read rejected its arguments and returned no source content. */
-  public String toolReadCorrection(String code, String guidance) {
+  public String toolReadCorrection(String callId, String name, ToolReadRejectedException error) {
     return rejectedOperationCorrection(
-        code,
-        guidance,
+        callId,
+        name,
+        error.code(),
+        error,
         "Correct only this rejected read and issue a new tool call. Preserve successful sibling calls and saved assessments. No source content was returned; do not treat this correction as a delivered page or invent source content or cursor values.");
   }
 
-  private String rejectedOperationCorrection(String code, String guidance, String instruction) {
-    consumeToolCorrection();
+  private String rejectedOperationCorrection(
+      String callId,
+      String name,
+      String code,
+      ToolResultRejectedException error,
+      String instruction) {
+    String guidance = CredentialRedactor.redact(error.getMessage());
+    consumeToolCorrection(
+        factory
+            .toolFailed(
+                callId,
+                CredentialRedactor.redact(name),
+                new ErrorInformation("ToolResultRejected", guidance, code))
+            .withOwnership(runContext));
     return tools.jackson.databind.json.JsonMapper.builder()
         .build()
         .writeValueAsString(
@@ -1008,16 +1030,30 @@ public class RunExecutionContext {
                 "validationExecuted",
                 true,
                 "guidance",
-                dev.mikoto2000.rei.event.CredentialRedactor.redact(guidance),
+                guidance,
+                "errors",
+                redactIssues(error.issues()),
                 "instruction",
                 instruction,
                 "correctionsRemaining",
                 budget.remainingArgumentCorrections()));
   }
 
-  private void consumeToolCorrection() {
-    if (!budget.tryCorrectArguments())
-      throw new ExecutionStoppedException(TOOL_ARGUMENT_REPAIR_EXHAUSTED);
+  private static List<ArgumentIssue> redactIssues(List<ArgumentIssue> issues) {
+    return issues.stream()
+        .map(
+            issue ->
+                new ArgumentIssue(
+                    CredentialRedactor.redact(issue.path()),
+                    CredentialRedactor.redact(issue.requirement())))
+        .toList();
+  }
+
+  private void consumeToolCorrection(AgentEvent rejection) {
+    if (budget.tryCorrectArguments()) return;
+    // The rejected call has no tool response when the run stops. Save its diagnosis first.
+    publisher.publishBoundary(rejection);
+    throw new ExecutionStoppedException(TOOL_ARGUMENT_REPAIR_EXHAUSTED);
   }
 
   /** 実行の識別子。 */

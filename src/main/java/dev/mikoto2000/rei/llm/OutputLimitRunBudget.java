@@ -10,7 +10,7 @@ package dev.mikoto2000.rei.llm;
  */
 public final class OutputLimitRunBudget {
   /** 既定最大引数補正一覧。 */
-  public static final int DEFAULT_MAX_ARGUMENT_CORRECTIONS = 5;
+  public static final int DEFAULT_MAX_ARGUMENT_CORRECTIONS = 10;
 
   /**
    * 用途に応じたモデル利用で受け渡す状態の記録を表す。
