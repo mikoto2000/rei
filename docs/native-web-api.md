@@ -13,21 +13,19 @@ $env:REI_API_KEY = '<設定する API key>'
 .\mvnw.cmd spring-boot:run
 ```
 
-既定の bind は `127.0.0.1`、port は `8080` です。LAN / Tailscale の別端末から接続するときは、サーバーの `rei.web.bind-address` を接続可能なインターフェースへ設定します。
-
-```powershell
-.\mvnw.cmd spring-boot:run '-Dspring-boot.run.arguments=--rei.web.bind-address=0.0.0.0 --rei.web.port=8080'
-```
+既定の bind は `127.0.0.1`、port は `8080` です。LAN や Tailscale の別端末から接続する場合は、クライアントが信頼する証明書を使う HTTPS リバースプロキシを経由してください。同じ PC にプロキシを置く場合、Rei は既定の `127.0.0.1:8080` で待ち受けられます。プロキシでは SSE のレスポンスをバッファリングせずに転送します。
 
 Native Client は `client` で `npm run tauri -- dev` を実行します。Settings で Credential Vault を解錠し、Server の Base URL と API Key を保存します。URL は API prefix を含まないサーバーの URL です。
 
 | 接続場所 | Base URL の例 |
 | --- | --- |
 | 同じ PC | `http://127.0.0.1:8080` |
-| LAN | `http://192.168.1.20:8080` |
-| Tailscale | `http://rei-host.example.ts.net:8080` |
+| LAN（HTTPS プロキシ経由） | `https://rei.example.net` |
+| Tailscale（HTTPS 終端を設定済み） | `https://rei-host.example.ts.net` |
 
 API Key は既存の暗号化 Vault に保存され、Rust が `Authorization: Bearer …` ヘッダーを設定します。接続テストは、認証不要の health と認証必須の projects を別々に確認します。health 成功だけでは認証済みと表示しません。
+
+HTTP では Bearer キーが平文で送られます。HTTP を使う場合は、ループバックか、別端末までの全区間が暗号化されたトンネル内に限定してください。
 
 ## 会話と Run
 
