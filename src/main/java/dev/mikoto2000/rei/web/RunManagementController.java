@@ -1,8 +1,8 @@
 package dev.mikoto2000.rei.web;
 
-import dev.mikoto2000.rei.application.run.RunManagementService;
-import dev.mikoto2000.rei.checkpoint.RunCheckpointMenu.Checkpoint;
-import dev.mikoto2000.rei.checkpoint.RunCheckpointMenu.Run;
+import dev.mikoto2000.rei.runmanagement.RunCheckpointMenu.Checkpoint;
+import dev.mikoto2000.rei.runmanagement.RunCheckpointMenu.Run;
+import dev.mikoto2000.rei.runmanagement.RunManagement;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -20,9 +20,9 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @RequestMapping("/api/v1/run-management")
 public class RunManagementController {
-  private final RunManagementService service;
+  private final RunManagement service;
 
-  public RunManagementController(RunManagementService service) {
+  public RunManagementController(RunManagement service) {
     this.service = service;
   }
 

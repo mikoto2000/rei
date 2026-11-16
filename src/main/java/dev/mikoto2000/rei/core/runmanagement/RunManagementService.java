@@ -1,10 +1,10 @@
-package dev.mikoto2000.rei.application.run;
+package dev.mikoto2000.rei.core.runmanagement;
 
+import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
+import dev.mikoto2000.rei.application.run.RunNotFoundException;
+import dev.mikoto2000.rei.application.run.RunRegistry;
 import dev.mikoto2000.rei.application.state.OperationConflictException;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpointService;
-import dev.mikoto2000.rei.checkpoint.RunCheckpointMenu;
-import dev.mikoto2000.rei.checkpoint.RunCheckpointMenu.Checkpoint;
-import dev.mikoto2000.rei.checkpoint.RunCheckpointMenu.Run;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.ActiveRun;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
@@ -17,6 +17,9 @@ import dev.mikoto2000.rei.event.AgentRunFailedPayload;
 import dev.mikoto2000.rei.event.BackgroundExecutionPayload;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.event.ProjectAgentEventStore;
+import dev.mikoto2000.rei.runmanagement.RunCheckpointMenu.Checkpoint;
+import dev.mikoto2000.rei.runmanagement.RunCheckpointMenu.Run;
+import dev.mikoto2000.rei.runmanagement.RunManagement;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -25,17 +28,7 @@ import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 @Service
-public class RunManagementService implements RunCheckpointMenu.Access {
-  @Override
-  public List<Checkpoint> checkpoints(Run run) {
-    return run.projectId() == null ? List.of() : checkpoints(run.projectId(), run.runId());
-  }
-
-  @Override
-  public void discard(Run run, Checkpoint checkpoint) {
-    discard(run.projectId(), run.runId(), checkpoint.taskId(), checkpoint.revision());
-  }
-
+final class RunManagementService implements RunManagement {
   private final ProjectRegistry projects;
   private final ConversationInputRouter router;
   private final ProjectAgentEventStore events;
@@ -43,7 +36,7 @@ public class RunManagementService implements RunCheckpointMenu.Access {
   private final PersistentCheckpointService checkpoints;
   private final org.springframework.beans.factory.ObjectProvider<RunRegistry> registry;
 
-  public RunManagementService(
+  RunManagementService(
       ProjectRegistry projects,
       ConversationInputRouter router,
       ProjectAgentEventStore events,
@@ -58,6 +51,7 @@ public class RunManagementService implements RunCheckpointMenu.Access {
     this.registry = registry;
   }
 
+  @Override
   public List<Run> runs() {
     var projectsById = new HashMap<String, ProjectContext>();
     var result = new ArrayList<Run>();
@@ -155,6 +149,7 @@ public class RunManagementService implements RunCheckpointMenu.Access {
         .toList();
   }
 
+  @Override
   public List<Checkpoint> checkpoints(String project, String run) {
     requireProject(project);
     return checkpoints.checkpointsForRun(project, run).stream()
@@ -172,6 +167,7 @@ public class RunManagementService implements RunCheckpointMenu.Access {
         .toList();
   }
 
+  @Override
   public void discard(String project, String run, String task, long revision) {
     requireProject(project);
     if (revision < 1) throw new IllegalArgumentException("Invalid checkpoint revision");

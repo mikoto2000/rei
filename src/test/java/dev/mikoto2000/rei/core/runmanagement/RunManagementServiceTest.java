@@ -1,10 +1,11 @@
-package dev.mikoto2000.rei.application.run;
+package dev.mikoto2000.rei.core.runmanagement;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.application.run.RunRegistry;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpointService;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;

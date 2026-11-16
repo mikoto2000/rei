@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.cli;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import dev.mikoto2000.rei.checkpoint.RunCheckpointMenu;
+import dev.mikoto2000.rei.runmanagement.RunCheckpointMenu;
 import dev.mikoto2000.rei.core.completion.*;
 import java.io.*;
 import java.nio.file.*;

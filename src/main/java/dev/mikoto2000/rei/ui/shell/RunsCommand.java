@@ -22,11 +22,11 @@ public class RunsCommand implements Runnable {
   @picocli.CommandLine.Parameters(arity = "0..1", paramLabel = "manage")
   private String action;
 
-  private dev.mikoto2000.rei.checkpoint.RunCheckpointMenu.Access management;
+  private dev.mikoto2000.rei.runmanagement.RunCheckpointMenu.Access management;
   private java.util.function.Function<String, String> input;
 
   @org.springframework.beans.factory.annotation.Autowired
-  void setManagement(dev.mikoto2000.rei.application.run.RunManagementService service) {
+  void setManagement(dev.mikoto2000.rei.runmanagement.RunManagement service) {
     management = service;
   }
 
@@ -72,7 +72,7 @@ public class RunsCommand implements Runnable {
         return;
       }
       try {
-        dev.mikoto2000.rei.checkpoint.RunCheckpointMenu.open(
+        dev.mikoto2000.rei.runmanagement.RunCheckpointMenu.open(
             management,
             input,
             line -> {
