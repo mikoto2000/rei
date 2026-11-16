@@ -194,13 +194,13 @@ OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%
 
 会話 Run を一覧へ公開する前に停止対象を登録し、runner と所有する子処理の後片付けが完了してから終端を確定します。`POST /api/v1/runs/{runId}/cancel` の HTTP 202 は停止要求の受付を表し、完了は Run の状態照会または SSE で確認します。[停止のライフサイクル](docs/run-cancellation-lifecycle.md)
 
-`AgentEventChatModel` は LLM イベントと時間計測を同じ Run ID に紐づけます。ストリーム購読を解除した場合、停止要求や割り込みなどのキャンセル状態があれば LLM Span を `CANCELLED`、通常の購読解除は `DISCONNECTED` として記録します。Span の状態と Run の終端状態はそれぞれのライフサイクルで確定します。[時間計測](docs/run-timing.md)・[キャンセル判定の回帰テスト](review/test-evidence.md#m-1-のキャンセル判定の回帰テスト)
+`AgentEventChatModel` は LLM イベントと時間計測を同じ Run ID に紐づけます。ストリーム購読を解除した場合、停止要求や割り込みなどのキャンセル状態があれば LLM Span を `CANCELLED`、通常の購読解除は `DISCONNECTED` として記録します。Span の状態と Run の終端状態はそれぞれのライフサイクルで確定します。[時間計測](docs/run-timing.md)・[キャンセル判定の回帰テスト](src/test/java/dev/mikoto2000/rei/llm/AgentEventChatModelTimingTest.java)
 
 ## プロンプト組み立てとファイル読み取り
 
 `ContextAssembler` は組み立てごとに Working Set を一度取得し、サイズの見積もりと最終プロンプトで共有します。ツール呼び出しと結果を組にした履歴の後ろに独立した `system` メッセージとして配置し、次のモデル呼び出しで取得し直します。[プロンプトとキャッシュ計測](docs/llm-prompt-cache.md)
 
-`grepMultiQuery`、`searchAndRead`、`readMultiFile` は有効な項目の結果を返し、除外された項目には `PROJECT_PATH_EXCLUDED` と許可された Project 相対パスでの再試行案内を返します。ページ付き検索では、除外と一致結果を入力時のクエリ番号で参照できます。[変更と検証証跡](review/README.md)
+`grepMultiQuery`、`searchAndRead`、`readMultiFile` は有効な項目の結果を返し、除外された項目には `PROJECT_PATH_EXCLUDED` と許可された Project 相対パスでの再試行案内を返します。ページ付き検索では、除外と一致結果を入力時のクエリ番号で参照できます。[読み取りと検索の回帰テスト](src/test/java/dev/mikoto2000/rei/core/ReadingSecurityTest.java)・[ページ付き検索の回帰テスト](src/test/java/dev/mikoto2000/rei/core/PagedFileSearchTest.java)
 
 ## 終了開始イベント
 
