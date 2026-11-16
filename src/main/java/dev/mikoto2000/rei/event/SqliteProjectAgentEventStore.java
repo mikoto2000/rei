@@ -213,6 +213,30 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
   }
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
+  @Override
+  public List<AgentEvent> runLifecycle(String projectId) {
+    return database.read(
+        db -> {
+          var result = new ArrayList<AgentEvent>();
+          try (var query =
+              db.prepareStatement(
+                  """
+          SELECT record FROM agent_events WHERE project_id=?
+            AND event_type IN (
+              'AGENT_RUN_STARTED','AGENT_RUN_COMPLETED','AGENT_RUN_FAILED','AGENT_RUN_CANCELLED',
+              'EXECUTION_STARTED','EXECUTION_COMPLETED','EXECUTION_FAILED','EXECUTION_CANCELLED'
+            )
+          ORDER BY sequence
+          """)) {
+            query.setString(1, scope(projectId));
+            try (var rows = query.executeQuery()) {
+              while (rows.next()) result.add(json.readValue(rows.getString(1), AgentEvent.class));
+            }
+          }
+          return List.copyOf(result);
+        });
+  }
+
   private Page read(
       Connection db, String project, long after, int limit, boolean reverse, boolean replay)
       throws SQLException, IOException {

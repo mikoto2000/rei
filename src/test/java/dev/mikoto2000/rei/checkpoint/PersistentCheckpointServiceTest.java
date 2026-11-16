@@ -71,6 +71,53 @@ class PersistentCheckpointServiceTest {
   AgentRunContext owner;
 
   /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
+  @Test
+  void guardedDiscardRequiresStoppedCurrentRevisionAndKeepsHistory() {
+    var running = state();
+    assertThrows(
+        dev.mikoto2000.rei.application.state.OperationConflictException.class,
+        () -> service.discardForRun("A", "run", running.taskId(), running.revision(), id -> false));
+
+    service.finish(owner, "FAILED");
+    var stopped = state();
+    assertThrows(
+        dev.mikoto2000.rei.application.state.OperationConflictException.class,
+        () -> service.discardForRun("A", "run", stopped.taskId(), running.revision(), id -> false));
+    assertThrows(
+        dev.mikoto2000.rei.application.state.OperationConflictException.class,
+        () -> service.discardForRun("A", "run", stopped.taskId(), stopped.revision(), id -> true));
+    assertThrows(
+        dev.mikoto2000.rei.application.state.OperationConflictException.class,
+        () ->
+            service.discardForRun(
+                "A", "unrelated", stopped.taskId(), stopped.revision(), id -> false));
+
+    long revisions = service.historyUsage().revisions();
+    service.discardForRun("A", "run", stopped.taskId(), stopped.revision(), id -> false);
+    assertEquals("ABANDONED", service.get("A", stopped.taskId()).status());
+    assertEquals(revisions + 1, service.historyUsage().revisions());
+    var error =
+        assertThrows(
+            CheckpointException.class,
+            () -> service.resumeForUser("A", stopped.taskId(), AgentRunContext.RequestSource.WEB));
+    assertEquals(CheckpointException.Code.RECONCILIATION_REQUIRED, error.code());
+    assertTrue(error.getMessage().contains("Task abandoned"));
+  }
+
+  @Test
+  void checkpointAssociationSurvivesResumeAndIsScopedByProject() {
+    service.finish(owner, "FAILED");
+    var stopped = state();
+    var resumed = service.resume("A", stopped.taskId(), AgentRunContext.RequestSource.SHELL);
+    assertEquals(stopped.taskId(), service.checkpointsForRun("A", "run").getFirst().taskId());
+    assertEquals(
+        stopped.taskId(), service.checkpointsForRun("A", resumed.runId()).getFirst().taskId());
+    assertTrue(service.checkpointsForRun("B", "run").isEmpty());
+    assertThrows(
+        dev.mikoto2000.rei.application.state.OperationConflictException.class,
+        () -> service.discardForRun("A", "run", stopped.taskId(), stopped.revision(), id -> false));
+  }
+
   @BeforeEach
   void setup() {
     var source = new SQLiteDataSource();

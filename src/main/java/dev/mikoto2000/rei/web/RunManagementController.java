@@ -1,0 +1,50 @@
+package dev.mikoto2000.rei.web;
+
+import dev.mikoto2000.rei.application.run.RunManagementService;
+import dev.mikoto2000.rei.checkpoint.RunCheckpointMenu.Checkpoint;
+import dev.mikoto2000.rei.checkpoint.RunCheckpointMenu.Run;
+import java.util.List;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
+@RequestMapping("/api/v1/run-management")
+public class RunManagementController {
+  private final RunManagementService service;
+
+  public RunManagementController(RunManagementService service) {
+    this.service = service;
+  }
+
+  @GetMapping
+  public List<Run> runs() {
+    return service.runs();
+  }
+
+  @GetMapping("/{projectId}/{runId}/checkpoints")
+  public List<Checkpoint> checkpoints(@PathVariable String projectId, @PathVariable String runId) {
+    return service.checkpoints(projectId, runId);
+  }
+
+  public record DiscardRequest(long revision) {}
+
+  @PostMapping("/{projectId}/{runId}/checkpoints/{taskId}/discard")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void discard(
+      @PathVariable String projectId,
+      @PathVariable String runId,
+      @PathVariable String taskId,
+      @RequestBody DiscardRequest request) {
+    service.discard(projectId, runId, taskId, request.revision());
+  }
+}

@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.cli;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import dev.mikoto2000.rei.checkpoint.RunCheckpointMenu;
 import dev.mikoto2000.rei.core.completion.*;
 import java.io.*;
 import java.nio.file.*;
@@ -137,6 +138,7 @@ public final class TerminalClient implements AutoCloseable {
       Map.of(
           "/project", List.of("select", "register"),
           "/session", List.of("select"),
+          "/runs", List.of("manage"),
           "/history", List.of("off", "on"),
           "/input-history", List.of("off", "on"),
           "/run-mode", List.of("exclusive", "read-only", "conversation"));
@@ -610,6 +612,53 @@ public final class TerminalClient implements AutoCloseable {
   }
 
   /** 軽量CLIでの対話に関するコマンドを処理する。 */
+  private void manageRuns() throws IOException, InterruptedException {
+    if (reader == null) throw new IllegalArgumentException("An interactive terminal is required");
+    RunCheckpointMenu.open(
+        new RunCheckpointMenu.Access() {
+          @Override
+          public List<RunCheckpointMenu.Run> runs() throws IOException, InterruptedException {
+            return List.of(
+                BackendClient.JSON.treeToValue(
+                    backend.get("/api/v1/run-management"), RunCheckpointMenu.Run[].class));
+          }
+
+          private String path(RunCheckpointMenu.Run run) {
+            return "/api/v1/run-management/"
+                + BackendClient.segment(run.projectId())
+                + "/"
+                + BackendClient.segment(run.runId())
+                + "/checkpoints";
+          }
+
+          @Override
+          public List<RunCheckpointMenu.Checkpoint> checkpoints(RunCheckpointMenu.Run run)
+              throws IOException, InterruptedException {
+            if (run.projectId() == null) return List.of();
+            return List.of(
+                BackendClient.JSON.treeToValue(
+                    backend.get(path(run)), RunCheckpointMenu.Checkpoint[].class));
+          }
+
+          @Override
+          public void discard(RunCheckpointMenu.Run run, RunCheckpointMenu.Checkpoint checkpoint)
+              throws IOException, InterruptedException {
+            backend.post(
+                path(run) + "/" + BackendClient.segment(checkpoint.taskId()) + "/discard",
+                Map.of("revision", checkpoint.revision()));
+          }
+        },
+        prompt -> {
+          try {
+            return reader.readLine(prompt);
+          } catch (org.jline.reader.EndOfFileException
+              | org.jline.reader.UserInterruptException exit) {
+            return null;
+          }
+        },
+        this::out);
+  }
+
   void command(String line) throws IOException, InterruptedException {
     var rawWords = commandWords(line);
     String requestedHelp = catalog.requestedHelp(rawWords);
@@ -1081,8 +1130,9 @@ public final class TerminalClient implements AutoCloseable {
         watch(run);
       }
       case "/runs" -> {
-        if (words.size() > 2) throw new IllegalArgumentException("Usage: /runs [RUN_ID]");
-        if (words.size() == 2)
+        if (words.size() > 2) throw new IllegalArgumentException("Usage: /runs [RUN_ID | manage]");
+        if (words.size() == 2 && words.get(1).equals("manage")) manageRuns();
+        else if (words.size() == 2)
           show(backend.get("/api/v1/runs/" + BackendClient.segment(words.get(1))));
         else out(backend.get("/api/v1/runs/active").path("text").asText());
       }

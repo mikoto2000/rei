@@ -131,6 +131,10 @@ public class PersistentCheckpointRepository {
   final class LifecycleAccess {
     private LifecycleAccess() {}
 
+    List<String> tasksForRun(String project, String run) {
+      return PersistentCheckpointRepository.this.tasksForRun(project, run);
+    }
+
     PersistentCheckpoint get(String project, String task) {
       return PersistentCheckpointRepository.this.get(project, task);
     }
@@ -476,6 +480,28 @@ public class PersistentCheckpointRepository {
   }
 
   /** 対象を特定できるよう、別実行を探す。 */
+  private List<String> tasksForRun(String project, String run) {
+    return db.sql(
+            """
+            WITH valid AS (
+              SELECT task, revision, CASE WHEN json_valid(snapshot) THEN snapshot END AS snapshot
+              FROM checkpoint_revisions WHERE project=:project
+            )
+            SELECT DISTINCT task FROM valid
+            WHERE json_extract(snapshot,'$.schemaVersion')=1
+              AND json_extract(snapshot,'$.projectId')=:project
+              AND json_extract(snapshot,'$.taskId')=task
+              AND json_extract(snapshot,'$.revision')=revision
+              AND :run IN (json_extract(snapshot,'$.runId'), json_extract(snapshot,'$.originalRunId'),
+                           json_extract(snapshot,'$.resumedFromRunId'))
+            ORDER BY task
+            """)
+        .param("project", project)
+        .param("run", run)
+        .query(String.class)
+        .list();
+  }
+
   public Optional<PersistentCheckpoint> findByRun(String project, String run) {
     return db.sql(
             """
