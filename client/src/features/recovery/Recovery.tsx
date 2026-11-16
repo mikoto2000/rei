@@ -3,6 +3,7 @@ import type { Command } from "../../tauri/commands";
 import { errorText, type Project, type Run } from "../../entities/models";
 import type { WorkspaceResult } from "../../entities/workspace";
 import { HumanAnswers } from "./HumanAnswers";
+import { DiscardConfirmation } from "./DiscardConfirmation";
 import { ScheduleControls } from "./ScheduleControls";
 import { GoalControls } from "./GoalControls";
 type Item = WorkspaceResult["items"][number];
@@ -272,16 +273,21 @@ export function Recovery({
           <button disabled={pending} onClick={() => setConfirm("abandon")}>
             放棄内容を確認
           </button>
-          {confirm && (
+          {confirm === "abandon" && (
+            <DiscardConfirmation
+              task={selected.task}
+              request={selected.saved.title}
+              pending={pending}
+              onDiscard={() => void act("abandon")}
+              onBack={() => setConfirm(null)}
+            />
+          )}
+          {confirm === "resume" && (
             <aside aria-label="復旧操作の確認">
-              <h3>
-                {confirm === "resume"
-                  ? "このTaskを保存したSessionで再開しますか？"
-                  : "このTaskの保存状態を放棄しますか？"}
-              </h3>
+              <h3>{"このTaskを保存したSessionで再開しますか？"}</h3>
               <p>{selected.saved.title}</p>
               <button disabled={pending} onClick={() => void act(confirm)}>
-                {confirm === "resume" ? "このTaskを再開" : "このTaskを放棄"}
+                {"このTaskを再開"}
               </button>
               <button disabled={pending} onClick={() => setConfirm(null)}>
                 戻る

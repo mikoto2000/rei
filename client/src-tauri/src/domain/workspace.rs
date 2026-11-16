@@ -105,6 +105,17 @@ pub enum WorkspaceOperation {
         expected_version: u64,
         answer: String,
     },
+    ManagedRuns,
+    RunCheckpoints {
+        project_id: String,
+        run_id: String,
+    },
+    DiscardRunCheckpoint {
+        project_id: String,
+        run_id: String,
+        task_id: String,
+        revision: String,
+    },
     Checkpoints {
         project_id: String,
     },
