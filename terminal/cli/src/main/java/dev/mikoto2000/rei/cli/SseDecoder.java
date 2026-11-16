@@ -37,11 +37,16 @@ public final class SseDecoder {
     String type = "message";
     long id = -1;
     int size = 0;
+    boolean previousCr = false;
     int character;
     while ((character = input.read()) != -1) {
-      if (character == '\r') continue;
+      if (character == '\n' && previousCr) {
+        previousCr = false;
+        continue;
+      }
+      previousCr = character == '\r';
       if (++size > 1048576) throw new IOException("SSE event capacity exceeded");
-      if (character != '\n') {
+      if (character != '\n' && !previousCr) {
         line.append((char) character);
         continue;
       }
