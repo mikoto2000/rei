@@ -51,6 +51,13 @@ class DurableReviewProtocolTest {
           .isLessThanOrEqualTo(256);
       assertThat(page.content()).isNotEmpty().isEqualTo(source.substring(0, page.nextOffset()));
       assertThat(tools.readNextReviewWorkItem(task, 512)).isEqualTo(page);
+
+      tools.configureReading(prompt -> 1024, 100000);
+      assertThatThrownBy(() -> tools.readReviewWorkItem(page.workItemId(), page.attempt()))
+          .isInstanceOf(dev.mikoto2000.rei.toolcontract.ToolReadRejectedException.class)
+          .hasMessageContaining("frozen range does not fit");
+      tools.configureReading(prompt -> 85000, 100000);
+      assertThat(tools.readReviewWorkItem(page.workItemId(), page.attempt())).isEqualTo(page);
     }
   }
 

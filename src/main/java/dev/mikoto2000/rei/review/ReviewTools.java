@@ -352,12 +352,7 @@ public final class ReviewTools {
     var claim = workItems().running(taskScope(owner), taskId, owner.runId());
     if (claim == null) claim = claimReviewWorkItemWithinBudget(taskId, budget);
     if (claim == null) return null;
-    var page = readReviewWorkItem(claim.item().id(), claim.attempt());
-    if (estimate(page) > budget)
-      throw new ToolReadRejectedException(
-          "CONTEXT_BUDGET_INSUFFICIENT",
-          "The existing frozen claim does not fit this request. Preserve its IDs; compact the active prompt or omit tokenBudget before redelivery. No new work was claimed or assessed.");
-    return page;
+    return readReviewWorkItem(claim.item().id(), claim.attempt(), budget);
   }
 
   private static String legacyWorkId(String job, Range range) {
@@ -468,8 +463,12 @@ public final class ReviewTools {
   @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
   @Tool(
       description =
-          "Read the exact frozen range of the current claim. Reading does not mark it delivered; trusted host model-delivery confirmation is required before submitReviewWorkItem.")
+          "Read the exact frozen range of the current claim if it fits the current context budget. Reading does not mark it delivered; trusted host model-delivery confirmation is required before submitReviewWorkItem.")
   public Page readReviewWorkItem(String workItemId, String attempt) {
+    return readReviewWorkItem(workItemId, attempt, readingBudget(null));
+  }
+
+  private Page readReviewWorkItem(String workItemId, String attempt, int budget) {
     var owner = AgentRunScope.current();
     var work = workItems();
     var claim = work.current(taskScope(owner), workItemId, owner.runId(), attempt);
@@ -478,6 +477,12 @@ public final class ReviewTools {
     var page =
         durablePage(
             claim.item(), attempt, work.source(taskScope(owner), claim.item()), claim.item().end());
+    int tokens = estimate(page);
+    if (tokens > budget)
+      throw new ToolReadRejectedException(
+          "CONTEXT_BUDGET_INSUFFICIENT",
+          "The frozen range does not fit the current context. Preserve its IDs and free prompt space"
+              + " or use a larger model context before redelivery.");
     METRICS.info(
         "review_read run={} task={} work={} attempt={} chars={} estimatedTokens={}",
         owner.runId(),
@@ -485,7 +490,7 @@ public final class ReviewTools {
         workItemId,
         attempt,
         page.content().length(),
-        estimate(page));
+        tokens);
     return page;
   }
 
