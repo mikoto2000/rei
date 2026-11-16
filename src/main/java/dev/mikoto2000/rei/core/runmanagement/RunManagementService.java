@@ -10,7 +10,7 @@ import dev.mikoto2000.rei.core.chat.ActiveRun;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.execution.ExecutionType;
 import dev.mikoto2000.rei.core.project.ProjectContext;
-import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.AgentRunFailedPayload;
@@ -29,7 +29,7 @@ import org.springframework.stereotype.Service;
 
 @Service
 final class RunManagementService implements RunManagement {
-  private final ProjectRegistry projects;
+  private final ProjectService projects;
   private final ConversationInputRouter router;
   private final ProjectAgentEventStore events;
   private final ConversationTurnStore turns;
@@ -37,7 +37,7 @@ final class RunManagementService implements RunManagement {
   private final org.springframework.beans.factory.ObjectProvider<RunRegistry> registry;
 
   RunManagementService(
-      ProjectRegistry projects,
+      ProjectService projects,
       ConversationInputRouter router,
       ProjectAgentEventStore events,
       ConversationTurnStore turns,
@@ -56,7 +56,7 @@ final class RunManagementService implements RunManagement {
     var projectsById = new HashMap<String, ProjectContext>();
     var result = new ArrayList<Run>();
     var active = router.activeExecutions();
-    for (var project : projects.list()) {
+    for (var project : projects.registeredProjects()) {
       projectsById.put(project.id(), project);
       var starts = new HashMap<String, AgentEvent>();
       var terminals = new HashMap<String, AgentEvent>();
@@ -177,7 +177,8 @@ final class RunManagementService implements RunManagement {
   }
 
   private void requireProject(String project) {
-    if (projects.resolveById(project).isEmpty()) throw new ResourceNotFoundException("Project");
+    if (projects.registeredProjects().stream().noneMatch(entry -> entry.id().equals(project)))
+      throw new ResourceNotFoundException("Project");
   }
 
   private boolean live(String project, String id) {

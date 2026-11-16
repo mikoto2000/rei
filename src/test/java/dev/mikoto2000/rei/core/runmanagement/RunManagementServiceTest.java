@@ -9,7 +9,7 @@ import dev.mikoto2000.rei.application.run.RunRegistry;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpointService;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
-import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.AgentRunFailedPayload;
@@ -34,8 +34,8 @@ class RunManagementServiceTest {
     try (var migration = new StorageMigrationCoordinator(directory)) {
       migration.prepare();
     }
-    var projects = new ProjectRegistry(directory.resolve("projects.json"));
-    var project = projects.resolve(directory);
+    var projects = new ProjectService(directory, directory.resolve("projects.json"));
+    var project = projects.currentContext();
     var eventStore = new SqliteProjectAgentEventStore(directory);
     var start = Instant.parse("2026-11-16T00:00:00Z");
     eventStore.append(
@@ -77,7 +77,12 @@ class RunManagementServiceTest {
     var registry = new StaticListableBeanFactory().getBeanProvider(RunRegistry.class);
     var restarted =
         new RunManagementService(
-            projects, router, new SqliteProjectAgentEventStore(directory), turns, checkpoints, registry);
+            projects,
+            router,
+            new SqliteProjectAgentEventStore(directory),
+            turns,
+            checkpoints,
+            registry);
     var rows = restarted.runs();
     assertEquals(1, rows.size());
     assertEquals("FAILED", rows.getFirst().status());
