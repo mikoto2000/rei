@@ -18,6 +18,7 @@ import { useUserAvatar } from "./features/settings/userAvatar";
 import { Avatar } from "./shared/Avatar";
 import { SessionList } from "./features/history/SessionList";
 import { Recovery } from "./features/recovery/Recovery";
+import { RunCheckpointManager } from "./features/recovery/RunCheckpointManager";
 import { Tasks } from "./features/tasks/Tasks";
 import { Artifacts } from "./features/artifacts/Artifacts";
 import type { ArtifactSelection } from "./entities/artifacts";
@@ -676,6 +677,12 @@ export function App({
                   </div>
                   <span className="pill">{active.length} active</span>
                 </header>
+                {data.selectedServer && data.unlocked && (
+                  <RunCheckpointManager
+                    call={call}
+                    serverId={data.selectedServer}
+                  />
+                )}
                 {!active.length ? (
                   <div className="empty">
                     <h2>実行中の Run はありません</h2>

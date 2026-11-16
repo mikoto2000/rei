@@ -19,6 +19,29 @@ public class RunsCommand implements Runnable {
   /** 仕様。 */
   @Spec private CommandSpec spec;
 
+  @picocli.CommandLine.Parameters(arity = "0..1", paramLabel = "manage")
+  private String action;
+
+  private dev.mikoto2000.rei.runmanagement.RunCheckpointMenu.Access management;
+  private java.util.function.Function<String, String> input;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setManagement(dev.mikoto2000.rei.runmanagement.RunManagement service) {
+    management = service;
+  }
+
+  public void setReader(org.jline.reader.LineReader reader) {
+    input =
+        prompt -> {
+          try {
+            return reader.readLine(prompt);
+          } catch (org.jline.reader.EndOfFileException
+              | org.jline.reader.UserInterruptException exit) {
+            return null;
+          }
+        };
+  }
+
   /** 既定の状態でRunsCommandを初期化する。 */
   public RunsCommand() {
     this.display = null;
@@ -42,6 +65,27 @@ public class RunsCommand implements Runnable {
   /** 全プロジェクトの実行中AgentRunを表示しますを行う。 */
   public void run() {
     var out = shellOutput == null ? CommandOutput.from(spec.commandLine().getOut()) : shellOutput;
+    if (action != null) {
+      if (!"manage".equals(action) || input == null || management == null) {
+        out.println("Usage in an interactive shell: /runs manage");
+        out.flush();
+        return;
+      }
+      try {
+        dev.mikoto2000.rei.runmanagement.RunCheckpointMenu.open(
+            management,
+            input,
+            line -> {
+              out.println(line);
+              out.flush();
+            });
+      } catch (java.io.IOException failure) {
+        throw new java.io.UncheckedIOException(failure);
+      } catch (InterruptedException interrupted) {
+        Thread.currentThread().interrupt();
+      }
+      return;
+    }
     if (display == null) {
       out.println("Active run runtime is unavailable.");
       out.flush();

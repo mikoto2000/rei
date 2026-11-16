@@ -65,6 +65,15 @@ export type WorkspaceOperation =
       expectedVersion: number;
       answer: string;
     }
+  | { operation: "managedRuns" }
+  | { operation: "runCheckpoints"; projectId: string; runId: string }
+  | {
+      operation: "discardRunCheckpoint";
+      projectId: string;
+      runId: string;
+      taskId: string;
+      revision: string;
+    }
   | { operation: "checkpoints"; projectId: string }
   | {
       operation: "checkpoint" | "checkpointInspect" | "checkpointAbandon";

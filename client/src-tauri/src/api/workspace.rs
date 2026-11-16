@@ -449,7 +449,12 @@ impl HttpReiClient {
             op @ (WorkspaceOperation::Checkpoints { .. }
             | WorkspaceOperation::Checkpoint { .. }
             | WorkspaceOperation::CheckpointInspect { .. }
-            | WorkspaceOperation::CheckpointAbandon { .. }) => self.checkpoint_operation(op).await,
+            | WorkspaceOperation::CheckpointAbandon { .. }
+            | WorkspaceOperation::ManagedRuns
+            | WorkspaceOperation::RunCheckpoints { .. }
+            | WorkspaceOperation::DiscardRunCheckpoint { .. }) => {
+                self.checkpoint_operation(op).await
+            }
             op @ (WorkspaceOperation::Attention { .. }
             | WorkspaceOperation::AttentionAck { .. }
             | WorkspaceOperation::Approvals { .. }

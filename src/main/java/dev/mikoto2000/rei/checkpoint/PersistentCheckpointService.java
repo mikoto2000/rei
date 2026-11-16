@@ -489,14 +489,60 @@ public class PersistentCheckpointService implements AutoCloseable {
 
   /** 作業の中断と再開で用いるabandonを返す。 */
   public PersistentCheckpoint abandon(String project, String task) {
+    return abandon(project, task, state -> true, false);
+  }
+
+  public List<PersistentCheckpoint> checkpointsForRun(String project, String run) {
+    return repository.tasksForRun(project, run).stream().map(task -> get(project, task)).toList();
+  }
+
+  public boolean canDiscard(PersistentCheckpoint state, java.util.function.Predicate<String> live) {
+    return !Set.of("ABANDONED", "COMPLETED", "WAITING", "WAITING_APPROVAL").contains(state.status())
+        && !repository.leased(state.projectId(), state.taskId())
+        && repository.diagnostics(state.projectId(), state.taskId()).isEmpty()
+        && !live.test(state.runId());
+  }
+
+  public PersistentCheckpoint discardForRun(
+      String project,
+      String run,
+      String task,
+      long revision,
+      java.util.function.Predicate<String> live) {
+    return abandon(
+        project,
+        task,
+        state ->
+            state.revision() == revision
+                && repository.tasksForRun(project, run).contains(task)
+                && !live.test(run)
+                && !live.test(state.runId())
+                && !Set.of("ABANDONED", "COMPLETED", "WAITING", "WAITING_APPROVAL")
+                    .contains(state.status())
+                && repository.diagnostics(project, task).isEmpty(),
+        true);
+  }
+
+  private PersistentCheckpoint abandon(
+      String project,
+      String task,
+      java.util.function.Predicate<PersistentCheckpoint> allowed,
+      boolean guarded) {
     String claim = "abandon:" + UUID.randomUUID();
-    if (!repository.acquire(project, task, claim))
+    if (!repository.acquire(project, task, claim)) {
+      if (guarded) throw new dev.mikoto2000.rei.application.state.OperationConflictException();
       throw new IllegalStateException("Cannot abandon an active task");
+    }
     try {
       var state = get(project, task);
+      if (!allowed.test(state))
+        throw new dev.mikoto2000.rei.application.state.OperationConflictException();
       var fields = repository.fields(state);
       fields.put("status", "ABANDONED");
       return repository.save(repository.fields(fields), state.revision(), claim);
+    } catch (java.util.ConcurrentModificationException stale) {
+      if (guarded) throw new dev.mikoto2000.rei.application.state.OperationConflictException();
+      throw stale;
     } finally {
       repository.release(project, task, claim);
     }

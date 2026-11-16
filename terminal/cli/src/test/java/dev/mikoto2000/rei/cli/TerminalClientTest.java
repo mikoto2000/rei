@@ -16,6 +16,61 @@ class TerminalClientTest {
   @TempDir Path directory;
 
   @Test
+  void runsManageConfirmsTheRevisionThroughTheConnectedBackend() throws Exception {
+    var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    var posted = new java.util.concurrent.atomic.AtomicReference<String>();
+    String path = "/api/v1/run-management";
+    server.createContext(
+        path,
+        exchange -> {
+          try (exchange) {
+            String requestPath = exchange.getRequestURI().getPath();
+            if (requestPath.equals(path + "/p/r/checkpoints/task/discard")) {
+              assertEquals("POST", exchange.getRequestMethod());
+              posted.set(
+                  new String(
+                      exchange.getRequestBody().readAllBytes(),
+                      java.nio.charset.StandardCharsets.UTF_8));
+              exchange.sendResponseHeaders(204, -1);
+              return;
+            }
+            String body =
+                requestPath.equals(path)
+                    ? """
+              [{"projectId":"p","projectName":"rei","runId":"r","request":"Request",
+                "status":"FAILED","startedAt":"2026-11-16T00:00:00Z","failure":"reason"}]
+              """
+                    : """
+              [{"taskId":"task","runId":"r","originalRunId":"r","savedAt":"2026-11-16T00:00:00Z",
+                "status":"FAILED","revision":7,"request":"Request","discardable":true}]
+              """;
+            var bytes = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, bytes.length);
+            exchange.getResponseBody().write(bytes);
+          }
+        });
+    server.start();
+    try (var backend =
+            new BackendClient(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort()), "fixture");
+        var client =
+            new TerminalClient(
+                backend,
+                directory,
+                true,
+                new DumbTerminal(
+                    new ByteArrayInputStream(
+                        "1\n1\n1\nq\n".getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+                    new ByteArrayOutputStream()))) {
+      client.command("/runs manage");
+      assertNotNull(posted.get());
+      assertEquals(7, BackendClient.JSON.readTree(posted.get()).path("revision").asInt());
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
   void sseDisplaysFileChangesAndGlobalShutdownWithoutJson() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     var requests = new java.util.concurrent.atomic.AtomicInteger();
