@@ -15,18 +15,24 @@ import dev.mikoto2000.rei.event.AgentRunFailedPayload;
 import dev.mikoto2000.rei.event.AgentRunStartedPayload;
 import dev.mikoto2000.rei.event.ErrorInformation;
 import dev.mikoto2000.rei.event.SqliteProjectAgentEventStore;
+import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Optional;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
+@Tag("integration")
 class RunManagementServiceTest {
   @TempDir Path directory;
 
   @Test
-  void persistedFailureWithoutCheckpointIsListedAfterRestart() {
+  void persistedFailureWithoutCheckpointIsListedAfterRestart() throws Exception {
+    try (var migration = new StorageMigrationCoordinator(directory)) {
+      migration.prepare();
+    }
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
     var project = projects.resolve(directory);
     var eventStore = new SqliteProjectAgentEventStore(directory);
