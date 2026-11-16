@@ -69,7 +69,7 @@ Windows の制限付き環境で Cargo の incremental cache rename が拒否さ
 6. Conversations はサーバーの Session 一覧です。project filter・追加読込み・更新に対応します。選択時に詳細と過去 Turn を取得し、同じ session で再開します。404 は自動再送せず、明示的に新しい会話へ進めます。409 は詳細を再取得してエラーを表示し、POST を再試行しません。
 7. Active Runs から会話・Run を選択できます。Stop は必ず選択した server ID / run ID を指定します。
 
-サーバーは LAN / VPN 上で利用し、HTTPS を推奨します。インターネットへの直接公開を前提としていません。Android と Windows では HTTP も利用できます。認証付きリダイレクトは追従しません。
+LAN / VPN 上の別端末から接続する場合は HTTPS を使ってください。Android と Windows で HTTP を使う場合は、ループバックか暗号化されたトンネル内に限定してください。接続例は [Native Client と Web API](../docs/native-web-api.md#起動と接続) を参照してください。認証付きリダイレクトは追従しません。
 
 server URL の変更・削除は、この起動中に関連する会話が開かれていると拒否します。接続先の取り違えを防ぐ既存の制約です。必要な場合は Run の終了を確認し、アプリを再起動して設定を変更してください。サーバーの Session を削除する機能はありません。
 
