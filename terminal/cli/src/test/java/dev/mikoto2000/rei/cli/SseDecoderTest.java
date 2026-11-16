@@ -8,6 +8,22 @@ import org.junit.jupiter.api.Test;
 
 /** イベント配信受信形式の解釈の結果と状態の契約を検証するテスト。 */
 class SseDecoderTest {
+  @Test
+  void acceptsCrLfAndCrLfPairsInOneStream() throws Exception {
+    var events = new ArrayList<SseDecoder.Event>();
+    var decoder = new SseDecoder(0);
+    decoder.read(
+        new StringReader("id: 1\revent: run.completed\rdata: {}\r\rid: 2\r\ndata: {\rdata: }\n\n"),
+        events::add);
+
+    assertEquals(
+        java.util.List.of(
+            new SseDecoder.Event(1, "run.completed", "{}"),
+            new SseDecoder.Event(2, "message", "{\n}")),
+        events);
+    assertEquals(2, decoder.sequence());
+  }
+
   /** 軽量CLIでの対話で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void decodesMultilineDataAndIgnoresHeartbeatAndDuplicateSequence() throws Exception {
