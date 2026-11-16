@@ -8,6 +8,29 @@ import org.springframework.ai.chat.model.ChatModel;
 
 /** 言語モデルモデル提供元の結果と状態の契約を検証するテスト。 */
 class LlmModelProviderTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void memoryOutputBudgetInheritsGlobalSettingUnlessExplicitlyOverridden(boolean override)
+      throws java.io.IOException {
+    var environment = new org.springframework.mock.env.MockEnvironment();
+    environment.setProperty("REI_LLM_MAX_OUTPUT_TOKENS", "4096");
+    if (override) environment.setProperty("REI_LLM_MEMORY_MAX_OUTPUT_TOKENS", "2048");
+    var yaml = new org.springframework.boot.env.YamlPropertySourceLoader();
+    for (var source :
+        yaml.load("application", new org.springframework.core.io.ClassPathResource("application.yaml"))) {
+      environment.getPropertySources().addLast(source);
+    }
+    var properties =
+        org.springframework.boot.context.properties.bind.Binder.get(environment)
+            .bind("rei.llm", LlmProperties.class)
+            .get();
+    var provider = new LlmModelProvider(Mockito.mock(ChatModel.class), properties);
+
+    assertThat(provider.chatOptions(LlmFeature.MEMORY, "memory").getMaxTokens())
+        .isEqualTo(override ? 2048 : 4096);
+    assertThat(provider.chatOptions(LlmFeature.CHAT, "chat").getMaxTokens()).isEqualTo(4096);
+  }
+
   /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void correctionInheritsChatEndpointAndCanOverrideOnlyItsModelWithoutCaptureOrFallback() {
