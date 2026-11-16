@@ -1,0 +1,7 @@
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0429"
+reason = "Cargo resolves glib 0.18.5 from vendor/glib-0.18.5 via [patch.crates-io]. This copy includes the upstream VariantStrIter fix and is regression-tested by the Linux GLib backport workflow."
+
+[[IgnoredVulns]]
+id = "RUSTSEC-2024-0370"
+reason = "This advisory reports maintenance status only. The Linux GTK3 stack still requires proc-macro-error at build time through glib-macros 0.18 and gtk3-macros 0.18. Remove this exception when those dependencies no longer require it."
