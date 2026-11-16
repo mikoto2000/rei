@@ -62,6 +62,7 @@ public final class ToolLoopSupport {
 
   /** 要求された処理を実行する。 */
   public ToolExecutionResult execute(Prompt prompt, ChatResponse response) {
+    if (hasInvalidToolCallIds(response)) return invalidToolCallIds(prompt);
     response = inheritFileContinuations(prompt, response);
     var lease = RunCancellation.enterChild(prompt);
     try (lease) {
@@ -185,6 +186,7 @@ public final class ToolLoopSupport {
       Prompt prompt,
       ChatResponse response,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
+    if (hasInvalidToolCallIds(response)) return invalidToolCallIds(prompt);
     var generation = response.getResult();
     var output = generation == null ? null : generation.getOutput();
     if (output == null) throw new IllegalArgumentException("Missing generation for tool calls");
@@ -220,6 +222,30 @@ public final class ToolLoopSupport {
   private String schema(Prompt prompt, String name) {
     var callback = registeredCallback(prompt, name);
     return callback == null ? null : callback.getToolDefinition().inputSchema();
+  }
+
+  private static boolean hasInvalidToolCallIds(ChatResponse response) {
+    for (var generation : response.getResults()) {
+      var ids = new java.util.HashSet<String>();
+      for (var call : generation.getOutput().getToolCalls()) {
+        if (!addToolCallId(ids, call.id())) return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean addToolCallId(java.util.Set<String> ids, String id) {
+    return id != null && !id.isBlank() && ids.add(id);
+  }
+
+  private static ToolExecutionResult invalidToolCallIds(Prompt prompt) {
+    var history = new java.util.ArrayList<>(prompt.getInstructions());
+    history.add(
+        new org.springframework.ai.chat.messages.SystemMessage(
+            "The previous response used missing, blank, or duplicate tool-call IDs. No calls"
+                + " from that response ran. Reissue still-needed calls with a distinct, nonblank"
+                + " ID for each call."));
+    return ToolExecutionResult.builder().conversationHistory(history).returnDirect(false).build();
   }
 
   private org.springframework.ai.tool.ToolCallback registeredCallback(Prompt prompt, String name) {
@@ -269,8 +295,8 @@ public final class ToolLoopSupport {
     // 再開時も、今回許可されたツールだけを使い、同じ呼び出しを重複して実行しない。
     var ids = new java.util.HashSet<String>();
     for (var call : pending.calls())
-      if (!callbacks.containsKey(call.name()) || !ids.add(call.id()))
-        throw new IllegalArgumentException("Unrequested or duplicate saved Tool");
+      if (!callbacks.containsKey(call.name()) || !addToolCallId(ids, call.id()))
+        throw new IllegalArgumentException("Unrequested saved Tool or invalid tool-call ID");
     var completed = new java.util.ArrayList<>(pending.completed());
     var argumentCorrections = new java.util.HashSet<>(pending.argumentCorrections());
     var completedIds =
