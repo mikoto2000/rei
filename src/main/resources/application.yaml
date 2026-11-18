@@ -371,7 +371,7 @@ rei:
     max-wire-bytes: ${REI_WEB_SEARCH_MAX_WIRE_BYTES:2097152}
     max-decoded-bytes: ${REI_WEB_SEARCH_MAX_DECODED_BYTES:4194304}
     max-redirects: ${REI_WEB_SEARCH_MAX_REDIRECTS:5}
-    max-results: ${REI_WEB_SEARCH_MAX_RESULTS:5}
+    max-results: ${REI_WEB_SEARCH_MAX_RESULTS:8}
     max-search-queries: ${REI_WEB_SEARCH_MAX_SEARCH_QUERIES:3}
     max-search-api-calls: ${REI_WEB_SEARCH_MAX_SEARCH_API_CALLS:4}
     max-page-fetches: ${REI_WEB_SEARCH_MAX_PAGE_FETCHES:5}

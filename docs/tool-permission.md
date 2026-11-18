@@ -127,3 +127,9 @@ LLM provider の通信、Tool callback 以外の I/O はこの境界の対象外
 ## 要件付き Codex 実装
 
 requestCodexImplementation は既存の任意テスト実行相当の capability を維持します。Policy enabled かつ明示 AUTO_APPROVE と管理者 implementation opt-in がそろう場合だけ自動許可します。Policy disabled は自動許可の根拠になりません。仕様全文・Project・base commit・管理者 test recipe を既存の exact approval へ結び付け、実行直前に再検証します。UNKNOWN retry は新しい ID と明示承認が必要です。prepare はプロセスを起動せず、recordCodexAcceptanceEvaluation は LOCAL_WRITE、状態・receipt・diff は READ です。[具体的な設定と承認フロー](llm-codex-implementation-delegation.md#設定と認可)を参照してください。
+
+## 読み取り失敗ログに対する設定
+
+過去ログの6件（`readRawToolResult` 2件、`getLastSummary`・`diagnoseTestReports`・`listReviewTasks`・`fetchUrlContent` 各1件）は、現行版では前4種類が READ、`fetchUrlContent` が NETWORK_READ です。上記の `auto-approve: [READ, NETWORK_READ]` で許可できます。これはすべての該当能力の参照ツールへ適用されます。ネットワーク参照を都度確認したい環境では READ のみを指定してください。明示した denied や capabilities、Project・Session・Run所有権、結果の参照範囲、URL取得先の検査は引き続き優先されます。ファイル書き込みや任意コマンドの自動承認は追加しません。
+
+レビューの `CONTEXT_BUDGET_INSUFFICIENT` / `REVIEW_PAGE_BUDGET_TOO_SMALL` は資料未配信の拒否です。既存の修正回数・LLM呼び出し予算を維持して、次の文脈投影で最大8000トークン（入力上限の1/8以下）の読み取り余裕を確保します。圧縮・既存ページ調整を使い、モデル上限は増やしません。次の読み取りは `tokenBudget` を省略し、既存の評価を先に提出して1単位ずつ進めます。成功済みの呼び出しや保存済み評価を再実行せず、解消できない場合は既存の修正予算で停止します。

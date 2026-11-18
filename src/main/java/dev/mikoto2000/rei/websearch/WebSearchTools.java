@@ -53,8 +53,7 @@ public class WebSearchTools {
     var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
     try (scope) {
       var refresh =
-          dev.mikoto2000.rei.http.FetchScope.withForceRefresh(
-              Boolean.TRUE.equals(forceRefresh));
+          dev.mikoto2000.rei.http.FetchScope.withForceRefresh(Boolean.TRUE.equals(forceRefresh));
       try (refresh) {
         resultBudget.requireAvailable(context);
         return resultBudget.fitMetadata(webSearch(query, limit), context);
@@ -87,7 +86,7 @@ public class WebSearchTools {
       Use webSearch directly only when search-result metadata or URL candidates are needed without page contents.
       Use fetchUrlContent directly when the exact URL to read is already known.
       Pass arguments inside request. query is required (1..2048 characters).
-      maxResults must be an integer from 1 to the configured maximum (normally 5); omit it to use that maximum.
+      maxResults must be an integer from 1 to the configured maximum (normally 8); omit it to use that maximum.
       readTop must be an integer from 0 to maxResults; it defaults to min(3, maxResults).
       Set readTop = 0 to return search metadata without fetching page contents.
       Individual page fetch failures are returned per result and do not fail the whole search.

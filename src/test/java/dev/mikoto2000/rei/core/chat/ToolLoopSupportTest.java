@@ -18,6 +18,53 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 /** ツール繰り返し補助の結果と状態の契約を検証するテスト。 */
 class ToolLoopSupportTest {
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "CONTEXT_BUDGET_INSUFFICIENT",
+        "REVIEW_PAGE_BUDGET_TOO_SMALL",
+        "TASK_ACCESS_DENIED"
+      })
+  void onlyValidatedReviewBudgetRejectionsRequestRecovery(String code) {
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    ToolCallback callback =
+        new ToolCallback() {
+          public ToolDefinition getToolDefinition() {
+            return ToolDefinition.builder()
+                .name("readNextReviewWorkItem")
+                .description("review read")
+                .inputSchema("{}")
+                .build();
+          }
+
+          public String call(String input) {
+            calls.incrementAndGet();
+            return "{\"error\":\"" + code + "\",\"accepted\":false,\"validationExecuted\":true}";
+          }
+        };
+    var prompt =
+        new Prompt("review", OpenAiChatOptions.builder().toolCallbacks(List.of(callback)).build());
+    var response =
+        new ChatResponse(
+            List.of(
+                new org.springframework.ai.chat.model.Generation(
+                    org.springframework.ai.chat.messages.AssistantMessage.builder()
+                        .content("")
+                        .toolCalls(
+                            List.of(
+                                new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                                    "read", "function", "readNextReviewWorkItem", "{}")))
+                        .build())));
+    var result = new ToolLoopSupport().execute(prompt, response);
+    var feedback =
+        (org.springframework.ai.chat.messages.ToolResponseMessage)
+            result.conversationHistory().getLast();
+    assertThat(Boolean.TRUE.equals(feedback.getMetadata().get("rei.reviewBudgetRecovery")))
+        .isEqualTo(!code.equals("TASK_ACCESS_DENIED"));
+    assertThat(feedback.getResponses()).hasSize(1);
+    assertThat(calls.get()).isEqualTo(1);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"webSearch", "webSearchAndRead"})
   void searchHttpFailureDoesNotAbortLocalFix(String searchTool) throws Exception {
     var search = org.mockito.Mockito.mock(dev.mikoto2000.rei.websearch.WebSearchService.class);

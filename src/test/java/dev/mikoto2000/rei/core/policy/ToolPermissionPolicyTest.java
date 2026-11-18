@@ -19,6 +19,36 @@ import org.junit.jupiter.api.Test;
 /** ツール権限判断基準の結果と状態の契約を検証するテスト。 */
 class ToolPermissionPolicyTest {
   @Test
+  void historicalReadFailuresUseReadCapabilitiesWithoutGrantingWrites() {
+    var policy =
+        policy(
+            Set.of(ActionCapability.READ, ActionCapability.NETWORK_READ),
+            Set.of(ActionCapability.DESTRUCTIVE));
+    for (var name :
+        List.of(
+            "getLastSummary",
+            "readRawToolResult",
+            "diagnoseTestReports",
+            "listReviewTasks",
+            "fetchUrlContent")) {
+      assertEquals(PermissionDecision.AUTO_APPROVE, policy.evaluate(name), name);
+      assertTrue(ToolPermissionPolicy.intrinsicallyReadOnly(name), name);
+    }
+    assertEquals(PermissionDecision.REQUIRE_APPROVAL, policy.evaluate("writeMultiFile"));
+    assertEquals(PermissionDecision.DENY, policy.evaluate("runCommand"));
+    assertEquals(PermissionDecision.DENY, policy.evaluate("unknownMcpTool"));
+    var denied =
+        policy(
+            Set.of(ActionCapability.READ, ActionCapability.NETWORK_READ),
+            Set.of(ActionCapability.READ, ActionCapability.NETWORK_READ));
+    assertEquals(PermissionDecision.DENY, denied.evaluate("readRawToolResult"));
+    assertEquals(PermissionDecision.DENY, denied.evaluate("fetchUrlContent"));
+    assertEquals(
+        PermissionDecision.REQUIRE_APPROVAL,
+        policy(Set.of(ActionCapability.READ), Set.of()).evaluate("fetchUrlContent"));
+  }
+
+  @Test
   void durableReviewToolsUseExistingReadOnlyReviewPermission() {
     var policy = policy(Set.of(ActionCapability.READ), Set.of());
     for (var name :

@@ -604,8 +604,7 @@ public class StagnationChatModel implements ChatModel {
 
           /** 実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input, ToolContext toolContext) {
-            var scope =
-                dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext());
+            var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext());
             try (scope) {
               context.checkActive();
               String name = getToolDefinition().name();
@@ -658,6 +657,7 @@ public class StagnationChatModel implements ChatModel {
                         instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read
                     && java.util.Set.of(
                             "readReviewPages",
+                            "readReviewWorkItem",
                             "readRawToolResult",
                             "claimReviewWorkItem",
                             "readNextReviewWorkItem",

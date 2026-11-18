@@ -63,7 +63,7 @@ public class WebSearchProperties {
   }
 
   /** 検索結果の件数上限。 */
-  private int maxResults = 5;
+  private int maxResults = 8;
 
   /** 最大検索検索条件一覧。 */
   private int maxSearchQueries = 3;

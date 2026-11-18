@@ -137,6 +137,8 @@ public final class ToolLoopSupport {
           }
       var metadata = new java.util.HashMap<>(message.getMetadata());
       metadata.put("rei.deliveryPolicies", java.util.Map.copyOf(calls));
+      if (message.getResponses().stream().anyMatch(ToolLoopSupport::reviewBudgetRejected))
+        metadata.put("rei.reviewBudgetRecovery", true);
       var readGrant = dev.mikoto2000.rei.tooldelivery.FileReadContext.grant();
       if (readGrant != null) {
         var grants =
@@ -164,7 +166,11 @@ public final class ToolLoopSupport {
 
   private static boolean rejectedRead(ToolResponseMessage.ToolResponse response) {
     if (!java.util.Set.of(
-            "readReviewPages", "readRawToolResult", "claimReviewWorkItem", "readNextReviewWorkItem")
+            "readReviewPages",
+            "readRawToolResult",
+            "readReviewWorkItem",
+            "claimReviewWorkItem",
+            "readNextReviewWorkItem")
         .contains(response.name())) return false;
     try {
       var result =
@@ -179,6 +185,20 @@ public final class ToolLoopSupport {
     } catch (RuntimeException malformed) {
       return false;
     }
+  }
+
+  private static boolean reviewBudgetRejected(ToolResponseMessage.ToolResponse response) {
+    if (!java.util.Set.of(
+                "readReviewPages",
+                "readReviewWorkItem",
+                "claimReviewWorkItem",
+                "readNextReviewWorkItem")
+            .contains(response.name())
+        || !rejectedRead(response)) return false;
+    var result =
+        tools.jackson.databind.json.JsonMapper.builder().build().readTree(response.responseData());
+    return java.util.Set.of("CONTEXT_BUDGET_INSUFFICIENT", "REVIEW_PAGE_BUDGET_TOO_SMALL")
+        .contains(result.path("error").asString());
   }
 
   /** 承認による中断や引数の修正を扱える実行経路を選び、未完了のツール呼び出しを進める。 */
@@ -197,7 +217,10 @@ public final class ToolLoopSupport {
         history.add(
             new org.springframework.ai.chat.messages.SystemMessage(
                 context.unavailableToolCorrection(call.id(), call.name())));
-        return ToolExecutionResult.builder().conversationHistory(history).returnDirect(false).build();
+        return ToolExecutionResult.builder()
+            .conversationHistory(history)
+            .returnDirect(false)
+            .build();
       }
     }
     if (!context.hasApprovalContinuation()
@@ -351,7 +374,8 @@ public final class ToolLoopSupport {
           String result =
               callbacks
                   .get(call.name())
-                  .call(call.arguments(), new org.springframework.ai.chat.model.ToolContext(values));
+                  .call(
+                      call.arguments(), new org.springframework.ai.chat.model.ToolContext(values));
           completed.add(
               new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
                   call.id(), call.name(), result));

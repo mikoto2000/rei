@@ -579,3 +579,7 @@ the real-renderer test command. No renderer or model is installed automatically.
 `REI_SQLITE_VEC_RELEASE_BASE_URL` で HTTPS ミラーを指定する場合も同じ SHA-256 が必要です。
 自動取得の対象外のバージョンや管理者が配布したライブラリを利用する場合は、
 検証済みのライブラリを `REI_SQLITE_VEC_EXTENSION_PATH` に指定してください。
+
+## Web検索の取得件数
+
+`rei.web-search.max-results`（`REI_WEB_SEARCH_MAX_RESULTS`）の既定値は8件です。既存の設定で5件などを明示していれば、その指定を優先します。本文取得数・総通信量・出力トークン上限は変更しません。

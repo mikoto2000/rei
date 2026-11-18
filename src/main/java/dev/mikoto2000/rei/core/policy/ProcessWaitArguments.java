@@ -35,7 +35,7 @@ public final class ProcessWaitArguments {
   /** 案内。 */
   private static final String GUIDANCE =
       "waitForShellProcess: timeoutSeconds は 0〜"
-          + DependencyAwaiter.MAX_TIMEOUT_SECONDS
+          + DependencyAwaiter.MAX_PROCESS_TIMEOUT_SECONDS
           + " 秒の整数を指定してください。"
           + " 0 は即時の状態確認、省略または null は既定の10秒です。"
           + " プロセスの確認・待機は実行していません。同じ processId で待機時間だけを修正してください。"
@@ -72,12 +72,12 @@ public final class ProcessWaitArguments {
     if (!timeout.isIntegralNumber()
         || !timeout.canConvertToInt()
         || timeout.intValue() < 0
-        || timeout.intValue() > DependencyAwaiter.MAX_TIMEOUT_SECONDS)
+        || timeout.intValue() > DependencyAwaiter.MAX_PROCESS_TIMEOUT_SECONDS)
       throw new InvalidToolArgumentsException(
           GUIDANCE,
           "timeoutSeconds",
           "must be an integer between 0 and "
-              + DependencyAwaiter.MAX_TIMEOUT_SECONDS
+              + DependencyAwaiter.MAX_PROCESS_TIMEOUT_SECONDS
               + ", null, or omitted");
   }
 }

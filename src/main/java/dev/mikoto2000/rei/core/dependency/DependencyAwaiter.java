@@ -14,6 +14,9 @@ public final class DependencyAwaiter {
   /** 最大タイムアウトの秒数。 */
   public static final int MAX_TIMEOUT_SECONDS = 60;
 
+  /** Managed process waits can span a longer build without relaunching it. */
+  public static final int MAX_PROCESS_TIMEOUT_SECONDS = 120;
+
   /** 外部条件の待機に必要な待機の実行先を扱う。 */
   @FunctionalInterface
   public interface Sleeper {
@@ -49,11 +52,22 @@ public final class DependencyAwaiter {
   /** 必要な状態が整ってから先へ進むため、依存条件Awaiterを待つ。 */
   public DependencyObservation await(
       Supplier<DependencyObservation> probe, Duration timeout, Runnable check) {
+    return await(probe, timeout, check, MAX_TIMEOUT_SECONDS);
+  }
+
+  /** Wait for an existing process with the process-specific bound. */
+  public DependencyObservation awaitProcess(
+      Supplier<DependencyObservation> probe, Duration timeout, Runnable check) {
+    return await(probe, timeout, check, MAX_PROCESS_TIMEOUT_SECONDS);
+  }
+
+  private DependencyObservation await(
+      Supplier<DependencyObservation> probe, Duration timeout, Runnable check, int maximumSeconds) {
     if (timeout == null
         || timeout.isNegative()
-        || timeout.compareTo(Duration.ofSeconds(MAX_TIMEOUT_SECONDS)) > 0)
+        || timeout.compareTo(Duration.ofSeconds(maximumSeconds)) > 0)
       throw new IllegalArgumentException(
-          "Dependency timeout must be between 0 and " + MAX_TIMEOUT_SECONDS + " seconds");
+          "Dependency timeout must be between 0 and " + maximumSeconds + " seconds");
     long started = time.nanoTime(), limit = timeout.toNanos();
     while (true) {
       check.run();
