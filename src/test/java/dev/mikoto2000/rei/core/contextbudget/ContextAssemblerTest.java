@@ -23,6 +23,59 @@ import org.springframework.ai.chat.prompt.Prompt;
 /** 文脈文脈の組み立ての結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ContextAssemblerTest {
+  @Test
+  void rejectedReviewReadReservesHeadroomWithoutChangingRawHistory() {
+    var properties = config();
+    properties.setThreshold(590);
+    var assembler =
+        new ContextAssembler(
+            properties,
+            estimator,
+            new ConversationSummaryRepository(dir),
+            new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
+            (previous, messages, budget, current) -> {
+              calls.incrementAndGet();
+              return "saved decisions";
+            },
+            null,
+            null);
+    var feedback =
+        ToolResponseMessage.builder()
+            .responses(
+                List.of(
+                    new ToolResponseMessage.ToolResponse(
+                        "read",
+                        "readNextReviewWorkItem",
+                        "{\"error\":\"CONTEXT_BUDGET_INSUFFICIENT\"}")))
+            .metadata(Map.of("rei.reviewBudgetRecovery", true))
+            .build();
+    var raw =
+        new Prompt(
+            List.of(
+                new SystemMessage("system"),
+                ContextHistoryAdvisor.historical(new UserMessage("old ".repeat(440)), 1),
+                ContextHistoryAdvisor.historical(new AssistantMessage("saved assessment"), 2),
+                new UserMessage("continue the same review"),
+                AssistantMessage.builder()
+                    .content("")
+                    .toolCalls(
+                        List.of(
+                            new AssistantMessage.ToolCall(
+                                "read", "function", "readNextReviewWorkItem", "{}")))
+                    .build(),
+                feedback));
+    long original = raw.getInstructions().stream().mapToLong(estimator::message).sum();
+    assertThat(original).isBetween(526L, 590L);
+    var projected = assembler.assemble(raw, "conversation", "recovery", () -> {});
+    assertThat(calls.get()).isGreaterThan(0);
+    assertThat(projected.getInstructions().stream().mapToLong(estimator::message).sum())
+        .isLessThanOrEqualTo(525);
+    assertThat(raw.getInstructions().stream().mapToLong(estimator::message).sum())
+        .isEqualTo(original);
+    assertThat(projected.getUserMessage().getText()).isEqualTo("continue the same review");
+    assertThat(projected.getInstructions().getLast()).isEqualTo(feedback);
+  }
+
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
@@ -181,7 +234,8 @@ class ContextAssemblerTest {
         org.springframework.ai.chat.client.ChatClientRequest.builder()
             .prompt(new Prompt(List.of(new SystemMessage("system"), new UserMessage("request"))))
             .context(
-                Map.of(org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, "conversation"))
+                Map.of(
+                    org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, "conversation"))
             .build();
     var raw = advisor.before(request, null).prompt();
 
@@ -190,7 +244,8 @@ class ContextAssemblerTest {
             .assemble(raw, "conversation", "run", () -> {});
 
     assertThat(ContextHistoryAdvisor.sequence(raw.getInstructions().get(1))).isZero();
-    assertThat(projected.getInstructions()).extracting(Message::getText)
+    assertThat(projected.getInstructions())
+        .extracting(Message::getText)
         .containsExactly(
             "system",
             "earlier request",
@@ -258,26 +313,41 @@ class ContextAssemblerTest {
   void workingSetChangesOnlyTheTailAfterCompleteToolExchanges(boolean compressionEnabled) {
     var properties = config();
     properties.setEnabled(compressionEnabled);
-    var a = new ContextAssembler(
-        properties, estimator, new ConversationSummaryRepository(dir),
-        new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
-        (p, m, b, r) -> { throw new AssertionError("Short history must not be summarized"); },
-        null, null);
+    var a =
+        new ContextAssembler(
+            properties,
+            estimator,
+            new ConversationSummaryRepository(dir),
+            new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
+            (p, m, b, r) -> {
+              throw new AssertionError("Short history must not be summarized");
+            },
+            null,
+            null);
     var current = new java.util.concurrent.atomic.AtomicReference<>("Working Set: a.java");
     a.setWorkingSet(current::get);
     var policy = new SystemMessage("policy");
     var request = new UserMessage("request");
-    var marker = SystemMessage.builder().text("obsolete snapshot")
-        .metadata(Map.of("rei.workingSet", true)).build();
-    var call = AssistantMessage.builder().content("").toolCalls(
-        List.of(new AssistantMessage.ToolCall("id", "function", "readFile", "{}"))).build();
-    var result = ToolResponseMessage.builder().responses(
-        List.of(new ToolResponseMessage.ToolResponse("id", "readFile", "contents"))).build();
+    var marker =
+        SystemMessage.builder()
+            .text("obsolete snapshot")
+            .metadata(Map.of("rei.workingSet", true))
+            .build();
+    var call =
+        AssistantMessage.builder()
+            .content("")
+            .toolCalls(List.of(new AssistantMessage.ToolCall("id", "function", "readFile", "{}")))
+            .build();
+    var result =
+        ToolResponseMessage.builder()
+            .responses(List.of(new ToolResponseMessage.ToolResponse("id", "readFile", "contents")))
+            .build();
     var raw = new Prompt(List.of(policy, request, marker, call, result));
     var first = a.assemble(raw, "conversation", "run", () -> {});
     current.set("Working Set: b.java");
     var next = a.assemble(raw, "conversation", "run", () -> {});
-    assertThat(first.getInstructions().subList(0, 4)).containsExactly(policy, request, call, result);
+    assertThat(first.getInstructions().subList(0, 4))
+        .containsExactly(policy, request, call, result);
     assertThat(next.getInstructions().subList(0, 4))
         .containsExactlyElementsOf(first.getInstructions().subList(0, 4));
     assertThat(next.getInstructions()).hasSize(5);

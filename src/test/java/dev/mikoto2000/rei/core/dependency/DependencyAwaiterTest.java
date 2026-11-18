@@ -10,6 +10,31 @@ import org.junit.jupiter.api.Test;
 
 /** 依存条件Awaiterの結果と状態の契約を検証するテスト。 */
 class DependencyAwaiterTest {
+  @Test
+  void processWaitSupports120SecondsAndRemainsCancellable() {
+    var time = new AtomicLong();
+    var awaiter = new DependencyAwaiter(time::get, d -> time.addAndGet(d.toNanos()));
+    var result =
+        awaiter.awaitProcess(
+            () -> new DependencyObservation("p", DependencyState.RUNNING, ""),
+            Duration.ofSeconds(120),
+            () -> {});
+    assertEquals(DependencyState.WAITING, result.state());
+    assertEquals(Duration.ofSeconds(120).toNanos(), time.get());
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> awaiter.awaitProcess(() -> null, Duration.ofSeconds(121), () -> {}));
+    assertThrows(
+        java.util.concurrent.CancellationException.class,
+        () ->
+            awaiter.awaitProcess(
+                () -> new DependencyObservation("p", DependencyState.RUNNING, ""),
+                Duration.ofSeconds(120),
+                () -> {
+                  throw new java.util.concurrent.CancellationException();
+                }));
+  }
+
   /** タイムアウトについて、待機中を返すことを確認する。 */
   @Test
   void timeoutReturnsWaitingWithoutClaimingCompletion() {

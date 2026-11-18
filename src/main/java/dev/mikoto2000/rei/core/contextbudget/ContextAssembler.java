@@ -717,7 +717,18 @@ public class ContextAssembler {
 
   /** モデルへ渡す文脈の管理で用いる厳しい条件上限を返す。 */
   private int hardLimit(Prompt prompt) {
-    return promptInputLimit.applyAsInt(prompt);
+    int limit = promptInputLimit.applyAsInt(prompt);
+    var messages = prompt.getInstructions();
+    int lastIndex = messages.size() - 1;
+    while (lastIndex >= 0 && messages.get(lastIndex) instanceof SystemMessage) lastIndex--;
+    if (lastIndex >= 0
+        && messages.get(lastIndex) instanceof ToolResponseMessage last
+        && Boolean.TRUE.equals(last.getMetadata().get("rei.reviewBudgetRecovery"))) {
+      // Reserve a fresh source page without raising model limits or replaying a tool batch.
+      // Summary calls still use the existing Run budget and cancellation checks.
+      return Math.max(1, limit - Math.min(8000, limit / 8));
+    }
+    return limit;
   }
 
   /** モデルへ渡す文脈の管理で用いる実行を返す。 */

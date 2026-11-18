@@ -1170,7 +1170,7 @@ class SubAgentRunnerTest {
     assertThat(runner.run("missing", "task", null).status())
         .isEqualTo(SubAgentResult.Status.UNKNOWN_AGENT);
     assertThat(runner.run("reviewer", "task", null).status())
-        .isEqualTo(SubAgentResult.Status.FAILED);
+        .isEqualTo(SubAgentResult.Status.MAX_STEPS_EXCEEDED);
     assertThat(toolCalls).hasValue(0);
     assertThat(events).anyMatch(e -> e.type() == AgentEventType.SUBAGENT_FAILED);
   }

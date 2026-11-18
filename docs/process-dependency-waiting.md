@@ -3,11 +3,11 @@
 Chat の `waitForShellProcess(processId, timeoutSeconds)` は、既存 `runCommand` の logical processId を観測して終了を待ちます。
 新しいプロセスの起動・終了・再接続は行いません。Policy 分類は READ です。
 
-待機は既定10秒、最大60秒、200ms間隔。0秒では状態を一度確認して返します。
+待機は既定10秒、最大120秒、200ms間隔。0秒では状態を一度確認して返します。
 monotonic clock と Sleeper はテストで差し替えられます。cancellation は各観測前後と sleep の interrupt で伝播します。
 待機のための追加 LLM 呼び出しはありません。
 
-`timeoutSeconds` は整数の0〜60秒で、省略・`null` は既定の10秒です。範囲外や型が不正な場合は、プロセスの状態確認・待機・承認要求の前に検出し、既存の回数制限付き引数修正ループで LLM に修正を求めます。修正時は同じ `processId` を維持し、成功済みのコマンドを再起動しません。これは1回の待機時間の上限であり、プロセス全体の実行期限ではありません。実行中に発生した障害や権限拒否を引数修正として再試行することはありません。
+`timeoutSeconds` は整数の0〜120秒で、省略・`null` は既定の10秒です。範囲外や型が不正な場合は、プロセスの状態確認・待機・承認要求の前に検出し、既存の回数制限付き引数修正ループで LLM に修正を求めます。修正時は同じ `processId` を維持し、成功済みのコマンドを再起動しません。これは1回の待機時間の上限であり、プロセス全体の実行期限ではありません。実行中に発生した障害や権限拒否を引数修正として再試行することはありません。
 
 戻り値 `ShellDependencyResult` は `dependency`（id/state/detail）と既存 `BackgroundProcessSnapshot` を含みます。
 

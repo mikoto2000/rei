@@ -51,13 +51,13 @@ public class ProcessDependencyTools {
   @Tool(
       name = "waitForShellProcess",
       description =
-          "Wait 0 to 60 seconds for an existing managed shell process without launching or killing it. Default 10 seconds; 0 checks immediately. Returns COMPLETED, FAILED, CANCELLED, BLOCKED (unknown process), or WAITING at timeout. WAITING is not successful completion; wait again with the same processId instead of relaunching the command. Uses bounded polling instead of repeated LLM status requests.")
+          "Wait 0 to 120 seconds for an existing managed shell process without launching or killing it. Default 10 seconds; 0 checks immediately. Returns COMPLETED, FAILED, CANCELLED, BLOCKED (unknown process), or WAITING at timeout. WAITING is not successful completion; wait again with the same processId instead of relaunching the command. Uses bounded polling instead of repeated LLM status requests.")
   public ShellDependencyResult waitForShellProcess(
       String processId,
       @ToolParam(
               required = false,
               description =
-                  "Integer seconds from 0 to 60 inclusive. Omit or use null for the default 10 seconds; 0 checks immediately.")
+                  "Integer seconds from 0 to 120 inclusive. Omit or use null for the default 10 seconds; 0 checks immediately.")
           Integer timeoutSeconds,
       ToolContext toolContext) {
     int seconds = timeoutSeconds == null ? 10 : timeoutSeconds;
@@ -69,7 +69,7 @@ public class ProcessDependencyTools {
             : null;
     var latest = new AtomicReference<BackgroundProcessSnapshot>();
     var result =
-        awaiter.await(
+        awaiter.awaitProcess(
             () -> {
               var snapshot = processes.status(processId, null);
               latest.set(snapshot);

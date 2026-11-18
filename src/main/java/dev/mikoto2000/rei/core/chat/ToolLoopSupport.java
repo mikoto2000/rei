@@ -179,6 +179,8 @@ public final class ToolLoopSupport {
           }
       var metadata = new java.util.HashMap<>(message.getMetadata());
       metadata.put("rei.deliveryPolicies", java.util.Map.copyOf(calls));
+      if (message.getResponses().stream().anyMatch(ToolLoopSupport::reviewBudgetRejected))
+        metadata.put("rei.reviewBudgetRecovery", true);
       var readGrant = dev.mikoto2000.rei.tooldelivery.FileReadContext.grant();
       if (readGrant != null) {
         var grants =
@@ -215,6 +217,20 @@ public final class ToolLoopSupport {
     } catch (RuntimeException malformed) {
       return false;
     }
+  }
+
+  private static boolean reviewBudgetRejected(ToolResponseMessage.ToolResponse response) {
+    if (!java.util.Set.of(
+                "readReviewPages",
+                "readReviewWorkItem",
+                "claimReviewWorkItem",
+                "readNextReviewWorkItem")
+            .contains(response.name())
+        || !declaredRejection(response)) return false;
+    var result =
+        tools.jackson.databind.json.JsonMapper.builder().build().readTree(response.responseData());
+    return java.util.Set.of("CONTEXT_BUDGET_INSUFFICIENT", "REVIEW_PAGE_BUDGET_TOO_SMALL")
+        .contains(result.path("error").asString());
   }
 
   /** 承認による中断や引数の修正を扱える実行経路を選び、未完了のツール呼び出しを進める。 */
