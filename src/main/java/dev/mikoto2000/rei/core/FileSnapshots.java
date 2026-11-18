@@ -32,8 +32,11 @@ final class FileSnapshots {
   /** 最大要求バイト数。 */
   static final int MAX_REQUEST_BYTES = 8 * MAX_FILE_BYTES;
 
-  /** 最大ファイル一覧。 */
+  /** 本文を保持するスナップショットの最大ファイル数。 */
   static final int MAX_FILES = 1024;
+
+  /** 絞り込み後のファイル一覧の最大件数。 */
+  static final int MAX_INVENTORY_FILES = 4096;
 
   /** 共通の実行基盤に必要な読み取り元を扱う。 */
   @FunctionalInterface
@@ -127,8 +130,9 @@ final class FileSnapshots {
     if (cached != null) return cached;
     var paths = loader.list().stream().distinct().sorted().toList();
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-    if (paths.size() > MAX_FILES)
-      throw new IOException("File inventory limit reached (1024); narrow baseDir/globs");
+    if (paths.size() > MAX_INVENTORY_FILES)
+      throw new IOException(
+          "File inventory limit reached (" + MAX_INVENTORY_FILES + "); narrow baseDir/globs");
     if (paths.stream().anyMatch(path -> path.length() > 1024))
       throw new IOException("Inventory path limit reached (1024 characters)");
     inventories.put(key, paths);

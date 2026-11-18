@@ -378,7 +378,7 @@ class FileOperationsOptimizationTest {
           /** {@code listFile} の条件を再現するための補助情報を返す。 */
           @Override
           List<String> listFile(String base, Path directory) {
-            return java.util.stream.IntStream.range(0, 1025).mapToObj(i -> "file" + i).toList();
+            return java.util.stream.IntStream.range(0, 4097).mapToObj(i -> "file" + i).toList();
           }
         };
     assertTrue(
@@ -400,7 +400,7 @@ class FileOperationsOptimizationTest {
     var paths = new ArrayList<String>();
     paths.add("a.txt");
     paths.add("b.java");
-    for (int i = 0; i < 1024; i++) paths.add("other" + i + ".log");
+    for (int i = 0; i < 4096; i++) paths.add("other" + i + ".log");
     var tools =
         new Tools() {
           /** {@code listFile} の条件を再現するための補助情報を返す。 */
