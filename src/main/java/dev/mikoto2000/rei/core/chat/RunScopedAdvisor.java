@@ -71,7 +71,7 @@ public final class RunScopedAdvisor implements BaseAdvisor {
                               0,
                               correctedText.length()
                                   - dev.mikoto2000.rei.core.chat.ToolLoopSupport
-                                      .discardedCharacters(chat)));
+                                      .streamRetryDiscardedCharacters(chat)));
                     } else if (chat.getResult() != null
                         && chat.getResult().getOutput().getText() != null) {
                       correctedText.append(chat.getResult().getOutput().getText());
