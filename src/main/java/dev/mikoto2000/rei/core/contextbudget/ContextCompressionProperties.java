@@ -46,6 +46,9 @@ public class ContextCompressionProperties {
   /** 要約トークン数。 */
   private int summaryTokens = 3000;
 
+  /** 要約本文とは別に、モデルの思考などに確保する生成トークン数。 */
+  private int summaryGenerationReserve = 8192;
+
   /** ツールの結果判定の境界値。 */
   private int toolResultThreshold = 8000;
 
@@ -80,6 +83,8 @@ public class ContextCompressionProperties {
         || hardLimit < threshold
         || recentTokens <= 0
         || summaryTokens <= 0
+        || summaryGenerationReserve < 0
+        || (long) summaryTokens + summaryGenerationReserve > Integer.MAX_VALUE
         || toolResultThreshold <= 0
         || toolResultTokens <= 0
         || toolResultTokens >= toolResultThreshold

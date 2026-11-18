@@ -168,6 +168,7 @@ rei:
     hard-limit: ${REI_CONTEXT_HARD_LIMIT:85000}
     recent-tokens: ${REI_CONTEXT_RECENT_TOKENS:12000}
     summary-tokens: ${REI_CONTEXT_SUMMARY_TOKENS:12000}
+    summary-generation-reserve: ${REI_CONTEXT_SUMMARY_GENERATION_RESERVE:8192}
     minimum-compression-gain: ${REI_CONTEXT_MINIMUM_GAIN:0.1}
     tool-result-threshold: ${REI_CONTEXT_TOOL_RESULT_THRESHOLD:8000}
     tool-result-tokens: ${REI_CONTEXT_TOOL_RESULT_TOKENS:2000}
@@ -216,6 +217,7 @@ rei:
     chat-memory-max-messages: ${REI_CHAT_MEMORY_MAX_MESSAGES:100}
   llm:
     read-timeout: ${REI_LLM_READ_TIMEOUT:5m}
+    max-stream-timeout-retries: ${REI_LLM_MAX_STREAM_TIMEOUT_RETRIES:2}
     max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
     output-limit:
       llm-call-budget-enabled: ${REI_LLM_OUTPUT_LIMIT_LLM_CALL_BUDGET_ENABLED:true}

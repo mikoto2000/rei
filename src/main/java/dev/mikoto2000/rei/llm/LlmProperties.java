@@ -27,6 +27,19 @@ public class LlmProperties {
     this.readTimeout = readTimeout;
   }
 
+  /** Additional retries for one timed-out chat model invocation. */
+  private int maxStreamTimeoutRetries = 2;
+
+  public int getMaxStreamTimeoutRetries() {
+    return maxStreamTimeoutRetries;
+  }
+
+  public void setMaxStreamTimeoutRetries(int value) {
+    if (value < 0 || value > 3)
+      throw new IllegalArgumentException("Stream timeout retries must be 0 to 3");
+    maxStreamTimeoutRetries = value;
+  }
+
   /** 出力上限。 */
   private OutputLimit outputLimit = new OutputLimit();
 

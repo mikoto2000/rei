@@ -31,7 +31,7 @@ public final class ContextCompressionException extends RuntimeException {
     /** 出力上限。 */
     OUTPUT_LIMIT(
         "summary_output_limit",
-        "要約モデルが出力上限に達しました。思考トークンも上限を消費する場合があります。rei.context-compression.summary-tokens とモデルの出力設定を確認してください。"),
+        "要約モデルが出力上限に達しました。思考トークンも上限を消費する場合があります。rei.context-compression.summary-generation-reserve とモデルの出力設定を確認してください。"),
     /** タイムアウト。 */
     TIMEOUT(
         "summary_timeout",

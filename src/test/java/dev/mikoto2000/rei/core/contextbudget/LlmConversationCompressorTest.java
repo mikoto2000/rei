@@ -76,14 +76,92 @@ class LlmConversationCompressorTest {
     assertThat(options.getToolCallbacks()).isEmpty();
     assertThat(options.getToolContext()).containsEntry("rei.modelCallPurpose", "context-summary");
     if (completionTokens) {
-      assertThat(options.getMaxCompletionTokens()).isEqualTo(100);
+      assertThat(options.getMaxCompletionTokens()).isEqualTo(8292);
       assertThat(options.getMaxTokens()).isNull();
       assertThat(source.getMaxCompletionTokens()).isEqualTo(4096);
     } else {
-      assertThat(options.getMaxTokens()).isEqualTo(100);
+      assertThat(options.getMaxTokens()).isEqualTo(8292);
       assertThat(options.getMaxCompletionTokens()).isNull();
       assertThat(source.getMaxTokens()).isEqualTo(4096);
     }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void reasoningCanFinishWithoutConsumingTheStoredSummaryBudget(boolean sdkUsage) {
+    var model = mock(ChatModel.class);
+    Object nativeUsage =
+        sdkUsage
+            ? com.openai.models.completions.CompletionUsage.builder()
+                .promptTokens(20)
+                .completionTokens(12003)
+                .totalTokens(12023)
+                .completionTokensDetails(
+                    com.openai.models.completions.CompletionUsage.CompletionTokensDetails.builder()
+                        .reasoningTokens(12000)
+                        .build())
+                .build()
+            : java.util.Map.of(
+                "completion_tokens_details", java.util.Map.of("reasoning_tokens", 12000));
+    var usage =
+        new org.springframework.ai.chat.metadata.DefaultUsage(20, 12003, 12023, nativeUsage);
+    when(model.stream(any(Prompt.class)))
+        .thenAnswer(
+            invocation -> {
+              Prompt prompt = invocation.getArgument(0);
+              var options = (OpenAiChatOptions) prompt.getOptions();
+              assertThat(prompt.getSystemMessage().getText())
+                  .contains("at most 2000 tokens", "hard text limit is 12000");
+              // Reproduce a model that uses the old 12,000-token API cap for reasoning alone.
+              if (options.getMaxTokens() < 12003) return Flux.just(response("", "length"));
+              return Flux.just(
+                  new ChatResponse(
+                      response("compact summary", "stop").getResults(),
+                      org.springframework.ai.chat.metadata.ChatResponseMetadata.builder()
+                          .usage(usage)
+                          .build()));
+            });
+    var budget = mock(dev.mikoto2000.rei.llm.ModelCallBudget.class);
+    var summary =
+        compressor(model, new ContextCompressionProperties())
+            .summarizeResult("", List.of(), 12000, new Prompt("owner"), budget);
+    assertThat(summary.text()).isEqualTo("compact summary");
+    assertThat(summary.outputTokens()).isEqualTo(3);
+    org.mockito.Mockito.verify(budget).recordTotalTokens(12023);
+  }
+
+  @ParameterizedTest
+  @ValueSource(longs = {-1, 12003, 12004})
+  void invalidReasoningUsageCannotHideAnOversizedSummary(long reasoning) {
+    var model = mock(ChatModel.class);
+    var usage =
+        new org.springframework.ai.chat.metadata.DefaultUsage(
+            20,
+            12003,
+            12023,
+            java.util.Map.of(
+                "completion_tokens_details", java.util.Map.of("reasoning_tokens", reasoning)));
+    when(model.stream(any(Prompt.class)))
+        .thenReturn(
+            Flux.just(
+                new ChatResponse(
+                    response("summary", "stop").getResults(),
+                    org.springframework.ai.chat.metadata.ChatResponseMetadata.builder()
+                        .usage(usage)
+                        .build())));
+    assertThat(
+            compressor(model, new ContextCompressionProperties())
+                .summarizeResult("", List.of(), 12000, new Prompt("owner"))
+                .outputTokens())
+        .isEqualTo(12003);
+  }
+
+  @Test
+  void generationReserveCanBeDisabledForProvidersWithSmallOutputLimits() {
+    var properties = new ContextCompressionProperties();
+    properties.setSummaryGenerationReserve(0);
+    assertThat(compressor(mock(ChatModel.class), properties).generationTokens(12000))
+        .isEqualTo(12000);
   }
 
   /** {@code compressor} の条件を再現するための補助情報を返す。 */

@@ -41,6 +41,54 @@ class ContextSummaryTokenBudgetTest {
   /** 検証に使うディレクトリ。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir;
 
+  @Test
+  @org.junit.jupiter.api.Tag("integration")
+  void summaryWithReasoningIsSavedWhileAllTokensAreChargedToTheRun() {
+    var model = mock(ChatModel.class);
+    var usage =
+        new DefaultUsage(
+            20, 1003, 1023, Map.of("completion_tokens_details", Map.of("reasoning_tokens", 1000)));
+    when(model.stream(any(Prompt.class)))
+        .thenReturn(
+            Flux.just(
+                new ChatResponse(
+                    List.of(new Generation(new AssistantMessage("compact summary"))),
+                    ChatResponseMetadata.builder().usage(usage).build())));
+    var budget = new OutputLimitRunBudget(0, 10, null, 5000);
+    var execution = new RunExecutionContext("run", budget, null, null, null);
+    var summaries = new ConversationSummaryRepository(dir);
+    var projected =
+        assembler(compressionConfig(), compressor(model), summaries)
+            .assemble(historical(execution), "chat", "run", execution::checkActive);
+    assertThat(projected.getContents()).contains("compact summary", "current");
+    assertThat(summaries.read("chat").throughSequence()).isEqualTo(1);
+    assertThat(budget.totalTokens()).isEqualTo(1023);
+    verify(model, times(1)).stream(any(Prompt.class));
+  }
+
+  @Test
+  @org.junit.jupiter.api.Tag("integration")
+  void generationReserveThatExhaustsTheWindowDoesNotSendAnOversizedSummaryRequest() {
+    var properties = compressionConfig();
+    properties.setModelContextLimit(20000);
+    properties.setCompletionReserve(0);
+    properties.setToolReserve(0);
+    properties.setSafetyMargin(0);
+    properties.setSummaryGenerationReserve(18000);
+    var model = mock(ChatModel.class);
+    var summaries = new ConversationSummaryRepository(dir);
+    var projected =
+        assembler(properties, compressor(model, properties), summaries)
+            .assemble(
+                new Prompt(standaloneHistorical().getInstructions().subList(0, 3)),
+                "chat",
+                "run",
+                () -> {});
+    assertThat(projected.getContents()).contains("current");
+    assertThat(summaries.read("chat").throughSequence()).isZero();
+    verifyNoInteractions(model);
+  }
+
   /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   ChatResponse response(String text, Integer tokens) {
     var metadata = ChatResponseMetadata.builder();

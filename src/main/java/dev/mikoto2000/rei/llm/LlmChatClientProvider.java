@@ -43,6 +43,13 @@ import org.springframework.stereotype.Component;
 /** 言語モデルモデルへ対話を依頼する窓口を用途や設定に応じて提供する窓口。 */
 @Component
 public class LlmChatClientProvider {
+  private int maxStreamTimeoutRetries = 2;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setStreamTimeoutRetries(LlmProperties properties) {
+    maxStreamTimeoutRetries = properties.getMaxStreamTimeoutRetries();
+  }
+
   /** Slackエージェントツール一覧。 */
   private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.slack.SlackAgentTools>
       slackAgentTools;
@@ -441,7 +448,7 @@ public class LlmChatClientProvider {
           var builder =
               ChatClient.builder(
                       new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-                          subAgentModel.get(), contextAssembler))
+                          subAgentModel.get(), contextAssembler, maxStreamTimeoutRetries))
                   .defaultAdvisors(new RunAwareToolCallingAdvisor())
                   .defaultOptions(
                       options
@@ -507,7 +514,8 @@ public class LlmChatClientProvider {
         ChatClient.builder(
                 new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
                     featureModel.apply(feature),
-                    LlmFeature.CHAT.equals(feature) ? contextAssembler : null))
+                    LlmFeature.CHAT.equals(feature) ? contextAssembler : null,
+                    LlmFeature.CHAT.equals(feature) ? maxStreamTimeoutRetries : 0))
             .defaultAdvisors(new RunAwareToolCallingAdvisor())
             .defaultSystem(
                 dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(

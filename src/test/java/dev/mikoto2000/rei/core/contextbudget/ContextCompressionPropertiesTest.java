@@ -7,6 +7,18 @@ import org.junit.jupiter.api.Test;
 
 /** 文脈圧縮設定の結果と状態の契約を検証するテスト。 */
 class ContextCompressionPropertiesTest {
+  @Test
+  void validatesGenerationReserveWithoutIntegerOverflow() {
+    var properties = new ContextCompressionProperties();
+    assertThat(properties.getSummaryGenerationReserve()).isEqualTo(8192);
+    properties.setSummaryGenerationReserve(0);
+    properties.validate();
+    properties.setSummaryGenerationReserve(-1);
+    assertThatThrownBy(properties::validate).isInstanceOf(IllegalArgumentException.class);
+    properties.setSummaryGenerationReserve(Integer.MAX_VALUE);
+    assertThatThrownBy(properties::validate).isInstanceOf(IllegalArgumentException.class);
+  }
+
   /** 既定値終点二つ分数およびについて、境界条件を受け付けられることを確認する。 */
   @Test
   void defaultsToTwoMinutesAndAcceptsBoundaries() {

@@ -10,13 +10,18 @@ public interface ConversationCompressor {
   /**
    * モデルへ渡す文脈の管理で受け渡す要約を表す。
    *
-   * <p>Provider completion usage, when present; null preserves conservative validation for legacy
-   * compressors.
+   * <p>Summary text usage, excluding separately reported reasoning tokens; null preserves
+   * conservative validation for legacy compressors.
    *
    * @param text テキスト
    * @param outputTokens 出力トークン数
    */
   record Summary(String text, Integer outputTokens) {}
+
+  /** 要約本文とモデルの思考を含め、要求全体に予約する生成トークン数。 */
+  default int generationTokens(int summaryTokens) {
+    return summaryTokens;
+  }
 
   /** 対象の内容を、要点が分かる形にまとめる。 */
   String summarize(

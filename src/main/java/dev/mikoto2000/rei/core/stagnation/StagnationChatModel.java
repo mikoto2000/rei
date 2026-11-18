@@ -31,9 +31,11 @@ import reactor.core.scheduler.Schedulers;
  * <p>Explicit streaming LLM -> tool-result loop. Existing client advisors still own prompt/memory
  * handling.
  */
-public class StagnationChatModel implements ChatModel {
+public final class StagnationChatModel implements ChatModel {
   /** 委譲先。 */
   private final ChatModel delegate;
+
+  private final int maxStreamTimeoutRetries;
 
   /** 文脈の組み立て。 */
   private final java.util.function.BiFunction<Prompt, Assembly, Prompt> assemblePrompt;
@@ -65,6 +67,17 @@ public class StagnationChatModel implements ChatModel {
   /** 指定された値や利用先を使って、StagnationChatModelを初期化する。 */
   public StagnationChatModel(
       ChatModel delegate, dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler) {
+    this(delegate, assembler, 0);
+  }
+
+  /** Configure bounded model retries before tool execution. */
+  public StagnationChatModel(
+      ChatModel delegate,
+      dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler,
+      int maxStreamTimeoutRetries) {
+    if (maxStreamTimeoutRetries < 0 || maxStreamTimeoutRetries > 3)
+      throw new IllegalArgumentException("Stream timeout retries must be 0 to 3");
+    this.maxStreamTimeoutRetries = maxStreamTimeoutRetries;
     this.delegate = delegate;
     this.assemblePrompt =
         assembler == null
@@ -245,7 +258,12 @@ public class StagnationChatModel implements ChatModel {
                       () -> {
                         context.checkModelTokenBudget();
                         invoked.set(true);
-                        return delegate.stream(invocationPrompt);
+                        return StreamTimeoutRetry.stream(
+                            delegate,
+                            invocationPrompt,
+                            context,
+                            maxStreamTimeoutRetries,
+                            aggregate::set);
                       })
                   : Mono.fromCallable(
                           () -> {
@@ -275,9 +293,14 @@ public class StagnationChatModel implements ChatModel {
                             context.checkModelTokenBudget();
                             invoked.set(true);
                             sent.set(projected);
-                            return delegate.stream(projected);
+                            return StreamTimeoutRetry.stream(
+                                delegate,
+                                projected,
+                                context,
+                                maxStreamTimeoutRetries,
+                                aggregate::set);
                           });
-          Flux<ChatResponse> response = new MessageAggregator().aggregate(requests, aggregate::set);
+          Flux<ChatResponse> response = requests;
           return response
               .concatWith(
                   Flux.defer(
