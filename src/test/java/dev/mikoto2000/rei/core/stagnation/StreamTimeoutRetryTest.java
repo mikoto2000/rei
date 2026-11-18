@@ -74,7 +74,10 @@ class StreamTimeoutRetryTest {
     assertThat(prompts).containsExactly(prompt, prompt);
     assertThat(completed).hasSize(1);
     assertThat(completed.getFirst().getResult().getOutput().getText()).isEqualTo("success");
-    assertThat(chunks.stream().filter(c -> StreamTimeoutRetry.retryAttempt(c) > 0).count())
+    assertThat(
+            chunks.stream()
+                .filter(c -> dev.mikoto2000.rei.core.chat.ToolLoopSupport.streamRetryAttempt(c) > 0)
+                .count())
         .isEqualTo(1);
     assertThat(budget.snapshot().llmCalls()).isEqualTo(2);
   }

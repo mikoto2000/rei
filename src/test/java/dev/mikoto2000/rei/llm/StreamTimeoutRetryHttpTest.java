@@ -4,10 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.sun.net.httpserver.HttpServer;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
 import dev.mikoto2000.rei.core.stagnation.ProgressEvaluator;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.core.stagnation.StagnationChatModel;
-import dev.mikoto2000.rei.core.stagnation.StreamTimeoutRetry;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -96,7 +96,7 @@ class StreamTimeoutRetryHttpTest {
                   .collectList()
                   .block(Duration.ofSeconds(20));
       assertThat(calls.get()).isEqualTo(2);
-      assertThat(chunks).anyMatch(chunk -> StreamTimeoutRetry.retryAttempt(chunk) == 1);
+      assertThat(chunks).anyMatch(chunk -> ToolLoopSupport.streamRetryAttempt(chunk) == 1);
       assertThat(chunks.getLast().getResult().getOutput().getText()).isEqualTo("success");
       assertThat(budget.snapshot().llmCalls()).isEqualTo(2);
     } finally {

@@ -16,23 +16,11 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /** Retries only a timed-out model invocation; tools remain outside this boundary. */
-public final class StreamTimeoutRetry {
+final class StreamTimeoutRetry {
   private static final String RETRY = "rei.streamTimeoutRetry";
   private static final String DISCARDED = "rei.streamTimeoutDiscardedCharacters";
 
   private StreamTimeoutRetry() {}
-
-  /** A control frame, never assistant content or a tool result. */
-  public static int retryAttempt(ChatResponse response) {
-    Object value = response.getMetadata().get(RETRY);
-    return value instanceof Integer attempt ? attempt : 0;
-  }
-
-  /** Number of already delivered text characters belonging to the failed attempt only. */
-  public static int discardedCharacters(ChatResponse response) {
-    Object value = response.getMetadata().get(DISCARDED);
-    return value instanceof Integer count ? count : 0;
-  }
 
   static Flux<ChatResponse> stream(
       ChatModel model,

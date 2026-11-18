@@ -1295,8 +1295,7 @@ public class ChatExecutionService {
                     var scope = AgentRunScope.open(execution.runContext());
                     try (scope) {
                       int retry =
-                          dev.mikoto2000.rei.core.stagnation.StreamTimeoutRetry.retryAttempt(
-                              response);
+                          dev.mikoto2000.rei.core.chat.ToolLoopSupport.streamRetryAttempt(response);
                       if (retry > 0) {
                         String notice = "[応答が途切れたため再試行中（" + retry + "回目）]";
                         if (thinkingEventStarted.get())

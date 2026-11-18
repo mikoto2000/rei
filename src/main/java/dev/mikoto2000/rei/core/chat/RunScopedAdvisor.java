@@ -64,14 +64,13 @@ public final class RunScopedAdvisor implements BaseAdvisor {
                   response -> {
                     var chat = response.chatResponse();
                     if (chat == null) return;
-                    if (dev.mikoto2000.rei.core.stagnation.StreamTimeoutRetry.retryAttempt(chat)
-                        > 0) {
+                    if (dev.mikoto2000.rei.core.chat.ToolLoopSupport.streamRetryAttempt(chat) > 0) {
                       retried.set(true);
                       correctedText.setLength(
                           Math.max(
                               0,
                               correctedText.length()
-                                  - dev.mikoto2000.rei.core.stagnation.StreamTimeoutRetry
+                                  - dev.mikoto2000.rei.core.chat.ToolLoopSupport
                                       .discardedCharacters(chat)));
                     } else if (chat.getResult() != null
                         && chat.getResult().getOutput().getText() != null) {
