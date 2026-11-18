@@ -395,7 +395,7 @@ public class AiConfiguration {
     ChatClient.Builder builder =
         ChatClient.builder(
                 new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-                    chatModel, contextAssembler))
+                    chatModel, contextAssembler, llmProperties.getMaxStreamTimeoutRetries()))
             .defaultSystem(systemPromptService.systemPrompt())
             // Run-owned tools use Rei's loop; legacy non-run requests retain SDK tool handling.
             .defaultAdvisors(new dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor())

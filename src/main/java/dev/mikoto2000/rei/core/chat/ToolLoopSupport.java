@@ -14,6 +14,17 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
  * <p>Shared Spring AI tool dispatch boundary for explicit application-owned loops.
  */
 public final class ToolLoopSupport {
+  /** Recognize internal retry control frames without treating them as assistant content. */
+  public static int streamRetryAttempt(ChatResponse response) {
+    Object value = response.getMetadata().get("rei.streamTimeoutRetry");
+    return value instanceof Integer attempt ? attempt : 0;
+  }
+
+  public static int streamRetryDiscardedCharacters(ChatResponse response) {
+    Object value = response.getMetadata().get("rei.streamTimeoutDiscardedCharacters");
+    return value instanceof Integer count ? count : 0;
+  }
+
   /** Capture delivered evidence at the existing tool-loop boundary, without replaying tools. */
   public String captureOutputLimitHandoff(
       java.util.List<org.springframework.ai.chat.messages.Message> delivered,
@@ -197,7 +208,10 @@ public final class ToolLoopSupport {
         history.add(
             new org.springframework.ai.chat.messages.SystemMessage(
                 context.unavailableToolCorrection(call.id(), call.name())));
-        return ToolExecutionResult.builder().conversationHistory(history).returnDirect(false).build();
+        return ToolExecutionResult.builder()
+            .conversationHistory(history)
+            .returnDirect(false)
+            .build();
       }
     }
     if (!context.hasApprovalContinuation()
@@ -351,7 +365,8 @@ public final class ToolLoopSupport {
           String result =
               callbacks
                   .get(call.name())
-                  .call(call.arguments(), new org.springframework.ai.chat.model.ToolContext(values));
+                  .call(
+                      call.arguments(), new org.springframework.ai.chat.model.ToolContext(values));
           completed.add(
               new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
                   call.id(), call.name(), result));

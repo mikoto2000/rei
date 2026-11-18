@@ -1272,7 +1272,7 @@ public class ChatExecutionService {
     AtomicReference<String> previousThinking = new AtomicReference<>("");
     AtomicBoolean thinkingEventStarted = new AtomicBoolean(false);
     AtomicBoolean thinkingEventCompleted = new AtomicBoolean(false);
-    String thinkingId = UUID.randomUUID().toString();
+    AtomicReference<String> thinkingId = new AtomicReference<>(UUID.randomUUID().toString());
     StringBuilder thinkingBuilder = new StringBuilder();
     AtomicLong answerStartedAtNanos = new AtomicLong(0L);
     AtomicLong answerLastChunkAtNanos = new AtomicLong(0L);
@@ -1281,7 +1281,7 @@ public class ChatExecutionService {
     AtomicInteger completionTokens = new AtomicInteger(0);
     AtomicBoolean outputLimitReached = new AtomicBoolean(false);
     AtomicBoolean messageStarted = new AtomicBoolean(false);
-    String messageId = UUID.randomUUID().toString();
+    AtomicReference<String> messageId = new AtomicReference<>(UUID.randomUUID().toString());
     StringBuilder responseBuilder = new StringBuilder();
     Disposable disposable;
     long requestStartedAtNanos = System.nanoTime();
@@ -1294,6 +1294,35 @@ public class ChatExecutionService {
                   response -> {
                     var scope = AgentRunScope.open(execution.runContext());
                     try (scope) {
+                      int retry =
+                          dev.mikoto2000.rei.core.chat.ToolLoopSupport.streamRetryAttempt(response);
+                      if (retry > 0) {
+                        String notice = "[応答が途切れたため再試行中（" + retry + "回目）]";
+                        if (thinkingEventStarted.get())
+                          eventPublisher.publish(
+                              eventFactory.thinkingCompleted(thinkingId.get(), notice));
+                        if (!messageStarted.get())
+                          eventPublisher.publish(
+                              eventFactory.messageStarted(messageId.get(), "assistant"));
+                        eventPublisher.publish(
+                            eventFactory.messageDelta(messageId.get(), "\n" + notice + "\n"));
+                        eventPublisher.publish(
+                            eventFactory.messageCompleted(messageId.get(), "assistant", notice));
+                        responseBuilder.setLength(0);
+                        thinkingBuilder.setLength(0);
+                        previousThinking.set("");
+                        thinkingEventStarted.set(false);
+                        thinkingEventCompleted.set(false);
+                        messageStarted.set(false);
+                        outputLimitReached.set(false);
+                        completionTokens.set(0);
+                        thinkingId.set(UUID.randomUUID().toString());
+                        messageId.set(UUID.randomUUID().toString());
+                        answerStartedAtNanos.set(0);
+                        answerLastChunkAtNanos.set(0);
+                        answerChunkCount.set(0);
+                        return;
+                      }
                       var generation = response.getResult();
                       var metadata = generation == null ? null : generation.getMetadata();
                       var finishReason = metadata == null ? null : metadata.getFinishReason();
@@ -1306,7 +1335,7 @@ public class ChatExecutionService {
                             response,
                             previousThinking,
                             thinkingEventStarted,
-                            thinkingId,
+                            thinkingId.get(),
                             thinkingBuilder);
                       }
                       String chunk = answerText(response);
@@ -1318,15 +1347,16 @@ public class ChatExecutionService {
                         completeThinking(
                             thinkingEventStarted,
                             thinkingEventCompleted,
-                            thinkingId,
+                            thinkingId.get(),
                             thinkingBuilder);
-                        eventPublisher.publish(eventFactory.messageStarted(messageId, "assistant"));
+                        eventPublisher.publish(
+                            eventFactory.messageStarted(messageId.get(), "assistant"));
                         answerStartedAtNanos.compareAndSet(0L, System.nanoTime());
                       }
                       answerLastChunkAtNanos.set(System.nanoTime());
                       answerChunkCount.incrementAndGet();
                       responseBuilder.append(chunk);
-                      eventPublisher.publish(eventFactory.messageDelta(messageId, chunk));
+                      eventPublisher.publish(eventFactory.messageDelta(messageId.get(), chunk));
                     }
                   },
                   error -> {
@@ -1360,7 +1390,8 @@ public class ChatExecutionService {
         runCompletionTokens.addAndGet(completionTokens.get());
         usageAvailable.set(true);
       }
-      completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
+      completeThinking(
+          thinkingEventStarted, thinkingEventCompleted, thinkingId.get(), thinkingBuilder);
       Throwable error = errorRef.get();
       if (error != null) {
         for (Throwable cause : failureCauses(error)) {
@@ -1385,7 +1416,8 @@ public class ChatExecutionService {
       }
       if (messageStarted.get()) {
         eventPublisher.publish(
-            eventFactory.messageCompleted(messageId, "assistant", responseBuilder.toString()));
+            eventFactory.messageCompleted(
+                messageId.get(), "assistant", responseBuilder.toString()));
       }
       GenerationMetrics metrics =
           calculateGenerationMetrics(
@@ -1399,7 +1431,8 @@ public class ChatExecutionService {
       return ChatRunResult.success(responseBuilder.toString());
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
-      completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
+      completeThinking(
+          thinkingEventStarted, thinkingEventCompleted, thinkingId.get(), thinkingBuilder);
       if (cancellationRequested.getAsBoolean()) {
         return ChatRunResult.cancelled();
       }
