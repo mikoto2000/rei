@@ -51,15 +51,55 @@ public final class RunScopedAdvisor implements BaseAdvisor {
   public reactor.core.publisher.Flux<ChatClientResponse> adviseStream(
       ChatClientRequest request, StreamAdvisorChain chain) {
     if (delegate instanceof BaseChatMemoryAdvisor) {
+      var correctedText = new StringBuilder();
+      var retried = new java.util.concurrent.atomic.AtomicBoolean();
       // Memory advisors save the aggregate on completion, not the finish-reason delta.
       // That final delta can have null text even after a complete answer was streamed.
       var responses =
           reactor.core.publisher.Mono.just(capture(request))
               .publishOn(getScheduler())
               .map(captured -> before(captured, chain))
-              .flatMapMany(chain::nextStream);
+              .flatMapMany(chain::nextStream)
+              .doOnNext(
+                  response -> {
+                    var chat = response.chatResponse();
+                    if (chat == null) return;
+                    if (dev.mikoto2000.rei.core.stagnation.StreamTimeoutRetry.retryAttempt(chat)
+                        > 0) {
+                      retried.set(true);
+                      correctedText.setLength(
+                          Math.max(
+                              0,
+                              correctedText.length()
+                                  - dev.mikoto2000.rei.core.stagnation.StreamTimeoutRetry
+                                      .discardedCharacters(chat)));
+                    } else if (chat.getResult() != null
+                        && chat.getResult().getOutput().getText() != null) {
+                      correctedText.append(chat.getResult().getOutput().getText());
+                    }
+                  });
       return new ChatClientMessageAggregator()
-          .aggregateChatClientResponse(responses, response -> after(response, chain));
+          .aggregateChatClientResponse(
+              responses,
+              response -> {
+                if (retried.get() && response.chatResponse() != null) {
+                  var chat = response.chatResponse();
+                  var output =
+                      org.springframework.ai.chat.messages.AssistantMessage.builder()
+                          .content(correctedText.toString())
+                          .build();
+                  response =
+                      response
+                          .mutate()
+                          .chatResponse(
+                              new org.springframework.ai.chat.model.ChatResponse(
+                                  java.util.List.of(
+                                      new org.springframework.ai.chat.model.Generation(output)),
+                                  chat.getMetadata()))
+                          .build();
+                }
+                after(response, chain);
+              });
     }
     return BaseAdvisor.super.adviseStream(capture(request), chain);
   }
