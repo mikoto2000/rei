@@ -10,7 +10,7 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Pure, bounded required-field checks against the registered callback's own input contract. */
+/** Pure, bounded argument checks against the registered callback's own input contract. */
 public final class ToolSchemaArguments {
   private static final int LIMIT = 4_194_304;
   private static final JsonMapper JSON =
@@ -31,7 +31,7 @@ public final class ToolSchemaArguments {
 
   public static boolean supports(String schema) {
     var node = schema(schema);
-    return node != null && node.path("required").isArray() && !node.path("required").isEmpty();
+    return objectContract(node);
   }
 
   static JsonNode input(String tool, String input) {
@@ -52,8 +52,8 @@ public final class ToolSchemaArguments {
   }
 
   public static void validate(String tool, String schema, String input) {
-    if (!supports(schema)) return;
     var contract = schema(schema);
+    if (!objectContract(contract)) return;
     var problems = new ArrayList<ArgumentIssue>();
     check(contract, contract, input(tool, input), "arguments", problems, 0, new int[1]);
     if (!problems.isEmpty())
@@ -64,6 +64,13 @@ public final class ToolSchemaArguments {
               + ". The tool has not executed. Supply the required fields in their declared objects; "
               + "correct only this call and preserve completed sibling results.",
           problems);
+  }
+
+  private static boolean objectContract(JsonNode schema) {
+    return schema != null
+        && ("object".equals(schema.path("type").asText())
+            || schema.path("properties").isObject()
+            || schema.path("required").isArray());
   }
 
   private static JsonNode schema(String text) {
@@ -112,11 +119,11 @@ public final class ToolSchemaArguments {
               root, schema.path("properties").path(field), child, at, problems, depth + 1, visited);
         if (problems.size() >= 8) return;
       }
-      // Optional nulls retain their existing default semantics; inspect present object shapes only.
+      // Optional nulls retain their existing default semantics.
       for (var entry : value.properties()) {
         var child = entry.getValue();
         if (!requiredNames.contains(entry.getKey())
-            && (child.isObject() || child.isArray())
+            && !child.isNull()
             && schema.path("properties").has(entry.getKey()))
           check(
               root,
@@ -134,15 +141,8 @@ public final class ToolSchemaArguments {
       }
       int i = 0;
       for (var child : value) {
-        if (child.isObject())
-          check(
-              root,
-              schema.path("items"),
-              child,
-              path + "[" + i + "]",
-              problems,
-              depth + 1,
-              visited);
+        check(
+            root, schema.path("items"), child, path + "[" + i + "]", problems, depth + 1, visited);
         if (++i > 10_000 || problems.size() >= 8) break;
       }
     }

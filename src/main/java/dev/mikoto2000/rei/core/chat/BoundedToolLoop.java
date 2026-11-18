@@ -437,50 +437,62 @@ public final class BoundedToolLoop {
                                           tool -> allowed.add(tool.getToolDefinition().name()));
                                   // Validate the entire batch before any side effect. Never let a
                                   // resolver find ambient tools.
-                                  for (var generation : response.getResults())
-                                    for (var call : generation.getOutput().getToolCalls()) {
-                                      if (!allowed.contains(call.name()))
-                                        return Mono.error(
-                                            new IllegalArgumentException("Unrequested tool"));
-                                    }
-                                  return Mono.fromCallable(
-                                          () -> {
-                                            var scope = AgentRunScope.open(owner);
-                                            try (scope) {
-                                              checkActive.run();
-                                              return tools.execute(
-                                                  dev.mikoto2000.rei.tooldelivery.FileReadContext
-                                                      .withProjection(prompt, projected),
-                                                  response);
-                                            }
-                                          })
-                                      .subscribeOn(Schedulers.boundedElastic())
-                                      .flatMap(
-                                          result -> {
-                                            checkActive.run();
-                                            if (result.returnDirect()) {
-                                              var output =
-                                                  ToolExecutionResult.buildGenerations(result)
-                                                      .getFirst()
-                                                      .getOutput();
-                                              var history =
-                                                  new ArrayList<Message>(
-                                                      result.conversationHistory());
-                                              history.add(output);
-                                              return Mono.just(
-                                                  new Outcome(output.getText(), history));
-                                            }
-                                            return iteration(
-                                                model,
-                                                new Prompt(
-                                                    result.conversationHistory(),
-                                                    prompt.getOptions()),
-                                                remaining,
-                                                owner,
-                                                checkActive,
-                                                reservation,
-                                                retries);
-                                          });
+                                  String rejection = batchRejection(response, allowed);
+                                  var dispatch =
+                                      rejection != null
+                                          ? Mono.just(
+                                              ToolLoopSupport.rejectedBatch(prompt, rejection))
+                                          : Mono.fromCallable(
+                                                  () -> {
+                                                    var scope = AgentRunScope.open(owner);
+                                                    try (scope) {
+                                                      checkActive.run();
+                                                      return tools.execute(
+                                                          dev.mikoto2000.rei.tooldelivery
+                                                              .FileReadContext.withProjection(
+                                                              prompt, projected),
+                                                          response);
+                                                    }
+                                                  })
+                                              .subscribeOn(Schedulers.boundedElastic());
+                                  return dispatch.flatMap(
+                                      result -> {
+                                        checkActive.run();
+                                        if (result.returnDirect()) {
+                                          var output =
+                                              ToolExecutionResult.buildGenerations(result)
+                                                  .getFirst()
+                                                  .getOutput();
+                                          var history =
+                                              new ArrayList<Message>(result.conversationHistory());
+                                          history.add(output);
+                                          return Mono.just(new Outcome(output.getText(), history));
+                                        }
+                                        return iteration(
+                                            model,
+                                            new Prompt(
+                                                result.conversationHistory(), prompt.getOptions()),
+                                            remaining,
+                                            owner,
+                                            checkActive,
+                                            reservation,
+                                            retries);
+                                      });
                                 })));
+  }
+
+  private static String batchRejection(ChatResponse response, Set<String> allowed) {
+    var ids = new HashSet<String>();
+    for (var generation : response.getResults()) {
+      for (var call : generation.getOutput().getToolCalls()) {
+        if (!allowed.contains(call.name()))
+          return "The previous response requested an unavailable tool. No calls from that response"
+              + " ran. Reissue still-needed calls using the available tool definitions.";
+        if (!ids.add(call.id()))
+          return "The previous response used duplicate tool-call IDs. No calls from that response"
+              + " ran. Reissue still-needed calls with a distinct ID for each call.";
+      }
+    }
+    return null;
   }
 }

@@ -18,6 +18,22 @@ public final class WorkItemStore {
 
   public record Claim(Item item, String run, String attempt) {}
 
+  /** The caller can see the task, but this Run does not own its work. */
+  public static final class RunNotBoundException extends IllegalArgumentException {
+    @java.io.Serial private static final long serialVersionUID = 1L;
+    public static final String CODE = "TASK_RUN_NOT_BOUND";
+    private final String taskId;
+
+    private RunNotBoundException(String taskId) {
+      super(CODE);
+      this.taskId = taskId;
+    }
+
+    public String taskId() {
+      return taskId;
+    }
+  }
+
   public record Finding(String id, String severity,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer start,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer end,
@@ -132,10 +148,38 @@ public final class WorkItemStore {
         DurableTaskStore.execute(db, "INSERT INTO durable_work(id,task,snapshot,path,start,end,version,kind,criterion,state,required) VALUES(?,?,?,?,?,?,?,?,?,'PENDING',?)",
             UUID.randomUUID().toString(), task, pending.snapshot(), pending.path(), end, pending.end(), pending.version(), pending.kind(), pending.criterion(), pending.required());
       }
-      if (DurableTaskStore.execute(db, "UPDATE durable_work SET state='RUNNING',active_attempt=?,last_step='CLAIMED' WHERE id=? AND state='PENDING'", attempt, pending.id()) != 1)
-        throw new IllegalStateException("WORK_CLAIM_CONFLICT");
-      DurableTaskStore.execute(db, "INSERT INTO durable_item_attempts(id,work,run,started,state) VALUES(?,?,?,?,'ACTIVE')", attempt, pending.id(), run, System.currentTimeMillis());
-      return new Claim(item(db, pending.id()), run, attempt);
+      return activateClaim(db, pending.id(), run, attempt);
+    });
+  }
+
+  private static Claim activateClaim(Connection db, String work, String run, String attempt)
+      throws SQLException {
+    if (DurableTaskStore.execute(db, "UPDATE durable_work SET state='RUNNING',active_attempt=?,last_step='CLAIMED' WHERE id=? AND state='PENDING'", attempt, work) != 1)
+      throw new IllegalStateException("WORK_CLAIM_CONFLICT");
+    DurableTaskStore.execute(db, "INSERT INTO durable_item_attempts(id,work,run,started,state) VALUES(?,?,?,?,'ACTIVE')", attempt, work, run, System.currentTimeMillis());
+    return new Claim(item(db, work), run, attempt);
+  }
+
+  /** Reacquire exactly a previously claimed range after an explicit Task resume. */
+  public <T> T reacquire(
+      DurableTaskStore.Scope scope, String work, String run,
+      java.util.function.BiFunction<Claim, String, T> prepare) {
+    return store.write(db -> {
+      var item = item(db, work);
+      requireRun(db, scope, item.task(), run, true);
+      if (item.state().equals("PENDING")
+          && DurableTaskStore.number(db, "SELECT COUNT(*) FROM durable_item_attempts WHERE work=?", work) > 0) {
+        var attempt = UUID.randomUUID().toString();
+        var prepared = prepare.apply(new Claim(item, run, attempt), source(db, item));
+        activateClaim(db, work, run, attempt);
+        return prepared;
+      }
+      try (var query = DurableTaskStore.statement(db,
+          "SELECT a.id FROM durable_work w JOIN durable_item_attempts a ON a.id=w.active_attempt WHERE w.id=? AND w.state='RUNNING' AND a.run=? AND a.state='ACTIVE'",
+          work, run); var rows = query.executeQuery()) {
+        if (!rows.next()) throw new IllegalArgumentException("WORK_NOT_RUNNING");
+        return prepare.apply(new Claim(item, run, rows.getString(1)), source(db, item));
+      }
     });
   }
 
@@ -189,7 +233,7 @@ public final class WorkItemStore {
     try (var query = DurableTaskStore.statement(db, "SELECT a.run,a.delivered_hash FROM durable_item_attempts a JOIN durable_work w ON w.id=a.work AND w.active_attempt=a.id WHERE a.id=? AND w.id=?", claim.attempt(), claim.item().id());
         var rows = query.executeQuery()) {
       if (!rows.next()) throw new IllegalArgumentException("STALE_CLAIM");
-      if (!rows.getString(1).equals(claim.run())) throw new IllegalArgumentException("TASK_RUN_NOT_BOUND");
+      if (!rows.getString(1).equals(claim.run())) throw new RunNotBoundException(claim.item().task());
       return rows.getString(2);
     }
   }
@@ -201,10 +245,10 @@ public final class WorkItemStore {
   private void requireRun(Connection db, DurableTaskStore.Scope scope, String task, String run, boolean replay) throws SQLException {
     var owner = store.status(db, scope, task);
     if (!owner.state().equals("ACTIVE") && !(replay && owner.state().equals("COMPLETE"))) throw new IllegalStateException("TASK_NOT_ACTIVE");
-    if (!owner.enumeration().equals("SEALED")) throw new IllegalStateException("ENUMERATION_NOT_SEALED");
+    if (!owner.enumeration().equals("SEALED")) throw new IllegalArgumentException("ENUMERATION_NOT_SEALED");
     try (var query = DurableTaskStore.statement(db, "SELECT 1 FROM durable_tasks t JOIN durable_attempts a ON a.task=t.id AND a.run=t.current_run WHERE t.id=? AND t.current_run=? AND a.state='ACTIVE'", task, run);
         var rows = query.executeQuery()) {
-      if (!rows.next()) throw new IllegalArgumentException("TASK_RUN_NOT_BOUND");
+      if (!rows.next()) throw new RunNotBoundException(task);
     }
   }
 

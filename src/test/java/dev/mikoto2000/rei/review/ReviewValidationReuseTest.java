@@ -135,8 +135,10 @@ class ReviewValidationReuseTest {
                 () ->
                     tools.submitReviewPage(
                         job.id(), "a.md", page.offset(), page.nextOffset(), "reviewed", List.of()))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("STALE_VERSION");
+            .isInstanceOfSatisfying(
+                ReviewResultRejectedException.class,
+                rejected -> assertThat(rejected.code()).isEqualTo("STALE_VERSION"))
+            .hasMessageContaining("restartReview");
         assertThat(ledger.get(job.id(), job.owner()).ranges())
             .noneMatch(ReviewCoverageLedger.Entry::reviewed);
       } else {

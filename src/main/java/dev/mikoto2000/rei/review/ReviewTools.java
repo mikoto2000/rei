@@ -6,6 +6,7 @@ import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.contextbudget.RawToolResultStore;
 import dev.mikoto2000.rei.core.contextbudget.ResultDelivery;
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
+import dev.mikoto2000.rei.durable.WorkItemStore.RunNotBoundException;
 import dev.mikoto2000.rei.review.ReviewCoverageLedger.Finding;
 import dev.mikoto2000.rei.review.ReviewCoverageLedger.Job;
 import dev.mikoto2000.rei.review.ReviewCoverageLedger.Range;
@@ -14,6 +15,7 @@ import dev.mikoto2000.rei.review.ReviewCoverageLedger.Span;
 import dev.mikoto2000.rei.review.ReviewCoverageLedger.Target;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
+import dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException;
 import dev.mikoto2000.rei.toolcontract.ToolReadRejectedException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -230,15 +232,25 @@ public final class ReviewTools {
   public dev.mikoto2000.rei.durable.DurableTaskStore.Task scanReviewSnapshot(
       String taskId,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxEntries) {
-    return new dev.mikoto2000.rei.durable.SnapshotEnumerator(tasks)
-        .step(taskScope(AgentRunScope.current()), taskId, maxEntries == null ? 128 : maxEntries);
+    try {
+      return new dev.mikoto2000.rei.durable.SnapshotEnumerator(tasks)
+          .step(taskScope(AgentRunScope.current()), taskId, maxEntries == null ? 128 : maxEntries);
+    } catch (IllegalArgumentException rejected) {
+      if ("PAGE_LIMIT_1_TO_1000".equals(rejected.getMessage()))
+        throw new ToolReadRejectedException("PAGE_LIMIT_1_TO_1000", "Set maxEntries to 1..1000.");
+      throw taskAccessFailure(rejected);
+    }
   }
 
   @Tool(
       description =
           "Inspect durable review identity, frozen Snapshot ID, enumeration status, errors, exclusion count and unscanned directories. SEALED only proves target enumeration, not completed review. Use listReviewTaskResults to summarize saved assessments and findings.")
   public dev.mikoto2000.rei.durable.DurableTaskStore.Task reviewTaskStatus(String taskId) {
-    return tasks.status(taskScope(AgentRunScope.current()), taskId);
+    try {
+      return tasks.status(taskScope(AgentRunScope.current()), taskId);
+    } catch (IllegalArgumentException rejected) {
+      throw taskAccessFailure(rejected);
+    }
   }
 
   @Tool(
@@ -257,7 +269,54 @@ public final class ReviewTools {
           "Explicitly resume a durable review Task in this Run without a Checkpoint. Preserves results, recovers unfinished read-only review work and retires old Run authority. Cancelled or failed Tasks cannot be resumed implicitly.")
   public dev.mikoto2000.rei.durable.DurableTaskStore.Task resumeRepositoryReview(String taskId) {
     var owner = AgentRunScope.current();
-    return workItems().resume(taskScope(owner), taskId, owner.runId());
+    try {
+      return workItems().resume(taskScope(owner), taskId, owner.runId());
+    } catch (IllegalArgumentException rejected) {
+      throw taskAccessFailure(rejected);
+    }
+  }
+
+  private static String resumeWorkGuidance(RunNotBoundException unbound) {
+    return "To continue this saved review, call resumeRepositoryReview with taskId "
+        + unbound.taskId()
+        + " to bind it to this Run. Then call readNextReviewWorkItem with the same taskId"
+        + " and use the newly returned workItemId and attempt. Saved assessments are preserved.";
+  }
+
+  private static IllegalArgumentException taskAccessFailure(IllegalArgumentException rejected) {
+    if (!"TASK_ACCESS_DENIED".equals(rejected.getMessage())) return rejected;
+    return new ToolAccessDeniedException(
+        "TASK_ACCESS_DENIED",
+        "現在の Project・会話で参照可能なレビュータスクが見つかりません。",
+        "listReviewTasks で現在の Project・会話の taskId を確認してください。");
+  }
+
+  private static IllegalArgumentException workReadFailure(IllegalArgumentException rejected) {
+    if (rejected instanceof RunNotBoundException unbound)
+      return new ToolReadRejectedException(unbound.getMessage(), resumeWorkGuidance(unbound));
+    String code = java.util.Objects.toString(rejected.getMessage(), "");
+    return switch (code) {
+      case "ENUMERATION_NOT_SEALED" ->
+          new ToolReadRejectedException(
+              code,
+              "Use reviewTaskStatus; for an unfinished scan call scanReviewSnapshot with the"
+                  + " same taskId until enumeration is SEALED. If FAILED, report the scan reason.");
+      case "STALE_CLAIM" ->
+          new ToolReadRejectedException(
+              code,
+              "To recover this exact unfinished work item, call readReviewWorkItem with the"
+                  + " same workItemId and omit attempt. Use the newly returned attempt.");
+      case "WORK_ITEM_NOT_FOUND", "WORK_NOT_RUNNING" ->
+          new ToolReadRejectedException(
+              code,
+              "Use the current workItemId and attempt, or read the"
+                  + " pending work again. For completed work, inspect listReviewTaskResults.");
+      case "REVIEW_PAGE_BUDGET_TOO_SMALL" ->
+          new ToolReadRejectedException(
+              code,
+              "Omit tokenBudget for the host-selected budget, or free space in the active prompt.");
+      default -> taskAccessFailure(rejected);
+    };
   }
 
   private dev.mikoto2000.rei.durable.WorkItemStore workItems() {
@@ -281,11 +340,7 @@ public final class ReviewTools {
               afterWork,
               limit == null ? 1 : Math.max(1, Math.min(10, limit)));
     } catch (IllegalArgumentException failure) {
-      if (!"TASK_ACCESS_DENIED".equals(failure.getMessage())) throw failure;
-      throw new dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException(
-          "TASK_ACCESS_DENIED",
-          "現在の Project・会話で参照可能なレビュータスクが見つかりません。",
-          "listReviewTasks で現在の Project・会話の taskId を確認してください。");
+      throw taskAccessFailure(failure);
     }
   }
 
@@ -295,7 +350,11 @@ public final class ReviewTools {
   public dev.mikoto2000.rei.durable.WorkItemStore.Claim claimReviewWorkItem(
       String taskId,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer tokenBudget) {
-    return claimReviewWorkItemWithinBudget(taskId, readingBudget(tokenBudget));
+    try {
+      return claimReviewWorkItemWithinBudget(taskId, readingBudget(tokenBudget));
+    } catch (IllegalArgumentException rejected) {
+      throw workReadFailure(rejected);
+    }
   }
 
   private dev.mikoto2000.rei.durable.WorkItemStore.Claim claimReviewWorkItemWithinBudget(
@@ -334,7 +393,7 @@ public final class ReviewTools {
   @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
   @Tool(
       description =
-          "Claim and read the next semantic review unit in ONE call. Existing reviewJobId: pass taskId=legacy:<reviewJobId> to keep its original ledger and assess only missing coverage; returned workItemId/attempt also work with submitReviewWorkItem. Use after the repository snapshot is SEALED. Omit tokenBudget to use up to 100000 estimated tokens, bounded by 1/8 of the model input window and free context. Small files are read whole; long files split at headings/paragraphs outside fences, then lines, with hard splitting only for oversized blocks. Returns workItemId and attempt for submitReviewWorkItem; never retype page coordinates. null means no pending work (inspect reviewTaskStatus; running claims can still remain). Submit assessments before requesting more units; batch submissions first and next reads in one response. Reading is not assessment.")
+          "Claim and read the next semantic review unit in ONE call. To continue an existing durable task in a new Run, first call resumeRepositoryReview with the same taskId. Use after the repository snapshot is SEALED. Existing legacy reviewJobId: pass taskId=legacy:<reviewJobId> to keep its original ledger and assess only missing coverage. Omit tokenBudget to use up to 100000 estimated tokens, bounded by 1/8 of the model input window and free context. Small files are read whole; long files split at headings/paragraphs outside fences, then lines, with hard splitting only for oversized blocks. Returns workItemId and attempt for submitReviewWorkItem; never retype page coordinates. null means no pending work (inspect reviewTaskStatus; running claims can still remain). Submit assessments before requesting more units; batch submissions first and next reads in one response. Reading is not assessment.")
   public Page readNextReviewWorkItem(
       String taskId,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer tokenBudget) {
@@ -346,11 +405,15 @@ public final class ReviewTools {
         throw new java.io.UncheckedIOException(error);
       }
     }
-    if (tasks.status(taskScope(AgentRunScope.current()), taskId).state().equals("COMPLETE"))
-      return null;
+    if (reviewTaskStatus(taskId).state().equals("COMPLETE")) return null;
     var owner = AgentRunScope.current();
-    var claim = workItems().running(taskScope(owner), taskId, owner.runId());
-    if (claim == null) claim = claimReviewWorkItemWithinBudget(taskId, budget);
+    dev.mikoto2000.rei.durable.WorkItemStore.Claim claim;
+    try {
+      claim = workItems().running(taskScope(owner), taskId, owner.runId());
+      if (claim == null) claim = claimReviewWorkItemWithinBudget(taskId, budget);
+    } catch (IllegalArgumentException rejected) {
+      throw workReadFailure(rejected);
+    }
     if (claim == null) return null;
     return readReviewWorkItem(claim.item().id(), claim.attempt(), budget);
   }
@@ -366,14 +429,14 @@ public final class ReviewTools {
           "CONTEXT_BUDGET_INSUFFICIENT",
           "No source was acquired. Compact the active prompt before reading another unit.");
     var job = reviewStatus(id);
-    if (job.status().equals("STALE_VERSION")) throw new IllegalStateException("STALE_VERSION");
+    if (job.status().equals("STALE_VERSION")) throw staleReviewRead();
     var unfinished = pending(job);
     if (unfinished.isEmpty()) return null;
     var next = unfinished.getFirst();
     var target =
         job.targets().stream().filter(t -> t.path().equals(next.path())).findFirst().orElseThrow();
     var source = readSource(next.path());
-    if (!source.version().equals(next.version())) throw new IllegalStateException("STALE_VERSION");
+    if (!source.version().equals(next.version())) throw staleReviewRead();
     var fitted =
         sizedPage(id, target, source.text(), source.positions(), next.start(), budget, null);
     int end =
@@ -388,7 +451,7 @@ public final class ReviewTools {
             end,
             source.positions().at(next.start()),
             source.positions().at(end));
-    if (estimate(page) > budget) throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
+    if (estimate(page) > budget) throw insufficientReviewPage();
     scopedReview.apply(scope(AgentRunScope.current())).fetched(id, page.range());
     METRICS.info(
         "review_read run={} task={} work={} attempt={} chars={} estimatedTokens={}",
@@ -463,35 +526,65 @@ public final class ReviewTools {
   @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
   @Tool(
       description =
-          "Read the exact frozen range of the current claim if it fits the current context budget. Reading does not mark it delivered; trusted host model-delivery confirmation is required before submitReviewWorkItem.")
-  public Page readReviewWorkItem(String workItemId, String attempt) {
+          "Read the exact frozen range. After explicitly resuming its task, omit attempt to recover the same previously claimed unfinished workItemId and receive its current attempt. Reading does not mark it delivered; trusted host model-delivery confirmation is required before submitReviewWorkItem.")
+  public Page readReviewWorkItem(
+      String workItemId,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String attempt) {
     return readReviewWorkItem(workItemId, attempt, readingBudget(null));
   }
 
   private Page readReviewWorkItem(String workItemId, String attempt, int budget) {
     var owner = AgentRunScope.current();
     var work = workItems();
-    var claim = work.current(taskScope(owner), workItemId, owner.runId(), attempt);
-    if (!claim.item().state().equals("RUNNING"))
-      throw new IllegalArgumentException("WORK_NOT_RUNNING");
-    var page =
-        durablePage(
-            claim.item(), attempt, work.source(taskScope(owner), claim.item()), claim.item().end());
+    var scope = taskScope(owner);
+    SizedDurablePage fitted;
+    try {
+      if (attempt == null) {
+        fitted =
+            work.reacquire(
+                scope,
+                workItemId,
+                owner.runId(),
+                (claim, source) -> fittedDurablePage(claim, source, budget));
+      } else {
+        var claim = work.current(scope, workItemId, owner.runId(), attempt);
+        if (!claim.item().state().equals("RUNNING"))
+          throw new IllegalArgumentException("WORK_NOT_RUNNING");
+        fitted = fittedDurablePage(claim, work.source(scope, claim.item()), budget);
+      }
+    } catch (IllegalArgumentException rejected) {
+      if (rejected instanceof RunNotBoundException unbound)
+        throw new ToolReadRejectedException(
+            unbound.getMessage(),
+            "Call resumeRepositoryReview with taskId "
+                + unbound.taskId()
+                + ", then call readReviewWorkItem with the same workItemId and omit attempt.");
+      throw workReadFailure(rejected);
+    }
+    var page = fitted.page();
+    METRICS.info(
+        "review_read run={} task={} work={} attempt={} chars={} estimatedTokens={}",
+        owner.runId(),
+        fitted.task(),
+        workItemId,
+        page.attempt(),
+        page.content().length(),
+        fitted.tokens());
+    return page;
+  }
+
+  private record SizedDurablePage(Page page, String task, int tokens) {}
+
+  private SizedDurablePage fittedDurablePage(
+      dev.mikoto2000.rei.durable.WorkItemStore.Claim claim, String source, int budget) {
+    var page = durablePage(claim.item(), claim.attempt(), source, claim.item().end());
     int tokens = estimate(page);
     if (tokens > budget)
       throw new ToolReadRejectedException(
           "CONTEXT_BUDGET_INSUFFICIENT",
           "The frozen range does not fit the current context. Preserve its IDs and free prompt space"
               + " or use a larger model context before redelivery.");
-    METRICS.info(
-        "review_read run={} task={} work={} attempt={} chars={} estimatedTokens={}",
-        owner.runId(),
-        claim.item().task(),
-        workItemId,
-        attempt,
-        page.content().length(),
-        tokens);
-    return page;
+    return new SizedDurablePage(page, claim.item().task(), tokens);
   }
 
   @Tool(
@@ -530,7 +623,30 @@ public final class ReviewTools {
           workItemId,
           attempt,
           invalid.getMessage());
-      if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw invalid;
+      if (invalid instanceof RunNotBoundException unbound)
+        throw new ReviewResultRejectedException(
+            unbound.getMessage(), "No assessment was accepted. " + resumeWorkGuidance(unbound));
+      if ("SOURCE_NOT_DELIVERED".equals(invalid.getMessage()))
+        throw new ReviewResultRejectedException(
+            "SOURCE_NOT_DELIVERED",
+            "No assessment was accepted. Read the same work item and wait for the source to"
+                + " appear in the next model request before submitting its assessment.");
+      if ("RESULT_CONFLICT".equals(invalid.getMessage()))
+        throw new ReviewResultRejectedException(
+            "RESULT_CONFLICT",
+            "This work item already has a different saved assessment. Use listReviewTaskResults"
+                + " to inspect it and continue pending work. The saved assessment was preserved.");
+      if ("STALE_CLAIM".equals(invalid.getMessage())
+          || "WORK_ITEM_NOT_FOUND".equals(invalid.getMessage()))
+        throw new ReviewResultRejectedException(
+            invalid.getMessage(),
+            "No assessment was accepted. If the workItemId is known, call readReviewWorkItem"
+                + " with that ID and omit attempt to recover the exact range."
+                + " Otherwise call readNextReviewWorkItem with the same taskId."
+                + " Assess the returned content and submit with the workItemId and attempt from"
+                + " that response. If it returns null, inspect reviewTaskStatus and"
+                + " listReviewTaskResults.");
+      if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw taskAccessFailure(invalid);
       throw new ReviewResultRejectedException(
           "No assessment was accepted. Keep the current workItemId and attempt; provide an"
               + " assessment of 1..16384 characters and findings=[] or at most 100 findings with"
@@ -669,13 +785,14 @@ public final class ReviewTools {
             .filter(t -> t.path().equals(path))
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("REVIEW_RESULT_INVALID"));
-    if (!target.version().equals(expectedVersion)) throw new IllegalStateException("STALE_VERSION");
+    if (!target.version().equals(expectedVersion)) throw staleReviewRead();
     if (tokenBudget < 256 || tokenBudget > 2048)
-      throw new IllegalArgumentException("CONTEXT_BUDGET_INSUFFICIENT");
+      throw new ToolReadRejectedException(
+          "CONTEXT_BUDGET_INSUFFICIENT", "Set tokenBudget to 256..2048.");
     var snapshot = files.get().reviewSnapshot(path);
     if (!target.version().equals(snapshot.version())) {
       scopedReview.apply(scope).invalidate(reviewJobId, path, snapshot.version());
-      throw new IllegalStateException("STALE_VERSION");
+      throw staleReviewRead();
     }
     String source = snapshot.text();
     if (offset < 0
@@ -683,8 +800,7 @@ public final class ReviewTools {
         || offset > 0
             && offset < source.length()
             && Character.isHighSurrogate(source.charAt(offset - 1))
-            && Character.isLowSurrogate(source.charAt(offset)))
-      throw new IllegalArgumentException("INVALID_CURSOR");
+            && Character.isLowSurrogate(source.charAt(offset))) throw invalidReviewCursor();
     var page =
         sizedPage(
             reviewJobId, target, source, new SourcePositions(source), offset, tokenBudget, null);
@@ -721,19 +837,13 @@ public final class ReviewTools {
             .filter(t -> t.path().equals(path))
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("REVIEW_RESULT_INVALID"));
-    if (!target.version().equals(expectedVersion)) throw new IllegalStateException("STALE_VERSION");
+    if (!target.version().equals(expectedVersion)) throw staleReviewRead();
     var source = readSource(path);
     if (!target.version().equals(source.version())) {
       scopedReview.apply(scope).invalidate(reviewJobId, path, source.version());
-      throw new IllegalStateException("STALE_VERSION");
+      throw staleReviewRead();
     }
-    if (!boundary(source.text(), offset))
-      throw new ToolReadRejectedException(
-          "INVALID_CURSOR",
-          "No pages were fetched or delivered. Keep the review identity unchanged; use offset=0 initially or the last returned nextOffset at a UTF-16 code point boundary within the source.",
-          new ArgumentIssue(
-              "offset",
-              "use 0 or the previous page's nextOffset at a UTF-16 code point boundary in the source"));
+    if (!boundary(source.text(), offset)) throw invalidReviewCursor();
     int count = Math.min(maxPages, Math.max(1, (totalTokenBudget - 64) / 256));
     var pages = new ArrayList<Page>();
     for (int i = 0; i < count; i++) {
@@ -748,7 +858,7 @@ public final class ReviewTools {
         page =
             sizedPage(
                 reviewJobId, target, source.text(), source.positions(), offset, allowance, pages);
-      } catch (IllegalStateException insufficient) {
+      } catch (ToolReadRejectedException insufficient) {
         if (pages.isEmpty()) throw insufficient;
         break;
       }
@@ -756,10 +866,29 @@ public final class ReviewTools {
       offset = page.nextOffset();
       if (!page.truncated()) break;
     }
-    if (estimate(pages) > totalTokenBudget)
-      throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
+    if (estimate(pages) > totalTokenBudget) throw insufficientReviewPage();
     scopedReview.apply(scope).fetchedBatch(reviewJobId, pages.stream().map(Page::range).toList());
     return List.copyOf(pages);
+  }
+
+  private static ToolReadRejectedException invalidReviewCursor() {
+    return new ToolReadRejectedException(
+        "INVALID_CURSOR",
+        "Use offset=0 initially or the last returned nextOffset at a UTF-16 code point boundary.",
+        new ArgumentIssue("offset", "use 0 or the previous page's nextOffset"));
+  }
+
+  private static ToolReadRejectedException staleReviewRead() {
+    return new ToolReadRejectedException(
+        "STALE_VERSION",
+        "Check reviewStatus and reuse the exact version for this file. If the job is STALE_VERSION,"
+            + " call restartReview for that reviewJobId before reading again.");
+  }
+
+  private static ToolReadRejectedException insufficientReviewPage() {
+    return new ToolReadRejectedException(
+        "CONTEXT_BUDGET_INSUFFICIENT",
+        "Increase the review page budget within its supported range.");
   }
 
   /** Fresh source validation plus saved assessments, rather than read history, proves coverage. */
@@ -816,7 +945,7 @@ public final class ReviewTools {
     int end = source.offsetByCodePoints(offset, low);
     var page = pageAt(reviewJobId, target, source, offset, end, from, positions.at(end));
     if (estimatePages(prefix, page) > tokenBudget || low == 0 && offset < source.length())
-      throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
+      throw insufficientReviewPage();
     return page;
   }
 
@@ -850,7 +979,7 @@ public final class ReviewTools {
     var owner = AgentRunScope.current();
     var scope = scope(owner);
     var job = reviewStatus(reviewJobId);
-    if ("STALE_VERSION".equals(job.status())) throw new IllegalStateException("STALE_VERSION");
+    if ("STALE_VERSION".equals(job.status())) throw staleReviewSubmission();
     var source = readSource(range.path());
     return submitVerifiedReviewResult(reviewJobId, scope, range, assessment, findings, source);
   }
@@ -1243,7 +1372,14 @@ public final class ReviewTools {
       var snapshot = prior.snapshots().get(target.path());
       if (snapshot != null && !snapshot.version().equals(version)) changed = true;
     }
-    if (changed) throw new IllegalStateException("STALE_VERSION");
+    if (changed) throw staleReviewSubmission();
+  }
+
+  private static ReviewResultRejectedException staleReviewSubmission() {
+    return new ReviewResultRejectedException(
+        "STALE_VERSION",
+        "Check reviewStatus. If the job is STALE_VERSION, use restartReview, then read and assess"
+            + " the current source before submitting again.");
   }
 
   /** Coverage-free, paginated access to preserved candidate findings. */

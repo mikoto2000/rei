@@ -245,12 +245,15 @@ class EditToolArgumentRepairTest {
 
   @Test
   void everyNativeRequiredContractRejectsMissingFieldsBeforeInvocation() {
+    var schemas = tools.jackson.databind.json.JsonMapper.builder().build();
     var required =
         Arrays.stream(DeliveryToolRegistration.provider(new Tools()).getToolCallbacks())
             .filter(
                 c ->
-                    dev.mikoto2000.rei.core.policy.ToolSchemaArguments.supports(
-                        c.getToolDefinition().inputSchema()))
+                    !schemas
+                        .readTree(c.getToolDefinition().inputSchema())
+                        .path("required")
+                        .isEmpty())
             .toList();
     assertThat(required.size()).isGreaterThan(15);
     for (var callback : required) {
