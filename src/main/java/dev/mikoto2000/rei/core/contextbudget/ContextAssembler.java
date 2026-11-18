@@ -368,6 +368,8 @@ public class ContextAssembler {
             + "|"
             + settings.summaryTokens()
             + "|"
+            + compressor.generationTokens(settings.summaryTokens())
+            + "|"
             + settings.summaryTimeoutSeconds()
             + "|"
             + settings.minimumCompressionGain()
@@ -406,7 +408,10 @@ public class ContextAssembler {
       // The summarizer itself must not exceed its input budget. Process a bounded prefix per
       // request.
       long max =
-          settings.contextLimit() - settings.summaryTokens() - settings.safetyMargin() - 2048L;
+          (long) settings.contextLimit()
+              - compressor.generationTokens(settings.summaryTokens())
+              - settings.safetyMargin()
+              - 2048L;
       max = compressionRetries.inputLimit(segment.retryKey, configuration, max);
       while (before > max && count > 1) {
         count--;
@@ -497,6 +502,8 @@ public class ContextAssembler {
                 + before
                 + " 推定tokens、要約上限="
                 + settings.summaryTokens()
+                + " tokens、生成上限="
+                + compressor.generationTokens(settings.summaryTokens())
                 + " tokens、制限時間="
                 + settings.summaryTimeoutSeconds()
                 + " 秒。";
@@ -672,8 +679,7 @@ public class ContextAssembler {
   private String captureWorkingSet(Prompt prompt) {
     var render = workingSet;
     if (render == null
-        || prompt.getInstructions().stream().noneMatch(ContextAssembler::isWorkingSet))
-      return null;
+        || prompt.getInstructions().stream().noneMatch(ContextAssembler::isWorkingSet)) return null;
     return Objects.toString(render.get(), "");
   }
 

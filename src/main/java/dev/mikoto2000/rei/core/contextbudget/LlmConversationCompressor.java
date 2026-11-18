@@ -31,6 +31,8 @@ public class LlmConversationCompressor implements ConversationCompressor {
   /** この機能の動作設定。 */
   private final java.util.function.IntSupplier summaryTimeoutSeconds;
 
+  private final java.util.function.IntSupplier summaryGenerationReserve;
+
   private final java.util.function.Supplier<ModelCallBudget> standaloneBudget;
 
   /** 指定された値や利用先を使って、LlmConversationCompressorを初期化する。 */
@@ -38,7 +40,13 @@ public class LlmConversationCompressor implements ConversationCompressor {
       ObjectProvider<LlmModelProvider> models, ContextCompressionProperties properties) {
     this.models = models;
     this.summaryTimeoutSeconds = () -> properties.getSummaryTimeoutSeconds();
+    this.summaryGenerationReserve = () -> properties.getSummaryGenerationReserve();
     this.standaloneBudget = () -> StandaloneSummaryBudget.create(properties);
+  }
+
+  @Override
+  public int generationTokens(int summaryTokens) {
+    return Math.addExact(summaryTokens, summaryGenerationReserve.getAsInt());
   }
 
   /** 対象の内容を、要点が分かる形にまとめる。 */
@@ -81,6 +89,9 @@ public class LlmConversationCompressor implements ConversationCompressor {
     var aggregate =
         new java.util.concurrent.atomic.AtomicReference<
             org.springframework.ai.chat.model.ChatResponse>();
+    // MessageAggregator rebuilds Usage without native completion details. Preserve the provider
+    // snapshot before aggregation so reasoning is not counted as stored summary text.
+    var nativeUsage = new java.util.concurrent.atomic.AtomicReference<Object>();
     var invoked = new java.util.concurrent.atomic.AtomicBoolean();
     var outputLimited = new java.util.concurrent.atomic.AtomicBoolean();
     var invalidResponse = new java.util.concurrent.atomic.AtomicBoolean();
@@ -96,10 +107,14 @@ public class LlmConversationCompressor implements ConversationCompressor {
           provider.chatOptions(
               LlmFeature.CHAT, ownerOptions == null ? null : ownerOptions.getModel());
       var optionsBuilder = baseOptions.mutate().toolCallbacks(List.of()).toolChoice("none");
-      // Keep the provider's supported token parameter while enforcing the summary budget.
+      // The API limit includes reasoning on some providers. It is not the saved text budget.
+      int generationTokens = generationTokens(maxTokens);
       if (baseOptions.getMaxCompletionTokens() != null)
-        optionsBuilder.maxCompletionTokens(null).maxTokens(null).maxCompletionTokens(maxTokens);
-      else optionsBuilder.maxTokens(maxTokens);
+        optionsBuilder
+            .maxCompletionTokens(null)
+            .maxTokens(null)
+            .maxCompletionTokens(generationTokens);
+      else optionsBuilder.maxTokens(generationTokens);
       var toolContext = new LinkedHashMap<String, Object>();
       if (ownerOptions
           instanceof org.springframework.ai.model.tool.ToolCallingChatOptions original) {
@@ -133,10 +148,15 @@ public class LlmConversationCompressor implements ConversationCompressor {
         Preserve exact API/class/method/file/branch names, IDs, URLs, error codes, numbers, implemented versus
         unimplemented status, and concrete facts likely needed next. Keep explicit user decisions and requirements.
         Omit greetings, repetition, resolved trial-and-error and redundant logs. Do not invent facts or completion.
-        Working Set is managed separately: do not replace or reinterpret it. Stay within\s\
+        Working Set is managed separately: do not replace or reinterpret it.
+        Write brief factual bullets, not a transcript or an exhaustive catalogue of the history.
+        Prioritize facts needed to continue the current task. Do not fill the available output budget.
+        Aim for at most\s\
         """
-                          + String.format("%d", maxTokens)
-                          + " output tokens.\n"),
+                          + Math.max(1, Math.min(2000, maxTokens / 2))
+                          + " tokens of summary text; the hard text limit is "
+                          + maxTokens
+                          + " tokens.\n"),
                   new UserMessage(data.toString())),
               options);
       // The parent subscription runs this on an interruptible worker. Disposing it interrupts
@@ -153,6 +173,10 @@ public class LlmConversationCompressor implements ConversationCompressor {
               .doOnNext(
                   response -> {
                     if (execution != null) execution.checkActive();
+                    var usage =
+                        response.getMetadata() == null ? null : response.getMetadata().getUsage();
+                    if (usage != null && usage.getNativeUsage() != null)
+                      nativeUsage.set(usage.getNativeUsage());
                     if (OutputLimitDetector.isOutputLimitReached(response)) outputLimited.set(true);
                     var generation = response.getResult();
                     var output = generation == null ? null : generation.getOutput();
@@ -182,7 +206,7 @@ public class LlmConversationCompressor implements ConversationCompressor {
         throw new ContextCompressionException(ContextCompressionException.Reason.INVALID_RESPONSE);
       if (result.toString().isBlank())
         throw new ContextCompressionException(ContextCompressionException.Reason.EMPTY_SUMMARY);
-      return new Summary(result.toString(), outputTokens(usage));
+      return new Summary(result.toString(), outputTokens(usage, nativeUsage.get()));
     } catch (RuntimeException error) {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
       var stopped = executionStopped(error);
@@ -201,13 +225,25 @@ public class LlmConversationCompressor implements ConversationCompressor {
   }
 
   /** モデルへ渡す文脈の管理で用いる出力トークン数を返す。 */
-  private static Integer outputTokens(org.springframework.ai.chat.metadata.Usage usage) {
+  private static Integer outputTokens(
+      org.springframework.ai.chat.metadata.Usage usage, Object nativeUsage) {
     // EmptyUsage reports zero even when the provider supplied no usage. Zero for nonempty text is
     // unknown.
     if (usage == null || usage instanceof org.springframework.ai.chat.metadata.EmptyUsage)
       return null;
     Integer output = usage.getCompletionTokens();
-    return output == null || output <= 0 ? null : output;
+    if (output == null || output <= 0) return null;
+    Long reasoning = null;
+    if (nativeUsage instanceof com.openai.models.completions.CompletionUsage completionUsage)
+      reasoning =
+          completionUsage.completionTokensDetails().flatMap(d -> d.reasoningTokens()).orElse(null);
+    else if (nativeUsage instanceof java.util.Map<?, ?> usageMap
+        && usageMap.get("completion_tokens_details") instanceof java.util.Map<?, ?> details
+        && details.get("reasoning_tokens") instanceof Number count) reasoning = count.longValue();
+    // Charge total usage to the Run above; only visible text consumes the stored summary budget.
+    // Missing or invalid details retain conservative validation against the full completion count.
+    if (reasoning == null || reasoning < 0 || reasoning >= output) return output;
+    return Math.toIntExact(output - reasoning);
   }
 
   /** モデルへ渡す文脈の管理で用いる実行停止済みを返す。 */
