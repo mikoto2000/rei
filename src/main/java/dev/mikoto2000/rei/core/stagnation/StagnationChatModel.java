@@ -182,8 +182,10 @@ public final class StagnationChatModel implements ChatModel {
                     + " one semantic unit with a host-selected budget up to 100000 estimated tokens, bounded"
                     + " by 1/8 of effective model input capacity and current free context. Assess the whole"
                     + " delivered unit with submitReviewWorkItem(workItemId,attempt,assessment,findings)."
-                    + " Preserve existing durable task IDs; use listReviewTasks/resumeRepositoryReview when"
-                    + " resuming. Do not create a second legacy job for the same durable task. Submit assessed"
+                    + " When continuing an existing durable task in a new Run, call resumeRepositoryReview"
+                    + " with that taskId before acquiring or submitting work. Use listReviewTasks if the"
+                    + " taskId is unknown. Reading status or saved results does not bind the task."
+                    + " Do not create a second legacy job for the same durable task. Submit assessed"
                     + " units first and read the next unit in the same tool-call response. Read cross-file"
                     + " dependencies when necessary to corroborate findings. Existing legacy jobs must be"
                     + " completed through their original ledger. Prefer readNextReviewWorkItem(taskId='legacy:'"
@@ -676,26 +678,14 @@ public final class StagnationChatModel implements ChatModel {
                 context.recordFailure(name, input, error);
                 var rejected =
                     dev.mikoto2000.rei.toolcontract.ToolResultRejectedException.find(error);
-                if (rejected
-                        instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read
-                    && java.util.Set.of(
-                            "readReviewPages",
-                            "readReviewWorkItem",
-                            "readRawToolResult",
-                            "claimReviewWorkItem",
-                            "readNextReviewWorkItem",
-                            "listFile")
-                        .contains(name)) return context.toolReadCorrection(actualId, name, read);
-                if (rejected != null
-                    && java.util.Set.of(
-                            "submitReviewResult",
-                            "submitReviewPage",
-                            "submitReviewPages",
-                            "submitReviewWorkItem",
-                            "dismissReviewFinding",
-                            "restartReview")
-                        .contains(name))
-                  return context.reviewSubmissionCorrection(actualId, name, rejected);
+                if (!Thread.currentThread().isInterrupted()
+                    && !RunExecutionContext.isControlFailure(error)) {
+                  if (rejected
+                      instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read)
+                    return context.toolReadCorrection(actualId, name, read);
+                  if (rejected != null)
+                    return context.toolOperationCorrection(actualId, name, rejected);
+                }
                 throw RunExecutionContext.toolCallbackFailure(error);
               } catch (Error fatal) {
                 try {

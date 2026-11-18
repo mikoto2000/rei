@@ -1,6 +1,10 @@
 package dev.mikoto2000.rei.temporal;
 
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
+import dev.mikoto2000.rei.toolcontract.ToolResultRejectedException;
+import java.time.DateTimeException;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Locale;
@@ -50,8 +54,17 @@ public class SchedulerTools {
       action には再開時に行う内容、conversationId には現在の会話/タスク識別子を指定します。
       """)
   public ScheduledAgentTask scheduleAt(String timestamp, String action, String conversationId) {
-    return scheduler.scheduleAt(
-        OffsetDateTime.parse(timestamp).toInstant(), action, conversationId);
+    Instant when;
+    try {
+      when = OffsetDateTime.parse(timestamp).toInstant();
+    } catch (DateTimeException invalid) {
+      String requirement = "Specify an ISO-8601 date and time with a UTC offset in timestamp.";
+      throw new ToolResultRejectedException(
+          "INVALID_SCHEDULE_TIMESTAMP",
+          requirement,
+          List.of(new ArgumentIssue("timestamp", requirement)));
+    }
+    return scheduler.scheduleAt(when, action, conversationId);
   }
 
   /** 利用可能な対象を確認できるよう、実行予約操作一覧を一覧にする。 */

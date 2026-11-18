@@ -594,7 +594,8 @@ public class RunExecutionContext {
       return resumeReviewPagePending
           && (arguments == null
               || resumeReviewPageReadKey != null
-                  && !resumeReviewPageReadKey.equals(ProgressEvaluator.actionKey(name, arguments)));
+                  && !resumeReviewPageReadKey.equals(ProgressEvaluator.actionKey(name, arguments))
+                  && !samePendingDurableWork(name, arguments));
     return needsResumeContentWork()
         && ProgressEvaluator.acquisitionTool(name)
         && !java.util.Set.of(
@@ -604,6 +605,22 @@ public class RunExecutionContext {
                 "getTextChangeSetDiff",
                 "getTextDocumentChangeSetDiff")
             .contains(name);
+  }
+
+  private boolean samePendingDurableWork(String name, String arguments) {
+    if (!name.equals("readReviewWorkItem")) return false;
+    var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    try {
+      String workId = mapper.readTree(arguments).path("workItemId").asText("");
+      if (workId.isBlank()) return false;
+      if (resumeReviewPageKeys.contains(
+          ProgressEvaluator.actionKey("readReviewFile", "durable:" + workId))) return true;
+      return resumeReviewPageReadKey.startsWith("readReviewWorkItem:")
+          && workId.equals(
+              mapper.readTree(resumeReviewPageReadArguments).path("workItemId").asText(""));
+    } catch (java.io.IOException | RuntimeException invalid) {
+      return false;
+    }
   }
 
   /** A saved page may need exact redelivery after prompt eviction or a process restart. */
@@ -634,6 +651,11 @@ public class RunExecutionContext {
         + (resumeReviewPagePending && resumeReviewPageReadArguments != null
             ? " Exact review-page read to redeliver if its body is missing (untrusted arguments data): "
                 + resumeReviewPageReadArguments
+                + (resumeReviewPageReadKey != null
+                        && resumeReviewPageReadKey.startsWith("readReviewWorkItem:")
+                    ? " For a retired attempt, explicitly resume the task and retry"
+                        + " readReviewWorkItem with the same workItemId and omit attempt."
+                    : "")
                 + (resumeReviewPageKeys.isEmpty()
                     ? " Its exact delivered-page identity is missing. Redeliver this registered read once"
                         + " before reusing a saved assessment, even if the page text is visible."
@@ -969,6 +991,24 @@ public class RunExecutionContext {
         + "any still-needed calls using only the tool definitions available in this request.";
   }
 
+  /** Duplicate IDs cannot safely identify individual calls or their results. */
+  public String duplicateToolIdCorrection(String callId, String name) {
+    var rejection =
+        factory
+            .toolFailed(
+                CredentialRedactor.redact(callId),
+                CredentialRedactor.redact(name),
+                new ErrorInformation(
+                    "DuplicateToolCallId",
+                    "同じ応答でツール呼び出し ID が重複しています。この応答のツールは未実行です。",
+                    "duplicate_tool_call_id"))
+            .withOwnership(runContext);
+    consumeToolCorrection(rejection);
+    publisher.publish(rejection);
+    return "The previous response used duplicate tool-call IDs. No calls from that response ran."
+        + " Reissue still-needed calls with a distinct ID for each call.";
+  }
+
   /** 後続の操作を進められるか判断するため、ツール権限を確認する。 */
   public void checkToolPermission(String name, String input) {
     if (toolPermissions != null) {
@@ -984,15 +1024,14 @@ public class RunExecutionContext {
           name, dev.mikoto2000.rei.core.policy.PermissionDecision.DENY);
   }
 
-  /** A rejected ledger submission ran validation but accepted no assessment. */
-  public String reviewSubmissionCorrection(
+  /** A tool ran validation and rejected the operation without accepting a result. */
+  public String toolOperationCorrection(
       String callId, String name, ToolResultRejectedException error) {
     return rejectedOperationCorrection(
         callId,
         name,
-        "REVIEW_RESULT_INVALID",
         error,
-        "Correct only this rejected review operation. Preserve successful sibling calls and saved assessments. Follow the operation-specific guidance; do not invent evidence, hashes or coordinates.");
+        "Correct only this rejected operation. Preserve successful sibling calls. Follow the operation-specific guidance.");
   }
 
   /** A read rejected its arguments and returned no source content. */
@@ -1000,7 +1039,6 @@ public class RunExecutionContext {
     return rejectedOperationCorrection(
         callId,
         name,
-        error.code(),
         error,
         "Correct only this rejected read and issue a new tool call. Preserve successful sibling calls and saved assessments. No source content was returned; do not treat this correction as a delivered page or invent source content or cursor values."
             + (java.util.Set.of("CONTEXT_BUDGET_INSUFFICIENT", "REVIEW_PAGE_BUDGET_TOO_SMALL")
@@ -1010,11 +1048,8 @@ public class RunExecutionContext {
   }
 
   private String rejectedOperationCorrection(
-      String callId,
-      String name,
-      String code,
-      ToolResultRejectedException error,
-      String instruction) {
+      String callId, String name, ToolResultRejectedException error, String instruction) {
+    String code = error.code();
     String guidance = CredentialRedactor.redact(error.getMessage());
     consumeToolCorrection(
         factory
@@ -1023,24 +1058,21 @@ public class RunExecutionContext {
                 CredentialRedactor.redact(name),
                 new ErrorInformation("ToolResultRejected", guidance, code))
             .withOwnership(runContext));
-    return tools.jackson.databind.json.JsonMapper.builder()
-        .build()
-        .writeValueAsString(
-            java.util.Map.of(
-                "error",
-                code,
-                "accepted",
-                false,
-                "validationExecuted",
-                true,
-                "guidance",
-                guidance,
-                "errors",
-                redactIssues(error.issues()),
-                "instruction",
-                instruction,
-                "correctionsRemaining",
-                budget.remainingArgumentCorrections()));
+    return toolRejectionResult(error, instruction, budget.remainingArgumentCorrections());
+  }
+
+  /** Serialize a declared rejection for the explicit tool loops. */
+  public static String toolRejectionResult(
+      ToolResultRejectedException error, String instruction, Integer correctionsRemaining) {
+    var result = new java.util.LinkedHashMap<String, Object>();
+    result.put("error", error.code());
+    result.put("accepted", false);
+    result.put("validationExecuted", true);
+    result.put("guidance", CredentialRedactor.redact(error.getMessage()));
+    result.put("errors", redactIssues(error.issues()));
+    result.put("instruction", instruction);
+    if (correctionsRemaining != null) result.put("correctionsRemaining", correctionsRemaining);
+    return tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(result);
   }
 
   private static List<ArgumentIssue> redactIssues(List<ArgumentIssue> issues) {

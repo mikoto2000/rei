@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core.chat;
 
+import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import dev.mikoto2000.rei.toolcontract.ToolResultRejectedException;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -7,6 +9,8 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
+import org.springframework.ai.tool.execution.DefaultToolExecutionExceptionProcessor;
+import org.springframework.ai.tool.execution.ToolExecutionException;
 
 /**
  * 対話中のツール実行を補助し、結果の引き継ぎや再試行の条件を整える。
@@ -68,8 +72,30 @@ public final class ToolLoopSupport {
   // 履歴に依存するライブラリー側の制限で、追加入力時に予算がリセットされたり、
   // 実行結果を保存する前にツール群が中断されたりすることを防ぐ。
   /** 管理。 */
+  private static final DefaultToolExecutionExceptionProcessor DEFAULT_TOOL_ERRORS =
+      DefaultToolExecutionExceptionProcessor.builder().build();
+
+  private static final tools.jackson.databind.json.JsonMapper JSON =
+      tools.jackson.databind.json.JsonMapper.builder().build();
+
   private final ToolCallingManager manager =
-      ToolCallingManager.builder().unlimitedCallsPerTool().unlimitedTotalToolCalls().build();
+      ToolCallingManager.builder()
+          .unlimitedCallsPerTool()
+          .unlimitedTotalToolCalls()
+          .toolExecutionExceptionProcessor(ToolLoopSupport::toolFailure)
+          .build();
+
+  private static String toolFailure(ToolExecutionException error) {
+    if (!Thread.currentThread().isInterrupted() && !RunExecutionContext.isControlFailure(error)) {
+      var rejected = ToolResultRejectedException.find(error);
+      if (rejected != null)
+        return RunExecutionContext.toolRejectionResult(
+            rejected,
+            "Correct only this rejected call and preserve successful sibling results.",
+            null);
+    }
+    return DEFAULT_TOOL_ERRORS.process(error);
+  }
 
   /** 要求された処理を実行する。 */
   public ToolExecutionResult execute(Prompt prompt, ChatResponse response) {
@@ -119,20 +145,25 @@ public final class ToolLoopSupport {
     var registered = new java.util.HashMap<String, org.springframework.ai.tool.ToolCallback>();
     toolCallbacks.forEach(
         callback -> registered.put(callback.getToolDefinition().name(), callback));
+    boolean direct = result.returnDirect();
     if (!history.isEmpty()
         && history.getLast()
             instanceof org.springframework.ai.chat.messages.ToolResponseMessage message) {
       var calls =
           new java.util.HashMap<
               String, dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind>();
-      for (var response : message.getResponses())
+      for (var response : message.getResponses()) {
+        boolean rejected =
+            argumentCorrections.contains(response.id()) || declaredRejection(response);
+        if (rejected) direct = false;
         calls.put(
             response.id(),
-            argumentCorrections.contains(response.id()) || rejectedRead(response)
+            rejected
                 ? dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL
                 : policies.getOrDefault(
                     response.name(),
                     dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL));
+      }
       var receipts = new java.util.HashMap<String, dev.mikoto2000.rei.review.ReviewTools.Receipt>();
       for (var response : message.getResponses())
         if (registered.get(response.name())
@@ -169,25 +200,15 @@ public final class ToolLoopSupport {
               .metadata(metadata)
               .build());
     }
-    return ToolExecutionResult.builder()
-        .conversationHistory(history)
-        .returnDirect(result.returnDirect())
-        .build();
+    return ToolExecutionResult.builder().conversationHistory(history).returnDirect(direct).build();
   }
 
-  private static boolean rejectedRead(ToolResponseMessage.ToolResponse response) {
-    if (!java.util.Set.of(
-            "readReviewPages",
-            "readRawToolResult",
-            "readReviewWorkItem",
-            "claimReviewWorkItem",
-            "readNextReviewWorkItem")
-        .contains(response.name())) return false;
+  private static boolean declaredRejection(ToolResponseMessage.ToolResponse response) {
+    String text = response.responseData();
+    if (text == null || !text.startsWith("{") || !text.contains("\"validationExecuted\""))
+      return false;
     try {
-      var result =
-          tools.jackson.databind.json.JsonMapper.builder()
-              .build()
-              .readTree(response.responseData());
+      var result = JSON.readTree(text);
       return result.isObject()
           && result.path("error").isString()
           && result.path("accepted").isBoolean()
@@ -205,7 +226,7 @@ public final class ToolLoopSupport {
                 "claimReviewWorkItem",
                 "readNextReviewWorkItem")
             .contains(response.name())
-        || !rejectedRead(response)) return false;
+        || !declaredRejection(response)) return false;
     var result =
         tools.jackson.databind.json.JsonMapper.builder().build().readTree(response.responseData());
     return java.util.Set.of("CONTEXT_BUDGET_INSUFFICIENT", "REVIEW_PAGE_BUDGET_TOO_SMALL")
@@ -217,21 +238,21 @@ public final class ToolLoopSupport {
       Prompt prompt,
       ChatResponse response,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
-    if (hasInvalidToolCallIds(response)) return invalidToolCallIds(prompt);
+    for (var candidate : response.getResults()) {
+      var candidateIds = new java.util.HashSet<String>();
+      for (var call : candidate.getOutput().getToolCalls()) {
+        if (!validToolCallId(call.id())) return rejectedBatch(prompt, invalidToolCallIdGuidance());
+        if (!candidateIds.add(call.id()))
+          return rejectedBatch(prompt, context.duplicateToolIdCorrection(call.id(), call.name()));
+      }
+    }
     var generation = response.getResult();
     var output = generation == null ? null : generation.getOutput();
     if (output == null) throw new IllegalArgumentException("Missing generation for tool calls");
     for (var call : output.getToolCalls()) {
       if (registeredCallback(prompt, call.name()) == null) {
         // Reject the batch before dispatch and keep invalid tool-call messages out of history.
-        var history = new java.util.ArrayList<>(prompt.getInstructions());
-        history.add(
-            new org.springframework.ai.chat.messages.SystemMessage(
-                context.unavailableToolCorrection(call.id(), call.name())));
-        return ToolExecutionResult.builder()
-            .conversationHistory(history)
-            .returnDirect(false)
-            .build();
+        return rejectedBatch(prompt, context.unavailableToolCorrection(call.id(), call.name()));
       }
     }
     if (!context.hasApprovalContinuation()
@@ -251,6 +272,22 @@ public final class ToolLoopSupport {
             java.util.List.of()),
         context,
         false);
+  }
+
+  static ToolExecutionResult rejectedBatch(Prompt prompt, String guidance) {
+    var history = new java.util.ArrayList<>(prompt.getInstructions());
+    history.add(new org.springframework.ai.chat.messages.SystemMessage(guidance));
+    return ToolExecutionResult.builder().conversationHistory(history).returnDirect(false).build();
+  }
+
+  private static boolean validToolCallId(String id) {
+    return id != null && !id.isBlank();
+  }
+
+  private static String invalidToolCallIdGuidance() {
+    return "The previous response used missing, blank, or duplicate tool-call IDs. No calls"
+        + " from that response ran. Reissue still-needed calls with a distinct, nonblank"
+        + " ID for each call.";
   }
 
   private String schema(Prompt prompt, String name) {

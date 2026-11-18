@@ -26,6 +26,14 @@ import java.util.function.Supplier;
  * <p>Immutable content-addressed bodies with call-specific pointers and conversation-scoped access.
  */
 public final class RawToolResultStore {
+  static final class ResultNotFound extends IllegalStateException {
+    @java.io.Serial private static final long serialVersionUID = 1L;
+
+    private ResultNotFound(String message) {
+      super(message);
+    }
+  }
+
   /**
    * モデルへ渡す文脈の管理で受け渡す結果を表す。
    *
@@ -231,7 +239,7 @@ public final class RawToolResultStore {
     verify(pointer);
     if (managed != null) managed.verifyPointer().accept(conversation, ref);
     if (!Files.isRegularFile(pointer, LinkOption.NOFOLLOW_LINKS))
-      throw new IllegalStateException("RAW_RESULT_NOT_FOUND");
+      throw new ResultNotFound("RAW_RESULT_NOT_FOUND");
     var owner = AgentRunScope.current();
     CacheKey key =
         owner != null && owner.conversationId().equals(conversation)
@@ -245,7 +253,7 @@ public final class RawToolResultStore {
           verify(path);
           if (managed != null) managed.verifyBody().accept(conversation, hit.bodyRef());
           if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
-            throw new IllegalStateException("RAW_RESULT_NOT_FOUND");
+            throw new ResultNotFound("RAW_RESULT_NOT_FOUND");
         }
         return hit.result();
       }
@@ -264,13 +272,13 @@ public final class RawToolResultStore {
       String raw = stored.rawResult();
       if (stored.bodyRef() != null) {
         if (managed != null && !managed.committed().test(conversation, ref))
-          throw new IllegalStateException("RAW_RESULT_NOT_FOUND: uncommitted pointer");
+          throw new ResultNotFound("RAW_RESULT_NOT_FOUND: uncommitted pointer");
         if (raw != null) throw new IllegalStateException("RAW_RESULT_IDENTITY_CHANGED");
         Path body = bodyFile(conversation, stored.bodyRef());
         verify(body);
         if (managed != null) managed.verifyBody().accept(conversation, stored.bodyRef());
         if (!Files.isRegularFile(body, LinkOption.NOFOLLOW_LINKS))
-          throw new IllegalStateException("RAW_RESULT_NOT_FOUND");
+          throw new ResultNotFound("RAW_RESULT_NOT_FOUND");
         if (Files.size(body) > maxResultBytes)
           throw new IllegalStateException("RAW_RESULT_CAPACITY_EXCEEDED");
         byte[] bytes = Files.readAllBytes(body);

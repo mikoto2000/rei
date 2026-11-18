@@ -6,7 +6,11 @@ public final class ReviewResultRejectedException
   @java.io.Serial private static final long serialVersionUID = 4774034386998697744L;
 
   public ReviewResultRejectedException(String guidance) {
-    super("REVIEW_RESULT_INVALID: " + guidance);
+    this("REVIEW_RESULT_INVALID", guidance);
+  }
+
+  public ReviewResultRejectedException(String code, String guidance) {
+    super(code, guidance);
   }
 
   public static ReviewResultRejectedException find(Throwable failure) {

@@ -67,7 +67,21 @@ public class RawToolResultTools {
         issues.add(new ArgumentIssue("limit", "must be an integer from 1 to 16000"));
       throw invalidCursor(issues.toArray(ArgumentIssue[]::new));
     }
-    var result = readResult.apply(owner.conversationId(), rawResultRef);
+    try {
+      java.util.UUID.fromString(rawResultRef);
+    } catch (IllegalArgumentException invalid) {
+      throw new ToolReadRejectedException(
+          "INVALID_RAW_RESULT_REF", "Copy rawResultRef from a tool result in this conversation.");
+    }
+    RawToolResultStore.Result result;
+    try {
+      result = readResult.apply(owner.conversationId(), rawResultRef);
+    } catch (RawToolResultStore.ResultNotFound missing) {
+      throw new ToolReadRejectedException(
+          "RAW_RESULT_NOT_FOUND",
+          "Check the rawResultRef from the original result. If it is no longer available,"
+              + " reissue the original read when safe or use other available evidence.");
+    }
     return pageText(estimator, rawResultRef, result, offset, limit, pageTokens);
   }
 

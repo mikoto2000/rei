@@ -175,6 +175,45 @@ class ExhaustedResumeRecoveryTest {
         .replace("\"span\":", "\"contentHash\":\"hash1\",\"span\":");
   }
 
+  @Test
+  void staleWorkItemClaimIsReturnedToTheModelForCorrection() throws Exception {
+    var c = context(0, 0, 0, false);
+    var submissions = new AtomicInteger();
+    var submit =
+        tool(
+            "submitReviewWorkItem",
+            () -> {
+              if (submissions.incrementAndGet() == 1)
+                throw new dev.mikoto2000.rei.review.ReviewResultRejectedException(
+                    "STALE_CLAIM", "Call readNextReviewWorkItem with the same taskId.");
+              return "{\"body\":{\"work\":\"work\"},\"sha256\":\"" + "a".repeat(64) + "\"}";
+            });
+    var options =
+        ToolCallingChatOptions.builder()
+            .toolCallbacks(List.of(submit))
+            .toolContext(Map.of(RunExecutionContext.KEY, c))
+            .build();
+    var calls = new AtomicInteger();
+    var completed =
+        new StagnationChatModel(
+                model(
+                    p -> {
+                      int n = calls.incrementAndGet();
+                      if (n == 1) return call(n, "submitReviewWorkItem", "{}");
+                      if (n == 2) {
+                        assertThat(p.getInstructions().toString())
+                            .contains("STALE_CLAIM", "\"accepted\":false", "readNextReviewWorkItem");
+                        return call(n, "submitReviewWorkItem", "{\"attempt\":\"current\"}");
+                      }
+                      return new AssistantMessage("Assessment saved.");
+                    }))
+            .stream(new Prompt(List.of(new UserMessage("Save the assessment")), options))
+            .blockLast();
+    assertThat(completed.getResult().getOutput().getText()).isEqualTo("Assessment saved.");
+    assertThat(submissions).hasValue(2);
+    assertThat(c.progressSnapshot().budget().argumentCorrections()).isEqualTo(1);
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void nativeReviewRejectionCanBeCorrectedWithoutAcceptingItOrRefundingTheRepairBudget(
