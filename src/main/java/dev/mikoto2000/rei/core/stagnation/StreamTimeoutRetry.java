@@ -49,8 +49,9 @@ final class StreamTimeoutRetry {
                       .doOnNext(
                           response -> {
                             var generation = response.getResult();
-                            if (generation != null && generation.getOutput().getText() != null)
-                              characters.addAndGet(generation.getOutput().getText().length());
+                            String text =
+                                generation == null ? null : generation.getOutput().getText();
+                            if (text != null) characters.addAndGet(text.length());
                           }),
                   completed)
               .onErrorResume(

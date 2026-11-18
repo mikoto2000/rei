@@ -72,17 +72,18 @@ public final class RunScopedAdvisor implements BaseAdvisor {
                               correctedText.length()
                                   - dev.mikoto2000.rei.core.chat.ToolLoopSupport
                                       .streamRetryDiscardedCharacters(chat)));
-                    } else if (chat.getResult() != null
-                        && chat.getResult().getOutput().getText() != null) {
-                      correctedText.append(chat.getResult().getOutput().getText());
+                    } else {
+                      var generation = chat.getResult();
+                      String text = generation == null ? null : generation.getOutput().getText();
+                      if (text != null) correctedText.append(text);
                     }
                   });
       return new ChatClientMessageAggregator()
           .aggregateChatClientResponse(
               responses,
               response -> {
-                if (retried.get() && response.chatResponse() != null) {
-                  var chat = response.chatResponse();
+                var chat = response.chatResponse();
+                if (retried.get() && chat != null) {
                   var output =
                       org.springframework.ai.chat.messages.AssistantMessage.builder()
                           .content(correctedText.toString())

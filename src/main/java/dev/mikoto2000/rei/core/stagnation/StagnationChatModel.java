@@ -31,7 +31,7 @@ import reactor.core.scheduler.Schedulers;
  * <p>Explicit streaming LLM -> tool-result loop. Existing client advisors still own prompt/memory
  * handling.
  */
-public class StagnationChatModel implements ChatModel {
+public final class StagnationChatModel implements ChatModel {
   /** 委譲先。 */
   private final ChatModel delegate;
 
