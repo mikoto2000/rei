@@ -63,7 +63,7 @@ class SearchPreparationReuseTest {
     var tools = new CountingTools();
     var listed = new java.util.ArrayList<String>();
     listed.add("one.md");
-    for (int i = 0; i < 1100; i++) listed.add("unselected-" + i + ".txt");
+    for (int i = 0; i < 4100; i++) listed.add("unselected-" + i + ".txt");
     tools.inventory = List.copyOf(listed);
     assertThat(tools.grepMultiQuery(List.of(query("*.md")), root).getFirst().matches()).hasSize(1);
   }

@@ -1456,7 +1456,7 @@ public class Tools {
       try (var paths = Files.walk(resolvedBaseDir, 20)) {
         return paths
             .filter(p -> Files.isRegularFile(p, java.nio.file.LinkOption.NOFOLLOW_LINKS))
-            .limit(FileSnapshots.MAX_FILES + 1)
+            .limit(FileSnapshots.MAX_INVENTORY_FILES + 1)
             .map(
                 p ->
                     workingDirectory
