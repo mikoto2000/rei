@@ -180,6 +180,19 @@ class GoogleOAuthServiceTest {
     verify(credential).refreshToken();
   }
 
+  @Test
+  void scheduledRefreshStopsAfterRevokedGrantAndSharesSafeReauthorizationStatus() throws Exception {
+    GoogleOAuthService service = service(true, true);
+    Credential credential = stored(service, 0L);
+    when(credential.refreshToken()).thenThrow(tokenError(400, "invalid_grant"));
+    assertThrows(
+        TokenResponseException.class, () -> service.refreshIfExpiring(Duration.ofMinutes(5)));
+    assertTrue(service.reauthorizationRequired());
+    assertFalse(service.refreshIfExpiring(Duration.ofMinutes(5)));
+    verify(credential, times(1)).refreshToken();
+    verify(service, never()).authorize(any(), anyBoolean());
+  }
+
   private void configureSecretaryScopes(GoogleOAuthService service) throws Exception {
     var scopes = String.join("\n", service.secretaryScopes());
     var hash = MessageDigest.getInstance("SHA-256").digest(scopes.getBytes(StandardCharsets.UTF_8));

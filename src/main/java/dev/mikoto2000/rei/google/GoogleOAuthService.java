@@ -114,7 +114,7 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
    */
   public synchronized boolean refreshIfExpiring(Duration advance)
       throws IOException, GeneralSecurityException {
-    if (!isEnabled()) {
+    if (!isEnabled() || secretaryAuthFailed) {
       return false;
     }
     if (credential == null) {
@@ -154,10 +154,25 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
 
   /** Googleサービスの認証に関する再確認を処理する。 */
   private void refresh(Credential target) throws IOException {
-    if (!target.refreshToken()) {
-      throw new IllegalStateException(
-          "Google token refresh failed; run schedule auth or task auth");
+    try {
+      if (!target.refreshToken()) {
+        throw new IllegalStateException(
+            "Google token refresh failed; run schedule auth or task auth");
+      }
+    } catch (TokenResponseException failed) {
+      var details = failed.getDetails();
+      String code = details == null ? null : details.getError();
+      if ("invalid_grant".equals(code)
+          || "invalid_scope".equals(code)
+          || "invalid_client".equals(code)
+          || "unauthorized_client".equals(code)) secretaryAuthFailed = true;
+      throw failed;
     }
+  }
+
+  /** Safe shared status, without exposing OAuth response bodies or credentials. */
+  public boolean reauthorizationRequired() {
+    return secretaryAuthFailed;
   }
 
   /** 新たな対象を利用できるよう、Flowを作成する。 */
