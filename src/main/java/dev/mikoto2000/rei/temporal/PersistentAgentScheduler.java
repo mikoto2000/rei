@@ -506,13 +506,13 @@ public class PersistentAgentScheduler
 
   /** 時刻と期間の解釈に関するexpireイベント待機一覧を処理する。 */
   public void expireEventWaits() {
-    // A zero-row UPDATE still takes SQLite's writer lock. Read outside the write transaction.
-    if (!db.sql(
-            "SELECT EXISTS(SELECT 1 FROM agent_schedules WHERE status='WAITING_EVENT' AND due<=?)")
-        .param(clock.millis())
-        .query(Boolean.class)
-        .single()) return;
     try {
+      // A zero-row UPDATE still takes SQLite's writer lock. Read outside the write transaction.
+      if (!db.sql(
+              "SELECT EXISTS(SELECT 1 FROM agent_schedules WHERE status='WAITING_EVENT' AND due<=?)")
+          .param(clock.millis())
+          .query(Boolean.class)
+          .single()) return;
       transaction.executeWithoutResult(
           status -> {
             var expired =
@@ -525,7 +525,8 @@ public class PersistentAgentScheduler
           });
     } catch (org.springframework.dao.DataAccessException unavailable) {
       if (!databaseBusy(unavailable)) throw unavailable;
-      // TransactionTemplate rolled the entire update/history pair back. Retry on the next tick.
+      // Failed writes roll back with their history; failed preflights have no effects. Retry next
+      // tick.
       org.slf4j.LoggerFactory.getLogger(getClass())
           .debug("Schedule expiry deferred: sqlite_busy; retry on the next scheduler check");
     }

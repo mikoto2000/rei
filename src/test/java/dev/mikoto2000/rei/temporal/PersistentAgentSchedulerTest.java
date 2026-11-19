@@ -50,6 +50,12 @@ class PersistentAgentSchedulerTest {
       assertEquals("WAITING_EVENT", scheduler.get("project", id).status());
       statement.execute("ROLLBACK");
     }
+    try (var lock = source.getConnection();
+        var statement = lock.createStatement()) {
+      statement.execute("BEGIN EXCLUSIVE");
+      scheduler.expireEventWaits();
+      statement.execute("ROLLBACK");
+    }
     scheduler.expireEventWaits();
     scheduler.expireEventWaits();
     assertEquals("FAILED", scheduler.get("project", id).status());
