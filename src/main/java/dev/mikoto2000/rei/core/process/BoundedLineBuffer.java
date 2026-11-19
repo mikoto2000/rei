@@ -6,6 +6,16 @@ import java.util.List;
 
 /** 外部プロセスの管理に必要な上限内に収めた行一時保持領域を扱う。 */
 class BoundedLineBuffer {
+  /** 読み取り途中と保持済みの各行に適用する文字数上限。 */
+  static final int MAX_LINE_CHARACTERS = 8192;
+
+  /** 各出力ストリームで保持する文字数の総量。 */
+  static final int MAX_CHARACTERS = 256 * 1024;
+
+  private static final String TRUNCATED = "... [truncated]";
+
+  private int characters;
+
   /** 許容件数。 */
   private final int capacity;
 
@@ -22,10 +32,14 @@ class BoundedLineBuffer {
     if (line == null) {
       return;
     }
-    while (lines.size() >= capacity) {
-      lines.removeFirst();
+    if (line.length() > MAX_LINE_CHARACTERS) {
+      line = line.substring(0, MAX_LINE_CHARACTERS - TRUNCATED.length()) + TRUNCATED;
+    }
+    while (lines.size() >= capacity || characters + line.length() > MAX_CHARACTERS) {
+      characters -= lines.removeFirst().length();
     }
     lines.addLast(line);
+    characters += line.length();
   }
 
   /** 外部プロセスの管理で用いる末尾を返す。 */

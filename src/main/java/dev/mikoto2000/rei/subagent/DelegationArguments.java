@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.subagent;
 
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -21,34 +22,33 @@ public final class DelegationArguments {
     return value == null || value.isBlank() ? null : value;
   }
 
-  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
-  public static void validate(String tool, String input) {
-    var problems = problems(tool, input);
-    if (!problems.isEmpty())
-      throw new IllegalArgumentException(
-          "Invalid delegation arguments; correct all listed problems together:\n"
-              + String.join("\n", problems));
+  /** 委譲引数の修正案内を返す。 */
+  public static String guidance(List<ArgumentIssue> issues) {
+    // Preserve the existing prose label for the single request; structured paths use the JSON root.
+    return "Invalid delegation arguments; correct all listed problems together:\n"
+        + ArgumentIssue.describe(issues, "\n").replaceAll("(?m)^arguments\\.", "request.");
   }
 
   /** 補助エージェントへの委譲で用いる問題一覧を返す。 */
-  public static List<String> problems(String tool, String input) {
+  public static List<ArgumentIssue> problems(String tool, String input) {
     if (!Set.of("delegateTask", "delegateTasks").contains(tool)) return List.of();
     JsonNode root;
     try {
       root = JsonMapper.builder().build().readTree(input);
     } catch (RuntimeException error) {
-      return List.of("arguments: expected a JSON object");
+      return List.of(new ArgumentIssue("arguments", "expected a JSON object"));
     }
-    if (root == null || !root.isObject()) return List.of("arguments: expected a JSON object");
-    var errors = new ArrayList<String>();
+    if (root == null || !root.isObject())
+      return List.of(new ArgumentIssue("arguments", "expected a JSON object"));
+    var errors = new ArrayList<ArgumentIssue>();
     if (tool.equals("delegateTask")) {
-      request(root, false, new HashSet<>(), errors, "request");
+      request(root, false, new HashSet<>(), errors, "arguments");
       return List.copyOf(errors);
     }
     var requests = root.path("requests");
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (!requests.isArray() || requests.isEmpty() || requests.size() > 8)
-      return List.of("requests: must contain 1 to 8 items");
+      return List.of(new ArgumentIssue("requests", "must contain 1 to 8 items"));
     var ids = new HashSet<String>();
     int index = 0;
     for (var request : requests) request(request, true, ids, errors, "requests[" + (index++) + "]");
@@ -57,32 +57,35 @@ public final class DelegationArguments {
 
   /** 補助エージェントへの委譲に関する要求を処理する。 */
   private static void request(
-      JsonNode request, boolean batch, Set<String> ids, List<String> errors, String prefix) {
+      JsonNode request, boolean batch, Set<String> ids, List<ArgumentIssue> errors, String prefix) {
     if (!request.isObject()) {
-      errors.add(prefix + ": must be an object");
+      errors.add(new ArgumentIssue(prefix, "must be an object"));
       return;
     }
     if (batch) {
       String id = text(request, "id", errors, prefix);
       if (id == null || !id.matches("[A-Za-z0-9_-]{1,64}") || !ids.add(id))
         errors.add(
-            prefix
-                + ".id: must be unique and contain 1 to 64 letters, digits, underscores or hyphens");
+            new ArgumentIssue(
+                prefix + ".id",
+                "must be unique and contain 1 to 64 letters, digits, underscores or hyphens"));
     }
     String agent = text(request, "agent", errors, prefix),
         task = text(request, "task", errors, prefix),
         context = text(request, "context", errors, prefix);
-    if (agent == null) errors.add(prefix + ".agent: required");
-    if (task == null) errors.add(prefix + ".task: required");
-    else if (task.length() > 16384) errors.add(prefix + ".task: exceeds 16384 characters");
+    if (agent == null) errors.add(new ArgumentIssue(prefix + ".agent", "required"));
+    if (task == null) errors.add(new ArgumentIssue(prefix + ".task", "required"));
+    else if (task.length() > 16384)
+      errors.add(new ArgumentIssue(prefix + ".task", "exceeds 16384 characters"));
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (context != null && context.length() > 32768)
-      errors.add(prefix + ".context: exceeds 32768 characters");
+      errors.add(new ArgumentIssue(prefix + ".context", "exceeds 32768 characters"));
     String backend = text(request, "backendId", errors, prefix);
     if (backend != null && !Set.of("local", "chatgpt-plan", "codex-app-server").contains(backend))
       errors.add(
-          prefix
-              + ".backendId: must be local, chatgpt-plan or codex-app-server; omit for local execution");
+          new ArgumentIssue(
+              prefix + ".backendId",
+              "must be local, chatgpt-plan or codex-app-server; omit for local execution"));
     boolean local = backend == null || backend.equals("local");
     String account = text(request, "accountRef", errors, prefix),
         model = text(request, "modelId", errors, prefix),
@@ -91,68 +94,92 @@ public final class DelegationArguments {
     boolean constraints = array(request, "constraints", 16, 2048, errors, prefix);
     boolean criteria = array(request, "completionCriteria", 16, 2048, errors, prefix);
     if (local) {
-      if (account != null) errors.add(prefix + ".accountRef: omit for local delegation");
-      if (model != null) errors.add(prefix + ".modelId: omit for local delegation");
+      if (account != null)
+        errors.add(new ArgumentIssue(prefix + ".accountRef", "omit for local delegation"));
+      if (model != null)
+        errors.add(new ArgumentIssue(prefix + ".modelId", "omit for local delegation"));
       if (sources)
-        errors.add(prefix + ".sourceRefs: put target files in task/context for local delegation");
+        errors.add(
+            new ArgumentIssue(
+                prefix + ".sourceRefs", "put target files in task/context for local delegation"));
       if (expected != null)
         errors.add(
-            prefix
-                + ".expectedOutput: put output requirements in task/context for local delegation");
+            new ArgumentIssue(
+                prefix + ".expectedOutput",
+                "put output requirements in task/context for local delegation"));
       if (constraints)
-        errors.add(prefix + ".constraints: put requirements in task/context for local delegation");
+        errors.add(
+            new ArgumentIssue(
+                prefix + ".constraints", "put requirements in task/context for local delegation"));
       if (criteria)
         errors.add(
-            prefix + ".completionCriteria: put requirements in task/context for local delegation");
+            new ArgumentIssue(
+                prefix + ".completionCriteria",
+                "put requirements in task/context for local delegation"));
     } else {
       if (context != null)
-        errors.add(prefix + ".context: omit for external delegation; move its content into task");
+        errors.add(
+            new ArgumentIssue(
+                prefix + ".context", "omit for external delegation; move its content into task"));
       if (account == null)
         errors.add(
-            prefix
-                + ".accountRef: ACCOUNT_REQUIRED; specify the allowed account label from current host guidance");
+            new ArgumentIssue(
+                prefix + ".accountRef",
+                "ACCOUNT_REQUIRED for external delegation; specify the allowed account label from current host guidance"));
       if (model == null)
         errors.add(
-            prefix
-                + ".modelId: MODEL_REQUIRED; specify the allowed model slug from current host guidance");
+            new ArgumentIssue(
+                prefix + ".modelId",
+                "MODEL_REQUIRED for external delegation; specify the allowed model slug from current host guidance"));
       if (!sources)
-        errors.add(prefix + ".sourceRefs: nonempty Project-relative paths required (at most 16)");
+        errors.add(
+            new ArgumentIssue(
+                prefix + ".sourceRefs",
+                "external delegation requires 1 to 16 Project-relative paths"));
       if (expected == null)
-        errors.add(prefix + ".expectedOutput: nonempty literal result conditions required");
+        errors.add(
+            new ArgumentIssue(
+                prefix + ".expectedOutput",
+                "external delegation requires nonempty literal result conditions"));
       else
         try {
           ExpectedOutputConditions.validate(expected, null);
         } catch (IllegalArgumentException invalid) {
-          errors.add(prefix + ".expectedOutput: " + invalid.getMessage());
+          errors.add(new ArgumentIssue(prefix + ".expectedOutput", invalid.getMessage()));
         }
     }
   }
 
   /** 表示や受け渡しに用いるテキストを返す。 */
-  private static String text(JsonNode request, String field, List<String> errors, String prefix) {
+  private static String text(
+      JsonNode request, String field, List<ArgumentIssue> errors, String prefix) {
     try {
       return text(request, field);
     } catch (IllegalArgumentException invalid) {
-      errors.add(prefix + "." + field + ": must be a string");
+      errors.add(new ArgumentIssue(prefix + "." + field, "must be a string"));
       return null;
     }
   }
 
   /** 補助エージェントへの委譲において、arrayに該当するか判定する。 */
   private static boolean array(
-      JsonNode request, String field, int max, int length, List<String> errors, String prefix) {
+      JsonNode request,
+      String field,
+      int max,
+      int length,
+      List<ArgumentIssue> errors,
+      String prefix) {
     try {
       return array(request, field, max, length);
     } catch (IllegalArgumentException invalid) {
       errors.add(
-          prefix
-              + "."
-              + field
-              + ": must be an array of at most "
-              + max
-              + " nonempty strings (each at most "
-              + length
-              + " characters)");
+          new ArgumentIssue(
+              prefix + "." + field,
+              "must be an array of at most "
+                  + max
+                  + " nonempty strings (each at most "
+                  + length
+                  + " characters)"));
       return false;
     }
   }

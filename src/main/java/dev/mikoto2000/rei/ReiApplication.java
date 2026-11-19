@@ -320,6 +320,10 @@ public class ReiApplication {
 
     Completer inputCompleter = ReiLineReaderFactory.completer(cmd, completionEngine);
     LineReader reader = ReiLineReaderFactory.create(terminal, inputCompleter);
+    var runs = cmd.getSubcommands().get("runs");
+    if (runs != null
+        && runs.getCommand() instanceof dev.mikoto2000.rei.ui.shell.RunsCommand command)
+      command.setReader(reader);
     var llm = cmd.getSubcommands().get("llm");
     if (llm != null
         && llm.getCommand() instanceof dev.mikoto2000.rei.llm.capture.LlmCaptureCommand capture)
@@ -459,7 +463,11 @@ public class ReiApplication {
               case COMMAND -> {
                 String[] commandArgs = input.arguments();
                 printUserInputIfNeeded(input.text(), terminal, commandArgs);
-                if (isInteractiveShellCommand(commandArgs)) {
+                if (commandArgs.length == 2
+                    && "runs".equals(commandArgs[0])
+                    && "manage".equals(commandArgs[1])) {
+                  cmd.execute(commandArgs);
+                } else if (isInteractiveShellCommand(commandArgs)) {
                   executeInteractiveShellCommand(
                       cmd, reader, terminal, inputCompleter, commandArgs);
                 } else {

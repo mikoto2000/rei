@@ -59,6 +59,8 @@ class ProjectRegistryTest {
       start.countDown();
       var identities = new java.util.HashSet<String>();
       for (var registration : registrations) identities.add(registration.get().id());
+      assertThat(shell.completionSnapshot()).hasSize(48);
+      assertThat(web.completionSnapshot()).isEqualTo(shell.completionSnapshot());
       assertThat(new ProjectRegistry(file).list()).hasSize(48);
       assertThat(identities).hasSize(48);
     }

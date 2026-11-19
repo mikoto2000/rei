@@ -19,7 +19,7 @@ public record WorkContextProperties(
     @DefaultValue("true") boolean autoPresent,
     @DefaultValue("1200") int maxContextTokens,
     @DefaultValue("12000") int maxInputTokens,
-    @DefaultValue("120") int timeoutSeconds,
+    @DefaultValue("240") int timeoutSeconds,
     @DefaultValue("20") int maxTurns) {
   /** 受け取った情報からWorkContextPropertiesを作成する。 */
   public WorkContextProperties {

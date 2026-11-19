@@ -368,6 +368,8 @@ public class ContextAssembler {
             + "|"
             + settings.summaryTokens()
             + "|"
+            + compressor.generationTokens(settings.summaryTokens())
+            + "|"
             + settings.summaryTimeoutSeconds()
             + "|"
             + settings.minimumCompressionGain()
@@ -406,7 +408,10 @@ public class ContextAssembler {
       // The summarizer itself must not exceed its input budget. Process a bounded prefix per
       // request.
       long max =
-          settings.contextLimit() - settings.summaryTokens() - settings.safetyMargin() - 2048L;
+          (long) settings.contextLimit()
+              - compressor.generationTokens(settings.summaryTokens())
+              - settings.safetyMargin()
+              - 2048L;
       max = compressionRetries.inputLimit(segment.retryKey, configuration, max);
       while (before > max && count > 1) {
         count--;
@@ -497,6 +502,8 @@ public class ContextAssembler {
                 + before
                 + " 推定tokens、要約上限="
                 + settings.summaryTokens()
+                + " tokens、生成上限="
+                + compressor.generationTokens(settings.summaryTokens())
                 + " tokens、制限時間="
                 + settings.summaryTimeoutSeconds()
                 + " 秒。";
@@ -672,8 +679,7 @@ public class ContextAssembler {
   private String captureWorkingSet(Prompt prompt) {
     var render = workingSet;
     if (render == null
-        || prompt.getInstructions().stream().noneMatch(ContextAssembler::isWorkingSet))
-      return null;
+        || prompt.getInstructions().stream().noneMatch(ContextAssembler::isWorkingSet)) return null;
     return Objects.toString(render.get(), "");
   }
 
@@ -711,7 +717,18 @@ public class ContextAssembler {
 
   /** モデルへ渡す文脈の管理で用いる厳しい条件上限を返す。 */
   private int hardLimit(Prompt prompt) {
-    return promptInputLimit.applyAsInt(prompt);
+    int limit = promptInputLimit.applyAsInt(prompt);
+    var messages = prompt.getInstructions();
+    int lastIndex = messages.size() - 1;
+    while (lastIndex >= 0 && messages.get(lastIndex) instanceof SystemMessage) lastIndex--;
+    if (lastIndex >= 0
+        && messages.get(lastIndex) instanceof ToolResponseMessage last
+        && Boolean.TRUE.equals(last.getMetadata().get("rei.reviewBudgetRecovery"))) {
+      // Reserve a fresh source page without raising model limits or replaying a tool batch.
+      // Summary calls still use the existing Run budget and cancellation checks.
+      return Math.max(1, limit - Math.min(8000, limit / 8));
+    }
+    return limit;
   }
 
   /** モデルへ渡す文脈の管理で用いる実行を返す。 */

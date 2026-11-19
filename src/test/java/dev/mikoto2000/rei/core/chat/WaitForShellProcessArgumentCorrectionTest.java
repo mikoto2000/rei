@@ -72,7 +72,7 @@ class WaitForShellProcessArgumentCorrectionTest {
             calls,
             (prompt, invocation) -> {
               if (invocation == 1) {
-                return waitCall("invalid-wait", 120);
+                return waitCall("invalid-wait", 121);
               }
               if (invocation == 2) {
                 // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
@@ -80,9 +80,9 @@ class WaitForShellProcessArgumentCorrectionTest {
                 var correction = JsonMapper.builder().build().readTree(latestToolResponse(prompt));
                 assertThat(correction.path("error").asString()).isEqualTo("INVALID_TOOL_ARGUMENTS");
                 assertThat(correction.path("executed").asBoolean()).isFalse();
-                assertThat(correction.path("guidance").asString()).contains("timeoutSeconds", "60");
+                assertThat(correction.path("guidance").asString()).contains("timeoutSeconds", "120");
                 assertThat(correction.path("correctionsRemaining").asInt()).isEqualTo(1);
-                return waitCall("corrected-wait", 60);
+                return waitCall("corrected-wait", 120);
               }
               assertThat(invocation).isEqualTo(3);
               assertThat(latestToolResponse(prompt)).contains("COMPLETED", "existing-process");
@@ -125,7 +125,7 @@ class WaitForShellProcessArgumentCorrectionTest {
                 assertThat(correction.path("maxCorrections").asInt()).isEqualTo(2);
                 remaining.add(correction.path("correctionsRemaining").asInt());
               }
-              return waitCall("invalid-wait-" + invocation, 120);
+              return waitCall("invalid-wait-" + invocation, 121);
             });
 
     var result = fixture.execute();
@@ -136,7 +136,10 @@ class WaitForShellProcessArgumentCorrectionTest {
         .contains("2回", "/resume <taskId>", "同じタスク", "累積使用量");
     assertThat(calls).hasValue(3);
     assertThat(remaining).containsExactly(1, 0);
-    assertThat(invalidArgumentEvents(fixture.events())).hasSize(2);
+    var rejections = invalidArgumentEvents(fixture.events());
+    assertThat(rejections).hasSize(3);
+    assertThat(rejections.getLast().toolCallId()).isEqualTo("invalid-wait-3");
+    assertThat(rejections.getLast().error().message()).contains("timeoutSeconds", "120");
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(processes, fixture.approvals());
   }

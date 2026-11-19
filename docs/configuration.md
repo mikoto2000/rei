@@ -60,7 +60,7 @@ rei:
       max-replans-per-goal: 2
       max-subgoals-per-replan: 8
       max-llm-calls-per-run: 120
-      max-tool-argument-corrections-per-run: 5
+      max-tool-argument-corrections-per-run: 10
   image:
     output-directory: ${rei.data-dir}/images
     size: 1024x1024
@@ -180,8 +180,8 @@ Web 検索の順位には適用しません。
 
 LLM を利用する機能ごとに、既定の `spring.ai.openai` とは別の OpenAI 互換 API サーバーとモデルを指定できます。
 `base-url` を空にした機能は、従来どおり既定の LLM 設定を使います。
-機能別に指定した LLM サーバーへの `call` / `stream` が失敗した場合は、`spring.ai.openai` の既定 LLM へフォールバックします。
-ただし、`computer-use` と `computer-use-planner` はフォールバックせず、解析に失敗した場合は Computer Use タスクを `MODEL_ERROR` で終了します。
+機能別に指定した接続先でエラーが発生すると、その機能の処理が失敗します。既定接続先へ同じ入力を再送してよい場合は、`rei.llm.features.<feature>.fallback-to-default: true` を設定してください。画像生成の機能名は `image-generation` です。再送先も入力を受信し、利用料が発生する場合があります。
+Computer Use、Activity、非公開の証拠を扱う専用モデルは再送しません。Computer Use の解析失敗時はタスクを `MODEL_ERROR` で終了します。
 機能別 `model` を指定している場合、フォールバック時はそのモデル名を既定 LLM へ引き継がず、既定 LLM 側のデフォルトモデルを使います。
 
 ```yaml
@@ -192,7 +192,7 @@ rei:
       max-replans-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL:2}
       max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
       max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:120}
-      max-tool-argument-corrections-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOOL_ARGUMENT_CORRECTIONS_PER_RUN:5}
+      max-tool-argument-corrections-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOOL_ARGUMENT_CORRECTIONS_PER_RUN:10}
     features:
       chat:
         base-url: ${REI_LLM_CHAT_BASE_URL:}
@@ -228,9 +228,9 @@ rei:
 チャットモデルを使う機能では `rei.llm.features.<機能キー>.max-output-tokens` で共通値を上書きできます。ShowUI の位置特定は128トークン固定です。
 出力上限に達した要求は、処理を分割して継続します。`output-limit` で再計画回数・分割数・呼び出し回数の上限を調整できます。
 
-`rei.llm.output-limit.max-tool-argument-corrections-per-run` は、実行前に検出した不正なツール引数を LLM に返して修正させる回数です。既定は Run 全体で5回、`0` は自動修正を無効にします。環境変数は `REI_LLM_OUTPUT_LIMIT_MAX_TOOL_ARGUMENT_CORRECTIONS_PER_RUN` です。不正なツール呼び出し1件につき1回を消費し、1呼び出し内の複数の不備はまとめて1回です。別のツールや同時に出された別の呼び出しも同じ Run の予算を使います。LLM 呼び出し数・トークン上限も引き続き適用します。権限拒否や実行を始めた後の例外は修正対象になりません。
+`rei.llm.output-limit.max-tool-argument-corrections-per-run` は、実行前に検出した不正なツール引数を LLM に返して修正させる回数です。既定は Run 全体で10回、`0` は自動修正を無効にします。環境変数は `REI_LLM_OUTPUT_LIMIT_MAX_TOOL_ARGUMENT_CORRECTIONS_PER_RUN` です。不正なツール呼び出し1件につき1回を消費し、1呼び出し内の複数の不備はまとめて1回です。別のツールや同時に出された別の呼び出しも同じ Run の予算を使います。LLM 呼び出し数・トークン上限も引き続き適用します。権限拒否や実行を始めた後の例外は修正対象になりません。
 
-承認からの続行・`/resume` では消費回数を引き継ぎ、現在の設定上限から残りを計算します。既に2回消費したタスクで上限を5回に増やすと、残りは3回です。上限を消費済み回数以下へ下げても回数は戻らず、追加の修正はできません。上限到達のエラーには設定名と対処を表示します。変更が必要な場合は外部の `application.yaml` を更新して Rei を再起動し、対象プロジェクトを選択して `/resume <taskId>` で再開してください。
+承認からの続行や自動再開では修正枠の消費を引き継ぎ、現在の設定上限から残りを計算します。上限に達した場合は、対象プロジェクトで `/resume <taskId>` を実行すると、現在の設定上限で修正枠が更新されます。累積修正回数と LLM 呼び出し数・トークンの上限は引き継ぎます。外部の `application.yaml` で上限を変更した場合は、Rei を再起動してから再開してください。
 
 対応している機能キー:
 
@@ -257,6 +257,7 @@ rei:
 | `REI_LLM_CHAT_BASE_URL` / `REI_LLM_CHAT_API_KEY` / `REI_LLM_CHAT_MODEL` | 通常チャット用 |
 | `REI_LLM_SEARCH_BASE_URL` / `REI_LLM_SEARCH_API_KEY` / `REI_LLM_SEARCH_MODEL` | 検索回答生成用 |
 | `REI_LLM_MEMORY_BASE_URL` / `REI_LLM_MEMORY_API_KEY` / `REI_LLM_MEMORY_MODEL` | メモリ統合用 |
+| `REI_LLM_MEMORY_MAX_OUTPUT_TOKENS` | メモリ統合・Work Context 抽出の出力上限。未設定時は `REI_LLM_MAX_OUTPUT_TOKENS` を継承 |
 | `REI_LLM_BLUESKY_REPLY_BASE_URL` / `REI_LLM_BLUESKY_REPLY_API_KEY` / `REI_LLM_BLUESKY_REPLY_MODEL` | Bluesky リプライ用 |
 | `REI_LLM_FEED_SUMMARY_BASE_URL` / `REI_LLM_FEED_SUMMARY_API_KEY` / `REI_LLM_FEED_SUMMARY_MODEL` | フィード要約用 |
 | `REI_LLM_BRIEFING_BASE_URL` / `REI_LLM_BRIEFING_API_KEY` / `REI_LLM_BRIEFING_MODEL` | ブリーフィング用 |
@@ -570,3 +571,15 @@ the real-renderer test command. No renderer or model is installed automatically.
 ## 音声認識のLLM補正
 
 `rei.voice.correction.enabled` は既定falseです。マイクOFF時の `/voice correction --enabled=true|false` はプロセス内の切替です。専用接続は `rei.llm.features.voice-correction` に設定し、省略すると通常会話の接続を継承します。有効時はASR原文・限定した文脈・辞書がリモートへ送られる場合があります。timeout、予算、辞書保存先、自動採用と重要操作の確認、メモリ内診断は [音声LLM補正](voice-llm-correction.md) を参照してください。
+
+## sqlite-vec の自動取得
+
+ベクトル DB を初めて開くときに sqlite-vec が未配置の場合、Rei は対応する
+バージョンと OS のアーカイブを HTTPS で取得し、同梱の SHA-256 と照合します。
+`REI_SQLITE_VEC_RELEASE_BASE_URL` で HTTPS ミラーを指定する場合も同じ SHA-256 が必要です。
+自動取得の対象外のバージョンや管理者が配布したライブラリを利用する場合は、
+検証済みのライブラリを `REI_SQLITE_VEC_EXTENSION_PATH` に指定してください。
+
+## Web検索の取得件数
+
+`rei.web-search.max-results`（`REI_WEB_SEARCH_MAX_RESULTS`）の既定値は8件です。既存の設定で5件などを明示していれば、その指定を優先します。本文取得数・総通信量・出力トークン上限は変更しません。

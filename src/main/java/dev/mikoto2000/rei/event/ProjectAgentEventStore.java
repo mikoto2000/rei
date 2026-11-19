@@ -265,6 +265,33 @@ public class ProjectAgentEventStore implements AgentEventListener {
   }
 
   /** 新たな対象を管理できるよう、Reversed行を追加する。 */
+  public List<AgentEvent> runLifecycle(String projectId) {
+    Path path = file(projectId);
+    if (!Files.exists(path)) return List.of();
+    try (var lines = Files.lines(path)) {
+      return lines
+          .map(line -> decode(line, path))
+          .filter(java.util.Objects::nonNull)
+          .filter(
+              event ->
+                  switch (event.type()) {
+                    case AGENT_RUN_STARTED,
+                        AGENT_RUN_COMPLETED,
+                        AGENT_RUN_FAILED,
+                        AGENT_RUN_CANCELLED,
+                        EXECUTION_STARTED,
+                        EXECUTION_COMPLETED,
+                        EXECUTION_FAILED,
+                        EXECUTION_CANCELLED ->
+                        true;
+                    default -> false;
+                  })
+          .toList();
+    } catch (IOException error) {
+      throw new IllegalStateException("Cannot read persisted run lifecycle", error);
+    }
+  }
+
   private void addReversedLine(ByteArrayOutputStream reversed, List<AgentEvent> result, Path file) {
     byte[] bytes = reversed.toByteArray();
     for (int i = 0, j = bytes.length - 1; i < j; i++, j--) {

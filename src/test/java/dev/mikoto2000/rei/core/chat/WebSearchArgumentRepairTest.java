@@ -125,7 +125,7 @@ class WebSearchArgumentRepairTest {
     var feedback = (ToolResponseMessage) result.conversationHistory().getLast();
     String error = feedback.getResponses().getFirst().responseData();
     assertTrue(error.contains("INVALID_TOOL_ARGUMENTS"));
-    assertTrue(error.contains("maxResults must be between 1 and 5"));
+    assertTrue(error.contains("maxResults must be between 1 and 8"));
     assertTrue(error.contains("\"executed\":false"));
     assertEquals("bad", feedback.getResponses().getFirst().id());
     assertFalse(result.returnDirect());

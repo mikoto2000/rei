@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.subagent;
 
 import dev.mikoto2000.rei.core.policy.ActionCapability;
+import dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException;
 import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
@@ -71,17 +73,18 @@ public final class DelegationToolPermissionResolver {
     int index = 0;
     boolean modelSelection = false;
     for (var request : requests) {
-      String prefix = "delegateTasks".equals(tool) ? "requests[" + (index++) + "]" : "request";
+      String prefix = "delegateTasks".equals(tool) ? "requests[" + (index++) + "]" : "arguments";
       if (!request.isObject() || !request.path("agent").isString()) continue;
       var definition = registry.getObject().findById(request.path("agent").asString());
       if (definition.isEmpty()) {
-        issues.add(prefix + ".agent: unavailable registered role");
+        issues.add(new ArgumentIssue(prefix + ".agent", "select an available registered role"));
         continue;
       }
       try {
         childPolicy.getObject().validate(definition.get().requestedTools());
       } catch (IllegalArgumentException invalid) {
-        issues.add(prefix + ".agent: role tool policy is incompatible");
+        issues.add(
+            new ArgumentIssue(prefix + ".agent", "select a role compatible with the tool policy"));
       }
       String backend =
           request.path("backendId").isString()
@@ -95,7 +98,7 @@ public final class DelegationToolPermissionResolver {
           ExpectedOutputConditions.validate(
               request.path("expectedOutput").asString(), definition.get().resultSchema());
         } catch (IllegalArgumentException invalid) {
-          String issue = prefix + ".expectedOutput: " + invalid.getMessage();
+          var issue = new ArgumentIssue(prefix + ".expectedOutput", invalid.getMessage());
           if (!issues.contains(issue)) issues.add(issue);
         }
       }
@@ -119,16 +122,15 @@ public final class DelegationToolPermissionResolver {
           && !automatic.allowedModels().contains(model)) {
         modelSelection = true;
         issues.add(
-            prefix
-                + ".modelId: choose an exact administrator-permitted ID from "
-                + json.writeValueAsString(models)
-                + "; use the ID, not a display name or guessed alias. If the human explicitly requested a different model, ask before proposing another. This validation does not authorize execution; normal policy and approval still apply.");
+            new ArgumentIssue(
+                prefix + ".modelId",
+                "choose an exact administrator-permitted ID from "
+                    + json.writeValueAsString(models)
+                    + "; use the ID, not a display name or guessed alias. If the human explicitly requested a different model, ask before proposing another. This validation does not authorize execution; normal policy and approval still apply."));
       }
     }
     if (!issues.isEmpty()) {
-      String guidance =
-          "Invalid delegation arguments; correct all listed problems together:\n"
-              + String.join("\n", issues);
+      String guidance = DelegationArguments.guidance(issues);
       if (modelSelection) {
         // Another request in the batch may have a real account/backend-policy refusal.
         // Do not mask that refusal with a repairable model selection from a different request.
@@ -155,11 +157,10 @@ public final class DelegationToolPermissionResolver {
                         && !automatic.allowedModels().contains(model)))
               automatic.check(account, model);
           }
-        throw new dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException(
-            guidance,
-            dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException.Kind.MODEL_SELECTION);
+        throw new InvalidToolArgumentsException(
+            guidance, issues, InvalidToolArgumentsException.Kind.MODEL_SELECTION);
       }
-      throw new IllegalArgumentException(guidance);
+      throw new InvalidToolArgumentsException(guidance, issues);
     }
     if (automatic != null)
       for (var request : requests) {

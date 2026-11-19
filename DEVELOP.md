@@ -58,7 +58,7 @@ Episode の経緯・根拠・差分整理・横断検索は [Episode Memory](doc
 
 ## 開発環境
 
-現在の基盤は Spring Boot 4.1.1 / Spring AI 2.0.1 です。接続設定と既存履歴の互換対応は [更新ガイド](docs/spring-ai-2-upgrade.md) を参照してください。
+現在の基盤は Spring Boot 4.1.2 / Spring AI 2.0.1 です。接続設定と既存履歴の互換対応は [更新ガイド](docs/spring-ai-2-upgrade.md) を参照してください。
 
 - JDK 25 以上
 - Maven Wrapper または Maven
@@ -97,8 +97,9 @@ CI の Java 全件回帰は Windows の2ジョブで実行します。Shard A �
 [`.github/ci/java-shard-a.txt`](.github/ci/java-shard-a.txt) にあるクラスを実行し、
 Shard B は Surefire の既定対象からそのクラスを除いた残りを実行します。
 新規クラスは既定で Shard B に入り、Shard A のクラスを改名・削除する場合は一覧も更新します。
-Ubuntu では別ジョブが `sh ./build.sh` と両起動スクリプトの `--help` を検証します。
-両 Windows ジョブの成功後、`test` ジョブがクラスの割り当て、テスト ID の重複、
+Ubuntu では別ジョブが `sh ./build.sh` と両起動スクリプトの `--help` に加え、
+書き込み時の POSIX ファイル権限の保持、シンボリックリンク経由の読み取り拒否、外部プロセスの起動・終了・取り消しを検証します。
+Windows と Ubuntu のジョブの成功後、`test` ジョブがクラスの割り当て、テスト ID の重複、
 および [想定スキップ](config/test-expected-skips.json) の ID と理由を照合します。
 
 別の Java 静的解析ワークフローは Checkstyle と SpotBugs を実行し、両方の指摘が 0 件であることを確認します。レポートの欠落・形式不正や SpotBugs の解析エラーも失敗として扱います。[ローカル実行と CI レポート](docs/static-analysis.md)
@@ -194,13 +195,13 @@ OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%
 
 会話 Run を一覧へ公開する前に停止対象を登録し、runner と所有する子処理の後片付けが完了してから終端を確定します。`POST /api/v1/runs/{runId}/cancel` の HTTP 202 は停止要求の受付を表し、完了は Run の状態照会または SSE で確認します。[停止のライフサイクル](docs/run-cancellation-lifecycle.md)
 
-`AgentEventChatModel` は LLM イベントと時間計測を同じ Run ID に紐づけます。ストリーム購読を解除した場合、停止要求や割り込みなどのキャンセル状態があれば LLM Span を `CANCELLED`、通常の購読解除は `DISCONNECTED` として記録します。Span の状態と Run の終端状態はそれぞれのライフサイクルで確定します。[時間計測](docs/run-timing.md)・[キャンセル判定の回帰テスト](review/test-evidence.md#m-1-のキャンセル判定の回帰テスト)
+`AgentEventChatModel` は LLM イベントと時間計測を同じ Run ID に紐づけます。ストリーム購読を解除した場合、停止要求や割り込みなどのキャンセル状態があれば LLM Span を `CANCELLED`、通常の購読解除は `DISCONNECTED` として記録します。Span の状態と Run の終端状態はそれぞれのライフサイクルで確定します。[時間計測](docs/run-timing.md)・[キャンセル判定の回帰テスト](src/test/java/dev/mikoto2000/rei/llm/AgentEventChatModelTimingTest.java)
 
 ## プロンプト組み立てとファイル読み取り
 
 `ContextAssembler` は組み立てごとに Working Set を一度取得し、サイズの見積もりと最終プロンプトで共有します。ツール呼び出しと結果を組にした履歴の後ろに独立した `system` メッセージとして配置し、次のモデル呼び出しで取得し直します。[プロンプトとキャッシュ計測](docs/llm-prompt-cache.md)
 
-`grepMultiQuery`、`searchAndRead`、`readMultiFile` は有効な項目の結果を返し、除外された項目には `PROJECT_PATH_EXCLUDED` と許可された Project 相対パスでの再試行案内を返します。ページ付き検索では、除外と一致結果を入力時のクエリ番号で参照できます。[変更と検証証跡](review/README.md)
+`grepMultiQuery`、`searchAndRead`、`readMultiFile` は有効な項目の結果を返し、除外された項目には `PROJECT_PATH_EXCLUDED` と許可された Project 相対パスでの再試行案内を返します。ページ付き検索では、除外と一致結果を入力時のクエリ番号で参照できます。[読み取りと検索の回帰テスト](src/test/java/dev/mikoto2000/rei/core/ReadingSecurityTest.java)・[ページ付き検索の回帰テスト](src/test/java/dev/mikoto2000/rei/core/PagedFileSearchTest.java)
 
 ## 終了開始イベント
 
@@ -295,3 +296,7 @@ Session単位の会話スタイル、音声限定設定、実行能力・承認�
 音声入力・会話モードのPR一覧、利用手順、実測結果と未対応範囲は [実装記録](docs/voice-input-implementation-report.md) を参照してください。
 
 Goal / Stage の責務、永続化、再開と操作は [Goal Stage実装](docs/goal-stage-implementation.md)、比較評価は [Goal Stage評価](docs/goal-stage-evaluation.md) を参照してください。
+
+依存脆弱性スキャンはルートの Maven 依存（推移的依存を含む）と npm・Cargo の lockfile を検査します。
+軽量 CLI は reactor 内の依存が公開されていないため、各 POM の直接依存を検査し、
+結果を別の Actions artifact に残します。

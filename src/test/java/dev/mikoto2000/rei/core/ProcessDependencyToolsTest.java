@@ -109,6 +109,6 @@ class ProcessDependencyToolsTest {
         .thenReturn(snapshot(BackgroundProcessStatus.FAILED, null, false));
     assertEquals(
         DependencyState.BLOCKED, tools.waitForShellProcess("p", 10, null).dependency().state());
-    assertThrows(IllegalArgumentException.class, () -> tools.waitForShellProcess("p", 61, null));
+    assertThrows(IllegalArgumentException.class, () -> tools.waitForShellProcess("p", 121, null));
   }
 }

@@ -23,7 +23,6 @@ import dev.mikoto2000.rei.workcontext.WorkContext.Status;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -380,7 +379,7 @@ public class WorkContextService {
         long expected = old == null ? 0 : old.revision();
         long current = repository.current(project.id()).map(WorkContext::revision).orElse(0L);
         if (current != expected)
-          throw new ConcurrentModificationException(
+          throw new WorkContextConflictException(
               "Work Context changed during extraction; retry with current revision");
         var metadata = selected.getLast().metadata();
         var snapshot =
@@ -456,7 +455,7 @@ public class WorkContextService {
               .current(projectId)
               .orElseThrow(() -> new IllegalArgumentException("No Work Context"));
       if (old.revision() != expected)
-        throw new ConcurrentModificationException(
+        throw new WorkContextConflictException(
             "Work Context changed; get current revision first");
       var item =
           old.items().stream()

@@ -86,7 +86,8 @@ User / 完了済み Tool Result → StagnationChatModel の request 境界
 | `threshold` | 70000 | 要約を検討する入力 token 数 |
 | `hard-limit` | 85000 | モデルに送信できる入力 token 数の上限 |
 | `recent-tokens` | 12000 | 会話 / Tool 往復それぞれの最近の原文を残す予算 |
-| `summary-tokens` | 3000 | 各 Summary の出力 token 上限 |
+| `summary-tokens` | 12000 | 各 Summary の本文 token 上限（Java 単体の既定値は3000） |
+| `summary-generation-reserve` | 8192 | 本文とは別に、思考などに確保する生成 token 数。0で追加予約を無効化 |
 | `minimum-compression-gain` | 0.1 | 最低10%の削減を要求 |
 | `tool-result-threshold` | 8000 | 一般ログを抜粋する推定 token 数。ファイル本文・delegateTask / delegateTasks の結果には適用しない |
 | `tool-result-tokens` | 2000 | 一般ログの診断・head・tail 本文の予算（参照ヘッダーは別途計測） |
@@ -110,8 +111,11 @@ rei:
 `TokenEstimator` は差し替え可能。既定は ASCII 約4文字/token、非ASCII 約2token/codepoint、message / tool-call の overhead と media 予約を加える概算。
 正確な tokenizer ではない。最終 prompt を再計測し、保護対象だけで上限を超える場合は `CONTEXT_HARD_LIMIT` を返す。
 
-要約 request の出力上限も `summary-tokens` を使う。受信後は、モデルが報告した出力 token 数で上限を検査し、使用量が返らない場合は `TokenEstimator` による推定を使う。
-出力が `length` で終了した場合も要約は採用しない。思考を出力 token に含めるモデルでは、本文が短くても上限に達することがある。
+要約 request の生成上限は `summary-tokens + summary-generation-reserve` とする。本文上限と生成上限を同じ値にすると、思考を出力 token に含めるモデルは要約本文の完成前に上限へ達することがあるため、別の予算として扱う。入力 window の計算でも、この生成上限全体を予約する。上限まで長く書くことを避けるため、要約指示では本文上限の半分、最大2000 tokensを目標とする。
+
+受信後は、モデルが報告した出力 token 数から明示された思考 token 数を除き、本文を `summary-tokens` で検査する。思考内訳が不明・不正なら全出力 token 数で保守的に検査し、使用量自体が返らない場合は `TokenEstimator` による推定を使う。Run / Goal の使用量には思考を含む全使用量を計上する。
+
+`summary-generation-reserve` の環境変数は `REI_CONTEXT_SUMMARY_GENERATION_RESERVE`。モデルの対応する最大出力に合わせて設定する。生成上限の増加は本文の保存上限を増やさず、完了を保証するものでもない。出力が `length` で終了した不完全な要約は引き続き採用しない。
 
 ## Summary・原文の保存
 

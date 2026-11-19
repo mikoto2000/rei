@@ -19,5 +19,4 @@
     <appender-ref ref="FILE" />
   </root>
 
-  <logger name="dev.mikoto2000.rei.bluesky" level="DEBUG" />
 </configuration>

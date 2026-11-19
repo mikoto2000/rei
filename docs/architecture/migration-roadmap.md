@@ -8,7 +8,7 @@ Phase 3の契約棚卸し・互換snapshotだけはPhase 1と同時に始めら�
 ## Phase 1: 横断配線をbootstrapへ
 
 2026-11-11: 最初の項目であるAgentRunConfigurationのbootstrap移動を実施。
-[レビュー記録](../../review/module-boundaries-2026-11-11.md)を参照。以下の他Configurationや後続Phaseは引き続き移行対象。
+移動後の [Bean 配線](../../src/main/java/dev/mikoto2000/rei/bootstrap/AgentRunConfiguration.java) と [依存境界の回帰テスト](../../src/test/java/dev/mikoto2000/rei/architecture/PackageArchitectureTest.java) を参照。以下の他Configurationや後続Phaseは引き続き移行対象。
 
 対象は `core.chat.AgentRunConfiguration`、`web.WebApiConfiguration`、`web.BackgroundRunConfiguration`、
 `core.configuration.AiConfiguration`。全Configurationを機械的に移す方針ではなく、機能内に閉じた設定・Propertiesは残します。

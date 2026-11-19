@@ -290,7 +290,7 @@ public class ExternalConfigFileService {
               max-replans-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL:2}
               max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
               max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:120}
-              max-tool-argument-corrections-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOOL_ARGUMENT_CORRECTIONS_PER_RUN:5}
+              max-tool-argument-corrections-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOOL_ARGUMENT_CORRECTIONS_PER_RUN:10}
               max-total-tokens-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOTAL_TOKENS_PER_RUN:0}
               max-total-tokens-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_TOTAL_TOKENS_PER_GOAL:0}
             features:
@@ -423,7 +423,7 @@ public class ExternalConfigFileService {
             max-wire-bytes: ${REI_WEB_SEARCH_MAX_WIRE_BYTES:2097152}
             max-decoded-bytes: ${REI_WEB_SEARCH_MAX_DECODED_BYTES:4194304}
             max-redirects: ${REI_WEB_SEARCH_MAX_REDIRECTS:5}
-            max-results: ${REI_WEB_SEARCH_MAX_RESULTS:5}
+            max-results: ${REI_WEB_SEARCH_MAX_RESULTS:8}
             max-search-queries: ${REI_WEB_SEARCH_MAX_SEARCH_QUERIES:3}
             max-search-api-calls: ${REI_WEB_SEARCH_MAX_SEARCH_API_CALLS:4}
             max-page-fetches: ${REI_WEB_SEARCH_MAX_PAGE_FETCHES:5}

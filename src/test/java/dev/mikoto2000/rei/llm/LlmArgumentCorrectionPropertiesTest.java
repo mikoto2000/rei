@@ -34,13 +34,13 @@ class LlmArgumentCorrectionPropertiesTest {
 
   /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
-  void defaultAndNullUseFiveWithoutTreatingZeroAsMissing() {
+  void defaultAndNullUseTenWithoutTreatingZeroAsMissing() {
     var properties = new LlmProperties();
-    assertThat(properties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun()).isEqualTo(5);
+    assertThat(properties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun()).isEqualTo(10);
     properties.updateOutputLimit(limits -> limits.setMaxToolArgumentCorrectionsPerRun(0));
     assertThat(properties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun()).isZero();
     properties.updateOutputLimit(limits -> limits.setMaxToolArgumentCorrectionsPerRun(null));
-    assertThat(properties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun()).isEqualTo(5);
+    assertThat(properties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun()).isEqualTo(10);
   }
 
   /** 用途に応じたモデル利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */

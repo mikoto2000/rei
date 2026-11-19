@@ -37,6 +37,31 @@ struct Resume {
     checkpoint_revision: u64,
     reconciliation: Reconciliation,
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ManagedRun {
+    project_id: Option<String>,
+    project_name: String,
+    run_id: String,
+    request: String,
+    status: String,
+    started_at: Option<String>,
+    failure: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RunCheckpoint {
+    task_id: String,
+    run_id: String,
+    original_run_id: String,
+    saved_at: String,
+    status: String,
+    revision: u64,
+    request: String,
+    discardable: bool,
+}
+
 impl Checkpoint {
     fn validate(&self, project: &str, task: Option<&str>) -> Result<()> {
         if self.schema_version != 1
@@ -168,6 +193,86 @@ impl HttpReiClient {
         op: WorkspaceOperation,
     ) -> Result<WorkspaceResult> {
         match op {
+            WorkspaceOperation::ManagedRuns => {
+                let rows: Vec<ManagedRun> = Self::json(
+                    self.request(Method::GET, "/api/v1/run-management", true)?,
+                    Operation::Resource,
+                )
+                .await?;
+                let items = rows
+                    .into_iter()
+                    .map(|row| WorkspaceItem {
+                        id: Some(row.run_id),
+                        title: row.request,
+                        fields: vec![
+                            ("Project".into(), row.project_id.unwrap_or_default()),
+                            ("Project name".into(), row.project_name),
+                            ("Status".into(), row.status),
+                            ("Started".into(), row.started_at.unwrap_or_default()),
+                            ("Failure".into(), row.failure),
+                        ],
+                    })
+                    .collect();
+                Ok(result("Runs", items))
+            }
+            WorkspaceOperation::RunCheckpoints { project_id, run_id } => {
+                let rows: Vec<RunCheckpoint> = Self::json(
+                    self.request(
+                        Method::GET,
+                        &format!(
+                            "/api/v1/run-management/{}/{}/checkpoints",
+                            segment(&project_id)?,
+                            segment(&run_id)?
+                        ),
+                        true,
+                    )?,
+                    Operation::Resource,
+                )
+                .await?;
+                let items = rows
+                    .into_iter()
+                    .map(|row| WorkspaceItem {
+                        id: Some(row.task_id),
+                        title: row.request,
+                        fields: vec![
+                            ("Run".into(), row.run_id),
+                            ("Original run".into(), row.original_run_id),
+                            ("Saved".into(), row.saved_at),
+                            ("Status".into(), row.status),
+                            ("Revision".into(), row.revision.to_string()),
+                            ("Discardable".into(), row.discardable.to_string()),
+                        ],
+                    })
+                    .collect();
+                Ok(result("Run checkpoints", items))
+            }
+            WorkspaceOperation::DiscardRunCheckpoint {
+                project_id,
+                run_id,
+                task_id,
+                revision,
+            } => {
+                let revision: u64 = revision.parse().map_err(|_| AppError::InvalidInput)?;
+                let response = Self::checked(
+                    self.request(
+                        Method::POST,
+                        &format!(
+                            "/api/v1/run-management/{}/{}/checkpoints/{}/discard",
+                            segment(&project_id)?,
+                            segment(&run_id)?,
+                            segment(&task_id)?
+                        ),
+                        true,
+                    )?
+                    .json(&serde_json::json!({ "revision": revision })),
+                    Operation::Resource,
+                )
+                .await?;
+                if response.status() != reqwest::StatusCode::NO_CONTENT {
+                    return Err(AppError::InvalidResponse);
+                }
+                Ok(result("Checkpoint discarded", vec![]))
+            }
             WorkspaceOperation::Checkpoints { project_id } => {
                 let rows: Vec<Checkpoint> = Self::json(
                     self.request(

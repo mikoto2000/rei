@@ -35,7 +35,7 @@ public final class ProcessWaitArguments {
   /** 案内。 */
   private static final String GUIDANCE =
       "waitForShellProcess: timeoutSeconds は 0〜"
-          + DependencyAwaiter.MAX_TIMEOUT_SECONDS
+          + DependencyAwaiter.MAX_PROCESS_TIMEOUT_SECONDS
           + " 秒の整数を指定してください。"
           + " 0 は即時の状態確認、省略または null は既定の10秒です。"
           + " プロセスの確認・待機は実行していません。同じ processId で待機時間だけを修正してください。"
@@ -63,14 +63,21 @@ public final class ProcessWaitArguments {
       throw new InvalidToolArgumentsException(
           "waitForShellProcess: 引数はサイズ・深さ制限内の単一JSONオブジェクトにしてください。"
               + " 重複キーや末尾の追加データは使用できません。"
-              + GUIDANCE);
+              + GUIDANCE,
+          "arguments",
+          "specify one bounded JSON object without duplicate keys or trailing data");
     }
     var timeout = root.path("timeoutSeconds");
     if (timeout.isMissingNode() || timeout.isNull()) return;
     if (!timeout.isIntegralNumber()
         || !timeout.canConvertToInt()
         || timeout.intValue() < 0
-        || timeout.intValue() > DependencyAwaiter.MAX_TIMEOUT_SECONDS)
-      throw new InvalidToolArgumentsException(GUIDANCE);
+        || timeout.intValue() > DependencyAwaiter.MAX_PROCESS_TIMEOUT_SECONDS)
+      throw new InvalidToolArgumentsException(
+          GUIDANCE,
+          "timeoutSeconds",
+          "must be an integer between 0 and "
+              + DependencyAwaiter.MAX_PROCESS_TIMEOUT_SECONDS
+              + ", null, or omitted");
   }
 }

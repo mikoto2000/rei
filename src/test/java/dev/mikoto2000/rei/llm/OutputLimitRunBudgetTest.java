@@ -95,14 +95,14 @@ class OutputLimitRunBudgetTest {
 
   /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
-  void legacyConstructorsUseFiveCorrectionsByDefault() {
+  void legacyConstructorsUseTenCorrectionsByDefault() {
     for (var budget :
         java.util.List.of(
             new OutputLimitRunBudget(2, 20),
             new OutputLimitRunBudget(2, 20, null),
             new OutputLimitRunBudget(2, 20, null, 0))) {
-      assertThat(budget.maxArgumentCorrections()).isEqualTo(5);
-      for (int used = 0; used < 5; used++) assertThat(budget.tryCorrectArguments()).isTrue();
+      assertThat(budget.maxArgumentCorrections()).isEqualTo(10);
+      for (int used = 0; used < 10; used++) assertThat(budget.tryCorrectArguments()).isTrue();
       assertThat(budget.tryCorrectArguments()).isFalse();
     }
   }
@@ -161,9 +161,9 @@ class OutputLimitRunBudgetTest {
     assertThat(resumed.stagnationReplans()).isEqualTo(2);
     var budget = new OutputLimitRunBudget(2, 1000);
     budget.restore(resumed);
-    for (int i = 0; i < 5; i++) assertThat(budget.tryCorrectArguments()).isTrue();
+    for (int i = 0; i < 10; i++) assertThat(budget.tryCorrectArguments()).isTrue();
     assertThat(budget.tryCorrectArguments()).isFalse();
-    assertThat(budget.snapshot().argumentCorrections()).isEqualTo(10);
+    assertThat(budget.snapshot().argumentCorrections()).isEqualTo(15);
     var json = new com.fasterxml.jackson.databind.ObjectMapper();
     var restarted = new OutputLimitRunBudget(2, 1000);
     restarted.restore(json.readValue(json.writeValueAsString(budget.snapshot()), OutputLimitRunBudget.Snapshot.class));
@@ -171,8 +171,8 @@ class OutputLimitRunBudgetTest {
     restarted.restore(resumed);
     assertThat(restarted.tryCorrectArguments()).isFalse();
     restarted.restore(restarted.snapshot().forExplicitResume());
-    assertThat(restarted.remainingArgumentCorrections()).isEqualTo(5);
-    assertThat(restarted.snapshot().argumentCorrections()).isEqualTo(10);
+    assertThat(restarted.remainingArgumentCorrections()).isEqualTo(10);
+    assertThat(restarted.snapshot().argumentCorrections()).isEqualTo(15);
   }
 
   @Test

@@ -6,7 +6,8 @@ use chacha20poly1305::{
 use rand::RngCore;
 use std::{
     collections::BTreeMap,
-    io::Write,
+    fs::{File, OpenOptions},
+    io::{ErrorKind, Read, Write},
     path::{Path, PathBuf},
 };
 use zeroize::Zeroizing;
@@ -45,61 +46,122 @@ impl Repository for JsonRepository {
     }
 }
 
-/// Versioned authenticated vault. The password and derived key never enter app data.
+/// Authenticated vault. The password and derived key never enter app data.
 /// File: magic(8) || salt(16) || nonce(24) || authenticated ciphertext.
 pub struct EncryptedVault {
     path: PathBuf,
     key: Zeroizing<[u8; 32]>,
     salt: [u8; 16],
-    secrets: BTreeMap<String, Secret>,
 }
 impl EncryptedVault {
+    const MAX_BYTES: usize = 1024 * 1024;
+
     pub fn open(path: PathBuf, password: Secret) -> Result<Self> {
         if password.expose().len() < 12 {
             return Err(AppError::InvalidPassphrase);
         }
-        let bytes = match std::fs::read(&path) {
-            Ok(bytes) => Some(bytes),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-            Err(_) => return Err(AppError::Storage),
-        };
-        let mut salt = [0; 16];
-        if let Some(bytes) = &bytes {
-            if bytes.len() < 64 || &bytes[..8] != b"REIVAULT" {
-                return Err(AppError::Storage);
-            }
-            salt.copy_from_slice(&bytes[8..24]);
-        } else {
-            rand::thread_rng().fill_bytes(&mut salt);
+        let bytes = Self::read_file(&path)?;
+        if let Some(bytes) = bytes {
+            let vault = Self::derive(path, &password, Self::read_salt(&bytes)?)?;
+            vault.decrypt(&bytes)?;
+            return Ok(vault);
         }
+
+        // Another process may have initialized the vault before this lock was acquired.
+        let _lock = Self::lock_file(&path)?;
+        let bytes = Self::read_file(&path)?;
+        let salt = match &bytes {
+            Some(bytes) => Self::read_salt(bytes)?,
+            None => {
+                let mut salt = [0; 16];
+                rand::thread_rng().fill_bytes(&mut salt);
+                salt
+            }
+        };
+        let vault = Self::derive(path, &password, salt)?;
+        match bytes {
+            Some(bytes) => {
+                vault.decrypt(&bytes)?;
+            }
+            None => vault.persist(&BTreeMap::new())?,
+        }
+        Ok(vault)
+    }
+
+    fn derive(path: PathBuf, password: &Secret, salt: [u8; 16]) -> Result<Self> {
         let mut key = Zeroizing::new([0; 32]);
         argon2::Argon2::default()
             .hash_password_into(password.expose().as_bytes(), &salt, key.as_mut())
             .map_err(|_| AppError::Storage)?;
-        let mut secrets = BTreeMap::new();
-        if let Some(bytes) = bytes {
-            let cipher =
-                XChaCha20Poly1305::new_from_slice(key.as_ref()).map_err(|_| AppError::Storage)?;
-            let plain = Zeroizing::new(
-                cipher
-                    .decrypt(XNonce::from_slice(&bytes[24..48]), &bytes[48..])
-                    .map_err(|_| AppError::VaultLocked)?,
-            );
-            let decoded: BTreeMap<String, String> =
-                serde_json::from_slice(&plain).map_err(|_| AppError::Storage)?;
-            secrets.extend(decoded.into_iter().map(|(k, v)| (k, Secret::new(v))));
-        }
-        let vault = Self {
-            path,
-            key,
-            salt,
-            secrets,
-        };
-        vault.persist()?;
-        Ok(vault)
+        Ok(Self { path, key, salt })
     }
-    fn persist(&self) -> Result<()> {
-        let map: BTreeMap<_, _> = self.secrets.iter().map(|(k, v)| (k, v.expose())).collect();
+
+    fn lock_file(path: &Path) -> Result<File> {
+        let parent = path.parent().ok_or(AppError::Storage)?;
+        std::fs::create_dir_all(parent).map_err(|_| AppError::Storage)?;
+        let mut options = OpenOptions::new();
+        options.read(true).write(true).create(true).truncate(false);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let lock = options
+            .open(path.with_extension("lock"))
+            .map_err(|_| AppError::Storage)?;
+        lock.lock().map_err(|_| AppError::Storage)?;
+        Ok(lock)
+    }
+
+    fn read_file(path: &Path) -> Result<Option<Vec<u8>>> {
+        let file = match File::open(path) {
+            Ok(file) => file,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+            Err(_) => return Err(AppError::Storage),
+        };
+        let mut bytes = Vec::new();
+        file.take((Self::MAX_BYTES + 1) as u64)
+            .read_to_end(&mut bytes)
+            .map_err(|_| AppError::Storage)?;
+        if bytes.len() > Self::MAX_BYTES {
+            return Err(AppError::Storage);
+        }
+        Ok(Some(bytes))
+    }
+
+    fn read_salt(bytes: &[u8]) -> Result<[u8; 16]> {
+        if bytes.len() < 64 || &bytes[..8] != b"REIVAULT" {
+            return Err(AppError::Storage);
+        }
+        bytes[8..24].try_into().map_err(|_| AppError::Storage)
+    }
+
+    fn decrypt(&self, bytes: &[u8]) -> Result<BTreeMap<String, Secret>> {
+        if Self::read_salt(bytes)? != self.salt {
+            return Err(AppError::VaultLocked);
+        }
+        let cipher =
+            XChaCha20Poly1305::new_from_slice(self.key.as_ref()).map_err(|_| AppError::Storage)?;
+        let plain = Zeroizing::new(
+            cipher
+                .decrypt(XNonce::from_slice(&bytes[24..48]), &bytes[48..])
+                .map_err(|_| AppError::VaultLocked)?,
+        );
+        let decoded: BTreeMap<String, String> =
+            serde_json::from_slice(&plain).map_err(|_| AppError::Storage)?;
+        Ok(decoded
+            .into_iter()
+            .map(|(k, v)| (k, Secret::new(v)))
+            .collect())
+    }
+
+    fn read_secrets(&self) -> Result<BTreeMap<String, Secret>> {
+        let bytes = Self::read_file(&self.path)?.ok_or(AppError::Storage)?;
+        self.decrypt(&bytes)
+    }
+
+    fn persist(&self, secrets: &BTreeMap<String, Secret>) -> Result<()> {
+        let map: BTreeMap<_, _> = secrets.iter().map(|(k, v)| (k, v.expose())).collect();
         let plain = Zeroizing::new(serde_json::to_vec(&map).map_err(|_| AppError::Storage)?);
         let mut nonce = [0; 24];
         rand::thread_rng().fill_bytes(&mut nonce);
@@ -112,6 +174,9 @@ impl EncryptedVault {
         bytes.extend(self.salt);
         bytes.extend(nonce);
         bytes.extend(encrypted);
+        if bytes.len() > Self::MAX_BYTES {
+            return Err(AppError::Storage);
+        }
         atomic_write(&self.path, &bytes)
     }
 }
@@ -120,32 +185,24 @@ impl CredentialStore for EncryptedVault {
         if secret.expose().trim().is_empty() || secret.expose().contains(['\r', '\n']) {
             return Err(AppError::InvalidCredential);
         }
-        let previous = self.secrets.insert(reference.into(), secret);
-        if let Err(error) = self.persist() {
-            self.secrets.remove(reference);
-            if let Some(previous) = previous {
-                self.secrets.insert(reference.into(), previous);
-            }
-            return Err(error);
-        }
-        Ok(())
+        let _lock = Self::lock_file(&self.path)?;
+        let mut secrets = self.read_secrets()?;
+        secrets.insert(reference.into(), secret);
+        self.persist(&secrets)
     }
     fn get(&self, reference: &str) -> Result<Secret> {
-        self.secrets
-            .get(reference)
-            .cloned()
+        self.read_secrets()?
+            .remove(reference)
             .ok_or(AppError::AuthenticationFailed)
     }
     fn exists(&self, reference: &str) -> Result<bool> {
-        Ok(self.secrets.contains_key(reference))
+        Ok(self.read_secrets()?.contains_key(reference))
     }
     fn delete(&mut self, reference: &str) -> Result<()> {
-        let previous = self.secrets.remove(reference);
-        if let Err(error) = self.persist() {
-            if let Some(previous) = previous {
-                self.secrets.insert(reference.into(), previous);
-            }
-            return Err(error);
+        let _lock = Self::lock_file(&self.path)?;
+        let mut secrets = self.read_secrets()?;
+        if secrets.remove(reference).is_some() {
+            self.persist(&secrets)?;
         }
         Ok(())
     }

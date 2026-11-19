@@ -5,10 +5,12 @@ import dev.mikoto2000.rei.llm.capture.CaptureInterceptor;
 import dev.mikoto2000.rei.llm.capture.CaptureStore;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.AbstractOpenAiOptions;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer;
 import org.springframework.ai.openai.setup.OpenAiSetup;
@@ -106,7 +108,7 @@ final class CapturingChatModel implements ChatModel {
             o.isMicrosoftFoundry(),
             o.isGitHubModels(),
             o.getModel(),
-            o.getTimeout(),
+            Objects.requireNonNullElse(o.getTimeout(), AbstractOpenAiOptions.DEFAULT_TIMEOUT),
             o.getMaxRetries(),
             o.getProxy(),
             o.getCustomHeaders(),

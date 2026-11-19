@@ -130,6 +130,7 @@ business: dev.mikoto2000.rei.web.ApiExceptionHandler -> dev.mikoto2000.rei.check
 business: dev.mikoto2000.rei.web.ApiExceptionHandler -> dev.mikoto2000.rei.checkpoint.CheckpointException$Code
 business: dev.mikoto2000.rei.web.ApiExceptionHandler -> dev.mikoto2000.rei.core.chat.ProjectRunQueue$CapacityExceededException
 business: dev.mikoto2000.rei.web.ApiExceptionHandler -> dev.mikoto2000.rei.event.ReplayGapException
+business: dev.mikoto2000.rei.web.ApiExceptionHandler -> dev.mikoto2000.rei.workcontext.WorkContextConflictException
 business: dev.mikoto2000.rei.web.ApiExceptionHandler$1 -> dev.mikoto2000.rei.artifact.ArtifactException$Code
 business: dev.mikoto2000.rei.web.ApiExceptionHandler$1 -> dev.mikoto2000.rei.checkpoint.CheckpointException$Code
 business: dev.mikoto2000.rei.web.ApiExceptionHandler$CheckpointCapacityError -> dev.mikoto2000.rei.checkpoint.CheckpointException$CapacityDetail

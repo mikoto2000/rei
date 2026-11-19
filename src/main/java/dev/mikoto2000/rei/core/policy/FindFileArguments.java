@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.policy;
 
 import dev.mikoto2000.rei.core.FindFileRequest;
+import dev.mikoto2000.rei.toolcontract.ArgumentIssue;
 import java.util.ArrayList;
 import tools.jackson.core.StreamReadConstraints;
 import tools.jackson.core.StreamReadFeature;
@@ -56,21 +57,29 @@ public final class FindFileArguments {
       if (root == null || !root.isObject()) throw new IllegalArgumentException();
     } catch (RuntimeException invalid) {
       throw new InvalidToolArgumentsException(
-          "サイズ・深さ制限内の単一JSONオブジェクトを指定してください。" + " 重複キーや末尾の追加データは使用できません。 " + GUIDANCE);
+          "サイズ・深さ制限内の単一JSONオブジェクトを指定してください。" + " 重複キーや末尾の追加データは使用できません。 " + GUIDANCE,
+          "arguments",
+          "specify one bounded JSON object without duplicate keys or trailing data");
     }
     var request = root.path("request");
-    if (!request.isObject()) throw new InvalidToolArgumentsException(GUIDANCE);
-    var problems = new ArrayList<String>();
+    if (!request.isObject())
+      throw new InvalidToolArgumentsException(GUIDANCE, "request", "must be an object");
+    var problems = new ArrayList<ArgumentIssue>();
     var keywords = request.path("keywords");
     boolean nonBlank = false;
+    boolean invalidEntry = false;
     if (keywords.isArray()) {
       for (var keyword : keywords) {
         if (keyword.isString() && !keyword.asString().isBlank()) nonBlank = true;
-        else if (!keyword.isNull() && !keyword.isString())
-          problems.add("keywords entries must be strings or null");
+        else if (!keyword.isNull() && !keyword.isString()) invalidEntry = true;
       }
     }
-    if (!nonBlank) problems.add("keywords must contain at least one non-blank string");
+    if (invalidEntry)
+      problems.add(new ArgumentIssue("request.keywords", "entries must be strings or null"));
+    if (!nonBlank)
+      problems.add(
+          new ArgumentIssue(
+              "request.keywords", "must be an array containing at least one non-blank string"));
     var limit = request.path("maxResults");
     if (!limit.isMissingNode()
         && !limit.isNull()
@@ -78,8 +87,14 @@ public final class FindFileArguments {
             || !limit.canConvertToInt()
             || limit.intValue() < 1
             || limit.intValue() > FindFileRequest.MAX_RESULTS))
-      problems.add("maxResults must be an integer between 1 and " + FindFileRequest.MAX_RESULTS);
+      problems.add(
+          new ArgumentIssue(
+              "request.maxResults",
+              "must be an integer between 1 and "
+                  + FindFileRequest.MAX_RESULTS
+                  + ", null, or omitted"));
     if (!problems.isEmpty())
-      throw new InvalidToolArgumentsException(String.join("\n", problems) + "\n" + GUIDANCE);
+      throw new InvalidToolArgumentsException(
+          ArgumentIssue.describe(problems, "\n") + "\n" + GUIDANCE, problems);
   }
 }

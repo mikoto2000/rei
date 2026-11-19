@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.concurrent.Executors;
 import org.junit.jupiter.api.Tag;
@@ -44,6 +45,44 @@ class PersistentAgentSchedulerTest {
     var scope = AgentRunScope.open(owner());
     try (scope) {
       return scheduler.scheduleAfter(Duration.ofSeconds(1), "Check build status", "session").id();
+    }
+  }
+
+  /** 時計が進んでも0秒後の予約は同じ基準時刻で検証・作成される。 */
+  @Test
+  void zeroDelayUsesOneInstantEvenWhenTheClockAdvances() {
+    Clock advancing =
+        new Clock() {
+          private Instant next = now;
+
+          @Override
+          public ZoneId getZone() {
+            return ZoneOffset.UTC;
+          }
+
+          @Override
+          public Clock withZone(ZoneId zone) {
+            return this;
+          }
+
+          @Override
+          public Instant instant() {
+            Instant current = next;
+            next = next.plusMillis(1);
+            return current;
+          }
+        };
+    var scheduler =
+        new PersistentAgentScheduler(
+            new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("timers.db")), advancing);
+    try (var scope = AgentRunScope.open(owner())) {
+      var task = scheduler.scheduleAfter(Duration.ZERO, "Run immediately", "session");
+      assertEquals(now, task.createdAt());
+      assertEquals(task.createdAt(), task.executeAt());
+      assertEquals("PENDING", scheduler.get("project", task.id()).status());
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> scheduler.scheduleAt(now, "Past absolute time", "session"));
     }
   }
 

@@ -168,6 +168,7 @@ rei:
     hard-limit: ${REI_CONTEXT_HARD_LIMIT:85000}
     recent-tokens: ${REI_CONTEXT_RECENT_TOKENS:12000}
     summary-tokens: ${REI_CONTEXT_SUMMARY_TOKENS:12000}
+    summary-generation-reserve: ${REI_CONTEXT_SUMMARY_GENERATION_RESERVE:8192}
     minimum-compression-gain: ${REI_CONTEXT_MINIMUM_GAIN:0.1}
     tool-result-threshold: ${REI_CONTEXT_TOOL_RESULT_THRESHOLD:8000}
     tool-result-tokens: ${REI_CONTEXT_TOOL_RESULT_TOKENS:2000}
@@ -216,13 +217,14 @@ rei:
     chat-memory-max-messages: ${REI_CHAT_MEMORY_MAX_MESSAGES:100}
   llm:
     read-timeout: ${REI_LLM_READ_TIMEOUT:5m}
+    max-stream-timeout-retries: ${REI_LLM_MAX_STREAM_TIMEOUT_RETRIES:2}
     max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
     output-limit:
       llm-call-budget-enabled: ${REI_LLM_OUTPUT_LIMIT_LLM_CALL_BUDGET_ENABLED:true}
       max-replans-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL:2}
       max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
       max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:120}
-      max-tool-argument-corrections-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOOL_ARGUMENT_CORRECTIONS_PER_RUN:5}
+      max-tool-argument-corrections-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOOL_ARGUMENT_CORRECTIONS_PER_RUN:10}
     features:
       # Override the shared output budget for a smaller vision model:
       # computer-use:
@@ -239,6 +241,7 @@ rei:
         base-url: ${REI_LLM_MEMORY_BASE_URL:}
         api-key: ${REI_LLM_MEMORY_API_KEY:}
         model: ${REI_LLM_MEMORY_MODEL:}
+        max-output-tokens: ${REI_LLM_MEMORY_MAX_OUTPUT_TOKENS:}
       bluesky-reply:
         base-url: ${REI_LLM_BLUESKY_REPLY_BASE_URL:}
         api-key: ${REI_LLM_BLUESKY_REPLY_API_KEY:}
@@ -370,7 +373,7 @@ rei:
     max-wire-bytes: ${REI_WEB_SEARCH_MAX_WIRE_BYTES:2097152}
     max-decoded-bytes: ${REI_WEB_SEARCH_MAX_DECODED_BYTES:4194304}
     max-redirects: ${REI_WEB_SEARCH_MAX_REDIRECTS:5}
-    max-results: ${REI_WEB_SEARCH_MAX_RESULTS:5}
+    max-results: ${REI_WEB_SEARCH_MAX_RESULTS:8}
     max-search-queries: ${REI_WEB_SEARCH_MAX_SEARCH_QUERIES:3}
     max-search-api-calls: ${REI_WEB_SEARCH_MAX_SEARCH_API_CALLS:4}
     max-page-fetches: ${REI_WEB_SEARCH_MAX_PAGE_FETCHES:5}
@@ -483,7 +486,7 @@ rei:
     auto-present: ${REI_WORK_CONTEXT_AUTO_PRESENT:true}
     max-context-tokens: ${REI_WORK_CONTEXT_MAX_CONTEXT_TOKENS:1200}
     max-input-tokens: ${REI_WORK_CONTEXT_MAX_INPUT_TOKENS:12000}
-    timeout-seconds: ${REI_WORK_CONTEXT_TIMEOUT_SECONDS:120}
+    timeout-seconds: ${REI_WORK_CONTEXT_TIMEOUT_SECONDS:240}
     max-turns: ${REI_WORK_CONTEXT_MAX_TURNS:20}
   memory:
     episodes:
@@ -532,4 +535,3 @@ logging:
     # SDK debug/error messages may contain Socket URLs or raw payloads. Adapter diagnostics are fixed codes.
     com.slack.api: "OFF"
     org.java_websocket: "OFF"
-    dev.mikoto2000.rei.bluesky: DEBUG

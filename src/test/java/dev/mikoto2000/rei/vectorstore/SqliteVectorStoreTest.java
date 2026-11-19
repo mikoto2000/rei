@@ -1045,7 +1045,7 @@ class SqliteVectorStoreTest {
     properties.setExtensionPath(vecExtensionPath().toString());
     SqliteVecInstaller installer =
         new SqliteVecInstaller(
-            properties, new PlatformDetector(), new SqliteVecAssetResolver(), new JsonMapper());
+            properties, new PlatformDetector(), new SqliteVecAssetResolver());
     SqliteVecExtensionLoader loader = new SqliteVecExtensionLoader(properties, installer);
     return new SqliteVecDataSource(delegate, loader);
   }

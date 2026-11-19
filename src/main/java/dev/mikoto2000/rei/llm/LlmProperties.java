@@ -27,6 +27,19 @@ public class LlmProperties {
     this.readTimeout = readTimeout;
   }
 
+  /** Additional retries for one timed-out chat model invocation. */
+  private int maxStreamTimeoutRetries = 2;
+
+  public int getMaxStreamTimeoutRetries() {
+    return maxStreamTimeoutRetries;
+  }
+
+  public void setMaxStreamTimeoutRetries(int value) {
+    if (value < 0 || value > 3)
+      throw new IllegalArgumentException("Stream timeout retries must be 0 to 3");
+    maxStreamTimeoutRetries = value;
+  }
+
   /** 出力上限。 */
   private OutputLimit outputLimit = new OutputLimit();
 
@@ -101,6 +114,7 @@ public class LlmProperties {
       copy.apiKey = apiKey;
       copy.model = model;
       copy.temperature = temperature;
+      copy.fallbackToDefault = fallbackToDefault;
       return copy;
     }
 
@@ -130,6 +144,19 @@ public class LlmProperties {
 
     /** 生成の揺らぎ。 */
     private Double temperature;
+
+    /** 専用サーバーの失敗時に既定接続先への再送を許可する。 */
+    private boolean fallbackToDefault;
+
+    /** 既定接続先への再送を許可するか返す。 */
+    public boolean isFallbackToDefault() {
+      return fallbackToDefault;
+    }
+
+    /** 既定接続先への再送の許可を設定する。 */
+    public void setFallbackToDefault(boolean fallbackToDefault) {
+      this.fallbackToDefault = fallbackToDefault;
+    }
 
     /** 用途に応じたモデル利用で参照する接続先の基準URLを返す。 */
     public String getBaseUrl() {

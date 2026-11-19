@@ -34,7 +34,9 @@ class ProcessWaitArgumentsTest {
         "{\"timeoutSeconds\":1}",
         "{\"timeoutSeconds\":10}",
         "{\"timeoutSeconds\":59}",
-        "{\"timeoutSeconds\":60}"
+        "{\"timeoutSeconds\":60}",
+        "{\"timeoutSeconds\":61}",
+        "{\"timeoutSeconds\":120}"
       })
   void acceptsIntegerBoundsAndDefaultTimeout(String input) {
     assertDoesNotThrow(() -> ProcessWaitArguments.validate("waitForShellProcess", input));
@@ -45,8 +47,8 @@ class ProcessWaitArgumentsTest {
   @ValueSource(
       strings = {
         "-1",
-        "61",
-        "120",
+        "121",
+        "300",
         "2147483648",
         "4294967296",
         "999999999999999999999999999999",
@@ -70,7 +72,7 @@ class ProcessWaitArgumentsTest {
                     "{\"processId\":\"private-id\",\"timeoutSeconds\":" + value + "}"));
 
     assertTrue(error.getMessage().contains("timeoutSeconds"));
-    assertTrue(error.getMessage().contains("0〜60"));
+    assertTrue(error.getMessage().contains("0〜120"));
     assertTrue(error.getMessage().contains("同じ processId"));
     assertTrue(error.getMessage().contains("実行していません"));
     assertFalse(error.getMessage().contains("private-id"));
@@ -98,7 +100,7 @@ class ProcessWaitArgumentsTest {
             () -> ProcessWaitArguments.validate("waitForShellProcess", input));
 
     assertTrue(error.getMessage().contains("単一JSONオブジェクト"));
-    assertTrue(error.getMessage().contains("0〜60"));
+    assertTrue(error.getMessage().contains("0〜120"));
   }
 
   /** ツール利用の権限制御で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
@@ -136,7 +138,7 @@ class ProcessWaitArgumentsTest {
         InvalidToolArgumentsException.class,
         () ->
             guard.check(
-                "waitForShellProcess", "{\"processId\":\"p\",\"timeoutSeconds\":120}", owner));
+                "waitForShellProcess", "{\"processId\":\"p\",\"timeoutSeconds\":121}", owner));
 
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(approvals);
@@ -154,7 +156,7 @@ class ProcessWaitArgumentsTest {
     var schema = JsonMapper.builder().build().readTree(callback.getToolDefinition().inputSchema());
     var timeout = schema.path("properties").path("timeoutSeconds");
 
-    assertTrue(timeout.path("description").asString().contains("0 to 60"));
+    assertTrue(timeout.path("description").asString().contains("0 to 120"));
     assertTrue(timeout.path("description").asString().contains("default 10 seconds"));
     assertFalse(schema.path("required").toString().contains("timeoutSeconds"));
     assertFalse(schema.path("properties").has("toolContext"));

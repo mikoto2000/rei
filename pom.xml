@@ -5,7 +5,7 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.1.1</version>
+		<version>4.1.2</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>dev.mikoto2000</groupId>
@@ -30,7 +30,7 @@
 		<rei.build.final-name>${project.artifactId}-${project.version}</rei.build.final-name>
 		<rei.build.directory>target</rei.build.directory>
 		<java.version>25</java.version>
-		<spring-ai.version>2.0.1</spring-ai.version>
+		<spring-ai.version>2.0.2</spring-ai.version>
 		<picocli.version>4.7.7</picocli.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -52,7 +52,7 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
-            <version>33.1.0-jre</version>
+            <version>33.7.2-jre</version>
         </dependency>
 		<dependency>
 			<groupId>com.tngtech.archunit</groupId>
@@ -94,7 +94,7 @@
 		<dependency>
 			<groupId>com.networknt</groupId>
 			<artifactId>json-schema-validator</artifactId>
-			<version>3.0.0</version>
+			<version>3.0.9</version>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
@@ -147,7 +147,7 @@
 		<dependency>
 			<groupId>com.google.api-client</groupId>
 			<artifactId>google-api-client</artifactId>
-			<version>2.8.1</version>
+			<version>2.9.2</version>
 		</dependency>
 		<dependency>
 			<groupId>com.google.oauth-client</groupId>
@@ -218,6 +218,27 @@
 	</dependencies>
 	<dependencyManagement>
 		<dependencies>
+			<!-- Used by the document readers through Apache Tika. -->
+			<dependency>
+				<groupId>com.github.junrar</groupId>
+				<artifactId>junrar</artifactId>
+				<version>7.6.1</version>
+			</dependency>
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcprov-jdk18on</artifactId>
+				<version>1.85</version>
+			</dependency>
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcpkix-jdk18on</artifactId>
+				<version>1.85</version>
+			</dependency>
+			<dependency>
+				<groupId>org.bouncycastle</groupId>
+				<artifactId>bcutil-jdk18on</artifactId>
+				<version>1.85</version>
+			</dependency>
 			<dependency>
 				<groupId>org.springframework.ai</groupId>
 				<artifactId>spring-ai-bom</artifactId>

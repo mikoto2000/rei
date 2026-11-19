@@ -2,7 +2,6 @@ package dev.mikoto2000.rei.workcontext;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import java.util.ConcurrentModificationException;
 import java.util.List;
 import java.util.Optional;
 import javax.sql.DataSource;
@@ -87,7 +86,7 @@ public class WorkContextRepository {
           if (db.sql("UPDATE work_context_heads SET revision=? WHERE project_id=? AND revision=?")
                   .params(context.revision(), context.projectId(), expected)
                   .update()
-              != 1) throw new ConcurrentModificationException("Work Context changed; retry update");
+              != 1) throw new WorkContextConflictException("Work Context changed; retry update");
           db.sql("INSERT INTO work_context_revisions(project_id,revision,snapshot) VALUES(?,?,?)")
               .params(context.projectId(), context.revision(), snapshot)
               .update();

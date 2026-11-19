@@ -55,9 +55,11 @@ errorType は PermissionRequired / PermissionDenied、code は REQUIRE_APPROVAL 
 
 `updateTaskState` も承認要求の作成・消費前に検証します。`status` は `IDLE` / `IN_PROGRESS` / `COMPLETED` / `BLOCKED` のいずれか、`goal` は省略可能な文字列です。`completed` / `pending` には `["レビュー委譲","指摘の検証"]` のような JSON 配列を指定します。空なら `[]` または省略できます。配列を文字列化した値やカンマ区切りの文字列は不正です。互換性のため省略・`null`、配列内の無視される `null` 項目を受け付けます。検証は Task State を変更せず、型・状態の不備をまとめて返します。
 
-委譲と `updateTaskState` の実行前検証エラーは、`INVALID_TOOL_ARGUMENTS`・`executed:false` と修正方法を Tool 結果としてモデルに返します。修正回数は `rei.llm.output-limit.max-tool-argument-corrections-per-run` で設定し、既定は Run 全体で5回、`0` は自動修正を無効にします。不正なツール呼び出し1件につき1回を消費し、同じ呼び出し内の複数の不備はまとめて1回です。例えば1件の `delegateTasks` に複数の不正な依頼があればまとめて1回、LLM が不正なツール呼び出しを2件同時に出した場合は2回を消費します。別のツールも同じ Run の予算を使い、成功した作業で予算は回復しません。成功済みの同時呼び出しは繰り返しません。権限拒否と、実行を開始した後の例外は自動修正しません。旧版で不正な引数が承認・保存されていた場合も、続行時に実行前検証し、修正された呼び出しには通常の権限判定と正確な新しい引数の承認を必要とします。
+委譲と `updateTaskState` の実行前検証エラーは、`INVALID_TOOL_ARGUMENTS`・`executed:false` と修正方法を Tool 結果としてモデルに返します。修正回数は `rei.llm.output-limit.max-tool-argument-corrections-per-run` で設定し、既定は Run 全体で10回、`0` は自動修正を無効にします。不正なツール呼び出し1件につき1回を消費し、同じ呼び出し内の複数の不備はまとめて1回です。例えば1件の `delegateTasks` に複数の不正な依頼があればまとめて1回、LLM が不正なツール呼び出しを2件同時に出した場合は2回を消費します。別のツールも同じ Run の予算を使い、成功した作業で予算は回復しません。成功済みの同時呼び出しは繰り返しません。権限拒否と、実行を開始した後の例外は自動修正しません。旧版で不正な引数が承認・保存されていた場合も、続行時に実行前検証し、修正された呼び出しには通常の権限判定と正確な新しい引数の承認を必要とします。
 
-承認からの続行・チェックポイント再開では消費回数を保持し、現在の設定上限から残りを計算します。2回消費済みのタスクで上限を5回へ増やした場合、残りは3回です。上限を消費済み回数以下へ下げても保存回数は失われず、追加の修正は停止します。修正フィードバックには残り回数と上限、上限到達のエラーには上限・設定名・対処を表示します。引数を確認し、上限の変更が必要なら外部の `application.yaml` に `rei.llm.output-limit.max-tool-argument-corrections-per-run` を設定して Rei を再起動した後、対象プロジェクトを選んで `/resume <taskId>` を実行してください。共通の LLM 呼び出し数・トークン上限は増やしません。
+修正結果の `errors` 配列は、各問題の `path` と `requirement` を返します。たとえば `requests[2].modelId` には外部委譲でモデル ID が必要な理由と指定方法が入ります。`arguments` は引数全体を指します。
+
+承認からの続行や自動再開では修正枠の消費を引き継ぎ、現在の設定上限から残りを計算します。上限によって停止する場合は、最後に拒否されたツール名と認証情報をマスクした検証理由をツール失敗イベントとチェックポイントに記録します。対象プロジェクトで `/resume <taskId>` を実行すると修正枠が更新され、累積修正回数と LLM 呼び出し数・トークンの上限は引き継がれます。
 
 `delegateTask` / `delegateTasks` のツール定義は、`backendId=chatgpt-plan` のときの `modelId` を、現在の `rei.chatgpt-plan.auto-delegation.allowed-models` から得た条件付き `enum` として提示します。ローカル委譲や Codex のモデル指定には適用しません。部分的な列挙で有効なモデルを除外しないよう、16件を超える許可モデルや安全に表示できないIDを含む設定では列挙を省略し、既存の許可判定を維持します。
 
@@ -125,3 +127,9 @@ LLM provider の通信、Tool callback 以外の I/O はこの境界の対象外
 ## 要件付き Codex 実装
 
 requestCodexImplementation は既存の任意テスト実行相当の capability を維持します。Policy enabled かつ明示 AUTO_APPROVE と管理者 implementation opt-in がそろう場合だけ自動許可します。Policy disabled は自動許可の根拠になりません。仕様全文・Project・base commit・管理者 test recipe を既存の exact approval へ結び付け、実行直前に再検証します。UNKNOWN retry は新しい ID と明示承認が必要です。prepare はプロセスを起動せず、recordCodexAcceptanceEvaluation は LOCAL_WRITE、状態・receipt・diff は READ です。[具体的な設定と承認フロー](llm-codex-implementation-delegation.md#設定と認可)を参照してください。
+
+## 読み取り失敗ログに対する設定
+
+過去ログの6件（`readRawToolResult` 2件、`getLastSummary`・`diagnoseTestReports`・`listReviewTasks`・`fetchUrlContent` 各1件）は、現行版では前4種類が READ、`fetchUrlContent` が NETWORK_READ です。上記の `auto-approve: [READ, NETWORK_READ]` で許可できます。これはすべての該当能力の参照ツールへ適用されます。ネットワーク参照を都度確認したい環境では READ のみを指定してください。明示した denied や capabilities、Project・Session・Run所有権、結果の参照範囲、URL取得先の検査は引き続き優先されます。ファイル書き込みや任意コマンドの自動承認は追加しません。
+
+レビューの `CONTEXT_BUDGET_INSUFFICIENT` / `REVIEW_PAGE_BUDGET_TOO_SMALL` は資料未配信の拒否です。既存の修正回数・LLM呼び出し予算を維持して、次の文脈投影で最大8000トークン（入力上限の1/8以下）の読み取り余裕を確保します。圧縮・既存ページ調整を使い、モデル上限は増やしません。次の読み取りは `tokenBudget` を省略し、既存の評価を先に提出して1単位ずつ進めます。成功済みの呼び出しや保存済み評価を再実行せず、解消できない場合は既存の修正予算で停止します。

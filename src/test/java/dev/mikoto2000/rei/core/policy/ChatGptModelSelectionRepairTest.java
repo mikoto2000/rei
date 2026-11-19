@@ -353,6 +353,12 @@ class ChatGptModelSelectionRepairTest {
     assertEquals(InvalidToolArgumentsException.Kind.MODEL_SELECTION, error.kind());
     assertTrue(error.getMessage().contains("request.context"));
     assertTrue(error.getMessage().contains("request.modelId"));
+    assertTrue(
+        error.issues().stream()
+            .anyMatch(
+                issue ->
+                    issue.path().equals("arguments.modelId")
+                        && issue.requirement().contains("gpt-6.1-sol")));
     assertEquals(0, fixture.budget.snapshot().argumentCorrections());
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(fixture.approvals);

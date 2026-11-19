@@ -52,6 +52,10 @@ class ImageModelProviderTest {
     server.setApiKey("feature-key");
     server.setModel("feature-model");
     properties.setFeature(LlmFeature.IMAGE_GENERATION, server);
+    assertThat(new ImageModelProvider(defaultModel, properties).imageModel())
+        .isNotInstanceOf(FallbackImageModel.class);
+    server.setFallbackToDefault(true);
+    properties.setFeature(LlmFeature.IMAGE_GENERATION, server);
 
     ImageModelProvider provider = new ImageModelProvider(defaultModel, properties);
 

@@ -31,9 +31,11 @@ import reactor.core.scheduler.Schedulers;
  * <p>Explicit streaming LLM -> tool-result loop. Existing client advisors still own prompt/memory
  * handling.
  */
-public class StagnationChatModel implements ChatModel {
+public final class StagnationChatModel implements ChatModel {
   /** 委譲先。 */
   private final ChatModel delegate;
+
+  private final int maxStreamTimeoutRetries;
 
   /** 文脈の組み立て。 */
   private final java.util.function.BiFunction<Prompt, Assembly, Prompt> assemblePrompt;
@@ -65,6 +67,17 @@ public class StagnationChatModel implements ChatModel {
   /** 指定された値や利用先を使って、StagnationChatModelを初期化する。 */
   public StagnationChatModel(
       ChatModel delegate, dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler) {
+    this(delegate, assembler, 0);
+  }
+
+  /** Configure bounded model retries before tool execution. */
+  public StagnationChatModel(
+      ChatModel delegate,
+      dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler,
+      int maxStreamTimeoutRetries) {
+    if (maxStreamTimeoutRetries < 0 || maxStreamTimeoutRetries > 3)
+      throw new IllegalArgumentException("Stream timeout retries must be 0 to 3");
+    this.maxStreamTimeoutRetries = maxStreamTimeoutRetries;
     this.delegate = delegate;
     this.assemblePrompt =
         assembler == null
@@ -169,8 +182,10 @@ public class StagnationChatModel implements ChatModel {
                     + " one semantic unit with a host-selected budget up to 100000 estimated tokens, bounded"
                     + " by 1/8 of effective model input capacity and current free context. Assess the whole"
                     + " delivered unit with submitReviewWorkItem(workItemId,attempt,assessment,findings)."
-                    + " Preserve existing durable task IDs; use listReviewTasks/resumeRepositoryReview when"
-                    + " resuming. Do not create a second legacy job for the same durable task. Submit assessed"
+                    + " When continuing an existing durable task in a new Run, call resumeRepositoryReview"
+                    + " with that taskId before acquiring or submitting work. Use listReviewTasks if the"
+                    + " taskId is unknown. Reading status or saved results does not bind the task."
+                    + " Do not create a second legacy job for the same durable task. Submit assessed"
                     + " units first and read the next unit in the same tool-call response. Read cross-file"
                     + " dependencies when necessary to corroborate findings. Existing legacy jobs must be"
                     + " completed through their original ledger. Prefer readNextReviewWorkItem(taskId='legacy:'"
@@ -245,7 +260,12 @@ public class StagnationChatModel implements ChatModel {
                       () -> {
                         context.checkModelTokenBudget();
                         invoked.set(true);
-                        return delegate.stream(invocationPrompt);
+                        return StreamTimeoutRetry.stream(
+                            delegate,
+                            invocationPrompt,
+                            context,
+                            maxStreamTimeoutRetries,
+                            aggregate::set);
                       })
                   : Mono.fromCallable(
                           () -> {
@@ -275,9 +295,14 @@ public class StagnationChatModel implements ChatModel {
                             context.checkModelTokenBudget();
                             invoked.set(true);
                             sent.set(projected);
-                            return delegate.stream(projected);
+                            return StreamTimeoutRetry.stream(
+                                delegate,
+                                projected,
+                                context,
+                                maxStreamTimeoutRetries,
+                                aggregate::set);
                           });
-          Flux<ChatResponse> response = new MessageAggregator().aggregate(requests, aggregate::set);
+          Flux<ChatResponse> response = requests;
           return response
               .concatWith(
                   Flux.defer(
@@ -604,8 +629,7 @@ public class StagnationChatModel implements ChatModel {
 
           /** 実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input, ToolContext toolContext) {
-            var scope =
-                dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext());
+            var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext());
             try (scope) {
               context.checkActive();
               String name = getToolDefinition().name();
@@ -654,26 +678,14 @@ public class StagnationChatModel implements ChatModel {
                 context.recordFailure(name, input, error);
                 var rejected =
                     dev.mikoto2000.rei.toolcontract.ToolResultRejectedException.find(error);
-                if (rejected
-                        instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read
-                    && java.util.Set.of(
-                            "readReviewPages",
-                            "readRawToolResult",
-                            "claimReviewWorkItem",
-                            "readNextReviewWorkItem",
-                            "listFile")
-                        .contains(name))
-                  return context.toolReadCorrection(read.code(), read.getMessage());
-                if (rejected != null
-                    && java.util.Set.of(
-                            "submitReviewResult",
-                            "submitReviewPage",
-                            "submitReviewPages",
-                            "submitReviewWorkItem",
-                            "dismissReviewFinding",
-                            "restartReview")
-                        .contains(name))
-                  return context.reviewSubmissionCorrection(rejected.getMessage());
+                if (!Thread.currentThread().isInterrupted()
+                    && !RunExecutionContext.isControlFailure(error)) {
+                  if (rejected
+                      instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read)
+                    return context.toolReadCorrection(actualId, name, read);
+                  if (rejected != null)
+                    return context.toolOperationCorrection(actualId, name, rejected);
+                }
                 throw RunExecutionContext.toolCallbackFailure(error);
               } catch (Error fatal) {
                 try {

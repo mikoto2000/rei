@@ -7,6 +7,7 @@
     <include>dev/mikoto2000/rei/event/AgentEventType.java</include>
     <include>dev/mikoto2000/rei/dot/DotCommandRequest.java</include>
     <include>dev/mikoto2000/rei/checkpoint/ResumeOverview.java</include>
+    <include>dev/mikoto2000/rei/runmanagement/RunCheckpointMenu.java</include>
     <include>dev/mikoto2000/rei/application/cli/CliCatalog.java</include>
     <include>dev/mikoto2000/rei/application/cli/CliGrammar.java</include>
     <include>dev/mikoto2000/rei/application/cli/CommandHelp.java</include>

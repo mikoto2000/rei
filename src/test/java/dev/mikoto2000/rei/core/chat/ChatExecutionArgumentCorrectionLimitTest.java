@@ -16,6 +16,7 @@ import dev.mikoto2000.rei.core.stagnation.StagnationChatModel;
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.ToolFailedPayload;
 import dev.mikoto2000.rei.llm.FixedLlmChatClientProvider;
 import dev.mikoto2000.rei.llm.FixedLlmModelProvider;
 import dev.mikoto2000.rei.llm.LlmProperties;
@@ -79,6 +80,13 @@ class ChatExecutionArgumentCorrectionLimitTest {
                               .build()
                               .readTree(message.getResponses().getFirst().responseData());
                       assertThat(correction.path("maxCorrections").asInt()).isEqualTo(limit);
+                      var issues = correction.path("errors");
+                      assertThat(issues.size()).isEqualTo(2);
+                      assertThat(issues.get(0).path("path").asString())
+                          .isEqualTo("arguments.agent");
+                      assertThat(issues.get(1).path("path").asString()).isEqualTo("arguments.task");
+                      assertThat(issues.get(1).path("requirement").asString())
+                          .isEqualTo("required");
                       remaining.add(correction.path("correctionsRemaining").asInt());
                     });
             return Flux.just(
@@ -93,7 +101,9 @@ class ChatExecutionArgumentCorrectionLimitTest {
                                             "call-" + invocation,
                                             "function",
                                             "delegateTask",
-                                            "{}")))
+                                            invocation == limit + 1
+                                                ? "{\"agent\":\"reviewer\",\"task\":12,\"secret\":\"private-input\"}"
+                                                : "{}")))
                                 .build()))));
           }
         };
@@ -167,5 +177,18 @@ class ChatExecutionArgumentCorrectionLimitTest {
                 .toList());
     assertThat(events.stream().filter(event -> event.type() == AgentEventType.AGENT_RUN_FAILED))
         .hasSize(1);
+    var rejections =
+        events.stream()
+            .map(AgentEvent::payload)
+            .filter(ToolFailedPayload.class::isInstance)
+            .map(ToolFailedPayload.class::cast)
+            .toList();
+    assertThat(rejections).hasSize(limit + 1);
+    var last = rejections.getLast();
+    assertThat(last.toolCallId()).isEqualTo("call-" + (limit + 1));
+    assertThat(last.toolName()).isEqualTo("delegateTask");
+    assertThat(last.error().message())
+        .contains("request.task: must be a string")
+        .doesNotContain("private-input");
   }
 }

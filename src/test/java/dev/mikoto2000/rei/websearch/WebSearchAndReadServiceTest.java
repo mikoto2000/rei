@@ -13,6 +13,24 @@ import org.mockito.Mockito;
 
 /** Web検索および読み取りサービスの結果と状態の契約を検証するテスト。 */
 class WebSearchAndReadServiceTest {
+  @Test
+  void defaultAllowsEightResultsButKeepsPageAndOutputBudgets() throws Exception {
+    var properties = new WebSearchProperties();
+    var search = Mockito.mock(WebSearchService.class);
+    Mockito.when(search.search("query", 8)).thenReturn(List.of());
+    var reader =
+        new WebSearchAndReadService(
+            search, urlContentFetchService, new WebPageExtractor(), properties);
+    reader.searchAndRead(new WebSearchAndReadRequest("query", 8, 0));
+    Mockito.verify(search).search("query", 8);
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> reader.searchAndRead(new WebSearchAndReadRequest("query", 9, 0)));
+    assertEquals(5, properties.getMaxPageFetches());
+    assertEquals(6000, properties.getMaxOutputTokens());
+    Mockito.verifyNoInteractions(urlContentFetchService);
+  }
+
   /** 検証に使うサービス。 */
   private WebSearchAndReadService service;
 
