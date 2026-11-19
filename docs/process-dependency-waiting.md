@@ -11,6 +11,10 @@ monotonic clock と Sleeper はテストで差し替えられます。cancellati
 
 戻り値 `ShellDependencyResult` は `dependency`（id/state/detail）と既存 `BackgroundProcessSnapshot` を含みます。
 
+標準出力・標準エラーは各ストリームの末尾200行まで、合計262,144文字まで保持します。
+1行は8,192文字までで、超過した末尾を `... [truncated]` に置き換えます。改行のない大量出力も読み捨てながら処理し、後続の行は引き続き取得します。
+プロセスの開始・起動失敗イベントには、実行用に符号化した引数ではなく元のコマンドをマスクして記録します。
+
 | Process | Dependency |
 |---|---|
 | STARTING / RUNNING（待機期限到達） | WAITING |

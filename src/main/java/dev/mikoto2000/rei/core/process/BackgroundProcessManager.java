@@ -104,11 +104,18 @@ public class BackgroundProcessManager {
       throw new IllegalArgumentException("command は空にできません");
     }
     String shell = systemShellService.resolveShell(System.getenv(), System.getProperty("os.name"));
-    return spawnCommandLine(systemShellService.shellCommandLine(shell, command), workingDirectory);
+    return spawnCommandLine(
+        systemShellService.shellCommandLine(shell, command), workingDirectory, command);
   }
 
   /** 外部プロセスの管理で用いるspawnコマンド行を返す。 */
   BackgroundProcessSnapshot spawnCommandLine(List<String> commandLine, Path workingDirectory) {
+    return spawnCommandLine(commandLine, workingDirectory, String.join(" ", commandLine));
+  }
+
+  /** 実行用に符号化した引数と、マスク対象の元コマンドを分けて扱う。 */
+  private BackgroundProcessSnapshot spawnCommandLine(
+      List<String> commandLine, Path workingDirectory, String eventCommand) {
     String processId = "proc-" + UUID.randomUUID().toString().substring(0, 8);
     try {
       Process process =
@@ -126,7 +133,7 @@ public class BackgroundProcessManager {
           eventFactory.backgroundProcessStarted(
               processId,
               process.pid(),
-              String.join(" ", commandLine),
+              eventCommand,
               workingDirectory.toAbsolutePath().normalize().toString()));
       managedProcess.stdoutReader =
           executor.submit(() -> readLines(process.getInputStream(), managedProcess.stdout));
@@ -135,8 +142,7 @@ public class BackgroundProcessManager {
       CompletableFuture.runAsync(() -> watchProcess(managedProcess), executor);
       return snapshot(managedProcess, DEFAULT_TAIL_LINES, "started");
     } catch (IOException e) {
-      eventPublisher.publish(
-          eventFactory.backgroundProcessFailed(processId, String.join(" ", commandLine), e));
+      eventPublisher.publish(eventFactory.backgroundProcessFailed(processId, eventCommand, e));
       return new BackgroundProcessSnapshot(
           processId,
           -1,
@@ -411,13 +417,31 @@ public class BackgroundProcessManager {
   }
 
   /** 必要な内容を参照できるよう、行一覧を読み取る。 */
-  private void readLines(InputStream stream, BoundedLineBuffer buffer) {
+  static void readLines(InputStream stream, BoundedLineBuffer buffer) {
     try (BufferedReader reader =
         new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-      String line;
-      while ((line = reader.readLine()) != null) {
-        buffer.add(line);
+      char[] chunk = new char[4096];
+      StringBuilder line = new StringBuilder();
+      boolean previousCr = false;
+      int count;
+      while ((count = reader.read(chunk)) != -1) {
+        for (int i = 0; i < count; i++) {
+          char character = chunk[i];
+          if (character == '\n' && previousCr) {
+            previousCr = false;
+            continue;
+          }
+          previousCr = character == '\r';
+          if (character == '\r' || character == '\n') {
+            buffer.add(line.toString());
+            line.setLength(0);
+          } else if (line.length() <= BoundedLineBuffer.MAX_LINE_CHARACTERS) {
+            // One extra character lets add() mark truncation without retaining the discarded tail.
+            line.append(character);
+          }
+        }
       }
+      if (!line.isEmpty()) buffer.add(line.toString());
     } catch (IOException e) {
       buffer.add("[read error] " + e.getMessage());
     }
