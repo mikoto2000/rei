@@ -102,6 +102,9 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   /** キャッシュ。 */
   private final Map<String, ChatModel> cache = new ConcurrentHashMap<>();
 
+  private final Map<String, ModelOutageGuard> outageGuards = new ConcurrentHashMap<>();
+  private final java.time.Duration outageCooldown;
+
   /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public LlmModelProvider(ChatModel defaultChatModel, LlmProperties properties) {
     this(defaultChatModel, properties, null, null);
@@ -114,6 +117,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       LlmProperties properties,
       AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher) {
+    this.outageCooldown = properties.getOutageCooldown();
     this.defaultChatModel = defaultChatModel;
     this.featureSettings = feature -> properties.feature(feature);
     this.readTimeout = () -> properties.getReadTimeout();
@@ -199,7 +203,18 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     }
     return eventFactory == null || eventPublisher == null
         ? model
-        : new AgentEventChatModel(feature, model, eventFactory, eventPublisher, timing, runCancellation);
+        : new AgentEventChatModel(
+            feature,
+            model,
+            eventFactory,
+            eventPublisher,
+            timing,
+            runCancellation,
+            outageGuards.computeIfAbsent(
+                (server != null && server.hasCustomServer() ? server.getBaseUrl() : "default")
+                    + "\n"
+                    + model(feature, null),
+                key -> new ModelOutageGuard(java.time.Clock.systemUTC(), outageCooldown)));
   }
 
   /** 用途に応じたモデル利用で用いるモデルを返す。 */

@@ -220,6 +220,7 @@ rei:
     chat-memory-max-messages: ${REI_CHAT_MEMORY_MAX_MESSAGES:100}
   llm:
     read-timeout: ${REI_LLM_READ_TIMEOUT:5m}
+    outage-cooldown: ${REI_LLM_OUTAGE_COOLDOWN:30s}
     max-stream-timeout-retries: ${REI_LLM_MAX_STREAM_TIMEOUT_RETRIES:2}
     max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
     output-limit:
