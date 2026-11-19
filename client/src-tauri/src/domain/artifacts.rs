@@ -100,7 +100,11 @@ impl DeliveryArtifact {
         self.validate()?;
         if self.status != "AVAILABLE"
             || bytes.len() as u64 != self.size
-            || format!("{:x}", Sha256::digest(bytes)) != self.sha256
+            || Sha256::digest(bytes)
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+                != self.sha256
         {
             return Err(AppError::InvalidResponse);
         }
