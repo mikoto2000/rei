@@ -20,7 +20,9 @@ public class MemoryDataSourceConfiguration {
   public DataSource memoryConsolidationDataSource() throws IOException {
     var path = ReiPaths.memoryConsolidationDbPath();
     ReiPaths.ensureParentDirectoryExists(path);
-    SQLiteDataSource dataSource = new SQLiteDataSource();
+    var config = new org.sqlite.SQLiteConfig();
+    config.setBusyTimeout(5000);
+    SQLiteDataSource dataSource = new SQLiteDataSource(config);
     dataSource.setUrl("jdbc:sqlite:" + path);
     return dataSource;
   }

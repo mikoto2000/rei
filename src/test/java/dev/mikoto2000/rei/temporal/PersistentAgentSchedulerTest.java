@@ -25,6 +25,53 @@ class PersistentAgentSchedulerTest {
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  @Test
+  void idlePollsDoNotRequestWriterLocksAndExpiryRetriesAfterLockRelease() throws Exception {
+    var source =
+        new DriverManagerDataSource(
+            "jdbc:sqlite:" + dir.resolve("contention.db") + "?busy_timeout=30");
+    var scheduler = new PersistentAgentScheduler(source, Clock.fixed(now, ZoneOffset.UTC));
+    var jdbc = org.springframework.jdbc.core.simple.JdbcClient.create(source);
+    try (var lock = source.getConnection();
+        var statement = lock.createStatement()) {
+      statement.execute("BEGIN IMMEDIATE");
+      scheduler.expireEventWaits();
+      assertTrue(scheduler.claimDue().isEmpty());
+      statement.execute("ROLLBACK");
+    }
+    String id = create(scheduler);
+    jdbc.sql("UPDATE agent_schedules SET status='WAITING_EVENT',due=? WHERE id=?")
+        .params(now.minusSeconds(1).toEpochMilli(), id)
+        .update();
+    try (var lock = source.getConnection();
+        var statement = lock.createStatement()) {
+      statement.execute("BEGIN IMMEDIATE");
+      scheduler.expireEventWaits();
+      assertEquals("WAITING_EVENT", scheduler.get("project", id).status());
+      statement.execute("ROLLBACK");
+    }
+    scheduler.expireEventWaits();
+    scheduler.expireEventWaits();
+    assertEquals("FAILED", scheduler.get("project", id).status());
+    assertEquals(
+        1,
+        jdbc.sql(
+                "SELECT COUNT(*) FROM agent_schedule_history WHERE id=? AND detail='event_wait_expired'")
+            .param(id)
+            .query(Integer.class)
+            .single());
+    assertTrue(scheduler.claimDue().isEmpty());
+  }
+
+  @Test
+  void busyClassificationDoesNotSwallowUnrelatedDatabaseErrors() {
+    assertTrue(
+        PersistentAgentScheduler.databaseBusy(
+            new RuntimeException(new java.sql.SQLException("safe", "", 5))));
+    org.junit.jupiter.api.Assertions.assertFalse(
+        PersistentAgentScheduler.databaseBusy(new java.sql.SQLException("constraint", "", 19)));
+  }
+
   /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-04T03:00:00Z");
 
