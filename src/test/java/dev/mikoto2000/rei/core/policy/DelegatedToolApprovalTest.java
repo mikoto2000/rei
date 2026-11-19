@@ -23,6 +23,8 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 /** 委譲済みツール承認の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DelegatedToolApprovalTest {
+  private static final String READ_ARGUMENTS = "{\"files\":[{\"path\":\"a.txt\"}]}";
+
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
@@ -56,24 +58,27 @@ class DelegatedToolApprovalTest {
   /** ツール利用の権限制御で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void parentGrantIsExactAndConsumedOnceByChild() {
-    var request = repository.request("readMultiFile", "{}", parent);
+    var request = repository.request("readMultiFile", READ_ARGUMENTS, parent);
     repository.decide("project", request.id(), true);
-    assertThrows(ToolPermissionException.class, () -> guard.check("readMultiFile", "{}", child));
+    assertThrows(
+        ToolPermissionException.class, () -> guard.check("readMultiFile", READ_ARGUMENTS, child));
     assertThrows(
         ToolPermissionException.class,
-        () -> guard.checkDelegated("readMultiFile", "{ }", child, parent));
+        () ->
+            guard.checkDelegated(
+                "readMultiFile", "{ \"files\":[{\"path\":\"a.txt\"}] }", child, parent));
     assertEquals("APPROVED", repository.get("project", request.id()).status());
-    assertDoesNotThrow(() -> guard.checkDelegated("readMultiFile", "{}", child, parent));
+    assertDoesNotThrow(() -> guard.checkDelegated("readMultiFile", READ_ARGUMENTS, child, parent));
     assertEquals("CONSUMED", repository.get("project", request.id()).status());
     assertThrows(
         ToolPermissionException.class,
-        () -> guard.checkDelegated("readMultiFile", "{}", child, parent));
+        () -> guard.checkDelegated("readMultiFile", READ_ARGUMENTS, child, parent));
   }
 
   /** ツール利用の権限制御で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void mismatchAndNonReadActionsCannotBorrowParentGrant() {
-    var request = repository.request("readMultiFile", "{}", parent);
+    var request = repository.request("readMultiFile", READ_ARGUMENTS, parent);
     repository.decide("project", request.id(), true);
     for (var wrong :
         List.of(
@@ -82,7 +87,7 @@ class DelegatedToolApprovalTest {
             new AgentRunContext("child", "ordinary", directory, "project"))) {
       assertThrows(
           ToolPermissionException.class,
-          () -> guard.checkDelegated("readMultiFile", "{}", wrong, parent));
+          () -> guard.checkDelegated("readMultiFile", READ_ARGUMENTS, wrong, parent));
     }
     var write =
         repository.request(
@@ -105,18 +110,18 @@ class DelegatedToolApprovalTest {
   void missingGrantCreatesReviewableRequestOwnedByParentSession() {
     assertThrows(
         ToolPermissionException.class,
-        () -> guard.checkDelegated("readMultiFile", "{}", child, parent));
+        () -> guard.checkDelegated("readMultiFile", READ_ARGUMENTS, child, parent));
     var request = repository.list("project").getFirst();
     assertEquals(parent.conversationId(), request.sessionId());
     assertEquals(parent.runId(), request.runId());
     repository.decide("project", request.id(), true);
-    assertDoesNotThrow(() -> guard.checkDelegated("readMultiFile", "{}", child, parent));
+    assertDoesNotThrow(() -> guard.checkDelegated("readMultiFile", READ_ARGUMENTS, child, parent));
   }
 
   /** ツール利用の権限制御で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void explicitDenialStillWinsAndConcurrentChildrenShareOneGrant() throws Exception {
-    var request = repository.request("readMultiFile", "{}", parent);
+    var request = repository.request("readMultiFile", READ_ARGUMENTS, parent);
     repository.decide("project", request.id(), true);
     var denying =
         new ToolPermissionGuard(
@@ -128,14 +133,14 @@ class DelegatedToolApprovalTest {
     denying.setApprovals(repository);
     assertThrows(
         ToolPermissionException.class,
-        () -> denying.checkDelegated("readMultiFile", "{}", child, parent));
+        () -> denying.checkDelegated("readMultiFile", READ_ARGUMENTS, child, parent));
     assertEquals("APPROVED", repository.get("project", request.id()).status());
     try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
       var first =
           executor.submit(
               () -> {
                 try {
-                  guard.checkDelegated("readMultiFile", "{}", child, parent);
+                  guard.checkDelegated("readMultiFile", READ_ARGUMENTS, child, parent);
                   return true;
                 } catch (ToolPermissionException refused) {
                   return false;
@@ -147,7 +152,7 @@ class DelegatedToolApprovalTest {
                 try {
                   guard.checkDelegated(
                       "readMultiFile",
-                      "{}",
+                      READ_ARGUMENTS,
                       new AgentRunContext("other", "subagent:other", directory, "project"),
                       parent);
                   return true;

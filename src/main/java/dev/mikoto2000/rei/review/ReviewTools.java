@@ -593,8 +593,14 @@ public final class ReviewTools {
   public dev.mikoto2000.rei.durable.WorkItemStore.Result submitReviewWorkItem(
       String workItemId,
       String attempt,
-      String assessment,
-      List<dev.mikoto2000.rei.durable.WorkItemStore.Finding> findings) {
+      @org.springframework.ai.tool.annotation.ToolParam(
+              description =
+                  "Required assessment, 1 to 16384 characters; summarize conclusions concisely.")
+          String assessment,
+      @org.springframework.ai.tool.annotation.ToolParam(
+              description =
+                  "Required array; use [] when there are no findings. At most 100 findings with unique IDs. Legacy work IDs accept exact evidence quotes without coordinates; durable IDs require absolute UTF-16 start/end from the delivered source.")
+          List<dev.mikoto2000.rei.durable.WorkItemStore.Finding> findings) {
     var owner = AgentRunScope.current();
     var work = workItems();
     try {
@@ -648,7 +654,9 @@ public final class ReviewTools {
                 + " listReviewTaskResults.");
       if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw taskAccessFailure(invalid);
       throw new ReviewResultRejectedException(
-          "No assessment was accepted. Keep the current workItemId and attempt; provide an"
+          dev.mikoto2000.rei.durable.WorkItemStore.resultValidationHint(
+                  assessment, findings, workItemId != null && workItemId.startsWith("legacy:"))
+              + " No assessment was accepted. Keep the current workItemId and attempt; provide an"
               + " assessment of 1..16384 characters and findings=[] or at most 100 findings with"
               + " unique IDs, valid absolute UTF-16 coordinates and exact source evidence inside"
               + " the delivered claim.");
