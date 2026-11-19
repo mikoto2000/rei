@@ -3,7 +3,7 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit},
     XChaCha20Poly1305, XNonce,
 };
-use rand::RngCore;
+use rand::Rng;
 use std::{
     collections::BTreeMap,
     fs::{File, OpenOptions},
@@ -74,7 +74,7 @@ impl EncryptedVault {
             Some(bytes) => Self::read_salt(bytes)?,
             None => {
                 let mut salt = [0; 16];
-                rand::thread_rng().fill_bytes(&mut salt);
+                rand::rng().fill_bytes(&mut salt);
                 salt
             }
         };
@@ -164,7 +164,7 @@ impl EncryptedVault {
         let map: BTreeMap<_, _> = secrets.iter().map(|(k, v)| (k, v.expose())).collect();
         let plain = Zeroizing::new(serde_json::to_vec(&map).map_err(|_| AppError::Storage)?);
         let mut nonce = [0; 24];
-        rand::thread_rng().fill_bytes(&mut nonce);
+        rand::rng().fill_bytes(&mut nonce);
         let cipher =
             XChaCha20Poly1305::new_from_slice(self.key.as_ref()).map_err(|_| AppError::Storage)?;
         let encrypted = cipher
