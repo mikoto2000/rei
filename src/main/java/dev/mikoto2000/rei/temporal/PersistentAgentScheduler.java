@@ -506,16 +506,42 @@ public class PersistentAgentScheduler
 
   /** 時刻と期間の解釈に関するexpireイベント待機一覧を処理する。 */
   public void expireEventWaits() {
-    transaction.executeWithoutResult(
-        status -> {
-          var expired =
-              db.sql(
-                      "UPDATE agent_schedules SET status='FAILED',outcome='event_wait_expired' WHERE id IN (SELECT id FROM agent_schedules WHERE status='WAITING_EVENT' AND due<=? ORDER BY due,id LIMIT 256) RETURNING *")
-                  .param(clock.millis())
-                  .query(ROW)
-                  .list();
-          expired.forEach(entry -> history(entry.task().id(), "FAILED", "event_wait_expired"));
-        });
+    try {
+      // A zero-row UPDATE still takes SQLite's writer lock. Read outside the write transaction.
+      if (!db.sql(
+              "SELECT EXISTS(SELECT 1 FROM agent_schedules WHERE status='WAITING_EVENT' AND due<=?)")
+          .param(clock.millis())
+          .query(Boolean.class)
+          .single()) return;
+      transaction.executeWithoutResult(
+          status -> {
+            var expired =
+                db.sql(
+                        "UPDATE agent_schedules SET status='FAILED',outcome='event_wait_expired' WHERE id IN (SELECT id FROM agent_schedules WHERE status='WAITING_EVENT' AND due<=? ORDER BY due,id LIMIT 256) RETURNING *")
+                    .param(clock.millis())
+                    .query(ROW)
+                    .list();
+            expired.forEach(entry -> history(entry.task().id(), "FAILED", "event_wait_expired"));
+          });
+    } catch (org.springframework.dao.DataAccessException unavailable) {
+      if (!databaseBusy(unavailable)) throw unavailable;
+      // Failed writes roll back with their history; failed preflights have no effects. Retry next
+      // tick.
+      org.slf4j.LoggerFactory.getLogger(getClass())
+          .debug("Schedule expiry deferred: sqlite_busy; retry on the next scheduler check");
+    }
+  }
+
+  static boolean databaseBusy(Throwable failure) {
+    var visited =
+        java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
+    for (int depth = 0;
+        failure != null && depth < 16 && visited.add(failure);
+        depth++, failure = failure.getCause()) {
+      if (failure instanceof java.sql.SQLException sql
+          && ((sql.getErrorCode() & 255) == 5 || (sql.getErrorCode() & 255) == 6)) return true;
+    }
+    return false;
   }
 
   /**
@@ -753,6 +779,11 @@ public class PersistentAgentScheduler
   /** 対象を処理する担当を決めるため、期限の利用権を確保する。 */
   public Optional<Entry> claimDue() {
     expireEventWaits();
+    if (!db.sql(
+            "SELECT EXISTS(SELECT 1 FROM agent_schedules candidate WHERE candidate.status='SCHEDULED' AND candidate.due<=? AND NOT EXISTS(SELECT 1 FROM agent_schedules active WHERE active.project=candidate.project AND active.session=candidate.session AND active.status='RUNNING'))")
+        .param(clock.millis())
+        .query(Boolean.class)
+        .single()) return Optional.empty();
     return transaction.execute(
         status -> {
           var result =
