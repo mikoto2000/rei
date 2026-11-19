@@ -21,6 +21,24 @@ import reactor.core.publisher.Flux;
 
 class ModelOutageGuardTest {
   @Test
+  void socketAndProviderTimeoutsAlsoStartCooldown() {
+    for (var failure :
+        List.of(
+            new java.net.SocketTimeoutException("PRIVATE"),
+            new java.util.concurrent.TimeoutException(),
+            org.springframework.web.reactive.function.client.WebClientResponseException.create(
+                408,
+                "timeout",
+                org.springframework.http.HttpHeaders.EMPTY,
+                new byte[0],
+                java.nio.charset.StandardCharsets.UTF_8))) {
+      var guard = new ModelOutageGuard(Clock.systemUTC(), Duration.ofSeconds(30));
+      guard.failed(guard.acquire(), failure);
+      assertThrows(ModelOutageGuard.CoolingDown.class, guard::acquire);
+    }
+  }
+
+  @Test
   void modelBoundaryReportsCooldownWithoutInvokingTheProviderAgain() {
     var delegate = mock(ChatModel.class);
     var prompt = new Prompt("request");
