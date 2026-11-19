@@ -49,6 +49,15 @@ public class ContextCompressionProperties {
   /** 要約本文とは別に、モデルの思考などに確保する生成トークン数。 */
   private int summaryGenerationReserve = 8192;
 
+  /** One summary request is bounded independently of the conversation window. */
+  private int summaryInputTokens = 24000;
+
+  /** Feature settings used by the summarizer; chat preserves existing routing by default. */
+  private String summaryModelFeature = "chat";
+
+  /** Context window for an explicitly selected summary feature. */
+  private int summaryModelContextLimit = 128000;
+
   /** ツールの結果判定の境界値。 */
   private int toolResultThreshold = 8000;
 
@@ -82,6 +91,10 @@ public class ContextCompressionProperties {
         || threshold <= 0
         || hardLimit < threshold
         || recentTokens <= 0
+        || summaryInputTokens < 1024
+        || summaryModelContextLimit < 1024
+        || summaryModelFeature == null
+        || summaryModelFeature.isBlank()
         || summaryTokens <= 0
         || summaryGenerationReserve < 0
         || (long) summaryTokens + summaryGenerationReserve > Integer.MAX_VALUE

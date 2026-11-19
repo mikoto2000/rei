@@ -175,7 +175,11 @@ public class ContextAssembler {
                 properties.getMinimumCompressionGain(),
                 properties.getSafetyMargin(),
                 properties.getRetryCooldownSeconds(),
-                properties.contextLimit(model));
+                "chat".equals(properties.getSummaryModelFeature())
+                    ? properties.contextLimit(model)
+                    : properties.getSummaryModelContextLimit(),
+                properties.getSummaryInputTokens(),
+                properties.getSummaryModelFeature());
     this.newStandaloneSummaryBudget = () -> StandaloneSummaryBudget.create(properties);
     this.estimator = estimator;
     this.summaries = summaries;
@@ -380,7 +384,11 @@ public class ContextAssembler {
             + "|"
             + settings.retryCooldownSeconds()
             + "|"
-            + settings.contextLimit();
+            + settings.contextLimit()
+            + "|"
+            + settings.summaryInputTokens()
+            + "|"
+            + settings.summaryModelFeature();
     var retry = compressionRetries.decision(segment.retryKey, configuration);
     if (!retry.allowed()) {
       if (retry.announce())
@@ -412,6 +420,7 @@ public class ContextAssembler {
               - compressor.generationTokens(settings.summaryTokens())
               - settings.safetyMargin()
               - 2048L;
+      max = Math.min(max, settings.summaryInputTokens());
       max = compressionRetries.inputLimit(segment.retryKey, configuration, max);
       while (before > max && count > 1) {
         count--;
@@ -783,7 +792,9 @@ public class ContextAssembler {
       double minimumCompressionGain,
       int safetyMargin,
       int retryCooldownSeconds,
-      int contextLimit) {}
+      int contextLimit,
+      int summaryInputTokens,
+      String summaryModelFeature) {}
 
   @FunctionalInterface
   private interface PreserveToolResult {

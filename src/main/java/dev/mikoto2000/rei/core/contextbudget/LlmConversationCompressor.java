@@ -35,6 +35,8 @@ public class LlmConversationCompressor implements ConversationCompressor {
 
   private final java.util.function.Supplier<ModelCallBudget> standaloneBudget;
 
+  private final java.util.function.Supplier<String> summaryModelFeature;
+
   /** 指定された値や利用先を使って、LlmConversationCompressorを初期化する。 */
   public LlmConversationCompressor(
       ObjectProvider<LlmModelProvider> models, ContextCompressionProperties properties) {
@@ -42,6 +44,7 @@ public class LlmConversationCompressor implements ConversationCompressor {
     this.summaryTimeoutSeconds = () -> properties.getSummaryTimeoutSeconds();
     this.summaryGenerationReserve = () -> properties.getSummaryGenerationReserve();
     this.standaloneBudget = () -> StandaloneSummaryBudget.create(properties);
+    this.summaryModelFeature = properties::getSummaryModelFeature;
   }
 
   @Override
@@ -98,14 +101,16 @@ public class LlmConversationCompressor implements ConversationCompressor {
     boolean reported = false;
     try {
       var provider = models.getObject();
-      // Same model/server as the parent makes the configured input window applicable to
-      // summarization too.
-      var model = provider.chatModel(LlmFeature.CHAT);
+      String feature = summaryModelFeature.get();
+      var model = provider.chatModel(feature);
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
       var ownerOptions = owner.getOptions();
       var baseOptions =
           provider.chatOptions(
-              LlmFeature.CHAT, ownerOptions == null ? null : ownerOptions.getModel());
+              feature,
+              !LlmFeature.CHAT.equals(feature) || ownerOptions == null
+                  ? null
+                  : ownerOptions.getModel());
       var optionsBuilder = baseOptions.mutate().toolCallbacks(List.of()).toolChoice("none");
       // The API limit includes reasoning on some providers. It is not the saved text budget.
       int generationTokens = generationTokens(maxTokens);

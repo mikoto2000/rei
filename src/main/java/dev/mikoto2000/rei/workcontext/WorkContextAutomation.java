@@ -170,7 +170,8 @@ public class WorkContextAutomation implements AutoCloseable {
     } catch (WorkContextExtractionException error) {
       // Input rejection happens before a model request; splitting preserves all evidence.
       if (batch.size() > 1
-          && error.reason() == WorkContextExtractionException.Reason.INPUT_TOO_LARGE)
+          && (error.reason() == WorkContextExtractionException.Reason.INPUT_TOO_LARGE
+              || error.reason() == WorkContextExtractionException.Reason.BATCH_LIMIT))
         for (var owner : batch) process(java.util.List.of(owner), false);
       else for (var owner : batch) failed(owner, error);
     } catch (RuntimeException error) {
