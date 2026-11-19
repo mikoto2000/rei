@@ -27,6 +27,19 @@ public class LlmProperties {
     this.readTimeout = readTimeout;
   }
 
+  private java.time.Duration outageCooldown = java.time.Duration.ofSeconds(30);
+
+  public java.time.Duration getOutageCooldown() {
+    return outageCooldown;
+  }
+
+  public void setOutageCooldown(java.time.Duration value) {
+    if (value == null || value.isNegative() || value.compareTo(java.time.Duration.ofMinutes(5)) > 0)
+      throw new IllegalArgumentException(
+          "Model outage cooldown must be between zero and five minutes");
+    outageCooldown = value;
+  }
+
   /** Additional retries for one timed-out chat model invocation. */
   private int maxStreamTimeoutRetries = 2;
 

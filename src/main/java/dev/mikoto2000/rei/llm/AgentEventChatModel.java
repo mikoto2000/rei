@@ -39,6 +39,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   private final dev.mikoto2000.rei.timing.TimingExecution timing;
 
   private final RunCancellationStatus runCancellation;
+  private final ModelOutageGuard outageGuard;
 
   /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   AgentEventChatModel(
@@ -66,6 +67,25 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
       AgentEventPublisher eventPublisher,
       dev.mikoto2000.rei.timing.TimingExecution timing,
       RunCancellationStatus runCancellation) {
+    this(
+        feature,
+        delegate,
+        eventFactory,
+        eventPublisher,
+        timing,
+        runCancellation,
+        new ModelOutageGuard(java.time.Clock.systemUTC(), java.time.Duration.ZERO));
+  }
+
+  AgentEventChatModel(
+      String feature,
+      ChatModel delegate,
+      AgentEventFactory eventFactory,
+      AgentEventPublisher eventPublisher,
+      dev.mikoto2000.rei.timing.TimingExecution timing,
+      RunCancellationStatus runCancellation,
+      ModelOutageGuard outageGuard) {
+    this.outageGuard = outageGuard;
     this.timing = timing;
     this.feature = feature;
     this.delegate = delegate;
@@ -87,23 +107,30 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     long startedAtNanos = System.nanoTime();
     requestEventPublisher.publish(
         eventFactory.llmRequestStarted(runId, requestId, observedFeature(prompt)));
+    ModelOutageGuard.Permit permit = null;
     try {
+      permit = outageGuard.acquire();
       ChatResponse response = delegate.call(prompt);
+      outageGuard.completed(permit);
       var metrics = new ResponseMetrics();
       metrics.observe(response);
-      requestEventPublisher
-          .publish(
-              eventFactory.llmResponseCompleted(runId, requestId, elapsedMillis(startedAtNanos),
-                  null, metrics.promptTokens, metrics.completionTokens));
+      requestEventPublisher.publish(
+          eventFactory.llmResponseCompleted(
+              runId,
+              requestId,
+              elapsedMillis(startedAtNanos),
+              null,
+              metrics.promptTokens,
+              metrics.completionTokens));
       observeUsage(measured, response);
       if (measured != null)
         measured.finish(dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS);
       return response;
     } catch (RuntimeException | Error e) {
+      if (permit != null) outageGuard.failed(permit, e);
       if (measured != null) measured.finish(dev.mikoto2000.rei.timing.TimingExecution.status(e));
-      requestEventPublisher
-          .publish(
-              eventFactory.llmRequestFailed(runId, requestId, elapsedMillis(startedAtNanos), e));
+      requestEventPublisher.publish(
+          eventFactory.llmRequestFailed(runId, requestId, elapsedMillis(startedAtNanos), e));
       throw e;
     }
   }
@@ -129,7 +156,12 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
               new java.util.concurrent.atomic.AtomicBoolean();
           requestEventPublisher.publish(
               eventFactory.llmRequestStarted(runId, requestId, observedFeature(prompt)));
-          return Flux.defer(() -> delegate.stream(prompt))
+          var permit = new java.util.concurrent.atomic.AtomicReference<ModelOutageGuard.Permit>();
+          return Flux.defer(
+                  () -> {
+                    permit.set(outageGuard.acquire());
+                    return delegate.stream(prompt);
+                  })
               .doOnNext(
                   response -> {
                     metrics.observe(response);
@@ -137,33 +169,37 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
                     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
                     if (firstTokenPublished.compareAndSet(false, true)) {
                       metrics.firstResponseMillis = elapsedMillis(startedAtNanos);
-                      requestEventPublisher
-                          .publish(
-                              eventFactory.llmResponseFirstToken(
-                                  runId, requestId, elapsedMillis(startedAtNanos)));
+                      requestEventPublisher.publish(
+                          eventFactory.llmResponseFirstToken(
+                              runId, requestId, elapsedMillis(startedAtNanos)));
                     }
                   })
               .doOnComplete(
                   () -> {
+                    outageGuard.completed(permit.get());
                     if (measured != null)
                       measured.finish(dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS);
-                    requestEventPublisher
-                        .publish(
-                            eventFactory.llmResponseCompleted(
-                                runId, requestId, elapsedMillis(startedAtNanos), metrics.firstResponseMillis,
-                                metrics.promptTokens, metrics.completionTokens));
+                    requestEventPublisher.publish(
+                        eventFactory.llmResponseCompleted(
+                            runId,
+                            requestId,
+                            elapsedMillis(startedAtNanos),
+                            metrics.firstResponseMillis,
+                            metrics.promptTokens,
+                            metrics.completionTokens));
                   })
               .doOnError(
                   error -> {
+                    if (permit.get() != null) outageGuard.failed(permit.get(), error);
                     if (measured != null)
                       measured.finish(dev.mikoto2000.rei.timing.TimingExecution.status(error));
-                    requestEventPublisher
-                        .publish(
-                            eventFactory.llmRequestFailed(
-                                runId, requestId, elapsedMillis(startedAtNanos), error));
+                    requestEventPublisher.publish(
+                        eventFactory.llmRequestFailed(
+                            runId, requestId, elapsedMillis(startedAtNanos), error));
                   })
               .doOnCancel(
                   () -> {
+                    if (permit.get() != null) outageGuard.cancelled(permit.get());
                     if (measured != null)
                       measured.finish(
                           cancelled(prompt, runId)
@@ -191,7 +227,8 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
       if (usage.getPromptTokens() != null)
         promptTokens = Math.max(promptTokens == null ? 0 : promptTokens, usage.getPromptTokens());
       if (usage.getCompletionTokens() != null)
-        completionTokens = Math.max(completionTokens == null ? 0 : completionTokens, usage.getCompletionTokens());
+        completionTokens =
+            Math.max(completionTokens == null ? 0 : completionTokens, usage.getCompletionTokens());
     }
   }
 
@@ -210,8 +247,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   private boolean cancelled(Prompt prompt, String runId) {
     return Thread.currentThread().isInterrupted()
         || (runId != null && runCancellation.isCancellationRequested(runId))
-        || toolContext(prompt)
-                .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+        || toolContext(prompt).get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
                 instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext run
             && run.isCancelled();
   }
@@ -304,8 +340,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   }
 
   private static Map<String, Object> toolContext(Prompt prompt) {
-    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
-      return Map.of();
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return Map.of();
     var context = options.getToolContext();
     return context == null ? Map.of() : context;
   }

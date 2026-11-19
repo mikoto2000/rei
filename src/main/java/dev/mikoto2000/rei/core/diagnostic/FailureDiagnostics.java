@@ -69,6 +69,9 @@ public final class FailureDiagnostics {
           || reactor.core.Exceptions.isCancel(cause))
         return diagnostic("cancelled", "処理が中断されました。保存済みの状態を確認してください。");
     for (var cause : causes) {
+      if (cause instanceof dev.mikoto2000.rei.llm.ModelOutageGuard.CoolingDown)
+        return diagnostic(
+            "model_cooling_down", "推論サーバーの障害後の待機中です。接続先の復旧と保存済みの結果を確認してから再開してください。ツールは自動再実行しません。");
       if (cause instanceof dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException)
         return diagnostic(
             dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.CODE,
