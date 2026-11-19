@@ -252,6 +252,33 @@ public final class WorkItemStore {
     }
   }
 
+  /** Safe first-field repair guidance; never echo an assessment, quote, path or identifier. */
+  public static String resultValidationHint(String assessment, List<Finding> findings, boolean legacy) {
+    if (assessment == null || assessment.isBlank() || assessment.length() > 16384)
+      return "assessment must contain 1..16384 characters.";
+    if (findings == null || findings.size() > 100)
+      return "findings must be an array of at most 100 entries; use [] when there are no findings.";
+    var ids = new java.util.HashSet<String>();
+    for (int i = 0; i < findings.size(); i++) {
+      var finding = findings.get(i);
+      String at = "findings[" + i + "]";
+      if (finding == null) return at + " must be an object.";
+      if (finding.id() == null || finding.id().isBlank() || finding.id().length() > 256)
+        return at + ".id must contain 1..256 characters.";
+      if (!ids.add(finding.id())) return at + ".id must be unique within this result.";
+      if (finding.severity() == null || finding.severity().isBlank() || finding.severity().length() > 64)
+        return at + ".severity must contain 1..64 characters.";
+      if (finding.evidence() == null || finding.evidence().isBlank() || finding.evidence().length() > 16384)
+        return at + ".evidence must contain an exact source quote of 1..16384 characters.";
+      if (finding.assessment() == null || finding.assessment().isBlank() || finding.assessment().length() > 16384)
+        return at + ".assessment must contain 1..16384 characters.";
+      if (!legacy && (finding.start() == null || finding.end() == null
+          || finding.start() < 0 || finding.end() <= finding.start()))
+        return at + ".start/end must be absolute UTF-16 coordinates from the delivered claim, with end > start.";
+    }
+    return "findings must use exact evidence inside the delivered unit; for durable work, start/end must match its absolute UTF-16 boundaries.";
+  }
+
   public Result commit(DurableTaskStore.Scope scope, Claim claim, String assessment, List<Finding> findings) {
     if (assessment == null || assessment.isBlank() || assessment.length() > 16384 || findings == null || findings.size() > 100)
       throw new IllegalArgumentException("REVIEW_RESULT_INVALID");

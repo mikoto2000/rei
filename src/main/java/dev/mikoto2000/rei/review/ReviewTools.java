@@ -654,7 +654,9 @@ public final class ReviewTools {
                 + " listReviewTaskResults.");
       if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw taskAccessFailure(invalid);
       throw new ReviewResultRejectedException(
-          "No assessment was accepted. Keep the current workItemId and attempt; provide an"
+          dev.mikoto2000.rei.durable.WorkItemStore.resultValidationHint(
+                  assessment, findings, workItemId != null && workItemId.startsWith("legacy:"))
+              + " No assessment was accepted. Keep the current workItemId and attempt; provide an"
               + " assessment of 1..16384 characters and findings=[] or at most 100 findings with"
               + " unique IDs, valid absolute UTF-16 coordinates and exact source evidence inside"
               + " the delivered claim.");
