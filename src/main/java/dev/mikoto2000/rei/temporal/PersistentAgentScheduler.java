@@ -181,12 +181,19 @@ public class PersistentAgentScheduler
   public ScheduledAgentTask scheduleAfter(Duration duration, String action, String conversationId) {
     if (duration == null || duration.isNegative() || duration.compareTo(Duration.ofDays(366)) > 0)
       throw new IllegalArgumentException("Duration must be 0..366 days");
-    return scheduleAt(clock.instant().plus(duration), action, conversationId);
+    Instant createdAt = clock.instant();
+    return scheduleAt(createdAt.plus(duration), action, conversationId, createdAt);
   }
 
   /** 指定された時刻や条件で実行できるよう、日時を予約する。 */
   @Override
   public ScheduledAgentTask scheduleAt(Instant executeAt, String action, String conversationId) {
+    return scheduleAt(executeAt, action, conversationId, clock.instant());
+  }
+
+  /** 相対時間の計算、検証、作成日時には同じ基準時刻を使う。 */
+  private ScheduledAgentTask scheduleAt(
+      Instant executeAt, String action, String conversationId, Instant createdAt) {
     var owner = AgentRunScope.current();
     if (owner == null
         || owner.projectId() == null
@@ -198,12 +205,12 @@ public class PersistentAgentScheduler
     if (action == null || action.isBlank() || action.length() > 4096)
       throw new IllegalArgumentException("Action must contain 1..4096 characters");
     if (executeAt == null
-        || executeAt.isBefore(clock.instant())
-        || executeAt.isAfter(clock.instant().plus(Duration.ofDays(366))))
+        || executeAt.isBefore(createdAt)
+        || executeAt.isAfter(createdAt.plus(Duration.ofDays(366))))
       throw new IllegalArgumentException("Execute time must be now..366 days in the future");
     var task =
         new ScheduledAgentTask(
-            "timer-" + UUID.randomUUID(), clock.instant(), executeAt, action, conversationId);
+            "timer-" + UUID.randomUUID(), createdAt, executeAt, action, conversationId);
     transaction.executeWithoutResult(
         status -> {
           int count =

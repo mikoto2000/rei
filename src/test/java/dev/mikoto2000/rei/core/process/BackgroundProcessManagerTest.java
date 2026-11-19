@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.process;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -8,6 +9,8 @@ import dev.mikoto2000.rei.core.service.SystemShellService;
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.BackgroundProcessFailedPayload;
+import dev.mikoto2000.rei.event.BackgroundProcessStartedPayload;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.temporal.ManualMonotonicTimeSource;
 import dev.mikoto2000.rei.temporal.MonotonicTimeSource;
@@ -174,6 +177,55 @@ class BackgroundProcessManagerTest {
               .anyMatch(event -> event.type() == AgentEventType.BACKGROUND_PROCESS_COMPLETED));
     } finally {
       manager.shutdown();
+    }
+  }
+
+  /** 符号化された実行引数から秘密を復元できるログを開始時・失敗時とも残さない。 */
+  @Test
+  void shellLifecycleMasksTheOriginalCommandBeforeEncoding() throws Exception {
+    String command = "$password='review-secret-123'; Write-Output ok";
+    String encoded = new SystemShellService().shellCommandLine("powershell", command).getLast();
+    for (boolean fail : List.of(false, true)) {
+      var bus = new InMemoryAgentEventBus();
+      List<AgentEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+      bus.subscribe(events::add);
+      var shell =
+          new SystemShellService() {
+            @Override
+            public List<String> shellCommandLine(String executable, String original) {
+              assertEquals(command, original);
+              return fail
+                  ? List.of(
+                      tempDir.resolve("missing-executable").toString(), "-EncodedCommand", encoded)
+                  : javaCommand("exit", "0", encoded);
+            }
+          };
+      var observed =
+          new BackgroundProcessManager(
+              shell,
+              Clock.systemUTC(),
+              MonotonicTimeSource.system(),
+              new AgentEventFactory(Clock.systemUTC()),
+              bus);
+      try {
+        var run = observed.spawnShell(command, tempDir);
+        String logged;
+        if (fail) {
+          assertEquals(BackgroundProcessStatus.FAILED, run.status());
+          logged = ((BackgroundProcessFailedPayload) events.getFirst().payload()).command();
+        } else {
+          var result = observed.await(run.processId(), java.time.Duration.ofSeconds(5));
+          assertEquals(0, result.exitCode());
+          assertTrue(result.stdout().contains("fixture stdout"));
+          logged = ((BackgroundProcessStartedPayload) events.getFirst().payload()).command();
+        }
+        assertTrue(logged.contains("[REDACTED]"));
+        assertTrue(logged.contains("Write-Output ok"));
+        assertFalse(logged.contains("review-secret-123"));
+        assertFalse(logged.contains(encoded));
+      } finally {
+        observed.shutdown();
+      }
     }
   }
 

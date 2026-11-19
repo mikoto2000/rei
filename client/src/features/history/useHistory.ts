@@ -96,7 +96,8 @@ export function useTerminalHistoryRefresh(
     let refreshList = false,
       refreshTurns = false;
     for (const run of runs) {
-      if (run.status === "RUNNING" || run.status === "QUEUED") continue;
+      if (!["COMPLETED", "FAILED", "CANCELLED", "UNKNOWN"].includes(run.status))
+        continue;
       const key = JSON.stringify([run.serverId, run.runId]);
       if (seen.current.has(key)) continue;
       seen.current.add(key);
