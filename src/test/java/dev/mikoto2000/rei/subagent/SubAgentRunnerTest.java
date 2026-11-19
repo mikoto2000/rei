@@ -46,6 +46,8 @@ import reactor.core.publisher.Flux;
 /** 補助エージェント実行の担当の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentRunnerTest {
+  static final String READ_ARGUMENTS = "{\"files\":[{\"path\":\"a.txt\"}]}";
+
   /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void localFailureReturnsAndPublishesItsCategoryToTheParentRun() throws Exception {
@@ -168,7 +170,10 @@ class SubAgentRunnerTest {
                                     .toolCalls(
                                         List.of(
                                             new AssistantMessage.ToolCall(
-                                                "call", "function", "readMultiFile", "{}")))
+                                                "call",
+                                                "function",
+                                                "readMultiFile",
+                                                READ_ARGUMENTS)))
                                     .build())))),
             "120s",
             () ->
@@ -294,7 +299,10 @@ class SubAgentRunnerTest {
                                     .toolCalls(
                                         List.of(
                                             new AssistantMessage.ToolCall(
-                                                "call", "function", "readMultiFile", "{}")))
+                                                "call",
+                                                "function",
+                                                "readMultiFile",
+                                                READ_ARGUMENTS)))
                                     .build())))),
             "120s");
     var common =
@@ -681,7 +689,7 @@ class SubAgentRunnerTest {
   @Test
   void exactArgumentContractsAreValidatedOnActualRunnerCalls() throws Exception {
     evidenceValidation = true;
-    for (String arguments : List.of("{}", "{paths: [missing.md]}")) {
+    for (String arguments : List.of(READ_ARGUMENTS, "{files: [{path: missing.md}]}")) {
       requiredCallsConfiguration =
           "requiredToolCalls:\n  - tool: readMultiFile\n    arguments: " + arguments + "\n";
       var calls = new AtomicInteger();
@@ -730,7 +738,7 @@ class SubAgentRunnerTest {
       var result = runner.run("reviewer", "review", null);
       assertThat(result.status())
           .isEqualTo(
-              arguments.equals("{}")
+              arguments.equals(READ_ARGUMENTS)
                   ? SubAgentResult.Status.COMPLETED
                   : SubAgentResult.Status.FAILED);
       assertThat(result.validationErrors().toString())
@@ -772,7 +780,7 @@ class SubAgentRunnerTest {
     maxRepairs = 1;
     maxSteps = 3;
     requiredCallsConfiguration =
-        "requiredToolCalls:\n  - tool: readMultiFile\n    arguments: {}\n    expectedOutput: {found: true}\n";
+        "requiredToolCalls:\n  - tool: readMultiFile\n    arguments: " + READ_ARGUMENTS + "\n    expectedOutput: {found: true}\n";
     var calls = new AtomicInteger();
     var runner =
         runner(
@@ -956,7 +964,12 @@ class SubAgentRunnerTest {
                 AssistantMessage.builder()
                     .content("")
                     .toolCalls(
-                        List.of(new AssistantMessage.ToolCall("call-1", "function", name, "{}")))
+                        List.of(
+                            new AssistantMessage.ToolCall(
+                                "call-1",
+                                "function",
+                                name,
+                                name.equals("readMultiFile") ? READ_ARGUMENTS : "{}")))
                     .build())));
   }
 
@@ -1472,7 +1485,10 @@ class SubAgentRunnerTest {
                                       .toolCalls(
                                           List.of(
                                               new AssistantMessage.ToolCall(
-                                                  "call", "function", "readMultiFile", "{}")))
+                                                  "call",
+                                                  "function",
+                                                  "readMultiFile",
+                                                  READ_ARGUMENTS)))
                                       .build()))));
                 },
                 "2s")

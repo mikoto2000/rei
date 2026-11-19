@@ -53,7 +53,7 @@ class SubAgentReadToolRetryTest {
                     .toolCalls(
                         List.of(
                             new AssistantMessage.ToolCall(
-                                "call", "function", "readMultiFile", "{}")))
+                                "call", "function", "readMultiFile", SubAgentRunnerTest.READ_ARGUMENTS)))
                     .build())));
   }
 
@@ -206,7 +206,7 @@ class SubAgentReadToolRetryTest {
             Clock.systemUTC());
     var parent =
         new dev.mikoto2000.rei.core.chat.AgentRunContext("parent", "session", dir, "project");
-    var request = repository.request("readMultiFile", "{}", parent);
+    var request = repository.request("readMultiFile", SubAgentRunnerTest.READ_ARGUMENTS, parent);
     repository.decide("project", request.id(), true);
     var f = fixture();
     f.requiredCallsConfiguration = "inheritApprovals: true\n";

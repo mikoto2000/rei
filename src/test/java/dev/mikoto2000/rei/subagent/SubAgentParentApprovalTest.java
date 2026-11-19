@@ -33,7 +33,7 @@ class SubAgentParentApprovalTest {
             new DriverManagerDataSource("jdbc:sqlite:" + directory.resolve("approval.db")),
             Clock.systemUTC());
     var parent = new AgentRunContext("parent", "session", directory, "project");
-    var request = repository.request("readMultiFile", "{}", parent);
+    var request = repository.request("readMultiFile", SubAgentRunnerTest.READ_ARGUMENTS, parent);
     repository.decide("project", request.id(), true);
     var guard =
         new ToolPermissionGuard(

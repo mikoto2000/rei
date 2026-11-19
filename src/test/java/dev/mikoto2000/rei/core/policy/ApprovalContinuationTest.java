@@ -350,7 +350,8 @@ class ApprovalContinuationTest {
             });
     var calls =
         List.of(
-            new AssistantMessage.ToolCall("read", "function", "readMultiFile", "{}"),
+            new AssistantMessage.ToolCall(
+                "read", "function", "readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}"),
             new AssistantMessage.ToolCall("command", "function", "runCommand", arguments));
     ChatModel model =
         new ChatModel() {
