@@ -40,7 +40,7 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
         () ->
             "memory".equals(properties.modelFeature())
                 ? models.memoryChatModel()
-                : models.chatModel(properties.modelFeature());
+                : models.isolatedChatModel(properties.modelFeature());
     this.optionsForCalls = () -> models.chatOptions(properties.modelFeature(), null);
     this.properties = properties;
   }
@@ -135,7 +135,9 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
                       result.length(),
                       dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS);
               })
-          .blockLast(Duration.ofSeconds(properties.timeoutSeconds()));
+          .blockLast(
+              WorkContextExtractionDeadline.remaining(
+                  Duration.ofSeconds(properties.timeoutSeconds())));
       WorkContextRepository.checkCancellation();
       return output.parse(result.toString());
     } catch (RuntimeException error) {

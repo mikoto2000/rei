@@ -598,3 +598,7 @@ Work Context は新しい Run の証拠だけを既存の項目へ統合しま�
 `rei.work-context.model-feature`（既定 `memory`、環境変数 `REI_WORK_CONTEXT_MODEL_FEATURE`）で抽出モデルを分離できます。
 別の機能を指定する場合は `rei.llm.features.<機能名>` に接続先とモデルを明示してください。
 タイムアウトを延ばす前に証拠バッチを小さくし、構造化JSONの生成に適したモデルで測定してください。
+
+`batch-evidence-tokens` は分割の目安です。単一の証拠は分断せず、最終的な `max-input-tokens` の検証を通した入力だけを送ります。
+`timeout-seconds` は全バッチで共有する抽出時間です。次のバッチには残り時間だけを割り当てるため、
+分割数を増やしても1更新の待ち時間上限を引き延ばしません。

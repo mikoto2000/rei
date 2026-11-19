@@ -350,46 +350,55 @@ public class WorkContextService {
                   Instant.parse(metadata.get("workContext.gitCapturedAt")))
               : git.capture(project.root(), now);
       WorkContext draft = old;
-      for (var batch : LlmWorkContextExtractor.evidenceBatches(evidence, properties)) {
+      try (var deadline =
+          WorkContextExtractionDeadline.open(
+              java.time.Duration.ofSeconds(properties.timeoutSeconds()))) {
+        for (var batch : LlmWorkContextExtractor.evidenceBatches(evidence, properties)) {
+          WorkContextRepository.checkCancellation();
+          WorkContextExtractionDeadline.remaining(
+              java.time.Duration.ofSeconds(properties.timeoutSeconds()));
+          var candidates =
+              extractor.extract(
+                  List.copyOf(batch.values()), draft == null ? List.of() : draft.items(), statuses);
+          candidates =
+              candidates.stream()
+                  .map(
+                      c -> {
+                        var cited =
+                            c.sourceIds().stream()
+                                .map(evidence::get)
+                                .filter(Objects::nonNull)
+                                .toList();
+                        boolean interrupted =
+                            cited.stream().anyMatch(e -> unfinished.contains(e.runId()));
+                        boolean partialConfirmed =
+                            c.certainty() == Origin.USER
+                                || c.certainty() == Origin.TOOL
+                                    && cited.stream()
+                                        .anyMatch(
+                                            e ->
+                                                e.toolCallId() != null
+                                                    && !e.text().startsWith("Tool failed:"));
+                        if (c.status() == Status.COMPLETED
+                            && interrupted
+                            && (c.kind() == Kind.CURRENT_WORK || !partialConfirmed))
+                          return new WorkContextCandidate(
+                              c.action(),
+                              c.targetId(),
+                              c.kind(),
+                              c.text(),
+                              c.reason(),
+                              Status.UNCONFIRMED,
+                              c.sourceIds(),
+                              c.certainty());
+                        return c;
+                      })
+                  .toList();
+          draft = merger.merge(project.id(), draft, null, candidates, batch, snapshot, now);
+        }
         WorkContextRepository.checkCancellation();
-        var candidates =
-            extractor.extract(
-                List.copyOf(batch.values()), draft == null ? List.of() : draft.items(), statuses);
-        candidates =
-            candidates.stream()
-                .map(
-                    c -> {
-                      var cited =
-                          c.sourceIds().stream()
-                              .map(evidence::get)
-                              .filter(Objects::nonNull)
-                              .toList();
-                      boolean interrupted =
-                          cited.stream().anyMatch(e -> unfinished.contains(e.runId()));
-                      boolean partialConfirmed =
-                          c.certainty() == Origin.USER
-                              || c.certainty() == Origin.TOOL
-                                  && cited.stream()
-                                      .anyMatch(
-                                          e ->
-                                              e.toolCallId() != null
-                                                  && !e.text().startsWith("Tool failed:"));
-                      if (c.status() == Status.COMPLETED
-                          && interrupted
-                          && (c.kind() == Kind.CURRENT_WORK || !partialConfirmed))
-                        return new WorkContextCandidate(
-                            c.action(),
-                            c.targetId(),
-                            c.kind(),
-                            c.text(),
-                            c.reason(),
-                            Status.UNCONFIRMED,
-                            c.sourceIds(),
-                            c.certainty());
-                      return c;
-                    })
-                .toList();
-        draft = merger.merge(project.id(), draft, null, candidates, batch, snapshot, now);
+        WorkContextExtractionDeadline.remaining(
+            java.time.Duration.ofSeconds(properties.timeoutSeconds()));
       }
       WorkContextRepository.checkCancellation();
       synchronized (locks.computeIfAbsent(project.id(), id -> new Object())) {

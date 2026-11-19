@@ -40,7 +40,7 @@ class LlmConversationCompressorTest {
   void dedicatedSummaryFeatureDoesNotInheritTheParentModelName() {
     var model = mock(ChatModel.class);
     var models = mock(LlmModelProvider.class);
-    when(models.chatModel("context-summary")).thenReturn(model);
+    when(models.isolatedChatModel("context-summary")).thenReturn(model);
     when(models.chatOptions("context-summary", null))
         .thenReturn(OpenAiChatOptions.builder().model("small-summary").build());
     when(model.stream(any(Prompt.class)))

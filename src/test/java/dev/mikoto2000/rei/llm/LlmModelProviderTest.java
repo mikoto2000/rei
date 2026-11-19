@@ -8,6 +8,31 @@ import org.springframework.ai.chat.model.ChatModel;
 
 /** 言語モデルモデル提供元の結果と状態の契約を検証するテスト。 */
 class LlmModelProviderTest {
+  @Test
+  void isolatedFeatureRejectsAmbientFallbackToolAuthority() {
+    var callback =
+        org.springframework.ai.tool.function.FunctionToolCallback.builder(
+                "unexpected", (String input) -> input)
+            .description("must not be inherited")
+            .inputType(String.class)
+            .build();
+    var fallback = Mockito.mock(ChatModel.class);
+    Mockito.when(fallback.getOptions())
+        .thenReturn(
+            org.springframework.ai.openai.OpenAiChatOptions.builder()
+                .toolCallbacks(java.util.List.of(callback))
+                .build());
+    var properties = new LlmProperties();
+    var feature = new LlmProperties.Server();
+    feature.setBaseUrl("https://summary.invalid/v1");
+    feature.setModel("small-summary");
+    feature.setFallbackToDefault(true);
+    properties.setFeature("context-summary", feature);
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> new LlmModelProvider(fallback, properties).isolatedChatModel("context-summary"))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void memoryOutputBudgetInheritsGlobalSettingUnlessExplicitlyOverridden(boolean override)
@@ -17,7 +42,8 @@ class LlmModelProviderTest {
     if (override) environment.setProperty("REI_LLM_MEMORY_MAX_OUTPUT_TOKENS", "2048");
     var yaml = new org.springframework.boot.env.YamlPropertySourceLoader();
     for (var source :
-        yaml.load("application", new org.springframework.core.io.ClassPathResource("application.yaml"))) {
+        yaml.load(
+            "application", new org.springframework.core.io.ClassPathResource("application.yaml"))) {
       environment.getPropertySources().addLast(source);
     }
     var properties =

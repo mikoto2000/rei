@@ -152,6 +152,14 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return model;
   }
 
+  /** Isolated extraction validates both the selected endpoint and any default fallback. */
+  public ChatModel isolatedChatModel(String feature) {
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
+    var model = chatModel(feature);
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+    return model;
+  }
+
   /** 新たな対象を利用できるよう、機能モデルを作成する。 */
   private ChatModel createFeatureModel(String feature) {
     if (LlmFeature.VOICE_CORRECTION.equals(feature)) {

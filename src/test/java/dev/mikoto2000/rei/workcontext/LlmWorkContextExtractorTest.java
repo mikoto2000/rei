@@ -38,7 +38,7 @@ class LlmWorkContextExtractorTest {
   void configuredWorkContextFeatureUsesItsOwnModelAndOptions() {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
-    when(models.chatModel("work-context")).thenReturn(model);
+    when(models.isolatedChatModel("work-context")).thenReturn(model);
     when(models.chatOptions("work-context", null))
         .thenReturn(OpenAiChatOptions.builder().model("handoff-model").build());
     when(model.stream(any(Prompt.class)))

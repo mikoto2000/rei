@@ -102,7 +102,10 @@ public class LlmConversationCompressor implements ConversationCompressor {
     try {
       var provider = models.getObject();
       String feature = summaryModelFeature.get();
-      var model = provider.chatModel(feature);
+      var model =
+          LlmFeature.CHAT.equals(feature)
+              ? provider.chatModel(feature)
+              : provider.isolatedChatModel(feature);
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
       var ownerOptions = owner.getOptions();
       var baseOptions =
