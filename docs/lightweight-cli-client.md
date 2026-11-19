@@ -80,6 +80,8 @@ Windows Terminal では、同じ `REI_DATA_DIR` と `REI_API_KEY` を設定し�
 
 ## discovery・起動・停止
 
+軽量 CLI の通常入力では、Ctrl+J でカーソル位置に改行を挿入し、Enter で複数行をまとめて送信できる（Windows Terminal 対応）。行末の `\` による継続入力と `/paste` も利用できる。パイプ入力などの簡易端末では、従来どおり LF で行を確定する。
+
 `<data-dir>/.storage/storage-id` はデータディレクトリの UUID、`backend-endpoint.json` は schema / instance / storage / PID / literal IPv4 loopback URL / protocol / READY を保持する。所有者だけの ACL / mode 600 と atomic move で公開し、秘密を含めない。壊れた UUID を勝手に再生成しない。protocol は2で、HTTP API の既存 `/api/v1` routes は維持する。
 
 接続には OS lease の所有状態、永続 storage ID、認証済み `GET /api/v1/instance` の全 identity 一致が必要。PID、ファイルの存在、port、health 成功だけでは接続しない。redirect と proxy に資格情報を渡さない。起動中は readiness を最大90秒待つ。競合 launcher の最終 admission は Backend の Storage gate が決め、lease を取得するまで Migration しない。

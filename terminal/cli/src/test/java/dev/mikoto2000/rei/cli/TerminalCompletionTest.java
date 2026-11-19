@@ -141,7 +141,7 @@ class TerminalCompletionTest {
   }
 
   private static String tab(LineReaderImpl reader, String line, int cursor) {
-    reader.runMacro(line + "\u0002".repeat(line.length() - cursor) + "\t\n");
+    reader.runMacro(line + "\u0002".repeat(line.length() - cursor) + "\t\r");
     return reader.readLine("");
   }
 

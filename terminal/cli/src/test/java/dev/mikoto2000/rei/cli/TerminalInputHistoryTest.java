@@ -95,7 +95,7 @@ class TerminalInputHistoryTest {
 
   private String read(TerminalClient client, String input) throws Exception {
     var reader = reader(client);
-    reader.runMacro(input + "\n");
+    reader.runMacro(input + "\r");
     String line = reader.readLine("");
     var field = TerminalClient.class.getDeclaredField("history");
     field.setAccessible(true);

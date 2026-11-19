@@ -1,13 +1,14 @@
 package dev.mikoto2000.rei.cli;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import dev.mikoto2000.rei.runmanagement.RunCheckpointMenu;
 import dev.mikoto2000.rei.core.completion.*;
+import dev.mikoto2000.rei.runmanagement.RunCheckpointMenu;
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
+import org.jline.keymap.KeyMap;
 import org.jline.reader.*;
 import org.jline.reader.impl.history.DefaultHistory;
 import org.jline.terminal.*;
@@ -178,6 +179,7 @@ public final class TerminalClient implements AutoCloseable {
           }
         });
     reader = menuReader;
+    configureMultilineKeyBinding();
     reader
         .getWidgets()
         .put(
@@ -215,6 +217,25 @@ public final class TerminalClient implements AutoCloseable {
           backend.detach();
           attached = false;
         });
+  }
+
+  /** 通常端末では Ctrl+J で改行し、パイプ入力では LF による行確定を維持する。 */
+  private void configureMultilineKeyBinding() {
+    if (Terminal.TYPE_DUMB.equals(terminal.getType())
+        || Terminal.TYPE_DUMB_COLOR.equals(terminal.getType())) return;
+    reader
+        .getWidgets()
+        .put(
+            "insert-newline",
+            () -> {
+              reader.getBuffer().write('\n');
+              return true;
+            });
+    var insertNewline = new Reference("insert-newline");
+    for (String name : List.of(LineReader.MAIN, LineReader.EMACS, LineReader.VIINS)) {
+      var keys = reader.getKeyMaps().get(name);
+      if (keys != null) keys.bind(insertNewline, KeyMap.ctrl('J'));
+    }
   }
 
   /** Shell と同じ JLine の履歴操作を使い、保存対象の制限も適用する。 */
