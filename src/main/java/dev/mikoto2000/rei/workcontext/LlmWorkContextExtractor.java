@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.workcontext;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
-import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.OutputLimitDetector;
 import dev.mikoto2000.rei.workcontext.WorkContext.Evidence;
@@ -37,8 +36,12 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
 
   /** 指定された値や利用先を使って、LlmWorkContextExtractorを初期化する。 */
   public LlmWorkContextExtractor(LlmModelProvider models, WorkContextProperties properties) {
-    this.modelForCalls = () -> models.memoryChatModel();
-    this.optionsForCalls = () -> models.chatOptions(LlmFeature.MEMORY, null);
+    this.modelForCalls =
+        () ->
+            "memory".equals(properties.modelFeature())
+                ? models.memoryChatModel()
+                : models.isolatedChatModel(properties.modelFeature());
+    this.optionsForCalls = () -> models.chatOptions(properties.modelFeature(), null);
     this.properties = properties;
   }
 
@@ -132,7 +135,9 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
                       result.length(),
                       dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS);
               })
-          .blockLast(Duration.ofSeconds(properties.timeoutSeconds()));
+          .blockLast(
+              WorkContextExtractionDeadline.remaining(
+                  Duration.ofSeconds(properties.timeoutSeconds())));
       WorkContextRepository.checkCancellation();
       return output.parse(result.toString());
     } catch (RuntimeException error) {
@@ -145,5 +150,35 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
       if (cause instanceof IllegalArgumentException argument) throw argument;
       throw new IllegalStateException("Work Context model execution failed", cause);
     }
+  }
+
+  /** Plan all bounded requests before invoking the model; never silently omit evidence. */
+  static List<Map<String, Evidence>> evidenceBatches(
+      Map<String, Evidence> evidence, WorkContextProperties properties) {
+    var batches = new ArrayList<Map<String, Evidence>>();
+    var json = tools.jackson.databind.json.JsonMapper.builder().build();
+    var estimator = dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative();
+    int limit = Math.min(properties.batchEvidenceTokens(), properties.maxInputTokens() / 3);
+    var batch = new java.util.LinkedHashMap<String, Evidence>();
+    long tokens = 0;
+    for (var entry : evidence.entrySet()) {
+      int size = estimator.text(json.writeValueAsString(entry.getValue())) + 2;
+      if (!batch.isEmpty() && tokens + size > limit) {
+        batches.add(java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(batch)));
+        batch.clear();
+        tokens = 0;
+      }
+      batch.put(entry.getKey(), entry.getValue());
+      tokens += size;
+    }
+    if (!batch.isEmpty())
+      batches.add(java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(batch)));
+    if (batches.isEmpty()) batches.add(Map.of());
+    if (batches.size() > properties.maxExtractionBatches())
+      throw new WorkContextExtractionException(
+          WorkContextExtractionException.Reason.BATCH_LIMIT,
+          batches.size(),
+          properties.maxExtractionBatches());
+    return batches;
   }
 }

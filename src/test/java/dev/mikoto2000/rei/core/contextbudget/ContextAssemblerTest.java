@@ -24,6 +24,44 @@ import org.springframework.ai.chat.prompt.Prompt;
 @org.junit.jupiter.api.Tag("integration")
 class ContextAssemblerTest {
   @Test
+  void largeContextWindowStillSummarizesBoundedPrefixesAndKeepsUncoveredHistory() {
+    var properties = config();
+    properties.setSummaryInputTokens(1024);
+    properties.setModelContextLimit(850000);
+    properties.setHardLimit(800000);
+    var saved = new ConversationSummaryRepository(dir);
+    var covered = new ArrayList<String>();
+    ConversationCompressor compressor =
+        (previous, messages, budget, owner) -> {
+          assertThat(
+                  estimator.text(previous) + messages.stream().mapToLong(estimator::message).sum())
+              .isLessThanOrEqualTo(1024);
+          messages.forEach(m -> covered.add(m.getText()));
+          return "compact facts";
+        };
+    var assembler =
+        new ContextAssembler(
+            properties,
+            estimator,
+            saved,
+            new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
+            compressor,
+            null,
+            null);
+    var history = new ArrayList<Message>();
+    history.add(new SystemMessage("system"));
+    for (int n = 1; n <= 12; n++)
+      history.add(
+          ContextHistoryAdvisor.historical(new UserMessage("item" + n + "x".repeat(1000)), n));
+    history.add(new UserMessage("current"));
+    var raw = new Prompt(history);
+    for (int n = 0; n < 12; n++) assembler.assemble(raw, "conversation", "run", () -> {});
+    assertThat(covered).hasSizeGreaterThan(2).doesNotHaveDuplicates();
+    assertThat(saved.read("conversation").throughSequence()).isBetween(1L, 11L);
+    assertThat(raw.getInstructions()).hasSize(14);
+  }
+
+  @Test
   void rejectedReviewReadReservesHeadroomWithoutChangingRawHistory() {
     var properties = config();
     properties.setThreshold(590);

@@ -34,6 +34,32 @@ import reactor.core.publisher.Flux;
 
 /** 言語モデル作業文脈情報の抽出の結果と状態の契約を検証するテスト。 */
 class LlmWorkContextExtractorTest {
+  @Test
+  void configuredWorkContextFeatureUsesItsOwnModelAndOptions() {
+    var models = mock(LlmModelProvider.class);
+    var model = mock(ChatModel.class);
+    when(models.isolatedChatModel("work-context")).thenReturn(model);
+    when(models.chatOptions("work-context", null))
+        .thenReturn(OpenAiChatOptions.builder().model("handoff-model").build());
+    when(model.stream(any(Prompt.class)))
+        .thenAnswer(
+            call -> {
+              Prompt prompt = call.getArgument(0);
+              assertEquals("handoff-model", prompt.getOptions().getModel());
+              return Flux.just(
+                  new ChatResponse(
+                      List.of(new Generation(new AssistantMessage("{\"changes\":[]}")))));
+            });
+    assertTrue(
+        new LlmWorkContextExtractor(
+                models,
+                new WorkContextProperties(
+                    false, true, 1200, 12000, 1, 20, 4000, 16, "work-context"))
+            .extract(evidence("task"), List.of(), "FAILED")
+            .isEmpty());
+    verify(models, never()).memoryChatModel();
+  }
+
   /** {@code evidence} の条件を再現するための補助情報を返す。 */
   List<Evidence> evidence(String text) {
     var now = Instant.now();

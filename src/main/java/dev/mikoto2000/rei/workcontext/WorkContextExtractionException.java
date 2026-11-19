@@ -14,6 +14,8 @@ public final class WorkContextExtractionException extends IllegalArgumentExcepti
   public enum Reason {
     /** 入力TOOLARGE。 */
     INPUT_TOO_LARGE,
+    /** Too many extraction calls would be required; nothing has been submitted. */
+    BATCH_LIMIT,
     /** 出力省略の有無。 */
     OUTPUT_TRUNCATED,
     /** 出力TOOLARGE。 */
@@ -74,6 +76,12 @@ public final class WorkContextExtractionException extends IllegalArgumentExcepti
                   + " tokens が上限 "
                   + limit
                   + " tokens を超えました。rei.work-context.max-turns を減らすか、rei.work-context.max-input-tokens を確認してください。";
+          case BATCH_LIMIT ->
+              "Work Context の分割数 "
+                  + measured
+                  + " が上限 "
+                  + limit
+                  + " を超えました。Run 単位で更新するか、rei.work-context.max-extraction-batches を確認してください。";
           case OUTPUT_TRUNCATED ->
               "Work Context の LLM 応答が出力上限で打ち切られました。rei.work-context.max-turns を減らすか、rei.llm.features.memory.max-output-tokens を確認してください。";
           case OUTPUT_TOO_LARGE ->

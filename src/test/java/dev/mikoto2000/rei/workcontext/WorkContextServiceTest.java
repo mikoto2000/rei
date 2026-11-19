@@ -121,6 +121,107 @@ class WorkContextServiceTest {
   }
 
   @Test
+  void excessiveBatchCountIsRejectedBeforeAnyModelCall() {
+    var small =
+        new WorkContextService(
+            repo,
+            sessions,
+            projects,
+            turns,
+            new ProjectAgentEventStore(temp),
+            extractor,
+            new WorkContextGit(),
+            new WorkContextProperties(false, true, 1200, 12000, 2, 20, 256, 1, "memory"),
+            Clock.systemUTC());
+    var run = new AgentRunContext("large", "session-a", a.root(), a.id());
+    turns.start(run, "要件".repeat(1400));
+    turns.finish(run, ConversationTurnStore.Status.COMPLETED, "進捗".repeat(1400));
+    var error =
+        assertThrows(
+            WorkContextExtractionException.class, () -> small.update("session-a", "large"));
+    assertEquals(WorkContextExtractionException.Reason.BATCH_LIMIT, error.reason());
+    org.mockito.Mockito.verifyNoInteractions(extractor);
+    assertTrue(repo.current(a.id()).isEmpty());
+  }
+
+  @Test
+  void boundedEvidenceBatchesMergeIncrementallyButCommitOnlyOneRevision() {
+    service =
+        new WorkContextService(
+            repo,
+            sessions,
+            projects,
+            turns,
+            new ProjectAgentEventStore(temp),
+            extractor,
+            new WorkContextGit(),
+            new WorkContextProperties(false, true, 1200, 12000, 2, 20, 1000, 16, "memory"),
+            Clock.systemUTC());
+    var run = new AgentRunContext("large", "session-a", a.root(), a.id());
+    turns.start(run, "要件".repeat(1400));
+    turns.finish(run, ConversationTurnStore.Status.FAILED, "進捗".repeat(1400));
+    var seen = new java.util.ArrayList<String>();
+    var invocations = new java.util.concurrent.atomic.AtomicInteger();
+    doAnswer(
+            call -> {
+              List<Evidence> batch = call.getArgument(0);
+              List<WorkContext.Item> existing = call.getArgument(1);
+              assertEquals(1, batch.size());
+              assertEquals(invocations.getAndIncrement(), existing.size());
+              seen.add(batch.getFirst().id());
+              return List.of(
+                  new WorkContextCandidate(
+                      "ADD",
+                      null,
+                      Kind.PENDING,
+                      "item-" + batch.getFirst().id(),
+                      "partial",
+                      Status.OPEN,
+                      List.of(batch.getFirst().id())));
+            })
+        .when(extractor)
+        .extract(anyList(), anyList(), anyString());
+    var result = service.update("session-a", "large").orElseThrow();
+    assertEquals(3, invocations.get());
+    assertEquals(List.of("large:user", "large:assistant", "large:terminal"), seen);
+    assertEquals(1, result.revision());
+    assertEquals(3, result.items().size());
+    assertTrue(result.processedRuns().contains("large"));
+    assertEquals(1, repo.history(a.id(), 10).size());
+  }
+
+  @Test
+  void failureInLaterEvidenceBatchLeavesTheRunRetryableAndOldRevisionIntact() {
+    service =
+        new WorkContextService(
+            repo,
+            sessions,
+            projects,
+            turns,
+            new ProjectAgentEventStore(temp),
+            extractor,
+            new WorkContextGit(),
+            new WorkContextProperties(false, true, 1200, 12000, 2, 20, 1000, 16, "memory"),
+            Clock.systemUTC());
+    var old = service.update("session-a", "run-a").orElseThrow();
+    var run = new AgentRunContext("large", "session-a", a.root(), a.id());
+    turns.start(run, "要件".repeat(1400));
+    turns.finish(run, ConversationTurnStore.Status.COMPLETED, "進捗".repeat(1400));
+    var count = new java.util.concurrent.atomic.AtomicInteger();
+    doAnswer(
+            call -> {
+              if (count.incrementAndGet() == 2) throw new IllegalStateException("timeout");
+              return List.of();
+            })
+        .when(extractor)
+        .extract(anyList(), anyList(), anyString());
+    assertThrows(IllegalStateException.class, () -> service.update("session-a", "large"));
+    assertEquals(2, count.get());
+    assertEquals(old, repo.current(a.id()).orElseThrow());
+    assertFalse(repo.current(a.id()).orElseThrow().processedRuns().contains("large"));
+  }
+
+  @Test
   void blockedExtractionDoesNotBlockUserEditAndCannotOverwriteItsRevision() throws Exception {
     var old = service.update("session-a", "run-a").orElseThrow();
     var run = new AgentRunContext("later", "session-a", a.root(), a.id());

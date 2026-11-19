@@ -36,6 +36,34 @@ import reactor.core.publisher.Flux;
 
 /** 言語モデル会話Compressorの結果と状態の契約を検証するテスト。 */
 class LlmConversationCompressorTest {
+  @Test
+  void dedicatedSummaryFeatureDoesNotInheritTheParentModelName() {
+    var model = mock(ChatModel.class);
+    var models = mock(LlmModelProvider.class);
+    when(models.isolatedChatModel("context-summary")).thenReturn(model);
+    when(models.chatOptions("context-summary", null))
+        .thenReturn(OpenAiChatOptions.builder().model("small-summary").build());
+    when(model.stream(any(Prompt.class)))
+        .thenAnswer(
+            call -> {
+              Prompt prompt = call.getArgument(0);
+              assertThat(prompt.getOptions().getModel()).isEqualTo("small-summary");
+              return Flux.just(response("summary", "stop"));
+            });
+    ObjectProvider<LlmModelProvider> provider = mock();
+    when(provider.getObject()).thenReturn(models);
+    var properties = new ContextCompressionProperties();
+    properties.setSummaryModelFeature("context-summary");
+    assertThat(
+            new LlmConversationCompressor(provider, properties)
+                .summarize(
+                    "",
+                    List.of(),
+                    100,
+                    new Prompt("owner", OpenAiChatOptions.builder().model("large-chat").build())))
+        .isEqualTo("summary");
+  }
+
   /** 検証に使う非公開。 */
   private static final String PRIVATE = "private-provider-body-and-request-secret";
 

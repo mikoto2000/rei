@@ -335,45 +335,71 @@ public class WorkContextService {
           selected.stream()
               .map(t -> t.runId() + ":" + t.status())
               .collect(java.util.stream.Collectors.joining(","));
-      var candidates =
-          extractor.extract(
-              List.copyOf(evidence.values()), old == null ? List.of() : old.items(), statuses);
       var unfinished =
           selected.stream()
               .filter(t -> t.status() != ConversationTurnStore.Status.COMPLETED)
               .map(ConversationTurnStore.Turn::runId)
               .collect(java.util.stream.Collectors.toSet());
-      candidates =
-          candidates.stream()
-              .map(
-                  c -> {
-                    var cited =
-                        c.sourceIds().stream().map(evidence::get).filter(Objects::nonNull).toList();
-                    boolean interrupted =
-                        cited.stream().anyMatch(e -> unfinished.contains(e.runId()));
-                    boolean partialConfirmed =
-                        c.certainty() == Origin.USER
-                            || c.certainty() == Origin.TOOL
-                                && cited.stream()
-                                    .anyMatch(
-                                        e ->
-                                            e.toolCallId() != null
-                                                && !e.text().startsWith("Tool failed:"));
-                    if (c.status() == Status.COMPLETED
-                        && interrupted
-                        && (c.kind() == Kind.CURRENT_WORK || !partialConfirmed))
-                      return new WorkContextCandidate(
-                          c.action(),
-                          c.targetId(),
-                          c.kind(),
-                          c.text(),
-                          c.reason(),
-                          Status.UNCONFIRMED,
-                          c.sourceIds(),
-                          c.certainty());
-                    return c;
-                  })
-              .toList();
+      var metadata = selected.getLast().metadata();
+      var snapshot =
+          metadata.containsKey("workContext.gitCapturedAt")
+              ? new GitState(
+                  metadata.get("workContext.directory"),
+                  metadata.get("workContext.branch"),
+                  metadata.get("workContext.commit"),
+                  Instant.parse(metadata.get("workContext.gitCapturedAt")))
+              : git.capture(project.root(), now);
+      WorkContext draft = old;
+      try (var deadline =
+          WorkContextExtractionDeadline.open(
+              java.time.Duration.ofSeconds(properties.timeoutSeconds()))) {
+        for (var batch : LlmWorkContextExtractor.evidenceBatches(evidence, properties)) {
+          WorkContextRepository.checkCancellation();
+          WorkContextExtractionDeadline.remaining(
+              java.time.Duration.ofSeconds(properties.timeoutSeconds()));
+          var candidates =
+              extractor.extract(
+                  List.copyOf(batch.values()), draft == null ? List.of() : draft.items(), statuses);
+          candidates =
+              candidates.stream()
+                  .map(
+                      c -> {
+                        var cited =
+                            c.sourceIds().stream()
+                                .map(evidence::get)
+                                .filter(Objects::nonNull)
+                                .toList();
+                        boolean interrupted =
+                            cited.stream().anyMatch(e -> unfinished.contains(e.runId()));
+                        boolean partialConfirmed =
+                            c.certainty() == Origin.USER
+                                || c.certainty() == Origin.TOOL
+                                    && cited.stream()
+                                        .anyMatch(
+                                            e ->
+                                                e.toolCallId() != null
+                                                    && !e.text().startsWith("Tool failed:"));
+                        if (c.status() == Status.COMPLETED
+                            && interrupted
+                            && (c.kind() == Kind.CURRENT_WORK || !partialConfirmed))
+                          return new WorkContextCandidate(
+                              c.action(),
+                              c.targetId(),
+                              c.kind(),
+                              c.text(),
+                              c.reason(),
+                              Status.UNCONFIRMED,
+                              c.sourceIds(),
+                              c.certainty());
+                        return c;
+                      })
+                  .toList();
+          draft = merger.merge(project.id(), draft, null, candidates, batch, snapshot, now);
+        }
+        WorkContextRepository.checkCancellation();
+        WorkContextExtractionDeadline.remaining(
+            java.time.Duration.ofSeconds(properties.timeoutSeconds()));
+      }
       WorkContextRepository.checkCancellation();
       synchronized (locks.computeIfAbsent(project.id(), id -> new Object())) {
         long expected = old == null ? 0 : old.revision();
@@ -381,16 +407,7 @@ public class WorkContextService {
         if (current != expected)
           throw new WorkContextConflictException(
               "Work Context changed during extraction; retry with current revision");
-        var metadata = selected.getLast().metadata();
-        var snapshot =
-            metadata.containsKey("workContext.gitCapturedAt")
-                ? new GitState(
-                    metadata.get("workContext.directory"),
-                    metadata.get("workContext.branch"),
-                    metadata.get("workContext.commit"),
-                    Instant.parse(metadata.get("workContext.gitCapturedAt")))
-                : git.capture(project.root(), now);
-        var next = merger.merge(project.id(), old, null, candidates, evidence, snapshot, now);
+        var next = draft;
         var processed = new HashSet<>(next.processedRuns());
         selected.stream()
             .filter(t -> t.status() != ConversationTurnStore.Status.RUNNING)
@@ -399,7 +416,7 @@ public class WorkContextService {
         next =
             new WorkContext(
                 next.projectId(),
-                next.revision(),
+                expected + 1,
                 next.createdAt(),
                 next.updatedAt(),
                 next.git(),
@@ -455,8 +472,7 @@ public class WorkContextService {
               .current(projectId)
               .orElseThrow(() -> new IllegalArgumentException("No Work Context"));
       if (old.revision() != expected)
-        throw new WorkContextConflictException(
-            "Work Context changed; get current revision first");
+        throw new WorkContextConflictException("Work Context changed; get current revision first");
       var item =
           old.items().stream()
               .filter(i -> i.id().equals(itemId))
