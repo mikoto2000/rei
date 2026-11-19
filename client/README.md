@@ -53,6 +53,11 @@ npm run tauri -- build --debug --no-bundle
 npm run tauri -- build --no-bundle
 ```
 
+型検査には `typescript-compiler` という別名でインストールした TypeScript 7 を使用します。
+`typescript-eslint` は TypeScript 7.0 のコンパイラ API に未対応のため、lint 用の
+`typescript` は対応範囲内の 6.0 に固定しています。`npm run typecheck` と `npm run build`
+は TypeScript 7 を明示的に起動します。
+
 Windows 実行ファイル: `src-tauri/target/debug/rei-client.exe`。通常の `cargo build` は開発用 URL を利用するため、配布可能な assets 埋込みビルドには Tauri CLI を利用します。インストーラー作成・署名は今回の対象外です。
 
 Playwright はインストール済み Chrome を使います。`e2e/fixture.html` は command/event 境界を置き換えた UI テスト専用の入口で、production bundle に含みません。HTTP/SSE の結合テストは Rust の Axum mock server で行います。UI テストを実サーバーとの E2E とみなさないでください。

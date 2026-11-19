@@ -15,12 +15,11 @@ const ID: &str = "00000000-0000-4000-8000-000000000001";
 #[tokio::test]
 async fn image_preview_returns_only_a_verified_bounded_data_url() {
     use base64::Engine;
-    use sha2::{Digest, Sha256};
     let bytes = base64::engine::general_purpose::STANDARD.decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aM1sAAAAASUVORK5CYII=").unwrap();
-    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let digest = "97737a870e5bd38fa539b9455040ecb2b5e02d6f1ed409b250da33a4139b5561";
     let length = bytes.len();
     let router = Router::new()
-        .route("/api/v1/artifacts/{id}", get(move || { let digest = digest.clone(); async move {
+        .route("/api/v1/artifacts/{id}", get(move || { async move {
             Json(json!({"artifactId":ID,"owner":"RUN","projectId":"p","sessionId":"s","runId":"r","taskId":null,"mediaType":"image/png","filename":"image.png","size":length,"sha256":digest,"createdAt":"2026-10-07T01:00:00Z","expiresAt":null,"storageReference":format!("artifact:{ID}"),"status":"AVAILABLE"}))
         }}))
         .route("/api/v1/artifacts/{id}/content", get(move || { let bytes = bytes.clone(); async move { ([("content-type","image/png")],bytes) }}));
