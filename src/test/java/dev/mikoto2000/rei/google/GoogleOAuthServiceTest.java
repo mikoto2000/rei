@@ -17,7 +17,6 @@ import static org.mockito.Mockito.when;
 
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.Credential;
-import com.google.api.client.auth.oauth2.TokenErrorResponse;
 import com.google.api.client.auth.oauth2.TokenResponse;
 import com.google.api.client.auth.oauth2.TokenResponseException;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
@@ -180,6 +179,20 @@ class GoogleOAuthServiceTest {
     verify(credential).refreshToken();
   }
 
+  @Test
+  void scheduledRefreshStopsAfterRevokedGrantAndSharesSafeReauthorizationStatus() throws Exception {
+    GoogleOAuthService service = service(true, true);
+    Credential credential = stored(service, 0L);
+    var revoked = tokenError(400, "invalid_grant");
+    when(credential.refreshToken()).thenThrow(revoked);
+    assertThrows(
+        TokenResponseException.class, () -> service.refreshIfExpiring(Duration.ofMinutes(5)));
+    assertTrue(service.reauthorizationRequired());
+    assertFalse(service.refreshIfExpiring(Duration.ofMinutes(5)));
+    verify(credential, times(1)).refreshToken();
+    verify(service, never()).authorize(any(), anyBoolean());
+  }
+
   private void configureSecretaryScopes(GoogleOAuthService service) throws Exception {
     var scopes = String.join("\n", service.secretaryScopes());
     var hash = MessageDigest.getInstance("SHA-256").digest(scopes.getBytes(StandardCharsets.UTF_8));
@@ -188,11 +201,22 @@ class GoogleOAuthServiceTest {
     Files.writeString(directory.resolve("StoredCredential"), "fixture");
   }
 
-  private static TokenResponseException tokenError(int status, String code) {
-    var error = mock(TokenResponseException.class);
-    when(error.getStatusCode()).thenReturn(status);
-    when(error.getDetails()).thenReturn(new TokenErrorResponse().setError(code));
-    return error;
+  private static TokenResponseException tokenError(int status, String code) throws IOException {
+    var transport =
+        new MockHttpTransport.Builder()
+            .setLowLevelHttpResponse(
+                new MockLowLevelHttpResponse()
+                    .setStatusCode(status)
+                    .setContentType("application/json")
+                    .setContent("{\"error\":\"" + code + "\"}"))
+            .build();
+    var response =
+        transport
+            .createRequestFactory()
+            .buildGetRequest(new com.google.api.client.http.GenericUrl("https://token.invalid"))
+            .setThrowExceptionOnExecuteError(false)
+            .execute();
+    return TokenResponseException.from(GsonFactory.getDefaultInstance(), response);
   }
 
   /** Googleサービスの認証で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */

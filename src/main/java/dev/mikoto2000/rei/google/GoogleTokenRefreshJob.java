@@ -24,10 +24,21 @@ public final class GoogleTokenRefreshJob {
   }
 
   private final ExpiringTokenRefresh refreshExpiringToken;
+  private final java.util.function.BooleanSupplier reauthorizationRequired;
+  private final java.time.Clock clock;
+  private java.time.Instant retryAt = java.time.Instant.MIN;
+  private int failures;
 
   /** 指定された値や利用先を使って、GoogleTokenRefreshJobを初期化する。 */
+  @org.springframework.beans.factory.annotation.Autowired
   public GoogleTokenRefreshJob(
       GoogleOAuthService service, @Value("${rei.google.token-refresh.advance:5m}") String advance) {
+    this(service, advance, java.time.Clock.systemUTC());
+  }
+
+  GoogleTokenRefreshJob(GoogleOAuthService service, String advance, java.time.Clock clock) {
+    this.clock = clock;
+    this.reauthorizationRequired = service::reauthorizationRequired;
     Duration advanceBy = DurationStyle.detectAndParse(advance);
     if (advanceBy.isNegative() || advanceBy.isZero()) {
       throw new IllegalArgumentException("Google token refresh advance must be positive");
@@ -37,16 +48,28 @@ public final class GoogleTokenRefreshJob {
 
   /** Googleサービスの認証の操作を実行する。 */
   @Scheduled(fixedDelayString = "${rei.google.token-refresh.check-interval:5m}")
-  public void run() {
+  public synchronized void run() {
+    if (clock.instant().isBefore(retryAt)) return;
     try {
       if (refreshExpiringToken.refresh()) {
         log.debug("Google access token refreshed");
       }
+      failures = 0;
+      retryAt = java.time.Instant.MIN;
     } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
-      // OAuth exception bodies can contain credentials; do not log their contents.
-      log.warn(
-          "Google token refresh failed ({}); will retry on the next check. If this persists, run schedule auth or task auth.",
-          e.getClass().getSimpleName());
+      // OAuth exception bodies can contain credentials; never log their contents.
+      if (reauthorizationRequired.getAsBoolean()) {
+        log.warn(
+            "Google reauthorization required; automatic refresh suspended. Run schedule auth or task auth.");
+      } else {
+        failures = Math.min(8, failures + 1);
+        long delaySeconds = Math.min(21600L, 300L << (failures - 1));
+        retryAt = clock.instant().plusSeconds(delaySeconds);
+        log.warn(
+            "Google token refresh temporarily failed ({}); retry in at least {} seconds.",
+            e.getClass().getSimpleName(),
+            delaySeconds);
+      }
     }
   }
 }

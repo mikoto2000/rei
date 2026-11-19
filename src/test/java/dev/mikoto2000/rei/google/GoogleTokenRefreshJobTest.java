@@ -23,8 +23,14 @@ class GoogleTokenRefreshJobTest {
     GoogleOAuthService service = mock(GoogleOAuthService.class);
     Duration advance = Duration.ofMinutes(5);
     when(service.refreshIfExpiring(advance)).thenThrow(new IOException("offline")).thenReturn(true);
-    GoogleTokenRefreshJob job = new GoogleTokenRefreshJob(service, "5m");
+    var now = new java.util.concurrent.atomic.AtomicReference<>(java.time.Instant.EPOCH);
+    var clock = mock(java.time.Clock.class);
+    when(clock.instant()).thenAnswer(call -> now.get());
+    GoogleTokenRefreshJob job = new GoogleTokenRefreshJob(service, "5m", clock);
     assertDoesNotThrow(job::run);
+    assertDoesNotThrow(job::run);
+    verify(service, times(1)).refreshIfExpiring(advance);
+    now.set(java.time.Instant.EPOCH.plusSeconds(300));
     assertDoesNotThrow(job::run);
     verify(service, times(2)).refreshIfExpiring(advance);
   }
