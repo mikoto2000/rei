@@ -328,7 +328,7 @@ class RawToolResultArgumentRepairTest {
         loop.executeResumable(
             prompt,
             response(
-                toolCall("successful", "readMultiFile", "{}"),
+                toolCall("successful", "readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}"),
                 toolCall("invalid", "readRawToolResult", INVALID)),
             context);
 

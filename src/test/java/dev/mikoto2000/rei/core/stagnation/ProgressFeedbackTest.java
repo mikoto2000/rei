@@ -25,6 +25,7 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
 class ProgressFeedbackTest {
+  private static final String READ_ARGUMENTS = "{\"files\":[{\"path\":\"docs/intro.md\"}]}";
   @TempDir Path root;
   static final String PAGE =
       "[{\"path\":\"docs/intro.md\",\"version\":\"v1\",\"startLine\":1,\"content\":[\"known text\"],\"error\":null}]";
@@ -59,7 +60,7 @@ class ProgressFeedbackTest {
                   : call(
                       n,
                       n == 1 ? "readMultiFile" : "writeTextFile",
-                      n == 1 ? "{}" : "{\"path\":\"review.md\"}");
+                      n == 1 ? READ_ARGUMENTS : "{\"path\":\"review.md\"}");
             });
     dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler = null;
     if (assembled) {
@@ -94,7 +95,7 @@ class ProgressFeedbackTest {
               if (n > 1)
                 assertThat(prompt.getContents())
                     .contains("Progress feedback", (n - 1) + "/4", "DUPLICATE");
-              return call(n, "readMultiFile", "{}");
+              return call(n, "readMultiFile", READ_ARGUMENTS);
             });
     assertThatThrownBy(() -> new StagnationChatModel(delegate).stream(prompt(context)).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
@@ -152,7 +153,7 @@ class ProgressFeedbackTest {
               if (n == 3) assertThat(prompt.getContents()).doesNotContain("Progress feedback");
               return n == 3
                   ? new AssistantMessage("partial report")
-                  : call(n, "readMultiFile", "{}");
+                  : call(n, "readMultiFile", READ_ARGUMENTS);
             });
     new StagnationChatModel(delegate).stream(input).blockLast();
     assertThat(context.progressSnapshot().budget().stagnationReplans()).isEqualTo(2);
@@ -164,7 +165,7 @@ class ProgressFeedbackTest {
     budget.tryConsumeStagnationReplan();
     budget.tryConsumeLlmCall();
     var evaluator = new ProgressEvaluator(root);
-    evaluator.afterTool("readMultiFile", "{}", PAGE, evaluator.beforeTool("readMultiFile", "{}"));
+    evaluator.afterTool("readMultiFile", READ_ARGUMENTS, PAGE, evaluator.beforeTool("readMultiFile", READ_ARGUMENTS));
     return new RunExecutionContext(
         "test", budget, evaluator, new AgentEventFactory(Clock.systemUTC()), e -> {});
   }

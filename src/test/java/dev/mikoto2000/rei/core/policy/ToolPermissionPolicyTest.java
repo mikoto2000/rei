@@ -190,7 +190,7 @@ class ToolPermissionPolicyTest {
             event -> {
               throw new IllegalStateException("storage failure");
             });
-    assertThrows(IllegalStateException.class, () -> guard.check("readMultiFile", null));
+    assertThrows(IllegalStateException.class, () -> guard.check("readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}", null));
   }
 
   /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
@@ -212,7 +212,7 @@ class ToolPermissionPolicyTest {
     assertEquals(1, events.size());
     var failure = (ToolFailedPayload) events.getFirst().payload();
     assertEquals("PermissionRequired", failure.error().errorType());
-    assertDoesNotThrow(() -> guard.check("readMultiFile", null));
+    assertDoesNotThrow(() -> guard.check("readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}", null));
     assertEquals(1, events.size());
   }
 }

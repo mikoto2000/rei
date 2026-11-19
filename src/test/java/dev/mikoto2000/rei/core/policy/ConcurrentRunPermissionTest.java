@@ -38,7 +38,7 @@ class ConcurrentRunPermissionTest {
             "p",
             AgentRunContext.RequestSource.WEB,
             AgentRunContext.Mode.READ_ONLY);
-    assertThatCode(() -> guard.check("readMultiFile", "{}", owner)).doesNotThrowAnyException();
+    assertThatCode(() -> guard.check("readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}", owner)).doesNotThrowAnyException();
     for (String tool : List.of("runCommand", "applyTextDiff", "unknownMcpTool", "delegateTasks"))
       assertThatThrownBy(() -> guard.check(tool, "{}", owner))
           .isInstanceOf(ToolPermissionException.class);

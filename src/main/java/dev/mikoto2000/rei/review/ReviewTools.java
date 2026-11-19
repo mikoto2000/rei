@@ -704,13 +704,15 @@ public final class ReviewTools {
   /** 変更内容のレビューで用いる開始レビューを返す。 */
   @Tool(
       description =
-          "Begin a coverage-verified review of explicit Project text/PDF files. Criteria and criteriaVersion are required. Read pages with readReviewFile, then submit one structured result for each delivered range. Reading alone never completes a review.")
+          "Begin a coverage-verified review of 1 to 64 explicit Project text/PDF file paths. Criteria and criteriaVersion are required. Read pages with readReviewFile, then submit one structured result for each delivered range. Reading alone never completes a review.")
   public Job beginReview(List<String> paths, String criteria, String criteriaVersion)
       throws java.io.IOException {
     var owner = AgentRunScope.current();
     var scope = scope(owner);
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-    if (paths == null || paths.isEmpty() || paths.size() > 64)
+    if (paths == null
+        || paths.isEmpty()
+        || paths.size() > dev.mikoto2000.rei.core.policy.FileBatchArguments.MAX_PATHS)
       throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     var targets = new ArrayList<Target>();
     int bytes = 0;

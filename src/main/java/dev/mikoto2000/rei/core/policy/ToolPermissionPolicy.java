@@ -189,7 +189,8 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
         || FindFileArguments.supports(tool)
         || TextEditArguments.supports(tool)
         || dev.mikoto2000.rei.websearch.WebSearchArguments.supports(tool)
-        || RawToolResultArguments.supports(tool);
+        || RawToolResultArguments.supports(tool)
+        || FileBatchArguments.supports(tool);
   }
 
   /** 登録された入力契約も含めて、実行前の引数補正を扱えるか判定する。 */
@@ -204,6 +205,7 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
 
   /** 承認や実行より前に、設定不要の検証とWeb検索件数の検証を共通で行う。 */
   public static void validateCommonArguments(String tool, String input, int webSearchMaxResults) {
+    FileBatchArguments.validate(tool, input);
     dev.mikoto2000.rei.websearch.WebSearchArguments.validate(tool, input, webSearchMaxResults);
     ShellFileReadArguments.validate(tool, input);
     ProcessWaitArguments.validate(tool, input);

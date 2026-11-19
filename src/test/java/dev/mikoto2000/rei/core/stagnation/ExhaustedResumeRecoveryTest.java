@@ -41,6 +41,7 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
 class ExhaustedResumeRecoveryTest {
+  private static final String READ_ARGUMENTS = "{\"files\":[{\"path\":\"docs/intro.md\"}]}";
   @ParameterizedTest
   @ValueSource(strings = {"readReviewWorkItem", "readNextReviewWorkItem"})
   void durableReviewRecoveryRequiresCommitForTheExactPendingWorkId(String reader) throws Exception {
@@ -130,7 +131,7 @@ class ExhaustedResumeRecoveryTest {
   private void readPage(RunExecutionContext c, int line) {
     String page = PAGE.replace("\"startLine\":1", "\"startLine\":" + line);
     c.beginIteration();
-    c.recordTool("readMultiFile", "{}", page, c.evaluator().beforeTool("readMultiFile", "{}"));
+    c.recordTool("readMultiFile", READ_ARGUMENTS, page, c.evaluator().beforeTool("readMultiFile", READ_ARGUMENTS));
     c.endIteration();
   }
 
@@ -606,7 +607,7 @@ class ExhaustedResumeRecoveryTest {
     assertThatThrownBy(
             () ->
                 new StagnationChatModel(
-                        model(p -> call(calls.incrementAndGet(), "readMultiFile", "{}")))
+                        model(p -> call(calls.incrementAndGet(), "readMultiFile", READ_ARGUMENTS)))
                     .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
         .hasMessageContaining("LLM_CALL_BUDGET_EXCEEDED");
@@ -701,7 +702,7 @@ class ExhaustedResumeRecoveryTest {
         String historical = PAGE.replace("\"startLine\":1", "\"startLine\":" + (i + 2));
         c.evaluator()
             .afterTool(
-                "readMultiFile", "{}", historical, c.evaluator().beforeTool("readMultiFile", "{}"));
+                "readMultiFile", READ_ARGUMENTS, historical, c.evaluator().beforeTool("readMultiFile", READ_ARGUMENTS));
       }
     }
     callbacks.removeIf(
@@ -741,7 +742,7 @@ class ExhaustedResumeRecoveryTest {
               }
               if (names(p).contains("readMultiFile")) {
                 assertThat(reads.get()).isLessThan((commits.get() + 1) * 8);
-                return call(n, "readMultiFile", "{}");
+                return call(n, "readMultiFile", READ_ARGUMENTS);
               }
               assertThat(reads.get()).isEqualTo((commits.get() + 1) * 8);
               assertThat(p.getContents()).contains("consolidated partial assessment");
@@ -773,7 +774,7 @@ class ExhaustedResumeRecoveryTest {
         String historical = PAGE.replace("\"startLine\":1", "\"startLine\":" + (i + 2));
         c.evaluator()
             .afterTool(
-                "readMultiFile", "{}", historical, c.evaluator().beforeTool("readMultiFile", "{}"));
+                "readMultiFile", READ_ARGUMENTS, historical, c.evaluator().beforeTool("readMultiFile", READ_ARGUMENTS));
       }
     }
     var initial = prompt(c, true, "resume", new AtomicInteger());
@@ -796,7 +797,7 @@ class ExhaustedResumeRecoveryTest {
                     for (int i = 0; i < 9; i++)
                       queued.add(
                           new AssistantMessage.ToolCall(
-                              "read-" + i, "function", "readMultiFile", "{}"));
+                              "read-" + i, "function", "readMultiFile", READ_ARGUMENTS));
                     return AssistantMessage.builder().toolCalls(queued).build();
                   }
                   if (n == 2) {
@@ -886,6 +887,7 @@ class ExhaustedResumeRecoveryTest {
   }
 
   private AssistantMessage call(int id, String name, String args) {
+    if (name.equals("readMultiFile") && args.equals("{}")) args = READ_ARGUMENTS;
     return AssistantMessage.builder()
         .toolCalls(List.of(new AssistantMessage.ToolCall("call-" + id, "function", name, args)))
         .build();
@@ -945,7 +947,7 @@ class ExhaustedResumeRecoveryTest {
                           .toString();
                   if (n == 1) {
                     assertThat(choice).isEqualTo("auto");
-                    return call(n, "readMultiFile", "{}");
+                    return call(n, "readMultiFile", READ_ARGUMENTS);
                   }
                   if (n == 2) {
                     assertThat(choice).isEqualTo("auto");
@@ -1518,7 +1520,7 @@ class ExhaustedResumeRecoveryTest {
             String name = turn == 1 ? "readMultiFile" : "writeMultiFile";
             String args =
                 turn == 1
-                    ? "{}"
+                    ? READ_ARGUMENTS
                     : "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}";
             delta =
                 Map.of(
@@ -1727,7 +1729,7 @@ class ExhaustedResumeRecoveryTest {
                 assertThat(names(p))
                     .doesNotContain("listFile", "countFileLines")
                     .contains("readMultiFile");
-                return call(n, "readMultiFile", "{}");
+                return call(n, "readMultiFile", READ_ARGUMENTS);
               }
               if (n == 2) {
                 assertThat(c.detector().stagnationCount()).isZero();
@@ -1763,7 +1765,7 @@ class ExhaustedResumeRecoveryTest {
         model(
             p -> {
               int n = calls.incrementAndGet();
-              if (n == 1) return call(n, "readMultiFile", "{}");
+              if (n == 1) return call(n, "readMultiFile", READ_ARGUMENTS);
               if (n == 2)
                 return new AssistantMessage("I will continue reading the unfinished page.");
               if (n == 3) {
@@ -1802,7 +1804,7 @@ class ExhaustedResumeRecoveryTest {
                               int n = calls.incrementAndGet();
                               assertThat(n).isLessThanOrEqualTo(6);
                               return n == 1
-                                  ? call(n, "readMultiFile", "{}")
+                                  ? call(n, "readMultiFile", READ_ARGUMENTS)
                                   : new AssistantMessage(text);
                             }))
                     .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
@@ -1852,7 +1854,7 @@ class ExhaustedResumeRecoveryTest {
                     new ChatResponse(
                         List.of(
                             new Generation(
-                                ExhaustedResumeRecoveryTest.this.call(n, "readMultiFile", "{}")))))
+                                ExhaustedResumeRecoveryTest.this.call(n, "readMultiFile", READ_ARGUMENTS)))))
                 : Flux.empty();
           }
         };
@@ -1881,7 +1883,7 @@ class ExhaustedResumeRecoveryTest {
     var c = context(0, 2, 8, true);
     String seed = PAGE.replace("[\"known\"]", "[\"one\",\"two\",\"three\"]");
     c.evaluator()
-        .afterTool("readMultiFile", "{}", seed, c.evaluator().beforeTool("readMultiFile", "{}"));
+        .afterTool("readMultiFile", READ_ARGUMENTS, seed, c.evaluator().beforeTool("readMultiFile", READ_ARGUMENTS));
     var initial =
         prompt(
             c,
@@ -1939,7 +1941,7 @@ class ExhaustedResumeRecoveryTest {
               // before recording one consolidated assessment, then continue the next unit.
               assertThat(names(p)).contains("readMultiFile");
               if (reads.get() < (writes.get() + 1) * 3) {
-                return call(n, "readMultiFile", "{}");
+                return call(n, "readMultiFile", READ_ARGUMENTS);
               }
               assertThat(names(p)).contains("writeMultiFile");
               assertThat(p.getContents())
@@ -1983,7 +1985,7 @@ class ExhaustedResumeRecoveryTest {
             model(
                 p -> {
                   assertThat(names(p)).contains("readMultiFile");
-                  if (calls.incrementAndGet() == 1) return call(1, "readMultiFile", "{}");
+                  if (calls.incrementAndGet() == 1) return call(1, "readMultiFile", READ_ARGUMENTS);
                   return new AssistantMessage("Missing evidence remains unresolved");
                 }))
         .stream(
@@ -2048,7 +2050,7 @@ class ExhaustedResumeRecoveryTest {
                                                 "writeMultiFile",
                                                 "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}"),
                                             new AssistantMessage.ToolCall(
-                                                "read", "function", "readMultiFile", "{}")))
+                                                "read", "function", "readMultiFile", READ_ARGUMENTS)))
                                     .build();
                               assertThat(c.hasPendingResumeContentWork()).isTrue();
                               if (calls.get() == 2) assertThat(names(p)).contains("readMultiFile");
@@ -2084,7 +2086,7 @@ class ExhaustedResumeRecoveryTest {
     assertThatThrownBy(
             () ->
                 new StagnationChatModel(
-                        model(p -> call(calls.incrementAndGet(), "readMultiFile", "{}")))
+                        model(p -> call(calls.incrementAndGet(), "readMultiFile", READ_ARGUMENTS)))
                     .stream(
                             new Prompt(
                                 initial.getInstructions(),
@@ -2122,7 +2124,7 @@ class ExhaustedResumeRecoveryTest {
             model(
                 p -> {
                   assertThat(names(p)).contains("readMultiFile");
-                  if (calls.incrementAndGet() == 1) return call(1, "readMultiFile", "{}");
+                  if (calls.incrementAndGet() == 1) return call(1, "readMultiFile", READ_ARGUMENTS);
                   return new AssistantMessage("Ordinary content use");
                 }))
         .stream(
@@ -2220,7 +2222,7 @@ class ExhaustedResumeRecoveryTest {
                         model(
                             p ->
                                 names(p).contains("readMultiFile")
-                                    ? call(1, "readMultiFile", "{}")
+                                    ? call(1, "readMultiFile", READ_ARGUMENTS)
                                     : new AssistantMessage("No outcome can be confirmed")))
                     .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)

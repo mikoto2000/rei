@@ -154,6 +154,6 @@ class FullAutoToolPermissionTest {
             AgentRunContext.RequestSource.MCP,
             AgentRunContext.Mode.READ_ONLY);
     assertThrows(ToolPermissionException.class, () -> guard.check("readFile", "{}", mcp));
-    assertDoesNotThrow(() -> guard.check("readMultiFile", "{}", mcp));
+    assertDoesNotThrow(() -> guard.check("readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}", mcp));
   }
 }

@@ -16,7 +16,10 @@ import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.BoundedToolLoop;
+import dev.mikoto2000.rei.core.policy.ActionCapability;
 import dev.mikoto2000.rei.core.policy.ToolPermissionGuard;
+import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
+import dev.mikoto2000.rei.core.policy.ToolPermissionProperties;
 import dev.mikoto2000.rei.core.stagnation.ProgressEvaluator;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.event.AgentEventFactory;
@@ -28,6 +31,8 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -71,7 +76,14 @@ class BeginnerReviewServiceTest {
         root.resolve("a.md"),
         "# A\n## Prerequisites\n- Docker\n## Exercises\nRun docker build .\n## Required files\n- config.yaml\n");
     var models = mock(LlmModelProvider.class);
-    var permissions = mock(ToolPermissionGuard.class);
+    var permissions =
+        org.mockito.Mockito.spy(
+            new ToolPermissionGuard(
+                new ToolPermissionPolicy(
+                    new ToolPermissionProperties(
+                        true, Set.of(ActionCapability.READ), Set.of(), Map.of())),
+                new AgentEventFactory(Clock.systemUTC()),
+                event -> {}));
     var report = new BeginnerReviewService(models, permissions).review(execution(), request());
     assertTrue(
         report.findings().stream().anyMatch(f -> f.issue().contains("Docker") && f.line() == 3));

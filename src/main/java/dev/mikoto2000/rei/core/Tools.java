@@ -1608,7 +1608,7 @@ public class Tools {
   }
 
   /** 1 リクエストあたりの最大 query 数。 */
-  static final int MAX_GREP_QUERIES = 20;
+  static final int MAX_GREP_QUERIES = dev.mikoto2000.rei.core.policy.FileBatchArguments.MAX_QUERIES;
 
   /** 1 query あたりの最大 match 数。 */
   static final int MAX_GREP_MATCHES_PER_QUERY = 1000;
@@ -1625,7 +1625,7 @@ public class Tools {
       name = "grepMultiQuery",
       description =
           """
-      Search one or more patterns and return structured match locations without reading whole file sections.
+      Search 1 to 20 patterns and return structured match locations without reading whole file sections.
       Use this primitive when match locations are sufficient. When locating and inspecting code, prefer searchAndRead.
       @param queries 検索条件のリスト。
       Each query may specify charset; otherwise BOM, strict UTF-8, then CP932 are tried.
@@ -2116,7 +2116,7 @@ public class Tools {
   }
 
   /** 1 リクエストあたりの最大 query 数。 */
-  static final int MAX_SEARCH_AND_READ_QUERIES = 20;
+  static final int MAX_SEARCH_AND_READ_QUERIES = MAX_GREP_QUERIES;
 
   /** 1 リクエストあたりの最大読み込みファイル数。 */
   static final int MAX_SEARCH_AND_READ_FILES = 8;
@@ -2142,7 +2142,8 @@ public class Tools {
       resultConverter = SearchReadResultConverter.class,
       description =
           """
-      Search for one or more code patterns and immediately read the relevant surrounding source code in a single tool call.
+      Search for 1 to 20 code patterns and immediately read the relevant surrounding source code in a single tool call.
+      request.queries accepts 1 to 20 entries; optional request.preferredPaths accepts up to 20 paths.
       Use this as the default tool for locating and inspecting code or text when exact file locations are not known.
       Use grepMultiQuery when only match locations are needed, or readMultiFile when file paths are already known.
       @param queries 検索条件のリスト。
@@ -2194,7 +2195,8 @@ public class Tools {
       List<String> preferred = new ArrayList<>();
       LinkedHashMap<String, String> fileErrors = new LinkedHashMap<>();
       if (request.preferredPaths() != null) {
-        if (request.preferredPaths().size() > 20)
+        if (request.preferredPaths().size()
+            > dev.mikoto2000.rei.core.policy.FileBatchArguments.MAX_PREFERRED_PATHS)
           throw new IllegalArgumentException("At most 20 preferred paths");
         var root = workingDirectory.toAbsolutePath().normalize();
         for (int i = 0; i < request.preferredPaths().size(); i++) {
@@ -2797,7 +2799,8 @@ public class Tools {
   }
 
   /** 1 リクエストあたりの最大ファイル数。 */
-  static final int MAX_READ_FILES = 20;
+  static final int MAX_READ_FILES =
+      dev.mikoto2000.rei.core.policy.FileBatchArguments.MAX_READ_FILES;
 
   /** 1 ファイルあたりの最大行数。 */
   static final int MAX_READ_LINES_PER_FILE = 1000;
@@ -2816,7 +2819,7 @@ public class Tools {
       name = "readMultiFile",
       description =
           """
-      Read one or more known file paths or line ranges in a single call.
+      Read 1 to 30 known file paths or line ranges in a single call. Split larger batches.
       Choose files[].purpose from the task: FULL for exhaustive review/comparison of entire files,
       OVERVIEW for orientation, TARGETED for a local question/fix. AUTO (default) uses bulk for
       whole-file requests and paging for explicit ranges/selectors. FULL/AUTO bulk reads are bounded
@@ -2869,7 +2872,7 @@ public class Tools {
       Absolute paths, paths outside the skill directory, sensitive files and linked paths are rejected.
       Each file supports line ranges, charset, expectedVersion and offset; Java symbol requests are unsupported.
       Batch known references from the same skill in one call, including single-file reads as a one-item list.
-      A batch accepts 1 to 20 files and shares source byte/line and result token budgets across files.
+      A batch accepts 1 to 30 files and shares source byte/line and result token budgets across files.
       If truncated, call again with the same skillName and each returned nextRead unchanged in files.
       Reads only; does not execute scripts or grant permission to modify files.
       """)
@@ -2912,7 +2915,9 @@ public class Tools {
   /** 対象の規模を判断するため、ファイル行一覧を数える。 */
   FileLineCounts countFileLines(List<String> paths, java.nio.file.Path workingDirectory) {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-    if (paths == null || paths.isEmpty() || paths.size() > 64)
+    if (paths == null
+        || paths.isEmpty()
+        || paths.size() > dev.mikoto2000.rei.core.policy.FileBatchArguments.MAX_PATHS)
       throw new IllegalArgumentException("paths must contain 1 to 64 files");
     for (String path : paths)
       if (path == null || path.isBlank() || path.length() > 1024)

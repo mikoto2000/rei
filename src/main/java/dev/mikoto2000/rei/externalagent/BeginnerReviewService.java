@@ -252,7 +252,9 @@ public class BeginnerReviewService {
     run.checkActive();
     var owner = run.runContext();
     if (owner == null) throw new IllegalArgumentException("Captured Project Run required");
-    authorizeReviewRead.accept("material-review " + request.root(), owner);
+    var readArguments = JSON.createObjectNode();
+    readArguments.putArray("files").addObject().put("path", request.root());
+    authorizeReviewRead.accept(readArguments.toString(), owner);
     Path root = ExternalAgentRequest.resolveTarget(owner.projectRoot(), request.root());
     if (root == null || ExternalAgentSourceSnapshot.excluded(owner.projectRoot().relativize(root)))
       throw new IllegalArgumentException("Material root is excluded");

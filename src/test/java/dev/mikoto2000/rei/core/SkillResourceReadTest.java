@@ -55,7 +55,9 @@ class SkillResourceReadTest {
     assertThatThrownBy(() -> tools.readSkillResource("review", List.of()))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(
-            () -> tools.readSkillResource("review", java.util.Collections.nCopies(21, valid)))
+            () ->
+                tools.readSkillResource(
+                    "review", java.util.Collections.nCopies(Tools.MAX_READ_FILES + 1, valid)))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(
             () -> tools.readSkillResource("review", java.util.Arrays.asList(valid, null)))

@@ -1,5 +1,15 @@
 # ファイル操作の改善
 
+## バッチ件数の実行前検証（2026-11-19）
+
+`readMultiFile` と `readSkillResource` は1呼び出し30ファイルまで受け付けます。
+`countFileLines`・`beginReview` は64パス、`grepMultiQuery`・`searchAndRead` は20検索条件、
+`searchAndRead.request.preferredPaths` は省略可能で最大20パスです。
+件数超過・必須配列の空指定などは承認やツール実行前に検証し、`INVALID_TOOL_ARGUMENTS` と
+`executed:false`、分割方法をモデルへ返します。既存のRun単位の引数修正枠を使い、
+成功した同時呼び出しは再実行しません。実行開始後の例外を一律に再試行するものではありません。
+`writeMultiFile` は既存の編集引数検証で20件上限を検証します。
+
 ## 目的に応じた一括・分割取得（2026-10-31）
 
 モデルは依頼の目的に合わせ、`readMultiFile.files[].purpose` を自律的に選びます。
@@ -16,7 +26,7 @@
 採用しません。最終モデル入力の上限検査は常に維持します。
 
 一括時はsource上限512 KiB・合計100,000行まで、通常ページは従来どおり64 KiB・
-合計5,000行・各1,000行です。個別ファイル1 MiB、snapshot合計8 MiB、最大20要求と
+合計5,000行・各1,000行です。個別ファイル1 MiB、snapshot合計8 MiB、最大30要求と
 最終JSON 1 MiBの上限は共通です。明示された行範囲を勝手に広げません。
 概要把握には8,000-tokenの通常target予算を使い、部分取得を全文レビュー完了とは扱いません。
 
