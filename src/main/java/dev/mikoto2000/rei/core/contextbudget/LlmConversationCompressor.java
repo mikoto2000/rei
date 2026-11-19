@@ -44,7 +44,7 @@ public class LlmConversationCompressor implements ConversationCompressor {
     this.summaryTimeoutSeconds = () -> properties.getSummaryTimeoutSeconds();
     this.summaryGenerationReserve = () -> properties.getSummaryGenerationReserve();
     this.standaloneBudget = () -> StandaloneSummaryBudget.create(properties);
-    this.summaryModelFeature = properties::getSummaryModelFeature;
+    this.summaryModelFeature = () -> properties.getSummaryModelFeature();
   }
 
   @Override
