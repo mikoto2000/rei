@@ -142,6 +142,7 @@ public class Tools {
   /** 配信設定。 */
   private static final FileDeliveryLimits DEFAULT_FILE_DELIVERY_LIMITS =
       readDeliveryLimits(new ToolResultDeliveryProperties());
+
   private Supplier<FileDeliveryLimits> fileDeliveryLimits = () -> DEFAULT_FILE_DELIVERY_LIMITS;
 
   private java.util.function.ToIntFunction<org.springframework.ai.chat.prompt.Prompt>
@@ -727,6 +728,7 @@ public class Tools {
 
   /** プロジェクトサービス。 */
   private final Supplier<ProjectContext> currentProjectContext;
+
   private final Supplier<Path> projectDirectory;
 
   /** システムシェルサービス。 */
@@ -740,6 +742,7 @@ public class Tools {
 
   /** 作業中集合。 */
   private final Supplier<java.io.Closeable> batchWorkingSetChanges;
+
   private final Consumer<Path> observeRead;
   private final Consumer<Path> observeWrite;
   private final Consumer<Path> observeEdit;
@@ -949,9 +952,10 @@ public class Tools {
     this.currentProjectContext =
         () -> projectService == null ? null : projectService.currentContext();
     this.projectDirectory =
-        () -> projectService == null
-            ? Paths.get(".").toAbsolutePath().normalize()
-            : projectService.currentProject();
+        () ->
+            projectService == null
+                ? Paths.get(".").toAbsolutePath().normalize()
+                : projectService.currentProject();
     this.systemShellService = systemShellService;
     this.backgroundProcessManager = backgroundProcessManager;
     this.clock = clock;
@@ -974,8 +978,9 @@ public class Tools {
           searchResultCache.clear();
         };
     this.noteSearchReference =
-        (source, target) -> relatedFileGraph.addRelation(
-            source, target, RelatedFileGraph.TYPE_REFERENCES, RelatedFileGraph.EVIDENCE_SEARCH);
+        (source, target) ->
+            relatedFileGraph.addRelation(
+                source, target, RelatedFileGraph.TYPE_REFERENCES, RelatedFileGraph.EVIDENCE_SEARCH);
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
   }
@@ -1988,18 +1993,18 @@ public class Tools {
    */
   public record GrepQuery(
       String pattern,
-      String baseDir,
-      Boolean ignoreCase,
-      Boolean fixedString,
-      Boolean invertMatch,
-      Boolean fileNamesOnly,
-      Integer beforeContext,
-      Integer afterContext,
-      Integer maxMatches,
-      Boolean includeLineNumber,
-      String includeGlob,
-      String excludeGlob,
-      String charset) {
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String baseDir,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean ignoreCase,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean fixedString,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean invertMatch,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean fileNamesOnly,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer beforeContext,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer afterContext,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxMatches,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean includeLineNumber,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String includeGlob,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String excludeGlob,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String charset) {
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public GrepQuery(
         String pattern,
@@ -2094,9 +2099,7 @@ public class Tools {
     public GrepQueryResult {
       matches = matches == null ? null : Collections.unmodifiableList(new ArrayList<>(matches));
       fileErrors =
-          fileErrors == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(fileErrors));
+          fileErrors == null ? null : Collections.unmodifiableList(new ArrayList<>(fileErrors));
     }
 
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -2361,8 +2364,7 @@ public class Tools {
                 .filter(item -> item.error() == null)
                 .mapToInt(item -> alreadyPresentPaths.contains(item.path()) ? 1 : 0)
                 .sum();
-        completeSearch.complete(
-            hitCount, fileMatches.size(), selectedCount, alreadyPresentCount);
+        completeSearch.complete(hitCount, fileMatches.size(), selectedCount, alreadyPresentCount);
         return boundedFileResult(
             Boolean.TRUE.equals(request.compactOutput())
                 ? fileResults.stream().map(SearchAndReadResult::withCompact).toList()
@@ -3006,7 +3008,9 @@ public class Tools {
                     limits.bulkTokens(),
                     readInputLimit,
                     prompt ->
-                        prompt.getInstructions().stream().mapToLong(deliveryEstimator::message).sum(),
+                        prompt.getInstructions().stream()
+                            .mapToLong(deliveryEstimator::message)
+                            .sum(),
                     deliveryEstimator::text)
                 : 0;
         if (whole
@@ -3085,14 +3089,7 @@ public class Tools {
                 e instanceof FileSnapshots.ExcludedInventoryPathException
                     ? e.getMessage()
                     : ReadingProblem.from(e).code() + ": " + e.getMessage();
-            results.add(
-                new ReadFileResult(
-                    request.path(),
-                    null,
-                    null,
-                    List.of(),
-                    false,
-                    error));
+            results.add(new ReadFileResult(request.path(), null, null, List.of(), false, error));
           } finally {
             budget.reserve(byteBudget - fileBudget.remaining());
           }
@@ -3900,13 +3897,7 @@ public class Tools {
       throws IOException, InterruptedException {
     List<String> commandLine =
         new ArrayList<>(
-            List.of(
-                "git",
-                "ls-files",
-                "-z",
-                "--cached",
-                "--others",
-                "--exclude-standard"));
+            List.of("git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"));
     if (pathSpecs != null && !pathSpecs.isEmpty()) {
       commandLine.add("--");
       commandLine.addAll(pathSpecs);
@@ -3936,7 +3927,8 @@ public class Tools {
         .filter(path -> !path.isEmpty())
         .filter(
             path ->
-                Files.exists(workingDirectory.resolve(path), java.nio.file.LinkOption.NOFOLLOW_LINKS))
+                Files.exists(
+                    workingDirectory.resolve(path), java.nio.file.LinkOption.NOFOLLOW_LINKS))
         .toList();
   }
 
@@ -4012,8 +4004,7 @@ public class Tools {
     int number = page == null ? 1 : page,
         start = offset == null ? 0 : offset,
         budget = tokenBudget == null ? limits.targetTokens() : tokenBudget;
-    if (budget < limits.minTokens()
-        || budget > limits.maxTokens())
+    if (budget < limits.minTokens() || budget > limits.maxTokens())
       throw new IOException("CONTEXT_BUDGET_INSUFFICIENT");
     var root = currentWorkingDirectory();
     var snapshot = newSnapshots().get(root, resolveProjectPath(pathStr, root));
@@ -4538,7 +4529,8 @@ public class Tools {
    */
   private record ResolvedTextFile(String content, Charset charset) {}
 
-  private record FileDeliveryLimits(int minTokens, int targetTokens, int maxTokens, int bulkTokens) {}
+  private record FileDeliveryLimits(
+      int minTokens, int targetTokens, int maxTokens, int bulkTokens) {}
 
   private static FileDeliveryLimits readDeliveryLimits(ToolResultDeliveryProperties properties) {
     return new FileDeliveryLimits(

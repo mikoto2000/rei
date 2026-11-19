@@ -7,6 +7,32 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import org.junit.jupiter.api.Test;
 
 class ToolSchemaArgumentsTest {
+  @Test
+  void grepQuerySchemaMatchesOptionalDefaultsAndRejectsIncorrectProvidedTypes() {
+    var schema =
+        org.springframework.ai.util.json.schema.JsonSchemaGenerator.generateForType(
+            dev.mikoto2000.rei.core.Tools.GrepQuery.class);
+    assertThatCode(
+            () -> ToolSchemaArguments.validate("grep-query", schema, "{\"pattern\":\"needle\"}"))
+        .doesNotThrowAnyException();
+    assertThatCode(
+            () ->
+                ToolSchemaArguments.validate(
+                    "grep-query",
+                    schema,
+                    "{\"pattern\":\"needle\",\"charset\":null,\"excludeGlob\":null}"))
+        .doesNotThrowAnyException();
+    assertThatThrownBy(
+            () ->
+                ToolSchemaArguments.validate(
+                    "grep-query", schema, "{\"pattern\":\"needle\",\"charset\":42}"))
+        .isInstanceOf(InvalidToolArgumentsException.class)
+        .hasMessageContaining("charset");
+    assertThatThrownBy(() -> ToolSchemaArguments.validate("grep-query", schema, "{}"))
+        .isInstanceOf(InvalidToolArgumentsException.class)
+        .hasMessageContaining("pattern");
+  }
+
   private static final String SCHEMA =
       """
       {"type":"object","required":["request"],"properties":{"request":{"type":"object",

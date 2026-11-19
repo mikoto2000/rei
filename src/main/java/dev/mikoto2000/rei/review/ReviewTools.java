@@ -593,8 +593,14 @@ public final class ReviewTools {
   public dev.mikoto2000.rei.durable.WorkItemStore.Result submitReviewWorkItem(
       String workItemId,
       String attempt,
-      String assessment,
-      List<dev.mikoto2000.rei.durable.WorkItemStore.Finding> findings) {
+      @org.springframework.ai.tool.annotation.ToolParam(
+              description =
+                  "Required assessment, 1 to 16384 characters; summarize conclusions concisely.")
+          String assessment,
+      @org.springframework.ai.tool.annotation.ToolParam(
+              description =
+                  "Required array; use [] when there are no findings. At most 100 findings with unique IDs. Legacy work IDs accept exact evidence quotes without coordinates; durable IDs require absolute UTF-16 start/end from the delivered source.")
+          List<dev.mikoto2000.rei.durable.WorkItemStore.Finding> findings) {
     var owner = AgentRunScope.current();
     var work = workItems();
     try {
