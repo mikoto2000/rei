@@ -21,6 +21,32 @@ import reactor.core.publisher.Flux;
 
 class ModelOutageGuardTest {
   @Test
+  void modelBoundaryReportsCooldownWithoutInvokingTheProviderAgain() {
+    var delegate = mock(ChatModel.class);
+    var prompt = new Prompt("request");
+    when(delegate.stream(prompt))
+        .thenReturn(Flux.error(new java.net.ConnectException("PRIVATE_HOST")));
+    var events = new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
+    var model =
+        new AgentEventChatModel(
+            "chat",
+            delegate,
+            new dev.mikoto2000.rei.event.AgentEventFactory(Clock.systemUTC()),
+            events::add,
+            null,
+            run -> false,
+            new ModelOutageGuard(Clock.systemUTC(), Duration.ofSeconds(30)));
+    assertThrows(RuntimeException.class, () -> model.stream(prompt).blockLast());
+    assertThrows(ModelOutageGuard.CoolingDown.class, () -> model.stream(prompt).blockLast());
+    org.mockito.Mockito.verify(delegate, org.mockito.Mockito.times(1)).stream(prompt);
+    assertEquals(
+        2,
+        events.stream()
+            .filter(e -> e.type() == dev.mikoto2000.rei.event.AgentEventType.LLM_REQUEST_FAILED)
+            .count());
+  }
+
+  @Test
   void outageBlocksNewRequestsAndAllowsOnlyOneRecoveryProbe() {
     var now = new java.util.concurrent.atomic.AtomicReference<>(Instant.EPOCH);
     var clock = mock(Clock.class);

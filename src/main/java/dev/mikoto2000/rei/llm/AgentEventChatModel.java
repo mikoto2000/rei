@@ -109,6 +109,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
         eventFactory.llmRequestStarted(runId, requestId, observedFeature(prompt)));
     ModelOutageGuard.Permit permit = null;
     try {
+      if (cancelled(prompt, runId)) throw new java.util.concurrent.CancellationException();
       permit = outageGuard.acquire();
       ChatResponse response = delegate.call(prompt);
       outageGuard.completed(permit);
@@ -159,6 +160,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
           var permit = new java.util.concurrent.atomic.AtomicReference<ModelOutageGuard.Permit>();
           return Flux.defer(
                   () -> {
+                    if (cancelled(prompt, runId)) throw new java.util.concurrent.CancellationException();
                     permit.set(outageGuard.acquire());
                     return delegate.stream(prompt);
                   })
