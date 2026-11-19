@@ -135,6 +135,48 @@ class CapturingChatModelHttpTest {
     }
   }
 
+  /** 未設定時の既定値と明示的なタイムアウトが記録用HTTP通信でも維持されることを確認する。 */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    ",60,false",
+    ",60,true",
+    "17,17,false",
+    "17,17,true",
+    "60,60,false",
+    "60,60,true"
+  })
+  void captureTransportPreservesTimeout(
+      Long configuredSeconds, long expectedSeconds, boolean streaming) throws Exception {
+    try (var fixture = new Fixture((n, e) -> streaming ? STREAM : RESPONSE)) {
+      fixture.activate();
+      var timeout = configuredSeconds == null ? null : Duration.ofSeconds(configuredSeconds);
+      var options = fixture.options("run-a").mutate().timeout(timeout).build();
+      var delegate = OpenAiChatModel.builder().options(options).build();
+      var observedTimeout = new java.util.concurrent.atomic.AtomicLong(-1);
+      var model =
+          new CapturingChatModel(
+              delegate,
+              fixture.store,
+              List.of(
+                  builder ->
+                      builder.interceptor(
+                          chain -> {
+                            observedTimeout.set(chain.call().timeout().timeoutNanos());
+                            return chain.proceed(chain.request());
+                          })),
+              io.micrometer.observation.ObservationRegistry.NOOP,
+              null);
+      var prompt = new Prompt("timeout", fixture.options("run-a"));
+      if (streaming)
+        assertThat(model.stream(prompt).collectList().block(Duration.ofSeconds(10))).isNotEmpty();
+      else assertThat(model.call(prompt).getResult().getOutput().getText()).isNotBlank();
+      fixture.assertMatches(1);
+      assertThat(observedTimeout).hasValue(Duration.ofSeconds(expectedSeconds).toNanos());
+      assertThat(options.getTimeout()).isEqualTo(timeout);
+      assertThat(delegate.getOptions().getTimeout()).isEqualTo(timeout);
+    }
+  }
+
   /** 用途に応じたモデル利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void captureTransportCreationFailureFallsBackToDelegate() throws Exception {
