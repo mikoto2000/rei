@@ -690,6 +690,38 @@ public final class TerminalClient implements AutoCloseable {
     var words = catalog.normalize(rawWords);
     String name = words.getFirst();
     String action = words.size() > 1 ? words.get(1) : "list";
+    if (name.equals("/resume") && words.size() == 1 && ApprovalDisplayState.interactive(terminal)) {
+      requireProject();
+      var checkpoints =
+          backend.get("/api/v1/projects/" + BackendClient.segment(project) + "/checkpoints");
+      var candidates = new ArrayList<MeetingSelectionMenu.Candidate>();
+      for (var checkpoint : checkpoints) {
+        String taskId = checkpoint.path("taskId").asText();
+        if (!taskId.isBlank())
+          candidates.add(
+              new MeetingSelectionMenu.Candidate(
+                  taskId,
+                  safeOutput(
+                      "["
+                          + checkpoint.path("status").asText()
+                          + "] "
+                          + checkpoint.path("request").asText()
+                          + " ("
+                          + taskId
+                          + ")")));
+      }
+      if (candidates.isEmpty()) {
+        out("再開候補はありません。");
+        return;
+      }
+      var selected = MeetingSelectionMenu.chooseOne(reader, candidates);
+      if (selected.isEmpty()) {
+        out("再開せずに閉じました。");
+        return;
+      }
+      words = List.of("/resume", selected.get());
+      action = selected.get();
+    }
     if (name.equals("/resume") && action.equals("overview") && words.size() == 2) {
       requireProject();
       presentResume(true);

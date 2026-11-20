@@ -106,6 +106,17 @@ class ReiApplicationCommandNotificationTest {
       app.executeInterruptibly(cmd, terminal, commandExecutor, "secretary", action);
       org.junit.jupiter.api.Assertions.assertSame(Thread.currentThread(), invoked.get());
     }
+    @CommandLine.Command(name = "resume")
+    class ResumeMenu implements Runnable {
+      @Override
+      public void run() {
+        invoked.set(Thread.currentThread());
+      }
+    }
+    cmd.addSubcommand(new ResumeMenu());
+    invoked.set(null);
+    app.executeInterruptibly(cmd, terminal, commandExecutor, "resume");
+    org.junit.jupiter.api.Assertions.assertSame(Thread.currentThread(), invoked.get());
     Mockito.verifyNoInteractions(escCancellationMonitor);
   }
 

@@ -66,6 +66,16 @@ public final class MeetingSelectionMenu {
 
   /** Empty optional means cancel; an empty list means explicitly confirm no selection. */
   public static Optional<List<String>> choose(LineReader reader, List<Candidate> candidates) {
+    return choose(reader, candidates, false);
+  }
+
+  /** Enter selects the cursor's item immediately; cancellation never selects a default. */
+  public static Optional<String> chooseOne(LineReader reader, List<Candidate> candidates) {
+    return choose(reader, candidates, true).map(selection -> selection.getFirst());
+  }
+
+  private static Optional<List<String>> choose(
+      LineReader reader, List<Candidate> candidates, boolean single) {
     if (!(reader instanceof LineReaderImpl input) || candidates.isEmpty()) return Optional.empty();
     var terminal = reader.getTerminal();
     var keys = new KeyMap<Binding>();
@@ -89,7 +99,9 @@ public final class MeetingSelectionMenu {
         var lines = new ArrayList<AttributedString>();
         lines.add(
             new AttributedString(
-                "↑↓ 移動 / Space 選択・解除 / Enter 保存 / Esc 取消 (" + selected.size() + "/3)"));
+                single
+                    ? "↑↓ 移動 / Enter 選択して再開 / Esc 取消"
+                    : "↑↓ 移動 / Space 選択・解除 / Enter 保存 / Esc 取消 (" + selected.size() + "/3)"));
         // Keep the cursor visible even in a short terminal; truncate labels without ANSI execution.
         int count = Math.min(candidates.size(), Math.max(1, rows - 2));
         int first = Math.max(0, Math.min(cursor, candidates.size() - count));
@@ -99,7 +111,7 @@ public final class MeetingSelectionMenu {
           var line =
               new AttributedString(
                   (index == cursor ? "> " : "  ")
-                      + (selected.contains(candidate.id()) ? "[x] " : "[ ] ")
+                      + (single ? "" : selected.contains(candidate.id()) ? "[x] " : "[ ] ")
                       + label);
           lines.add(line.columnSubSequence(0, Math.max(1, columns - 1)));
         }
@@ -112,6 +124,7 @@ public final class MeetingSelectionMenu {
           case "up" -> cursor = Math.floorMod(cursor - 1, candidates.size());
           case "down" -> cursor = (cursor + 1) % candidates.size();
           case "toggle" -> {
+            if (single) break;
             String id = candidates.get(cursor).id();
             if (!selected.remove(id)) {
               if (selected.size() < 3) selected.add(id);
@@ -119,7 +132,8 @@ public final class MeetingSelectionMenu {
             }
           }
           case "confirm" -> {
-            return Optional.of(List.copyOf(selected));
+            return Optional.of(
+                single ? List.of(candidates.get(cursor).id()) : List.copyOf(selected));
           }
           case "cancel" -> {
             return Optional.empty();

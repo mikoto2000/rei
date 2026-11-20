@@ -26,6 +26,43 @@ class ResumeSessionCommandTest {
   /** 会話とプロジェクトを保存する一時ディレクトリ。 */
   @TempDir Path root;
 
+  @Test
+  void interactiveSelectionResumesOnlyTheChosenTaskAndCancelDoesNothing() {
+    var service = mock(PersistentCheckpointService.class);
+    var projects = mock(ProjectService.class);
+    var context =
+        new dev.mikoto2000.rei.core.project.ProjectContext(
+            java.util.UUID.randomUUID().toString(), "project", root);
+    when(projects.currentContext()).thenReturn(context);
+    var first = mock(PersistentCheckpoint.class);
+    var second = mock(PersistentCheckpoint.class);
+    when(second.taskId()).thenReturn("second");
+    var candidates = java.util.List.of(first, second);
+    when(service.list(context.id())).thenReturn(candidates);
+    var resume = new ResumeCommand(service, projects);
+    var output = new StringWriter();
+    var command = new picocli.CommandLine(resume).setOut(new PrintWriter(output));
+    resume.setTaskSelection(
+        items -> {
+          assertEquals(candidates, items);
+          return java.util.Optional.of(items.get(1).taskId());
+        });
+    assertEquals(0, command.execute());
+    verify(service).resumeForShell(eq(context.id()), eq("second"), any());
+    org.mockito.Mockito.clearInvocations(service);
+    resume.setTaskSelection(items -> java.util.Optional.empty());
+    assertEquals(0, command.execute());
+    verify(service, org.mockito.Mockito.never()).resumeForShell(any(), any(), any());
+    org.junit.jupiter.api.Assertions.assertTrue(output.toString().contains("再開せずに閉じました"));
+    when(service.list(context.id())).thenReturn(java.util.List.of());
+    resume.setTaskSelection(
+        items -> {
+          throw new AssertionError("Empty list must not open a menu");
+        });
+    assertEquals(0, command.execute());
+    org.junit.jupiter.api.Assertions.assertTrue(output.toString().contains("再開候補はありません"));
+  }
+
   /** 再開時には実行開始前に選択し、次の入力もその会話へ送る。 */
   @Test
   void resumeSelectsSessionBeforeSubmissionAndNextInputUsesIt() {
