@@ -39,6 +39,17 @@ public final class ApprovalMenuLineReader extends LineReaderImpl {
     this.interactive = interactive;
   }
 
+  /** CRLF を一つの改行として保持し、貼り付け本文をキー操作として実行しない。 */
+  @Override
+  public boolean beginPaste() {
+    String pasted = doReadStringUntil("\033[201~");
+    regionActive = RegionType.PASTE;
+    regionMark = getBuffer().cursor();
+    // JLine 3.29 の既定処理は CR を LF に置換するだけなので、CRLF が二重改行になる。
+    getBuffer().write(pasted.replace("\r\n", "\n").replace('\r', '\n'));
+    return true;
+  }
+
   /** 入力候補の提示に関する承認操作の選択肢を処理する。 */
   public void approvalMenu(String text) {
     lock.lock();

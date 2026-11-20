@@ -25,6 +25,70 @@ import picocli.CommandLine;
 class ReiApplicationMultilineInputTest {
 
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "LF,false",
+    "LF,true",
+    "CRLF,false",
+    "CRLF,true",
+    "CR,false",
+    "CR,true"
+  })
+  @org.junit.jupiter.api.Timeout(5)
+  void shellPasteRemainsEditableUntilEnterAndPreservesLineBreaks(
+      String lineEnding, boolean trailingNewline) throws Exception {
+    String separator =
+        switch (lineEnding) {
+          case "CRLF" -> "\r\n";
+          case "CR" -> "\r";
+          default -> "\n";
+        };
+    String pasted =
+        "一行目"
+            + separator
+            + separator
+            + "/help"
+            + separator
+            + "最終行"
+            + (trailingNewline ? separator : "");
+    String expected = "一行目\n\n/help\n最終行" + (trailingNewline ? "\n" : "");
+    String input = "\033[200~" + pasted + "\033[201~\033[99~\n追記\r次の入力\r";
+    try (var terminal =
+        new org.jline.terminal.impl.DumbTerminal(
+            "shell",
+            "xterm",
+            new java.io.ByteArrayInputStream(
+                input.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+            new java.io.ByteArrayOutputStream(),
+            java.nio.charset.StandardCharsets.UTF_8)) {
+      terminal.setSize(new org.jline.terminal.Size(120, 30));
+      var reader =
+          dev.mikoto2000.rei.core.command.ReiLineReaderFactory.create(
+              terminal, (org.jline.reader.Completer) (r, line, candidates) -> {});
+      var app = newApp();
+      app.configureMultilineKeyBinding(reader);
+      var pasteObserved = new java.util.concurrent.atomic.AtomicBoolean();
+      reader
+          .getWidgets()
+          .put(
+              "inspect-paste",
+              () -> {
+                assertEquals(expected, reader.getBuffer().toString());
+                pasteObserved.set(true);
+                return true;
+              });
+      reader
+          .getKeyMaps()
+          .get(LineReader.MAIN)
+          .bind(new org.jline.reader.Reference("inspect-paste"), "\033[99~");
+      String accepted = reader.readLine("");
+      org.junit.jupiter.api.Assertions.assertTrue(
+          pasteObserved.get(), "Paste must stay in the input buffer until Enter");
+      assertEquals(expected + "\n追記", app.readPossiblyMultilineInput(accepted, reader));
+      assertEquals("次の入力", reader.readLine(""));
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"dumb", "dumb-color"})
   @org.junit.jupiter.api.Timeout(5)
   void pipedResumeLineIsAcceptedInsteadOfBecomingMultilineText(String type) throws Exception {
