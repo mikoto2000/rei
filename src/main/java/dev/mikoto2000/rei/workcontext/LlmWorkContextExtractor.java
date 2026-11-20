@@ -204,7 +204,7 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
         RunCancellation.propagate(error);
         RunCancellation.propagateStopped(error);
         if (attempt >= properties.maxTimeoutRetries()
-            || !WorkContextExtractionException.isTimeout(error)) {
+            || !WorkContextExtractionDeadline.isTimeout(error)) {
           if (error instanceof IllegalArgumentException argument) throw argument;
           if (error instanceof IllegalStateException state) throw state;
           throw new IllegalStateException("Work Context extraction failed", error);

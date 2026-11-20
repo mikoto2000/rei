@@ -9,6 +9,21 @@ import org.junit.jupiter.api.Test;
 
 class WorkContextExtractionDeadlineTest {
   @Test
+  void retryClassificationRequiresATypedTimeoutAndRejectsSchemaErrors() {
+    org.junit.jupiter.api.Assertions.assertTrue(
+        WorkContextExtractionDeadline.isTimeout(
+            new IllegalStateException("deadline", new java.util.concurrent.TimeoutException())));
+    org.junit.jupiter.api.Assertions.assertFalse(
+        WorkContextExtractionDeadline.isTimeout(
+            new IllegalStateException("timeout text is not a typed timeout")));
+    org.junit.jupiter.api.Assertions.assertFalse(
+        WorkContextExtractionDeadline.isTimeout(
+            new WorkContextExtractionException(
+                WorkContextExtractionException.Reason.INVALID_JSON,
+                new java.util.concurrent.TimeoutException())));
+  }
+
+  @Test
   void batchesShareRemainingTimeAndClosingRestoresThePreviousScope() {
     var time = new AtomicLong();
     var maximum = Duration.ofSeconds(240);

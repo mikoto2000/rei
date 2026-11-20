@@ -40,6 +40,21 @@ final class WorkContextExtractionDeadline implements AutoCloseable {
     return Duration.ofNanos(remaining);
   }
 
+  /** Only typed timeouts are retryable; schema errors and model cooldown are not. */
+  static boolean isTimeout(Throwable error) {
+    var seen =
+        java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
+    for (int depth = 0;
+        error != null && depth < 16 && seen.add(error);
+        depth++, error = error.getCause()) {
+      if (error instanceof WorkContextExtractionException) return false;
+      if (error instanceof java.util.concurrent.TimeoutException
+          || error instanceof java.net.SocketTimeoutException
+          || error instanceof java.net.http.HttpTimeoutException) return true;
+    }
+    return false;
+  }
+
   @Override
   public void close() {
     if (previous == null) CURRENT.remove();
