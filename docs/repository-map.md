@@ -1,6 +1,11 @@
 # Repository Map
 
-CHATの`repositoryMap`でGit管理下とignore対象外の未追跡ファイルを構造検索する。
+CHATの`repositoryMap`でプロジェクト内のファイルを構造検索する。
+Git管理下では管理対象とignore対象外の未追跡ファイルを取得する。
+Git管理外のフォルダーでは上限付きのファイルシステム走査を利用する。
+この場合Git ignore規則は適用せず、警告とpartialで探索方式を通知する。
+秘密設定・buildディレクトリに加え、`.tools`、`.cache`、`.worktrees`、`*-worktrees`、
+`.venv`、`venv`、`.gradle`、`dist`、`out`、`__pycache__`、`.svn`、`.hg`を除外し、リンクを辿らない。
 queryはpath/package/module/symbolの部分一致、limitは1〜100（既定20）。
 JavaはJDK compilerのparse-only ASTから型・method・import・public static void main(String[])を取得する。
 ソース本文を結果やLLMに送らず、annotation processor・compile・実行は行わない。
@@ -15,7 +20,8 @@ Git inventoryは5秒・1MiB上限、全体はファイル間で10秒予算を確
 一覧1024件、対応source各128KiB、合計読取16MiB、各64symbol/128importに制限する。
 resultは最大100file/200relation。queryと結果上限で省略される項目もある。
 partial/warnings/各fileのstatusを確認する。relation上限は200件で切り詰める。
-Git inventory失敗時はエラーを返し、無制限walkへfallbackしない。
+Git管理外の走査は5秒・8192訪問entry・深さ32・1024fileに制限し、上限や読取失敗を警告する。
+Git管理下のinventory失敗時はエラーを返し、ファイルシステム走査へfallbackしない。
 root外・symlink file・既知の秘密設定名・build/cacheディレクトリを除外する。
 
 各呼出しで対応source内容SHA-256を確認し、同一内容の解析を再利用する。heuristic cacheにはbuild境界も含める。

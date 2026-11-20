@@ -709,7 +709,7 @@ public class Tools {
   /** 共通の実行基盤で用いる保存と検索の窓口対応表を返す。 */
   @Tool(
       description =
-          "Git管理下の構造索引を取得します。Java ASTとTS/JS/Rust/Go/Pythonのbounded heuristic宣言・local import・テスト候補。sourceやbuildを実行しません。language/analysisModeで解析方式を区別し、heuristicは常にpartialでsemantic resolverではありません。summaryは絞り込み前の走査範囲です。queryで表示を絞り込み、limitは1〜100、既定20。partial/warningsを確認してください。")
+          "プロジェクトの構造索引を取得します。Git管理外はキャッシュ・秘密設定・リンクを除外する上限付きディレクトリ走査（Git ignore規則は未適用）。Java ASTとTS/JS/Rust/Go/Pythonのbounded heuristic宣言・local import・テスト候補。sourceやbuildを実行しません。language/analysisModeで解析方式を区別し、heuristicは常にpartialでsemantic resolverではありません。summaryは絞り込み前の走査範囲です。queryで表示を絞り込み、limitは1〜100、既定20。partial/warningsを確認してください。")
   RepositoryMapService.View repositoryMap(
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String query,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit)

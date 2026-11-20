@@ -220,9 +220,7 @@ public final class RepositoryMapService {
       modules = modules == null ? null : Collections.unmodifiableList(new ArrayList<>(modules));
       packages = packages == null ? null : Collections.unmodifiableList(new ArrayList<>(packages));
       entryPoints =
-          entryPoints == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(entryPoints));
+          entryPoints == null ? null : Collections.unmodifiableList(new ArrayList<>(entryPoints));
     }
 
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -279,9 +277,7 @@ public final class RepositoryMapService {
       warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
       items = items == null ? null : Collections.unmodifiableList(new ArrayList<>(items));
       relations =
-          relations == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(relations));
+          relations == null ? null : Collections.unmodifiableList(new ArrayList<>(relations));
     }
   }
 
@@ -319,7 +315,7 @@ public final class RepositoryMapService {
 
   /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RepositoryMapService() {
-    this(RepositoryMapService::gitFiles);
+    this(null);
   }
 
   /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -368,7 +364,7 @@ public final class RepositoryMapService {
   List<String> javaInventory(Path directory, FileSnapshots snapshots) throws IOException {
     try {
       return snapshots
-          .inventory("java-symbols", () -> inventory.files(directory.toRealPath()))
+          .inventory("java-symbols", () -> readInventory(directory.toRealPath()).paths())
           .stream()
           .filter(path -> path.endsWith(".java") && !sensitive(Path.of(path)))
           .toList();
@@ -436,7 +432,8 @@ public final class RepositoryMapService {
           "Map limit must be 1 to 100 and query at most 256 characters");
     Path root = directory.toRealPath();
     long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
-    var paths = inventory.files(root).stream().distinct().sorted().toList();
+    var inventoryResult = readInventory(root);
+    var paths = inventoryResult.paths().stream().distinct().sorted().toList();
     var previous = new HashMap<>(caches.getOrDefault(root, Map.of()));
     var next = new HashMap<String, Cached>();
     if (persistentIndex != null)
@@ -457,7 +454,7 @@ public final class RepositoryMapService {
             .warn("Repository metadata index read failed ({})", error.getClass().getSimpleName());
       }
     var files = new ArrayList<File>();
-    var warnings = new LinkedHashSet<String>();
+    var warnings = new LinkedHashSet<>(inventoryResult.warnings());
     if (paths.size() > 1024) warnings.add("File inventory limited to 1024 entries");
     var boundaries = HeuristicSourceIndex.boundaries(root, paths, deadline);
     warnings.addAll(boundaries.warnings());
@@ -944,6 +941,15 @@ public final class RepositoryMapService {
     } catch (NoSuchAlgorithmException error) {
       throw new IllegalStateException(error);
     }
+  }
+
+  /** Git管理外では上限付きのファイルシステム一覧を使う。Gitの実行失敗は隠さない。 */
+  private RepositoryFileInventory.Result readInventory(Path root) throws IOException {
+    if (inventory != null)
+      return new RepositoryFileInventory.Result(inventory.files(root), List.of());
+    if (RepositoryFileInventory.hasGitMetadata(root))
+      return new RepositoryFileInventory.Result(gitFiles(root), List.of());
+    return RepositoryFileInventory.scan(root);
   }
 
   /** 共通の実行基盤で用いるGitファイル一覧を返す。 */
