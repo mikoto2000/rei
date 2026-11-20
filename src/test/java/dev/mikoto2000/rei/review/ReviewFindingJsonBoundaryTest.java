@@ -162,8 +162,16 @@ class ReviewFindingJsonBoundaryTest {
     execution.beginContextRestoration();
   }
 
+  private static ToolResponseMessage lastToolResponse(Prompt prompt) {
+    return prompt.getInstructions().stream()
+        .filter(ToolResponseMessage.class::isInstance)
+        .map(ToolResponseMessage.class::cast)
+        .toList()
+        .getLast();
+  }
+
   private static String lastToolResult(Prompt prompt) {
-    var response = (ToolResponseMessage) prompt.getInstructions().getLast();
+    var response = lastToolResponse(prompt);
     return response.getResponses().getFirst().responseData();
   }
 
@@ -216,7 +224,7 @@ class ReviewFindingJsonBoundaryTest {
         } else if (n == 2 || !legacy && n == 3) {
           var prompt = (Prompt) invocation.getArgument(0);
           if (n == 2) {
-            var response = (ToolResponseMessage) prompt.getInstructions().getLast();
+            var response = lastToolResponse(prompt);
             delivered[0] = StorageDatabase.JSON.readValue(response.getResponses().getFirst().responseData(), ReviewTools.Page.class);
           } else {
             assertThat(prompt.getInstructions().toString()).contains("REVIEW_RESULT_INVALID").doesNotContain("Cannot map");
@@ -237,7 +245,7 @@ class ReviewFindingJsonBoundaryTest {
               "assessment", "reviewed complete source unit", "findings", List.of(finding));
         } else {
           var prompt = (Prompt) invocation.getArgument(0);
-          var response = (ToolResponseMessage) prompt.getInstructions().getLast();
+          var response = lastToolResponse(prompt);
           var result = StorageDatabase.JSON.readTree(response.getResponses().getFirst().responseData());
           assertThat(result.path("body").path("findings").get(0).path("start").asInt()).isEqualTo(text.indexOf(quote));
           assertThat(result.path("body").path("findings").get(0).path("end").asInt()).isEqualTo(text.indexOf(quote) + quote.length());
