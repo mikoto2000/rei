@@ -63,6 +63,26 @@ public class ResumeCommand implements Callable<Integer> {
   /** 概要。 */
   private ResumeOverviewService overview;
 
+  private java.util.function.Function<
+          java.util.List<PersistentCheckpoint>, java.util.Optional<String>>
+      taskSelection;
+
+  /** Local interactive selection; batch and API callers retain their existing behavior. */
+  public void setTaskSelection(
+      java.util.function.Function<java.util.List<PersistentCheckpoint>, java.util.Optional<String>>
+          selection) {
+    taskSelection = selection;
+  }
+
+  /** Present primitive IDs and redacted labels without exposing checkpoint models to wiring. */
+  public void setTaskMenu(java.util.function.BiFunction<java.util.List<String>, java.util.List<String>,
+      java.util.Optional<String>> menu) {
+    setTaskSelection(items -> menu.apply(
+        items.stream().map(PersistentCheckpoint::taskId).toList(),
+        items.stream().map(item -> ResumeOverview.safe(
+            "[" + item.status() + "] " + item.request() + " (" + item.taskId() + ")", 240)).toList()));
+  }
+
   /** 作業の中断と再開で使用する概要を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setOverview(ResumeOverviewService value) {
@@ -130,17 +150,25 @@ public class ResumeCommand implements Callable<Integer> {
   /** 保存タスクの一覧・照合・明示再開・除外を行う。 */
   @Override
   public Integer call() {
-    return print(() -> task == null ? listCheckpoints.apply(project()) : resumeTask());
+    return print(
+        () -> {
+          if (task != null) return resumeTask(task);
+          var candidates = listCheckpoints.apply(project());
+          if (taskSelection == null) return candidates;
+          if (candidates.isEmpty()) return "再開候補はありません。";
+          var selected = taskSelection.apply(candidates);
+          return selected.isPresent() ? resumeTask(selected.get()) : "再開せずに閉じました。";
+        });
   }
 
   /** 再開した実行の出力と後続の入力を同じ会話へ向ける。 */
-  private PersistentCheckpointService.ResumeResult resumeTask() {
+  private PersistentCheckpointService.ResumeResult resumeTask(String selectedTask) {
     String previousSession = currentSessionId.get();
     boolean[] selected = {false};
     try {
       return resumeFromShell.resume(
           project(),
-          task,
+          selectedTask,
           sessionId -> {
             selectSession.accept(sessionId);
             selected[0] = true;

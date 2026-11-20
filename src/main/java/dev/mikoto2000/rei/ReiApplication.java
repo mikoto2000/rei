@@ -320,6 +320,14 @@ public class ReiApplication {
 
     Completer inputCompleter = ReiLineReaderFactory.completer(cmd, completionEngine);
     LineReader reader = ReiLineReaderFactory.create(terminal, inputCompleter);
+    var resumeSelection = cmd.getSubcommands().get("resume");
+    if (isInteractiveTerminal(terminal)
+        && resumeSelection != null
+        && resumeSelection.getCommand()
+            instanceof dev.mikoto2000.rei.checkpoint.ResumeCommand command)
+      command.setTaskMenu(
+          (ids, labels) ->
+              dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.chooseOne(reader, ids, labels));
     var secretary = cmd.getSubcommands().get("secretary");
     if (secretary != null
         && secretary.getCommand() instanceof dev.mikoto2000.rei.secretary.SecretaryCommand command)
@@ -653,6 +661,7 @@ public class ReiApplication {
       throws IOException {
     if (args.length > 0
         && ("llm".equals(args[0])
+            || ("resume".equals(args[0]) && args.length == 1)
             || ("secretary".equals(args[0])
                 && java.util.Arrays.stream(args)
                     .anyMatch(arg -> "briefing".equals(arg) || "review".equals(arg)))

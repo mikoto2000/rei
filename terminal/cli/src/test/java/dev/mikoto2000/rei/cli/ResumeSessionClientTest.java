@@ -31,11 +31,21 @@ class ResumeSessionClientTest {
     verifyResume(true);
   }
 
+  @Test
+  void keyboardSelectionResumesSecondTaskAndUsesItsSession() throws Exception {
+    verifyResume(false, "\033[B\r");
+  }
+
   /** HTTP と SSE を使って再開と後続の送信先を確認する。 */
   private void verifyResume(boolean fail) throws Exception {
+    verifyResume(fail, null);
+  }
+
+  private void verifyResume(boolean fail, String keys) throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     var submittedSession = new AtomicReference<String>();
     var output = new ByteArrayOutputStream();
+    var resumedTask = new AtomicReference<String>();
     server.createContext("/api/v1/cli/catalog", e -> reply(e, "{\"commands\":[]}"));
     server.createContext("/api/v1/models/current", e -> reply(e, "{}"));
     server.createContext("/api/v1/resume-overview", e -> reply(e, "{\"enabled\":false}"));
@@ -51,10 +61,16 @@ class ResumeSessionClientTest {
         "/api/v1/projects",
         e -> {
           if (e.getRequestURI().getPath().endsWith("/resume")) {
+            resumedTask.set(e.getRequestURI().getPath().split("/")[6]);
             if (fail) {
               e.sendResponseHeaders(409, -1);
               e.close();
             } else reply(e, "{\"runId\":\"resumed\",\"sessionId\":\"target\"}");
+          } else if (e.getRequestURI().getPath().endsWith("/checkpoints")) {
+            reply(
+                e,
+                "[{\"taskId\":\"first\",\"status\":\"INTERRUPTED\",\"request\":\"First\"},"
+                    + "{\"taskId\":\"second\",\"status\":\"INTERRUPTED\",\"request\":\"Second\"}]");
           } else reply(e, "[{\"id\":\"one\",\"name\":\"One\"}]");
         });
     server.createContext(
@@ -87,13 +103,16 @@ class ResumeSessionClientTest {
                 backend,
                 directory,
                 true,
-                new DumbTerminal(new ByteArrayInputStream(new byte[0]), output))) {
+                keys == null
+                    ? new DumbTerminal(new ByteArrayInputStream(new byte[0]), output)
+                    : interactiveTerminal(keys, output))) {
       client.command("/project select one");
       client.command("/session switch previous");
       if (fail)
         assertThrows(BackendClient.ApiException.class, () -> client.command("/resume task"));
       else {
-        client.command("/resume task");
+        client.command(keys == null ? "/resume task" : "/resume");
+        assertEquals(keys == null ? "task" : "second", resumedTask.get());
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (!output.toString(StandardCharsets.UTF_8).contains("resumed output")
             && System.nanoTime() < deadline) Thread.sleep(10);
@@ -105,6 +124,39 @@ class ResumeSessionClientTest {
     } finally {
       server.stop(0);
     }
+  }
+
+  /** In-memory input with explicit TTY capability, without opening a real console. */
+  private static org.jline.terminal.Terminal interactiveTerminal(
+      String keys, ByteArrayOutputStream output) throws IOException {
+    var terminal =
+        new DumbTerminal(new ByteArrayInputStream(keys.getBytes(StandardCharsets.UTF_8)), output);
+    terminal.setSize(new org.jline.terminal.Size(100, 12));
+    var provider =
+        java.lang.reflect.Proxy.newProxyInstance(
+            ResumeSessionClientTest.class.getClassLoader(),
+            new Class<?>[] {org.jline.terminal.spi.TerminalProvider.class},
+            (proxy, method, args) -> method.getName().equals("isSystemStream") ? true : null);
+    return (org.jline.terminal.Terminal)
+        java.lang.reflect.Proxy.newProxyInstance(
+            ResumeSessionClientTest.class.getClassLoader(),
+            new Class<?>[] {org.jline.terminal.spi.TerminalExt.class},
+            (proxy, method, args) -> {
+              switch (method.getName()) {
+                case "getProvider":
+                  return provider;
+                case "getSystemStream":
+                  return org.jline.terminal.spi.SystemStream.Input;
+                case "getType":
+                  return "xterm";
+                default:
+                  try {
+                    return method.invoke(terminal, args);
+                  } catch (java.lang.reflect.InvocationTargetException error) {
+                    throw error.getCause();
+                  }
+              }
+            });
   }
 
   /** サーバー応答を UTF-8 で返す。 */

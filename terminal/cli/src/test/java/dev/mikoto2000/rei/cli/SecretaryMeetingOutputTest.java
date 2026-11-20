@@ -14,6 +14,30 @@ import org.junit.jupiter.api.Test;
 
 class SecretaryMeetingOutputTest {
   @Test
+  void singleSelectionUsesCursorAndCancelsWithoutChoosingADefault() throws Exception {
+    var candidates =
+        List.of(
+            new MeetingSelectionMenu.Candidate("a", "同じ名前"),
+            new MeetingSelectionMenu.Candidate("b", "同じ名前"));
+    try (var terminal =
+        new DumbTerminal(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())) {
+      terminal.setSize(new Size(40, 3));
+      var reader = LineReaderBuilder.builder().terminal(terminal).build();
+      reader.runMacro("\033[B \r");
+      assertEquals("b", MeetingSelectionMenu.chooseOne(reader, candidates).orElseThrow());
+      reader.runMacro("\033[A\r");
+      assertEquals("b", MeetingSelectionMenu.chooseOne(reader, candidates).orElseThrow());
+      reader.runMacro("\r");
+      assertEquals("a", MeetingSelectionMenu.chooseOne(reader, candidates).orElseThrow());
+      for (String cancel : List.of("\033", "\003", "\004")) {
+        reader.runMacro("\033[B" + cancel);
+        assertTrue(MeetingSelectionMenu.chooseOne(reader, candidates).isEmpty());
+      }
+      assertTrue(MeetingSelectionMenu.chooseOne(reader, List.of()).isEmpty());
+    }
+  }
+
+  @Test
   void arrowKeysMoveAndSpaceTogglesWithoutChangingTheOrdinaryReader() throws Exception {
     var candidates =
         List.of(
