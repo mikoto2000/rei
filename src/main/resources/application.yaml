@@ -486,6 +486,10 @@ rei:
       max-post-age-minutes: ${REI_BLUESKY_REPLY_MAX_POST_AGE_MINUTES:120}
       generation-timeout-seconds: ${REI_BLUESKY_REPLY_GENERATION_TIMEOUT_SECONDS:1200}
   work-context:
+    # All batches and optional retries share timeout-seconds; do not restart its deadline.
+    max-timeout-retries: ${REI_WORK_CONTEXT_MAX_TIMEOUT_RETRIES:0}
+    batch-timeout-seconds: ${REI_WORK_CONTEXT_BATCH_TIMEOUT_SECONDS:60}
+    max-output-tokens: ${REI_WORK_CONTEXT_MAX_OUTPUT_TOKENS:4096}
     auto-update: ${REI_WORK_CONTEXT_AUTO_UPDATE:false}
     auto-present: ${REI_WORK_CONTEXT_AUTO_PRESENT:true}
     max-context-tokens: ${REI_WORK_CONTEXT_MAX_CONTEXT_TOKENS:1200}

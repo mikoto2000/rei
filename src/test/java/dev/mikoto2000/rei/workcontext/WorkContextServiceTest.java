@@ -41,6 +41,89 @@ import org.sqlite.SQLiteDataSource;
 /** 作業文脈サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class WorkContextServiceTest {
+  @Test
+  void timeoutRetriesOnlyTheFailedBatchWithoutReplayingEarlierEvidence() {
+    service =
+        new WorkContextService(
+            repo,
+            sessions,
+            projects,
+            turns,
+            new ProjectAgentEventStore(temp),
+            extractor,
+            new WorkContextGit(),
+            new WorkContextProperties(
+                false, true, 1200, 12000, 2, 20, 1000, 16, "memory", 1, 1, 4096),
+            Clock.systemUTC());
+    var run = new AgentRunContext("large", "session-a", a.root(), a.id());
+    turns.start(run, "要件".repeat(1400));
+    turns.finish(run, ConversationTurnStore.Status.FAILED, "進捗".repeat(1400));
+    var seen = new java.util.ArrayList<String>();
+    doAnswer(
+            call -> {
+              List<Evidence> batch = call.getArgument(0);
+              seen.add(batch.getFirst().id());
+              if (seen.size() == 2)
+                throw new IllegalStateException(
+                    "deadline", new java.util.concurrent.TimeoutException());
+              return List.of();
+            })
+        .when(extractor)
+        .extract(anyList(), anyList(), anyString());
+    var result = service.update("session-a", "large").orElseThrow();
+    assertEquals(
+        List.of("large:user", "large:assistant", "large:assistant", "large:terminal"), seen);
+    assertEquals(1, result.revision());
+    assertTrue(result.processedRuns().contains("large"));
+  }
+
+  @Test
+  void timeoutRetriesCannotRestartTheTotalDeadlineOrWriteAPartialRevision() {
+    service =
+        new WorkContextService(
+            repo,
+            sessions,
+            projects,
+            turns,
+            new ProjectAgentEventStore(temp),
+            extractor,
+            new WorkContextGit(),
+            new WorkContextProperties(
+                false, true, 1200, 12000, 1, 20, 4000, 16, "memory", 2, 1, 4096),
+            Clock.systemUTC());
+    var time = new java.util.concurrent.atomic.AtomicLong();
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    doAnswer(
+            call -> {
+              time.set(1_000_000_001L);
+              calls.incrementAndGet();
+              throw new IllegalStateException(
+                  "deadline", new java.util.concurrent.TimeoutException());
+            })
+        .when(extractor)
+        .extract(anyList(), anyList(), anyString());
+    try (var outer =
+        WorkContextExtractionDeadline.open(java.time.Duration.ofSeconds(1), time::get)) {
+      assertThrows(IllegalStateException.class, () -> service.update("session-a", "run-a"));
+    }
+    assertEquals(1, calls.get());
+    assertTrue(repo.current(a.id()).isEmpty());
+  }
+
+  @Test
+  void defaultTimeoutDoesNotAutomaticallyRepeatTheModelRequest() {
+    doAnswer(
+            call -> {
+              throw new IllegalStateException(
+                  "deadline", new java.util.concurrent.TimeoutException());
+            })
+        .when(extractor)
+        .extract(anyList(), anyList(), anyString());
+    assertThrows(IllegalStateException.class, () -> service.update("session-a", "run-a"));
+    org.mockito.Mockito.verify(extractor).extract(anyList(), anyList(), anyString());
+    assertTrue(repo.current(a.id()).isEmpty());
+  }
+
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 

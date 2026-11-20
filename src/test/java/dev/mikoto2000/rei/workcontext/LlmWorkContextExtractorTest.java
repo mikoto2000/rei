@@ -34,6 +34,125 @@ import reactor.core.publisher.Flux;
 
 /** 言語モデル作業文脈情報の抽出の結果と状態の契約を検証するテスト。 */
 class LlmWorkContextExtractorTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void outputBudgetCapsBothProviderLimitStylesAndPreservesSmallerLimits(boolean completion) {
+    var models = mock(LlmModelProvider.class);
+    var model = mock(ChatModel.class);
+    when(models.memoryChatModel()).thenReturn(model);
+    var count = new java.util.concurrent.atomic.AtomicInteger();
+    when(models.chatOptions("memory", null))
+        .thenAnswer(
+            call -> {
+              int limit = count.getAndIncrement() == 0 ? 32000 : 512;
+              var builder = OpenAiChatOptions.builder();
+              return completion
+                  ? builder.maxCompletionTokens(limit).build()
+                  : builder.maxTokens(limit).build();
+            });
+    var limits = new ArrayList<Integer>();
+    when(model.stream(any(Prompt.class)))
+        .thenAnswer(
+            call -> {
+              var options = (OpenAiChatOptions) ((Prompt) call.getArgument(0)).getOptions();
+              limits.add(completion ? options.getMaxCompletionTokens() : options.getMaxTokens());
+              assertEquals(
+                  null, completion ? options.getMaxTokens() : options.getMaxCompletionTokens());
+              return Flux.just(
+                  new ChatResponse(
+                      List.of(new Generation(new AssistantMessage("{\"changes\":[]}")))));
+            });
+    var extractor =
+        new LlmWorkContextExtractor(
+            models, new WorkContextProperties(false, true, 1200, 12000, 240, 20));
+    extractor.extract(evidence("one"), List.of(), "COMPLETED");
+    extractor.extract(evidence("two"), List.of(), "COMPLETED");
+    assertEquals(List.of(4096, 512), limits);
+  }
+
+  @Test
+  void batchTimeoutCancelsTheStreamBeforeTheLargerUpdateDeadline() {
+    var models = mock(LlmModelProvider.class);
+    var model = mock(ChatModel.class);
+    when(models.memoryChatModel()).thenReturn(model);
+    when(models.chatOptions("memory", null)).thenReturn(OpenAiChatOptions.builder().build());
+    var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+    when(model.stream(any(Prompt.class)))
+        .thenReturn(Flux.<ChatResponse>never().doOnCancel(() -> cancelled.set(true)));
+    var extractor =
+        new LlmWorkContextExtractor(
+            models,
+            new WorkContextProperties(
+                false, true, 1200, 12000, 240, 20, 4000, 16, "memory", 0, 1, 4096));
+    org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(
+        java.time.Duration.ofSeconds(3),
+        () -> {
+          var error =
+              assertThrows(
+                  IllegalStateException.class,
+                  () -> extractor.extract(evidence("task"), List.of(), "COMPLETED"));
+          assertEquals(
+              "timeout",
+              dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(error).code());
+        });
+    assertTrue(cancelled.get());
+    // A timed-out request releases its shared slot for the next update.
+    when(model.stream(any(Prompt.class)))
+        .thenReturn(
+            Flux.just(
+                new ChatResponse(
+                    List.of(new Generation(new AssistantMessage("{\"changes\":[]}"))))));
+    assertTrue(extractor.extract(evidence("retry"), List.of(), "COMPLETED").isEmpty());
+  }
+
+  @Test
+  void concurrentProjectsShareOneModelSlotWithoutDroppingTheirRequests() throws Exception {
+    var models = mock(LlmModelProvider.class);
+    var model = mock(ChatModel.class);
+    when(models.memoryChatModel()).thenReturn(model);
+    when(models.chatOptions("memory", null)).thenReturn(OpenAiChatOptions.builder().build());
+    var firstEntered = new java.util.concurrent.CountDownLatch(1);
+    var secondStarted = new java.util.concurrent.CountDownLatch(1);
+    var secondEntered = new java.util.concurrent.CountDownLatch(1);
+    var first = reactor.core.publisher.Sinks.<ChatResponse>one();
+    var response =
+        new ChatResponse(List.of(new Generation(new AssistantMessage("{\"changes\":[]}"))));
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    when(model.stream(any(Prompt.class)))
+        .thenAnswer(
+            call -> {
+              if (calls.incrementAndGet() == 1) {
+                firstEntered.countDown();
+                return first.asMono().flux();
+              }
+              secondEntered.countDown();
+              return Flux.just(response);
+            });
+    var extractor =
+        new LlmWorkContextExtractor(
+            models, new WorkContextProperties(false, true, 1200, 12000, 5, 20));
+    try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+      var a =
+          executor.submit(() -> extractor.extract(evidence("project a"), List.of(), "COMPLETED"));
+      assertTrue(firstEntered.await(2, java.util.concurrent.TimeUnit.SECONDS));
+      var b =
+          executor.submit(
+              () -> {
+                secondStarted.countDown();
+                return extractor.extract(evidence("project b"), List.of(), "COMPLETED");
+              });
+      assertTrue(secondStarted.await(2, java.util.concurrent.TimeUnit.SECONDS));
+      try {
+        assertFalse(secondEntered.await(100, java.util.concurrent.TimeUnit.MILLISECONDS));
+      } finally {
+        first.tryEmitValue(response);
+      }
+      assertTrue(a.get(2, java.util.concurrent.TimeUnit.SECONDS).isEmpty());
+      assertTrue(b.get(2, java.util.concurrent.TimeUnit.SECONDS).isEmpty());
+      assertEquals(2, calls.get());
+    }
+  }
+
   @Test
   void configuredWorkContextFeatureUsesItsOwnModelAndOptions() {
     var models = mock(LlmModelProvider.class);

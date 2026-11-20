@@ -14,6 +14,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param batchEvidenceTokens 一度に抽出する証拠の推定トークン数
  * @param maxExtractionBatches 一度の更新で許可する抽出回数
  * @param modelFeature 抽出モデルの機能設定名
+ * @param maxTimeoutRetries 同じ更新期限内で許可する追加試行回数
+ * @param batchTimeoutSeconds モデル枠待機を含む1バッチの制限秒数
+ * @param maxOutputTokens 抽出応答の生成トークン上限
  * @param maxTurns 最大やり取り一覧
  */
 @ConfigurationProperties("rei.work-context")
@@ -26,7 +29,35 @@ public record WorkContextProperties(
     @DefaultValue("20") int maxTurns,
     @DefaultValue("4000") int batchEvidenceTokens,
     @DefaultValue("16") int maxExtractionBatches,
-    @DefaultValue("memory") String modelFeature) {
+    @DefaultValue("memory") String modelFeature,
+    @DefaultValue("0") int maxTimeoutRetries,
+    @DefaultValue("60") int batchTimeoutSeconds,
+    @DefaultValue("4096") int maxOutputTokens) {
+  public WorkContextProperties(
+      boolean autoUpdate,
+      boolean autoPresent,
+      int maxContextTokens,
+      int maxInputTokens,
+      int timeoutSeconds,
+      int maxTurns,
+      int batchEvidenceTokens,
+      int maxExtractionBatches,
+      String modelFeature) {
+    this(
+        autoUpdate,
+        autoPresent,
+        maxContextTokens,
+        maxInputTokens,
+        timeoutSeconds,
+        maxTurns,
+        batchEvidenceTokens,
+        maxExtractionBatches,
+        modelFeature,
+        0,
+        60,
+        4096);
+  }
+
   public WorkContextProperties(
       boolean autoUpdate,
       boolean autoPresent,
@@ -57,6 +88,11 @@ public record WorkContextProperties(
         || batchEvidenceTokens < 256
         || maxExtractionBatches < 1
         || maxExtractionBatches > 64
+        || maxTimeoutRetries < 0
+        || maxTimeoutRetries > 2
+        || batchTimeoutSeconds < 1
+        || maxOutputTokens < 256
+        || maxOutputTokens > 32768
         || modelFeature == null
         || modelFeature.isBlank())
       throw new IllegalArgumentException("Invalid Work Context budgets");

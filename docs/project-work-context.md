@@ -68,7 +68,7 @@ rei:
 | 再開時の自動提示 | true | `REI_WORK_CONTEXT_AUTO_PRESENT` |
 | CHAT注入予算 | 1200推定tokens | `REI_WORK_CONTEXT_MAX_CONTEXT_TOKENS` |
 | 抽出入力予算（指示・Schemaを含む） | 12000推定tokens | `REI_WORK_CONTEXT_MAX_INPUT_TOKENS` |
-| 抽出timeout | 120秒 | `REI_WORK_CONTEXT_TIMEOUT_SECONDS` |
+| 抽出timeout | 240秒 | `REI_WORK_CONTEXT_TIMEOUT_SECONDS` |
 | 1回の最大Turn数 | 20 | `REI_WORK_CONTEXT_MAX_TURNS` |
 
 設定変更は再起動後に反映します。手動更新は自動更新が無効でも利用できます。抽出には既存の`rei.llm.features.memory`モデル設定を再利用し、Sleepの有効化や処理済み位置には依存しません。
@@ -113,3 +113,17 @@ Native Workspaceの「Work Context / 引き継ぎ」「Work Context 更新履歴
 - 抽出に渡す既存項目は、未撤回・未置換の新しい項目を入力予算の1/3以内で選びます。保存された未完了項目は削除しません。予算から外れた古い言い換えまで完全に意味的重複を検出する保証はありません。
 - 自動更新キューは共通FIFO・1worker・最大256件です。同一プロジェクトの保存は手動更新も含め直列化します。他プロセスとの競合は再試行が必要です。
 - Nativeの専用項目編集画面、モバイル実機検証、強制終了直前の更新保証はありません。
+
+### 抽出の待ち時間と再試行
+
+`timeout-seconds`（既定240秒）は更新全体の上限です。全証拠バッチ・モデル枠の待機・任意の再試行で1つの期限を共有します。抽出用モデルの同時呼出しは全Projectで1件に抑え、通常会話や別機能のモデル枠は変更しません。Projectごとの待ち行列とRunのまとめ処理は維持します。
+
+| 設定 | 既定値 | 環境変数 |
+| --- | --- | --- |
+| `batch-timeout-seconds` | 60 | `REI_WORK_CONTEXT_BATCH_TIMEOUT_SECONDS` |
+| `max-output-tokens` | 4096 | `REI_WORK_CONTEXT_MAX_OUTPUT_TOKENS` |
+| `max-timeout-retries` | 0 | `REI_WORK_CONTEXT_MAX_TIMEOUT_RETRIES` |
+
+1バッチの60秒にはモデル枠の待機も含み、残りの更新期限より長く待ちません。出力上限は `maxTokens` と `maxCompletionTokens` の両形式に対応し、機能別設定の上限が小さければそれを維持します。出力が上限で途切れた場合は不完全なJSONを採用しません。
+
+再試行を有効にする場合は0〜2回で指定します。タイムアウトしたバッチのみを再試行し、成功済みバッチを再実行したり、更新全体の期限を延ばしたりしません。認証・構文・入力上限・キャンセル・モデル障害後の待機は即座に終了します。全バッチ成功までrevisionとprocessedRunsを保存せず、失敗したRunは後で明示更新できます。推論サーバーの復旧そのものを保証する機能ではありません。

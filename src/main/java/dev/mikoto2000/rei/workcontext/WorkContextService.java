@@ -357,9 +357,10 @@ public class WorkContextService {
           WorkContextRepository.checkCancellation();
           WorkContextExtractionDeadline.remaining(
               java.time.Duration.ofSeconds(properties.timeoutSeconds()));
+          var existing = draft == null ? List.<WorkContext.Item>of() : draft.items();
           var candidates =
-              extractor.extract(
-                  List.copyOf(batch.values()), draft == null ? List.of() : draft.items(), statuses);
+              LlmWorkContextExtractor.extractWithRetries(
+                  () -> extractor.extract(List.copyOf(batch.values()), existing, statuses), properties);
           candidates =
               candidates.stream()
                   .map(

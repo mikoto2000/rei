@@ -110,7 +110,8 @@ final class CompressionRetryGuard {
     long wait = (long) cooldownSeconds * (1L << (failure.failures - 1));
     failure.retryAt = milliseconds.getAsLong() + wait * 1000;
     if (shrink)
-      failure.inputLimit = Math.min(failure.inputLimit, Math.max(2L * summaryTokens, before / 2));
+      failure.inputLimit =
+          Math.min(failure.inputLimit, Math.max(Math.min(2L * summaryTokens, 1024), before / 2));
     while (failures.size() > CAPACITY) failures.remove(failures.keySet().iterator().next());
     return wait;
   }

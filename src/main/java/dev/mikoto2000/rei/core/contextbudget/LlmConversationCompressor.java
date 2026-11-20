@@ -9,11 +9,8 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Objects;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
-import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.ObjectProvider;
@@ -84,6 +81,23 @@ public class LlmConversationCompressor implements ConversationCompressor {
       int maxTokens,
       Prompt owner,
       ModelCallBudget supplied) {
+    return summarizeResult(
+        previous,
+        messages,
+        maxTokens,
+        owner,
+        supplied,
+        Duration.ofSeconds(summaryTimeoutSeconds.getAsInt()));
+  }
+
+  @Override
+  public Summary summarizeResult(
+      String previous,
+      List<Message> messages,
+      int maxTokens,
+      Prompt owner,
+      ModelCallBudget supplied,
+      Duration timeout) {
     var execution = ContextAssembler.execution(owner);
     ModelCallBudget standalone =
         execution == null ? (supplied == null ? standaloneBudget.get() : supplied) : null;
@@ -135,16 +149,7 @@ public class LlmConversationCompressor implements ConversationCompressor {
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
       StringBuilder data =
           new StringBuilder("Previous summary:\n").append(previous).append("\nNew history:\n");
-      for (var message : messages) {
-        data.append(message.getMessageType())
-            .append(": ")
-            .append(Objects.toString(message.getText(), ""))
-            .append('\n');
-        if (message instanceof AssistantMessage assistant)
-          data.append(assistant.getToolCalls()).append('\n');
-        if (message instanceof ToolResponseMessage tool)
-          data.append(tool.getResponses()).append('\n');
-      }
+      for (var message : messages) data.append(SummaryInputPages.history(message));
       var prompt =
           new Prompt(
               List.of(
@@ -196,7 +201,7 @@ public class LlmConversationCompressor implements ConversationCompressor {
       new org.springframework.ai.chat.model.MessageAggregator()
           .aggregate(responses, aggregate::set)
           .then()
-          .timeout(Duration.ofSeconds(summaryTimeoutSeconds.getAsInt()))
+          .timeout(timeout)
           .block();
       var response = aggregate.get();
       var usage = response == null ? null : response.getMetadata().getUsage();
