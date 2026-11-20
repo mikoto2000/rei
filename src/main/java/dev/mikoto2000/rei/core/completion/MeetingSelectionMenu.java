@@ -69,6 +69,15 @@ public final class MeetingSelectionMenu {
     return choose(reader, candidates, false);
   }
 
+  /** Adapt primitive menu data supplied by the checkpoint command. */
+  public static Optional<String> chooseOne(LineReader reader, List<String> ids, List<String> labels) {
+    if (ids.size() != labels.size()) throw new IllegalArgumentException("Menu IDs and labels differ");
+    var candidates = new ArrayList<Candidate>();
+    for (int index = 0; index < ids.size(); index++)
+      candidates.add(new Candidate(ids.get(index), labels.get(index)));
+    return chooseOne(reader, candidates);
+  }
+
   /** Enter selects the cursor's item immediately; cancellation never selects a default. */
   public static Optional<String> chooseOne(LineReader reader, List<Candidate> candidates) {
     return choose(reader, candidates, true).map(selection -> selection.getFirst());

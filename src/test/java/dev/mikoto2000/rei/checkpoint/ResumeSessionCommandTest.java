@@ -42,10 +42,14 @@ class ResumeSessionCommandTest {
     var resume = new ResumeCommand(service, projects);
     var output = new StringWriter();
     var command = new picocli.CommandLine(resume).setOut(new PrintWriter(output));
-    resume.setTaskSelection(
-        items -> {
-          assertEquals(candidates, items);
-          return java.util.Optional.of(items.get(1).taskId());
+    when(first.taskId()).thenReturn("first");
+    when(second.request()).thenReturn("Bearer PRIVATE_TOKEN\nrequest");
+    resume.setTaskMenu(
+        (ids, labels) -> {
+          assertEquals(java.util.List.of("first", "second"), ids);
+          org.junit.jupiter.api.Assertions.assertFalse(labels.get(1).contains("PRIVATE_TOKEN"));
+          org.junit.jupiter.api.Assertions.assertFalse(labels.get(1).contains("\n"));
+          return java.util.Optional.of(ids.get(1));
         });
     assertEquals(0, command.execute());
     verify(service).resumeForShell(eq(context.id()), eq("second"), any());

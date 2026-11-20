@@ -325,24 +325,9 @@ public class ReiApplication {
         && resumeSelection != null
         && resumeSelection.getCommand()
             instanceof dev.mikoto2000.rei.checkpoint.ResumeCommand command)
-      command.setTaskSelection(
-          checkpoints ->
-              dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.chooseOne(
-                  reader,
-                  checkpoints.stream()
-                      .map(
-                          checkpoint ->
-                              new dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.Candidate(
-                                  checkpoint.taskId(),
-                                  dev.mikoto2000.rei.event.CredentialRedactor.redact(
-                                      "["
-                                          + checkpoint.status()
-                                          + "] "
-                                          + checkpoint.request()
-                                          + " ("
-                                          + checkpoint.taskId()
-                                          + ")")))
-                      .toList()));
+      command.setTaskMenu(
+          (ids, labels) ->
+              dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.chooseOne(reader, ids, labels));
     var secretary = cmd.getSubcommands().get("secretary");
     if (secretary != null
         && secretary.getCommand() instanceof dev.mikoto2000.rei.secretary.SecretaryCommand command)

@@ -74,6 +74,15 @@ public class ResumeCommand implements Callable<Integer> {
     taskSelection = selection;
   }
 
+  /** Present primitive IDs and redacted labels without exposing checkpoint models to wiring. */
+  public void setTaskMenu(java.util.function.BiFunction<java.util.List<String>, java.util.List<String>,
+      java.util.Optional<String>> menu) {
+    setTaskSelection(items -> menu.apply(
+        items.stream().map(PersistentCheckpoint::taskId).toList(),
+        items.stream().map(item -> ResumeOverview.safe(
+            "[" + item.status() + "] " + item.request() + " (" + item.taskId() + ")", 240)).toList()));
+  }
+
   /** 作業の中断と再開で使用する概要を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setOverview(ResumeOverviewService value) {
