@@ -190,6 +190,25 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
     }
   }
 
+  /** Retries stay inside the update deadline and never replay already extracted batches. */
+  static List<WorkContextCandidate> extractWithRetries(
+      Supplier<List<WorkContextCandidate>> extraction, WorkContextProperties properties) {
+    for (int attempt = 0; ; attempt++) {
+      WorkContextRepository.checkCancellation();
+      WorkContextExtractionDeadline.remaining(
+          java.time.Duration.ofSeconds(properties.timeoutSeconds()));
+      try {
+        return extraction.get();
+      } catch (RuntimeException error) {
+        RunCancellation.propagate(error);
+        RunCancellation.propagateStopped(error);
+        if (attempt >= properties.maxTimeoutRetries()
+            || !WorkContextExtractionException.isTimeout(error))
+          throw error;
+      }
+    }
+  }
+
   /** Plan all bounded requests before invoking the model; never silently omit evidence. */
   static List<Map<String, Evidence>> evidenceBatches(
       Map<String, Evidence> evidence, WorkContextProperties properties) {

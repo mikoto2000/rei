@@ -7,11 +7,16 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.prompt.Prompt;
 
 /** Splits summary DATA, never executable tool messages; callers commit only complete groups. */
 final class SummaryInputPages {
   private SummaryInputPages() {}
+
+  @FunctionalInterface
+  interface SummaryCall {
+    ConversationCompressor.Summary summarize(
+        String previous, List<Message> messages, int target, Duration timeout);
+  }
 
   static String history(Message message) {
     var text =
@@ -34,14 +39,12 @@ final class SummaryInputPages {
   }
 
   static ConversationCompressor.Summary summarize(
-      ConversationCompressor compressor,
+      SummaryCall summarize,
       TokenEstimator estimator,
       String previous,
       List<Message> messages,
       int summaryTokens,
       long inputLimit,
-      Prompt owner,
-      dev.mikoto2000.rei.llm.ModelCallBudget budget,
       Runnable check,
       Duration timeout) {
     var data =
@@ -76,8 +79,7 @@ final class SummaryInputPages {
         throw new ContextCompressionException(ContextCompressionException.Reason.INPUT_BUDGET);
       var fragment = new UserMessage(header + source.substring(offset, offset + length));
       result =
-          compressor.summarizeResult(
-              rolling, List.of(fragment), target, owner, budget, remaining(started, timeout));
+          summarize.summarize(rolling, List.of(fragment), target, remaining(started, timeout));
       check.run();
       remaining(started, timeout);
       rolling = result == null ? null : result.text();

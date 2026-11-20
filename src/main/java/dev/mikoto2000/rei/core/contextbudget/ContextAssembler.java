@@ -450,14 +450,13 @@ public class ContextAssembler {
       var result =
           paged
               ? SummaryInputPages.summarize(
-                  compressor,
+                  (previous, fragments, target, timeout) ->
+                      compressor.summarizeResult(previous, fragments, target, raw, budget, timeout),
                   estimator,
                   segment.summary.summary(),
                   messages,
                   settings.summaryTokens(),
                   max,
-                  raw,
-                  budget,
                   check,
                   java.time.Duration.ofSeconds(settings.summaryTimeoutSeconds()))
               : budget == null
