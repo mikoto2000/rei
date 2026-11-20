@@ -204,6 +204,157 @@ class WorkContextServiceTest {
   }
 
   @Test
+  void batchTimeoutRetriesWithinTheOriginalUpdateDeadlineAndCommitsOnce() {
+    var models = mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
+    var model = mock(org.springframework.ai.chat.model.ChatModel.class);
+    when(models.memoryChatModel()).thenReturn(model);
+    when(models.chatOptions("memory", null))
+        .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    when(model.stream(
+            org.mockito.ArgumentMatchers.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenAnswer(
+            call -> {
+              assertTrue(
+                  WorkContextExtractionDeadline.remaining(java.time.Duration.ofSeconds(1))
+                          .toMillis()
+                      > 500);
+              if (calls.incrementAndGet() == 1) return reactor.core.publisher.Flux.never();
+              return reactor.core.publisher.Flux.just(
+                  new org.springframework.ai.chat.model.ChatResponse(
+                      List.of(
+                          new org.springframework.ai.chat.model.Generation(
+                              new org.springframework.ai.chat.messages.AssistantMessage(
+                                  "{\"changes\":[]}")))));
+            });
+    var properties =
+        new WorkContextProperties(false, true, 1200, 12000, 5, 20, 4000, 16, "memory", 1, 1, 4096);
+    service =
+        new WorkContextService(
+            repo,
+            sessions,
+            projects,
+            turns,
+            new ProjectAgentEventStore(temp),
+            new LlmWorkContextExtractor(models, properties),
+            new WorkContextGit(),
+            properties,
+            Clock.systemUTC());
+
+    var result = service.update("session-a", "run-a").orElseThrow();
+
+    assertEquals(2, calls.get());
+    assertEquals(1, result.revision());
+    assertTrue(result.processedRuns().contains("run-a"));
+    assertEquals(1, repo.history(a.id(), 10).size());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(ints = {0, 2})
+  void repeatedTimeoutsRespectRetryLimitAndPreserveStoredRevision(int retries) {
+    var old = service.update("session-a", "run-a").orElseThrow();
+    var later = new AgentRunContext("later", "session-a", a.root(), a.id());
+    turns.start(later, "new work");
+    turns.finish(later, ConversationTurnStore.Status.COMPLETED, "done");
+    var failure = new IllegalStateException("model wait", new java.net.SocketTimeoutException());
+    doThrow(failure).when(extractor).extract(anyList(), anyList(), anyString());
+    org.mockito.Mockito.clearInvocations(extractor);
+    service =
+        new WorkContextService(
+            repo,
+            sessions,
+            projects,
+            turns,
+            new ProjectAgentEventStore(temp),
+            extractor,
+            new WorkContextGit(),
+            new WorkContextProperties(
+                false, true, 1200, 12000, 1, 20, 4000, 16, "memory", retries, 1, 4096),
+            Clock.systemUTC());
+
+    assertEquals(
+        failure,
+        assertThrows(IllegalStateException.class, () -> service.update("session-a", "later")));
+    verify(extractor, times(retries + 1)).extract(anyList(), anyList(), anyString());
+    assertEquals(old, repo.current(a.id()).orElseThrow());
+    assertEquals(1, repo.history(a.id(), 10).size());
+  }
+
+  @Test
+  void timeoutInLaterBatchKeepsDraftWithoutReplayingSuccessfulEvidenceOrDuplicatingItems() {
+    service =
+        new WorkContextService(
+            repo,
+            sessions,
+            projects,
+            turns,
+            new ProjectAgentEventStore(temp),
+            extractor,
+            new WorkContextGit(),
+            new WorkContextProperties(
+                false, true, 1200, 12000, 2, 20, 1000, 16, "memory", 1, 1, 4096),
+            Clock.systemUTC());
+    var run = new AgentRunContext("large", "session-a", a.root(), a.id());
+    turns.start(run, "要件".repeat(1400));
+    turns.finish(run, ConversationTurnStore.Status.COMPLETED, "進捗".repeat(1400));
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    var seen = new java.util.ArrayList<String>();
+    doAnswer(
+            call -> {
+              List<Evidence> batch = call.getArgument(0);
+              List<WorkContext.Item> existing = call.getArgument(1);
+              int attempt = calls.incrementAndGet();
+              seen.add(batch.getFirst().id());
+              assertTrue(repo.current(a.id()).isEmpty());
+              if (attempt == 2)
+                throw new IllegalStateException(
+                    "wait expired", new java.util.concurrent.TimeoutException());
+              assertEquals(attempt == 1 ? 0 : 1, existing.size());
+              return List.of(
+                  new WorkContextCandidate(
+                      "ADD",
+                      null,
+                      Kind.PENDING,
+                      "item-" + batch.getFirst().id(),
+                      "reason",
+                      Status.OPEN,
+                      List.of(batch.getFirst().id())));
+            })
+        .when(extractor)
+        .extract(anyList(), anyList(), anyString());
+
+    var result = service.update("session-a", "large").orElseThrow();
+
+    assertEquals(List.of("large:user", "large:assistant", "large:assistant"), seen);
+    assertEquals(2, result.items().size());
+    assertEquals(1, repo.history(a.id(), 10).size());
+  }
+
+  @Test
+  void cancellationWithTimeoutCauseIsNeverRetried() {
+    service =
+        new WorkContextService(
+            repo,
+            sessions,
+            projects,
+            turns,
+            new ProjectAgentEventStore(temp),
+            extractor,
+            new WorkContextGit(),
+            new WorkContextProperties(
+                false, true, 1200, 12000, 2, 20, 4000, 16, "memory", 2, 1, 4096),
+            Clock.systemUTC());
+    var cancelled = new java.util.concurrent.CancellationException("cancelled");
+    cancelled.initCause(new java.util.concurrent.TimeoutException());
+    doThrow(cancelled).when(extractor).extract(anyList(), anyList(), anyString());
+    assertThrows(
+        java.util.concurrent.CancellationException.class,
+        () -> service.update("session-a", "run-a"));
+    verify(extractor).extract(anyList(), anyList(), anyString());
+    assertTrue(repo.current(a.id()).isEmpty());
+  }
+
+  @Test
   void excessiveBatchCountIsRejectedBeforeAnyModelCall() {
     var small =
         new WorkContextService(
