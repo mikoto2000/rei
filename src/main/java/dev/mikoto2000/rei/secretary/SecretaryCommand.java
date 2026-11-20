@@ -14,11 +14,20 @@ import picocli.CommandLine.Spec;
 @Command(name = "secretary", description = "約束・タスク台帳を操作します", mixinStandardHelpOptions = true)
 public class SecretaryCommand implements java.util.concurrent.Callable<Integer> {
   private final ObjectProvider<SecretaryLedger> ledgers;
-  private org.jline.reader.LineReader reader;
+  private java.util.function.BiFunction<
+          com.fasterxml.jackson.databind.JsonNode,
+          java.io.PrintWriter,
+          java.util.Optional<List<String>>>
+      meetingSelector = (report, output) -> java.util.Optional.empty();
 
-  /** Attach only the local Shell reader; API and batch callers remain noninteractive. */
-  public void setReader(org.jline.reader.LineReader value) {
-    reader = value;
+  /** Shell owns terminal input; API and batch callers keep the default noninteractive selector. */
+  public void setMeetingSelector(
+      java.util.function.BiFunction<
+              com.fasterxml.jackson.databind.JsonNode,
+              java.io.PrintWriter,
+              java.util.Optional<List<String>>>
+          selector) {
+    meetingSelector = java.util.Objects.requireNonNull(selector);
   }
 
   @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -294,18 +303,9 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
   }
 
   private void selectMeeting(com.fasterxml.jackson.databind.JsonNode report) {
-    if (!java.util.Set.of("briefing", "review").contains(action)
-        || reader == null
-        || !dev.mikoto2000.rei.core.completion.ApprovalDisplayState.interactive(
-            reader.getTerminal())) return;
-    var candidates = dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.candidates(report);
-    if (candidates.isEmpty()) return;
-    spec.commandLine().getOut().flush();
-    var choice = dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.choose(reader, candidates);
-    if (choice.isEmpty()) {
-      spec.commandLine().getOut().println("保存せずにミーティングを閉じました。");
-      return;
-    }
+    if (!java.util.Set.of("briefing", "review").contains(action)) return;
+    var choice = meetingSelector.apply(report, spec.commandLine().getOut());
+    if (choice.isEmpty()) return;
     var date = LocalDate.parse(report.path("date").asText());
     String decisionKey = java.util.UUID.randomUUID().toString();
     if (project == null)

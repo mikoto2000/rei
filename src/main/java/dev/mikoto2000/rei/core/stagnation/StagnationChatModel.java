@@ -175,8 +175,9 @@ public final class StagnationChatModel implements ChatModel {
           if (!prepaid) context.consumeNextLlmCall();
           Prompt actionPrompt = resumeRecoveryPrompt(prompt, context);
           String feedback = context.progressFeedback() + context.resumeBatchFeedback();
+          String reviewGuidance = "";
           if (hasReviewProtocol(prompt)) {
-            feedback +=
+            reviewGuidance +=
                 " For a new whole-repository review prefer beginRepositoryReview, scanReviewSnapshot"
                     + " until SEALED, then readNextReviewWorkItem with tokenBudget omitted. It claims and reads"
                     + " one semantic unit with a host-selected budget up to 100000 estimated tokens, bounded"
@@ -193,7 +194,7 @@ public final class StagnationChatModel implements ChatModel {
                     + " continues pending semantic units without losing saved legacy assessments. The following legacy guidance applies ONLY"
                     + " to explicit-target reviews or existing legacy jobs.";
             if (!context.isResumedContext())
-              feedback +=
+              reviewGuidance +=
                   " For authorized review work, use beginReview for the explicit targets and criteria."
                       + " Read a bounded unit with readReviewFile/readReviewPages, then persist its"
                       + " evidence-backed assessment with submitReviewPage/submitReviewPages before"
@@ -202,7 +203,7 @@ public final class StagnationChatModel implements ChatModel {
                       + " reviewFindings to continue. Fetched content is not reviewed coverage."
                       + " Do not defer all assessments until the entire corpus has been read.";
             else
-              feedback +=
+              reviewGuidance +=
                   " For review work, persist each assessed source range with beginReview, readReviewFile"
                       + " and a delivered-page assessment. Prefer readReviewPages and submitReviewPages for bounded batches; otherwise submitReviewPage: copy only"
                       + " the delivered path/offset/nextOffset and cite unique exact evidence quotes; the server"
@@ -242,8 +243,20 @@ public final class StagnationChatModel implements ChatModel {
                     + "If an assessment is not supportable, explain the specific blockage instead of fabricating work. "
                     + "Actual work advancement restores acquisition for the next work unit; failed writes, annotations and repeated text alone do not.";
           var invocationMessages = new ArrayList<Message>(actionPrompt.getInstructions());
+          if (!reviewGuidance.isEmpty()) {
+            // Fixed protocol belongs beside the original system prefix; live state follows history.
+            int prefixEnd = 0;
+            while (prefixEnd < invocationMessages.size()
+                && invocationMessages.get(prefixEnd) instanceof SystemMessage) prefixEnd++;
+            invocationMessages.add(
+                prefixEnd,
+                SystemMessage.builder()
+                    .text(reviewGuidance)
+                    .metadata(java.util.Map.of("rei.reviewGuidance", true))
+                    .build());
+          }
           if (!feedback.isEmpty())
-            invocationMessages.addFirst(
+            invocationMessages.add(
                 SystemMessage.builder()
                     .text(feedback)
                     .metadata(java.util.Map.of("rei.progressFeedback", true))

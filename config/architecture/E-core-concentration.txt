@@ -961,6 +961,7 @@ wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.completion.
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.completion.ApprovalActionMenu$Owner
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.completion.ApprovalDisplayState
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.completion.CompletionEngine
+wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.completion.MeetingSelectionMenu
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.datasource.ReiDataDirectory
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.datasource.ReiPaths
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.dependency.DependencyCommand

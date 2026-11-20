@@ -472,4 +472,35 @@ class SecretaryGlobalBriefingsTest {
                   .exists());
     }
   }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void shellSelectorConfirmsOnlyExplicitChoicesAndJsonStaysNoninteractive(boolean confirm)
+      throws Exception {
+    try (var f = fixture(List.of("p"))) {
+      var beans = new StaticListableBeanFactory();
+      beans.addBean("followups", f.followups());
+      var command = new SecretaryCommand();
+      command.setFollowups(beans.getBeanProvider(SecretaryFollowups.class));
+      var selections = new java.util.concurrent.atomic.AtomicInteger();
+      command.setMeetingSelector(
+          (report, output) -> {
+            selections.incrementAndGet();
+            assertTrue(report.path("meeting").isObject());
+            return confirm ? java.util.Optional.of(List.of()) : java.util.Optional.empty();
+          });
+      var cli = new picocli.CommandLine(command);
+      var text = new java.io.StringWriter();
+      cli.setOut(new java.io.PrintWriter(text));
+      cli.setErr(new java.io.PrintWriter(text));
+      assertEquals(0, cli.execute("briefing", "--json"));
+      assertEquals(0, selections.get());
+      assertFalse(f.global().report(null, false).meeting().confirmed());
+      text.getBuffer().setLength(0);
+      assertEquals(0, cli.execute("briefing"));
+      assertEquals(1, selections.get());
+      assertEquals(confirm, f.global().report(null, false).meeting().confirmed());
+      assertEquals(confirm, text.toString().contains("方針を保存しました"));
+    }
+  }
 }
