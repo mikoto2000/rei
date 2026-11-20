@@ -139,8 +139,9 @@ class ContextAssemblerTest {
     assertThat(raw.getInstructions()).hasSize(14);
   }
 
-  @Test
-  void rejectedReviewReadReservesHeadroomWithoutChangingRawHistory() {
+  @ParameterizedTest
+  @ValueSource(strings = {"rei.reviewBudgetRecovery", "rei.fileBudgetRecovery"})
+  void rejectedReadReservesHeadroomWithoutChangingRawHistory(String recoveryKey) {
     var properties = config();
     properties.setThreshold(590);
     var assembler =
@@ -163,7 +164,7 @@ class ContextAssemblerTest {
                         "read",
                         "readNextReviewWorkItem",
                         "{\"error\":\"CONTEXT_BUDGET_INSUFFICIENT\"}")))
-            .metadata(Map.of("rei.reviewBudgetRecovery", true))
+            .metadata(Map.of(recoveryKey, true))
             .build();
     var raw =
         new Prompt(

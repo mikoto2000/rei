@@ -69,6 +69,11 @@ public final class FailureDiagnostics {
           || reactor.core.Exceptions.isCancel(cause))
         return diagnostic("cancelled", "処理が中断されました。保存済みの状態を確認してください。");
     for (var cause : causes) {
+      if (cause instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read
+          && "CONTEXT_BUDGET_INSUFFICIENT".equals(read.code()))
+        return diagnostic(
+            "context_budget_insufficient",
+            "資料を追加するためのコンテキスト枠が不足しています。送信する履歴を減らし、失敗した読み取りだけを再試行してください。");
       if (cause instanceof dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException)
         return diagnostic(
             dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.CODE,
@@ -90,7 +95,8 @@ public final class FailureDiagnostics {
           && "invalid_grant".equals(response.getDetails().getError()))
         return diagnostic(
             GOOGLE_REAUTHORIZATION_REQUIRED,
-            "Google が OAuth 認可を拒否しました。Google Calendar は /schedule auth、Google Tasks は /task auth で再認可してからやり直してください。");
+            "Google が OAuth 認可を拒否しました。Google Calendar は /schedule auth、Google Tasks は /task auth"
+                + " で再認可してからやり直してください。");
       if (cause instanceof com.openai.errors.OpenAIServiceException response) {
         String code = "";
         try {

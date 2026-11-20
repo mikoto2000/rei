@@ -18,6 +18,63 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 /** ツール繰り返し補助の結果と状態の契約を検証するテスト。 */
 class ToolLoopSupportTest {
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "readMultiFile,CONTEXT_BUDGET_INSUFFICIENT,true",
+    "readPdfPage,CONTEXT_BUDGET_INSUFFICIENT,true",
+    "readMultiFile,TASK_ACCESS_DENIED,false",
+    "unrelated,CONTEXT_BUDGET_INSUFFICIENT,false"
+  })
+  void pendingBudgetRejectionPreservesCompletedSiblingsAndRequestsRecovery(
+      String tool, String code, boolean recovery) {
+    var callback = org.mockito.Mockito.mock(ToolCallback.class);
+    org.mockito.Mockito.when(callback.getToolDefinition())
+        .thenReturn(
+            ToolDefinition.builder().name(tool).description("read").inputSchema("{}").build());
+    org.mockito.Mockito.when(callback.getToolMetadata())
+        .thenReturn(
+            org.springframework.ai.tool.metadata.ToolMetadata.builder().returnDirect(true).build());
+    var rejection = new dev.mikoto2000.rei.toolcontract.ToolReadRejectedException(code, "retry");
+    org.mockito.Mockito.when(
+            callback.call(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+        .thenThrow(rejection);
+    var saved =
+        new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+            "saved", tool, "saved result");
+    var pending =
+        new RunContinuation.PendingTools(
+            "",
+            List.of(
+                new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                    "saved", "function", tool, "{}"),
+                new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                    "retry", "function", tool, "{}")),
+            List.of(saved));
+    var context =
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.class);
+    org.mockito.Mockito.when(context.toolReadCorrection("retry", tool, rejection))
+        .thenReturn(
+            dev.mikoto2000.rei.core.stagnation.RunExecutionContext.toolRejectionResult(
+                rejection, "retry only this read", 1));
+    var result =
+        new ToolLoopSupport()
+            .executePending(
+                new Prompt("resume", OpenAiChatOptions.builder().toolCallbacks(callback).build()),
+                pending,
+                context);
+    var feedback =
+        (org.springframework.ai.chat.messages.ToolResponseMessage)
+            result.conversationHistory().getLast();
+    assertThat(feedback.getResponses()).hasSize(2);
+    assertThat(feedback.getResponses().getFirst()).isSameAs(saved);
+    assertThat(Boolean.TRUE.equals(feedback.getMetadata().get("rei.fileBudgetRecovery")))
+        .isEqualTo(recovery);
+    assertThat(result.returnDirect()).isFalse();
+    org.mockito.Mockito.verify(callback, org.mockito.Mockito.times(1))
+        .call(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {
         "CONTEXT_BUDGET_INSUFFICIENT",

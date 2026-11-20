@@ -132,7 +132,7 @@ class FileResultTokenPagerTest {
             () ->
                 new FileResultTokenPager(TokenEstimator.conservative())
                     .page(List.of(result), List.of(request), 32))
-        .isInstanceOf(java.io.IOException.class)
+        .isInstanceOf(dev.mikoto2000.rei.toolcontract.ToolReadRejectedException.class)
         .hasMessageContaining("CONTEXT_BUDGET_INSUFFICIENT")
         .hasMessageContaining("narrow the file batch");
   }

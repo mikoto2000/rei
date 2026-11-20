@@ -40,6 +40,88 @@ class AdaptiveFileReadTest {
   private final TokenEstimator estimator = TokenEstimator.conservative();
   private final ContextCompressionProperties context = new ContextCompressionProperties();
 
+  @Test
+  void exhaustedContextReturnsRejectionAndRetriesAfterTimeoutWithoutChangingHistory()
+      throws Exception {
+    Files.writeString(root.resolve("a.md"), "source content");
+    context.setHardLimit(16000);
+    context.setThreshold(15999);
+    context.setRecentTokens(80);
+    var tools = new Tools();
+    tools.configureDelivery(estimator, new ToolResultDeliveryProperties());
+    tools.configureReadContext(p -> ContextBudgetManager.inputLimit(context, estimator, p));
+    var callback =
+        Arrays.stream(DeliveryToolRegistration.provider(tools).getToolCallbacks())
+            .filter(c -> c.getToolDefinition().name().equals("readMultiFile"))
+            .findFirst()
+            .orElseThrow();
+    var options = OpenAiChatOptions.builder().toolCallbacks(callback).build();
+    var original =
+        new Prompt(
+            List.of(
+                dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(
+                    new org.springframework.ai.chat.messages.UserMessage("old ".repeat(15700)), 1),
+                dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(
+                    new AssistantMessage("previous decisions"), 2),
+                new org.springframework.ai.chat.messages.UserMessage("read a.md")),
+            options);
+    var response =
+        new ChatResponse(
+            List.of(
+                new Generation(
+                    AssistantMessage.builder()
+                        .content("")
+                        .toolCalls(
+                            List.of(
+                                new AssistantMessage.ToolCall(
+                                    "read",
+                                    "function",
+                                    "readMultiFile",
+                                    "{\"files\":[{\"path\":\"a.md\",\"purpose\":\"FULL\"}]}")))
+                        .build())));
+    var loop = new ToolLoopSupport();
+    try (var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"))) {
+      var failed = loop.execute(original, response);
+      var feedback = message(failed);
+      var rejection = json.readTree(feedback.getResponses().getFirst().responseData());
+      assertThat(rejection.path("error").asText()).isEqualTo("CONTEXT_BUDGET_INSUFFICIENT");
+      assertThat(rejection.path("accepted").asBoolean()).isFalse();
+      assertThat(feedback.getMetadata()).containsEntry("rei.fileBudgetRecovery", true);
+      assertThat(feedback.getMetadata().get("rei.deliveryPolicies"))
+          .isEqualTo(Map.of("read", ResultDelivery.Kind.GENERAL));
+      var summaryCalls = new java.util.concurrent.atomic.AtomicInteger();
+      var assembler =
+          new ContextAssembler(
+              context,
+              estimator,
+              new ConversationSummaryRepository(root),
+              new ToolResultCompressor(new RawToolResultStore(root), estimator, 8000, 2000),
+              (previous, messages, budget, current) -> {
+                summaryCalls.incrementAndGet();
+                throw new dev.mikoto2000.rei.core.contextbudget.ContextCompressionException(
+                    dev.mikoto2000.rei.core.contextbudget.ContextCompressionException.Reason
+                        .TIMEOUT);
+              },
+              null,
+              null);
+      var raw = new Prompt(failed.conversationHistory(), options);
+      var projected = assembler.assemble(raw, "session", "run", () -> {});
+      int attempts = summaryCalls.get();
+      assertThat(attempts).isPositive();
+      assertThat(estimator.message(projected.getUserMessage())).isLessThan(100);
+      assertThat(ContextBudgetManager.estimateMessages(projected.getInstructions(), estimator))
+          .isLessThanOrEqualTo(14000);
+      assembler.assemble(raw, "session", "run", () -> {});
+      assertThat(summaryCalls.get()).isEqualTo(attempts);
+      assertThat(raw.getInstructions()).isEqualTo(failed.conversationHistory());
+      assertThat(projected.getInstructions()).contains(feedback);
+      var retried = loop.execute(FileReadContext.withProjection(raw, projected), response);
+      var file = json.readTree(message(retried).getResponses().getFirst().responseData()).get(0);
+      assertThat(file.path("content").get(0).asText()).isEqualTo("source content");
+      assertThat(message(retried).getMetadata()).doesNotContainKey("rei.fileBudgetRecovery");
+    }
+  }
+
   private List<String> source() {
     return java.util.stream.IntStream.range(0, 1600)
         .mapToObj(i -> "line=" + i + " abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")

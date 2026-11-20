@@ -1043,7 +1043,7 @@ public class RunExecutionContext {
         "Correct only this rejected read and issue a new tool call. Preserve successful sibling calls and saved assessments. No source content was returned; do not treat this correction as a delivered page or invent source content or cursor values."
             + (java.util.Set.of("CONTEXT_BUDGET_INSUFFICIENT", "REVIEW_PAGE_BUDGET_TOO_SMALL")
                     .contains(error.code())
-                ? " For review budget recovery, omit tokenBudget for the host-selected page size, submit any already-delivered assessments first, and request only one next review unit. The host reserves context headroom on the next projection; do not raise model limits or restart the review task."
+                ? " The host reserves context headroom by reducing the next prompt. Retry only this rejected read, with a smaller batch if needed; do not raise model limits. For review reads, omit tokenBudget for the host-selected page size, submit already-delivered assessments first, and request only one next review unit without restarting the review task."
                 : ""));
   }
 
