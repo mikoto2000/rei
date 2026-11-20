@@ -116,16 +116,17 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
     ToolLoopSupport.requireNoDefaultTools(model);
     var baseOptions = optionsForCalls.get();
     var optionsBuilder = baseOptions.mutate();
-    if (baseOptions.getMaxCompletionTokens() != null)
+    Integer completionLimit = baseOptions.getMaxCompletionTokens();
+    Integer tokenLimit = baseOptions.getMaxTokens();
+    if (completionLimit != null)
       optionsBuilder
           .maxTokens(null)
-          .maxCompletionTokens(
-              Math.min(baseOptions.getMaxCompletionTokens(), properties.maxOutputTokens()));
+          .maxCompletionTokens(Math.min(completionLimit, properties.maxOutputTokens()));
     else
       optionsBuilder.maxTokens(
-          baseOptions.getMaxTokens() == null
+          tokenLimit == null
               ? properties.maxOutputTokens()
-              : Math.min(baseOptions.getMaxTokens(), properties.maxOutputTokens()));
+              : Math.min(tokenLimit, properties.maxOutputTokens()));
     optionsBuilder.toolCallbacks(List.of());
     optionsBuilder.toolChoice("none");
     var options = optionsBuilder.build();
@@ -203,8 +204,11 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
         RunCancellation.propagate(error);
         RunCancellation.propagateStopped(error);
         if (attempt >= properties.maxTimeoutRetries()
-            || !WorkContextExtractionException.isTimeout(error))
-          throw error;
+            || !WorkContextExtractionException.isTimeout(error)) {
+          if (error instanceof IllegalArgumentException argument) throw argument;
+          if (error instanceof IllegalStateException state) throw state;
+          throw new IllegalStateException("Work Context extraction failed", error);
+        }
       }
     }
   }

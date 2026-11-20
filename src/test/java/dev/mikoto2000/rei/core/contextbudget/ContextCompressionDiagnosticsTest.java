@@ -267,7 +267,7 @@ class ContextCompressionDiagnosticsTest {
 
   /** 要約保存を伝えることを確認する。 */
   @Test
-  void reportsSummaryStorageAndOversizedAtomicInputBeforeSendingToModel() {
+  void reportsStorageFailurePagesOversizedInputAndRejectsImpossibleInputBudget() {
     var summaries =
         new ConversationSummaryRepository(dir) {
           /** 検証用に、後から参照できるよう、指定された情報を保存する。 */
@@ -305,6 +305,20 @@ class ContextCompressionDiagnosticsTest {
               return "compact";
             })
         .assemble(original, "chat", "oversized", () -> {});
+    assertThat(calls.get()).isGreaterThan(1);
+    assertThat(payloads(AgentEventType.CONTEXT_COMPRESSION_FAILED)).isEmpty();
+    assertThat(payloads(AgentEventType.CONTEXT_COMPRESSION_COMPLETED)).hasSize(1);
+    assertThat(new ConversationSummaryRepository(dir).read("chat").throughSequence()).isEqualTo(1);
+    assertThat(original.getContents()).contains("x".repeat(20000));
+    events.clear();
+    calls.set(0);
+    properties.setModelContextLimit(100);
+    assembler(
+            (p, m, b, o) -> {
+              calls.incrementAndGet();
+              return "compact";
+            })
+        .assemble(original, "impossible", "oversized", () -> {});
     assertThat(calls).hasValue(0);
     assertThat(payloads(AgentEventType.CONTEXT_COMPRESSION_FAILED))
         .singleElement()
