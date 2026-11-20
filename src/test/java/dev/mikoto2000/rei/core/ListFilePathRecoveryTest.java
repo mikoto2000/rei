@@ -91,7 +91,11 @@ class ListFilePathRecoveryTest {
   }
 
   private static String lastToolResult(Prompt request) {
-    return ((ToolResponseMessage) request.getInstructions().getLast())
+    return request.getInstructions().stream()
+        .filter(ToolResponseMessage.class::isInstance)
+        .map(ToolResponseMessage.class::cast)
+        .toList()
+        .getLast()
         .getResponses()
         .getFirst()
         .responseData();

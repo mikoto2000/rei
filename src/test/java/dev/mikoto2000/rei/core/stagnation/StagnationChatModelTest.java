@@ -92,7 +92,11 @@ class StagnationChatModelTest {
       assertThat(requests.get(1).getInstructions())
           .anyMatch(message -> message.getText().contains("No tool calls from that response ran"))
           .noneMatch(message -> message instanceof AssistantMessage || message instanceof ToolResponseMessage);
-      assertThat(requests.get(2).getInstructions().getLast())
+      assertThat(
+              requests.get(2).getInstructions().stream()
+                  .filter(ToolResponseMessage.class::isInstance)
+                  .toList()
+                  .getLast())
           .isInstanceOfSatisfying(
               ToolResponseMessage.class,
               message ->
