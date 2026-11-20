@@ -86,6 +86,29 @@ class ReiApplicationCommandNotificationTest {
         Mockito.mock(dev.mikoto2000.rei.event.AgentEventBus.class));
   }
 
+  @Test
+  void meetingOwnsInputWithoutCompetingWithEscapeCancellationMonitor() throws IOException {
+    var invoked = new java.util.concurrent.atomic.AtomicReference<Thread>();
+    @CommandLine.Command(name = "secretary")
+    class MeetingCommand implements Runnable {
+      @CommandLine.Parameters String action;
+
+      @Override
+      public void run() {
+        invoked.set(Thread.currentThread());
+      }
+    }
+    var cmd =
+        new CommandLine(CommandLine.Model.CommandSpec.create().name("rei"))
+            .addSubcommand(new MeetingCommand());
+    var app = newApp();
+    for (String action : java.util.List.of("briefing", "review")) {
+      app.executeInterruptibly(cmd, terminal, commandExecutor, "secretary", action);
+      org.junit.jupiter.api.Assertions.assertSame(Thread.currentThread(), invoked.get());
+    }
+    Mockito.verifyNoInteractions(escCancellationMonitor);
+  }
+
   /** れいの起動で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void notifiesOnNormalCompletion() throws IOException {

@@ -14,6 +14,12 @@ import picocli.CommandLine.Spec;
 @Command(name = "secretary", description = "約束・タスク台帳を操作します", mixinStandardHelpOptions = true)
 public class SecretaryCommand implements java.util.concurrent.Callable<Integer> {
   private final ObjectProvider<SecretaryLedger> ledgers;
+  private org.jline.reader.LineReader reader;
+
+  /** Attach only the local Shell reader; API and batch callers remain noninteractive. */
+  public void setReader(org.jline.reader.LineReader value) {
+    reader = value;
+  }
 
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   private dev.mikoto2000.rei.life.LifeContext life;
@@ -279,11 +285,36 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
       throws com.fasterxml.jackson.core.JsonProcessingException {
     com.fasterxml.jackson.databind.JsonNode tree = SecretaryJson.JSON.valueToTree(result);
     var meeting = tree.has("report") ? tree.path("report").path("meeting") : tree.path("meeting");
-    if (!json && meeting.path("text").isTextual())
+    if (!json && meeting.path("text").isTextual()) {
       spec.commandLine().getOut().println(meeting.path("text").asText());
-    else if (!json && result instanceof SecretaryMeeting.Decision)
+      selectMeeting(tree);
+    } else if (!json && result instanceof SecretaryMeeting.Decision)
       spec.commandLine().getOut().println("方針を保存しました。ミーティングを終了します。");
     else spec.commandLine().getOut().println(SecretaryJson.JSON.writeValueAsString(result));
+  }
+
+  private void selectMeeting(com.fasterxml.jackson.databind.JsonNode report) {
+    if (!java.util.Set.of("briefing", "review").contains(action)
+        || reader == null
+        || !dev.mikoto2000.rei.core.completion.ApprovalDisplayState.interactive(
+            reader.getTerminal())) return;
+    var candidates = dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.candidates(report);
+    if (candidates.isEmpty()) return;
+    spec.commandLine().getOut().flush();
+    var choice = dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.choose(reader, candidates);
+    if (choice.isEmpty()) {
+      spec.commandLine().getOut().println("保存せずにミーティングを閉じました。");
+      return;
+    }
+    var date = LocalDate.parse(report.path("date").asText());
+    String decisionKey = java.util.UUID.randomUUID().toString();
+    if (project == null)
+      followups()
+          .globalBriefings()
+          .confirmMeeting(date, action.equals("review"), decisionKey, choice.get());
+    else
+      followups().confirmMeeting(project, date, action.equals("review"), decisionKey, choice.get());
+    spec.commandLine().getOut().println("方針を保存しました。ミーティングを終了します。");
   }
 
   @Override

@@ -320,6 +320,10 @@ public class ReiApplication {
 
     Completer inputCompleter = ReiLineReaderFactory.completer(cmd, completionEngine);
     LineReader reader = ReiLineReaderFactory.create(terminal, inputCompleter);
+    var secretary = cmd.getSubcommands().get("secretary");
+    if (secretary != null
+        && secretary.getCommand() instanceof dev.mikoto2000.rei.secretary.SecretaryCommand command)
+      command.setReader(reader);
     var runs = cmd.getSubcommands().get("runs");
     if (runs != null
         && runs.getCommand() instanceof dev.mikoto2000.rei.ui.shell.RunsCommand command)
@@ -396,15 +400,13 @@ public class ReiApplication {
 
     ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
     UserInputService inputService = new UserInputService(new UserInputParser());
-    try (
-        var commandHistory =
-            new dev.mikoto2000.rei.ui.shell.ProjectCommandHistory(
-                () -> (org.jline.reader.impl.LineReaderImpl) reader,
-                projects::currentContext,
-                dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current())) {
+    try (var commandHistory =
+        new dev.mikoto2000.rei.ui.shell.ProjectCommandHistory(
+            () -> (org.jline.reader.impl.LineReaderImpl) reader,
+            projects::currentContext,
+            dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current())) {
       var consoleSession = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession();
-      try (
-          consoleSession;
+      try (consoleSession;
           var runPrompt =
               new dev.mikoto2000.rei.ui.shell.ActiveRunPrompt(
                   reader,
@@ -649,6 +651,9 @@ public class ReiApplication {
       throws IOException {
     if (args.length > 0
         && ("llm".equals(args[0])
+            || ("secretary".equals(args[0])
+                && java.util.Arrays.stream(args)
+                    .anyMatch(arg -> "briefing".equals(arg) || "review".equals(arg)))
             || "cancel".equals(args[0])
             || "agent".equals(args[0])
             || "history".equals(args[0])

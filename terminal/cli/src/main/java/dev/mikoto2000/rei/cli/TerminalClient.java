@@ -859,6 +859,20 @@ public final class TerminalClient implements AutoCloseable {
         var meetingText = SecretaryMeetingOutput.text(response);
         if (meetingText != null) {
           out(meetingText);
+          if (Set.of("briefing", "review").contains(action)
+              && ApprovalDisplayState.interactive(terminal)) {
+            var candidates = MeetingSelectionMenu.candidates(response);
+            if (!candidates.isEmpty()) {
+              var choice = MeetingSelectionMenu.choose(reader, candidates);
+              if (choice.isPresent()) {
+                var body =
+                    SecretaryMeetingOutput.confirmation(
+                        response, request.path(), UUID.randomUUID().toString(), choice.get());
+                var receipt = backend.post("/api/v1/secretary/meetings/confirm", body);
+                out(SecretaryMeetingOutput.text(receipt));
+              } else out("保存せずにミーティングを閉じました。");
+            }
+          }
           return;
         }
       }
