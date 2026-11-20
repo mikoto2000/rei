@@ -585,6 +585,7 @@ dev.mikoto2000.rei.core.ProcessDependencyTools -> dev.mikoto2000.rei.temporal.Mo
 dev.mikoto2000.rei.core.ProcessDependencyTools$1 -> dev.mikoto2000.rei.core.process.BackgroundProcessStatus
 dev.mikoto2000.rei.core.ProcessDependencyTools$ShellDependencyResult -> dev.mikoto2000.rei.core.dependency.DependencyObservation
 dev.mikoto2000.rei.core.ProcessDependencyTools$ShellDependencyResult -> dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot
+dev.mikoto2000.rei.core.RepositoryFileInventory$1 -> dev.mikoto2000.rei.core.chat.RunCancellation
 dev.mikoto2000.rei.core.RepositoryMapService -> dev.mikoto2000.rei.core.chat.RunCancellation
 dev.mikoto2000.rei.core.RepositoryMapService -> dev.mikoto2000.rei.externalagent.ExternalAgentProcessRunner
 dev.mikoto2000.rei.core.RepositoryMapService -> dev.mikoto2000.rei.externalagent.ExternalAgentProcessRunner$Output

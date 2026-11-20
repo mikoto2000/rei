@@ -16,6 +16,7 @@ dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.completion.Approval
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.completion.ApprovalActionMenu$Owner
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.completion.ApprovalDisplayState
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.completion.CompletionEngine
+dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.completion.MeetingSelectionMenu
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.datasource.ReiDataDirectory
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.datasource.ReiPaths
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.core.dependency.DependencyCommand
@@ -39,6 +40,7 @@ dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.launcher.BackendMode
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.llm.capture.LlmCaptureCommand
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.memory.command.SleepCommand
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.reflection.ReflectionCommand
+dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.secretary.SecretaryCommand
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.subagent.SubAgentCommand
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.summarize.command.SummarizeCommand
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.temporal.TimerCommand

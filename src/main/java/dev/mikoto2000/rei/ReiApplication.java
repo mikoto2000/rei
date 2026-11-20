@@ -323,7 +323,9 @@ public class ReiApplication {
     var secretary = cmd.getSubcommands().get("secretary");
     if (secretary != null
         && secretary.getCommand() instanceof dev.mikoto2000.rei.secretary.SecretaryCommand command)
-      command.setReader(reader);
+      command.setMeetingSelector(
+          (report, output) ->
+              dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.choose(reader, report, output));
     var runs = cmd.getSubcommands().get("runs");
     if (runs != null
         && runs.getCommand() instanceof dev.mikoto2000.rei.ui.shell.RunsCommand command)

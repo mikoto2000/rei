@@ -23,6 +23,19 @@ public final class MeetingSelectionMenu {
   /** A selectable work item; the original ID is never derived from its display label. */
   public record Candidate(String id, String label) {}
 
+  /** Offer selection only on the Shell terminal, preserving cancellation without saving. */
+  public static Optional<List<String>> choose(
+      LineReader reader, JsonNode report, java.io.PrintWriter output) {
+    if (reader == null || !ApprovalDisplayState.interactive(reader.getTerminal()))
+      return Optional.empty();
+    var candidates = candidates(report);
+    if (candidates.isEmpty()) return Optional.empty();
+    output.flush();
+    var choice = choose(reader, candidates);
+    if (choice.isEmpty()) output.println("保存せずにミーティングを閉じました。");
+    return choice;
+  }
+
   /** Only current, unconfirmed meetings offer an interactive choice. */
   public static List<Candidate> candidates(JsonNode report) {
     var meeting = report.path("meeting");
