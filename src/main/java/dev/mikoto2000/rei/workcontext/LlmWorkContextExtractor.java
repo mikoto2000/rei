@@ -34,6 +34,10 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
   /** この機能の動作設定。 */
   private final WorkContextProperties properties;
 
+  /** Background handoff requests share one model slot, including across projects. */
+  private final java.util.concurrent.Semaphore modelSlot =
+      new java.util.concurrent.Semaphore(1, true);
+
   /** 指定された値や利用先を使って、LlmWorkContextExtractorを初期化する。 */
   public LlmWorkContextExtractor(LlmModelProvider models, WorkContextProperties properties) {
     this.modelForCalls =
@@ -97,6 +101,7 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
         CORRECT for explicit corrections, SUPERSEDE for explicit changed decisions, CONFLICT when unresolved.
         Missing mention never deletes or completes existing work. ADD only genuinely new items.
         Match equivalent phrasing to existing items. Return empty changes if no new evidence.
+        Keep each change concise. Do not repeat the evidence or existing items in your output.
         Schema:
         """
             + output.schema();
@@ -109,14 +114,41 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
           properties.maxInputTokens());
     var model = modelForCalls.get();
     ToolLoopSupport.requireNoDefaultTools(model);
-    var optionsBuilder = optionsForCalls.get().mutate();
+    var baseOptions = optionsForCalls.get();
+    var optionsBuilder = baseOptions.mutate();
+    if (baseOptions.getMaxCompletionTokens() != null)
+      optionsBuilder
+          .maxTokens(null)
+          .maxCompletionTokens(
+              Math.min(baseOptions.getMaxCompletionTokens(), properties.maxOutputTokens()));
+    else
+      optionsBuilder.maxTokens(
+          baseOptions.getMaxTokens() == null
+              ? properties.maxOutputTokens()
+              : Math.min(baseOptions.getMaxTokens(), properties.maxOutputTokens()));
     optionsBuilder.toolCallbacks(List.of());
     optionsBuilder.toolChoice("none");
     var options = optionsBuilder.build();
     ToolLoopSupport.requireNoRawTools(options);
     var result = new StringBuilder();
-    try {
+    boolean acquired = false;
+    try (var deadline =
+        WorkContextExtractionDeadline.open(
+            Duration.ofSeconds(
+                Math.min(properties.timeoutSeconds(), properties.batchTimeoutSeconds())))) {
       WorkContextRepository.checkCancellation();
+      acquired =
+          modelSlot.tryAcquire(
+              WorkContextExtractionDeadline.remaining(
+                      Duration.ofSeconds(properties.batchTimeoutSeconds()))
+                  .toNanos(),
+              java.util.concurrent.TimeUnit.NANOSECONDS);
+      if (!acquired)
+        throw new IllegalStateException(
+            "Work Context model slot deadline exceeded",
+            new java.util.concurrent.TimeoutException());
+      WorkContextRepository.checkCancellation();
+      WorkContextExtractionDeadline.remaining(Duration.ofSeconds(properties.batchTimeoutSeconds()));
       model.stream(new Prompt(List.of(new SystemMessage(system), new UserMessage(data)), options))
           .doOnNext(
               r -> {
@@ -137,9 +169,13 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
               })
           .blockLast(
               WorkContextExtractionDeadline.remaining(
-                  Duration.ofSeconds(properties.timeoutSeconds())));
+                  Duration.ofSeconds(
+                      Math.min(properties.timeoutSeconds(), properties.batchTimeoutSeconds()))));
       WorkContextRepository.checkCancellation();
       return output.parse(result.toString());
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+      throw new java.util.concurrent.CancellationException("Work Context model wait interrupted");
     } catch (RuntimeException error) {
       var cause = reactor.core.Exceptions.unwrap(error);
       if (cause instanceof Error fatal) throw fatal;
@@ -149,6 +185,8 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
       if (cause instanceof IllegalStateException state) throw state;
       if (cause instanceof IllegalArgumentException argument) throw argument;
       throw new IllegalStateException("Work Context model execution failed", cause);
+    } finally {
+      if (acquired) modelSlot.release();
     }
   }
 

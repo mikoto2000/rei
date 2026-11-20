@@ -357,9 +357,10 @@ public class WorkContextService {
           WorkContextRepository.checkCancellation();
           WorkContextExtractionDeadline.remaining(
               java.time.Duration.ofSeconds(properties.timeoutSeconds()));
+          var existing = draft == null ? List.<WorkContext.Item>of() : draft.items();
           var candidates =
-              extractor.extract(
-                  List.copyOf(batch.values()), draft == null ? List.of() : draft.items(), statuses);
+              extractBatchWithRetries(
+                  () -> extractor.extract(List.copyOf(batch.values()), existing, statuses));
           candidates =
               candidates.stream()
                   .map(
@@ -424,6 +425,27 @@ public class WorkContextService {
                 processed);
         repository.save(next, old == null ? 0 : old.revision());
         return Optional.of(next);
+      }
+    }
+  }
+
+  /** Retries stay inside the update deadline and never replay already extracted batches. */
+  private List<WorkContextCandidate> extractBatchWithRetries(
+      Supplier<List<WorkContextCandidate>> extraction) {
+    for (int attempt = 0; ; attempt++) {
+      WorkContextRepository.checkCancellation();
+      WorkContextExtractionDeadline.remaining(
+          java.time.Duration.ofSeconds(properties.timeoutSeconds()));
+      try {
+        return extraction.get();
+      } catch (RuntimeException error) {
+        dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+        dev.mikoto2000.rei.core.chat.RunCancellation.propagateStopped(error);
+        if (attempt >= properties.maxTimeoutRetries()
+            || !"timeout"
+                .equals(
+                    dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(error).code()))
+          throw error;
       }
     }
   }

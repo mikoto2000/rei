@@ -38,7 +38,18 @@ class CompressionRetryGuardTest {
           .isEqualTo(seconds);
       time.addAndGet(seconds * 1000);
     }
-    assertThat(guard.inputLimit("run", "config", 100000)).isEqualTo(6000);
+    assertThat(guard.inputLimit("run", "config", 100000)).isEqualTo(1250);
+  }
+
+  @Test
+  void largeStoredSummaryBudgetDoesNotPreventSmallerTimeoutRetries() {
+    guard.failed("run", "config", "summary_timeout", 22350, 12000, 120, true);
+    assertThat(guard.inputLimit("run", "config", 24000)).isEqualTo(11175);
+    for (int n = 0; n < 8; n++) {
+      long input = guard.inputLimit("run", "config", 24000);
+      guard.failed("run", "config", "summary_timeout", input, 12000, 120, true);
+    }
+    assertThat(guard.inputLimit("run", "config", 24000)).isEqualTo(1024);
   }
 
   /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */

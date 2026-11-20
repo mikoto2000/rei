@@ -26,6 +26,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -36,6 +37,32 @@ import reactor.core.publisher.Flux;
 
 /** 言語モデル会話Compressorの結果と状態の契約を検証するテスト。 */
 class LlmConversationCompressorTest {
+  @Test
+  void pagedSummaryUsesRemainingTotalDeadlineAndDisposesItsStream() {
+    var model = mock(ChatModel.class);
+    var disposed = new java.util.concurrent.atomic.AtomicBoolean();
+    when(model.stream(any(Prompt.class)))
+        .thenReturn(Flux.<ChatResponse>never().doOnCancel(() -> disposed.set(true)));
+    var compressor = compressor(model, new ContextCompressionProperties());
+    org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(
+        java.time.Duration.ofSeconds(2),
+        () -> {
+          assertThatThrownBy(
+                  () ->
+                      compressor.summarizeResult(
+                          "",
+                          List.of(new UserMessage("page")),
+                          100,
+                          new Prompt("owner"),
+                          null,
+                          java.time.Duration.ofMillis(30)))
+              .isInstanceOfSatisfying(
+                  ContextCompressionException.class,
+                  failure -> assertThat(failure.reason()).isEqualTo(TIMEOUT));
+        });
+    assertThat(disposed).isTrue();
+  }
+
   @Test
   void dedicatedSummaryFeatureDoesNotInheritTheParentModelName() {
     var model = mock(ChatModel.class);

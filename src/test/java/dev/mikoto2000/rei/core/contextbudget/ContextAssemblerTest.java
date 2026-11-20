@@ -23,6 +23,84 @@ import org.springframework.ai.chat.prompt.Prompt;
 /** 文脈文脈の組み立ての結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ContextAssemblerTest {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void oversizedToolExchangeIsPagedAndCursorCommitsOnlyAfterEveryPage(boolean failLater) {
+    var properties = config();
+    properties.setSummaryInputTokens(1024);
+    properties.setHardLimit(800000);
+    var saved = new ConversationSummaryRepository(dir);
+    String previousSummary = "prior decision; ".repeat(400);
+    saved.save(
+        "conversation", new ConversationSummary(previousSummary, 1, java.time.Instant.now()));
+    var captured = new StringBuilder();
+    var seen = new AtomicInteger();
+    var call =
+        AssistantMessage.builder()
+            .content("inspect")
+            .properties(Map.of(ContextHistoryAdvisor.SEQUENCE, 2L))
+            .toolCalls(
+                List.of(
+                    new AssistantMessage.ToolCall(
+                        "tool-id", "function", "readFile", "{\"path\":\"A.java\"}")))
+            .build();
+    var response =
+        ToolResponseMessage.builder()
+            .metadata(Map.of(ContextHistoryAdvisor.SEQUENCE, 3L))
+            .responses(
+                List.of(
+                    new ToolResponseMessage.ToolResponse(
+                        "tool-id", "readFile", "begin-" + "日本語😀".repeat(700) + "-end")))
+            .build();
+    var raw =
+        new Prompt(
+            List.of(
+                new SystemMessage("policy"),
+                call,
+                response,
+                ContextHistoryAdvisor.historical(new AssistantMessage("recent"), 4),
+                new UserMessage("current")));
+    var assembler =
+        new ContextAssembler(
+            properties,
+            estimator,
+            saved,
+            new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
+            (previous, messages, budget, owner) -> {
+              assertThat(saved.read("conversation").throughSequence()).isEqualTo(1);
+              assertThat(
+                      estimator.text(previous)
+                          + messages.stream().mapToLong(estimator::message).sum())
+                  .isLessThanOrEqualTo(1024);
+              assertThat(messages).allMatch(UserMessage.class::isInstance);
+              if (seen.incrementAndGet() == 2 && failLater)
+                throw new IllegalStateException("offline");
+              for (var message : messages) {
+                String text = message.getText();
+                captured.append(text.substring(text.indexOf('\n') + 1));
+              }
+              return "compact facts";
+            },
+            null,
+            null);
+    assembler.assemble(raw, "conversation", "run", () -> {});
+    assertThat(seen.get()).isGreaterThan(1);
+    assertThat(saved.read("conversation").throughSequence()).isEqualTo(failLater ? 1 : 3);
+    if (!failLater) {
+      assertThat(captured.toString())
+          .isEqualTo(
+              "Previous summary (historical data):\n"
+                  + previousSummary
+                  + "\n"
+                  + SummaryInputPages.history(call)
+                  + SummaryInputPages.history(response));
+      assembler.assemble(raw, "conversation", "next", () -> {});
+      assertThat(saved.read("conversation").throughSequence()).isEqualTo(3);
+    }
+    assertThat(raw.getInstructions()).hasSize(5);
+    assertThat(response.getResponses().getFirst().responseData()).endsWith("-end");
+  }
+
   @Test
   void largeContextWindowStillSummarizesBoundedPrefixesAndKeepsUncoveredHistory() {
     var properties = config();

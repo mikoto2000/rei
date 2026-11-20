@@ -432,18 +432,39 @@ public class ContextAssembler {
             estimator.text(segment.summary.summary())
                 + prefix.stream().mapToLong(e -> estimator.message(e.message())).sum();
       }
+      boolean paged = count == 0 || before > max;
+      if (paged) {
+        // The first complete tool exchange itself is oversized. Page its summary DATA, but
+        // retain its atomic cursor and all raw history until every page has succeeded.
+        count = 1;
+        while (count < segment.entries.size()
+            && segment.entries.get(count).message() instanceof ToolResponseMessage) count++;
+        prefix = segment.entries.subList(0, count);
+        before =
+            estimator.text(segment.summary.summary())
+                + prefix.stream().mapToLong(e -> estimator.message(e.message())).sum();
+      }
       after = before;
-      if (count == 0 || before > max)
-        throw new ContextCompressionException(
-            ContextCompressionException.Reason.INPUT_BUDGET, before, max);
       through = prefix.getLast().sequence();
       var messages = prefix.stream().map(Entry::message).toList();
       var result =
-          budget == null
-              ? compressor.summarizeResult(
-                  segment.summary.summary(), messages, settings.summaryTokens(), raw)
-              : compressor.summarizeResult(
-                  segment.summary.summary(), messages, settings.summaryTokens(), raw, budget);
+          paged
+              ? SummaryInputPages.summarize(
+                  compressor,
+                  estimator,
+                  segment.summary.summary(),
+                  messages,
+                  settings.summaryTokens(),
+                  max,
+                  raw,
+                  budget,
+                  check,
+                  java.time.Duration.ofSeconds(settings.summaryTimeoutSeconds()))
+              : budget == null
+                  ? compressor.summarizeResult(
+                      segment.summary.summary(), messages, settings.summaryTokens(), raw)
+                  : compressor.summarizeResult(
+                      segment.summary.summary(), messages, settings.summaryTokens(), raw, budget);
       check.run();
       String text = result == null ? null : result.text();
       if (text == null || text.isBlank())

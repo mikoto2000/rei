@@ -53,6 +53,18 @@ public interface ConversationCompressor {
       List<Message> newlyCompressible,
       int maxTokens,
       Prompt ownerRequest,
+      dev.mikoto2000.rei.llm.ModelCallBudget budget,
+      java.time.Duration timeout) {
+    return budget == null
+        ? summarizeResult(previousSummary, newlyCompressible, maxTokens, ownerRequest)
+        : summarizeResult(previousSummary, newlyCompressible, maxTokens, ownerRequest, budget);
+  }
+
+  default Summary summarizeResult(
+      String previousSummary,
+      List<Message> newlyCompressible,
+      int maxTokens,
+      Prompt ownerRequest,
       dev.mikoto2000.rei.llm.ModelCallBudget budget) {
     return new Summary(
         summarize(previousSummary, newlyCompressible, maxTokens, ownerRequest, budget), null);
