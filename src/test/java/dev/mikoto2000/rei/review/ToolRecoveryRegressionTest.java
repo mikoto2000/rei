@@ -117,7 +117,7 @@ class ToolRecoveryRegressionTest {
             prompt -> {
               if (calls.incrementAndGet() == 1)
                 return batch(sibling("before"), rejected, sibling("after"));
-              var response = (ToolResponseMessage) prompt.getInstructions().getLast();
+              var response = latestToolResponse(prompt);
               assertThat(response.getResponses())
                   .extracting(ToolResponseMessage.ToolResponse::id)
                   .containsExactly("before", "rejected", "after");
@@ -155,13 +155,13 @@ class ToolRecoveryRegressionTest {
                 switch (calls.incrementAndGet()) {
                   case 1 -> batch(rejected);
                   case 2 -> {
-                    var response = (ToolResponseMessage) prompt.getInstructions().getLast();
+                    var response = latestToolResponse(prompt);
                     assertThat(response.getResponses().getFirst().responseData())
                         .contains("INVALID_TOOL_ARGUMENTS");
                     yield batch(call("fixed", "listReviewTasks", Map.of()));
                   }
                   case 3 -> {
-                    var response = (ToolResponseMessage) prompt.getInstructions().getLast();
+                    var response = latestToolResponse(prompt);
                     assertThat(response.getResponses().getFirst().responseData())
                         .contains("\"entries\":[]");
                     yield new AssistantMessage("Continued.");
@@ -184,7 +184,7 @@ class ToolRecoveryRegressionTest {
                   case 1 -> batch(sibling("saved"));
                   case 2 -> batch(sibling("duplicate"), sibling("duplicate"));
                   case 3 -> {
-                    assertThat(prompt.getInstructions().getLast().getText())
+                    assertThat(prompt.getContents())
                         .contains("duplicate tool-call IDs");
                     assertThat(prompt.getInstructions())
                         .anySatisfy(
@@ -322,6 +322,14 @@ class ToolRecoveryRegressionTest {
             event -> {});
     execution.setRunContext(owner);
     return execution;
+  }
+
+  private static ToolResponseMessage latestToolResponse(Prompt prompt) {
+    return prompt.getInstructions().stream()
+        .filter(ToolResponseMessage.class::isInstance)
+        .map(ToolResponseMessage.class::cast)
+        .toList()
+        .getLast();
   }
 
   private Prompt prompt(RunExecutionContext execution) {

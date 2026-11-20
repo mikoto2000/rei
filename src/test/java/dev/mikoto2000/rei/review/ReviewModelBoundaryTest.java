@@ -35,6 +35,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -142,8 +143,11 @@ class ReviewModelBoundaryTest {
                 if (n == 2) {
                   var prompt = (Prompt) invocation.getArgument(0);
                   var message =
-                      (org.springframework.ai.chat.messages.ToolResponseMessage)
-                          prompt.getInstructions().getLast();
+                      prompt.getInstructions().stream()
+                          .filter(ToolResponseMessage.class::isInstance)
+                          .map(ToolResponseMessage.class::cast)
+                          .toList()
+                          .getLast();
                   var correction =
                       tools.jackson.databind.json.JsonMapper.builder()
                           .build()
