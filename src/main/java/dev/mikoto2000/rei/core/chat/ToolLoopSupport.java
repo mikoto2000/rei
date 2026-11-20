@@ -181,6 +181,8 @@ public final class ToolLoopSupport {
       metadata.put("rei.deliveryPolicies", java.util.Map.copyOf(calls));
       if (message.getResponses().stream().anyMatch(ToolLoopSupport::reviewBudgetRejected))
         metadata.put("rei.reviewBudgetRecovery", true);
+      if (message.getResponses().stream().anyMatch(ToolLoopSupport::fileBudgetRejected))
+        metadata.put("rei.fileBudgetRecovery", true);
       var readGrant = dev.mikoto2000.rei.tooldelivery.FileReadContext.grant();
       if (readGrant != null) {
         var grants =
@@ -231,6 +233,13 @@ public final class ToolLoopSupport {
         tools.jackson.databind.json.JsonMapper.builder().build().readTree(response.responseData());
     return java.util.Set.of("CONTEXT_BUDGET_INSUFFICIENT", "REVIEW_PAGE_BUDGET_TOO_SMALL")
         .contains(result.path("error").asString());
+  }
+
+  private static boolean fileBudgetRejected(ToolResponseMessage.ToolResponse response) {
+    return java.util.Set.of("readMultiFile", "readPdfPage").contains(response.name())
+        && declaredRejection(response)
+        && "CONTEXT_BUDGET_INSUFFICIENT"
+            .equals(JSON.readTree(response.responseData()).path("error").asString());
   }
 
   /** 承認による中断や引数の修正を扱える実行経路を選び、未完了のツール呼び出しを進める。 */
@@ -429,6 +438,19 @@ public final class ToolLoopSupport {
                   call.id(), call.name(), result));
         }
       } catch (RuntimeException error) {
+        if (!Thread.currentThread().isInterrupted()
+            && !RunExecutionContext.isControlFailure(error)) {
+          var rejected = ToolResultRejectedException.find(error);
+          if (rejected != null) {
+            String correction =
+                rejected instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read
+                    ? context.toolReadCorrection(call.id(), call.name(), read)
+                    : context.toolOperationCorrection(call.id(), call.name(), rejected);
+            completed.add(new ToolResponseMessage.ToolResponse(call.id(), call.name(), correction));
+            argumentCorrections.add(call.id());
+            continue;
+          }
+        }
         for (Throwable cause : RunCancellation.causes(error)) {
           if (cause instanceof dev.mikoto2000.rei.core.policy.ToolPermissionException permission
               && permission.approvalId() != null) {

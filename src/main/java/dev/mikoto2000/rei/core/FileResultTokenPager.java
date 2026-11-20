@@ -56,8 +56,10 @@ final class FileResultTokenPager {
     var page = prefix(results, requests, capacities, low);
     long readable = capacities.stream().filter(capacity -> capacity > 0).count();
     if (estimate(page) > tokens || low < readable)
-      throw new IOException(
-          "CONTEXT_BUDGET_INSUFFICIENT; result metadata and a prefix of every file exceed the token budget; narrow the file batch or metadata");
+      throw new dev.mikoto2000.rei.toolcontract.ToolReadRejectedException(
+          "CONTEXT_BUDGET_INSUFFICIENT",
+          "Result metadata and a prefix of every file exceed the token budget; narrow the file"
+              + " batch or metadata. The host reserves context headroom for the next read.");
     return page;
   }
 

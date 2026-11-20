@@ -11,9 +11,27 @@ import org.junit.jupiter.params.provider.CsvSource;
 /** 失敗情報診断情報の結果と状態の契約を検証するテスト。 */
 class FailureDiagnosticsTest {
   @Test
+  void contextBudgetRejectionHasDedicatedDiagnosticWithoutLeakingDetails() {
+    var failure =
+        new IllegalStateException(
+            "PRIVATE_WRAPPER",
+            new dev.mikoto2000.rei.toolcontract.ToolReadRejectedException(
+                "CONTEXT_BUDGET_INSUFFICIENT", "PRIVATE"));
+    var diagnostic = FailureDiagnostics.classify(failure);
+    assertEquals("context_budget_insufficient", diagnostic.code());
+    assertTrue(diagnostic.message().contains("履歴"));
+    assertFalse(diagnostic.message().contains("PRIVATE"));
+    assertEquals(
+        "io_failure",
+        FailureDiagnostics.classify(new java.io.IOException("CONTEXT_BUDGET_INSUFFICIENT")).code());
+  }
+
+  @Test
   void nestedSocketFailuresReportConnectionLossWithoutExposingExceptionText() {
-    for (var message : java.util.List.of("Connection reset PRIVATE", "Network is unreachable PRIVATE")) {
-      var failure = new IllegalStateException("PRIVATE_WRAPPER", new java.net.SocketException(message));
+    for (var message :
+        java.util.List.of("Connection reset PRIVATE", "Network is unreachable PRIVATE")) {
+      var failure =
+          new IllegalStateException("PRIVATE_WRAPPER", new java.net.SocketException(message));
       var diagnostic = FailureDiagnostics.classify(failure);
       assertEquals("connection_lost", diagnostic.code());
       assertTrue(diagnostic.message().contains("接続が切断"));
@@ -25,7 +43,8 @@ class FailureDiagnosticsTest {
     assertEquals(
         "timeout",
         FailureDiagnostics.classify(new java.net.SocketTimeoutException("PRIVATE")).code());
-    assertEquals("io_failure", FailureDiagnostics.classify(new java.io.IOException("PRIVATE")).code());
+    assertEquals(
+        "io_failure", FailureDiagnostics.classify(new java.io.IOException("PRIVATE")).code());
   }
 
   @Test

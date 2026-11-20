@@ -142,6 +142,8 @@
 
 `readMultiFile` は残り byte / 行予算を残り要求件数で分け、最初の大きなファイルだけで予算を消費しない。短いファイルが使わなかった予算は後続に回す。Agent Run の最終 JSON token 上限でも、通常の行範囲の各ファイルに連続 prefix を公平に割り当てる。全ファイルの metadata と最小 prefix が収まらない場合は `CONTEXT_BUDGET_INSUFFICIENT` を返し、要求件数または metadata を減らすよう案内する。上限を引き上げたり中間本文を捨てたりしない。
 
+`readMultiFile` / `readPdfPage` のコンテキスト不足は I/O 障害ではなく、本文未配信の読み取り拒否として返す。次の文脈投影では最大8000トークン（入力上限の1/8以下）の空きを確保し、要約または古い完全な会話単位の除外で送信履歴を減らす。要約がタイムアウトして再試行待ちの間も、元の履歴と既存要約を保持したまま投影を縮める。モデルは拒否された読み取りだけを新しいツール呼び出しとして再試行し、成功済みの兄弟呼び出しは再実行しない。既存の修正回数・LLM呼び出し予算は維持し、固定入力などを減らせず空きを確保できない場合は `CONTEXT_HARD_LIMIT` で停止する。
+
 通常の行範囲の `truncationReason` は `SOURCE_BYTE_BUDGET` / `SOURCE_LINE_BUDGET` / `RESULT_TOKEN_BUDGET` を区別する。`truncated: true` と `nextRead` がある場合の空 `content` は、返却予算による継続待ちであり、空ファイルや読み取り失敗ではない。`continuationInstruction` の指示どおり各結果の `nextRead` を改変せず次の `files` 配列にまとめて渡す。空ファイルや範囲外は `truncated: false` で `nextRead` を持たない。Java symbol の選択結果も従来の `symbolOffset` による継続を維持する。
 
 返却 `version` は SHA-256 hex、`nextRead` は既存 `readMultiFile` にそのまま渡せる入力。`offset` は指定 startLine 内の UTF-16 offset であり、返却値を改変せず使う。`returnedBytes` は返却した source payload と行区切りの UTF-8 byte 数。search の `sections.startLine/endLine` は返却済みの行、`truncated` は source の省略を示す。巨大行の最後の行も部分返却になり得る。

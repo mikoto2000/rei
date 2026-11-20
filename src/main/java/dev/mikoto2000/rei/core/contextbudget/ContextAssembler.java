@@ -752,7 +752,8 @@ public class ContextAssembler {
     while (lastIndex >= 0 && messages.get(lastIndex) instanceof SystemMessage) lastIndex--;
     if (lastIndex >= 0
         && messages.get(lastIndex) instanceof ToolResponseMessage last
-        && Boolean.TRUE.equals(last.getMetadata().get("rei.reviewBudgetRecovery"))) {
+        && (Boolean.TRUE.equals(last.getMetadata().get("rei.reviewBudgetRecovery"))
+            || Boolean.TRUE.equals(last.getMetadata().get("rei.fileBudgetRecovery")))) {
       // Reserve a fresh source page without raising model limits or replaying a tool batch.
       // Summary calls still use the existing Run budget and cancellation checks.
       return Math.max(1, limit - Math.min(8000, limit / 8));

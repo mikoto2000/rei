@@ -3017,8 +3017,9 @@ public class Tools {
             && readInputLimit != null
             && dev.mikoto2000.rei.tooldelivery.FileReadContext.active()
             && bulkTokens < limits.minTokens())
-          throw new IOException(
-              "CONTEXT_BUDGET_INSUFFICIENT: no room for a file page; reduce the active prompt");
+          throw new dev.mikoto2000.rei.toolcontract.ToolReadRejectedException(
+              "CONTEXT_BUDGET_INSUFFICIENT",
+              "No room for a file page. The host reserves headroom by reducing the next prompt; retry only this read, using a smaller file batch if needed.");
         boolean bulk = bulkTokens > limits.maxTokens();
         int resultTokens = bulkTokens > 0 ? bulkTokens : limits.maxTokens();
         if (!whole && files.stream().anyMatch(request -> request.purpose() == ReadPurpose.OVERVIEW))
@@ -4005,7 +4006,9 @@ public class Tools {
         start = offset == null ? 0 : offset,
         budget = tokenBudget == null ? limits.targetTokens() : tokenBudget;
     if (budget < limits.minTokens() || budget > limits.maxTokens())
-      throw new IOException("CONTEXT_BUDGET_INSUFFICIENT");
+      throw new dev.mikoto2000.rei.toolcontract.ToolReadRejectedException(
+          "CONTEXT_BUDGET_INSUFFICIENT",
+          "Omit tokenBudget to use the host-selected page size and retry only this PDF page.");
     var root = currentWorkingDirectory();
     var snapshot = newSnapshots().get(root, resolveProjectPath(pathStr, root));
     if (expectedVersion != null
@@ -4055,7 +4058,8 @@ public class Tools {
               text);
       if (deliveryEstimator.text(FILE_RESULT_JSON.writeValueAsString(result)) > budget
           || low == 0 && start < text.length())
-        throw new IOException("CONTEXT_BUDGET_INSUFFICIENT");
+        throw new dev.mikoto2000.rei.toolcontract.ToolReadRejectedException(
+            "CONTEXT_BUDGET_INSUFFICIENT", "Reduce the active prompt and retry this PDF page.");
       observeRead.accept(snapshot.path());
       return result;
     }
