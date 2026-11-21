@@ -17,6 +17,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param maxTimeoutRetries 同じ更新期限内で許可する追加試行回数
  * @param batchTimeoutSeconds モデル枠待機を含む1バッチの制限秒数
  * @param maxOutputTokens 抽出応答の生成トークン上限
+ * @param enableThinking 対応サーバーの思考モード。null は提供元の設定を維持する
  * @param maxTurns 最大やり取り一覧
  */
 @ConfigurationProperties("rei.work-context")
@@ -32,7 +33,38 @@ public record WorkContextProperties(
     @DefaultValue("memory") String modelFeature,
     @DefaultValue("0") int maxTimeoutRetries,
     @DefaultValue("60") int batchTimeoutSeconds,
-    @DefaultValue("4096") int maxOutputTokens) {
+    @DefaultValue("4096") int maxOutputTokens,
+    Boolean enableThinking) {
+  /** Preserve constructor compatibility without overriding the provider's thinking mode. */
+  public WorkContextProperties(
+      boolean autoUpdate,
+      boolean autoPresent,
+      int maxContextTokens,
+      int maxInputTokens,
+      int timeoutSeconds,
+      int maxTurns,
+      int batchEvidenceTokens,
+      int maxExtractionBatches,
+      String modelFeature,
+      int maxTimeoutRetries,
+      int batchTimeoutSeconds,
+      int maxOutputTokens) {
+    this(
+        autoUpdate,
+        autoPresent,
+        maxContextTokens,
+        maxInputTokens,
+        timeoutSeconds,
+        maxTurns,
+        batchEvidenceTokens,
+        maxExtractionBatches,
+        modelFeature,
+        maxTimeoutRetries,
+        batchTimeoutSeconds,
+        maxOutputTokens,
+        null);
+  }
+
   public WorkContextProperties(
       boolean autoUpdate,
       boolean autoPresent,

@@ -123,8 +123,19 @@ Native Workspaceの「Work Context / 引き継ぎ」「Work Context 更新履歴
 | `batch-timeout-seconds` | 60 | `REI_WORK_CONTEXT_BATCH_TIMEOUT_SECONDS` |
 | `max-output-tokens` | 4096 | `REI_WORK_CONTEXT_MAX_OUTPUT_TOKENS` |
 | `max-timeout-retries` | 0 | `REI_WORK_CONTEXT_MAX_TIMEOUT_RETRIES` |
+| `enable-thinking` | 未指定（提供元の設定を維持） | `REI_WORK_CONTEXT_ENABLE_THINKING` |
 
 1バッチの60秒にはモデル枠の待機も含み、残りの更新期限より長く待ちません。出力上限は `maxTokens` と `maxCompletionTokens` の両形式に対応し、機能別設定の上限が小さければそれを維持します。出力が上限で途切れた場合は不完全なJSONを採用しません。
+
+思考型モデルは、JSON本文を出す前の reasoning に時間と生成トークンを使います。ストリームの開始だけでは、抽出結果が生成されたとは限りません。`chat_template_kwargs.enable_thinking` に対応する提供元では、次の設定で Work Context 抽出だけ思考モードを無効にできます。未指定なら追加パラメータを送らず、既存の提供元設定を維持します。通常会話・Sleepや共用モデルの設定を変更しません。対応しない提供元には指定しないでください。
+
+```yaml
+rei:
+  work-context:
+    enable-thinking: false
+```
+
+この設定はプロバイダーの既存 `extraBody` と `chat_template_kwargs` の他の項目を保持し、要求ごとに適用します。設定変更には更新済みビルドでの再起動が必要です。タイムアウト時のバックエンドログは、モデル枠待機 (`model-slot`) と応答待機 (`model-response`)、推定入力tokens、受信した本文文字数、バッチと更新全体の上限を記録します。会話本文やモデルの応答本文は記録しません。期限内に収まることはサーバー負荷や出力量にも依存します。
 
 再試行を有効にする場合は0〜2回で指定します。タイムアウトしたバッチのみを再試行し、成功済みバッチを再実行したり、更新全体の期限を延ばしたりしません。認証・構文・入力上限・キャンセル・モデル障害後の待機は即座に終了します。全バッチ成功までrevisionとprocessedRunsを保存せず、失敗したRunは後で明示更新できます。推論サーバーの復旧そのものを保証する機能ではありません。
 

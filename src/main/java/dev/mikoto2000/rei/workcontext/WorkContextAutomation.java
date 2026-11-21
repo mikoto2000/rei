@@ -186,7 +186,9 @@ public class WorkContextAutomation implements AutoCloseable {
         AgentEventType.WORK_CONTEXT_UPDATE_FAILED,
         null,
         diagnostic.display()
-            + ("timeout".equals(diagnostic.code()) ? " 設定: rei.work-context.timeout-seconds。" : "")
+            + ("timeout".equals(diagnostic.code())
+                ? " 設定: rei.work-context.batch-timeout-seconds / rei.work-context.timeout-seconds。抽出モデルの思考モードと稼働状況も確認してください。"
+                : "")
             + " 元 Run の結果には影響しません。/work show で保存状態を確認し、必要なら /work update を実行してください。");
   }
 

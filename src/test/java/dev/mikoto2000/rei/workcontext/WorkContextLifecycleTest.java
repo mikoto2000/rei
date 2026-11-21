@@ -86,6 +86,7 @@ class WorkContextLifecycleTest {
     assertTrue(status.contains("/work update"));
     assertFalse(status.contains("PRIVATE"));
     assertTrue(status.contains("rei.work-context.timeout-seconds"));
+    assertTrue(status.contains("rei.work-context.batch-timeout-seconds"));
   }
 
   /** 作業文脈の引き継ぎで、指定した条件に対する結果と状態の変化を確認する。 */
