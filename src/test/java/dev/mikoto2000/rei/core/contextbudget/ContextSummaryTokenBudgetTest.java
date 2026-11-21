@@ -38,6 +38,53 @@ import reactor.core.publisher.Flux;
 
 /** 文脈要約トークン予算の結果と状態の契約を検証するテスト。 */
 class ContextSummaryTokenBudgetTest {
+  @Test
+  @org.junit.jupiter.api.Tag("integration")
+  void oversizedPageAndItsRepairBothChargeUsageToTheOriginalRun() {
+    var properties = compressionConfig();
+    properties.setSummaryInputTokens(1024);
+    properties.setHardLimit(100000);
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    var targets = new java.util.ArrayList<Integer>();
+    var model = mock(ChatModel.class);
+    when(model.stream(any(Prompt.class)))
+        .thenAnswer(invocation -> {
+          var options =
+              (org.springframework.ai.openai.OpenAiChatOptions)
+                  ((Prompt) invocation.getArgument(0)).getOptions();
+          targets.add(options.getMaxTokens());
+          boolean first = calls.incrementAndGet() == 1;
+          return Flux.just(
+              new ChatResponse(
+                  List.of(
+                      new Generation(
+                          new AssistantMessage(
+                              first ? "too verbose draft" : "compact decision; pending test"))),
+                  ChatResponseMetadata.builder()
+                      .usage(new DefaultUsage(10, first ? 200 : 10))
+                      .build()));
+        });
+    var budget = new OutputLimitRunBudget(0, 100, null, 10000);
+    var execution = new RunExecutionContext("run", budget, null, null, null);
+    var summaries = new ConversationSummaryRepository(dir);
+    var raw =
+        new Prompt(
+            List.of(
+                ContextHistoryAdvisor.historical(
+                    new UserMessage("synthetic facts ".repeat(1000)), 1),
+                ContextHistoryAdvisor.historical(new AssistantMessage("recent"), 2),
+                new UserMessage("current")),
+            ToolCallingChatOptions.builder()
+                .toolContext(Map.of(RunExecutionContext.KEY, execution))
+                .build());
+    assembler(properties, compressor(model, properties), summaries)
+        .assemble(raw, "chat", "run", execution::checkActive);
+    assertThat(calls.get()).isGreaterThan(2);
+    assertThat(targets).startsWith(8292, 8242);
+    assertThat(budget.totalTokens()).isEqualTo(210L + (calls.get() - 1L) * 20);
+    assertThat(summaries.read("chat").throughSequence()).isEqualTo(1);
+  }
+
   /** 検証に使うディレクトリ。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir;
 

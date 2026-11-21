@@ -466,10 +466,7 @@ public class ContextAssembler {
       if (text == null || text.isBlank())
         throw new ContextCompressionException(ContextCompressionException.Reason.EMPTY_SUMMARY);
       after = estimator.text(text);
-      long outputTokens =
-          result.outputTokens() != null && result.outputTokens() > 0
-              ? result.outputTokens()
-              : after;
+      long outputTokens = result.textTokens(estimator);
       if (outputTokens > settings.summaryTokens())
         throw new ContextCompressionException(
             ContextCompressionException.Reason.SUMMARY_TOO_LONG,
