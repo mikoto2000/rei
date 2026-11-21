@@ -40,11 +40,20 @@ class OpenAiSdkConfigurationTest {
   @Test
   void boundConnectionOptionsKeepLegacyWirePathsAndConfiguredModels() {
     runner()
-        .withPropertyValues("rei.llm.read-timeout=8m")
+        .withPropertyValues(
+            "rei.llm.read-timeout=8m", "spring.ai.openai.chat.options.temperature=0.25")
         .run(context -> {
           assertThat(context).hasNotFailed();
           var chat = context.getBean(OpenAiChatModel.class);
           assertThat(chat.getOptions().getModel()).isEqualTo("local-chat");
+          assertThat(chat.getOptions().getMaxRetries()).isZero();
+          assertThat(chat.getOptions().getTemperature()).isEqualTo(0.25);
+          var properties =
+              context.getBean(
+                  org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties.class);
+          assertThat(properties).isSameAs(context.getBean("reiOpenAiChatProperties"));
+          assertThat(properties.getMaxRetries()).isZero();
+          assertThat(properties.toOptions().getMaxRetries()).isZero();
           assertThat(chat.call(new Prompt("hello")).getResult().getOutput().getText())
               .isEqualTo("hello");
           var image = context.getBean(OpenAiImageModel.class);
@@ -113,6 +122,7 @@ class OpenAiSdkConfigurationTest {
       return builder ->
           builder.interceptor(chain -> {
             var request = chain.request();
+            assertThat(request.header("Authorization")).isEqualTo("Bearer dummy-key");
             requests.readTimeouts.add(chain.readTimeoutMillis());
             requests.urls.add(request.url().toString());
             var buffer = new okio.Buffer();

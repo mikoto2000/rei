@@ -47,6 +47,22 @@ class StreamTimeoutRetryTest {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }
 
+  @Test
+  void inheritedRecoveryAdmissionSurvivesAnInnerInitialAttempt() {
+    var model = mock(ChatModel.class);
+    when(model.stream(any(Prompt.class)))
+        .thenReturn(
+            Flux.deferContextual(values -> {
+              assertThat(values.getOrDefault("rei.modelAdmission.waitForRecovery", false)).isTrue();
+              return Flux.just(text("recovered"));
+            }));
+    var context = context(new OutputLimitRunBudget(2, 5));
+    context.consumeNextLlmCall();
+    StreamTimeoutRetry.stream(model, new Prompt("work"), context, 0, response -> {})
+        .contextWrite(values -> values.put("rei.modelAdmission.waitForRecovery", true))
+        .blockLast();
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void retriesSamePromptAndDiscardsIncompleteAggregate(boolean partial) {

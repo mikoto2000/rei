@@ -80,6 +80,22 @@ final class ModelOutageGuard {
     if (permit.generation() == generation && permit.probe()) probing = false;
   }
 
+  /** Await admission without blocking a worker or issuing a model request. */
+  reactor.core.publisher.Mono<Permit> acquireAfterCooldown(Runnable checkActive) {
+    return reactor.core.publisher.Mono.fromCallable(
+            () -> {
+              checkActive.run();
+              return acquire();
+            })
+        .retryWhen(
+            reactor.util.retry.Retry.fixedDelay(Long.MAX_VALUE, Duration.ofMillis(100))
+                .filter(CoolingDown.class::isInstance))
+        // A permanently occupied probe must not retain a retry forever. Callers may impose a
+        // shorter Run/update deadline, which cancels this subscription and all pending polls.
+        .timeout(cooldown.plus(Duration.ofMinutes(1)))
+        .doOnDiscard(Permit.class, this::cancelled);
+  }
+
   /** Contains no provider body, endpoint, prompt or credentials. */
   static final class CoolingDown extends IllegalStateException
       implements dev.mikoto2000.rei.toolcontract.ExternalReadFailure {

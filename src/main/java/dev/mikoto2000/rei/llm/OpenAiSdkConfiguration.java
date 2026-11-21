@@ -14,6 +14,19 @@ import org.springframework.core.env.Environment;
  */
 @Configuration(proxyBeanMethods = false)
 public class OpenAiSdkConfiguration {
+  /** AI 2.1 does not copy connection retry settings into its request options. */
+  @Bean
+  @org.springframework.context.annotation.Primary
+  @org.springframework.boot.context.properties.ConfigurationProperties("spring.ai.openai.chat")
+  org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties reiOpenAiChatProperties() {
+    return new org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties() {
+      @Override
+      public org.springframework.ai.openai.OpenAiChatOptions toOptions() {
+        return super.toOptions().mutate().maxRetries(0).build();
+      }
+    };
+  }
+
   /** 必要な対象を利用できるよう、AIサーバー作業ルートCompatibilityの利用を開始する。 */
   @Bean
   static BeanPostProcessor openAiServerRootCompatibility() {
@@ -21,6 +34,12 @@ public class OpenAiSdkConfiguration {
       /** 用途に応じたモデル利用で用いる投稿プロセス変更前初期化を返す。 */
       @Override
       public Object postProcessBeforeInitialization(Object bean, String beanName) {
+        if (bean
+            instanceof
+            org.springframework.ai.model.openai.autoconfigure.OpenAiChatProperties chat) {
+          // Physical text requests are retried only by Rei's budgeted application boundary.
+          chat.setMaxRetries(0);
+        }
         if (bean instanceof AbstractOpenAiProperties properties) {
           properties.setBaseUrl(OpenAiCompatibleEndpoint.baseUrl(properties.getBaseUrl()));
           // Rei's empty per-feature key means inherit the shared key; AI 2 treats an

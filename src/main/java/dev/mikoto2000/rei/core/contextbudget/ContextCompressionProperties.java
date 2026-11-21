@@ -49,6 +49,9 @@ public class ContextCompressionProperties {
   /** 要約本文とは別に、モデルの思考などに確保する生成トークン数。 */
   private int summaryGenerationReserve = 8192;
 
+  /** Optional chat_template_kwargs override for compatible reasoning servers; null inherits. */
+  private Boolean summaryEnableThinking;
+
   /** One summary request is bounded independently of the conversation window. */
   private int summaryInputTokens = 24000;
 

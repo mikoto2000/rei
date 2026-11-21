@@ -230,7 +230,12 @@ public final class BoundedToolLoop {
                         checkActive.run();
                         started.set(true);
                         if (retrying) retries.attempts.incrementAndGet();
-                        var stream = model.stream(prompt);
+                        var stream =
+                            model.stream(prompt)
+                                .contextWrite(context ->
+                                    retrying
+                                        ? context.put("rei.modelAdmission.waitForRecovery", true)
+                                        : context);
                         return trace == null
                             ? stream
                             : stream.contextWrite(context ->

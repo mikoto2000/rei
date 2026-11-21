@@ -9,6 +9,31 @@ import org.springframework.ai.chat.model.ChatModel;
 /** 言語モデルモデル提供元の結果と状態の契約を検証するテスト。 */
 class LlmModelProviderTest {
   @Test
+  void applicationRetryBoundariesOwnAllTextRequestRetries() {
+    var defaults = Mockito.mock(ChatModel.class);
+    Mockito.when(defaults.getOptions())
+        .thenReturn(
+            org.springframework.ai.openai.OpenAiChatOptions.builder()
+                .model("default")
+                .maxRetries(7)
+                .build());
+    var properties = new LlmProperties();
+    var server = new LlmProperties.Server();
+    server.setBaseUrl("http://127.0.0.1:1/v1");
+    server.setModel("custom");
+    server.setFallbackToDefault(false);
+    properties.setFeature("custom", server);
+    var provider = new LlmModelProvider(defaults, properties);
+    for (String feature : java.util.List.of("chat", "memory", "custom", "voice-correction"))
+      assertThat(provider.chatOptions(feature, null).getMaxRetries()).isZero();
+    assertThat(
+            ((org.springframework.ai.openai.OpenAiChatOptions)
+                    provider.chatModel("custom").getOptions())
+                .getMaxRetries())
+        .isZero();
+  }
+
+  @Test
   void isolatedFeatureRejectsAmbientFallbackToolAuthority() {
     var callback =
         org.springframework.ai.tool.function.FunctionToolCallback.builder(

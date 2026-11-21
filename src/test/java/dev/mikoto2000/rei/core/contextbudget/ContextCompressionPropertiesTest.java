@@ -4,9 +4,41 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
 /** 文脈圧縮設定の結果と状態の契約を検証するテスト。 */
 class ContextCompressionPropertiesTest {
+  @Test
+  void absentThinkingOverridePreservesProviderDefault() {
+    assertThat(new ContextCompressionProperties().getSummaryEnableThinking()).isNull();
+    var properties =
+        new Binder(
+                new MapConfigurationPropertySource(
+                    java.util.Map.of("rei.context-compression.summary-input-tokens", "24000")))
+            .bind("rei.context-compression", Bindable.of(ContextCompressionProperties.class))
+            .orElseThrow(() -> new IllegalStateException("Missing compression properties"));
+    assertThat(properties.getSummaryEnableThinking()).isNull();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void bindsExplicitSummaryThinkingOverride(boolean thinking) {
+    var properties =
+        new Binder(
+                new MapConfigurationPropertySource(
+                    java.util.Map.of(
+                        "rei.context-compression.summary-enable-thinking",
+                        Boolean.toString(thinking))))
+            .bind("rei.context-compression", Bindable.of(ContextCompressionProperties.class))
+            .orElseThrow(() -> new IllegalStateException("Missing compression properties"));
+    assertThat(properties.getSummaryEnableThinking()).isEqualTo(thinking);
+    properties.validate();
+  }
+
   @Test
   void validatesGenerationReserveWithoutIntegerOverflow() {
     var properties = new ContextCompressionProperties();

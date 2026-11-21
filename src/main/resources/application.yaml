@@ -172,6 +172,8 @@ rei:
     summary-model-feature: ${REI_CONTEXT_SUMMARY_MODEL_FEATURE:chat}
     summary-model-context-limit: ${REI_CONTEXT_SUMMARY_MODEL_CONTEXT_LIMIT:128000}
     summary-generation-reserve: ${REI_CONTEXT_SUMMARY_GENERATION_RESERVE:8192}
+    # Optional per-summary override for servers supporting chat_template_kwargs.enable_thinking.
+    summary-enable-thinking: ${REI_CONTEXT_SUMMARY_ENABLE_THINKING:}
     minimum-compression-gain: ${REI_CONTEXT_MINIMUM_GAIN:0.1}
     tool-result-threshold: ${REI_CONTEXT_TOOL_RESULT_THRESHOLD:8000}
     tool-result-tokens: ${REI_CONTEXT_TOOL_RESULT_TOKENS:2000}
@@ -408,6 +410,9 @@ rei:
     enabled: ${REI_INTEREST_ENABLED:false}
     lookback-days: ${REI_INTEREST_LOOKBACK_DAYS:7}
     message-limit: ${REI_INTEREST_MESSAGE_LIMIT:200}
+    extraction-max-input-tokens: ${REI_INTEREST_EXTRACTION_MAX_INPUT_TOKENS:24000}
+    extraction-timeout-seconds: ${REI_INTEREST_EXTRACTION_TIMEOUT_SECONDS:120}
+    extraction-max-output-tokens: ${REI_INTEREST_EXTRACTION_MAX_OUTPUT_TOKENS:4096}
     min-score: ${REI_INTEREST_MIN_SCORE:0.6}
     max-topics: ${REI_INTEREST_MAX_TOPICS:3}
     recent-hours: ${REI_INTEREST_RECENT_HOURS:24}
