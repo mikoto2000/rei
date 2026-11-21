@@ -187,7 +187,7 @@ public class WorkContextAutomation implements AutoCloseable {
         null,
         diagnostic.display()
             + ("timeout".equals(diagnostic.code())
-                ? " 設定: rei.work-context.batch-timeout-seconds / timeout-seconds。抽出モデルの思考モードと稼働状況も確認してください。"
+                ? " 設定: rei.work-context.batch-timeout-seconds / rei.work-context.timeout-seconds。抽出モデルの思考モードと稼働状況も確認してください。"
                 : "")
             + " 元 Run の結果には影響しません。/work show で保存状態を確認し、必要なら /work update を実行してください。");
   }
