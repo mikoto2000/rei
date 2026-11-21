@@ -35,6 +35,67 @@ import reactor.core.publisher.Flux;
 /** 言語モデル作業文脈情報の抽出の結果と状態の契約を検証するテスト。 */
 class LlmWorkContextExtractorTest {
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.NullSource
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void thinkingOverrideIsRequestLocalAndPreservesOtherTemplateOptions(Boolean thinking) {
+    var models = mock(LlmModelProvider.class);
+    var model = mock(ChatModel.class);
+    var template = Map.<String, Object>of("enable_thinking", true, "format", "original");
+    var extra = Map.<String, Object>of("chat_template_kwargs", template, "other", 7);
+    var base = OpenAiChatOptions.builder().extraBody(extra).build();
+    when(models.memoryChatModel()).thenReturn(model);
+    when(models.chatOptions("memory", null)).thenReturn(base);
+    when(model.stream(any(Prompt.class)))
+        .thenAnswer(
+            call -> {
+              var options = (OpenAiChatOptions) ((Prompt) call.getArgument(0)).getOptions();
+              assertEquals(
+                  Map.of(
+                      "chat_template_kwargs",
+                      Map.of(
+                          "enable_thinking",
+                          thinking == null ? true : thinking,
+                          "format",
+                          "original"),
+                      "other",
+                      7),
+                  options.getExtraBody());
+              return Flux.just(
+                  new ChatResponse(
+                      List.of(new Generation(new AssistantMessage("{\"changes\":[]}")))));
+            });
+    var extractor =
+        new LlmWorkContextExtractor(
+            models,
+            new WorkContextProperties(
+                false, true, 1200, 12000, 240, 20, 4000, 16, "memory", 0, 60, 4096, thinking));
+    extractor.extract(evidence("task"), List.of(), "COMPLETED");
+    assertEquals(extra, base.getExtraBody());
+    assertEquals(true, template.get("enable_thinking"));
+  }
+
+  @Test
+  void thinkingOverrideRejectsMalformedTemplateOptionsBeforeCallingTheModel() {
+    var models = mock(LlmModelProvider.class);
+    var model = mock(ChatModel.class);
+    when(models.memoryChatModel()).thenReturn(model);
+    when(models.chatOptions("memory", null))
+        .thenReturn(
+            OpenAiChatOptions.builder()
+                .extraBody(Map.of("chat_template_kwargs", "invalid"))
+                .build());
+    var extractor =
+        new LlmWorkContextExtractor(
+            models,
+            new WorkContextProperties(
+                false, true, 1200, 12000, 240, 20, 4000, 16, "memory", 0, 60, 4096, false));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> extractor.extract(evidence("task"), List.of(), "COMPLETED"));
+    verify(model, never()).stream(any(Prompt.class));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void outputBudgetCapsBothProviderLimitStylesAndPreservesSmallerLimits(boolean completion) {
     var models = mock(LlmModelProvider.class);

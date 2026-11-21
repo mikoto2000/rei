@@ -27,8 +27,22 @@ class WorkContextPropertiesTest {
     assertEquals(2048, properties.maxOutputTokens());
     assertEquals(240, properties.timeoutSeconds());
     assertEquals("memory", properties.modelFeature());
+    assertEquals(null, properties.enableThinking());
     assertEquals(
         0, new WorkContextProperties(false, true, 1200, 12000, 240, 20).maxTimeoutRetries());
+  }
+
+  @Test
+  void bindsExplicitThinkingModeWithoutChangingTheProviderDefaultWhenAbsent() {
+    for (boolean thinking : new boolean[] {false, true}) {
+      var properties =
+          new Binder(
+                  new MapConfigurationPropertySource(
+                      Map.of("rei.work-context.enable-thinking", Boolean.toString(thinking))))
+              .bind("rei.work-context", Bindable.of(WorkContextProperties.class))
+              .orElseThrow(() -> new IllegalStateException("Missing Work Context properties"));
+      assertEquals(thinking, properties.enableThinking());
+    }
   }
 
   @Test

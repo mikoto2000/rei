@@ -129,6 +129,26 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
               : Math.min(tokenLimit, properties.maxOutputTokens()));
     optionsBuilder.toolCallbacks(List.of());
     optionsBuilder.toolChoice("none");
+    if (properties.enableThinking() != null) {
+      // Request-local override: do not change the shared memory/chat model or its defaults.
+      var extra = new java.util.LinkedHashMap<String, Object>();
+      if (baseOptions.getExtraBody() != null) extra.putAll(baseOptions.getExtraBody());
+      var template = new java.util.LinkedHashMap<String, Object>();
+      var configured = extra.get("chat_template_kwargs");
+      if (configured != null) {
+        if (!(configured instanceof Map<?, ?> values))
+          throw new IllegalArgumentException("chat_template_kwargs must be an object");
+        values.forEach(
+            (key, value) -> {
+              if (!(key instanceof String name))
+                throw new IllegalArgumentException("chat_template_kwargs keys must be strings");
+              template.put(name, value);
+            });
+      }
+      template.put("enable_thinking", properties.enableThinking());
+      extra.put("chat_template_kwargs", template);
+      optionsBuilder.extraBody(extra);
+    }
     var options = optionsBuilder.build();
     ToolLoopSupport.requireNoRawTools(options);
     var result = new StringBuilder();
@@ -182,6 +202,15 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
       if (cause instanceof Error fatal) throw fatal;
       RunCancellation.propagate(error);
       RunCancellation.propagateStopped(cause);
+      if (WorkContextExtractionDeadline.isTimeout(error))
+        org.slf4j.LoggerFactory.getLogger(LlmWorkContextExtractor.class)
+            .warn(
+                "Work Context timeout: phase={}, inputTokens={}, responseChars={}, batchTimeoutSeconds={}, updateTimeoutSeconds={}",
+                acquired ? "model-response" : "model-slot",
+                inputTokens,
+                result.length(),
+                properties.batchTimeoutSeconds(),
+                properties.timeoutSeconds());
       if (cause instanceof WorkContextExtractionException extraction) throw extraction;
       if (cause instanceof IllegalStateException state) throw state;
       if (cause instanceof IllegalArgumentException argument) throw argument;
