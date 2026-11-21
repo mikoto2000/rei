@@ -212,22 +212,20 @@ public class ConversationHistorySearchService {
       var messages =
           entries.stream()
               .skip(Math.max(0, entries.size() - budget))
-              .map(
-                  e ->
-                      new ConversationHistoryMessage(
-                          e.speaker(), e.timestamp().toInstant().toString(), e.content()))
+              .map(e ->
+                  new ConversationHistoryMessage(
+                      e.speaker(), e.timestamp().toInstant().toString(), e.content()))
               .toList();
       if (messages.isEmpty()) messages = findChatDetail(id, budget);
       if (foreign)
         messages =
             messages.stream()
-                .map(
-                    m ->
-                        new ConversationHistoryMessage(
-                            m.speaker(),
-                            m.timestamp(),
-                            HistoryRetrievalPolicy.clip(
-                                m.content(), HistoryRetrievalPolicy.CONTENT_MAX_CHARS)))
+                .map(m ->
+                    new ConversationHistoryMessage(
+                        m.speaker(),
+                        m.timestamp(),
+                        HistoryRetrievalPolicy.clip(
+                            m.content(), HistoryRetrievalPolicy.CONTENT_MAX_CHARS)))
                 .toList();
       return new ConversationHistoryDetail(
           id,
@@ -278,27 +276,23 @@ public class ConversationHistorySearchService {
     return readAllLogs.get().stream()
         .filter(entry -> scope.equals("all") || entry.scope().equals(scope))
         .filter(entry -> speaker == null || entry.speaker().equalsIgnoreCase(speaker))
-        .filter(
-            entry ->
-                timeRange.sinceEpochMillis() == null
-                    || entry.timestamp().toInstant().toEpochMilli() >= timeRange.sinceEpochMillis())
-        .filter(
-            entry ->
-                timeRange.untilEpochMillis() == null
-                    || entry.timestamp().toInstant().toEpochMilli() <= timeRange.untilEpochMillis())
-        .filter(
-            entry ->
-                terms.stream()
-                    .allMatch(term -> entry.content().toLowerCase(Locale.ROOT).contains(term)))
-        .map(
-            entry ->
-                new ConversationSearchResult(
-                    entry.conversationId(),
-                    entry.scope(),
-                    entry.speaker(),
-                    entry.timestamp().toInstant().toString(),
-                    preview(entry.content(), SUMMARY_MAX_LENGTH),
-                    preview(entry.content(), CONTENT_MAX_LENGTH)))
+        .filter(entry ->
+            timeRange.sinceEpochMillis() == null
+                || entry.timestamp().toInstant().toEpochMilli() >= timeRange.sinceEpochMillis())
+        .filter(entry ->
+            timeRange.untilEpochMillis() == null
+                || entry.timestamp().toInstant().toEpochMilli() <= timeRange.untilEpochMillis())
+        .filter(entry ->
+            terms.stream()
+                .allMatch(term -> entry.content().toLowerCase(Locale.ROOT).contains(term)))
+        .map(entry ->
+            new ConversationSearchResult(
+                entry.conversationId(),
+                entry.scope(),
+                entry.speaker(),
+                entry.timestamp().toInstant().toString(),
+                preview(entry.content(), SUMMARY_MAX_LENGTH),
+                preview(entry.content(), CONTENT_MAX_LENGTH)))
         .toList();
   }
 
@@ -311,10 +305,9 @@ public class ConversationHistorySearchService {
             .toList();
     return entries.stream()
         .skip(Math.max(0, entries.size() - limit))
-        .map(
-            entry ->
-                new ConversationHistoryMessage(
-                    entry.speaker(), entry.timestamp().toInstant().toString(), entry.content()))
+        .map(entry ->
+            new ConversationHistoryMessage(
+                entry.speaker(), entry.timestamp().toInstant().toString(), entry.content()))
         .toList();
   }
 
@@ -324,12 +317,12 @@ public class ConversationHistorySearchService {
     StringBuilder sql =
         new StringBuilder(
             """
-        SELECT conversation_id, content, type, timestamp
-        FROM SPRING_AI_CHAT_MEMORY
-        WHERE 1 = 1
-        AND conversation_id NOT LIKE 'bluesky-manual:%'
-        AND conversation_id NOT LIKE 'tool:%'
-        """);
+            SELECT conversation_id, content, type, timestamp
+            FROM SPRING_AI_CHAT_MEMORY
+            WHERE 1 = 1
+            AND conversation_id NOT LIKE 'bluesky-manual:%'
+            AND conversation_id NOT LIKE 'tool:%'
+            """);
     List<Object> params = new ArrayList<>();
     addQueryConditions(sql, params, query);
     if (speaker != null) {
@@ -350,19 +343,18 @@ public class ConversationHistorySearchService {
       return jdbcClient
           .sql(sql.toString())
           .params(params)
-          .query(
-              (rs, rowNum) -> {
-                String content = rs.getString("content");
-                String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
-                String conversationId = rs.getString("conversation_id");
-                return new ConversationSearchResult(
-                    conversationId.startsWith("chat:") ? conversationId : "chat:" + conversationId,
-                    "chat",
-                    normalizeChatSpeaker(rs.getString("type")),
-                    timestamp,
-                    preview(content, SUMMARY_MAX_LENGTH),
-                    preview(content, CONTENT_MAX_LENGTH));
-              })
+          .query((rs, rowNum) -> {
+            String content = rs.getString("content");
+            String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
+            String conversationId = rs.getString("conversation_id");
+            return new ConversationSearchResult(
+                conversationId.startsWith("chat:") ? conversationId : "chat:" + conversationId,
+                "chat",
+                normalizeChatSpeaker(rs.getString("type")),
+                timestamp,
+                preview(content, SUMMARY_MAX_LENGTH),
+                preview(content, CONTENT_MAX_LENGTH));
+          })
           .list();
     } catch (DataAccessException e) {
       return List.of();
@@ -375,11 +367,11 @@ public class ConversationHistorySearchService {
     StringBuilder sql =
         new StringBuilder(
             """
-        SELECT conversation_id, content, type, timestamp
-        FROM SPRING_AI_CHAT_MEMORY
-        WHERE 1 = 1
-        AND conversation_id LIKE 'bluesky-manual:%'
-        """);
+            SELECT conversation_id, content, type, timestamp
+            FROM SPRING_AI_CHAT_MEMORY
+            WHERE 1 = 1
+            AND conversation_id LIKE 'bluesky-manual:%'
+            """);
     List<Object> params = new ArrayList<>();
     addQueryConditions(sql, params, query);
     if (speaker != null) {
@@ -400,19 +392,18 @@ public class ConversationHistorySearchService {
       return jdbcClient
           .sql(sql.toString())
           .params(params)
-          .query(
-              (rs, rowNum) -> {
-                String content = rs.getString("content");
-                String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
-                String conversationId = rs.getString("conversation_id");
-                return new ConversationSearchResult(
-                    conversationId,
-                    "bluesky-manual",
-                    normalizeChatSpeaker(rs.getString("type")),
-                    timestamp,
-                    preview(content, SUMMARY_MAX_LENGTH),
-                    preview(content, CONTENT_MAX_LENGTH));
-              })
+          .query((rs, rowNum) -> {
+            String content = rs.getString("content");
+            String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
+            String conversationId = rs.getString("conversation_id");
+            return new ConversationSearchResult(
+                conversationId,
+                "bluesky-manual",
+                normalizeChatSpeaker(rs.getString("type")),
+                timestamp,
+                preview(content, SUMMARY_MAX_LENGTH),
+                preview(content, CONTENT_MAX_LENGTH));
+          })
           .list();
     } catch (DataAccessException e) {
       return List.of();
@@ -425,11 +416,11 @@ public class ConversationHistorySearchService {
     StringBuilder sql =
         new StringBuilder(
             """
-        SELECT conversation_id, content, type, timestamp
-        FROM SPRING_AI_CHAT_MEMORY
-        WHERE 1 = 1
-        AND conversation_id LIKE 'tool:%'
-        """);
+            SELECT conversation_id, content, type, timestamp
+            FROM SPRING_AI_CHAT_MEMORY
+            WHERE 1 = 1
+            AND conversation_id LIKE 'tool:%'
+            """);
     List<Object> params = new ArrayList<>();
     addQueryConditions(sql, params, query);
     if (speaker != null) {
@@ -450,19 +441,18 @@ public class ConversationHistorySearchService {
       return jdbcClient
           .sql(sql.toString())
           .params(params)
-          .query(
-              (rs, rowNum) -> {
-                String content = rs.getString("content");
-                String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
-                String conversationId = rs.getString("conversation_id");
-                return new ConversationSearchResult(
-                    conversationId,
-                    "tool",
-                    normalizeChatSpeaker(rs.getString("type")),
-                    timestamp,
-                    preview(content, SUMMARY_MAX_LENGTH),
-                    preview(content, CONTENT_MAX_LENGTH));
-              })
+          .query((rs, rowNum) -> {
+            String content = rs.getString("content");
+            String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
+            String conversationId = rs.getString("conversation_id");
+            return new ConversationSearchResult(
+                conversationId,
+                "tool",
+                normalizeChatSpeaker(rs.getString("type")),
+                timestamp,
+                preview(content, SUMMARY_MAX_LENGTH),
+                preview(content, CONTENT_MAX_LENGTH));
+          })
           .list();
     } catch (DataAccessException e) {
       return List.of();
@@ -475,10 +465,10 @@ public class ConversationHistorySearchService {
     StringBuilder sql =
         new StringBuilder(
             """
-        SELECT handle, role, content, created_at
-        FROM bluesky_reply_conversations
-        WHERE 1 = 1
-        """);
+            SELECT handle, role, content, created_at
+            FROM bluesky_reply_conversations
+            WHERE 1 = 1
+            """);
     List<Object> params = new ArrayList<>();
     addQueryConditions(sql, params, query);
     if (speaker != null) {
@@ -499,17 +489,16 @@ public class ConversationHistorySearchService {
       return jdbcClient
           .sql(sql.toString())
           .params(params)
-          .query(
-              (rs, rowNum) -> {
-                String content = rs.getString("content");
-                return new ConversationSearchResult(
-                    "bluesky-reply:" + rs.getString("handle"),
-                    "bluesky-reply",
-                    rs.getString("role"),
-                    normalizeTimestamp(rs.getString("created_at")),
-                    preview(content, SUMMARY_MAX_LENGTH),
-                    preview(content, CONTENT_MAX_LENGTH));
-              })
+          .query((rs, rowNum) -> {
+            String content = rs.getString("content");
+            return new ConversationSearchResult(
+                "bluesky-reply:" + rs.getString("handle"),
+                "bluesky-reply",
+                rs.getString("role"),
+                normalizeTimestamp(rs.getString("created_at")),
+                preview(content, SUMMARY_MAX_LENGTH),
+                preview(content, CONTENT_MAX_LENGTH));
+          })
           .list();
     } catch (DataAccessException e) {
       return List.of();
@@ -523,19 +512,18 @@ public class ConversationHistorySearchService {
           jdbcClient
               .sql(
                   """
-          SELECT type, content, timestamp
-          FROM SPRING_AI_CHAT_MEMORY
-          WHERE conversation_id = ?
-          ORDER BY timestamp DESC
-          LIMIT ?
-          """)
+                  SELECT type, content, timestamp
+                  FROM SPRING_AI_CHAT_MEMORY
+                  WHERE conversation_id = ?
+                  ORDER BY timestamp DESC
+                  LIMIT ?
+                  """)
               .params(conversationId, limit)
-              .query(
-                  (rs, rowNum) ->
-                      new ConversationHistoryMessage(
-                          normalizeChatSpeaker(rs.getString("type")),
-                          Instant.ofEpochMilli(rs.getLong("timestamp")).toString(),
-                          rs.getString("content")))
+              .query((rs, rowNum) ->
+                  new ConversationHistoryMessage(
+                      normalizeChatSpeaker(rs.getString("type")),
+                      Instant.ofEpochMilli(rs.getLong("timestamp")).toString(),
+                      rs.getString("content")))
               .list();
       Collections.reverse(messages);
       return messages;
@@ -561,19 +549,18 @@ public class ConversationHistorySearchService {
           jdbcClient
               .sql(
                   """
-          SELECT role, content, created_at
-          FROM bluesky_reply_conversations
-          WHERE handle = ?
-          ORDER BY id DESC
-          LIMIT ?
-          """)
+                  SELECT role, content, created_at
+                  FROM bluesky_reply_conversations
+                  WHERE handle = ?
+                  ORDER BY id DESC
+                  LIMIT ?
+                  """)
               .params(handle, limit)
-              .query(
-                  (rs, rowNum) ->
-                      new ConversationHistoryMessage(
-                          rs.getString("role"),
-                          normalizeTimestamp(rs.getString("created_at")),
-                          rs.getString("content")))
+              .query((rs, rowNum) ->
+                  new ConversationHistoryMessage(
+                      rs.getString("role"),
+                      normalizeTimestamp(rs.getString("created_at")),
+                      rs.getString("content")))
               .list();
       Collections.reverse(messages);
       return messages;

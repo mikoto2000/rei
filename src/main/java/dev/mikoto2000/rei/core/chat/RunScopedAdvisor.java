@@ -60,24 +60,23 @@ public final class RunScopedAdvisor implements BaseAdvisor {
               .publishOn(getScheduler())
               .map(captured -> before(captured, chain))
               .flatMapMany(chain::nextStream)
-              .doOnNext(
-                  response -> {
-                    var chat = response.chatResponse();
-                    if (chat == null) return;
-                    if (dev.mikoto2000.rei.core.chat.ToolLoopSupport.streamRetryAttempt(chat) > 0) {
-                      retried.set(true);
-                      correctedText.setLength(
-                          Math.max(
-                              0,
-                              correctedText.length()
-                                  - dev.mikoto2000.rei.core.chat.ToolLoopSupport
-                                      .streamRetryDiscardedCharacters(chat)));
-                    } else {
-                      var generation = chat.getResult();
-                      String text = generation == null ? null : generation.getOutput().getText();
-                      if (text != null) correctedText.append(text);
-                    }
-                  });
+              .doOnNext(response -> {
+                var chat = response.chatResponse();
+                if (chat == null) return;
+                if (dev.mikoto2000.rei.core.chat.ToolLoopSupport.streamRetryAttempt(chat) > 0) {
+                  retried.set(true);
+                  correctedText.setLength(
+                      Math.max(
+                          0,
+                          correctedText.length()
+                              - dev.mikoto2000.rei.core.chat.ToolLoopSupport
+                                  .streamRetryDiscardedCharacters(chat)));
+                } else {
+                  var generation = chat.getResult();
+                  String text = generation == null ? null : generation.getOutput().getText();
+                  if (text != null) correctedText.append(text);
+                }
+              });
       return new ChatClientMessageAggregator()
           .aggregateChatClientResponse(
               responses,

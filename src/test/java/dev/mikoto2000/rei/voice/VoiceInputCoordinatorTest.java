@@ -363,10 +363,9 @@ class VoiceInputCoordinatorTest {
       diagnosticSource.speech(1);
       await()
           .atMost(Duration.ofSeconds(3))
-          .until(
-              () ->
-                  events.stream()
-                      .anyMatch(e -> e.type() == VoiceEventPublisher.Type.DIAGNOSTIC_RESULT));
+          .until(() ->
+              events.stream()
+                  .anyMatch(e -> e.type() == VoiceEventPublisher.Type.DIAGNOSTIC_RESULT));
       assertThat(calls).hasValue(1);
       assertThat(submitted).hasSize(1);
     }
@@ -862,10 +861,9 @@ class VoiceInputCoordinatorTest {
       source.speech(1);
       await()
           .atMost(Duration.ofSeconds(3))
-          .untilAsserted(
-              () ->
-                  assertThat(events)
-                      .anyMatch(e -> e.type() == VoiceEventPublisher.Type.RESULT_REJECTED));
+          .untilAsserted(() ->
+              assertThat(events)
+                  .anyMatch(e -> e.type() == VoiceEventPublisher.Type.RESULT_REJECTED));
       assertThat(submitted).isEmpty();
     }
   }
@@ -947,13 +945,11 @@ class VoiceInputCoordinatorTest {
       source.speech(1);
       await()
           .atMost(Duration.ofSeconds(3))
-          .untilAsserted(
-              () ->
-                  assertThat(events)
-                      .anyMatch(
-                          e ->
-                              e.type() == VoiceEventPublisher.Type.DIAGNOSTIC_RESULT
-                                  && e.detail().equals("診断の発話")));
+          .untilAsserted(() ->
+              assertThat(events)
+                  .anyMatch(e ->
+                      e.type() == VoiceEventPublisher.Type.DIAGNOSTIC_RESULT
+                          && e.detail().equals("診断の発話")));
       assertThat(submitted).isEmpty();
       voice.off();
     }

@@ -513,14 +513,13 @@ final class ActivityEvidencePipeline {
       if (p.getDetection().isBackgroundFullScreenEnabled()) {
         var captures =
             screen.displays().stream()
-                .map(
-                    display -> {
-                      var b = ActivityImages.physicalBounds(display.geometry());
-                      return new ActivityRecord.Observation(
-                          display.geometry().id(),
-                          new ActivityRecord.Bounds(b.x, b.y, b.width, b.height),
-                          imageCapturedAt);
-                    })
+                .map(display -> {
+                  var b = ActivityImages.physicalBounds(display.geometry());
+                  return new ActivityRecord.Observation(
+                      display.geometry().id(),
+                      new ActivityRecord.Bounds(b.x, b.y, b.width, b.height),
+                      imageCapturedAt);
+                })
                 .toList();
         record =
             new ActivityRecord(

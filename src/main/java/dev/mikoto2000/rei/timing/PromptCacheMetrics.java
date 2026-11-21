@@ -173,17 +173,16 @@ public final class PromptCacheMetrics {
   public static List<Call> calls(TimingRecorder.Run run) {
     return run.spans().stream()
         .filter(s -> s.category() == TimingRecorder.Category.LLM)
-        .map(
-            s -> {
-              var o = s.llm();
-              return new Call(
-                  o == null ? "UNKNOWN" : o.provider(),
-                  o == null ? "UNKNOWN" : o.model(),
-                  o == null ? "UNKNOWN" : o.feature(),
-                  new Usage(s.inputTokens(), o == null ? null : o.cachedInputTokens()),
-                  s.milestones().get(TimingRecorder.Metric.FIRST_GENERATION_TEXT),
-                  s.endNanos() == null ? null : s.endNanos() - s.startNanos());
-            })
+        .map(s -> {
+          var o = s.llm();
+          return new Call(
+              o == null ? "UNKNOWN" : o.provider(),
+              o == null ? "UNKNOWN" : o.model(),
+              o == null ? "UNKNOWN" : o.feature(),
+              new Usage(s.inputTokens(), o == null ? null : o.cachedInputTokens()),
+              s.milestones().get(TimingRecorder.Metric.FIRST_GENERATION_TEXT),
+              s.endNanos() == null ? null : s.endNanos() - s.startNanos());
+        })
         .toList();
   }
 }

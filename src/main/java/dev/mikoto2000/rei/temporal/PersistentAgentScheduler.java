@@ -36,33 +36,29 @@ public class PersistentAgentScheduler
       String project, java.time.LocalDate date, java.time.ZoneId zone) {
     return list(project).stream()
         .filter(entry -> entry.task().executeAt().atZone(zone).toLocalDate().equals(date))
-        .map(
-            entry ->
-                new dev.mikoto2000.rei.secretary.SecretaryContext.Item(
-                    "scheduler",
-                    entry.task().id(),
-                    entry.task().action(),
-                    entry.status(),
-                    "scheduled; execution success does not verify the whole work",
-                    dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.FACT,
-                    java.util.List.of(),
-                    new dev.mikoto2000.rei.secretary.SecretaryContext.Observation(
-                        "scheduler:" + entry.task().id(),
-                        null,
-                        entry.status().equals("CANCELLED")
-                            ? "CANCELLED"
-                            : java.util.Set.of("PENDING", "SCHEDULED").contains(entry.status())
-                                ? "PENDING"
-                                : entry.status().equals("RUNNING")
-                                    ? "IN_PROGRESS"
-                                    : entry.status().equals("WAITING_EVENT")
-                                        ? "WAITING"
-                                        : "UNKNOWN",
-                        !java.util.Set.of("COMPLETED", "FAILED", "UNKNOWN")
-                            .contains(entry.status()),
-                        null,
-                        entry.task().executeAt().atZone(zone).toLocalDate(),
-                        "SCHEDULE")))
+        .map(entry ->
+            new dev.mikoto2000.rei.secretary.SecretaryContext.Item(
+                "scheduler",
+                entry.task().id(),
+                entry.task().action(),
+                entry.status(),
+                "scheduled; execution success does not verify the whole work",
+                dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.FACT,
+                java.util.List.of(),
+                new dev.mikoto2000.rei.secretary.SecretaryContext.Observation(
+                    "scheduler:" + entry.task().id(),
+                    null,
+                    entry.status().equals("CANCELLED")
+                        ? "CANCELLED"
+                        : java.util.Set.of("PENDING", "SCHEDULED").contains(entry.status())
+                            ? "PENDING"
+                            : entry.status().equals("RUNNING")
+                                ? "IN_PROGRESS"
+                                : entry.status().equals("WAITING_EVENT") ? "WAITING" : "UNKNOWN",
+                    !java.util.Set.of("COMPLETED", "FAILED", "UNKNOWN").contains(entry.status()),
+                    null,
+                    entry.task().executeAt().atZone(zone).toLocalDate(),
+                    "SCHEDULE")))
         .toList();
   }
 
@@ -211,27 +207,26 @@ public class PersistentAgentScheduler
     var task =
         new ScheduledAgentTask(
             "timer-" + UUID.randomUUID(), createdAt, executeAt, action, conversationId);
-    transaction.executeWithoutResult(
-        status -> {
-          int count =
-              db.sql(
-                      "INSERT INTO agent_schedules(id,created,due,action,session,project,root,status) SELECT ?,?,?,?,?,?,?,'PENDING' WHERE (SELECT COUNT(*) FROM agent_schedules WHERE project=? AND status IN ('PENDING','SCHEDULED','RUNNING','WAITING_EVENT'))<256")
-                  .params(
-                      task.id(),
-                      task.createdAt().toEpochMilli(),
-                      executeAt.toEpochMilli(),
-                      action,
-                      conversationId,
-                      owner.projectId(),
-                      owner.projectRoot().toString(),
-                      owner.projectId())
-                  .update();
-          if (count != 1) throw new IllegalStateException("Project schedule limit reached (256)");
-          db.sql("UPDATE agent_schedules SET creator_run=? WHERE project=? AND id=?")
-              .params(owner.runId(), owner.projectId(), task.id())
+    transaction.executeWithoutResult(status -> {
+      int count =
+          db.sql(
+                  "INSERT INTO agent_schedules(id,created,due,action,session,project,root,status) SELECT ?,?,?,?,?,?,?,'PENDING' WHERE (SELECT COUNT(*) FROM agent_schedules WHERE project=? AND status IN ('PENDING','SCHEDULED','RUNNING','WAITING_EVENT'))<256")
+              .params(
+                  task.id(),
+                  task.createdAt().toEpochMilli(),
+                  executeAt.toEpochMilli(),
+                  action,
+                  conversationId,
+                  owner.projectId(),
+                  owner.projectRoot().toString(),
+                  owner.projectId())
               .update();
-          history(task.id(), "PENDING", "");
-        });
+      if (count != 1) throw new IllegalStateException("Project schedule limit reached (256)");
+      db.sql("UPDATE agent_schedules SET creator_run=? WHERE project=? AND id=?")
+          .params(owner.runId(), owner.projectId(), task.id())
+          .update();
+      history(task.id(), "PENDING", "");
+    });
     return task;
   }
 
@@ -265,14 +260,13 @@ public class PersistentAgentScheduler
       throw new IllegalArgumentException("Interval must be 1 minute..366 days");
     if (occurrences < 2 || occurrences > 100)
       throw new IllegalArgumentException("Occurrences must be 2..100");
-    return transaction.execute(
-        status -> {
-          var task = scheduleAfter(interval, action, conversationId);
-          db.sql("INSERT INTO agent_schedule_intervals(id,interval_ms,remaining) VALUES(?,?,?)")
-              .params(task.id(), interval.toMillis(), occurrences)
-              .update();
-          return task;
-        });
+    return transaction.execute(status -> {
+      var task = scheduleAfter(interval, action, conversationId);
+      db.sql("INSERT INTO agent_schedule_intervals(id,interval_ms,remaining) VALUES(?,?,?)")
+          .params(task.id(), interval.toMillis(), occurrences)
+          .update();
+      return task;
+    });
   }
 
   /**
@@ -314,14 +308,13 @@ public class PersistentAgentScheduler
       throw new IllegalArgumentException("Invalid cron time zone", error);
     }
     if (due == null) throw new IllegalArgumentException("Cron has no future occurrence");
-    return transaction.execute(
-        status -> {
-          var task = scheduleAt(due, action, conversationId);
-          db.sql("INSERT INTO agent_schedule_crons(id,expression,zone,remaining) VALUES(?,?,?,?)")
-              .params(task.id(), expression.trim(), zone, occurrences)
-              .update();
-          return task;
-        });
+    return transaction.execute(status -> {
+      var task = scheduleAt(due, action, conversationId);
+      db.sql("INSERT INTO agent_schedule_crons(id,expression,zone,remaining) VALUES(?,?,?,?)")
+          .params(task.id(), expression.trim(), zone, occurrences)
+          .update();
+      return task;
+    });
   }
 
   /** 時刻と期間の解釈で用いる次定期実行条件を返す。 */
@@ -379,17 +372,16 @@ public class PersistentAgentScheduler
     get(project, id);
     return db.sql("SELECT * FROM agent_schedule_events WHERE id=?")
         .param(id)
-        .query(
-            (rs, n) -> {
-              long activated = rs.getLong("activated");
-              boolean absent = rs.wasNull();
-              return new EventTrigger(
-                  rs.getString("source_run"),
-                  AgentEventType.valueOf(rs.getString("type")),
-                  Instant.ofEpochMilli(rs.getLong("expires")),
-                  absent ? null : activated,
-                  rs.getString("matched_event"));
-            })
+        .query((rs, n) -> {
+          long activated = rs.getLong("activated");
+          boolean absent = rs.wasNull();
+          return new EventTrigger(
+              rs.getString("source_run"),
+              AgentEventType.valueOf(rs.getString("type")),
+              Instant.ofEpochMilli(rs.getLong("expires")),
+              absent ? null : activated,
+              rs.getString("matched_event"));
+        })
         .optional();
   }
 
@@ -411,14 +403,13 @@ public class PersistentAgentScheduler
         || expiresAfter.compareTo(Duration.ofSeconds(1)) < 0
         || expiresAfter.compareTo(Duration.ofDays(366)) > 0)
       throw new IllegalArgumentException("Event wait expiry must be 1 second..366 days");
-    return transaction.execute(
-        status -> {
-          var task = scheduleAfter(expiresAfter, action, conversationId);
-          db.sql("INSERT INTO agent_schedule_events(id,source_run,type,expires) VALUES(?,?,?,?)")
-              .params(task.id(), sourceRun, type.name(), task.executeAt().toEpochMilli())
-              .update();
-          return task;
-        });
+    return transaction.execute(status -> {
+      var task = scheduleAfter(expiresAfter, action, conversationId);
+      db.sql("INSERT INTO agent_schedule_events(id,source_run,type,expires) VALUES(?,?,?,?)")
+          .params(task.id(), sourceRun, type.name(), task.executeAt().toEpochMilli())
+          .update();
+      return task;
+    });
   }
 
   /**
@@ -477,31 +468,30 @@ public class PersistentAgentScheduler
               + ":"
               + event.id(),
           event.projectId() + ":" + source + ":" + event.id());
-    transaction.executeWithoutResult(
-        status -> {
-          var entries =
-              db.sql(
-                      "UPDATE agent_schedules SET status='SCHEDULED',due=? WHERE project=? AND session=? AND (? IS NULL OR root=?) AND status='WAITING_EVENT' AND id IN (SELECT id FROM agent_schedule_events WHERE source_run=? AND type=? AND activated<=? AND expires>? AND expires>=?) RETURNING *")
-                  .params(
-                      clock.millis(),
-                      event.projectId(),
-                      event.sessionId(),
-                      root == null ? null : root.toString(),
-                      root == null ? null : root.toString(),
-                      source,
-                      event.type().name(),
-                      event.timestamp().toEpochMilli(),
-                      clock.millis(),
-                      event.timestamp().toEpochMilli())
-                  .query(ROW)
-                  .list();
-          for (var entry : entries) {
-            db.sql("UPDATE agent_schedule_events SET matched_event=? WHERE id=?")
-                .params(event.id(), entry.task().id())
-                .update();
-            history(entry.task().id(), "SCHEDULED", "event:" + event.id());
-          }
-        });
+    transaction.executeWithoutResult(status -> {
+      var entries =
+          db.sql(
+                  "UPDATE agent_schedules SET status='SCHEDULED',due=? WHERE project=? AND session=? AND (? IS NULL OR root=?) AND status='WAITING_EVENT' AND id IN (SELECT id FROM agent_schedule_events WHERE source_run=? AND type=? AND activated<=? AND expires>? AND expires>=?) RETURNING *")
+              .params(
+                  clock.millis(),
+                  event.projectId(),
+                  event.sessionId(),
+                  root == null ? null : root.toString(),
+                  root == null ? null : root.toString(),
+                  source,
+                  event.type().name(),
+                  event.timestamp().toEpochMilli(),
+                  clock.millis(),
+                  event.timestamp().toEpochMilli())
+              .query(ROW)
+              .list();
+      for (var entry : entries) {
+        db.sql("UPDATE agent_schedule_events SET matched_event=? WHERE id=?")
+            .params(event.id(), entry.task().id())
+            .update();
+        history(entry.task().id(), "SCHEDULED", "event:" + event.id());
+      }
+    });
   }
 
   /** 時刻と期間の解釈に関するexpireイベント待機一覧を処理する。 */
@@ -513,16 +503,15 @@ public class PersistentAgentScheduler
           .param(clock.millis())
           .query(Boolean.class)
           .single()) return;
-      transaction.executeWithoutResult(
-          status -> {
-            var expired =
-                db.sql(
-                        "UPDATE agent_schedules SET status='FAILED',outcome='event_wait_expired' WHERE id IN (SELECT id FROM agent_schedules WHERE status='WAITING_EVENT' AND due<=? ORDER BY due,id LIMIT 256) RETURNING *")
-                    .param(clock.millis())
-                    .query(ROW)
-                    .list();
-            expired.forEach(entry -> history(entry.task().id(), "FAILED", "event_wait_expired"));
-          });
+      transaction.executeWithoutResult(status -> {
+        var expired =
+            db.sql(
+                    "UPDATE agent_schedules SET status='FAILED',outcome='event_wait_expired' WHERE id IN (SELECT id FROM agent_schedules WHERE status='WAITING_EVENT' AND due<=? ORDER BY due,id LIMIT 256) RETURNING *")
+                .param(clock.millis())
+                .query(ROW)
+                .list();
+        expired.forEach(entry -> history(entry.task().id(), "FAILED", "event_wait_expired"));
+      });
     } catch (org.springframework.dao.DataAccessException unavailable) {
       if (!databaseBusy(unavailable)) throw unavailable;
       // Failed writes roll back with their history; failed preflights have no effects. Retry next
@@ -561,10 +550,9 @@ public class PersistentAgentScheduler
     }
     return db.sql("SELECT * FROM agent_schedule_event_cursors WHERE project=?")
         .param(project)
-        .query(
-            (rs, n) ->
-                new ReplayCursor(
-                    rs.getLong("offset"), rs.getInt("discard") != 0, rs.getLong("generation")))
+        .query((rs, n) ->
+            new ReplayCursor(
+                rs.getLong("offset"), rs.getInt("discard") != 0, rs.getLong("generation")))
         .single();
   }
 
@@ -694,25 +682,24 @@ public class PersistentAgentScheduler
           && trigger.get().expiresAt().isAfter(clock.instant())
           && get(project, id).status().equals("PENDING")) eventCursors.reset(project);
     }
-    transaction.executeWithoutResult(
-        status -> {
-          var trigger = eventTrigger(project, id);
-          if (trigger.isEmpty()) {
-            transition(project, id, "PENDING", "SCHEDULED");
-            return;
-          }
-          if (!trigger.get().expiresAt().isAfter(clock.instant()))
-            throw new IllegalStateException("Event wait already expired");
-          transition(project, id, "PENDING", "WAITING_EVENT");
-          db.sql("UPDATE agent_schedule_events SET activated=? WHERE id=?")
-              .params(clock.millis(), id)
-              .update();
-          if (eventCursors == null)
-            db.sql(
-                    "INSERT INTO agent_schedule_event_cursors(project,offset,discard,generation) VALUES(?,0,0,0) ON CONFLICT(project) DO UPDATE SET offset=0,discard=0,generation=generation+1")
-                .param(project)
-                .update();
-        });
+    transaction.executeWithoutResult(status -> {
+      var trigger = eventTrigger(project, id);
+      if (trigger.isEmpty()) {
+        transition(project, id, "PENDING", "SCHEDULED");
+        return;
+      }
+      if (!trigger.get().expiresAt().isAfter(clock.instant()))
+        throw new IllegalStateException("Event wait already expired");
+      transition(project, id, "PENDING", "WAITING_EVENT");
+      db.sql("UPDATE agent_schedule_events SET activated=? WHERE id=?")
+          .params(clock.millis(), id)
+          .update();
+      if (eventCursors == null)
+        db.sql(
+                "INSERT INTO agent_schedule_event_cursors(project,offset,discard,generation) VALUES(?,0,0,0) ON CONFLICT(project) DO UPDATE SET offset=0,discard=0,generation=generation+1")
+            .param(project)
+            .update();
+    });
   }
 
   /** 対象の実行をキャンセルする。 */
@@ -722,14 +709,13 @@ public class PersistentAgentScheduler
     var owner = AgentRunScope.current();
     if (owner == null || owner.projectId() == null)
       throw new IllegalArgumentException("Owning project is required");
-    transaction.executeWithoutResult(
-        status -> {
-          var entry = get(owner.projectId(), id);
-          if (!Objects.equals(entry.task().conversationId(), owner.conversationId())
-              || !Objects.equals(entry.projectRoot(), owner.projectRoot().toString()))
-            throw new IllegalArgumentException("Schedule not found in this Project/Session");
-          cancel(owner.projectId(), id);
-        });
+    transaction.executeWithoutResult(status -> {
+      var entry = get(owner.projectId(), id);
+      if (!Objects.equals(entry.task().conversationId(), owner.conversationId())
+          || !Objects.equals(entry.projectRoot(), owner.projectRoot().toString()))
+        throw new IllegalArgumentException("Schedule not found in this Project/Session");
+      cancel(owner.projectId(), id);
+    });
   }
 
   /** 対象の実行をキャンセルする。 */
@@ -744,36 +730,34 @@ public class PersistentAgentScheduler
 
   /** 対象の実行をキャンセルする。 */
   private void cancel(String project, String id, Long expectedRevision) {
-    transaction.executeWithoutResult(
-        status -> {
-          get(project, id);
-          if (db.sql(
-                      "UPDATE agent_schedules SET status='CANCELLED' WHERE project=:project AND id=:id AND status IN ('PENDING','SCHEDULED','WAITING_EVENT') AND (:revision IS NULL OR (SELECT COUNT(*) FROM agent_schedule_history WHERE id=:id)=:revision)")
-                  .param("project", project)
-                  .param("id", id)
-                  .param("revision", expectedRevision)
-                  .update()
-              != 1) {
-            if (expectedRevision != null)
-              throw new dev.mikoto2000.rei.application.state.OperationConflictException();
-            throw new IllegalStateException(
-                "Only unclaimed schedules can be cancelled; stop a running Run separately");
-          }
-          history(id, "CANCELLED", "");
-        });
+    transaction.executeWithoutResult(status -> {
+      get(project, id);
+      if (db.sql(
+                  "UPDATE agent_schedules SET status='CANCELLED' WHERE project=:project AND id=:id AND status IN ('PENDING','SCHEDULED','WAITING_EVENT') AND (:revision IS NULL OR (SELECT COUNT(*) FROM agent_schedule_history WHERE id=:id)=:revision)")
+              .param("project", project)
+              .param("id", id)
+              .param("revision", expectedRevision)
+              .update()
+          != 1) {
+        if (expectedRevision != null)
+          throw new dev.mikoto2000.rei.application.state.OperationConflictException();
+        throw new IllegalStateException(
+            "Only unclaimed schedules can be cancelled; stop a running Run separately");
+      }
+      history(id, "CANCELLED", "");
+    });
   }
 
   /** 時刻と期間の解釈に関する状態の遷移を処理する。 */
   private void transition(String project, String id, String from, String to) {
-    transaction.executeWithoutResult(
-        status -> {
-          get(project, id);
-          if (db.sql("UPDATE agent_schedules SET status=? WHERE project=? AND id=? AND status=?")
-                  .params(to, project, id, from)
-                  .update()
-              != 1) throw new IllegalStateException("Schedule already activated or terminal");
-          history(id, to, "");
-        });
+    transaction.executeWithoutResult(status -> {
+      get(project, id);
+      if (db.sql("UPDATE agent_schedules SET status=? WHERE project=? AND id=? AND status=?")
+              .params(to, project, id, from)
+              .update()
+          != 1) throw new IllegalStateException("Schedule already activated or terminal");
+      history(id, to, "");
+    });
   }
 
   /** 対象を処理する担当を決めるため、期限の利用権を確保する。 */
@@ -784,17 +768,16 @@ public class PersistentAgentScheduler
         .param(clock.millis())
         .query(Boolean.class)
         .single()) return Optional.empty();
-    return transaction.execute(
-        status -> {
-          var result =
-              db.sql(
-                      "UPDATE agent_schedules SET status='RUNNING',run=? WHERE id=(SELECT candidate.id FROM agent_schedules candidate WHERE candidate.status='SCHEDULED' AND candidate.due<=? AND NOT EXISTS(SELECT 1 FROM agent_schedules active WHERE active.project=candidate.project AND active.session=candidate.session AND active.status='RUNNING') ORDER BY candidate.due,candidate.id LIMIT 1) AND status='SCHEDULED' RETURNING *")
-                  .params(UUID.randomUUID().toString(), clock.millis())
-                  .query(ROW)
-                  .optional();
-          result.ifPresent(entry -> history(entry.task().id(), "RUNNING", entry.runId()));
-          return result;
-        });
+    return transaction.execute(status -> {
+      var result =
+          db.sql(
+                  "UPDATE agent_schedules SET status='RUNNING',run=? WHERE id=(SELECT candidate.id FROM agent_schedules candidate WHERE candidate.status='SCHEDULED' AND candidate.due<=? AND NOT EXISTS(SELECT 1 FROM agent_schedules active WHERE active.project=candidate.project AND active.session=candidate.session AND active.status='RUNNING') ORDER BY candidate.due,candidate.id LIMIT 1) AND status='SCHEDULED' RETURNING *")
+              .params(UUID.randomUUID().toString(), clock.millis())
+              .query(ROW)
+              .optional();
+      result.ifPresent(entry -> history(entry.task().id(), "RUNNING", entry.runId()));
+      return result;
+    });
   }
 
   /** 時刻と期間の解釈において、活動中利用権の確保に該当するか判定する。 */
@@ -813,18 +796,16 @@ public class PersistentAgentScheduler
    * <p>Explicit human reconciliation; unknown effects are never reported as successful or replayed.
    */
   public Entry reconcile(String project, String id, String expectedRunId) {
-    transaction.executeWithoutResult(
-        status -> {
-          get(project, id);
-          if (db.sql(
-                      "UPDATE agent_schedules SET status='FAILED',outcome='uncertain_run_reconciled' WHERE project=? AND id=? AND run=? AND status='RUNNING'")
-                  .params(project, id, expectedRunId)
-                  .update()
-              != 1)
-            throw new IllegalStateException(
-                "Schedule is no longer running with the specified Run ID");
-          history(id, "FAILED", "uncertain_run_reconciled");
-        });
+    transaction.executeWithoutResult(status -> {
+      get(project, id);
+      if (db.sql(
+                  "UPDATE agent_schedules SET status='FAILED',outcome='uncertain_run_reconciled' WHERE project=? AND id=? AND run=? AND status='RUNNING'")
+              .params(project, id, expectedRunId)
+              .update()
+          != 1)
+        throw new IllegalStateException("Schedule is no longer running with the specified Run ID");
+      history(id, "FAILED", "uncertain_run_reconciled");
+    });
     return get(project, id);
   }
 
@@ -832,49 +813,48 @@ public class PersistentAgentScheduler
   public void finish(Entry claim, String state, String detail) {
     if (!Set.of("COMPLETED", "FAILED", "CANCELLED").contains(state))
       throw new IllegalArgumentException("Invalid terminal status");
-    transaction.executeWithoutResult(
-        status -> {
-          String outcome = preview(detail);
-          if (db.sql(
-                      "UPDATE agent_schedules SET status=?,outcome=? WHERE id=? AND project=? AND run=? AND status='RUNNING'")
-                  .params(state, outcome, claim.task().id(), claim.projectId(), claim.runId())
-                  .update()
-              != 1) throw new IllegalStateException("Claim no longer active");
-          history(claim.task().id(), state, outcome);
-          if (state.equals("COMPLETED")) {
-            var interval =
-                db.sql("SELECT interval_ms,remaining FROM agent_schedule_intervals WHERE id=?")
-                    .param(claim.task().id())
-                    .query((rs, n) -> new long[] {rs.getLong(1), rs.getLong(2)})
-                    .optional();
-            if (interval.isPresent()) {
-              long[] repeat = interval.get();
-              db.sql("UPDATE agent_schedule_intervals SET remaining=remaining-1 WHERE id=?")
-                  .param(claim.task().id())
-                  .update();
-              if (repeat[1] > 1)
-                scheduleNext(
-                    claim.task().id(),
-                    clock.instant().plusMillis(repeat[0]),
-                    "interval continuation; missed occurrences coalesced");
-            }
-            var cron = cron(claim.projectId(), claim.task().id());
-            if (cron.isPresent()) {
-              var repeat = cron.get();
-              db.sql("UPDATE agent_schedule_crons SET remaining=remaining-1 WHERE id=?")
-                  .param(claim.task().id())
-                  .update();
-              if (repeat.remaining() > 1) {
-                Instant due = nextCron(repeat.expression(), repeat.zone(), clock.instant());
-                if (due != null
-                    && due.isAfter(clock.instant())
-                    && !due.isAfter(clock.instant().plus(Duration.ofDays(366))))
-                  scheduleNext(
-                      claim.task().id(), due, "cron continuation; missed occurrences coalesced");
-              }
-            }
+    transaction.executeWithoutResult(status -> {
+      String outcome = preview(detail);
+      if (db.sql(
+                  "UPDATE agent_schedules SET status=?,outcome=? WHERE id=? AND project=? AND run=? AND status='RUNNING'")
+              .params(state, outcome, claim.task().id(), claim.projectId(), claim.runId())
+              .update()
+          != 1) throw new IllegalStateException("Claim no longer active");
+      history(claim.task().id(), state, outcome);
+      if (state.equals("COMPLETED")) {
+        var interval =
+            db.sql("SELECT interval_ms,remaining FROM agent_schedule_intervals WHERE id=?")
+                .param(claim.task().id())
+                .query((rs, n) -> new long[] {rs.getLong(1), rs.getLong(2)})
+                .optional();
+        if (interval.isPresent()) {
+          long[] repeat = interval.get();
+          db.sql("UPDATE agent_schedule_intervals SET remaining=remaining-1 WHERE id=?")
+              .param(claim.task().id())
+              .update();
+          if (repeat[1] > 1)
+            scheduleNext(
+                claim.task().id(),
+                clock.instant().plusMillis(repeat[0]),
+                "interval continuation; missed occurrences coalesced");
+        }
+        var cron = cron(claim.projectId(), claim.task().id());
+        if (cron.isPresent()) {
+          var repeat = cron.get();
+          db.sql("UPDATE agent_schedule_crons SET remaining=remaining-1 WHERE id=?")
+              .param(claim.task().id())
+              .update();
+          if (repeat.remaining() > 1) {
+            Instant due = nextCron(repeat.expression(), repeat.zone(), clock.instant());
+            if (due != null
+                && due.isAfter(clock.instant())
+                && !due.isAfter(clock.instant().plus(Duration.ofDays(366))))
+              scheduleNext(
+                  claim.task().id(), due, "cron continuation; missed occurrences coalesced");
           }
-        });
+        }
+      }
+    });
   }
 
   /** 過去の記録を、条件に従って参照できる形で返す。 */
@@ -882,12 +862,11 @@ public class PersistentAgentScheduler
     get(project, id);
     return db.sql("SELECT * FROM agent_schedule_history WHERE id=? ORDER BY sequence")
         .param(id)
-        .query(
-            (rs, n) ->
-                new History(
-                    rs.getString("status"),
-                    Instant.ofEpochMilli(rs.getLong("timestamp")),
-                    rs.getString("detail")))
+        .query((rs, n) ->
+            new History(
+                rs.getString("status"),
+                Instant.ofEpochMilli(rs.getLong("timestamp")),
+                rs.getString("detail")))
         .list();
   }
 

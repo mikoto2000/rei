@@ -29,20 +29,19 @@ public class ConversationHistoryService {
         jdbcClient
             .sql(
                 """
-        SELECT conversation_id, content, timestamp
-        FROM SPRING_AI_CHAT_MEMORY
-        WHERE type = 'USER' AND timestamp >= ?
-        ORDER BY timestamp DESC
-        LIMIT ?
-        """)
+                SELECT conversation_id, content, timestamp
+                FROM SPRING_AI_CHAT_MEMORY
+                WHERE type = 'USER' AND timestamp >= ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+                """)
             .params(cutoffEpochMillis, limit)
-            .query(
-                (rs, rowNum) ->
-                    new ConversationSnippet(
-                        rs.getString("conversation_id"),
-                        rs.getString("content"),
-                        OffsetDateTime.ofInstant(
-                            Instant.ofEpochMilli(rs.getLong("timestamp")), ZoneOffset.UTC)))
+            .query((rs, rowNum) ->
+                new ConversationSnippet(
+                    rs.getString("conversation_id"),
+                    rs.getString("content"),
+                    OffsetDateTime.ofInstant(
+                        Instant.ofEpochMilli(rs.getLong("timestamp")), ZoneOffset.UTC)))
             .list();
     Collections.reverse(rows);
     return rows;

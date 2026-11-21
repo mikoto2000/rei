@@ -70,26 +70,24 @@ public final class WorkContextFormatter {
   private void section(StringBuilder out, WorkContext context, String label, Set<Kind> kinds) {
     var selected =
         context.items().stream()
-            .filter(
-                i ->
-                    kinds.contains(i.kind())
-                        && i.status() != Status.WITHDRAWN
-                        && i.status() != Status.SUPERSEDED)
+            .filter(i ->
+                kinds.contains(i.kind())
+                    && i.status() != Status.WITHDRAWN
+                    && i.status() != Status.SUPERSEDED)
             .sorted(Comparator.comparing(Item::updatedAt).reversed())
             .toList();
     out.append(label).append(":\n");
     if (selected.isEmpty()) out.append("  記録なし\n");
     selected.stream()
         .limit(2)
-        .forEach(
-            i ->
-                out.append("  ")
-                    .append(safe.label(i.text()))
-                    .append(" [")
-                    .append(i.status())
-                    .append("; ")
-                    .append(origins(i))
-                    .append("]\n"));
+        .forEach(i ->
+            out.append("  ")
+                .append(safe.label(i.text()))
+                .append(" [")
+                .append(i.status())
+                .append("; ")
+                .append(origins(i))
+                .append("]\n"));
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (selected.size() > 2) out.append("  他 ").append(selected.size() - 2).append(" 件\n");
   }

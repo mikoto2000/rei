@@ -79,11 +79,11 @@ class UrlContentFetchServiceTest {
     when(response.body())
         .thenReturn(
             """
-        <html>
-          <head><meta charset="Shift_JIS"></head>
-          <body>日本語の本文</body>
-        </html>
-        """
+            <html>
+              <head><meta charset="Shift_JIS"></head>
+              <body>日本語の本文</body>
+            </html>
+            """
                 .getBytes(Charset.forName("Shift_JIS")));
     when(response.headers())
         .thenReturn(
@@ -186,8 +186,7 @@ class UrlContentFetchServiceTest {
   @Test
   void returnsNetworkErrorOnIoException() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
-    when(httpClient.<byte[]>send(any(), Mockito.notNull()))
-        .thenThrow(new IOException("timeout"));
+    when(httpClient.<byte[]>send(any(), Mockito.notNull())).thenThrow(new IOException("timeout"));
     UrlContentFetchService service = new UrlContentFetchService(new UrlValidator(), httpClient);
 
     UrlContentFetchResult result = service.fetch("https://example.com");

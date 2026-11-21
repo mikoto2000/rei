@@ -93,23 +93,22 @@ public final class VoicePlaybackService implements AutoCloseable {
     }
     long epoch = generation.get();
     try {
-      worker.execute(
-          () -> {
-            BooleanSupplier current = () -> epoch == generation.get() && eligible(context);
-            if (!current.getAsBoolean()) return;
-            var settings = options.get();
-            try {
-              var playback = gate.playback(Duration.ofMillis(settings.echoTailMs()));
-              try (playback) {
-                if (current.getAsBoolean()) output.speak(settings.ttsVoice(), text, current);
-              }
-            } catch (InterruptedException interrupted) {
-              // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
-              Thread.currentThread().interrupt();
-            } catch (IOException | RuntimeException failure) {
-              events.publish(VoiceEventPublisher.Type.TTS_FAILED, "local playback failed");
-            }
-          });
+      worker.execute(() -> {
+        BooleanSupplier current = () -> epoch == generation.get() && eligible(context);
+        if (!current.getAsBoolean()) return;
+        var settings = options.get();
+        try {
+          var playback = gate.playback(Duration.ofMillis(settings.echoTailMs()));
+          try (playback) {
+            if (current.getAsBoolean()) output.speak(settings.ttsVoice(), text, current);
+          }
+        } catch (InterruptedException interrupted) {
+          // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
+          Thread.currentThread().interrupt();
+        } catch (IOException | RuntimeException failure) {
+          events.publish(VoiceEventPublisher.Type.TTS_FAILED, "local playback failed");
+        }
+      });
     } catch (RejectedExecutionException full) {
       events.publish(VoiceEventPublisher.Type.TTS_DROPPED, "playback queue full");
     }

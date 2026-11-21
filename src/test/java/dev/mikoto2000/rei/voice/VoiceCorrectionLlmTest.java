@@ -35,13 +35,11 @@ class VoiceCorrectionLlmTest {
     var clients = mock(LlmChatClientProvider.class);
     when(clients.chatClient(LlmFeature.VOICE_CORRECTION))
         .thenReturn(ChatClient.builder(model).build());
-    assertThatThrownBy(
-            () ->
-                new VoiceCorrectionLlm(clients, models, new VoiceCorrectionProperties())
-                    .call(
-                        "交配の話",
-                        new VoiceCorrectionContext.Snapshot(
-                            "project", "Rei", List.of(), List.of())))
+    assertThatThrownBy(() ->
+            new VoiceCorrectionLlm(clients, models, new VoiceCorrectionProperties())
+                .call(
+                    "交配の話",
+                    new VoiceCorrectionContext.Snapshot("project", "Rei", List.of(), List.of())))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("correction_budget");
   }

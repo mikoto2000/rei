@@ -39,8 +39,7 @@ class SearchReportsTest {
                 WebSearchContext.primaryOnly(List.of()),
                 null));
     when(client.prompt(any(Prompt.class))).thenReturn(request);
-    when(request.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
-        .thenReturn(request);
+    when(request.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(request);
     when(request.stream().content()).thenReturn(reactor.core.publisher.Flux.just("an ", "answer"));
     var command = new SearchCommand(client, model, knowledge, new CommandCancellationService());
     var text = new StringBuilder();

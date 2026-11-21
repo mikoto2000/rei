@@ -237,39 +237,38 @@ public class AttentionDeliveryRepository {
   private boolean claim(String project, String id, long intervalMillis, Delivery expected) {
     if (intervalMillis < 0 || intervalMillis > 3600000)
       throw new IllegalArgumentException("Invalid provider interval");
-    return tx.execute(
-        status -> {
-          // Acquire SQLite's writer lock before reading; a deferred read/write upgrade can fail
-          // under parallel claims.
+    return tx.execute(status -> {
+      // Acquire SQLite's writer lock before reading; a deferred read/write upgrade can fail
+      // under parallel claims.
+      db.sql(
+              "INSERT OR IGNORE INTO attention_provider_rate SELECT destination,0 FROM attention_delivery WHERE project=? AND id=?")
+          .params(project, id)
+          .update();
+      var item = find(project, id).orElseThrow();
+      if (expected != null
+          && (item.attempts() != expected.attempts()
+              || !item.destination().equals(expected.destination())
+              || !item.provider().equals(expected.provider()))) return false;
+      int changed =
           db.sql(
-                  "INSERT OR IGNORE INTO attention_provider_rate SELECT destination,0 FROM attention_delivery WHERE project=? AND id=?")
-              .params(project, id)
+                  "UPDATE attention_delivery SET status='SENDING',attempts=attempts+1,reason='sending',updated=?,pid=?,process_start=?,heartbeat=? WHERE project=? AND id=? AND status='PENDING' AND attempts<3 AND retry_not_before<=? AND NOT EXISTS(SELECT 1 FROM attention_delivery WHERE status='SENDING') AND (SELECT not_before FROM attention_provider_rate WHERE destination=?)<=?")
+              .params(
+                  clock.millis(),
+                  ProcessHandle.current().pid(),
+                  processStart(),
+                  clock.millis(),
+                  project,
+                  id,
+                  clock.millis(),
+                  item.destination(),
+                  clock.millis())
               .update();
-          var item = find(project, id).orElseThrow();
-          if (expected != null
-              && (item.attempts() != expected.attempts()
-                  || !item.destination().equals(expected.destination())
-                  || !item.provider().equals(expected.provider()))) return false;
-          int changed =
-              db.sql(
-                      "UPDATE attention_delivery SET status='SENDING',attempts=attempts+1,reason='sending',updated=?,pid=?,process_start=?,heartbeat=? WHERE project=? AND id=? AND status='PENDING' AND attempts<3 AND retry_not_before<=? AND NOT EXISTS(SELECT 1 FROM attention_delivery WHERE status='SENDING') AND (SELECT not_before FROM attention_provider_rate WHERE destination=?)<=?")
-                  .params(
-                      clock.millis(),
-                      ProcessHandle.current().pid(),
-                      processStart(),
-                      clock.millis(),
-                      project,
-                      id,
-                      clock.millis(),
-                      item.destination(),
-                      clock.millis())
-                  .update();
-          if (changed == 1)
-            db.sql("UPDATE attention_provider_rate SET not_before=? WHERE destination=?")
-                .params(clock.millis() + intervalMillis, item.destination())
-                .update();
-          return changed == 1;
-        });
+      if (changed == 1)
+        db.sql("UPDATE attention_provider_rate SET not_before=? WHERE destination=?")
+            .params(clock.millis() + intervalMillis, item.destination())
+            .update();
+      return changed == 1;
+    });
   }
 
   /** A privacy hold is not a failed transport attempt and keeps the durable pending item. */
@@ -287,32 +286,31 @@ public class AttentionDeliveryRepository {
 
   /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public void finish(Delivery item, NotificationProvider.Receipt receipt) {
-    tx.executeWithoutResult(
-        status -> {
-          long deadline = clock.millis() + receipt.retryAfterSeconds() * 1000L;
-          int attempt = item.status().equals("SENDING") ? item.attempts() : item.attempts() + 1;
-          int changed =
-              db.sql(
-                      "UPDATE attention_delivery SET status=?,reason=?,provider_receipt=?,retry_not_before=?,updated=?,heartbeat=? WHERE project=? AND id=? AND status='SENDING' AND attempts=? AND destination=? AND provider=?")
-                  .params(
-                      receipt.status(),
-                      receipt.reason(),
-                      receipt.providerReceipt(),
-                      deadline,
-                      clock.millis(),
-                      clock.millis(),
-                      item.projectId(),
-                      item.id(),
-                      attempt,
-                      item.destination(),
-                      item.provider())
-                  .update();
-          if (changed == 1 && receipt.retryAfterSeconds() > 0)
-            db.sql(
-                    "UPDATE attention_provider_rate SET not_before=MAX(not_before,?) WHERE destination=?")
-                .params(deadline, item.destination())
-                .update();
-        });
+    tx.executeWithoutResult(status -> {
+      long deadline = clock.millis() + receipt.retryAfterSeconds() * 1000L;
+      int attempt = item.status().equals("SENDING") ? item.attempts() : item.attempts() + 1;
+      int changed =
+          db.sql(
+                  "UPDATE attention_delivery SET status=?,reason=?,provider_receipt=?,retry_not_before=?,updated=?,heartbeat=? WHERE project=? AND id=? AND status='SENDING' AND attempts=? AND destination=? AND provider=?")
+              .params(
+                  receipt.status(),
+                  receipt.reason(),
+                  receipt.providerReceipt(),
+                  deadline,
+                  clock.millis(),
+                  clock.millis(),
+                  item.projectId(),
+                  item.id(),
+                  attempt,
+                  item.destination(),
+                  item.provider())
+              .update();
+      if (changed == 1 && receipt.retryAfterSeconds() > 0)
+        db.sql(
+                "UPDATE attention_provider_rate SET not_before=MAX(not_before,?) WHERE destination=?")
+            .params(deadline, item.destination())
+            .update();
+    });
   }
 
   /** 注意の管理に関する対象外を処理する。 */
@@ -339,13 +337,12 @@ public class AttentionDeliveryRepository {
     for (var item :
         db.sql(
                 "SELECT id,attempts,pid,process_start FROM attention_delivery WHERE status='SENDING'")
-            .query(
-                (rs, n) ->
-                    new Claimed(
-                        rs.getString("id"),
-                        rs.getInt("attempts"),
-                        rs.getLong("pid"),
-                        rs.getString("process_start")))
+            .query((rs, n) ->
+                new Claimed(
+                    rs.getString("id"),
+                    rs.getInt("attempts"),
+                    rs.getLong("pid"),
+                    rs.getString("process_start")))
             .list()) {
       boolean alive = false;
       try {

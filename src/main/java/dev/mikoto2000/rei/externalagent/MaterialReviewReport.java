@@ -53,15 +53,14 @@ final class MaterialReviewReport {
       throw new IllegalArgumentException("Material report exceeds limit");
     var normalized =
         findings.stream()
-            .map(
-                f ->
-                    new ExternalAgentFinding(
-                        ExternalAgentFinding.Severity.valueOf(
-                            f.path("severity").asText().toLowerCase(Locale.ROOT)),
-                        safe(f.path("issue").asText()),
-                        safe(f.path("whyItMatters").asText()),
-                        safe(f.path("suggestedImprovement").asText()),
-                        safe(location(f))))
+            .map(f ->
+                new ExternalAgentFinding(
+                    ExternalAgentFinding.Severity.valueOf(
+                        f.path("severity").asText().toLowerCase(Locale.ROOT)),
+                    safe(f.path("issue").asText()),
+                    safe(f.path("whyItMatters").asText()),
+                    safe(f.path("suggestedImprovement").asText()),
+                    safe(location(f))))
             .toList();
     var warnings = new ArrayList<String>();
     data.path("warnings").forEach(w -> warnings.add(safe(w.asText())));
@@ -137,10 +136,9 @@ final class MaterialReviewReport {
       out.append("\n### ").append(aspect[1]).append('\n');
       var selected = new ArrayList<JsonNode>();
       data.path("crossPageFindings")
-          .forEach(
-              c -> {
-                if (c.path("aspect").asText().equals(aspect[0])) selected.add(c.path("finding"));
-              });
+          .forEach(c -> {
+            if (c.path("aspect").asText().equals(aspect[0])) selected.add(c.path("finding"));
+          });
       appendFindings(out, selected);
     }
     for (var item :
@@ -156,15 +154,14 @@ final class MaterialReviewReport {
     section(out, "14. Build / Link / Markdown 検証結果");
     if (data.path("validationResults").isEmpty()) out.append("検証結果なし（未検証）\n");
     data.path("validationResults")
-        .forEach(
-            v ->
-                out.append("- ")
-                    .append(v.path("command").asText())
-                    .append(": ")
-                    .append(v.path("status").asText())
-                    .append(" — ")
-                    .append(v.path("details").asText())
-                    .append('\n'));
+        .forEach(v ->
+            out.append("- ")
+                .append(v.path("command").asText())
+                .append(": ")
+                .append(v.path("status").asText())
+                .append(" — ")
+                .append(v.path("details").asText())
+                .append('\n'));
     section(out, "15. 良い点");
     list(out, data.path("positiveFindings"));
     return out.toString();

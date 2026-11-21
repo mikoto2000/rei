@@ -53,9 +53,7 @@ public record SummaryThemeCandidate(
             ? null
             : Collections.unmodifiableList(new ArrayList<>(memberProjects));
     activities =
-        activities == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(activities));
+        activities == null ? null : Collections.unmodifiableList(new ArrayList<>(activities));
     themes = themes == null ? null : Collections.unmodifiableList(new ArrayList<>(themes));
   }
 

@@ -161,16 +161,15 @@ class BackendEndpointTest {
     var first = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.INHERIT).start();
     try {
       var line =
-          java.util.concurrent.CompletableFuture.supplyAsync(
-              () -> {
-                try {
-                  return new java.io.BufferedReader(
-                          new java.io.InputStreamReader(first.getInputStream()))
-                      .readLine();
-                } catch (java.io.IOException error) {
-                  throw new java.io.UncheckedIOException(error);
-                }
-              });
+          java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+              return new java.io.BufferedReader(
+                      new java.io.InputStreamReader(first.getInputStream()))
+                  .readLine();
+            } catch (java.io.IOException error) {
+              throw new java.io.UncheckedIOException(error);
+            }
+          });
       assertEquals("LOCKED", line.get(15, java.util.concurrent.TimeUnit.SECONDS));
       assertTrue(BackendOwnership.isOwned(root));
       var second =
@@ -203,18 +202,16 @@ class BackendEndpointTest {
             new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.INHERIT).start());
       var lines =
           candidates.stream()
-              .map(
-                  process ->
-                      java.util.concurrent.CompletableFuture.supplyAsync(
-                          () -> {
-                            try {
-                              return new java.io.BufferedReader(
-                                      new java.io.InputStreamReader(process.getInputStream()))
-                                  .readLine();
-                            } catch (java.io.IOException error) {
-                              throw new java.io.UncheckedIOException(error);
-                            }
-                          }))
+              .map(process ->
+                  java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                    try {
+                      return new java.io.BufferedReader(
+                              new java.io.InputStreamReader(process.getInputStream()))
+                          .readLine();
+                    } catch (java.io.IOException error) {
+                      throw new java.io.UncheckedIOException(error);
+                    }
+                  }))
               .toList();
       int owners = 0;
       for (int i = 0; i < 2; i++) {

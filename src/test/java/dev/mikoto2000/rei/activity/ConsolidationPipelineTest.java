@@ -142,32 +142,27 @@ class ConsolidationPipelineTest {
     var model = mock(ChatModel.class);
 
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              var input = JSON.readTree(((Prompt) call.getArgument(0)).getUserMessage().getText());
-              assertNoRawAlias(input);
-              assertThat(input.has("topProjects")).isFalse();
-              input.path("majorWorkBlocks").forEach(b -> assertThat(b.has("theme")).isFalse());
-              assertThat(input.path("mainWorkThemeCandidates").findValuesAsText("label"))
-                  .doesNotContain("文字起こし・音声翻訳");
-              assertThat(input.path("timeOfDay").path("evening").path("workThemes").toString())
-                  .doesNotContain("音声翻訳");
-              if (mode.equals("failure"))
-                return Flux.error(new IllegalStateException("test failure"));
-              if (mode.equals("invalid"))
-                return Flux.just(
-                    new ChatResponse(List.of(new Generation(new AssistantMessage("{}")))));
-              var response = JSON.valueToTree(DailySummary.fallback(a));
-              var times =
-                  (com.fasterxml.jackson.databind.node.ObjectNode) response.path("timeOfDay");
-              for (var key : DailySummaryAggregate.BUCKET_ORDER)
-                if (!times.has(key)) times.putNull(key);
-              return Flux.just(
-                  new ChatResponse(
-                      List.of(
-                          new Generation(
-                              new AssistantMessage(JSON.writeValueAsString(response))))));
-            });
+        .thenAnswer(call -> {
+          var input = JSON.readTree(((Prompt) call.getArgument(0)).getUserMessage().getText());
+          assertNoRawAlias(input);
+          assertThat(input.has("topProjects")).isFalse();
+          input.path("majorWorkBlocks").forEach(b -> assertThat(b.has("theme")).isFalse());
+          assertThat(input.path("mainWorkThemeCandidates").findValuesAsText("label"))
+              .doesNotContain("文字起こし・音声翻訳");
+          assertThat(input.path("timeOfDay").path("evening").path("workThemes").toString())
+              .doesNotContain("音声翻訳");
+          if (mode.equals("failure")) return Flux.error(new IllegalStateException("test failure"));
+          if (mode.equals("invalid"))
+            return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("{}")))));
+          var response = JSON.valueToTree(DailySummary.fallback(a));
+          var times = (com.fasterxml.jackson.databind.node.ObjectNode) response.path("timeOfDay");
+          for (var key : DailySummaryAggregate.BUCKET_ORDER)
+            if (!times.has(key)) times.putNull(key);
+          return Flux.just(
+              new ChatResponse(
+                  List.of(
+                      new Generation(new AssistantMessage(JSON.writeValueAsString(response))))));
+        });
     var writer =
         new LlmDailySummaryWriter(
             () -> model, () -> OpenAiChatOptions.builder().build(), Duration.ofSeconds(2));
@@ -193,18 +188,16 @@ class ConsolidationPipelineTest {
     assertThat(a.timeOfDay().get("lateNight").workThemes()).contains("DeepSeek / Vision関連の開発");
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              var input = JSON.readTree(((Prompt) call.getArgument(0)).getUserMessage().getText());
-              assertNoRawAlias(input);
-              var candidates = input.path("mainWorkThemeCandidates");
-              assertThat(candidates.findValuesAsText("label"))
-                  .doesNotContain("livevingo の翻訳", "sensevoice-input の文書作業");
-              assertThat(candidates.findValuesAsText("level")).contains("GROUP");
-              assertThat(candidates.toString()).contains("speech-input", "speech-translation");
-              return Flux.just(
-                  new ChatResponse(List.of(new Generation(new AssistantMessage("{}")))));
-            });
+        .thenAnswer(call -> {
+          var input = JSON.readTree(((Prompt) call.getArgument(0)).getUserMessage().getText());
+          assertNoRawAlias(input);
+          var candidates = input.path("mainWorkThemeCandidates");
+          assertThat(candidates.findValuesAsText("label"))
+              .doesNotContain("livevingo の翻訳", "sensevoice-input の文書作業");
+          assertThat(candidates.findValuesAsText("level")).contains("GROUP");
+          assertThat(candidates.toString()).contains("speech-input", "speech-translation");
+          return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("{}")))));
+        });
     new DailySummaryService(
             store,
             new LlmDailySummaryWriter(

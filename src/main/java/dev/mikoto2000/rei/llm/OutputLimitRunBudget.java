@@ -31,15 +31,26 @@ public final class OutputLimitRunBudget {
       int stagnationReplans,
       int argumentCorrections,
       int argumentCorrectionBaseline) {
-    public Snapshot(int replans, int llmCalls, long totalTokens, boolean usageUnknown,
-        int stagnationReplans, int argumentCorrections) {
+    public Snapshot(
+        int replans,
+        int llmCalls,
+        long totalTokens,
+        boolean usageUnknown,
+        int stagnationReplans,
+        int argumentCorrections) {
       this(replans, llmCalls, totalTokens, usageUnknown, stagnationReplans, argumentCorrections, 0);
     }
 
     /** Only an explicit human resume starts a fresh bounded repair window. */
     public Snapshot forExplicitResume() {
-      return new Snapshot(replans, llmCalls, totalTokens, usageUnknown,
-          stagnationReplans, argumentCorrections, argumentCorrections);
+      return new Snapshot(
+          replans,
+          llmCalls,
+          totalTokens,
+          usageUnknown,
+          stagnationReplans,
+          argumentCorrections,
+          argumentCorrections);
     }
 
     /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -56,6 +67,7 @@ public final class OutputLimitRunBudget {
 
   /** 引数補正一覧。 */
   private int argumentCorrections;
+
   private int argumentCorrectionBaseline;
 
   /** 用途に応じたモデル利用で判断に用いる試行Correct引数の条件を確認する。 */
@@ -79,7 +91,12 @@ public final class OutputLimitRunBudget {
   /** 現在の状態を、後から参照できる記録として取り出す。 */
   public synchronized Snapshot snapshot() {
     return new Snapshot(
-        replans, llmCalls, totalTokens, usageUnknown, stagnationReplans, argumentCorrections,
+        replans,
+        llmCalls,
+        totalTokens,
+        usageUnknown,
+        stagnationReplans,
+        argumentCorrections,
         argumentCorrectionBaseline);
   }
 
@@ -95,7 +112,8 @@ public final class OutputLimitRunBudget {
         || saved.argumentCorrectionBaseline() > saved.argumentCorrections())
       throw new IllegalArgumentException("Invalid saved Run budget");
     argumentCorrections = Math.max(argumentCorrections, saved.argumentCorrections());
-    argumentCorrectionBaseline = Math.max(argumentCorrectionBaseline, saved.argumentCorrectionBaseline());
+    argumentCorrectionBaseline =
+        Math.max(argumentCorrectionBaseline, saved.argumentCorrectionBaseline());
     stagnationReplans = Math.max(stagnationReplans, saved.stagnationReplans());
     replans = Math.max(replans, saved.replans());
     llmCalls = Math.max(llmCalls, saved.llmCalls());

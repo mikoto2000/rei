@@ -77,8 +77,9 @@ class DurableSubAgentRepositoryTest {
         blocker.setAutoCommit(false);
         statement.executeUpdate("UPDATE subagent_checkpoints SET revision=revision WHERE 0");
         try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
-          var pending = executor.submit(
-              () -> repository.claim(parent, saved.id(), saved.revision(), "child-" + mode));
+          var pending =
+              executor.submit(
+                  () -> repository.claim(parent, saved.id(), saved.revision(), "child-" + mode));
           try {
             assertTrue(begun.get().await(5, java.util.concurrent.TimeUnit.SECONDS));
             assertThrows(
@@ -103,23 +104,22 @@ class DurableSubAgentRepositoryTest {
     assertThrows(
         IllegalArgumentException.class,
         () ->
-            repository.atomic(
-                () -> {
-                  repository.createPrepared(
-                      parent, graph, "GRAPH", null, "rei-dag", "graph", null, 4, 0, "baseline");
-                  repository.createPrepared(
-                      parent,
-                      UUID.randomUUID().toString(),
-                      "CHILD",
-                      graph,
-                      "reviewer",
-                      "inspect",
-                      "x".repeat(2000),
-                      2,
-                      0,
-                      "baseline");
-                  return null;
-                }));
+            repository.atomic(() -> {
+              repository.createPrepared(
+                  parent, graph, "GRAPH", null, "rei-dag", "graph", null, 4, 0, "baseline");
+              repository.createPrepared(
+                  parent,
+                  UUID.randomUUID().toString(),
+                  "CHILD",
+                  graph,
+                  "reviewer",
+                  "inspect",
+                  "x".repeat(2000),
+                  2,
+                  0,
+                  "baseline");
+              return null;
+            }));
     assertTrue(repository.list(parent, 0, 10).isEmpty());
   }
 

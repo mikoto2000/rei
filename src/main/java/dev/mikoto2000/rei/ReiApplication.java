@@ -251,13 +251,12 @@ public class ReiApplication {
     boolean backend =
         StartupOptions.parse(args, dev.mikoto2000.rei.core.datasource.ReiPaths.startupDirectory())
             .backend();
-    application.addInitializers(
-        c ->
-            c.getEnvironment()
-                .getPropertySources()
-                .addFirst(
-                    new org.springframework.core.env.MapPropertySource(
-                        "reiBackendMode", java.util.Map.of("rei.backend-mode", backend))));
+    application.addInitializers(c ->
+        c.getEnvironment()
+            .getPropertySources()
+            .addFirst(
+                new org.springframework.core.env.MapPropertySource(
+                    "reiBackendMode", java.util.Map.of("rei.backend-mode", backend))));
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
     dev.mikoto2000.rei.web.WebApplication.configure(application, System.getenv("REI_API_KEY"));
     ConfigurableApplicationContext context = application.run(args);
@@ -325,15 +324,13 @@ public class ReiApplication {
         && resumeSelection != null
         && resumeSelection.getCommand()
             instanceof dev.mikoto2000.rei.checkpoint.ResumeCommand command)
-      command.setTaskMenu(
-          (ids, labels) ->
-              dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.chooseOne(reader, ids, labels));
+      command.setTaskMenu((ids, labels) ->
+          dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.chooseOne(reader, ids, labels));
     var secretary = cmd.getSubcommands().get("secretary");
     if (secretary != null
         && secretary.getCommand() instanceof dev.mikoto2000.rei.secretary.SecretaryCommand command)
-      command.setMeetingSelector(
-          (report, output) ->
-              dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.choose(reader, report, output));
+      command.setMeetingSelector((report, output) ->
+          dev.mikoto2000.rei.core.completion.MeetingSelectionMenu.choose(reader, report, output));
     var runs = cmd.getSubcommands().get("runs");
     if (runs != null
         && runs.getCommand() instanceof dev.mikoto2000.rei.ui.shell.RunsCommand command)
@@ -341,16 +338,15 @@ public class ReiApplication {
     var llm = cmd.getSubcommands().get("llm");
     if (llm != null
         && llm.getCommand() instanceof dev.mikoto2000.rei.llm.capture.LlmCaptureCommand capture)
-      capture.setConfirmation(
-          prompt -> {
-            try {
-              var answer = reader.readLine(prompt);
-              return "y".equalsIgnoreCase(answer) || "yes".equalsIgnoreCase(answer);
-            } catch (org.jline.reader.EndOfFileException
-                | org.jline.reader.UserInterruptException declined) {
-              return false;
-            }
-          });
+      capture.setConfirmation(prompt -> {
+        try {
+          var answer = reader.readLine(prompt);
+          return "y".equalsIgnoreCase(answer) || "yes".equalsIgnoreCase(answer);
+        } catch (org.jline.reader.EndOfFileException
+            | org.jline.reader.UserInterruptException declined) {
+          return false;
+        }
+      });
     configureMultilineKeyBinding(reader);
     var eventOutput = new JLineShellEventOutput(reader);
     var approvalMenu =
@@ -365,24 +361,22 @@ public class ReiApplication {
             });
     eventOutput.setApprovalMenu(approvalMenu);
     if (approvalRequests != null)
-      approvalMenu.follow(
-          owner -> {
-            if (owner.project() == null || owner.session() == null) return java.util.List.of();
-            return approvalRequests.list(owner.project()).stream()
-                .filter(request -> owner.session().equals(request.sessionId()))
-                .filter(request -> approvalRunActive(request.runId()))
-                .filter(
-                    request ->
-                        dev.mikoto2000.rei.core.completion.ApprovalDisplayState.pending(
-                            request.status(),
-                            request.expiresAt(),
-                            approvalContinuations == null
-                                ? "UNAVAILABLE"
-                                : approvalContinuations.state(request.id()).orElse("UNAVAILABLE"),
-                            java.time.Instant.now()))
-                .map(dev.mikoto2000.rei.core.policy.ToolApprovalRepository.Request::id)
-                .toList();
-          });
+      approvalMenu.follow(owner -> {
+        if (owner.project() == null || owner.session() == null) return java.util.List.of();
+        return approvalRequests.list(owner.project()).stream()
+            .filter(request -> owner.session().equals(request.sessionId()))
+            .filter(request -> approvalRunActive(request.runId()))
+            .filter(request ->
+                dev.mikoto2000.rei.core.completion.ApprovalDisplayState.pending(
+                    request.status(),
+                    request.expiresAt(),
+                    approvalContinuations == null
+                        ? "UNAVAILABLE"
+                        : approvalContinuations.state(request.id()).orElse("UNAVAILABLE"),
+                    java.time.Instant.now()))
+            .map(dev.mikoto2000.rei.core.policy.ToolApprovalRepository.Request::id)
+            .toList();
+      });
     var notificationOptions = ShellAgentEventRenderer.TopicNotificationOptions.from(environment);
     dev.mikoto2000.rei.event.AgentEventListener shellListener;
     if (projectShellActivity != null) {
@@ -562,6 +556,11 @@ public class ReiApplication {
     if (System.getProperty(TerminalBuilder.PROP_ENCODING) == null
         && System.getProperty(TerminalBuilder.PROP_CODEPAGE) == null) {
       builder.encoding(output.charset());
+      // JLine 4 resolves stream encodings separately from the general encoding.
+      if (System.getProperty(TerminalBuilder.PROP_STDOUT_ENCODING) == null)
+        builder.stdoutEncoding(output.charset());
+      if (System.getProperty(TerminalBuilder.PROP_STDERR_ENCODING) == null)
+        builder.stderrEncoding(output.charset());
     }
     return builder;
   }

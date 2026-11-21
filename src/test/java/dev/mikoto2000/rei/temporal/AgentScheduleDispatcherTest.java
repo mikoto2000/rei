@@ -58,10 +58,9 @@ class AgentScheduleDispatcherTest {
     dispatcher.setSecretary(ticks::incrementAndGet);
     dispatcher.tick();
     assertEquals(1, ticks.get());
-    dispatcher.setSecretary(
-        () -> {
-          throw new IllegalStateException("observer failed");
-        });
+    dispatcher.setSecretary(() -> {
+      throw new IllegalStateException("observer failed");
+    });
     org.junit.jupiter.api.Assertions.assertDoesNotThrow(dispatcher::tick);
   }
 
@@ -322,14 +321,13 @@ class AgentScheduleDispatcherTest {
             h.router()::cancelQueued)) {
       h.dispatcher().configureRunTracking(registry, lifecycle);
       when(h.chat().execute(any(), anyString(), any()))
-          .thenAnswer(
-              invocation -> {
-                var owner = invocation.getArgument(0, AgentRunContext.class);
-                assertEquals(
-                    dev.mikoto2000.rei.application.run.RunStatus.RUNNING,
-                    lifecycle.get(owner.runId()).status());
-                return ChatExecutionResult.success("done", false);
-              });
+          .thenAnswer(invocation -> {
+            var owner = invocation.getArgument(0, AgentRunContext.class);
+            assertEquals(
+                dev.mikoto2000.rei.application.run.RunStatus.RUNNING,
+                lifecycle.get(owner.runId()).status());
+            return ChatExecutionResult.success("done", false);
+          });
       h.dispatcher().tick();
       String run = schedules.get(project, id).runId();
       assertEquals(
@@ -437,11 +435,9 @@ class AgentScheduleDispatcherTest {
       assertEquals(
           1,
           events.stream()
-              .filter(
-                  event ->
-                      run.equals(event.runId())
-                          && event.type()
-                              == dev.mikoto2000.rei.event.AgentEventType.AGENT_RUN_FAILED)
+              .filter(event ->
+                  run.equals(event.runId())
+                      && event.type() == dev.mikoto2000.rei.event.AgentEventType.AGENT_RUN_FAILED)
               .count());
       h.dispatcher().tick();
       verify(h.chat(), times(1)).execute(any(), anyString(), any());
@@ -457,12 +453,11 @@ class AgentScheduleDispatcherTest {
     String run = schedules.get(project, id).runId();
     assertThrows(IllegalStateException.class, () -> h.dispatcher().reconcile(project, id, run));
     when(h.chat().execute(any(), anyString(), any()))
-        .thenAnswer(
-            invocation -> {
-              assertThrows(
-                  IllegalStateException.class, () -> h.dispatcher().reconcile(project, id, run));
-              return ChatExecutionResult.success("done", false);
-            });
+        .thenAnswer(invocation -> {
+          assertThrows(
+              IllegalStateException.class, () -> h.dispatcher().reconcile(project, id, run));
+          return ChatExecutionResult.success("done", false);
+        });
     h.jobs().remove().run();
     assertEquals("COMPLETED", schedules.get(project, id).status());
   }

@@ -71,10 +71,9 @@ class ExternalAgentProcessRunnerTest {
     assertEquals(ExternalAgentResult.Status.SUCCESS, output.status());
     assertEquals(
         arguments.stream()
-            .map(
-                s ->
-                    Base64.getEncoder()
-                        .encodeToString(s.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+            .map(s ->
+                Base64.getEncoder()
+                    .encodeToString(s.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
             .toList(),
         output.stdout().lines().toList());
   }
@@ -196,10 +195,9 @@ class ExternalAgentProcessRunnerTest {
         case "large" -> {
           Thread err =
               Thread.ofPlatform()
-                  .start(
-                      () -> {
-                        for (int i = 0; i < 10000; i++) System.err.println("e".repeat(1000));
-                      });
+                  .start(() -> {
+                    for (int i = 0; i < 10000; i++) System.err.println("e".repeat(1000));
+                  });
           for (int i = 0; i < 10000; i++) System.out.println("o".repeat(1000));
           err.join();
         }

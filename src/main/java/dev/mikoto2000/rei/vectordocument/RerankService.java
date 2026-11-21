@@ -114,16 +114,14 @@ public final class RerankService implements CandidateReranker {
       JsonNode response =
           budget == null
               ? request.retrieve().body(JsonNode.class)
-              : request.exchange(
-                  (sent, received) -> {
-                    if (!received.getStatusCode().is2xxSuccessful())
-                      throw new IllegalStateException("Rerank HTTP request unsuccessful");
-                    var body = received.getBody().readNBytes(65537);
-                    if (body.length > 65536)
-                      throw new IllegalStateException(
-                          "Rerank response exceeds budget evidence limit");
-                    return BUDGET_JSON.readTree(body);
-                  });
+              : request.exchange((sent, received) -> {
+                if (!received.getStatusCode().is2xxSuccessful())
+                  throw new IllegalStateException("Rerank HTTP request unsuccessful");
+                var body = received.getBody().readNBytes(65537);
+                if (body.length > 65536)
+                  throw new IllegalStateException("Rerank response exceeds budget evidence limit");
+                return BUDGET_JSON.readTree(body);
+              });
       if (budget != null) {
         var usage = response == null ? null : response.get("usage");
         var total = usage == null ? null : usage.get("total_tokens");
@@ -164,7 +162,8 @@ public final class RerankService implements CandidateReranker {
       if (budget != null) {
         dev.mikoto2000.rei.core.chat.RunCancellation.propagate(exception);
         if (invoked && !reported) budget.recordTotalTokens(null);
-        if (exception instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)
+        if (exception
+            instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)
           throw stopped;
       }
       logger.warn(

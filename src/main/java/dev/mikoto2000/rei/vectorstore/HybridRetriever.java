@@ -40,24 +40,22 @@ public final class HybridRetriever {
     checkCancellation();
     return new ReciprocalRankFusion(settings.rankConstant())
         .fuse(List.of(dense, lexical), Document::getId, request.getTopK()).stream()
-            .map(
-                rank -> {
-                  var document = rank.item();
-                  var metadata = new LinkedHashMap<>(document.getMetadata());
-                  metadata.remove("denseRank");
-                  metadata.remove("lexicalRank");
-                  metadata.put("retrievalMode", "rrf");
-                  metadata.put("rrfScore", rank.score());
-                  for (var source : rank.ranks())
-                    metadata.put(
-                        source.stream() == 0 ? "denseRank" : "lexicalRank", source.position());
-                  return Document.builder()
-                      .id(document.getId())
-                      .text(document.getText())
-                      .metadata(metadata)
-                      .score(rank.score())
-                      .build();
-                })
+            .map(rank -> {
+              var document = rank.item();
+              var metadata = new LinkedHashMap<>(document.getMetadata());
+              metadata.remove("denseRank");
+              metadata.remove("lexicalRank");
+              metadata.put("retrievalMode", "rrf");
+              metadata.put("rrfScore", rank.score());
+              for (var source : rank.ranks())
+                metadata.put(source.stream() == 0 ? "denseRank" : "lexicalRank", source.position());
+              return Document.builder()
+                  .id(document.getId())
+                  .text(document.getText())
+                  .metadata(metadata)
+                  .score(rank.score())
+                  .build();
+            })
             .toList();
   }
 

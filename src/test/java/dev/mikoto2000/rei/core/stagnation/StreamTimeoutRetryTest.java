@@ -54,16 +54,14 @@ class StreamTimeoutRetryTest {
     var calls = new AtomicInteger();
     var prompts = new ArrayList<Prompt>();
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              prompts.add(invocation.getArgument(0));
-              if (calls.incrementAndGet() == 1) {
-                var failure =
-                    Flux.<ChatResponse>error(new SocketTimeoutException("read timed out"));
-                return partial ? Flux.concat(Flux.just(text("discard")), failure) : failure;
-              }
-              return Flux.just(text("success"));
-            });
+        .thenAnswer(invocation -> {
+          prompts.add(invocation.getArgument(0));
+          if (calls.incrementAndGet() == 1) {
+            var failure = Flux.<ChatResponse>error(new SocketTimeoutException("read timed out"));
+            return partial ? Flux.concat(Flux.just(text("discard")), failure) : failure;
+          }
+          return Flux.just(text("success"));
+        });
     var budget = new OutputLimitRunBudget(2, 5);
     var context = context(budget);
     context.consumeNextLlmCall();
@@ -87,20 +85,18 @@ class StreamTimeoutRetryTest {
     var model = mock(ChatModel.class);
     var calls = new AtomicInteger();
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              calls.incrementAndGet();
-              return Flux.error(new SocketTimeoutException());
-            });
-    assertThatThrownBy(
-            () ->
-                StreamTimeoutRetry.stream(
-                        model,
-                        new Prompt("work"),
-                        context(new OutputLimitRunBudget(2, 10)),
-                        2,
-                        response -> {})
-                    .blockLast())
+        .thenAnswer(invocation -> {
+          calls.incrementAndGet();
+          return Flux.error(new SocketTimeoutException());
+        });
+    assertThatThrownBy(() ->
+            StreamTimeoutRetry.stream(
+                    model,
+                    new Prompt("work"),
+                    context(new OutputLimitRunBudget(2, 10)),
+                    2,
+                    response -> {})
+                .blockLast())
         .hasRootCauseInstanceOf(SocketTimeoutException.class);
     assertThat(calls.get()).isEqualTo(3);
     assertThat(
@@ -116,25 +112,21 @@ class StreamTimeoutRetryTest {
     var model = mock(ChatModel.class);
     var calls = new AtomicInteger();
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              calls.incrementAndGet();
-              return Flux.error(new SocketTimeoutException());
-            });
+        .thenAnswer(invocation -> {
+          calls.incrementAndGet();
+          return Flux.error(new SocketTimeoutException());
+        });
     var tokenContext = context(new OutputLimitRunBudget(2, 10, null, 100));
-    assertThatThrownBy(
-            () ->
-                StreamTimeoutRetry.stream(
-                        model, new Prompt("work"), tokenContext, 2, response -> {})
-                    .blockLast())
+    assertThatThrownBy(() ->
+            StreamTimeoutRetry.stream(model, new Prompt("work"), tokenContext, 2, response -> {})
+                .blockLast())
         .isInstanceOf(ExecutionStoppedException.class);
     assertThat(calls.get()).isEqualTo(1);
     var callContext = context(new OutputLimitRunBudget(2, 1));
     callContext.consumeNextLlmCall();
-    assertThatThrownBy(
-            () ->
-                StreamTimeoutRetry.stream(model, new Prompt("work"), callContext, 2, response -> {})
-                    .blockLast())
+    assertThatThrownBy(() ->
+            StreamTimeoutRetry.stream(model, new Prompt("work"), callContext, 2, response -> {})
+                .blockLast())
         .isInstanceOf(ExecutionStoppedException.class);
     assertThat(calls.get()).isEqualTo(2);
   }
@@ -145,11 +137,10 @@ class StreamTimeoutRetryTest {
     var context = context(new OutputLimitRunBudget(2, 5));
     var calls = new AtomicInteger();
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              calls.incrementAndGet();
-              return Flux.error(new SocketTimeoutException());
-            });
+        .thenAnswer(invocation -> {
+          calls.incrementAndGet();
+          return Flux.error(new SocketTimeoutException());
+        });
     var subscription =
         StreamTimeoutRetry.stream(model, new Prompt("work"), context, 2, response -> {})
             .subscribe(response -> {}, error -> {});
@@ -164,12 +155,10 @@ class StreamTimeoutRetryTest {
     when(model.getOptions()).thenReturn(ToolCallingChatOptions.builder().build());
     var calls = new AtomicInteger();
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation ->
-                calls.incrementAndGet() == 1
-                    ? Flux.concat(
-                        Flux.just(text("discard")), Flux.error(new SocketTimeoutException()))
-                    : Flux.just(text("success")));
+        .thenAnswer(invocation ->
+            calls.incrementAndGet() == 1
+                ? Flux.concat(Flux.just(text("discard")), Flux.error(new SocketTimeoutException()))
+                : Flux.just(text("success")));
     var context = context(new OutputLimitRunBudget(2, 10));
     var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
     var advisor =
@@ -186,9 +175,8 @@ class StreamTimeoutRetryTest {
     try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
       client
           .prompt(new Prompt("work", options))
-          .advisors(
-              a ->
-                  a.param(org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, "session"))
+          .advisors(a ->
+              a.param(org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, "session"))
           .stream()
           .chatResponse()
           .blockLast();
@@ -225,27 +213,25 @@ class StreamTimeoutRetryTest {
             .toolContext(Map.of(RunExecutionContext.KEY, context))
             .build();
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              int n = calls.incrementAndGet();
-              var call =
-                  new ChatResponse(
-                      List.of(
-                          new Generation(
-                              AssistantMessage.builder()
-                                  .content("")
-                                  .toolCalls(
-                                      List.of(
-                                          new AssistantMessage.ToolCall(
-                                              "write-" + n, "function", "write", "{}")))
-                                  .build())));
-              if (n == 1) return Flux.just(call);
-              if (n == 2)
-                return Flux.concat(Flux.just(call), Flux.error(new SocketTimeoutException()));
-              assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
-                  .contains("saved");
-              return Flux.just(text("done"));
-            });
+        .thenAnswer(invocation -> {
+          int n = calls.incrementAndGet();
+          var call =
+              new ChatResponse(
+                  List.of(
+                      new Generation(
+                          AssistantMessage.builder()
+                              .content("")
+                              .toolCalls(
+                                  List.of(
+                                      new AssistantMessage.ToolCall(
+                                          "write-" + n, "function", "write", "{}")))
+                              .build())));
+          if (n == 1) return Flux.just(call);
+          if (n == 2) return Flux.concat(Flux.just(call), Flux.error(new SocketTimeoutException()));
+          assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
+              .contains("saved");
+          return Flux.just(text("done"));
+        });
     var chunks =
         new StagnationChatModel(model, null, 2)
             .stream(new Prompt("work", options)).collectList().block();

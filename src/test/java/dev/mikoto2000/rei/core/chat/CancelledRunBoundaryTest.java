@@ -91,15 +91,14 @@ class CancelledRunBoundaryTest {
     var advisorFinished = new CountDownLatch(1);
     var selection = mock(AgentSkillSelectionService.class);
     when(selection.select(anyString(), any(Runnable.class)))
-        .thenAnswer(
-            invocation -> {
-              invocation.getArgument(1, Runnable.class).run();
-              entered.countDown();
-              awaitIgnoringInterrupt(release);
-              returned.countDown();
-              return new AgentSkillSelection(
-                  List.of(), List.of(), List.of(), "work", 1L, List.of(), null);
-            });
+        .thenAnswer(invocation -> {
+          invocation.getArgument(1, Runnable.class).run();
+          entered.countDown();
+          awaitIgnoringInterrupt(release);
+          returned.countDown();
+          return new AgentSkillSelection(
+              List.of(), List.of(), List.of(), "work", 1L, List.of(), null);
+        });
     var events = new CopyOnWriteArrayList<AgentEvent>();
     var advisor =
         new AgentSkillAdvisor(
@@ -181,9 +180,8 @@ class CancelledRunBoundaryTest {
     queue.offer("pending B");
     try (var executor = Executors.newSingleThreadExecutor()) {
       var run =
-          executor.submit(
-              () ->
-                  service.execute(new AgentRunContext("A", "chat:main", Path.of(".")), "A", queue));
+          executor.submit(() ->
+              service.execute(new AgentRunContext("A", "chat:main", Path.of(".")), "A", queue));
       assertThat(subscribed.await(5, TimeUnit.SECONDS)).isTrue();
       cancellation.cancel();
       assertThat(run.get(5, TimeUnit.SECONDS).status())

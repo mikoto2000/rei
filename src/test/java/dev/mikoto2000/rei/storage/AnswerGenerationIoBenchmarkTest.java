@@ -248,26 +248,24 @@ class AnswerGenerationIoBenchmarkTest {
               context.refresh();
               if (pageSize != 0)
                 new StorageDatabase(root)
-                    .transaction(
-                        db -> {
-                          try (var sql = db.createStatement()) {
-                            sql.execute("PRAGMA wal_autocheckpoint=" + (4096000 / pageSize));
-                          }
-                          return null;
-                        });
+                    .transaction(db -> {
+                      try (var sql = db.createStatement()) {
+                        sql.execute("PRAGMA wal_autocheckpoint=" + (4096000 / pageSize));
+                      }
+                      return null;
+                    });
             } else {
               coordinator = new StorageMigrationCoordinator(root);
               coordinator.prepare();
             }
             var registry = new StorageObjectRegistry(root);
             int actualPageSize =
-                registry.database.read(
-                    db -> {
-                      try (var sql = db.createStatement();
-                          var rows = sql.executeQuery("PRAGMA page_size")) {
-                        return rows.getInt(1);
-                      }
-                    });
+                registry.database.read(db -> {
+                  try (var sql = db.createStatement();
+                      var rows = sql.executeQuery("PRAGMA page_size")) {
+                    return rows.getInt(1);
+                  }
+                });
             var project = new SqliteProjectAgentEventStore(root);
             var persistenceLatency = new ConcurrentLinkedQueue<Long>();
             var measuredProject =
@@ -308,11 +306,10 @@ class AnswerGenerationIoBenchmarkTest {
                 var subscription = new ProjectAgentEventSubscriber(bus, measuredProject)) {
               subscription.setStreamingPersistence(streaming);
               if (coordinated)
-                bus.subscribePersistence(
-                    event -> {
-                      persistenceLatency.add(System.nanoTime() - coordinatedStart.get());
-                      coordinatedStart.remove();
-                    });
+                bus.subscribePersistence(event -> {
+                  persistenceLatency.add(System.nanoTime() - coordinatedStart.get());
+                  coordinatedStart.remove();
+                });
               if (!coordinated) bus.subscribe(profile);
               bus.subscribe(e -> displayed.incrementAndGet());
               int runs = scenario.equals("parallel") ? 4 : 1;
@@ -332,26 +329,24 @@ class AnswerGenerationIoBenchmarkTest {
                 for (int run = 0; run < runs; run++) {
                   final int r = run;
                   futures.add(
-                      executor.submit(
-                          () -> {
-                            var observation = applicationIo.observe();
-                            try (observation) {
-                              for (int i = 0; i < count; i++) {
-                                if (offeredRate > 0)
-                                  await(
-                                      started
-                                          + (long) (i * runs + r) * (1_000_000_000L / offeredRate));
-                                long start = System.nanoTime();
-                                bus.publish(
-                                    event(
-                                        i,
-                                        r,
-                                        scenario.equals("long") && i < count / 2,
-                                        scenario.equals("long") ? 32 : 1));
-                                latency[r * count + i] = System.nanoTime() - start;
-                              }
-                            }
-                          }));
+                      executor.submit(() -> {
+                        var observation = applicationIo.observe();
+                        try (observation) {
+                          for (int i = 0; i < count; i++) {
+                            if (offeredRate > 0)
+                              await(
+                                  started + (long) (i * runs + r) * (1_000_000_000L / offeredRate));
+                            long start = System.nanoTime();
+                            bus.publish(
+                                event(
+                                    i,
+                                    r,
+                                    scenario.equals("long") && i < count / 2,
+                                    scenario.equals("long") ? 32 : 1));
+                            latency[r * count + i] = System.nanoTime() - start;
+                          }
+                        }
+                      }));
                 }
                 for (var future : futures) future.get(120, TimeUnit.SECONDS);
               } finally {

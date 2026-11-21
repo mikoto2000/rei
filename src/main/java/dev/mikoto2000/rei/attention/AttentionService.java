@@ -327,22 +327,21 @@ public class AttentionService implements dev.mikoto2000.rei.secretary.SecretaryN
       item.ifPresent(saved -> inbox.hold(saved.projectId(), saved.id()));
       return;
     }
-    item.ifPresent(
-        saved ->
-            publisher.publish(
-                new AgentEvent(
-                    UUID.randomUUID().toString(),
-                    0,
-                    clock.instant(),
-                    AgentEventType.ATTENTION_REQUIRED,
-                    1,
-                    source.sessionId(),
-                    source.turnId(),
-                    source.runId(),
-                    saved.id(),
-                    source.id(),
-                    new AttentionRequiredPayload(saved.id(), kind, message),
-                    source.projectId())));
+    item.ifPresent(saved ->
+        publisher.publish(
+            new AgentEvent(
+                UUID.randomUUID().toString(),
+                0,
+                clock.instant(),
+                AgentEventType.ATTENTION_REQUIRED,
+                1,
+                source.sessionId(),
+                source.turnId(),
+                source.runId(),
+                saved.id(),
+                source.id(),
+                new AttentionRequiredPayload(saved.id(), kind, message),
+                source.projectId())));
   }
 
   @org.springframework.scheduling.annotation.Scheduled(

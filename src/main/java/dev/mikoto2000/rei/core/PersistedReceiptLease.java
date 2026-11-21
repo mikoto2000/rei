@@ -119,9 +119,8 @@ final class PersistedReceiptLease {
     if (id != null) statement = statement.param(id);
     for (var row :
         statement
-            .query(
-                (rs, n) ->
-                    new Row(rs.getString("id"), rs.getLong("pid"), rs.getString("process_start")))
+            .query((rs, n) ->
+                new Row(rs.getString("id"), rs.getLong("pid"), rs.getString("process_start")))
             .list()) {
       boolean alive = false;
       try {

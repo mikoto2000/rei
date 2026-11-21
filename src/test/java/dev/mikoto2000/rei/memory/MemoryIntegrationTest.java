@@ -128,12 +128,10 @@ class MemoryIntegrationTest {
     var model = mock(ChatModel.class);
     when(model.getOptions()).thenReturn(OpenAiChatOptions.builder().model("test").build());
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            a -> {
-              sent.set(a.getArgument(0));
-              return Flux.just(
-                  new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
-            });
+        .thenAnswer(a -> {
+          sent.set(a.getArgument(0));
+          return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
+        });
     var history = MessageWindowChatMemory.builder().maxMessages(100).build();
     var retriever = spy(new MemoryRetriever(repository, properties));
     var client =
@@ -152,12 +150,11 @@ class MemoryIntegrationTest {
         OpenAiChatOptions.builder().toolContext(Map.of(RunExecutionContext.KEY, execution)).build();
     client
         .prompt(new Prompt(new UserMessage("Vision"), options))
-        .advisors(
-            a ->
-                a.param(AgentRunContext.class.getName(), owner)
-                    .param(
-                        ChatMemory.CONVERSATION_ID,
-                        "project:00000000-0000-0000-0000-000000000001:chat"))
+        .advisors(a ->
+            a.param(AgentRunContext.class.getName(), owner)
+                .param(
+                    ChatMemory.CONVERSATION_ID,
+                    "project:00000000-0000-0000-0000-000000000001:chat"))
         .stream()
         .chatResponse()
         .blockLast();
@@ -191,18 +188,17 @@ class MemoryIntegrationTest {
     when(models.chatOptions(LlmFeature.MEMORY, null))
         .thenReturn(OpenAiChatOptions.builder().build());
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            a -> {
-              Prompt prompt = a.getArgument(0);
-              var options = (OpenAiChatOptions) prompt.getOptions();
-              assertTrue(options.getToolCallbacks().isEmpty());
-              assertEquals("none", options.getToolChoice());
-              assertTrue(prompt.getSystemMessage().getText().contains("LESSON"));
-              assertTrue(prompt.getSystemMessage().getText().contains("PROCEDURE"));
-              return Flux.just(
-                  new ChatResponse(
-                      List.of(new Generation(new AssistantMessage(MemoryOutputTest.VALID)))));
-            });
+        .thenAnswer(a -> {
+          Prompt prompt = a.getArgument(0);
+          var options = (OpenAiChatOptions) prompt.getOptions();
+          assertTrue(options.getToolCallbacks().isEmpty());
+          assertEquals("none", options.getToolChoice());
+          assertTrue(prompt.getSystemMessage().getText().contains("LESSON"));
+          assertTrue(prompt.getSystemMessage().getText().contains("PROCEDURE"));
+          return Flux.just(
+              new ChatResponse(
+                  List.of(new Generation(new AssistantMessage(MemoryOutputTest.VALID)))));
+        });
     var processor =
         new LlmMemoryProcessor(models, new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null));
     assertEquals(1, processor.extract(List.of()).size());

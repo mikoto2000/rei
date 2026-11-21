@@ -234,31 +234,29 @@ public final class DurableSubAgentRepository {
             kind,
             graphId);
     String encoded = encode(state);
-    return transaction.execute(
-        tx -> {
-          lockWriter();
-          if (db.sql("SELECT COUNT(*) FROM subagent_checkpoints").query(Long.class).single() >= 1024
-              || db.sql(
-                              "SELECT COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) FROM subagent_checkpoints")
-                          .query(Long.class)
-                          .single()
-                      + encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-                  > maxBytes)
-            throw new IllegalArgumentException("Durable child storage capacity reached");
-          db.sql("INSERT INTO subagent_checkpoints(id,revision,snapshot) VALUES(?,0,?)")
-              .params(state.id(), encode(state))
-              .update();
-          return state;
-        });
+    return transaction.execute(tx -> {
+      lockWriter();
+      if (db.sql("SELECT COUNT(*) FROM subagent_checkpoints").query(Long.class).single() >= 1024
+          || db.sql(
+                          "SELECT COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) FROM subagent_checkpoints")
+                      .query(Long.class)
+                      .single()
+                  + encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+              > maxBytes)
+        throw new IllegalArgumentException("Durable child storage capacity reached");
+      db.sql("INSERT INTO subagent_checkpoints(id,revision,snapshot) VALUES(?,0,?)")
+          .params(state.id(), encode(state))
+          .update();
+      return state;
+    });
   }
 
   /** 補助エージェントへの委譲で用いる一括反映を返す。 */
   synchronized <T> T atomic(java.util.function.Supplier<T> action) {
-    return transaction.execute(
-        tx -> {
-          lockWriter();
-          return action.get();
-        });
+    return transaction.execute(tx -> {
+      lockWriter();
+      return action.get();
+    });
   }
 
   /** 読み取り後のロック昇格を避け、容量確認と更新を同じ書き込み予約の下で行う。 */
@@ -413,16 +411,15 @@ public final class DurableSubAgentRepository {
       throw new IllegalArgumentException("No started child Tool operation");
     var operations =
         saved.operations().stream()
-            .map(
-                o ->
-                    o.id().equals(operation)
-                        ? new Operation(
-                            o.id(),
-                            o.tool(),
-                            o.argumentsHash(),
-                            success ? "SUCCEEDED" : "UNKNOWN",
-                            null)
-                        : o)
+            .map(o ->
+                o.id().equals(operation)
+                    ? new Operation(
+                        o.id(),
+                        o.tool(),
+                        o.argumentsHash(),
+                        success ? "SUCCEEDED" : "UNKNOWN",
+                        null)
+                    : o)
             .toList();
     update(
         saved,
@@ -511,16 +508,15 @@ public final class DurableSubAgentRepository {
           "Current unknown operation and explicit human observation required");
     var operations =
         saved.operations().stream()
-            .map(
-                o ->
-                    o.id().equals(operation)
-                        ? new Operation(
-                            o.id(),
-                            o.tool(),
-                            o.argumentsHash(),
-                            status,
-                            CredentialRedactor.redact(note))
-                        : o)
+            .map(o ->
+                o.id().equals(operation)
+                    ? new Operation(
+                        o.id(),
+                        o.tool(),
+                        o.argumentsHash(),
+                        status,
+                        CredentialRedactor.redact(note))
+                    : o)
             .toList();
     return update(
         saved,
@@ -563,29 +559,25 @@ public final class DurableSubAgentRepository {
   private Checkpoint update(Checkpoint saved, UnaryOperator<Checkpoint> change) {
     var next = change.apply(saved);
     String encoded = encode(next);
-    return transaction.execute(
-        tx -> {
-          lockWriter();
-          var current = load(saved.id());
-          if (current.revision() != saved.revision())
-            throw new ConcurrentModificationException("Child checkpoint revision changed");
-          long size =
-              db.sql(
-                      "SELECT COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) FROM subagent_checkpoints")
-                  .query(Long.class)
-                  .single();
-          if (size
-                  - encode(current).getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-                  + encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-              > maxBytes)
-            throw new IllegalArgumentException("Durable child storage capacity reached");
-          if (db.sql(
-                      "UPDATE subagent_checkpoints SET revision=?,snapshot=? WHERE id=? AND revision=?")
-                  .params(next.revision(), encoded, saved.id(), saved.revision())
-                  .update()
-              != 1) throw new ConcurrentModificationException("Child checkpoint revision changed");
-          return next;
-        });
+    return transaction.execute(tx -> {
+      lockWriter();
+      var current = load(saved.id());
+      if (current.revision() != saved.revision())
+        throw new ConcurrentModificationException("Child checkpoint revision changed");
+      long size =
+          db.sql("SELECT COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) FROM subagent_checkpoints")
+              .query(Long.class)
+              .single();
+      if (size
+              - encode(current).getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+              + encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+          > maxBytes) throw new IllegalArgumentException("Durable child storage capacity reached");
+      if (db.sql("UPDATE subagent_checkpoints SET revision=?,snapshot=? WHERE id=? AND revision=?")
+              .params(next.revision(), encoded, saved.id(), saved.revision())
+              .update()
+          != 1) throw new ConcurrentModificationException("Child checkpoint revision changed");
+      return next;
+    });
   }
 
   /** 補助エージェントへの委譲で用いる複製を返す。 */
@@ -675,11 +667,10 @@ public final class DurableSubAgentRepository {
   /** 確定できない結果を、判定不能の情報として表す。 */
   private static List<Operation> unknown(List<Operation> operations) {
     return operations.stream()
-        .map(
-            o ->
-                o.status().equals("STARTED")
-                    ? new Operation(o.id(), o.tool(), o.argumentsHash(), "UNKNOWN", null)
-                    : o)
+        .map(o ->
+            o.status().equals("STARTED")
+                ? new Operation(o.id(), o.tool(), o.argumentsHash(), "UNKNOWN", null)
+                : o)
         .toList();
   }
 

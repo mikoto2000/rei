@@ -22,8 +22,8 @@ class TopicCandidateParserTest {
     var candidates =
         parser.parse(
             """
-        {"candidates":[{"topic":"Working Set 改善後の探索時間評価","reason":"効果測定が未実施","type":"unfinished_work","source":"working_set","priority":0.8,"freshness":0.9,"usefulness":0.8,"intrusiveness":0.2,"confidence":0.9}]}
-        """,
+            {"candidates":[{"topic":"Working Set 改善後の探索時間評価","reason":"効果測定が未実施","type":"unfinished_work","source":"working_set","priority":0.8,"freshness":0.9,"usefulness":0.8,"intrusiveness":0.2,"confidence":0.9}]}
+            """,
             5);
 
     assertEquals(1, candidates.size());
@@ -37,8 +37,8 @@ class TopicCandidateParserTest {
     var candidates =
         parser.parse(
             """
-        {"candidates":[{"topic":"明日の確認","reason":"後で確認すると言っていた","type":"follow_up","source":"conversation","priority":0.7,"freshness":0.8,"usefulness":0.7,"intrusiveness":0.2,"confidence":0.8}]}
-        """,
+            {"candidates":[{"topic":"明日の確認","reason":"後で確認すると言っていた","type":"follow_up","source":"conversation","priority":0.7,"freshness":0.8,"usefulness":0.7,"intrusiveness":0.2,"confidence":0.8}]}
+            """,
             5);
 
     assertEquals(1, candidates.size());
@@ -51,11 +51,11 @@ class TopicCandidateParserTest {
     var candidates =
         parser.parse(
             """
-        {"candidates":[
-          {"topic":"完了済みメモ","reason":"done","type":"casual","source":"conversation","priority":1,"freshness":1,"usefulness":1,"intrusiveness":0,"confidence":1},
-          {"topic":"","reason":"blank","type":"unfinished_work","source":"conversation","priority":1,"freshness":1,"usefulness":1,"intrusiveness":0,"confidence":1}
-        ]}
-        """,
+            {"candidates":[
+              {"topic":"完了済みメモ","reason":"done","type":"casual","source":"conversation","priority":1,"freshness":1,"usefulness":1,"intrusiveness":0,"confidence":1},
+              {"topic":"","reason":"blank","type":"unfinished_work","source":"conversation","priority":1,"freshness":1,"usefulness":1,"intrusiveness":0,"confidence":1}
+            ]}
+            """,
             5);
 
     assertTrue(candidates.isEmpty());
@@ -73,11 +73,11 @@ class TopicCandidateParserTest {
     var candidates =
         parser.parse(
             """
-        {"candidates":[
-          {"topic":"a","reason":"","type":"unfinished_work","source":"conversation","priority":1,"freshness":1,"usefulness":1,"intrusiveness":0,"confidence":1},
-          {"topic":"b","reason":"","type":"follow_up","source":"conversation","priority":1,"freshness":1,"usefulness":1,"intrusiveness":0,"confidence":1}
-        ]}
-        """,
+            {"candidates":[
+              {"topic":"a","reason":"","type":"unfinished_work","source":"conversation","priority":1,"freshness":1,"usefulness":1,"intrusiveness":0,"confidence":1},
+              {"topic":"b","reason":"","type":"follow_up","source":"conversation","priority":1,"freshness":1,"usefulness":1,"intrusiveness":0,"confidence":1}
+            ]}
+            """,
             1);
 
     assertEquals(1, candidates.size());

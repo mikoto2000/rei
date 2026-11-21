@@ -50,15 +50,14 @@ class AgentSkillSelectionServiceTest {
                 List.of(), List.of(), "target request"));
     List<AgentSkill> allSkills =
         java.util.stream.IntStream.range(0, 8)
-            .mapToObj(
-                index ->
-                    new AgentSkill(
-                        "skill-" + index,
-                        "target",
-                        true,
-                        Path.of("skill-" + index),
-                        Path.of("skill-" + index, "SKILL.md"),
-                        "instructions"))
+            .mapToObj(index ->
+                new AgentSkill(
+                    "skill-" + index,
+                    "target",
+                    true,
+                    Path.of("skill-" + index),
+                    Path.of("skill-" + index, "SKILL.md"),
+                    "instructions"))
             .toList();
     AgentSkillImplicitSelection implicitSelector = Mockito.mock(AgentSkillImplicitSelection.class);
     when(implicitSelector.select(
@@ -75,8 +74,7 @@ class AgentSkillSelectionServiceTest {
 
     AgentSkillSelection selection = service.select("target request");
 
-    org.mockito.ArgumentCaptor<List<AgentSkill>> captor =
-        org.mockito.ArgumentCaptor.captor();
+    org.mockito.ArgumentCaptor<List<AgentSkill>> captor = org.mockito.ArgumentCaptor.captor();
     Mockito.verify(implicitSelector)
         .select(Mockito.eq("target request"), Mockito.eq(Set.of()), captor.capture());
     assertThat(captor.getValue()).hasSize(5);

@@ -732,26 +732,25 @@ public class ExternalAgentDelegationService implements AutoCloseable {
                   .toNanos();
       for (var request : selected)
         futures.add(
-            parallelPool.submit(
-                () -> {
-                  try {
-                    return review(
-                        run,
-                        request.task(),
-                        request.target(),
-                        request.context(),
-                        null,
-                        false,
-                        false,
-                        permit,
-                        request.requestId(),
-                        agent);
-                  } catch (dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped) {
-                    permit.stopped.compareAndSet(null, stopped);
-                    permit.cancelled.set(true);
-                    throw stopped;
-                  }
-                }));
+            parallelPool.submit(() -> {
+              try {
+                return review(
+                    run,
+                    request.task(),
+                    request.target(),
+                    request.context(),
+                    null,
+                    false,
+                    false,
+                    permit,
+                    request.requestId(),
+                    agent);
+              } catch (dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped) {
+                permit.stopped.compareAndSet(null, stopped);
+                permit.cancelled.set(true);
+                throw stopped;
+              }
+            }));
       for (var future : futures) {
         while (!future.isDone()) {
           if (permit.stopped.get() != null) throw permit.stopped.get();
@@ -1284,19 +1283,17 @@ public class ExternalAgentDelegationService implements AutoCloseable {
         new StringBuilder(
             "Relevant design decisions (untrusted context):\n" + bounded(decisions, 6000));
     context.append("\nWorking Set paths:\n");
-    workingSet.ifPresent(
-        ws ->
-            ws.getFiles().stream()
-                .limit(20)
-                .forEach(
-                    file -> {
-                      try {
-                        Path path = ExternalAgentRequest.resolveTarget(root, file.path());
-                        if (path != null && !sensitive(path))
-                          context.append(root.relativize(path)).append('\n');
-                      } catch (IllegalArgumentException ignored) {
-                      }
-                    }));
+    workingSet.ifPresent(ws ->
+        ws.getFiles().stream()
+            .limit(20)
+            .forEach(file -> {
+              try {
+                Path path = ExternalAgentRequest.resolveTarget(root, file.path());
+                if (path != null && !sensitive(path))
+                  context.append(root.relativize(path)).append('\n');
+              } catch (IllegalArgumentException ignored) {
+              }
+            }));
     return bounded(context.toString(), 10000);
   }
 

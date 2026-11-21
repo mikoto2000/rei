@@ -67,14 +67,12 @@ final class MarkdownSectionReads {
         sections.stream()
             .filter(
                 section -> request.section() == null || section.title().equals(request.section()))
-            .filter(
-                section ->
-                    request.sectionPath() == null || section.path().equals(request.sectionPath()))
+            .filter(section ->
+                request.sectionPath() == null || section.path().equals(request.sectionPath()))
             .filter(
                 section -> request.sectionId() == null || section.id().equals(request.sectionId()))
-            .filter(
-                section ->
-                    request.headingLevel() == null || section.level() == request.headingLevel())
+            .filter(section ->
+                request.headingLevel() == null || section.level() == request.headingLevel())
             .toList();
     if (found.size() != 1) {
       var result =

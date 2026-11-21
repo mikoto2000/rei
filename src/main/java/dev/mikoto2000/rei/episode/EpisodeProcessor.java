@@ -65,18 +65,16 @@ public class EpisodeProcessor {
     if (existing == null) existing = List.of();
     existing =
         existing.stream()
-            .filter(
-                e ->
-                    findTurn != null
-                        && e.claims().stream()
-                            .allMatch(
-                                c ->
-                                    findTurn.apply(e.sessionId(), c.runId()).isPresent()
-                                        && (!c.speaker().equals("tool")
-                                            || findToolEvent != null
-                                                && findToolEvent
-                                                    .apply(e.projectId(), c.sourceId())
-                                                    .isPresent())))
+            .filter(e ->
+                findTurn != null
+                    && e.claims().stream()
+                        .allMatch(c ->
+                            findTurn.apply(e.sessionId(), c.runId()).isPresent()
+                                && (!c.speaker().equals("tool")
+                                    || findToolEvent != null
+                                        && findToolEvent
+                                            .apply(e.projectId(), c.sourceId())
+                                            .isPresent())))
             .toList();
     var candidates =
         turns.isEmpty()
@@ -90,17 +88,15 @@ public class EpisodeProcessor {
       if (!candidate.projectId().equals(project) || !candidate.sessionId().equals(session))
         throw new IllegalArgumentException("Episode ownership mismatch");
       if (turns.stream()
-          .noneMatch(
-              t ->
-                  t.createdAt() != null
-                      && t.createdAt().equals(java.time.Instant.parse(candidate.occurredAt()))))
+          .noneMatch(t ->
+              t.createdAt() != null
+                  && t.createdAt().equals(java.time.Instant.parse(candidate.occurredAt()))))
         throw new IllegalArgumentException("Episode timestamp is not in supplied evidence");
       if (candidate.endedAt() != null
           && turns.stream()
-              .noneMatch(
-                  t ->
-                      t.createdAt() != null
-                          && t.createdAt().equals(java.time.Instant.parse(candidate.endedAt()))))
+              .noneMatch(t ->
+                  t.createdAt() != null
+                      && t.createdAt().equals(java.time.Instant.parse(candidate.endedAt()))))
         throw new IllegalArgumentException("Episode end is not in supplied evidence");
       for (var claim : candidate.claims()) {
         var turn = source.get(claim.runId());
@@ -126,11 +122,10 @@ public class EpisodeProcessor {
       }
       if (candidate.status() == Episode.Status.COMPLETED
           && candidate.claims().stream()
-              .noneMatch(
-                  c ->
-                      c.kind().equals("decision") && c.evidence() == Episode.Evidence.USER_EXPLICIT
-                          || c.kind().equals("result")
-                              && c.evidence() == Episode.Evidence.TOOL_OBSERVED))
+              .noneMatch(c ->
+                  c.kind().equals("decision") && c.evidence() == Episode.Evidence.USER_EXPLICIT
+                      || c.kind().equals("result")
+                          && c.evidence() == Episode.Evidence.TOOL_OBSERVED))
         throw new IllegalArgumentException(
             "A completed episode requires an explicit user decision or direct tool result");
       verified.add(candidate);

@@ -406,24 +406,23 @@ public class SleepService {
   }
 
   private void commitSleep(MemoryRepository repository, CommitRequest request, Runnable check) {
-    repository.transaction(
-        () -> {
-          check.run();
-          var run = request.run();
-          if (repository.lastProcessed(run.sessionId()) != request.previousCheckpoint())
-            throw new IllegalStateException("Sleep checkpoint changed; retry");
-          for (var plan : request.plans()) {
-            check.run();
-            for (var target : plan.targets())
-              if (!repository.find(target.id()).orElseThrow().equals(target))
-                throw new IllegalStateException("Memory changed during Sleep; retry");
-            apply(repository, plan, run.projectId(), run.sessionId());
-          }
-          check.run();
-          repository.saveRun(run);
-          check.run();
-          return null;
-        });
+    repository.transaction(() -> {
+      check.run();
+      var run = request.run();
+      if (repository.lastProcessed(run.sessionId()) != request.previousCheckpoint())
+        throw new IllegalStateException("Sleep checkpoint changed; retry");
+      for (var plan : request.plans()) {
+        check.run();
+        for (var target : plan.targets())
+          if (!repository.find(target.id()).orElseThrow().equals(target))
+            throw new IllegalStateException("Memory changed during Sleep; retry");
+        apply(repository, plan, run.projectId(), run.sessionId());
+      }
+      check.run();
+      repository.saveRun(run);
+      check.run();
+      return null;
+    });
   }
 
   /** 指定された内容を、現在の対象へ反映する。 */
@@ -451,11 +450,10 @@ public class SleepService {
     if (episodeStore != null && r.action() != MemoryAction.IGNORE)
       repository
           .exact(c, project)
-          .ifPresent(
-              m ->
-                  episodeStore
-                      .linkMemory()
-                      .accept(new MemoryLink(project, session, c.sourceTurnIds(), m.id())));
+          .ifPresent(m ->
+              episodeStore
+                  .linkMemory()
+                  .accept(new MemoryLink(project, session, c.sourceTurnIds(), m.id())));
   }
 
   /** 長期記憶の保存と検索の操作を実行する。 */

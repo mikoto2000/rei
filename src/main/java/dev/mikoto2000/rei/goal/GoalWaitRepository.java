@@ -161,48 +161,47 @@ public class GoalWaitRepository {
       Snapshot snapshot,
       Supplier<String> schedule) {
     String encoded = encode(snapshot);
-    return tx.execute(
-        status -> {
-          if (active(goal.projectId(), goal.id()))
-            throw new IllegalStateException("Goal already has an active wait");
-          if (db.sql(
-                      "SELECT COUNT(*) FROM agent_goal_waits WHERE project=? AND state IN ('WAITING','BLOCKED','RESUMING')")
-                  .param(goal.projectId())
-                  .query(Integer.class)
-                  .single()
-              >= 256) throw new IllegalStateException("Goal wait capacity reached");
-          if (db.sql(
-                      "UPDATE agent_goals SET status='PAUSED',reason='dependency_wait' WHERE project=? AND id=? AND run IS ? AND attempts=? AND status=? AND status IN ('READY','PAUSED','FAILED','WAITING_APPROVAL','BLOCKED') AND completion_json IS ?")
-                  .params(
-                      goal.projectId(),
-                      goal.id(),
-                      goal.currentRunId(),
-                      goal.attempts(),
-                      goal.status(),
-                      goal.completion() == null ? null : encodeDefinition(goal.completion()))
-                  .update()
-              != 1) throw new IllegalStateException("Goal changed before wait");
-          db.sql(
-                  "INSERT INTO agent_goal_history(goal,status,reason,timestamp) VALUES(?,'PAUSED','dependency_wait',?)")
-              .params(goal.id(), clock.millis())
-              .update();
-          String id = UUID.randomUUID().toString(), timer = schedule.get();
-          db.sql(
-                  "INSERT INTO agent_goal_waits(id,project,goal,run,attempts,reason,dependency,schedule,state,observed,version,snapshot,created) VALUES(?,?,?,?,?,?,?,?,'WAITING','not_observed',1,?,?)")
+    return tx.execute(status -> {
+      if (active(goal.projectId(), goal.id()))
+        throw new IllegalStateException("Goal already has an active wait");
+      if (db.sql(
+                  "SELECT COUNT(*) FROM agent_goal_waits WHERE project=? AND state IN ('WAITING','BLOCKED','RESUMING')")
+              .param(goal.projectId())
+              .query(Integer.class)
+              .single()
+          >= 256) throw new IllegalStateException("Goal wait capacity reached");
+      if (db.sql(
+                  "UPDATE agent_goals SET status='PAUSED',reason='dependency_wait' WHERE project=? AND id=? AND run IS ? AND attempts=? AND status=? AND status IN ('READY','PAUSED','FAILED','WAITING_APPROVAL','BLOCKED') AND completion_json IS ?")
               .params(
-                  id,
                   goal.projectId(),
                   goal.id(),
                   goal.currentRunId(),
                   goal.attempts(),
-                  reason,
-                  dependency,
-                  timer,
-                  encoded,
-                  clock.millis())
-              .update();
-          return byId(goal.projectId(), id);
-        });
+                  goal.status(),
+                  goal.completion() == null ? null : encodeDefinition(goal.completion()))
+              .update()
+          != 1) throw new IllegalStateException("Goal changed before wait");
+      db.sql(
+              "INSERT INTO agent_goal_history(goal,status,reason,timestamp) VALUES(?,'PAUSED','dependency_wait',?)")
+          .params(goal.id(), clock.millis())
+          .update();
+      String id = UUID.randomUUID().toString(), timer = schedule.get();
+      db.sql(
+              "INSERT INTO agent_goal_waits(id,project,goal,run,attempts,reason,dependency,schedule,state,observed,version,snapshot,created) VALUES(?,?,?,?,?,?,?,?,'WAITING','not_observed',1,?,?)")
+          .params(
+              id,
+              goal.projectId(),
+              goal.id(),
+              goal.currentRunId(),
+              goal.attempts(),
+              reason,
+              dependency,
+              timer,
+              encoded,
+              clock.millis())
+          .update();
+      return byId(goal.projectId(), id);
+    });
   }
 
   /** 目標の達成管理で用いる別識別子を返す。 */

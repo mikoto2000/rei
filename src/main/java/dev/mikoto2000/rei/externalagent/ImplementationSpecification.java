@@ -31,25 +31,17 @@ public record ImplementationSpecification(
     String changeMode) {
   public ImplementationSpecification {
     instructions =
-        instructions == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(instructions));
+        instructions == null ? null : Collections.unmodifiableList(new ArrayList<>(instructions));
     allowedPaths =
-        allowedPaths == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(allowedPaths));
+        allowedPaths == null ? null : Collections.unmodifiableList(new ArrayList<>(allowedPaths));
     constraints =
-        constraints == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(constraints));
+        constraints == null ? null : Collections.unmodifiableList(new ArrayList<>(constraints));
     acceptanceCriteria =
         acceptanceCriteria == null
             ? null
             : Collections.unmodifiableList(new ArrayList<>(acceptanceCriteria));
     references =
-        references == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(references));
+        references == null ? null : Collections.unmodifiableList(new ArrayList<>(references));
   }
 
   /**

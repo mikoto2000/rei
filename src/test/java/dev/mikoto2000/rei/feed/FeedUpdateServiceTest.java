@@ -23,25 +23,24 @@ class FeedUpdateServiceTest {
     FeedService feedService = newService();
     Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
     FeedFetcher feedFetcher =
-        new FeedFetcher(
-            uri ->
-                new FeedHttpResponse(
-                    200,
-                    """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <rss version="2.0">
-          <channel>
-            <title>Fetched Title</title>
-            <link>https://example.com/</link>
-            <description>Fetched Description</description>
-            <item>
-              <title>First Post</title>
-              <link>https://example.com/posts/1</link>
-              <pubDate>Tue, 21 Apr 2026 09:30:00 GMT</pubDate>
-            </item>
-          </channel>
-        </rss>
-        """));
+        new FeedFetcher(uri ->
+            new FeedHttpResponse(
+                200,
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <rss version="2.0">
+                  <channel>
+                    <title>Fetched Title</title>
+                    <link>https://example.com/</link>
+                    <description>Fetched Description</description>
+                    <item>
+                      <title>First Post</title>
+                      <link>https://example.com/posts/1</link>
+                      <pubDate>Tue, 21 Apr 2026 09:30:00 GMT</pubDate>
+                    </item>
+                  </channel>
+                </rss>
+                """));
     FeedUpdateService updateService = new FeedUpdateService(feedService, feedFetcher);
 
     FeedUpdateResult result = updateService.update(feed.id());
@@ -61,23 +60,22 @@ class FeedUpdateServiceTest {
     FeedService feedService = newService();
     Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
     FeedFetcher feedFetcher =
-        new FeedFetcher(
-            uri ->
-                new FeedHttpResponse(
-                    200,
-                    """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <rss version="2.0">
-          <channel>
-            <title>Example RSS</title>
-            <item>
-              <title>First Post</title>
-              <link>https://example.com/posts/1</link>
-              <pubDate>Tue, 21 Apr 2026 09:30:00 GMT</pubDate>
-            </item>
-          </channel>
-        </rss>
-        """));
+        new FeedFetcher(uri ->
+            new FeedHttpResponse(
+                200,
+                """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <rss version="2.0">
+                  <channel>
+                    <title>Example RSS</title>
+                    <item>
+                      <title>First Post</title>
+                      <link>https://example.com/posts/1</link>
+                      <pubDate>Tue, 21 Apr 2026 09:30:00 GMT</pubDate>
+                    </item>
+                  </channel>
+                </rss>
+                """));
     FeedUpdateService updateService = new FeedUpdateService(feedService, feedFetcher);
 
     updateService.update(feed.id());
@@ -97,26 +95,25 @@ class FeedUpdateServiceTest {
     Feed failingFeed = feedService.add("https://example.com/fail.xml", "Fail Feed");
 
     FeedFetcher feedFetcher =
-        new FeedFetcher(
-            uri -> {
-              if (uri.toString().contains("fail")) {
-                throw new FeedFetchException("fetch failed", 503);
-              }
-              return new FeedHttpResponse(
-                  200,
-                  """
-          <?xml version="1.0" encoding="UTF-8"?>
-          <rss version="2.0">
-            <channel>
-              <title>Ok Feed</title>
-              <item>
-                <title>Post</title>
-                <link>https://example.com/posts/1</link>
-              </item>
-            </channel>
-          </rss>
-          """);
-            });
+        new FeedFetcher(uri -> {
+          if (uri.toString().contains("fail")) {
+            throw new FeedFetchException("fetch failed", 503);
+          }
+          return new FeedHttpResponse(
+              200,
+              """
+              <?xml version="1.0" encoding="UTF-8"?>
+              <rss version="2.0">
+                <channel>
+                  <title>Ok Feed</title>
+                  <item>
+                    <title>Post</title>
+                    <link>https://example.com/posts/1</link>
+                  </item>
+                </channel>
+              </rss>
+              """);
+        });
     FeedUpdateService updateService = new FeedUpdateService(feedService, feedFetcher);
 
     List<FeedUpdateResult> results = updateService.updateAll();

@@ -31,11 +31,10 @@ class ActivityCommandsControllerTest {
     var projects = new ProjectService(second.root(), registry);
     var command = mock(ActivityCommand.class);
     when(command.reportContext("today"))
-        .thenAnswer(
-            call -> {
-              assertEquals(first.id(), projects.currentContext().id());
-              return "context";
-            });
+        .thenAnswer(call -> {
+          assertEquals(first.id(), projects.currentContext().id());
+          return "context";
+        });
     var api =
         new ActivityCommandsController(
             command, registry, projects, mock(IntegrationRunSubmitService.class));

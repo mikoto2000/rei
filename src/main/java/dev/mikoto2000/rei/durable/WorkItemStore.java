@@ -5,16 +5,26 @@ import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.HexFormat;
-import java.util.UUID;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 
 /** Work-level claims and frozen sources share the existing serialized SQLite writer. */
 public final class WorkItemStore {
-  public record Item(String id, String task, String snapshot, String path, int start, int end,
-      String version, String kind, String criterion, String state, boolean required) {}
+  public record Item(
+      String id,
+      String task,
+      String snapshot,
+      String path,
+      int start,
+      int end,
+      String version,
+      String kind,
+      String criterion,
+      String state,
+      boolean required) {}
 
   public record Claim(Item item, String run, String attempt) {}
 
@@ -34,27 +44,48 @@ public final class WorkItemStore {
     }
   }
 
-  public record Finding(String id, String severity,
+  public record Finding(
+      String id,
+      String severity,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer start,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer end,
-      String evidence, String assessment) {}
+      String evidence,
+      String assessment) {}
 
-  public record ReviewResult(String work, String snapshot, String path, int start, int end,
-      String version, String criterion, String assessment, List<Finding> findings) {
+  public record ReviewResult(
+      String work,
+      String snapshot,
+      String path,
+      int start,
+      int end,
+      String version,
+      String criterion,
+      String assessment,
+      List<Finding> findings) {
     public ReviewResult {
       findings = List.copyOf(findings);
     }
   }
 
-  public record Result(ReviewResult body, String sha256,
-      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-      java.util.Map<String, Object> legacyReceipt) {
-    public Result { legacyReceipt = legacyReceipt == null ? null : java.util.Map.copyOf(legacyReceipt); }
-    public Result(ReviewResult body, String sha256) { this(body, sha256, null); }
+  public record Result(
+      ReviewResult body,
+      String sha256,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          java.util.Map<String, Object> legacyReceipt) {
+    public Result {
+      legacyReceipt = legacyReceipt == null ? null : java.util.Map.copyOf(legacyReceipt);
+    }
+
+    public Result(ReviewResult body, String sha256) {
+      this(body, sha256, null);
+    }
   }
 
-  private static final com.fasterxml.jackson.databind.ObjectMapper JSON = com.fasterxml.jackson.databind.json.JsonMapper.builder()
-      .enable(com.fasterxml.jackson.databind.MapperFeature.SORT_PROPERTIES_ALPHABETICALLY).build();
+  private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+      com.fasterxml.jackson.databind.json.JsonMapper.builder()
+          .enable(com.fasterxml.jackson.databind.MapperFeature.SORT_PROPERTIES_ALPHABETICALLY)
+          .build();
 
   private final DurableTaskStore store;
 
@@ -69,16 +100,30 @@ public final class WorkItemStore {
       var owner = store.status(db, scope, task);
       if (!owner.state().equals("ACTIVE") && !owner.state().equals("COMPLETE"))
         throw new IllegalStateException("TASK_NOT_ACTIVE");
-      if (DurableTaskStore.number(db, "SELECT COUNT(*) FROM durable_tasks WHERE id=? AND current_run=?", task, run) != 0)
-        return owner;
+      if (DurableTaskStore.number(
+              db, "SELECT COUNT(*) FROM durable_tasks WHERE id=? AND current_run=?", task, run)
+          != 0) return owner;
       // A previously retired Run may not reclaim authority by replaying an old resume.
-      if (DurableTaskStore.number(db, "SELECT COUNT(*) FROM durable_attempts WHERE task=? AND run=?", task, run) != 0)
-        throw new IllegalArgumentException("TASK_RUN_RETIRED");
+      if (DurableTaskStore.number(
+              db, "SELECT COUNT(*) FROM durable_attempts WHERE task=? AND run=?", task, run)
+          != 0) throw new IllegalArgumentException("TASK_RUN_RETIRED");
       reconcile(db, task);
-      DurableTaskStore.execute(db, "UPDATE durable_item_attempts SET state='REVOKED' WHERE state='ACTIVE' AND work IN (SELECT id FROM durable_work WHERE task=?)", task);
-      DurableTaskStore.execute(db, "UPDATE durable_work SET state='PENDING',active_attempt=NULL,last_step='RECOVERED' WHERE task=? AND state='RUNNING' AND result_id IS NULL", task);
-      DurableTaskStore.execute(db, "UPDATE durable_attempts SET state='RETIRED' WHERE task=? AND state='ACTIVE'", task);
-      DurableTaskStore.execute(db, "INSERT INTO durable_attempts(task,run,started,state) VALUES(?,?,?,'ACTIVE')", task, run, System.currentTimeMillis());
+      DurableTaskStore.execute(
+          db,
+          "UPDATE durable_item_attempts SET state='REVOKED' WHERE state='ACTIVE' AND work IN (SELECT id FROM durable_work WHERE task=?)",
+          task);
+      DurableTaskStore.execute(
+          db,
+          "UPDATE durable_work SET state='PENDING',active_attempt=NULL,last_step='RECOVERED' WHERE task=? AND state='RUNNING' AND result_id IS NULL",
+          task);
+      DurableTaskStore.execute(
+          db, "UPDATE durable_attempts SET state='RETIRED' WHERE task=? AND state='ACTIVE'", task);
+      DurableTaskStore.execute(
+          db,
+          "INSERT INTO durable_attempts(task,run,started,state) VALUES(?,?,?,'ACTIVE')",
+          task,
+          run,
+          System.currentTimeMillis());
       DurableTaskStore.execute(db, "UPDATE durable_tasks SET current_run=? WHERE id=?", run, task);
       if (TaskCompletion.verify(db, store.status(db, scope, task)).complete())
         DurableTaskStore.execute(db, "UPDATE durable_tasks SET state='COMPLETE' WHERE id=?", task);
@@ -90,14 +135,23 @@ public final class WorkItemStore {
     String cursor = "";
     while (true) {
       var ids = new ArrayList<String>();
-      try (var query = DurableTaskStore.statement(db, "SELECT r.work FROM durable_results r JOIN durable_work w ON w.id=r.work WHERE w.task=? AND r.work>? ORDER BY r.work LIMIT 100", task, cursor);
+      try (var query =
+              DurableTaskStore.statement(
+                  db,
+                  "SELECT r.work FROM durable_results r JOIN durable_work w ON w.id=r.work WHERE w.task=? AND r.work>? ORDER BY r.work LIMIT 100",
+                  task,
+                  cursor);
           var rows = query.executeQuery()) {
         while (rows.next()) ids.add(rows.getString(1));
       }
       for (var id : ids) {
         var item = item(db, id);
         verifyStored(db, item);
-        DurableTaskStore.execute(db, "UPDATE durable_work SET state='COMPLETE',result_id=?,last_step='COMPLETED' WHERE id=?", id, id);
+        DurableTaskStore.execute(
+            db,
+            "UPDATE durable_work SET state='COMPLETE',result_id=?,last_step='COMPLETED' WHERE id=?",
+            id,
+            id);
         cursor = id;
       }
       if (ids.size() < 100) return;
@@ -105,20 +159,38 @@ public final class WorkItemStore {
   }
 
   static void verifyStored(Connection db, Item item) throws SQLException {
-    try (var query = DurableTaskStore.statement(db, "SELECT body,sha256,task,snapshot,path,start,end,version,criterion FROM durable_results WHERE work=?", item.id());
+    try (var query =
+            DurableTaskStore.statement(
+                db,
+                "SELECT body,sha256,task,snapshot,path,start,end,version,criterion FROM durable_results WHERE work=?",
+                item.id());
         var rows = query.executeQuery()) {
       if (!rows.next()) throw new IllegalArgumentException("RESULT_CORRUPT");
       var body = result(rows).body();
-      if (body == null || !Objects.equals(body.work(), item.id()) || !Objects.equals(body.snapshot(), item.snapshot())
-          || !Objects.equals(body.path(), item.path()) || body.start() != item.start() || body.end() != item.end()
-          || !Objects.equals(body.version(), item.version()) || !Objects.equals(body.criterion(), item.criterion())
-          || !rows.getString(3).equals(item.task()) || !rows.getString(4).equals(item.snapshot())
-          || !rows.getString(5).equals(item.path()) || rows.getInt(6) != item.start() || rows.getInt(7) != item.end()
-          || !rows.getString(8).equals(item.version()) || !rows.getString(9).equals(item.criterion())
-          || body.assessment() == null || body.assessment().isBlank() || body.assessment().length() > 16384)
+      if (body == null
+          || !Objects.equals(body.work(), item.id())
+          || !Objects.equals(body.snapshot(), item.snapshot())
+          || !Objects.equals(body.path(), item.path())
+          || body.start() != item.start()
+          || body.end() != item.end()
+          || !Objects.equals(body.version(), item.version())
+          || !Objects.equals(body.criterion(), item.criterion())
+          || !rows.getString(3).equals(item.task())
+          || !rows.getString(4).equals(item.snapshot())
+          || !rows.getString(5).equals(item.path())
+          || rows.getInt(6) != item.start()
+          || rows.getInt(7) != item.end()
+          || !rows.getString(8).equals(item.version())
+          || !rows.getString(9).equals(item.criterion())
+          || body.assessment() == null
+          || body.assessment().isBlank()
+          || body.assessment().length() > 16384)
         throw new IllegalArgumentException("RESULT_CORRUPT");
-      try { validateFindings(item, source(db, item), body.findings()); }
-      catch (IllegalArgumentException invalid) { throw new IllegalArgumentException("RESULT_CORRUPT", invalid); }
+      try {
+        validateFindings(item, source(db, item), body.findings());
+      } catch (IllegalArgumentException invalid) {
+        throw new IllegalArgumentException("RESULT_CORRUPT", invalid);
+      }
     }
   }
 
@@ -132,8 +204,7 @@ public final class WorkItemStore {
     int end(Item item, String source, String attempt);
   }
 
-  public Claim claim(DurableTaskStore.Scope scope, String task, String run,
-      ClaimSizer sizer) {
+  public Claim claim(DurableTaskStore.Scope scope, String task, String run, ClaimSizer sizer) {
     return store.write(db -> {
       requireRun(db, scope, task, run);
       Item pending = pending(db, task);
@@ -141,12 +212,27 @@ public final class WorkItemStore {
       String source = source(db, pending);
       String attempt = UUID.randomUUID().toString();
       int end = sizer.end(pending, source, attempt);
-      if (end < pending.start() || end > pending.end() || !boundary(source, end)
-          || end == pending.start() && end < pending.end()) throw new IllegalArgumentException("WORK_SPLIT_INVALID");
+      if (end < pending.start()
+          || end > pending.end()
+          || !boundary(source, end)
+          || end == pending.start() && end < pending.end())
+        throw new IllegalArgumentException("WORK_SPLIT_INVALID");
       if (end < pending.end()) {
-        DurableTaskStore.execute(db, "UPDATE durable_work SET end=? WHERE id=? AND state='PENDING'", end, pending.id());
-        DurableTaskStore.execute(db, "INSERT INTO durable_work(id,task,snapshot,path,start,end,version,kind,criterion,state,required) VALUES(?,?,?,?,?,?,?,?,?,'PENDING',?)",
-            UUID.randomUUID().toString(), task, pending.snapshot(), pending.path(), end, pending.end(), pending.version(), pending.kind(), pending.criterion(), pending.required());
+        DurableTaskStore.execute(
+            db, "UPDATE durable_work SET end=? WHERE id=? AND state='PENDING'", end, pending.id());
+        DurableTaskStore.execute(
+            db,
+            "INSERT INTO durable_work(id,task,snapshot,path,start,end,version,kind,criterion,state,required) VALUES(?,?,?,?,?,?,?,?,?,'PENDING',?)",
+            UUID.randomUUID().toString(),
+            task,
+            pending.snapshot(),
+            pending.path(),
+            end,
+            pending.end(),
+            pending.version(),
+            pending.kind(),
+            pending.criterion(),
+            pending.required());
       }
       return activateClaim(db, pending.id(), run, attempt);
     });
@@ -154,29 +240,47 @@ public final class WorkItemStore {
 
   private static Claim activateClaim(Connection db, String work, String run, String attempt)
       throws SQLException {
-    if (DurableTaskStore.execute(db, "UPDATE durable_work SET state='RUNNING',active_attempt=?,last_step='CLAIMED' WHERE id=? AND state='PENDING'", attempt, work) != 1)
-      throw new IllegalStateException("WORK_CLAIM_CONFLICT");
-    DurableTaskStore.execute(db, "INSERT INTO durable_item_attempts(id,work,run,started,state) VALUES(?,?,?,?,'ACTIVE')", attempt, work, run, System.currentTimeMillis());
+    if (DurableTaskStore.execute(
+            db,
+            "UPDATE durable_work SET state='RUNNING',active_attempt=?,last_step='CLAIMED' WHERE id=? AND state='PENDING'",
+            attempt,
+            work)
+        != 1) throw new IllegalStateException("WORK_CLAIM_CONFLICT");
+    DurableTaskStore.execute(
+        db,
+        "INSERT INTO durable_item_attempts(id,work,run,started,state) VALUES(?,?,?,?,'ACTIVE')",
+        attempt,
+        work,
+        run,
+        System.currentTimeMillis());
     return new Claim(item(db, work), run, attempt);
   }
 
   /** Reacquire exactly a previously claimed range after an explicit Task resume. */
   public <T> T reacquire(
-      DurableTaskStore.Scope scope, String work, String run,
+      DurableTaskStore.Scope scope,
+      String work,
+      String run,
       java.util.function.BiFunction<Claim, String, T> prepare) {
     return store.write(db -> {
       var item = item(db, work);
       requireRun(db, scope, item.task(), run, true);
       if (item.state().equals("PENDING")
-          && DurableTaskStore.number(db, "SELECT COUNT(*) FROM durable_item_attempts WHERE work=?", work) > 0) {
+          && DurableTaskStore.number(
+                  db, "SELECT COUNT(*) FROM durable_item_attempts WHERE work=?", work)
+              > 0) {
         var attempt = UUID.randomUUID().toString();
         var prepared = prepare.apply(new Claim(item, run, attempt), source(db, item));
         activateClaim(db, work, run, attempt);
         return prepared;
       }
-      try (var query = DurableTaskStore.statement(db,
-          "SELECT a.id FROM durable_work w JOIN durable_item_attempts a ON a.id=w.active_attempt WHERE w.id=? AND w.state='RUNNING' AND a.run=? AND a.state='ACTIVE'",
-          work, run); var rows = query.executeQuery()) {
+      try (var query =
+              DurableTaskStore.statement(
+                  db,
+                  "SELECT a.id FROM durable_work w JOIN durable_item_attempts a ON a.id=w.active_attempt WHERE w.id=? AND w.state='RUNNING' AND a.run=? AND a.state='ACTIVE'",
+                  work,
+                  run);
+          var rows = query.executeQuery()) {
         if (!rows.next()) throw new IllegalArgumentException("WORK_NOT_RUNNING");
         return prepare.apply(new Claim(item, run, rows.getString(1)), source(db, item));
       }
@@ -197,8 +301,12 @@ public final class WorkItemStore {
   public Claim running(DurableTaskStore.Scope scope, String task, String run) {
     return store.read(db -> {
       requireRun(db, scope, task, run, true);
-      try (var query = DurableTaskStore.statement(db,
-          "SELECT w.id,w.active_attempt FROM durable_work w JOIN durable_item_attempts a ON a.id=w.active_attempt WHERE w.task=? AND w.state='RUNNING' AND a.run=? AND a.state='ACTIVE' ORDER BY w.path,w.start LIMIT 1", task, run);
+      try (var query =
+              DurableTaskStore.statement(
+                  db,
+                  "SELECT w.id,w.active_attempt FROM durable_work w JOIN durable_item_attempts a ON a.id=w.active_attempt WHERE w.task=? AND w.state='RUNNING' AND a.run=? AND a.state='ACTIVE' ORDER BY w.path,w.start LIMIT 1",
+                  task,
+                  run);
           var rows = query.executeQuery()) {
         return rows.next() ? new Claim(item(db, rows.getString(1)), run, rows.getString(2)) : null;
       }
@@ -210,14 +318,22 @@ public final class WorkItemStore {
       store.status(db, scope, claim.item().task());
       String previous = delivery(db, claim);
       String text = source(db, claim.item());
-      if (!contentHash.equals(hash(text.substring(claim.item().start(), claim.item().end()).getBytes(StandardCharsets.UTF_8))))
+      if (!contentHash.equals(
+          hash(
+              text.substring(claim.item().start(), claim.item().end())
+                  .getBytes(StandardCharsets.UTF_8))))
         throw new IllegalArgumentException("DELIVERY_RANGE_MISMATCH");
       if (previous.equals(contentHash)) return null;
       requireRun(db, scope, claim.item().task(), claim.run());
       if (!item(db, claim.item().id()).state().equals("RUNNING"))
         throw new IllegalArgumentException("STALE_CLAIM");
-      DurableTaskStore.execute(db, "UPDATE durable_item_attempts SET delivered_hash=? WHERE id=? AND state='ACTIVE'", contentHash, claim.attempt());
-      DurableTaskStore.execute(db, "UPDATE durable_work SET last_step='DELIVERED' WHERE id=?", claim.item().id());
+      DurableTaskStore.execute(
+          db,
+          "UPDATE durable_item_attempts SET delivered_hash=? WHERE id=? AND state='ACTIVE'",
+          contentHash,
+          claim.attempt());
+      DurableTaskStore.execute(
+          db, "UPDATE durable_work SET last_step='DELIVERED' WHERE id=?", claim.item().id());
       return null;
     });
   }
@@ -230,30 +346,47 @@ public final class WorkItemStore {
   }
 
   static String delivery(Connection db, Claim claim) throws SQLException {
-    try (var query = DurableTaskStore.statement(db, "SELECT a.run,a.delivered_hash FROM durable_item_attempts a JOIN durable_work w ON w.id=a.work AND w.active_attempt=a.id WHERE a.id=? AND w.id=?", claim.attempt(), claim.item().id());
+    try (var query =
+            DurableTaskStore.statement(
+                db,
+                "SELECT a.run,a.delivered_hash FROM durable_item_attempts a JOIN durable_work w ON w.id=a.work AND w.active_attempt=a.id WHERE a.id=? AND w.id=?",
+                claim.attempt(),
+                claim.item().id());
         var rows = query.executeQuery()) {
       if (!rows.next()) throw new IllegalArgumentException("STALE_CLAIM");
-      if (!rows.getString(1).equals(claim.run())) throw new RunNotBoundException(claim.item().task());
+      if (!rows.getString(1).equals(claim.run()))
+        throw new RunNotBoundException(claim.item().task());
       return rows.getString(2);
     }
   }
 
-  void requireRun(Connection db, DurableTaskStore.Scope scope, String task, String run) throws SQLException {
+  void requireRun(Connection db, DurableTaskStore.Scope scope, String task, String run)
+      throws SQLException {
     requireRun(db, scope, task, run, false);
   }
 
-  private void requireRun(Connection db, DurableTaskStore.Scope scope, String task, String run, boolean replay) throws SQLException {
+  private void requireRun(
+      Connection db, DurableTaskStore.Scope scope, String task, String run, boolean replay)
+      throws SQLException {
     var owner = store.status(db, scope, task);
-    if (!owner.state().equals("ACTIVE") && !(replay && owner.state().equals("COMPLETE"))) throw new IllegalStateException("TASK_NOT_ACTIVE");
-    if (!owner.enumeration().equals("SEALED")) throw new IllegalArgumentException("ENUMERATION_NOT_SEALED");
-    try (var query = DurableTaskStore.statement(db, "SELECT 1 FROM durable_tasks t JOIN durable_attempts a ON a.task=t.id AND a.run=t.current_run WHERE t.id=? AND t.current_run=? AND a.state='ACTIVE'", task, run);
+    if (!owner.state().equals("ACTIVE") && !(replay && owner.state().equals("COMPLETE")))
+      throw new IllegalStateException("TASK_NOT_ACTIVE");
+    if (!owner.enumeration().equals("SEALED"))
+      throw new IllegalArgumentException("ENUMERATION_NOT_SEALED");
+    try (var query =
+            DurableTaskStore.statement(
+                db,
+                "SELECT 1 FROM durable_tasks t JOIN durable_attempts a ON a.task=t.id AND a.run=t.current_run WHERE t.id=? AND t.current_run=? AND a.state='ACTIVE'",
+                task,
+                run);
         var rows = query.executeQuery()) {
       if (!rows.next()) throw new RunNotBoundException(task);
     }
   }
 
   /** Safe first-field repair guidance; never echo an assessment, quote, path or identifier. */
-  public static String resultValidationHint(String assessment, List<Finding> findings, boolean legacy) {
+  public static String resultValidationHint(
+      String assessment, List<Finding> findings, boolean legacy) {
     if (assessment == null || assessment.isBlank() || assessment.length() > 16384)
       return "assessment must contain 1..16384 characters.";
     if (findings == null || findings.size() > 100)
@@ -266,77 +399,163 @@ public final class WorkItemStore {
       if (finding.id() == null || finding.id().isBlank() || finding.id().length() > 256)
         return at + ".id must contain 1..256 characters.";
       if (!ids.add(finding.id())) return at + ".id must be unique within this result.";
-      if (finding.severity() == null || finding.severity().isBlank() || finding.severity().length() > 64)
+      if (finding.severity() == null
+          || finding.severity().isBlank()
+          || finding.severity().length() > 64)
         return at + ".severity must contain 1..64 characters.";
-      if (finding.evidence() == null || finding.evidence().isBlank() || finding.evidence().length() > 16384)
+      if (finding.evidence() == null
+          || finding.evidence().isBlank()
+          || finding.evidence().length() > 16384)
         return at + ".evidence must contain an exact source quote of 1..16384 characters.";
-      if (finding.assessment() == null || finding.assessment().isBlank() || finding.assessment().length() > 16384)
+      if (finding.assessment() == null
+          || finding.assessment().isBlank()
+          || finding.assessment().length() > 16384)
         return at + ".assessment must contain 1..16384 characters.";
-      if (!legacy && (finding.start() == null || finding.end() == null
-          || finding.start() < 0 || finding.end() <= finding.start()))
-        return at + ".start/end must be absolute UTF-16 coordinates from the delivered claim, with end > start.";
+      if (!legacy
+          && (finding.start() == null
+              || finding.end() == null
+              || finding.start() < 0
+              || finding.end() <= finding.start()))
+        return at
+            + ".start/end must be absolute UTF-16 coordinates from the delivered claim, with end > start.";
     }
     return "findings must use exact evidence inside the delivered unit; for durable work, start/end must match its absolute UTF-16 boundaries.";
   }
 
-  public Result commit(DurableTaskStore.Scope scope, Claim claim, String assessment, List<Finding> findings) {
-    if (assessment == null || assessment.isBlank() || assessment.length() > 16384 || findings == null || findings.size() > 100)
-      throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+  public Result commit(
+      DurableTaskStore.Scope scope, Claim claim, String assessment, List<Finding> findings) {
+    if (assessment == null
+        || assessment.isBlank()
+        || assessment.length() > 16384
+        || findings == null
+        || findings.size() > 100) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     return store.write(db -> {
       requireRun(db, scope, claim.item().task(), claim.run(), true);
       String delivered = delivery(db, claim);
       String source = source(db, claim.item());
-      if (!delivered.equals(hash(source.substring(claim.item().start(), claim.item().end()).getBytes(StandardCharsets.UTF_8))))
+      if (!delivered.equals(
+          hash(
+              source
+                  .substring(claim.item().start(), claim.item().end())
+                  .getBytes(StandardCharsets.UTF_8))))
         throw new IllegalArgumentException("SOURCE_NOT_DELIVERED");
       validateFindings(claim.item(), source, findings);
       var item = claim.item();
-      var body = new ReviewResult(item.id(), item.snapshot(), item.path(), item.start(), item.end(), item.version(), item.criterion(), assessment, findings);
+      var body =
+          new ReviewResult(
+              item.id(),
+              item.snapshot(),
+              item.path(),
+              item.start(),
+              item.end(),
+              item.version(),
+              item.criterion(),
+              assessment,
+              findings);
       String json = encode(body);
       byte[] encoded = json.getBytes(StandardCharsets.UTF_8);
       if (encoded.length > 256 * 1024) throw new IllegalArgumentException("RESULT_BYTE_LIMIT");
       String hash = hash(encoded);
-      try (var query = DurableTaskStore.statement(db, "SELECT body,sha256 FROM durable_results WHERE work=?", item.id()); var rows = query.executeQuery()) {
+      try (var query =
+              DurableTaskStore.statement(
+                  db, "SELECT body,sha256 FROM durable_results WHERE work=?", item.id());
+          var rows = query.executeQuery()) {
         if (rows.next()) {
-          if (!rows.getString(2).equals(hash)) throw new IllegalArgumentException("RESULT_CONFLICT");
+          if (!rows.getString(2).equals(hash))
+            throw new IllegalArgumentException("RESULT_CONFLICT");
           return result(rows);
         }
       }
-      if (!item(db, item.id()).state().equals("RUNNING")) throw new IllegalArgumentException("STALE_CLAIM");
-      DurableTaskStore.execute(db, "INSERT INTO durable_results(work,task,snapshot,path,start,end,version,criterion,attempt,body,sha256,created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-          item.id(), item.task(), item.snapshot(), item.path(), item.start(), item.end(), item.version(), item.criterion(), claim.attempt(), json, hash, System.currentTimeMillis());
-      for (var finding : findings)
-        DurableTaskStore.execute(db, "INSERT INTO durable_findings(work,id,severity,start,end,evidence,assessment) VALUES(?,?,?,?,?,?,?)", item.id(), finding.id(), finding.severity(), finding.start(), finding.end(), finding.evidence(), finding.assessment());
-      if (DurableTaskStore.execute(db, "UPDATE durable_work SET state='COMPLETE',result_id=?,last_step='COMPLETED' WHERE id=? AND state='RUNNING' AND active_attempt=?", item.id(), item.id(), claim.attempt()) != 1)
+      if (!item(db, item.id()).state().equals("RUNNING"))
         throw new IllegalArgumentException("STALE_CLAIM");
-      DurableTaskStore.execute(db, "UPDATE durable_item_attempts SET state='COMPLETE' WHERE id=?", claim.attempt());
+      DurableTaskStore.execute(
+          db,
+          "INSERT INTO durable_results(work,task,snapshot,path,start,end,version,criterion,attempt,body,sha256,created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+          item.id(),
+          item.task(),
+          item.snapshot(),
+          item.path(),
+          item.start(),
+          item.end(),
+          item.version(),
+          item.criterion(),
+          claim.attempt(),
+          json,
+          hash,
+          System.currentTimeMillis());
+      for (var finding : findings)
+        DurableTaskStore.execute(
+            db,
+            "INSERT INTO durable_findings(work,id,severity,start,end,evidence,assessment) VALUES(?,?,?,?,?,?,?)",
+            item.id(),
+            finding.id(),
+            finding.severity(),
+            finding.start(),
+            finding.end(),
+            finding.evidence(),
+            finding.assessment());
+      if (DurableTaskStore.execute(
+              db,
+              "UPDATE durable_work SET state='COMPLETE',result_id=?,last_step='COMPLETED' WHERE id=? AND state='RUNNING' AND active_attempt=?",
+              item.id(),
+              item.id(),
+              claim.attempt())
+          != 1) throw new IllegalArgumentException("STALE_CLAIM");
+      DurableTaskStore.execute(
+          db, "UPDATE durable_item_attempts SET state='COMPLETE' WHERE id=?", claim.attempt());
       if (TaskCompletion.verify(db, store.status(db, scope, item.task())).complete())
-        DurableTaskStore.execute(db, "UPDATE durable_tasks SET state='COMPLETE' WHERE id=? AND state='ACTIVE'", item.task());
+        DurableTaskStore.execute(
+            db,
+            "UPDATE durable_tasks SET state='COMPLETE' WHERE id=? AND state='ACTIVE'",
+            item.task());
       return new Result(body, hash);
     });
   }
 
   private static void validateFindings(Item item, String source, List<Finding> findings) {
-    if (findings == null || findings.size() > 100) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+    if (findings == null || findings.size() > 100)
+      throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     for (var finding : findings) {
-      if (finding == null || finding.id() == null || finding.id().isBlank() || finding.id().length() > 256
-          || finding.severity() == null || finding.severity().isBlank() || finding.severity().length() > 64
-          || finding.evidence() == null || finding.evidence().isBlank() || finding.evidence().length() > 16384
-          || finding.assessment() == null || finding.assessment().isBlank() || finding.assessment().length() > 16384
-          || finding.start() == null || finding.end() == null
-          || finding.start() < item.start() || finding.end() > item.end() || finding.end() <= finding.start()
-          || !boundary(source, finding.start()) || !boundary(source, finding.end())
+      if (finding == null
+          || finding.id() == null
+          || finding.id().isBlank()
+          || finding.id().length() > 256
+          || finding.severity() == null
+          || finding.severity().isBlank()
+          || finding.severity().length() > 64
+          || finding.evidence() == null
+          || finding.evidence().isBlank()
+          || finding.evidence().length() > 16384
+          || finding.assessment() == null
+          || finding.assessment().isBlank()
+          || finding.assessment().length() > 16384
+          || finding.start() == null
+          || finding.end() == null
+          || finding.start() < item.start()
+          || finding.end() > item.end()
+          || finding.end() <= finding.start()
+          || !boundary(source, finding.start())
+          || !boundary(source, finding.end())
           || !source.substring(finding.start(), finding.end()).contains(finding.evidence()))
         throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     }
-    if (findings.stream().map(Finding::id).distinct().count() != findings.size()) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+    if (findings.stream().map(Finding::id).distinct().count() != findings.size())
+      throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
   }
 
-  public DurableTaskStore.Page<Result> results(DurableTaskStore.Scope scope, String task, String after, int limit) {
+  public DurableTaskStore.Page<Result> results(
+      DurableTaskStore.Scope scope, String task, String after, int limit) {
     DurableTaskStore.pageLimit(limit);
     return store.read(db -> {
       store.status(db, scope, task);
       var entries = new ArrayList<Result>();
-      try (var query = DurableTaskStore.statement(db, "SELECT body,sha256 FROM durable_results WHERE task=? AND work>? ORDER BY work LIMIT ?", task, Objects.toString(after, ""), limit + 1);
+      try (var query =
+              DurableTaskStore.statement(
+                  db,
+                  "SELECT body,sha256 FROM durable_results WHERE task=? AND work>? ORDER BY work LIMIT ?",
+                  task,
+                  Objects.toString(after, ""),
+                  limit + 1);
           var rows = query.executeQuery()) {
         while (rows.next()) entries.add(result(rows));
       }
@@ -356,7 +575,8 @@ public final class WorkItemStore {
 
   private static Result result(ResultSet row) throws SQLException {
     String body = row.getString(1), hash = row.getString(2);
-    if (!hash(body.getBytes(StandardCharsets.UTF_8)).equals(hash)) throw new IllegalArgumentException("RESULT_CORRUPT");
+    if (!hash(body.getBytes(StandardCharsets.UTF_8)).equals(hash))
+      throw new IllegalArgumentException("RESULT_CORRUPT");
     try {
       return new Result(JSON.readValue(body, ReviewResult.class), hash);
     } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
@@ -365,28 +585,46 @@ public final class WorkItemStore {
   }
 
   static boolean boundary(String text, int position) {
-    return position >= 0 && position <= text.length() && !(position > 0 && position < text.length()
-        && Character.isHighSurrogate(text.charAt(position - 1)) && Character.isLowSurrogate(text.charAt(position)));
+    return position >= 0
+        && position <= text.length()
+        && !(position > 0
+            && position < text.length()
+            && Character.isHighSurrogate(text.charAt(position - 1))
+            && Character.isLowSurrogate(text.charAt(position)));
   }
 
   static Item pending(Connection db, String task) throws SQLException {
-    try (var query = DurableTaskStore.statement(db, "SELECT * FROM durable_work WHERE task=? AND state='PENDING' AND required=1 ORDER BY path,start,id LIMIT 1", task);
+    try (var query =
+            DurableTaskStore.statement(
+                db,
+                "SELECT * FROM durable_work WHERE task=? AND state='PENDING' AND required=1 ORDER BY path,start,id LIMIT 1",
+                task);
         var rows = query.executeQuery()) {
       return rows.next() ? item(rows) : null;
     }
   }
 
   static Item item(Connection db, String id) throws SQLException {
-    try (var query = DurableTaskStore.statement(db, "SELECT * FROM durable_work WHERE id=?", id); var rows = query.executeQuery()) {
+    try (var query = DurableTaskStore.statement(db, "SELECT * FROM durable_work WHERE id=?", id);
+        var rows = query.executeQuery()) {
       if (!rows.next()) throw new IllegalArgumentException("WORK_ITEM_NOT_FOUND");
       return item(rows);
     }
   }
 
   static Item item(ResultSet row) throws SQLException {
-    return new Item(row.getString("id"), row.getString("task"), row.getString("snapshot"),
-        row.getString("path"), row.getInt("start"), row.getInt("end"), row.getString("version"),
-        row.getString("kind"), row.getString("criterion"), row.getString("state"), row.getBoolean("required"));
+    return new Item(
+        row.getString("id"),
+        row.getString("task"),
+        row.getString("snapshot"),
+        row.getString("path"),
+        row.getInt("start"),
+        row.getInt("end"),
+        row.getString("version"),
+        row.getString("kind"),
+        row.getString("criterion"),
+        row.getString("state"),
+        row.getBoolean("required"));
   }
 
   public String source(DurableTaskStore.Scope scope, Item expected) {
@@ -397,14 +635,27 @@ public final class WorkItemStore {
   }
 
   static String source(Connection db, Item expected) throws SQLException {
-    try (var query = DurableTaskStore.statement(db,
-        "SELECT f.content,f.text FROM durable_files f JOIN durable_work w ON w.snapshot=f.snapshot AND w.path=f.path WHERE w.id=? AND w.task=? AND w.snapshot=? AND w.path=? AND w.start=? AND w.end=? AND w.version=? AND w.kind=? AND w.criterion=? AND w.required=? AND f.version=w.version AND f.error='' AND f.reason=''",
-        expected.id(), expected.task(), expected.snapshot(), expected.path(), expected.start(), expected.end(), expected.version(), expected.kind(), expected.criterion(), expected.required());
+    try (var query =
+            DurableTaskStore.statement(
+                db,
+                "SELECT f.content,f.text FROM durable_files f JOIN durable_work w ON w.snapshot=f.snapshot AND w.path=f.path WHERE w.id=? AND w.task=? AND w.snapshot=? AND w.path=? AND w.start=? AND w.end=? AND w.version=? AND w.kind=? AND w.criterion=? AND w.required=? AND f.version=w.version AND f.error='' AND f.reason=''",
+                expected.id(),
+                expected.task(),
+                expected.snapshot(),
+                expected.path(),
+                expected.start(),
+                expected.end(),
+                expected.version(),
+                expected.kind(),
+                expected.criterion(),
+                expected.required());
         var row = query.executeQuery()) {
       if (!row.next()) throw new IllegalArgumentException("WORK_ITEM_CHANGED");
       byte[] content = row.getBytes(1);
       String text = row.getString(2);
-      if (content == null || text == null || !hash(content).equals(expected.version())
+      if (content == null
+          || text == null
+          || !hash(content).equals(expected.version())
           || !new String(content, StandardCharsets.UTF_8).equals(text))
         throw new IllegalArgumentException("SNAPSHOT_CORRUPT");
       return text;

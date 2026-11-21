@@ -115,11 +115,10 @@ public record ToolResultMetadata(
   private static <T> Map<String, T> selected(Object value, Class<T> type, Set<String> ids) {
     var result = new HashMap<String, T>();
     if (value instanceof Map<?, ?> values)
-      values.forEach(
-          (key, item) -> {
-            if (key instanceof String id && ids.contains(id) && type.isInstance(item))
-              result.put(id, type.cast(item));
-          });
+      values.forEach((key, item) -> {
+        if (key instanceof String id && ids.contains(id) && type.isInstance(item))
+          result.put(id, type.cast(item));
+      });
     return Map.copyOf(result);
   }
 }

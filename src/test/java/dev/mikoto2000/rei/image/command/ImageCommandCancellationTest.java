@@ -29,17 +29,16 @@ class ImageCommandCancellationTest {
     CountDownLatch serviceCalled = new CountDownLatch(1);
     ImageGenerationService service = Mockito.mock(ImageGenerationService.class);
     when(service.generate(any(ImageGenerationRequest.class)))
-        .thenAnswer(
-            invocation -> {
-              serviceCalled.countDown();
-              try {
-                Thread.sleep(TimeUnit.SECONDS.toMillis(30));
-                return ImageGenerationResult.failure("not cancelled");
-              } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return ImageGenerationResult.failure("cancelled");
-              }
-            });
+        .thenAnswer(invocation -> {
+          serviceCalled.countDown();
+          try {
+            Thread.sleep(TimeUnit.SECONDS.toMillis(30));
+            return ImageGenerationResult.failure("not cancelled");
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return ImageGenerationResult.failure("cancelled");
+          }
+        });
     CommandLine commandLine = newCommand(service, cancellationService);
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;

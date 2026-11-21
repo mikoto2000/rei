@@ -210,13 +210,12 @@ class ChatGptSubAgentPartitionTest {
     assertThat(receipt.groups().stream().flatMap(g -> g.scope().stream()).toList())
         .isEqualTo(names);
     assertThat(receipt.groups())
-        .allSatisfy(
-            g -> {
-              assertThat(g.state()).isEqualTo(ChatGptSubAgentBackend.State.COMPLETED);
-              assertThat(g.result().subAgentRunId()).isEqualTo(receipt.requestId());
-              assertThat(g.result().structuredOutput()).isNotNull();
-              assertThat(g.totalTokens()).isEqualTo(17);
-            });
+        .allSatisfy(g -> {
+          assertThat(g.state()).isEqualTo(ChatGptSubAgentBackend.State.COMPLETED);
+          assertThat(g.result().subAgentRunId()).isEqualTo(receipt.requestId());
+          assertThat(g.result().structuredOutput()).isNotNull();
+          assertThat(g.totalTokens()).isEqualTo(17);
+        });
     assertThat(receipt.totalTokens()).isEqualTo(68);
     assertThat(receipt.result().structuredOutput()).isNull();
     var host = json.readTree(receipt.result().output());

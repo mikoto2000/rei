@@ -66,19 +66,18 @@ class StagnationChatModelTest {
     var requests = new ArrayList<Prompt>();
     var delegate = mock(ChatModel.class);
     when(delegate.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              Prompt request = invocation.getArgument(0);
-              requests.add(request);
-              var reply =
-                  switch (requests.size()) {
-                    case 1 -> AssistantMessage.builder().toolCalls(List.of(time, today)).build();
-                    case 2 -> AssistantMessage.builder().toolCalls(List.of(corrected)).build();
-                    case 3 -> new AssistantMessage("done");
-                    default -> throw new AssertionError("Unexpected model request");
-                  };
-              return Flux.just(new ChatResponse(List.of(new Generation(reply))));
-            });
+        .thenAnswer(invocation -> {
+          Prompt request = invocation.getArgument(0);
+          requests.add(request);
+          var reply =
+              switch (requests.size()) {
+                case 1 -> AssistantMessage.builder().toolCalls(List.of(time, today)).build();
+                case 2 -> AssistantMessage.builder().toolCalls(List.of(corrected)).build();
+                case 3 -> new AssistantMessage("done");
+                default -> throw new AssertionError("Unexpected model request");
+              };
+          return Flux.just(new ChatResponse(List.of(new Generation(reply))));
+        });
 
     var stream = new StagnationChatModel(delegate).stream(new Prompt("weekend dates", options));
     if (corrections == 0) {
@@ -91,7 +90,8 @@ class StagnationChatModelTest {
       assertThat(requests).hasSize(3);
       assertThat(requests.get(1).getInstructions())
           .anyMatch(message -> message.getText().contains("No tool calls from that response ran"))
-          .noneMatch(message -> message instanceof AssistantMessage || message instanceof ToolResponseMessage);
+          .noneMatch(message ->
+              message instanceof AssistantMessage || message instanceof ToolResponseMessage);
       assertThat(
               requests.get(2).getInstructions().stream()
                   .filter(ToolResponseMessage.class::isInstance)
@@ -108,12 +108,11 @@ class StagnationChatModelTest {
         .containsExactlyElementsOf(corrections == 0 ? List.of() : List.of("corrected"));
     assertThat(events.stream().filter(event -> event.type() == AgentEventType.TOOL_FAILED))
         .singleElement()
-        .satisfies(
-            event -> {
-              var failure = (ToolFailedPayload) event.payload();
-              assertThat(failure.toolName()).isEqualTo("today");
-              assertThat(failure.error().code()).isEqualTo("tool_unavailable");
-            });
+        .satisfies(event -> {
+          var failure = (ToolFailedPayload) event.payload();
+          assertThat(failure.toolName()).isEqualTo("today");
+          assertThat(failure.error().code()).isEqualTo("tool_unavailable");
+        });
   }
 
   /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
@@ -136,10 +135,9 @@ class StagnationChatModelTest {
             return true;
           }
         });
-    assertThatThrownBy(
-            () ->
-                model(new ArrayList<>(), calls, false).stream(prompt(context, () -> "WAITING"))
-                    .blockLast())
+    assertThatThrownBy(() ->
+            model(new ArrayList<>(), calls, false).stream(prompt(context, () -> "WAITING"))
+                .blockLast())
         .isInstanceOf(dev.mikoto2000.rei.core.chat.RunWaitingException.class);
     assertThat(calls.get()).isEqualTo(1);
     assertThat(saved.get()).isEqualTo(1);
@@ -192,16 +190,15 @@ class StagnationChatModelTest {
         new dev.mikoto2000.rei.core.policy.ToolPermissionGuard(
             p, new AgentEventFactory(Clock.systemUTC()), events::add));
     var effects = new AtomicInteger();
-    assertThatThrownBy(
-            () ->
-                model(new ArrayList<>(), new AtomicInteger(), false).stream(
-                        prompt(
-                            context,
-                            () -> {
-                              effects.incrementAndGet();
-                              return "content";
-                            }))
-                    .blockLast())
+    assertThatThrownBy(() ->
+            model(new ArrayList<>(), new AtomicInteger(), false).stream(
+                    prompt(
+                        context,
+                        () -> {
+                          effects.incrementAndGet();
+                          return "content";
+                        }))
+                .blockLast())
         .hasMessageContaining("REQUIRE_APPROVAL");
     assertThat(effects.get()).isZero();
     assertThat(events).anyMatch(e -> e.type() == AgentEventType.TOOL_FAILED);
@@ -223,10 +220,8 @@ class StagnationChatModelTest {
             return Flux.error(new IllegalStateException("network failed"));
           }
         };
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(failing)
-                    .stream(prompt(context, () -> "unused")).blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(failing).stream(prompt(context, () -> "unused")).blockLast())
         .hasMessageContaining("network failed");
     assertThat(context.detector().stagnationCount()).isEqualTo(1);
   }
@@ -237,10 +232,9 @@ class StagnationChatModelTest {
     var context = context(5, new ArrayList<>());
     context.close();
     var calls = new AtomicInteger();
-    assertThatThrownBy(
-            () ->
-                model(new ArrayList<>(), calls, false).stream(prompt(context, () -> "unused"))
-                    .blockLast())
+    assertThatThrownBy(() ->
+            model(new ArrayList<>(), calls, false).stream(prompt(context, () -> "unused"))
+                .blockLast())
         .isInstanceOf(java.util.concurrent.CancellationException.class);
     assertThat(calls.get()).isZero();
   }
@@ -307,10 +301,8 @@ class StagnationChatModelTest {
             int n = calls.incrementAndGet();
             var batch =
                 java.util.stream.IntStream.range(0, 4)
-                    .mapToObj(
-                        i ->
-                            new AssistantMessage.ToolCall(
-                                n + "-" + i, "function", "readFile", "{}"))
+                    .mapToObj(i ->
+                        new AssistantMessage.ToolCall(n + "-" + i, "function", "readFile", "{}"))
                     .toList();
             return Flux.just(
                 new ChatResponse(
@@ -319,9 +311,8 @@ class StagnationChatModelTest {
                             AssistantMessage.builder().content("").toolCalls(batch).build()))));
           }
         };
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(delegate).stream(prompt(context, () -> "same")).blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(delegate).stream(prompt(context, () -> "same")).blockLast())
         .hasMessageContaining("LLM_CALL_BUDGET_EXCEEDED");
     assertThat(context.detector().stagnationCount()).isEqualTo(2);
   }
@@ -355,11 +346,10 @@ class StagnationChatModelTest {
     var results = new AtomicInteger();
     List<AgentEvent> events = new ArrayList<>();
     var context = context(6, events);
-    assertThatThrownBy(
-            () ->
-                model(new ArrayList<>(), calls, false).stream(
-                        prompt(context, () -> "new content " + results.incrementAndGet()))
-                    .blockLast())
+    assertThatThrownBy(() ->
+            model(new ArrayList<>(), calls, false).stream(
+                    prompt(context, () -> "new content " + results.incrementAndGet()))
+                .blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
         .hasMessageContaining("LLM_CALL_BUDGET_EXCEEDED");
     assertThat(calls.get()).isEqualTo(6);

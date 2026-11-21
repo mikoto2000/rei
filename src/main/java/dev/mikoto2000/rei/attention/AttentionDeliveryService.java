@@ -108,12 +108,11 @@ public class AttentionDeliveryService {
 
   /** 実行の担当。 */
   private final ExecutorService worker =
-      Executors.newSingleThreadExecutor(
-          r -> {
-            var t = new Thread(r, "attention-delivery");
-            t.setDaemon(true);
-            return t;
-          });
+      Executors.newSingleThreadExecutor(r -> {
+        var t = new Thread(r, "attention-delivery");
+        t.setDaemon(true);
+        return t;
+      });
 
   /** 使用中。 */
   private final AtomicBoolean busy = new AtomicBoolean();
@@ -219,17 +218,16 @@ public class AttentionDeliveryService {
     var item = inbox.get(project, id);
     return findDelivery
         .apply(project, id)
-        .orElseGet(
-            () ->
-                new AttentionDeliveryRepository.Delivery(
-                    item.id(),
-                    project,
-                    null,
-                    null,
-                    "NOT_REQUESTED",
-                    0,
-                    "not_requested",
-                    item.createdAt()));
+        .orElseGet(() ->
+            new AttentionDeliveryRepository.Delivery(
+                item.id(),
+                project,
+                null,
+                null,
+                "NOT_REQUESTED",
+                0,
+                "not_requested",
+                item.createdAt()));
   }
 
   /** 注意の管理で用いる要求を返す。 */
@@ -252,16 +250,15 @@ public class AttentionDeliveryService {
     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (closed || !properties.enabled() || !busy.compareAndSet(false, true)) return;
     try {
-      worker.execute(
-          () -> {
-            try {
-              dispatchOne();
-            } catch (RuntimeException error) {
-              LOG.warn("Attention delivery worker failed: {}", error.getClass().getSimpleName());
-            } finally {
-              busy.set(false);
-            }
-          });
+      worker.execute(() -> {
+        try {
+          dispatchOne();
+        } catch (RuntimeException error) {
+          LOG.warn("Attention delivery worker failed: {}", error.getClass().getSimpleName());
+        } finally {
+          busy.set(false);
+        }
+      });
     } catch (RejectedExecutionException error) {
       busy.set(false);
     }

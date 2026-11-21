@@ -71,13 +71,9 @@ class GitHubDependencyIntegrationTest {
             "\"action\":\"closed\",\"pull_request\":{\"number\":17,\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\""
                 + "a".repeat(40)
                 + "\"},\"merged\":true,\"merged_at\":\"2026-10-07T04:00:00Z\"}");
-    assertThatThrownBy(
-            () ->
-                receiver.receive(
-                    UUID.randomUUID().toString(),
-                    "pull_request",
-                    "sha256=" + "0".repeat(64),
-                    bytes))
+    assertThatThrownBy(() ->
+            receiver.receive(
+                UUID.randomUUID().toString(), "pull_request", "sha256=" + "0".repeat(64), bytes))
         .isInstanceOf(SecurityException.class);
     assertThat(probe.probe(pending).state()).isEqualTo(DependencyState.WAITING);
     receiver.receive(

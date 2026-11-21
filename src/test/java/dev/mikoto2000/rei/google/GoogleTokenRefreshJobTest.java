@@ -50,19 +50,16 @@ class GoogleTokenRefreshJobTest {
         new ApplicationContextRunner()
             .withBean(GoogleOAuthService.class, () -> mock(GoogleOAuthService.class))
             .withUserConfiguration(GoogleTokenRefreshJob.class);
-    runner.run(
-        context -> {
-          assertNull(context.getStartupFailure());
-          context.getBean(GoogleTokenRefreshJob.class).run();
-          verify(context.getBean(GoogleOAuthService.class))
-              .refreshIfExpiring(Duration.ofMinutes(5));
-        });
+    runner.run(context -> {
+      assertNull(context.getStartupFailure());
+      context.getBean(GoogleTokenRefreshJob.class).run();
+      verify(context.getBean(GoogleOAuthService.class)).refreshIfExpiring(Duration.ofMinutes(5));
+    });
     runner
         .withPropertyValues("rei.google.token-refresh.enabled=false")
-        .run(
-            context -> {
-              assertNull(context.getStartupFailure());
-              assertTrue(context.getBeansOfType(GoogleTokenRefreshJob.class).isEmpty());
-            });
+        .run(context -> {
+          assertNull(context.getStartupFailure());
+          assertTrue(context.getBeansOfType(GoogleTokenRefreshJob.class).isEmpty());
+        });
   }
 }

@@ -79,11 +79,10 @@ class ContextCancellationTest {
     var nextLlmCalls = new AtomicInteger();
     var nextModel = mock(ChatModel.class);
     when(nextModel.stream(any(Prompt.class)))
-        .thenAnswer(
-            i -> {
-              nextLlmCalls.incrementAndGet();
-              return Flux.empty();
-            });
+        .thenAnswer(i -> {
+          nextLlmCalls.incrementAndGet();
+          return Flux.empty();
+        });
     var options =
         OpenAiChatOptions.builder().toolContext(Map.of(RunExecutionContext.KEY, context)).build();
     var prompt =

@@ -96,15 +96,13 @@ public class SafeHttpFetcher {
           var forwarded = new LinkedHashMap<>(headers);
           forwarded
               .keySet()
-              .removeIf(
-                  name ->
-                      Set.of("if-none-match", "if-modified-since")
-                          .contains(name.toLowerCase(Locale.ROOT)));
+              .removeIf(name ->
+                  Set.of("if-none-match", "if-modified-since")
+                      .contains(name.toLowerCase(Locale.ROOT)));
           if (forwarded.keySet().stream()
-              .anyMatch(
-                  name ->
-                      !Set.of("accept", "accept-encoding", "user-agent", "cache-control")
-                          .contains(name.toLowerCase(Locale.ROOT))))
+              .anyMatch(name ->
+                  !Set.of("accept", "accept-encoding", "user-agent", "cache-control")
+                      .contains(name.toLowerCase(Locale.ROOT))))
             throw new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED);
           headers = Map.copyOf(forwarded);
         }
@@ -202,7 +200,8 @@ public class SafeHttpFetcher {
     }
     try {
       var lease = FetchScope.acquireConnection(uri, operation);
-      try (lease; var resolver = new ValidatingResolverGroup(policy::allowsAddress, approved)) {
+      try (lease;
+          var resolver = new ValidatingResolverGroup(policy::allowsAddress, approved)) {
         var client =
             reactor.netty.http.client.HttpClient.newConnection()
                 .compress(false)
@@ -215,15 +214,14 @@ public class SafeHttpFetcher {
                     (int) policy.connectTimeout().toMillis())
                 .responseTimeout(policy.readTimeout())
                 .doOnRequest((request, connection) -> operation.check())
-                .doOnConnected(
-                    connection -> {
-                      try {
-                        validatePeer(connection.channel().remoteAddress(), approved, policy);
-                      } catch (HttpFetchException refused) {
-                        connection.dispose();
-                        throw refused;
-                      }
-                    });
+                .doOnConnected(connection -> {
+                  try {
+                    validatePeer(connection.channel().remoteAddress(), approved, policy);
+                  } catch (HttpFetchException refused) {
+                    connection.dispose();
+                    throw refused;
+                  }
+                });
         operation.check();
         observer.request(redirect);
         var future =
@@ -235,61 +233,55 @@ public class SafeHttpFetcher {
                     body == null
                         ? reactor.netty.ByteBufFlux.empty()
                         : reactor.netty.ByteBufFlux.fromInbound(Mono.just(body)))
-                .response(
-                    (response, content) -> {
-                      int status = response.status().code();
-                      observer.status(status);
-                      Map<String, String> received = new HashMap<>();
-                      response
-                          .responseHeaders()
-                          .forEach(
-                              h -> {
-                                String name = h.getKey().toLowerCase(Locale.ROOT);
-                                if (Set.of("cache-control", "vary").contains(name))
-                                  received.merge(
-                                      name,
-                                      h.getValue(),
-                                      (previous, value) -> previous + ", " + value);
-                                else received.put(name, h.getValue());
-                              });
-                      String length = received.get("content-length");
-                      if (length != null && !"HEAD".equals(method)) {
-                        try {
-                          if (Long.parseLong(length) > policy.maxWireBytes())
-                            return Mono.<Response>error(
-                                new HttpFetchException(HttpFetchException.Code.WIRE_LIMIT));
-                        } catch (NumberFormatException invalid) {
-                          return Mono.<Response>error(
-                              new HttpFetchException(HttpFetchException.Code.NETWORK_ERROR));
-                        }
-                      }
-                      if (status == 200
-                          && policy.requiredContentType() != null
-                          && !policy
-                              .requiredContentType()
-                              .equalsIgnoreCase(
-                                  received.getOrDefault("content-type", "").split(";", 2)[0].strip()))
+                .response((response, content) -> {
+                  int status = response.status().code();
+                  observer.status(status);
+                  Map<String, String> received = new HashMap<>();
+                  response
+                      .responseHeaders()
+                      .forEach(h -> {
+                        String name = h.getKey().toLowerCase(Locale.ROOT);
+                        if (Set.of("cache-control", "vary").contains(name))
+                          received.merge(
+                              name, h.getValue(), (previous, value) -> previous + ", " + value);
+                        else received.put(name, h.getValue());
+                      });
+                  String length = received.get("content-length");
+                  if (length != null && !"HEAD".equals(method)) {
+                    try {
+                      if (Long.parseLong(length) > policy.maxWireBytes())
                         return Mono.<Response>error(
-                            new HttpFetchException(HttpFetchException.Code.INVALID_CONTENT_TYPE));
-                      return content
-                          .reduceWith(
-                              ByteArrayOutputStream::new,
-                              (bytes, buffer) -> {
-                                operation.check();
-                                int size = buffer.readableBytes();
-                                observer.bytes(size);
-                                BoundedBody.checkWireSize(bytes.size(), size, policy.maxWireBytes());
-                                if (transferBudget != null) transferBudget.wire(size);
-                                byte[] chunk = new byte[size];
-                                buffer.readBytes(chunk);
-                                bytes.writeBytes(chunk);
-                                return bytes;
-                              })
-                          .map(
-                              bytes ->
-                                  new Response(
-                                      status, Map.copyOf(received), bytes.toByteArray(), uri));
-                    })
+                            new HttpFetchException(HttpFetchException.Code.WIRE_LIMIT));
+                    } catch (NumberFormatException invalid) {
+                      return Mono.<Response>error(
+                          new HttpFetchException(HttpFetchException.Code.NETWORK_ERROR));
+                    }
+                  }
+                  if (status == 200
+                      && policy.requiredContentType() != null
+                      && !policy
+                          .requiredContentType()
+                          .equalsIgnoreCase(
+                              received.getOrDefault("content-type", "").split(";", 2)[0].strip()))
+                    return Mono.<Response>error(
+                        new HttpFetchException(HttpFetchException.Code.INVALID_CONTENT_TYPE));
+                  return content
+                      .reduceWith(
+                          ByteArrayOutputStream::new,
+                          (bytes, buffer) -> {
+                            operation.check();
+                            int size = buffer.readableBytes();
+                            observer.bytes(size);
+                            BoundedBody.checkWireSize(bytes.size(), size, policy.maxWireBytes());
+                            if (transferBudget != null) transferBudget.wire(size);
+                            byte[] chunk = new byte[size];
+                            buffer.readBytes(chunk);
+                            bytes.writeBytes(chunk);
+                            return bytes;
+                          })
+                      .map(bytes ->
+                          new Response(status, Map.copyOf(received), bytes.toByteArray(), uri));
+                })
                 .single()
                 .timeout(operation.remaining())
                 .toFuture();

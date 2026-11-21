@@ -105,25 +105,24 @@ class SubAgentIntegrationTest {
     history.add(main, List.of(new UserMessage("parent private reasoning")));
     List<Prompt> requests = new CopyOnWriteArrayList<>();
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              Prompt prompt = invocation.getArgument(0);
-              requests.add(prompt);
-              var message =
-                  requests.size() == 1
-                      ? AssistantMessage.builder()
-                          .content("")
-                          .toolCalls(
-                              List.of(
-                                  new AssistantMessage.ToolCall(
-                                      "read",
-                                      "function",
-                                      "readMultiFile",
-                                      "{\"files\":[{\"path\":\"note.txt\"}]}")))
-                          .build()
-                      : new AssistantMessage(SubAgentResultParserTest.VALID);
-              return Flux.just(new ChatResponse(List.of(new Generation(message))));
-            });
+        .thenAnswer(invocation -> {
+          Prompt prompt = invocation.getArgument(0);
+          requests.add(prompt);
+          var message =
+              requests.size() == 1
+                  ? AssistantMessage.builder()
+                      .content("")
+                      .toolCalls(
+                          List.of(
+                              new AssistantMessage.ToolCall(
+                                  "read",
+                                  "function",
+                                  "readMultiFile",
+                                  "{\"files\":[{\"path\":\"note.txt\"}]}")))
+                      .build()
+                  : new AssistantMessage(SubAgentResultParserTest.VALID);
+          return Flux.just(new ChatResponse(List.of(new Generation(message))));
+        });
     try {
       var scope = AgentRunScope.open(new AgentRunContext("parent", main, directory));
       try (scope) {
@@ -133,12 +132,11 @@ class SubAgentIntegrationTest {
         assertThat(requests).allMatch(p -> !p.getContents().contains("parent private reasoning"));
         assertThat(requests.getLast().getInstructions())
             .filteredOn(m -> m instanceof ToolResponseMessage)
-            .anyMatch(
-                m ->
-                    ((ToolResponseMessage) m)
-                        .getResponses()
-                        .toString()
-                        .contains("independent evidence"));
+            .anyMatch(m ->
+                ((ToolResponseMessage) m)
+                    .getResponses()
+                    .toString()
+                    .contains("independent evidence"));
         assertThat(workingSet.getFiles()).isEqualTo(before);
         assertThat(history.get(main))
             .extracting(Message::getText)
@@ -151,7 +149,8 @@ class SubAgentIntegrationTest {
                     new ParallelSubAgentDelegator.Request("second", "reviewer", "review B", null)));
         assertThat(batch.status()).isEqualTo(ParallelSubAgentDelegator.Status.COMPLETED);
         assertThat(batch.items()).hasSize(2);
-        assertThat(batch.items().stream().map(i -> i.result().subAgentRunId()).distinct()).hasSize(2);
+        assertThat(batch.items().stream().map(i -> i.result().subAgentRunId()).distinct())
+            .hasSize(2);
         assertThat(workingSet.getFiles()).isEqualTo(before);
         assertThat(history.get(main))
             .extracting(Message::getText)
@@ -162,12 +161,10 @@ class SubAgentIntegrationTest {
     }
     var captured = new java.util.concurrent.atomic.AtomicReference<Prompt>();
     when(model.call(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              captured.set(invocation.getArgument(0));
-              return new ChatResponse(
-                  List.of(new Generation(new AssistantMessage("parent response"))));
-            });
+        .thenAnswer(invocation -> {
+          captured.set(invocation.getArgument(0));
+          return new ChatResponse(List.of(new Generation(new AssistantMessage("parent response"))));
+        });
     try {
       clients
           .chatClient(LlmFeature.CHAT)
@@ -181,11 +178,10 @@ class SubAgentIntegrationTest {
     }
     var callbacks = ((ToolCallingChatOptions) captured.get().getOptions()).getToolCallbacks();
     assertThat(callbacks)
-        .anyMatch(
-            c ->
-                c.getToolDefinition().name().equals("delegateTask")
-                    && c.getToolDefinition().description().contains("reviewer")
-                    && !c.getToolDefinition().description().contains("Review independently."));
+        .anyMatch(c ->
+            c.getToolDefinition().name().equals("delegateTask")
+                && c.getToolDefinition().description().contains("reviewer")
+                && !c.getToolDefinition().description().contains("Review independently."));
     assertThat(callbacks)
         .filteredOn(c -> c.getToolDefinition().name().equals("delegateTasks"))
         .hasSize(1);

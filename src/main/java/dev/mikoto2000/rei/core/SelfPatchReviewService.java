@@ -120,13 +120,9 @@ public final class SelfPatchReviewService {
       List<String> warnings) {
     public Result {
       changedFiles =
-          changedFiles == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(changedFiles));
+          changedFiles == null ? null : Collections.unmodifiableList(new ArrayList<>(changedFiles));
       nextActions =
-          nextActions == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(nextActions));
+          nextActions == null ? null : Collections.unmodifiableList(new ArrayList<>(nextActions));
       warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
     }
   }

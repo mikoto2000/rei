@@ -89,19 +89,16 @@ public final class ClassificationRuleSuggestions {
 
   /** 作業状況の把握で用いる提案を返す。 */
   public String suggest(boolean entertainment) {
-    if (!toolkit.ruleSuggestionsEnabled())
-      return "ルール候補生成は無効です。";
+    if (!toolkit.ruleSuggestionsEnabled()) return "ルール候補生成は無効です。";
     String stage = "候補選択";
     try {
-      int minimum =
-          toolkit.ruleSuggestionMinimumSamples();
+      int minimum = toolkit.ruleSuggestionMinimumSamples();
       var candidate =
           toolkit.candidates(entertainment ? "uncertain" : "unknown").stream()
-              .filter(
-                  c ->
-                      c.count() >= minimum
-                          && c.outcomes().size() == 1
-                          && (entertainment || c.visionSuccess() >= minimum))
+              .filter(c ->
+                  c.count() >= minimum
+                      && c.outcomes().size() == 1
+                      && (entertainment || c.visionSuccess() >= minimum))
               .filter(c -> !covered(c, entertainment))
               .findFirst();
       if (candidate.isEmpty()) return "候補なし（一貫したサンプル不足、または既存ルールで対応済み）。";
@@ -116,19 +113,18 @@ public final class ClassificationRuleSuggestions {
               "existingRules",
               toolkit.rules().snapshot().rules().stream()
                   .limit(100)
-                  .map(
-                      r ->
-                          Map.of(
-                              "id",
-                              r.id(),
-                              "type",
-                              r.type(),
-                              "priority",
-                              r.priority(),
-                              "match",
-                              r.match(),
-                              "classify",
-                              r.classify()))
+                  .map(r ->
+                      Map.of(
+                          "id",
+                          r.id(),
+                          "type",
+                          r.type(),
+                          "priority",
+                          r.priority(),
+                          "match",
+                          r.match(),
+                          "classify",
+                          r.classify()))
                   .toList());
       String inputJson =
           new com.fasterxml.jackson.databind.ObjectMapper()

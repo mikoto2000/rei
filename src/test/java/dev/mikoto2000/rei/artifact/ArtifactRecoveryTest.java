@@ -56,14 +56,13 @@ class ArtifactRecoveryTest {
         process.destroyForcibly();
         assertThat(process.waitFor(5, TimeUnit.SECONDS)).isTrue();
         assertThat(observer.get(project.id(), "session", id).status()).isEqualTo("UNKNOWN");
-        assertThatThrownBy(
-                () ->
-                    observer.publish(
-                        new AgentRunContext("run", "session", root, project.id()),
-                        "generated",
-                        "text/plain",
-                        "result.txt",
-                        "safe".getBytes()))
+        assertThatThrownBy(() ->
+                observer.publish(
+                    new AgentRunContext("run", "session", root, project.id()),
+                    "generated",
+                    "text/plain",
+                    "result.txt",
+                    "safe".getBytes()))
             .isInstanceOf(ArtifactException.class);
         assertThat(observer.list(project.id(), "session", null, 100, null).items()).hasSize(1);
         var delivery = directory.resolve("delivery");

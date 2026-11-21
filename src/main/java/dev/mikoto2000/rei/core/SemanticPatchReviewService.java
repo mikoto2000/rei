@@ -153,9 +153,7 @@ public final class SemanticPatchReviewService {
       List<TestFact> tests) {
     public Input {
       requirements =
-          requirements == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(requirements));
+          requirements == null ? null : Collections.unmodifiableList(new ArrayList<>(requirements));
       sources = sources == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(sources));
       tests = tests == null ? null : Collections.unmodifiableList(new ArrayList<>(tests));
     }
@@ -198,9 +196,7 @@ public final class SemanticPatchReviewService {
       List<String> warnings) {
     public Detail {
       requirements =
-          requirements == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(requirements));
+          requirements == null ? null : Collections.unmodifiableList(new ArrayList<>(requirements));
       files = files == null ? null : Collections.unmodifiableList(new ArrayList<>(files));
       tests = tests == null ? null : Collections.unmodifiableList(new ArrayList<>(tests));
       checks = checks == null ? null : Collections.unmodifiableList(new ArrayList<>(checks));
@@ -351,13 +347,12 @@ public final class SemanticPatchReviewService {
                 owner.conversationId(),
                 owner.runId(),
                 requestHash)
-            .query(
-                (row, n) ->
-                    stored(
-                        row.getString("id"),
-                        row.getString("status"),
-                        row.getString("payload"),
-                        row.getString("sha")))
+            .query((row, n) ->
+                stored(
+                    row.getString("id"),
+                    row.getString("status"),
+                    row.getString("payload"),
+                    row.getString("sha")))
             .optional();
     if (previous.isPresent()) return previous.get();
     var snapshot = capture.capture(root, deadline);
@@ -389,7 +384,8 @@ public final class SemanticPatchReviewService {
       try (lease) {
         if (!snapshot.complete()
             || snapshot.changedFiles().isEmpty()
-            || snapshot.changedFiles().size() > 32) checks.add(new Check("PATCH_INCOMPLETE", "", ""));
+            || snapshot.changedFiles().size() > 32)
+          checks.add(new Check("PATCH_INCOMPLETE", "", ""));
         else {
           for (String path : snapshot.changedFiles())
             if (!request.allowedFiles().contains(path))
@@ -437,8 +433,8 @@ public final class SemanticPatchReviewService {
                           && fresh;
                   var passed =
                       report.testCases().stream()
-                          .filter(
-                              item -> item.outcome().equals("PASSED") && needed.contains(item.test()))
+                          .filter(item ->
+                              item.outcome().equals("PASSED") && needed.contains(item.test()))
                           .map(TestReportDiagnosisService.TestCase::test)
                           .distinct()
                           .sorted()
@@ -480,7 +476,8 @@ public final class SemanticPatchReviewService {
                   if (!semanticEnabled
                       || run == null
                       || !owner.equals(run.runContext())
-                      || run.sharedLlmReservation().remaining() < 1) status = "SEMANTIC_UNAVAILABLE";
+                      || run.sharedLlmReservation().remaining() < 1)
+                    status = "SEMANTIC_UNAVAILABLE";
                   else {
                     run.checkActive();
                     var safeSources = new TreeMap<String, String>();
@@ -503,7 +500,9 @@ public final class SemanticPatchReviewService {
                       status =
                           verdict.status().equals("MATCH")
                               ? "REVIEWED_CHECKS"
-                              : verdict.status().equals("FAIL") ? "FIX_REQUIRED" : "SEMANTIC_UNKNOWN";
+                              : verdict.status().equals("FAIL")
+                                  ? "FIX_REQUIRED"
+                                  : "SEMANTIC_UNKNOWN";
                     else {
                       status = "SEMANTIC_UNKNOWN";
                       var requirementUnknown = new TreeMap<String, String>();
@@ -581,17 +580,15 @@ public final class SemanticPatchReviewService {
         db.sql(
                 "SELECT id,status,payload,sha FROM patch_requirement_reviews WHERE id=? AND project=? AND root=? AND session=?")
             .params(id, owner.projectId(), root.toString(), owner.conversationId())
-            .query(
-                (row, n) ->
-                    stored(
-                        row.getString("id"),
-                        row.getString("status"),
-                        row.getString("payload"),
-                        row.getString("sha")))
+            .query((row, n) ->
+                stored(
+                    row.getString("id"),
+                    row.getString("status"),
+                    row.getString("payload"),
+                    row.getString("sha")))
             .optional()
-            .orElseThrow(
-                () ->
-                    new IllegalArgumentException("Review not found in this Project/root/session"));
+            .orElseThrow(() ->
+                new IllegalArgumentException("Review not found in this Project/root/session"));
     if (!receipt.sha256().equals(sha)) throw new IllegalArgumentException("Review SHA mismatch");
     return receipt;
   }
@@ -611,19 +608,18 @@ public final class SemanticPatchReviewService {
     return db.sql(
             "SELECT id,status,sha,payload,pid,heartbeat FROM patch_requirement_reviews WHERE id=? AND project=? AND root=? AND session=?")
         .params(id, owner.projectId(), root.toString(), owner.conversationId())
-        .query(
-            (rs, n) ->
-                new Inspection(
-                    rs.getString("id"),
-                    rs.getString("status"),
-                    rs.getString("sha"),
-                    rs.getString("payload") != null && rs.getString("sha") != null,
-                    rs.getLong("pid"),
-                    rs.getObject("heartbeat") == null
-                        ? null
-                        : Instant.ofEpochMilli(rs.getLong("heartbeat")),
-                    List.of(
-                        "Historical execution state only; no automatic replay or correctness proof")))
+        .query((rs, n) ->
+            new Inspection(
+                rs.getString("id"),
+                rs.getString("status"),
+                rs.getString("sha"),
+                rs.getString("payload") != null && rs.getString("sha") != null,
+                rs.getLong("pid"),
+                rs.getObject("heartbeat") == null
+                    ? null
+                    : Instant.ofEpochMilli(rs.getLong("heartbeat")),
+                List.of(
+                    "Historical execution state only; no automatic replay or correctness proof")))
         .optional()
         .orElseThrow(
             () -> new IllegalArgumentException("Review not found in this Project/root/session"));
@@ -784,13 +780,12 @@ public final class SemanticPatchReviewService {
       uniquePaths(requirement.files());
       if (new HashSet<>(requirement.tests()).size() != requirement.tests().size()
           || requirement.tests().stream()
-              .anyMatch(
-                  test ->
-                      test == null
-                          || test.isBlank()
-                          || test.length() > 256
-                          || test.codePoints().anyMatch(Character::isISOControl)
-                          || !CredentialRedactor.redact(test).equals(test)))
+              .anyMatch(test ->
+                  test == null
+                      || test.isBlank()
+                      || test.length() > 256
+                      || test.codePoints().anyMatch(Character::isISOControl)
+                      || !CredentialRedactor.redact(test).equals(test)))
         throw new IllegalArgumentException("Invalid required testcase identity");
     }
   }

@@ -36,8 +36,8 @@ class OutputLimitReplannerTest {
         .thenReturn(
             response(
                 """
-        {"subgoals":[{"id":"one","goal":"小さく実行する"}],"finalGoal":"統合する"}
-        """));
+                {"subgoals":[{"id":"one","goal":"小さく実行する"}],"finalGoal":"統合する"}
+                """));
     OutputLimitReplanner replanner =
         new OutputLimitReplanner(
             modelProvider, modelHolderService, properties, new OutputLimitReplanParser());
@@ -83,13 +83,11 @@ class OutputLimitReplannerTest {
                     .usage(new org.springframework.ai.chat.metadata.DefaultUsage(2, 3))
                     .build()));
     var tokens = new java.util.concurrent.atomic.AtomicInteger();
-    org.assertj.core.api.Assertions.assertThatThrownBy(
-            () ->
-                new OutputLimitReplanner(provider, holder, new LlmProperties())
-                    .replan(
-                        new OutputLimitReplanRequest(
-                            "task", "goal", "progress", "partial", 1, 2, 3),
-                        tokens::set))
+    org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            new OutputLimitReplanner(provider, holder, new LlmProperties())
+                .replan(
+                    new OutputLimitReplanRequest("task", "goal", "progress", "partial", 1, 2, 3),
+                    tokens::set))
         .isInstanceOf(RuntimeException.class);
     assertThat(tokens).hasValue(5);
   }
@@ -109,13 +107,11 @@ class OutputLimitReplannerTest {
     java.util.function.Consumer<Integer> usage = Mockito.mock();
     Mockito.doThrow(accounting).when(usage).accept(null);
 
-    org.assertj.core.api.Assertions.assertThatThrownBy(
-            () ->
-                new OutputLimitReplanner(provider, holder, new LlmProperties())
-                    .replan(
-                        new OutputLimitReplanRequest(
-                            "task", "goal", "progress", "partial", 1, 2, 3),
-                        usage))
+    org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            new OutputLimitReplanner(provider, holder, new LlmProperties())
+                .replan(
+                    new OutputLimitReplanRequest("task", "goal", "progress", "partial", 1, 2, 3),
+                    usage))
         .isSameAs(fatal);
     verify(usage).accept(null);
     assertThat(fatal.getSuppressed()).containsExactly(accounting);

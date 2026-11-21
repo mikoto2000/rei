@@ -66,7 +66,7 @@ class ToolLoopSupportTest {
         (org.springframework.ai.chat.messages.ToolResponseMessage)
             result.conversationHistory().getLast();
     assertThat(feedback.getResponses()).hasSize(2);
-    assertThat(feedback.getResponses().getFirst()).isSameAs(saved);
+    assertThat(feedback.getResponses().getFirst()).isEqualTo(saved);
     assertThat(Boolean.TRUE.equals(feedback.getMetadata().get("rei.fileBudgetRecovery")))
         .isEqualTo(recovery);
     assertThat(result.returnDirect()).isFalse();
@@ -306,10 +306,9 @@ class ToolLoopSupportTest {
             throw new AssertionError("must not execute");
           }
         };
-    assertThatThrownBy(
-            () ->
-                ToolLoopSupport.requireNoDefaultTools(
-                    model(OpenAiChatOptions.builder().toolCallbacks(callback).build())))
+    assertThatThrownBy(() ->
+            ToolLoopSupport.requireNoDefaultTools(
+                model(OpenAiChatOptions.builder().toolCallbacks(callback).build())))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -333,14 +332,13 @@ class ToolLoopSupportTest {
     assertThatCode(
             () -> ToolLoopSupport.requireNoDefaultTools(model(OpenAiChatOptions.builder().build())))
         .doesNotThrowAnyException();
-    assertThatCode(
-            () ->
-                ToolLoopSupport.requireNoDefaultTools(
-                    model(
-                        OpenAiChatOptions.builder()
-                            .toolCallbacks(List.of())
-                            .extraBody(Map.of("tools", List.of(), "custom", "value"))
-                            .build())))
+    assertThatCode(() ->
+            ToolLoopSupport.requireNoDefaultTools(
+                model(
+                    OpenAiChatOptions.builder()
+                        .toolCallbacks(List.of())
+                        .extraBody(Map.of("tools", List.of(), "custom", "value"))
+                        .build())))
         .doesNotThrowAnyException();
   }
 

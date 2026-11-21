@@ -18,7 +18,8 @@ public class GoogleCalendarTools {
   @Tool(
       name = "googleCalendarListEvents",
       description = "Google Calendar の予定を指定期間で一覧します。日時は ISO-8601 形式で指定します。")
-  List<GoogleCalendarEventSummary> listEvents(String from, String to) throws java.io.IOException, java.security.GeneralSecurityException {
+  List<GoogleCalendarEventSummary> listEvents(String from, String to)
+      throws java.io.IOException, java.security.GeneralSecurityException {
     IO.println(String.format("Google Calendar の予定を %s から %s で一覧するよ", from, to));
     return googleCalendarService.listEvents(
         googleCalendarService.parseDateTime(from).toInstant(),
@@ -29,7 +30,8 @@ public class GoogleCalendarTools {
   @Tool(
       name = "googleCalendarListEventsForDate",
       description = "Google Calendar の予定を指定日で一覧します。日付は yyyy-MM-dd 形式で指定します。")
-  List<GoogleCalendarEventSummary> listEventsForDate(String date) throws java.io.IOException, java.security.GeneralSecurityException {
+  List<GoogleCalendarEventSummary> listEventsForDate(String date)
+      throws java.io.IOException, java.security.GeneralSecurityException {
     IO.println(String.format("Google Calendar の予定を %s で一覧するよ", date));
     return googleCalendarService.listEventsForDate(LocalDate.parse(date));
   }

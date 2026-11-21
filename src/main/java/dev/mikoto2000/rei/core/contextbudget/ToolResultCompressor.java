@@ -175,10 +175,9 @@ public class ToolResultCompressor {
       var responses = new ArrayList<>(tool.getResponses());
       var pages = new HashMap<String, Page>();
       if (tool.getMetadata().get("rei.losslessPages") instanceof Map<?, ?> existing)
-        existing.forEach(
-            (key, value) -> {
-              if (key instanceof String id && value instanceof Page page) pages.put(id, page);
-            });
+        existing.forEach((key, value) -> {
+          if (key instanceof String id && value instanceof Page page) pages.put(id, page);
+        });
       for (int r = 0; r < responses.size() && total > hard; r++) {
         var response = responses.get(r);
         var policy = policy(tool, response.id());
@@ -279,11 +278,10 @@ public class ToolResultCompressor {
     } catch (JsonProcessingException | RuntimeException ignored) {
     }
     return raw.lines()
-        .filter(
-            line ->
-                line.toLowerCase(Locale.ROOT)
-                    .matches(
-                        ".*(exit.?code|status|command|fail|error|stderr|diagnosis|expected|exception|tests run|build |process).*"))
+        .filter(line ->
+            line.toLowerCase(Locale.ROOT)
+                .matches(
+                    ".*(exit.?code|status|command|fail|error|stderr|diagnosis|expected|exception|tests run|build |process).*"))
         .limit(80)
         .collect(java.util.stream.Collectors.joining("\n"));
   }

@@ -194,7 +194,8 @@ class FileOperationsBenchmarkTest {
         dev.mikoto2000.rei.core.chat.AgentRunScope.open(
             new dev.mikoto2000.rei.core.chat.AgentRunContext(
                 "benchmark", "session", root, UUID.randomUUID().toString()));
-    try (owner; var recording = new Recording()) {
+    try (owner;
+        var recording = new Recording()) {
       recording.enable("jdk.FileRead").withThreshold(java.time.Duration.ZERO);
       recording.enable("jdk.FileWrite").withThreshold(java.time.Duration.ZERO);
       recording.start();

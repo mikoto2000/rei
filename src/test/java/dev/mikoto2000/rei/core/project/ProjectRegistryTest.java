@@ -50,11 +50,10 @@ class ProjectRegistryTest {
         Path directory = Files.createDirectory(temp.resolve("project-" + index));
         var registry = index % 2 == 0 ? shell : web;
         registrations.add(
-            workers.submit(
-                () -> {
-                  start.await();
-                  return registry.resolve(directory);
-                }));
+            workers.submit(() -> {
+              start.await();
+              return registry.resolve(directory);
+            }));
       }
       start.countDown();
       var identities = new java.util.HashSet<String>();

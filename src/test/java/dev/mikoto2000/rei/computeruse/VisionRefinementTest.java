@@ -106,11 +106,10 @@ class VisionRefinementTest {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
     var model = mock(ChatModel.class);
     when(model.call(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              cancelled.set(true);
-              return click(.5, .5, "LOW");
-            });
+        .thenAnswer(invocation -> {
+          cancelled.set(true);
+          return click(.5, .5, "LOW");
+        });
     assertThrows(
         java.util.concurrent.CancellationException.class,
         () ->

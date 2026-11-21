@@ -64,12 +64,11 @@ class WebSearchProviderLoggingTest {
     var cache = mock(HttpResponseCache.class);
     var fetched = new java.util.concurrent.atomic.AtomicReference<HttpResponseCache.Request>();
     when(cache.fetch(any(), any(), any(), same(fetcher)))
-        .thenAnswer(
-            invocation -> {
-              fetched.set(invocation.getArgument(0));
-              properties.setTimeoutSeconds(12);
-              return response(200, "{}");
-            });
+        .thenAnswer(invocation -> {
+          fetched.set(invocation.getArgument(0));
+          properties.setTimeoutSeconds(12);
+          return response(200, "{}");
+        });
     var service = new WebSearchService(properties, new JsonMapper(), fetcher, cache);
 
     assertThrows(IllegalStateException.class, () -> service.search("query", 1));
@@ -86,9 +85,9 @@ class WebSearchProviderLoggingTest {
             response(
                 200,
                 """
-            <div class="result"><a class="result__a" href="https://example.com/">
-            Search result</a></div>
-            """));
+                <div class="result"><a class="result__a" href="https://example.com/">
+                Search result</a></div>
+                """));
 
     assertEquals(1, service().search("PRIVATE_QUERY", 1).size());
     assertEquals(1, diagnostics().size());
@@ -269,13 +268,10 @@ class WebSearchProviderLoggingTest {
     properties.setMaxSearchApiCalls(1);
     properties.setProviders(List.of(provider("brave"), provider("duckduckgo")));
     when(fetcher.fetch(any(), any(), any(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              invocation
-                  .getArgument(4, dev.mikoto2000.rei.http.HttpFetchObserver.class)
-                  .request(false);
-              return response(402, "PRIVATE_BODY");
-            });
+        .thenAnswer(invocation -> {
+          invocation.getArgument(4, dev.mikoto2000.rei.http.HttpFetchObserver.class).request(false);
+          return response(402, "PRIVATE_BODY");
+        });
     assertThrows(WebSearchHttpException.class, () -> service().search("PRIVATE_QUERY", 1));
     assertTrue(
         appender
@@ -328,13 +324,12 @@ class WebSearchProviderLoggingTest {
 
   private List<ILoggingEvent> diagnostics() {
     return appender.list.stream()
-        .filter(
-            event -> {
-              String message = event.getFormattedMessage();
-              return message.startsWith("Web search provider failed;")
-                  || message.startsWith("Web search provider completed;")
-                      && message.contains("results=0,");
-            })
+        .filter(event -> {
+          String message = event.getFormattedMessage();
+          return message.startsWith("Web search provider failed;")
+              || message.startsWith("Web search provider completed;")
+                  && message.contains("results=0,");
+        })
         .toList();
   }
 

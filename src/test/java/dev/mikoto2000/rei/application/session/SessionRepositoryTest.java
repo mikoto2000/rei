@@ -55,23 +55,21 @@ class SessionRepositoryTest {
   void rejectionRestoresPreviousDurableState() {
     var file = temp.resolve("sessions.json");
     var store = new FileSessionRepository(file);
-    assertThatThrownBy(
-            () ->
-                store.accept(
-                    metadata("one"),
-                    () -> {
-                      throw new IllegalStateException("rejected");
-                    }))
+    assertThatThrownBy(() ->
+            store.accept(
+                metadata("one"),
+                () -> {
+                  throw new IllegalStateException("rejected");
+                }))
         .hasMessage("rejected");
     assertThat(new FileSessionRepository(file).findById("one")).isEmpty();
     store.accept(metadata("one"), () -> {});
-    assertThatThrownBy(
-            () ->
-                store.accept(
-                    metadata("one").touched(now.plusSeconds(10)),
-                    () -> {
-                      throw new IllegalStateException("rejected");
-                    }))
+    assertThatThrownBy(() ->
+            store.accept(
+                metadata("one").touched(now.plusSeconds(10)),
+                () -> {
+                  throw new IllegalStateException("rejected");
+                }))
         .hasMessage("rejected");
     assertThat(new FileSessionRepository(file).findById("one")).contains(metadata("one"));
   }
@@ -81,13 +79,12 @@ class SessionRepositoryTest {
   void failedPersistenceNeverDispatches() throws Exception {
     var file = Files.writeString(temp.resolve("not-directory"), "file").resolve("sessions.json");
     var store = new FileSessionRepository(file);
-    assertThatThrownBy(
-            () ->
-                store.accept(
-                    metadata("one"),
-                    () -> {
-                      throw new AssertionError("must not enqueue");
-                    }))
+    assertThatThrownBy(() ->
+            store.accept(
+                metadata("one"),
+                () -> {
+                  throw new AssertionError("must not enqueue");
+                }))
         .isInstanceOf(IllegalStateException.class);
     assertThat(store.findById("one")).isEmpty();
   }
@@ -104,12 +101,11 @@ class SessionRepositoryTest {
       for (int i = 1; i <= 30; i++) {
         int index = i;
         jobs.add(
-            executor.submit(
-                () -> {
-                  store.accept(first.touched(now.plusSeconds(index)), () -> {});
-                  store.accept(metadata("new-" + index), () -> {});
-                  assertThat(store.findPage(null, null, 100)).isNotEmpty();
-                }));
+            executor.submit(() -> {
+              store.accept(first.touched(now.plusSeconds(index)), () -> {});
+              store.accept(metadata("new-" + index), () -> {});
+              assertThat(store.findPage(null, null, 100)).isNotEmpty();
+            }));
       }
       for (var job : jobs) job.get(10, java.util.concurrent.TimeUnit.SECONDS);
     }

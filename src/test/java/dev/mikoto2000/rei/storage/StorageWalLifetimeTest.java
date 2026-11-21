@@ -46,14 +46,13 @@ class StorageWalLifetimeTest {
   /** 検証用に、指定された内容を書き込み先へ反映する。 */
   void write(String id) {
     new StorageDatabase(root)
-        .transaction(
-            db -> {
-              try (var sql = db.prepareStatement("INSERT INTO event_sequences VALUES(?,1)")) {
-                sql.setString(1, id);
-                sql.executeUpdate();
-              }
-              return null;
-            });
+        .transaction(db -> {
+          try (var sql = db.prepareStatement("INSERT INTO event_sequences VALUES(?,1)")) {
+            sql.setString(1, id);
+            sql.executeUpdate();
+          }
+          return null;
+        });
   }
 
   /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
@@ -65,28 +64,25 @@ class StorageWalLifetimeTest {
       for (int i = 0; i < 3; i++) {
         String id = "write-" + i;
         new StorageDatabase(root)
-            .transaction(
-                db -> {
-                  connections.add(db);
-                  try (var sql = db.prepareStatement("INSERT INTO event_sequences VALUES(?,1)")) {
-                    sql.setString(1, id);
-                    sql.executeUpdate();
-                  }
-                  return null;
-                });
+            .transaction(db -> {
+              connections.add(db);
+              try (var sql = db.prepareStatement("INSERT INTO event_sequences VALUES(?,1)")) {
+                sql.setString(1, id);
+                sql.executeUpdate();
+              }
+              return null;
+            });
         new StorageDatabase(root)
-            .read(
-                db -> {
-                  try (var sql =
-                      db.prepareStatement(
-                          "SELECT sequence FROM event_sequences WHERE project_id=?")) {
-                    sql.setString(1, id);
-                    try (var rows = sql.executeQuery()) {
-                      assertThat(rows.next()).isTrue();
-                    }
-                  }
-                  return null;
-                });
+            .read(db -> {
+              try (var sql =
+                  db.prepareStatement("SELECT sequence FROM event_sequences WHERE project_id=?")) {
+                sql.setString(1, id);
+                try (var rows = sql.executeQuery()) {
+                  assertThat(rows.next()).isTrue();
+                }
+              }
+              return null;
+            });
       }
       assertThat(connections.get(1)).isSameAs(connections.get(0));
       assertThat(connections.get(2)).isSameAs(connections.get(0));
@@ -103,37 +99,35 @@ class StorageWalLifetimeTest {
         assertThat(Files.exists(root.resolve("storage.db-wal"))).isTrue();
         assertThat(Files.size(root.resolve("storage.db-wal"))).isPositive();
         new StorageDatabase(root)
-            .read(
-                db -> {
-                  try (var sql = db.createStatement()) {
-                    try (var rows =
-                        sql.executeQuery(
-                            "SELECT sequence FROM event_sequences WHERE project_id='committed'")) {
-                      assertThat(rows.next()).isTrue();
-                      assertThat(rows.getLong(1)).isEqualTo(1);
-                    }
-                    for (var expected : Map.of("synchronous", 2, "page_size", 1024).entrySet()) {
-                      try (var rows = sql.executeQuery("PRAGMA " + expected.getKey())) {
-                        assertThat(rows.getInt(1)).isEqualTo(expected.getValue());
-                      }
-                    }
+            .read(db -> {
+              try (var sql = db.createStatement()) {
+                try (var rows =
+                    sql.executeQuery(
+                        "SELECT sequence FROM event_sequences WHERE project_id='committed'")) {
+                  assertThat(rows.next()).isTrue();
+                  assertThat(rows.getLong(1)).isEqualTo(1);
+                }
+                for (var expected : Map.of("synchronous", 2, "page_size", 1024).entrySet()) {
+                  try (var rows = sql.executeQuery("PRAGMA " + expected.getKey())) {
+                    assertThat(rows.getInt(1)).isEqualTo(expected.getValue());
                   }
-                  return null;
-                });
+                }
+              }
+              return null;
+            });
         new StorageDatabase(root)
-            .transaction(
-                db -> {
-                  try (var sql = db.createStatement()) {
-                    for (var expected :
-                        Map.of("synchronous", 2, "wal_autocheckpoint", 4000, "page_size", 1024)
-                            .entrySet()) {
-                      try (var rows = sql.executeQuery("PRAGMA " + expected.getKey())) {
-                        assertThat(rows.getInt(1)).isEqualTo(expected.getValue());
-                      }
-                    }
+            .transaction(db -> {
+              try (var sql = db.createStatement()) {
+                for (var expected :
+                    Map.of("synchronous", 2, "wal_autocheckpoint", 4000, "page_size", 1024)
+                        .entrySet()) {
+                  try (var rows = sql.executeQuery("PRAGMA " + expected.getKey())) {
+                    assertThat(rows.getInt(1)).isEqualTo(expected.getValue());
                   }
-                  return null;
-                });
+                }
+              }
+              return null;
+            });
       }
     }
     assertThat(Files.exists(root.resolve("storage.db-wal"))).isFalse();
@@ -166,24 +160,21 @@ class StorageWalLifetimeTest {
   void rollbackStillAtomicAndIdleConnectionDoesNotBlockMaintenance() {
     try (var context = context()) {
       var database = new StorageDatabase(root);
-      assertThatThrownBy(
-              () ->
-                  database.transaction(
-                      db -> {
-                        try (var sql = db.createStatement()) {
-                          sql.executeUpdate("INSERT INTO event_sequences VALUES('rolled-back',1)");
-                        }
-                        throw new java.io.IOException("simulated failure");
-                      }))
+      assertThatThrownBy(() ->
+              database.transaction(db -> {
+                try (var sql = db.createStatement()) {
+                  sql.executeUpdate("INSERT INTO event_sequences VALUES('rolled-back',1)");
+                }
+                throw new java.io.IOException("simulated failure");
+              }))
           .isInstanceOf(IllegalStateException.class);
-      database.read(
-          db -> {
-            try (var sql = db.createStatement();
-                var rows = sql.executeQuery("SELECT count(*) FROM event_sequences")) {
-              assertThat(rows.getInt(1)).isZero();
-            }
-            return null;
-          });
+      database.read(db -> {
+        try (var sql = db.createStatement();
+            var rows = sql.executeQuery("SELECT count(*) FROM event_sequences")) {
+          assertThat(rows.getInt(1)).isZero();
+        }
+        return null;
+      });
       write("committed");
       var maintenance = new StorageMaintenance(context.getBean(StorageObjectRegistry.class));
       var checkpoint = maintenance.checkpoint();
@@ -199,26 +190,23 @@ class StorageWalLifetimeTest {
     var context = context();
     try (context) {
       var database = new StorageDatabase(root);
-      assertThatThrownBy(
-              () ->
-                  database.transaction(
-                      db -> {
-                        try (var sql = db.createStatement()) {
-                          sql.executeUpdate("INSERT INTO event_sequences VALUES('outer',1)");
-                        }
-                        write("inner");
-                        return null;
-                      }))
+      assertThatThrownBy(() ->
+              database.transaction(db -> {
+                try (var sql = db.createStatement()) {
+                  sql.executeUpdate("INSERT INTO event_sequences VALUES('outer',1)");
+                }
+                write("inner");
+                return null;
+              }))
           .isInstanceOf(IllegalStateException.class);
-      database.read(
-          db -> {
-            try (var sql = db.createStatement();
-                var rows = sql.executeQuery("SELECT count(*) FROM event_sequences")) {
-              assertThat(rows.next()).isTrue();
-              assertThat(rows.getInt(1)).isZero();
-            }
-            return null;
-          });
+      database.read(db -> {
+        try (var sql = db.createStatement();
+            var rows = sql.executeQuery("SELECT count(*) FROM event_sequences")) {
+          assertThat(rows.next()).isTrue();
+          assertThat(rows.getInt(1)).isZero();
+        }
+        return null;
+      });
       write("after-rollback");
     }
   }
@@ -229,26 +217,23 @@ class StorageWalLifetimeTest {
     var context = context();
     try (context) {
       var database = new StorageDatabase(root);
-      assertThatThrownBy(
-              () ->
-                  database.transaction(
-                      db -> {
-                        db.close();
-                        return null;
-                      }))
+      assertThatThrownBy(() ->
+              database.transaction(db -> {
+                db.close();
+                return null;
+              }))
           .isInstanceOf(IllegalStateException.class);
       write("recovered");
-      database.read(
-          db -> {
-            try (var sql = db.createStatement();
-                var rows =
-                    sql.executeQuery(
-                        "SELECT sequence FROM event_sequences WHERE project_id='recovered'")) {
-              assertThat(rows.next()).isTrue();
-              assertThat(rows.getLong(1)).isEqualTo(1);
-            }
-            return null;
-          });
+      database.read(db -> {
+        try (var sql = db.createStatement();
+            var rows =
+                sql.executeQuery(
+                    "SELECT sequence FROM event_sequences WHERE project_id='recovered'")) {
+          assertThat(rows.next()).isTrue();
+          assertThat(rows.getLong(1)).isEqualTo(1);
+        }
+        return null;
+      });
     }
     assertThat(Files.exists(root.resolve("storage.db-wal"))).isFalse();
   }
@@ -286,37 +271,34 @@ class StorageWalLifetimeTest {
     var context = context();
     try (context) {
       var database = new StorageDatabase(root);
-      database.transaction(
-          db -> {
-            try (var sql = db.createStatement()) {
-              sql.execute("CREATE TABLE checkpoint_fixture(id INTEGER PRIMARY KEY,body TEXT)");
-            }
-            return null;
-          });
+      database.transaction(db -> {
+        try (var sql = db.createStatement()) {
+          sql.execute("CREATE TABLE checkpoint_fixture(id INTEGER PRIMARY KEY,body TEXT)");
+        }
+        return null;
+      });
       long before = Files.size(root.resolve("storage.db"));
       for (int i = 0; i < 50; i++) {
         int id = i;
-        database.transaction(
-            db -> {
-              try (var sql = db.prepareStatement("INSERT INTO checkpoint_fixture VALUES(?,?)")) {
-                sql.setInt(1, id);
-                sql.setString(2, "x".repeat(100_000));
-                sql.executeUpdate();
-              }
-              return null;
-            });
+        database.transaction(db -> {
+          try (var sql = db.prepareStatement("INSERT INTO checkpoint_fixture VALUES(?,?)")) {
+            sql.setInt(1, id);
+            sql.setString(2, "x".repeat(100_000));
+            sql.executeUpdate();
+          }
+          return null;
+        });
       }
       assertThat(Files.size(root.resolve("storage.db"))).isGreaterThan(before);
       assertThat(Files.exists(root.resolve("storage.db-wal"))).isTrue();
-      database.read(
-          db -> {
-            try (var sql = db.createStatement();
-                var rows = sql.executeQuery("SELECT count(*) FROM checkpoint_fixture")) {
-              assertThat(rows.next()).isTrue();
-              assertThat(rows.getInt(1)).isEqualTo(50);
-            }
-            return null;
-          });
+      database.read(db -> {
+        try (var sql = db.createStatement();
+            var rows = sql.executeQuery("SELECT count(*) FROM checkpoint_fixture")) {
+          assertThat(rows.next()).isTrue();
+          assertThat(rows.getInt(1)).isEqualTo(50);
+        }
+        return null;
+      });
     }
   }
 
@@ -364,17 +346,16 @@ class StorageWalLifetimeTest {
     var restarted = context();
     try (restarted) {
       new StorageDatabase(root)
-          .read(
-              db -> {
-                try (var sql = db.createStatement();
-                    var rows =
-                        sql.executeQuery(
-                            "SELECT sequence FROM event_sequences WHERE project_id='crash-committed'")) {
-                  assertThat(rows.next()).isTrue();
-                  assertThat(rows.getLong(1)).isEqualTo(42);
-                }
-                return null;
-              });
+          .read(db -> {
+            try (var sql = db.createStatement();
+                var rows =
+                    sql.executeQuery(
+                        "SELECT sequence FROM event_sequences WHERE project_id='crash-committed'")) {
+              assertThat(rows.next()).isTrue();
+              assertThat(rows.getLong(1)).isEqualTo(42);
+            }
+            return null;
+          });
       write("after-crash");
     }
   }
@@ -446,11 +427,10 @@ class StorageWalLifetimeTest {
     var restarted = context();
     try (restarted) {
       var store = new SqliteProjectAgentEventStore(root);
-      expected.forEach(
-          (project, ids) ->
-              assertThat(store.readAfter(project, 0, 100))
-                  .extracting(AgentEvent::id)
-                  .containsExactlyElementsOf(ids));
+      expected.forEach((project, ids) ->
+          assertThat(store.readAfter(project, 0, 100))
+              .extracting(AgentEvent::id)
+              .containsExactlyElementsOf(ids));
     }
   }
 }

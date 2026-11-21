@@ -57,7 +57,8 @@ class BackendInstanceIntegrationTest {
               "--rei.data-dir=" + root,
               "--rei.web.port=0",
               "--logging.config=classpath:web-test-logback.xml");
-      try (context; var client = HttpClient.newHttpClient()) {
+      try (context;
+          var client = HttpClient.newHttpClient()) {
         var endpoint = store.read().orElseThrow();
         assertTrue(BackendOwnership.isOwned(root));
         assertEquals(

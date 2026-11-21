@@ -67,25 +67,23 @@ class EmbeddingDisabledTest {
     new ApplicationContextRunner()
         .withUserConfiguration(VectorStoreConfiguration.class)
         .withPropertyValues("rei.embedding.enabled=false")
-        .run(
-            context -> {
-              assertThat(context).hasNotFailed().hasSingleBean(VectorStore.class);
-              DisabledVectorStore store = context.getBean(DisabledVectorStore.class);
-              assertThat(context.getBean(VectorDocumentRepository.class)).isSameAs(store);
-              assertThat(store.getNativeClient()).isEmpty();
-              VectorDocumentService documents =
-                  new VectorDocumentService(store, store, new VectorDocumentProperties(512, 0));
-              WebSearchOrchestrator web = mock(WebSearchOrchestrator.class);
-              WebSearchContext webResult = WebSearchContext.primaryOnly(List.of());
-              when(web.search("query", 3)).thenReturn(webResult);
-              var result =
-                  new SearchKnowledgeService(documents, web).search("query", 5, 3, null, null);
-              assertThat(result.vectorResults()).isEmpty();
-              assertThat(result.webContext()).isSameAs(webResult);
-              verify(web).search("query", 3);
-              assertThrows(IllegalStateException.class, () -> store.deleteBySource("docs/a.md"));
-              assertThrows(IllegalStateException.class, () -> store.add(List.of()));
-            });
+        .run(context -> {
+          assertThat(context).hasNotFailed().hasSingleBean(VectorStore.class);
+          DisabledVectorStore store = context.getBean(DisabledVectorStore.class);
+          assertThat(context.getBean(VectorDocumentRepository.class)).isSameAs(store);
+          assertThat(store.getNativeClient()).isEmpty();
+          VectorDocumentService documents =
+              new VectorDocumentService(store, store, new VectorDocumentProperties(512, 0));
+          WebSearchOrchestrator web = mock(WebSearchOrchestrator.class);
+          WebSearchContext webResult = WebSearchContext.primaryOnly(List.of());
+          when(web.search("query", 3)).thenReturn(webResult);
+          var result = new SearchKnowledgeService(documents, web).search("query", 5, 3, null, null);
+          assertThat(result.vectorResults()).isEmpty();
+          assertThat(result.webContext()).isSameAs(webResult);
+          verify(web).search("query", 3);
+          assertThrows(IllegalStateException.class, () -> store.deleteBySource("docs/a.md"));
+          assertThrows(IllegalStateException.class, () -> store.add(List.of()));
+        });
   }
 
   /** 機能の組み立てで、指定した条件に対する結果と状態の変化を確認する。 */

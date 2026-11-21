@@ -60,12 +60,11 @@ public class BackgroundProcessManager {
 
   /** 実行先。 */
   private final ExecutorService executor =
-      Executors.newCachedThreadPool(
-          r -> {
-            Thread thread = new Thread(r, "rei-background-process");
-            thread.setDaemon(true);
-            return thread;
-          });
+      Executors.newCachedThreadPool(r -> {
+        Thread thread = new Thread(r, "rei-background-process");
+        thread.setDaemon(true);
+        return thread;
+      });
 
   /** 指定された値や利用先を使って、BackgroundProcessManagerを初期化する。 */
   @Autowired
@@ -322,19 +321,17 @@ public class BackgroundProcessManager {
 
   /** 所有権を確認済みのハンドルにだけ、既存の終了猶予を適用する。 */
   private void terminateProcessTree(List<ProcessHandle> handles) {
-    handles.forEach(
-        handle -> {
-          if (handle.isAlive()) {
-            handle.destroy();
-          }
-        });
+    handles.forEach(handle -> {
+      if (handle.isAlive()) {
+        handle.destroy();
+      }
+    });
     waitForExit(handles, KILL_GRACE_PERIOD);
-    handles.forEach(
-        handle -> {
-          if (handle.isAlive()) {
-            handle.destroyForcibly();
-          }
-        });
+    handles.forEach(handle -> {
+      if (handle.isAlive()) {
+        handle.destroyForcibly();
+      }
+    });
     waitForExit(handles, Duration.ofSeconds(1));
   }
 

@@ -1248,18 +1248,17 @@ public class ChatExecutionService {
         clientForMode
             .apply(mode)
             .prompt(new Prompt(messages, options))
-            .advisors(
-                advisor ->
-                    advisor
-                        .advisors(
-                            new ConversationLifecycleAdvisor(
-                                turns, execution.runContext().conversationId()))
-                        .param(AgentRunContext.class.getName(), execution.runContext())
-                        .param(ChatMemory.CONVERSATION_ID, execution.runContext().conversationId())
-                        .param(
-                            dev.mikoto2000.rei.context.CancelledTaskHistory.KEY,
-                            turns.promptHistory(execution.runContext().conversationId()))
-                        .param(AgentSkillAdvisor.ROUTING_CONTEXT_KEY, skillRoutingContext));
+            .advisors(advisor ->
+                advisor
+                    .advisors(
+                        new ConversationLifecycleAdvisor(
+                            turns, execution.runContext().conversationId()))
+                    .param(AgentRunContext.class.getName(), execution.runContext())
+                    .param(ChatMemory.CONVERSATION_ID, execution.runContext().conversationId())
+                    .param(
+                        dev.mikoto2000.rei.context.CancelledTaskHistory.KEY,
+                        turns.promptHistory(execution.runContext().conversationId()))
+                    .param(AgentSkillAdvisor.ROUTING_CONTEXT_KEY, skillRoutingContext));
     if (execution.runContext().responseStyle() == ResponseStyle.CONVERSATION)
       requestSpec.advisors(new ConversationStyleAdvisor(ResponseStyle.CONVERSATION));
     if (mode != AgentRunContext.Mode.EXCLUSIVE && checkpoints != null)
@@ -1551,14 +1550,14 @@ public class ChatExecutionService {
         + """
 
 
-    統合ゴール:
-    """
+        統合ゴール:
+        """
         + finalGoal
         + """
 
 
-    サブゴール結果:
-    """
+        サブゴール結果:
+        """
         + subgoalResults
         + "\n";
   }
@@ -1606,30 +1605,28 @@ public class ChatExecutionService {
   /** 会話の実行において、提案統合の実施条件を判定する。 */
   private boolean shouldSuggestConsolidation() {
     AtomicBoolean suggested = new AtomicBoolean(false);
-    memoryConsolidatorService.ifPresent(
-        service -> {
-          try {
-            if (service.shouldSuggestConsolidationNow()) {
-              suggested.set(true);
-            }
-          } catch (Exception error) {
-            RunCancellation.propagate(error);
-          }
-        });
+    memoryConsolidatorService.ifPresent(service -> {
+      try {
+        if (service.shouldSuggestConsolidationNow()) {
+          suggested.set(true);
+        }
+      } catch (Exception error) {
+        RunCancellation.propagate(error);
+      }
+    });
     return suggested.get();
   }
 
   /** 会話の実行に関するmaybe再確認話題候補一覧を処理する。 */
   private void maybeRefreshTopicCandidates() {
-    topicOrchestrator.ifPresent(
-        orchestrator -> {
-          try {
-            orchestrator.onChatCompleted();
-          } catch (Exception e) {
-            RunCancellation.propagate(e);
-            log.warn("Topic candidate refresh failed", e);
-          }
-        });
+    topicOrchestrator.ifPresent(orchestrator -> {
+      try {
+        orchestrator.onChatCompleted();
+      } catch (Exception e) {
+        RunCancellation.propagate(e);
+        log.warn("Topic candidate refresh failed", e);
+      }
+    });
   }
 
   /** 後から状況を確認できるよう、応答生成に使ったトークン数を記録する。 */

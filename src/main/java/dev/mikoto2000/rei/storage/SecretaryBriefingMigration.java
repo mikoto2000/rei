@@ -16,7 +16,8 @@ final class SecretaryBriefingMigration {
 
   static void verify(Connection db) throws SQLException {
     try (var q = db.createStatement()) {
-      if (!q.execute("SELECT id,project,request_key,generated,record FROM secretary_briefings LIMIT 0"))
+      if (!q.execute(
+          "SELECT id,project,request_key,generated,record FROM secretary_briefings LIMIT 0"))
         throw new SQLException("Expected secretary briefing schema query to return a result set");
     }
   }

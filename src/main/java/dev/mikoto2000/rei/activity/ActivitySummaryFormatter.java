@@ -55,14 +55,13 @@ public record ActivitySummaryFormatter(ZoneId zone) {
                   ? String.join(
                       "・",
                       segment.primaryCategories().stream()
-                          .map(
-                              c ->
-                                  switch (c) {
-                                    case "development" -> "開発";
-                                    case "research" -> "調査";
-                                    case "documentation" -> "文書作業";
-                                    default -> label(c);
-                                  })
+                          .map(c ->
+                              switch (c) {
+                                case "development" -> "開発";
+                                case "research" -> "調査";
+                                case "documentation" -> "文書作業";
+                                default -> label(c);
+                              })
                           .toList())
                   : label(primary.type());
       out.append(main).append("が中心と推定。");
@@ -74,11 +73,10 @@ public record ActivitySummaryFormatter(ZoneId zone) {
             : segment.roles().secondary().stream();
     var labels =
         visible
-            .map(
-                a ->
-                    a.service().isBlank()
-                        ? ActivityVocabulary.applicationLabel(a.application())
-                        : ActivityVocabulary.serviceLabel(a.service()))
+            .map(a ->
+                a.service().isBlank()
+                    ? ActivityVocabulary.applicationLabel(a.application())
+                    : ActivityVocabulary.serviceLabel(a.service()))
             .filter(s -> !s.isBlank())
             .map(s -> clean(s, 40))
             .distinct()

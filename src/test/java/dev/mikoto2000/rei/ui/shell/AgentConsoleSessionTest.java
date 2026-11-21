@@ -25,17 +25,15 @@ class AgentConsoleSessionTest {
     var release = new CountDownLatch(1);
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
       var run =
-          executor.submit(
-              () -> {
-                var scope =
-                    AgentRunScope.open(new AgentRunContext("run", "chat:main", Path.of(".")));
-                try (scope) {
-                  entered.countDown();
-                  release.await();
-                  routed.println("raw tool output");
-                }
-                return null;
-              });
+          executor.submit(() -> {
+            var scope = AgentRunScope.open(new AgentRunContext("run", "chat:main", Path.of(".")));
+            try (scope) {
+              entered.countDown();
+              release.await();
+              routed.println("raw tool output");
+            }
+            return null;
+          });
       assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
       try {
         routed.println("ユーザー入力");

@@ -32,11 +32,10 @@ public class ContextCompressionConfiguration {
   public dev.mikoto2000.rei.tooldelivery.ReadingStateStore readingStateStore(
       @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
     var database = new dev.mikoto2000.rei.storage.StorageDatabase(java.nio.file.Path.of(directory));
-    return new dev.mikoto2000.rei.tooldelivery.ReadingStateStore(
-        (write, work) -> {
-          if (write) database.transaction(work::run);
-          else database.read(work::run);
-        });
+    return new dev.mikoto2000.rei.tooldelivery.ReadingStateStore((write, work) -> {
+      if (write) database.transaction(work::run);
+      else database.read(work::run);
+    });
   }
 
   /** モデルへ渡す文脈の管理で用いるレビュー対象範囲記録台帳を返す。 */
@@ -57,8 +56,11 @@ public class ContextCompressionConfiguration {
       dev.mikoto2000.rei.review.ReviewCoverageLedger ledger,
       RawToolResultStore raw,
       ObjectProvider<dev.mikoto2000.rei.core.Tools> files,
-      TokenEstimator estimator, ContextCompressionProperties context, ToolResultDeliveryProperties delivery) {
-    var reviews = new dev.mikoto2000.rei.review.ReviewTools(ledger, raw, files::getObject, estimator);
+      TokenEstimator estimator,
+      ContextCompressionProperties context,
+      ToolResultDeliveryProperties delivery) {
+    var reviews =
+        new dev.mikoto2000.rei.review.ReviewTools(ledger, raw, files::getObject, estimator);
     context.validate();
     reviews.configureReading(
         prompt -> ContextBudgetManager.inputLimit(context, estimator, prompt),
@@ -71,16 +73,15 @@ public class ContextCompressionConfiguration {
       dev.mikoto2000.rei.review.ReviewCoverageLedger ledger,
       ObjectProvider<dev.mikoto2000.rei.goal.GoalRepository> goals) {
     return () ->
-        ledger.setTaskGoalResolver(
-            (scope, run) -> {
-              var repository = goals.getIfAvailable();
-              return repository == null
-                  ? null
-                  : repository
-                      .taskOrigin(scope.project(), scope.root(), scope.session(), run)
-                      .map(dev.mikoto2000.rei.goal.GoalRepository.Goal::id)
-                      .orElse(null);
-            });
+        ledger.setTaskGoalResolver((scope, run) -> {
+          var repository = goals.getIfAvailable();
+          return repository == null
+              ? null
+              : repository
+                  .taskOrigin(scope.project(), scope.root(), scope.session(), run)
+                  .map(dev.mikoto2000.rei.goal.GoalRepository.Goal::id)
+                  .orElse(null);
+        });
   }
 
   @Bean

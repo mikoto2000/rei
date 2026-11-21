@@ -198,7 +198,8 @@ public final class CoverageImpactService {
   }
 
   /** 共通の実行基盤で用いる分析を返す。 */
-  static Result analyze(RepositoryMapService.View view, List<Range> ranges, List<String> reportPaths)
+  static Result analyze(
+      RepositoryMapService.View view, List<Range> ranges, List<String> reportPaths)
       throws IOException {
     RunCancellation.propagate(null);
     Path root = Path.of(view.root()).toRealPath();
@@ -310,20 +311,18 @@ public final class CoverageImpactService {
       for (int number : entry.getValue()) {
         var observed =
             facts.stream()
-                .filter(
-                    fact ->
-                        fact.path().equals(entry.getKey())
-                            && fact.line() == number
-                            && fact.covered() != null)
+                .filter(fact ->
+                    fact.path().equals(entry.getKey())
+                        && fact.line() == number
+                        && fact.covered() != null)
                 .toList();
         Instant modified = sourceTime;
         var fresh =
             observed.stream()
-                .filter(
-                    fact ->
-                        modified != null
-                            && !fact.modified().isBefore(modified)
-                            && !fact.modified().isAfter(Instant.now().plusSeconds(60)))
+                .filter(fact ->
+                    modified != null
+                        && !fact.modified().isBefore(modified)
+                        && !fact.modified().isAfter(Instant.now().plusSeconds(60)))
                 .toList();
         String status =
             fresh.stream().anyMatch(fact -> Boolean.TRUE.equals(fact.covered()))
@@ -693,11 +692,10 @@ public final class CoverageImpactService {
     if (parsed.format().equals("JACOCO")) {
       var candidates =
           files.values().stream()
-              .filter(
-                  file ->
-                      file.language().equals("JAVA")
-                          && file.packageName().replace('.', '/').equals(row.packageName())
-                          && HeuristicSourceIndex.fileName(file.path()).equals(row.source()))
+              .filter(file ->
+                  file.language().equals("JAVA")
+                      && file.packageName().replace('.', '/').equals(row.packageName())
+                      && HeuristicSourceIndex.fileName(file.path()).equals(row.source()))
               .toList();
       var local =
           candidates.stream()

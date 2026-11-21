@@ -42,11 +42,10 @@ class FileOperationsOptimizationTest {
           /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           FileSnapshots newSnapshots() {
-            return new FileSnapshots(
-                path -> {
-                  reads.incrementAndGet();
-                  return Files.readAllBytes(path);
-                });
+            return new FileSnapshots(path -> {
+              reads.incrementAndGet();
+              return Files.readAllBytes(path);
+            });
           }
         };
     var result =
@@ -95,12 +94,11 @@ class FileOperationsOptimizationTest {
     var file = root.resolve("a.txt");
     Files.writeString(file, "before");
     var racing =
-        new FileSnapshots(
-            path -> {
-              var bytes = Files.readAllBytes(path);
-              Files.writeString(path, "different size");
-              return bytes;
-            });
+        new FileSnapshots(path -> {
+          var bytes = Files.readAllBytes(path);
+          Files.writeString(path, "different size");
+          return bytes;
+        });
     assertThrows(java.io.IOException.class, () -> racing.get(root, file));
     Files.writeString(file, "x".repeat(FileSnapshots.MAX_FILE_BYTES + 1));
     assertThrows(java.io.IOException.class, () -> new FileSnapshots().get(root, file));
@@ -126,11 +124,10 @@ class FileOperationsOptimizationTest {
           /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           FileSnapshots newSnapshots() {
-            return new FileSnapshots(
-                path -> {
-                  reads.incrementAndGet();
-                  return Files.readAllBytes(path);
-                });
+            return new FileSnapshots(path -> {
+              reads.incrementAndGet();
+              return Files.readAllBytes(path);
+            });
           }
         };
     var results =
@@ -278,11 +275,10 @@ class FileOperationsOptimizationTest {
   void cacheCapacityIsBoundedAndParallelReadsAreCoalesced() throws Exception {
     var reads = new java.util.concurrent.atomic.AtomicInteger();
     var snapshots =
-        new FileSnapshots(
-            path -> {
-              reads.incrementAndGet();
-              return Files.readAllBytes(path);
-            });
+        new FileSnapshots(path -> {
+          reads.incrementAndGet();
+          return Files.readAllBytes(path);
+        });
     Files.writeString(root.resolve("same.txt"), "same");
     try (var executor = java.util.concurrent.Executors.newFixedThreadPool(4)) {
       var futures = new ArrayList<java.util.concurrent.Future<String>>();

@@ -28,20 +28,19 @@ public class CuriosityTopicCandidateGenerator implements TopicCandidateGenerator
     if (!topicSettings.enabled()) return List.of();
     Instant now = context.currentTime();
     return findCandidates.apply(new CuriosityQuery(now, topicSettings.maxCandidates())).stream()
-        .map(
-            item ->
-                new TopicCandidate(
-                    UUID.randomUUID().toString(),
-                    item.question(),
-                    item.reason(),
-                    TopicType.FOLLOW_UP,
-                    TopicSource.CURIOSITY_QUEUE,
-                    item.priority(),
-                    freshness(item, now),
-                    0.75d,
-                    0.25d,
-                    0.80d,
-                    now))
+        .map(item ->
+            new TopicCandidate(
+                UUID.randomUUID().toString(),
+                item.question(),
+                item.reason(),
+                TopicType.FOLLOW_UP,
+                TopicSource.CURIOSITY_QUEUE,
+                item.priority(),
+                freshness(item, now),
+                0.75d,
+                0.25d,
+                0.80d,
+                now))
         .toList();
   }
 

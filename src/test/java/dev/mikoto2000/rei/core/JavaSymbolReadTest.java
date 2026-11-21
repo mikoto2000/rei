@@ -117,11 +117,10 @@ class JavaSymbolReadTest {
           /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           FileSnapshots newSnapshots() {
-            return new FileSnapshots(
-                path -> {
-                  reads.incrementAndGet();
-                  return Files.readAllBytes(path);
-                });
+            return new FileSnapshots(path -> {
+              reads.incrementAndGet();
+              return Files.readAllBytes(path);
+            });
           }
         };
     tools.setRepositoryMaps(new RepositoryMapService(path -> List.of("C.java", "Other.java")));

@@ -315,10 +315,8 @@ class ChatExecutionInterventionTest {
     verify(memory, never())
         .add(
             anyString(),
-            argThat(
-                (List<Message> messages) ->
-                    messages.stream()
-                        .anyMatch(m -> m.getText().contains("secret pending guidance"))));
+            argThat((List<Message> messages) ->
+                messages.stream().anyMatch(m -> m.getText().contains("secret pending guidance"))));
     assertThat(queue.drain()).isEmpty();
     assertThat(queue.offer("late")).isFalse();
   }
@@ -356,10 +354,8 @@ class ChatExecutionInterventionTest {
     service.setChatMemory(memory);
     var queue = new UserInterventionQueue();
     queue.offer("guidance");
-    assertThatThrownBy(
-            () ->
-                service.execute(
-                    new AgentRunContext("run", "chat:main", Path.of(".")), "start", queue))
+    assertThatThrownBy(() ->
+            service.execute(new AgentRunContext("run", "chat:main", Path.of(".")), "start", queue))
         .hasMessage("memory unavailable");
     verify(cancellation).clear();
   }
@@ -408,11 +404,10 @@ class ChatExecutionInterventionTest {
     verify(memory)
         .add(
             eq("chat:main"),
-            argThat(
-                (List<Message> messages) ->
-                    messages.size() == 1
-                        && messages.getFirst() instanceof UserMessage
-                        && messages.getFirst().getText().equals("keep README")));
+            argThat((List<Message> messages) ->
+                messages.size() == 1
+                    && messages.getFirst() instanceof UserMessage
+                    && messages.getFirst().getText().equals("keep README")));
     assertThat(queue.offer("after completion")).isFalse();
   }
 }

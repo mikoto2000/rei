@@ -43,14 +43,13 @@ class ReadingDeliveryTest {
     String hash = FileSnapshots.hash(line.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     var history =
         java.util.stream.IntStream.range(0, 40)
-            .mapToObj(
-                i ->
-                    new ReadingDelivery.Entry(
-                        "lesson.md",
-                        initial.version(),
-                        i * 10 + 1,
-                        java.util.Collections.nCopies(10, hash),
-                        "old-" + i))
+            .mapToObj(i ->
+                new ReadingDelivery.Entry(
+                    "lesson.md",
+                    initial.version(),
+                    i * 10 + 1,
+                    java.util.Collections.nCopies(10, hash),
+                    "old-" + i))
             .toList();
     store.save(
         owner,
@@ -103,14 +102,13 @@ class ReadingDeliveryTest {
       String lineHash = FileSnapshots.hash(new byte[0]);
       var old =
           java.util.stream.IntStream.range(0, 60)
-              .mapToObj(
-                  i ->
-                      new ReadingDelivery.Entry(
-                          "a.txt",
-                          initial.version(),
-                          i * 1000 + 1,
-                          java.util.Collections.nCopies(1000, lineHash),
-                          "old-" + i))
+              .mapToObj(i ->
+                  new ReadingDelivery.Entry(
+                      "a.txt",
+                      initial.version(),
+                      i * 1000 + 1,
+                      java.util.Collections.nCopies(1000, lineHash),
+                      "old-" + i))
               .toList();
       store.save(
           owner,
@@ -232,10 +230,8 @@ class ReadingDeliveryTest {
                   StorageDatabase.JSON.writeValueAsString(List.of(restored)),
                   evaluator.beforeTool("readMultiFile", "{}"))
               .stream()
-              .anyMatch(
-                  e ->
-                      e.kind()
-                          == dev.mikoto2000.rei.core.stagnation.ProgressEvent.CONTEXT_RESTORED));
+              .anyMatch(e ->
+                  e.kind() == dev.mikoto2000.rei.core.stagnation.ProgressEvent.CONTEXT_RESTORED));
       assertFalse(
           evaluator
               .afterTool(
@@ -244,10 +240,8 @@ class ReadingDeliveryTest {
                   StorageDatabase.JSON.writeValueAsString(List.of(restored)),
                   evaluator.beforeTool("readMultiFile", "{}"))
               .stream()
-              .anyMatch(
-                  e ->
-                      e.kind()
-                          == dev.mikoto2000.rei.core.stagnation.ProgressEvent.CONTEXT_RESTORED));
+              .anyMatch(e ->
+                  e.kind() == dev.mikoto2000.rei.core.stagnation.ProgressEvent.CONTEXT_RESTORED));
       assertNotNull(restored.delivery().evidence().getFirst().rawResultRef());
       tools.setReadingDelivery(
           ReadingTestStores.delivery(ReadingTestStores.store(new StorageDatabase(data)), raw));

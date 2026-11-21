@@ -33,11 +33,10 @@ class InMemoryAgentEventBusTest {
     var displayed = new ArrayList<AgentEvent>();
     bus.subscribe(displayed::add);
     var persistence =
-        bus.subscribePersistence(
-            event -> {
-              bus.publish(event("agent.run.completed"));
-              throw new IllegalStateException("storage failed");
-            });
+        bus.subscribePersistence(event -> {
+          bus.publish(event("agent.run.completed"));
+          throw new IllegalStateException("storage failed");
+        });
     org.junit.jupiter.api.Assertions.assertThrows(
         IllegalStateException.class, () -> bus.publish(event("agent.run.started")));
     assertTrue(displayed.isEmpty());
@@ -56,20 +55,17 @@ class InMemoryAgentEventBusTest {
     var received = new ArrayList<AgentEvent>();
     bus.subscribe(received::add);
     var persistence =
-        bus.subscribePersistence(
-            e -> {
-              if (e.type() == AgentEventType.AGENT_RUN_STARTED)
-                bus.publish(event("message.started"));
-            });
+        bus.subscribePersistence(e -> {
+          if (e.type() == AgentEventType.AGENT_RUN_STARTED) bus.publish(event("message.started"));
+        });
     bus.publishBoundary(event("agent.run.started"));
     assertEquals(List.of(1L, 2L), received.stream().map(AgentEvent::sequence).toList());
     persistence.unsubscribe();
     persistence =
-        bus.subscribePersistence(
-            e -> {
-              bus.publish(event("message.completed"));
-              throw new IllegalStateException("failed");
-            });
+        bus.subscribePersistence(e -> {
+          bus.publish(event("message.completed"));
+          throw new IllegalStateException("failed");
+        });
     org.junit.jupiter.api.Assertions.assertThrows(
         IllegalStateException.class, () -> bus.publishBoundary(event("agent.run.failed")));
     persistence.unsubscribe();
@@ -181,10 +177,9 @@ class InMemoryAgentEventBusTest {
   void listenerExceptionDoesNotStopOtherListeners() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     List<AgentEvent> received = new ArrayList<>();
-    bus.subscribe(
-        e -> {
-          throw new RuntimeException("boom");
-        });
+    bus.subscribe(e -> {
+      throw new RuntimeException("boom");
+    });
     bus.subscribe(received::add);
 
     bus.publish(event("agent.run.started"));

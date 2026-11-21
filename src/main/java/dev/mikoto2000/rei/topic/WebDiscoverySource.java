@@ -30,17 +30,16 @@ public class WebDiscoverySource implements DiscoverySource {
       var response = service.searchAndRead(new WebSearchAndReadRequest(seed, 3, 1));
       response.results().stream()
           .filter(result -> result.title() != null && !result.title().isBlank())
-          .map(
-              result ->
-                  new DiscoveryItem(
-                      result.url(),
-                      result.title(),
-                      result.snippet(),
-                      result.url(),
-                      TopicSource.WEB,
-                      parseInstant(result.publishedAt()),
-                      relevance(seed, result.title() + " " + result.snippet()),
-                      seed))
+          .map(result ->
+              new DiscoveryItem(
+                  result.url(),
+                  result.title(),
+                  result.snippet(),
+                  result.url(),
+                  TopicSource.WEB,
+                  parseInstant(result.publishedAt()),
+                  relevance(seed, result.title() + " " + result.snippet()),
+                  seed))
           .forEach(items::add);
     }
     return items;

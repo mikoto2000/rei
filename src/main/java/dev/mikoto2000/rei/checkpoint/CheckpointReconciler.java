@@ -218,11 +218,9 @@ public class CheckpointReconciler {
       saved.evidence().stream().map(Evidence::eventId).filter(Objects::nonNull).forEach(ids::add);
       eventStore
           .referenceStatus(saved.projectId(), ids)
-          .forEach(
-              (id, status) -> {
-                if (!status.equals("available"))
-                  recheck.add("Result reference " + id + ": " + status);
-              });
+          .forEach((id, status) -> {
+            if (!status.equals("available")) recheck.add("Result reference " + id + ": " + status);
+          });
     }
     if (!unknown.isEmpty())
       recheck.add(
@@ -338,14 +336,13 @@ public class CheckpointReconciler {
       process = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD).start();
       var running = process;
       var output =
-          CompletableFuture.supplyAsync(
-              () -> {
-                try {
-                  return running.getInputStream().readNBytes(65537);
-                } catch (java.io.IOException e) {
-                  return new byte[0];
-                }
-              });
+          CompletableFuture.supplyAsync(() -> {
+            try {
+              return running.getInputStream().readNBytes(65537);
+            } catch (java.io.IOException e) {
+              return new byte[0];
+            }
+          });
       if (!process.waitFor(2, TimeUnit.SECONDS) || process.exitValue() != 0) return "unavailable";
       byte[] bytes = output.get(1, TimeUnit.SECONDS);
       if (bytes.length > 65536) return "oversized:recheck";

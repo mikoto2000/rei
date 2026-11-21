@@ -132,10 +132,9 @@ class ShowUiComputerVisionModelTest {
             o -> {
               assertTrue(
                   o.screenshot().displays().stream()
-                      .allMatch(
-                          d ->
-                              (long) d.image().getWidth() * d.image().getHeight()
-                                  <= ShowUiComputerVisionModel.MAX_PIXELS));
+                      .allMatch(d ->
+                          (long) d.image().getWidth() * d.image().getHeight()
+                              <= ShowUiComputerVisionModel.MAX_PIXELS));
               return click();
             },
             grounding,

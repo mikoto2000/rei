@@ -401,17 +401,15 @@ class CheckpointHistoryTest {
     var barrier = new java.util.concurrent.CyclicBarrier(2);
     try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
       var cleanup =
-          pool.submit(
-              () -> {
-                barrier.await();
-                return new PersistentCheckpointRepository(source, settings).cleanupHistory(true);
-              });
+          pool.submit(() -> {
+            barrier.await();
+            return new PersistentCheckpointRepository(source, settings).cleanupHistory(true);
+          });
       var save =
-          pool.submit(
-              () -> {
-                barrier.await();
-                return repo.save(repo.get("project", "task"), 3, "concurrent");
-              });
+          pool.submit(() -> {
+            barrier.await();
+            return repo.save(repo.get("project", "task"), 3, "concurrent");
+          });
       cleanup.get();
       assertEquals(4, save.get().revision());
     }

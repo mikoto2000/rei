@@ -289,11 +289,10 @@ public record TrendSummaryPolicy(
       return true;
     var families = new HashSet<String>();
     var labels = new HashSet<String>();
-    group.forEach(
-        c -> {
-          families.addAll(c.families());
-          labels.addAll(c.labels());
-        });
+    group.forEach(c -> {
+      families.addAll(c.families());
+      labels.addAll(c.labels());
+    });
     return !Collections.disjoint(families, next.families())
         || !Collections.disjoint(labels, next.labels())
         || (!projects.isEmpty() && projects.equals(next.projects()))

@@ -28,10 +28,9 @@ class ReiApplicationExitConfirmationTest {
     ReiApplication app = newApp(false);
 
     assertTrue(
-        app.confirmExitIfNeeded(
-            prompt -> {
-              throw new AssertionError("confirmation should not be requested");
-            }));
+        app.confirmExitIfNeeded(prompt -> {
+          throw new AssertionError("confirmation should not be requested");
+        }));
   }
 
   /** れいの起動の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
@@ -64,10 +63,9 @@ class ReiApplicationExitConfirmationTest {
     ReiApplication app = newApp(true);
 
     assertFalse(
-        app.confirmExitIfNeeded(
-            prompt -> {
-              throw new EndOfFileException();
-            }));
+        app.confirmExitIfNeeded(prompt -> {
+          throw new EndOfFileException();
+        }));
   }
 
   /** 指定された条件を再現するための検証対象や入力情報を作成する。 */

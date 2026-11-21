@@ -30,14 +30,13 @@ class TaskSourceFixtureTest {
       assertThat(rows.getString(1)).isEqualTo("committed");
       assertThat(rows.next()).isFalse();
     }
-    org.assertj.core.api.Assertions.assertThatThrownBy(
-            () ->
-                populate(
-                    data,
-                    () -> {
-                      jdbc.sql("INSERT INTO fixture_rows VALUES('rolled-back')").update();
-                      throw new IllegalStateException("failed fixture");
-                    }))
+    org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            populate(
+                data,
+                () -> {
+                  jdbc.sql("INSERT INTO fixture_rows VALUES('rolled-back')").update();
+                  throw new IllegalStateException("failed fixture");
+                }))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("failed fixture");
     try (var connection = data.getConnection();

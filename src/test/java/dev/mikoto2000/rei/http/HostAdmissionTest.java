@@ -66,11 +66,10 @@ class HostAdmissionTest {
                       uri, FetchOperation.active().withTimeout(Duration.ofMillis(20))));
         }
       }
-      assertDoesNotThrow(
-          () -> {
-            var unconstrained = FetchScope.acquireConnection(uri, FetchOperation.active());
-            try (unconstrained) {}
-          });
+      assertDoesNotThrow(() -> {
+        var unconstrained = FetchScope.acquireConnection(uri, FetchOperation.active());
+        try (unconstrained) {}
+      });
     }
     assertEquals(0, admission.entries());
   }

@@ -120,10 +120,9 @@ class ProgressLoopSafetyTest {
             event -> {});
     for (int i = 0; i < 30; i++) iterate(e, "fact" + i);
     assertThat(plan.steps())
-        .allSatisfy(
-            step ->
-                assertThat(step.status())
-                    .isNotEqualTo(dev.mikoto2000.rei.core.actionplan.ActionPlan.STATUS_DONE));
+        .allSatisfy(step ->
+            assertThat(step.status())
+                .isNotEqualTo(dev.mikoto2000.rei.core.actionplan.ActionPlan.STATUS_DONE));
     e.completeSubgoal("review document");
     for (int i = 30; i < 60; i++) iterate(e, "fact" + i);
     assertThat(e.detector().isStagnant()).isFalse();

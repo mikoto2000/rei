@@ -36,12 +36,12 @@ public class LlmFeedSummaryGenerator implements FeedSummaryGenerator {
   /** 指定された条件に従って、依頼された内容を生成する。 */
   @Override
   public String generate(String prompt) {
-    return summaryClient.get()
+    return summaryClient
+        .get()
         .prompt()
         .user(prompt)
-        .advisors(
-            advisor ->
-                advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("feed-summary")))
+        .advisors(advisor ->
+            advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("feed-summary")))
         .call()
         .content();
   }

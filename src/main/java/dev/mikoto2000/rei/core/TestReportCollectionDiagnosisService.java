@@ -120,17 +120,11 @@ public final class TestReportCollectionDiagnosisService {
               : Collections.unmodifiableList(new ArrayList<>(discoveredPaths));
       reports = reports == null ? null : Collections.unmodifiableList(new ArrayList<>(reports));
       failedTests =
-          failedTests == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(failedTests));
+          failedTests == null ? null : Collections.unmodifiableList(new ArrayList<>(failedTests));
       unavailable =
-          unavailable == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(unavailable));
+          unavailable == null ? null : Collections.unmodifiableList(new ArrayList<>(unavailable));
       nextActions =
-          nextActions == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(nextActions));
+          nextActions == null ? null : Collections.unmodifiableList(new ArrayList<>(nextActions));
       warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
     }
   }

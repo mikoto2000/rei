@@ -172,21 +172,20 @@ class PlanOAuthTest {
   @Test
   void concurrentRefreshIsSingleFlightAcrossInstances() throws Exception {
     store()
-        .locked(
-            s -> {
-              s.save(
-                  "default",
-                  new TokenSet(
-                      "oaiapp_test",
-                      "sub",
-                      null,
-                      "id",
-                      "old",
-                      "old-refresh",
-                      Set.of("chatgpt.tokens.use.direct"),
-                      clock.instant().getEpochSecond()));
-              return null;
-            });
+        .locked(s -> {
+          s.save(
+              "default",
+              new TokenSet(
+                  "oaiapp_test",
+                  "sub",
+                  null,
+                  "id",
+                  "old",
+                  "old-refresh",
+                  Set.of("chatgpt.tokens.use.direct"),
+                  clock.instant().getEpochSecond()));
+          return null;
+        });
     AtomicInteger refreshes = new AtomicInteger();
     PlanTransport transport =
         (u, m, h, b, t, c) -> {
@@ -209,21 +208,20 @@ class PlanOAuthTest {
   @Test
   void terminalRefreshFailureClearsTokensButNetworkFailureKeepsThem() {
     store()
-        .locked(
-            s -> {
-              s.save(
-                  "default",
-                  new TokenSet(
-                      "oaiapp_test",
-                      "sub",
-                      null,
-                      "id",
-                      "old",
-                      "refresh",
-                      Set.of("chatgpt.tokens.use.direct"),
-                      0));
-              return null;
-            });
+        .locked(s -> {
+          s.save(
+              "default",
+              new TokenSet(
+                  "oaiapp_test",
+                  "sub",
+                  null,
+                  "id",
+                  "old",
+                  "refresh",
+                  Set.of("chatgpt.tokens.use.direct"),
+                  0));
+          return null;
+        });
     var network =
         new PlanOAuth(
             store(),
@@ -248,11 +246,10 @@ class PlanOAuthTest {
   @Test
   void logoutUsesDiscoveryAndReportsUnconfirmedRevocation() {
     store()
-        .locked(
-            s -> {
-              s.save("default", ProtectedCredentialStoreTest.tokens("access", "refresh"));
-              return null;
-            });
+        .locked(s -> {
+          s.save("default", ProtectedCredentialStoreTest.tokens("access", "refresh"));
+          return null;
+        });
     var oauth =
         new PlanOAuth(
             store(),

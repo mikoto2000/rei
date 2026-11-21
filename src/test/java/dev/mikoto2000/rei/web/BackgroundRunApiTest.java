@@ -74,10 +74,9 @@ class BackgroundRunApiTest {
     when(summaries.summarize(URI.create("https://example.com")))
         .thenReturn(new SummaryResult(URI.create("https://example.com"), "summary", null));
     when(images.generate(any()))
-        .thenAnswer(
-            a ->
-                ImageGenerationResult.success(
-                    ((ImageGenerationRequest) a.getArgument(0)).outputPath(), "image"));
+        .thenAnswer(a ->
+            ImageGenerationResult.success(
+                ((ImageGenerationRequest) a.getArgument(0)).outputPath(), "image"));
     try (var runs = new RunService(registry, bus, events, cancellation, router::cancelQueued);
         var bridge = new SseBridge(bus, runs, "")) {
       var submit =
@@ -182,17 +181,16 @@ class BackgroundRunApiTest {
     var summaries = mock(WebPageSummarizerService.class);
     var images = mock(ImageGenerationService.class);
     when(summaries.summarize(any()))
-        .thenAnswer(
-            a -> {
-              started.countDown();
-              try {
-                new CountDownLatch(1).await();
-              } catch (InterruptedException e) {
-                interrupted.countDown();
-                throw new CancellationException();
-              }
-              return null;
-            });
+        .thenAnswer(a -> {
+          started.countDown();
+          try {
+            new CountDownLatch(1).await();
+          } catch (InterruptedException e) {
+            interrupted.countDown();
+            throw new CancellationException();
+          }
+          return null;
+        });
     when(images.generate(any()))
         .thenReturn(ImageGenerationResult.success(directory.resolve("image.png")));
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -210,11 +208,10 @@ class BackgroundRunApiTest {
       try (var runs = new RunService(registry, bus, events, cancellation, router::cancelQueued)) {
         var otherCompleted = new CompletableFuture<String>();
         var completion =
-            bus.subscribe(
-                event -> {
-                  if (event.type() == AgentEventType.AGENT_RUN_COMPLETED
-                      && two.id().equals(event.projectId())) otherCompleted.complete(event.runId());
-                });
+            bus.subscribe(event -> {
+              if (event.type() == AgentEventType.AGENT_RUN_COMPLETED
+                  && two.id().equals(event.projectId())) otherCompleted.complete(event.runId());
+            });
         try {
           var submit =
               new BackgroundRunSubmitService(

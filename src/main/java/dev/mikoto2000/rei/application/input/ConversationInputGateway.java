@@ -268,9 +268,8 @@ public final class ConversationInputGateway {
     var cutoff = clock.instant().minus(retention);
     accepted
         .values()
-        .removeIf(
-            entry ->
-                !entry.acceptedAt().isAfter(cutoff)
-                    && !containsRun.test(entry.context().projectId(), entry.context().runId()));
+        .removeIf(entry ->
+            !entry.acceptedAt().isAfter(cutoff)
+                && !containsRun.test(entry.context().projectId(), entry.context().runId()));
   }
 }

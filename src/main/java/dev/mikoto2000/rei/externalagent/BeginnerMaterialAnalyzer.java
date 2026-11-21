@@ -103,9 +103,7 @@ public final class BeginnerMaterialAnalyzer {
       Set<String> knowledgeAfter) {
     public Chapter {
       explained =
-          explained == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(explained));
+          explained == null ? null : Collections.unmodifiableList(new ArrayList<>(explained));
       required = required == null ? null : Collections.unmodifiableList(new ArrayList<>(required));
       implicitPrerequisites =
           implicitPrerequisites == null
@@ -113,22 +111,16 @@ public final class BeginnerMaterialAnalyzer {
               : Collections.unmodifiableList(new ArrayList<>(implicitPrerequisites));
       goals = goals == null ? null : Collections.unmodifiableList(new ArrayList<>(goals));
       exercises =
-          exercises == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(exercises));
+          exercises == null ? null : Collections.unmodifiableList(new ArrayList<>(exercises));
       questions =
-          questions == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(questions));
+          questions == null ? null : Collections.unmodifiableList(new ArrayList<>(questions));
       expectedResults =
           expectedResults == null
               ? null
               : Collections.unmodifiableList(new ArrayList<>(expectedResults));
       files = files == null ? null : Collections.unmodifiableList(new ArrayList<>(files));
       environment =
-          environment == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(environment));
+          environment == null ? null : Collections.unmodifiableList(new ArrayList<>(environment));
       knowledgeBefore =
           knowledgeBefore == null
               ? null
@@ -153,9 +145,7 @@ public final class BeginnerMaterialAnalyzer {
     public Analysis {
       chapters = chapters == null ? null : Collections.unmodifiableList(new ArrayList<>(chapters));
       unreadFiles =
-          unreadFiles == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(unreadFiles));
+          unreadFiles == null ? null : Collections.unmodifiableList(new ArrayList<>(unreadFiles));
       warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
     }
   }

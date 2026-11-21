@@ -67,20 +67,19 @@ public final class ConversationAdmissionStore implements AutoCloseable {
   /** 状況を判断する根拠を得るため、会話受付保存先を観測する。 */
   public void observe(dev.mikoto2000.rei.event.AgentEventBus events) {
     subscription =
-        events.subscribe(
-            event -> {
-              if (event.runId() == null) return;
-              RunStatus next =
-                  switch (event.type()) {
-                    case AGENT_RUN_STARTED -> RunStatus.RUNNING;
-                    case AGENT_RUN_COMPLETED -> RunStatus.COMPLETED;
-                    case AGENT_RUN_FAILED -> RunStatus.FAILED;
-                    case AGENT_RUN_CANCELLED -> RunStatus.CANCELLED;
-                    default -> null;
-                  };
-              if (next != null && !(next.isTerminal() && deferredTerminals.contains(event.runId())))
-                transition(event.runId(), next);
-            });
+        events.subscribe(event -> {
+          if (event.runId() == null) return;
+          RunStatus next =
+              switch (event.type()) {
+                case AGENT_RUN_STARTED -> RunStatus.RUNNING;
+                case AGENT_RUN_COMPLETED -> RunStatus.COMPLETED;
+                case AGENT_RUN_FAILED -> RunStatus.FAILED;
+                case AGENT_RUN_CANCELLED -> RunStatus.CANCELLED;
+                default -> null;
+              };
+          if (next != null && !(next.isTerminal() && deferredTerminals.contains(event.runId())))
+            transition(event.runId(), next);
+        });
   }
 
   /**
@@ -148,30 +147,29 @@ public final class ConversationAdmissionStore implements AutoCloseable {
 
   /** 処理を継続できる状態に戻すため、会話受付保存先を復旧する。 */
   private void recover() {
-    database.transaction(
-        db -> {
-          var lost = new ArrayList<String>();
-          try (var query = db.createStatement();
-              var rows =
-                  query.executeQuery(
-                      "SELECT run_id,owner_instance,owner_pid,owner_start FROM conversation_admissions WHERE active=1 OR status IN ('QUEUED','RUNNING','WAITING','WAITING_APPROVAL')")) {
-            while (rows.next()) {
-              long pid = rows.getLong(3);
-              String start = rows.getString(4), owner = rows.getString(2);
-              boolean alive =
-                  start != null
-                      && ProcessHandle.of(pid)
-                          .filter(ProcessHandle::isAlive)
-                          .flatMap(p -> p.info().startInstant())
-                          .map(t -> t.toString().equals(start))
-                          .orElse(false);
-              if (!alive || pid == ProcessHandle.current().pid() && !OPEN.contains(owner))
-                lost.add(rows.getString(1));
-            }
-          }
-          for (String id : lost) unknown(db, id);
-          return null;
-        });
+    database.transaction(db -> {
+      var lost = new ArrayList<String>();
+      try (var query = db.createStatement();
+          var rows =
+              query.executeQuery(
+                  "SELECT run_id,owner_instance,owner_pid,owner_start FROM conversation_admissions WHERE active=1 OR status IN ('QUEUED','RUNNING','WAITING','WAITING_APPROVAL')")) {
+        while (rows.next()) {
+          long pid = rows.getLong(3);
+          String start = rows.getString(4), owner = rows.getString(2);
+          boolean alive =
+              start != null
+                  && ProcessHandle.of(pid)
+                      .filter(ProcessHandle::isAlive)
+                      .flatMap(p -> p.info().startInstant())
+                      .map(t -> t.toString().equals(start))
+                      .orElse(false);
+          if (!alive || pid == ProcessHandle.current().pid() && !OPEN.contains(owner))
+            lost.add(rows.getString(1));
+        }
+      }
+      for (String id : lost) unknown(db, id);
+      return null;
+    });
   }
 
   /** 内容の同一性を照合するためのハッシュ値を求める。 */
@@ -292,111 +290,105 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     if (!metadata.sessionId().equals(context.conversationId())
         || !metadata.projectId().equals(context.projectId()))
       throw new IllegalArgumentException("Admission ownership mismatch");
-    return database.withWriterLock(
-        () -> {
-          if (closed) throw new IllegalStateException("Admission store closed");
-          return database.transaction(
-              db -> {
-                if (mcp != null) {
-                  if (context.requestSource() != AgentRunContext.RequestSource.MCP
-                      || context.mode() != AgentRunContext.Mode.READ_ONLY)
-                    throw new IllegalArgumentException("MCP requires READ_ONLY");
-                  try (var query =
-                      db.prepareStatement(
-                          "SELECT fingerprint,run_id,expires_at FROM mcp_requests WHERE principal='local-mcp' AND request_hash=?")) {
-                    query.setString(1, mcp.requestHash());
-                    try (var rows = query.executeQuery()) {
-                      if (rows.next()) {
-                        if (!clock.instant().isBefore(Instant.parse(rows.getString(3))))
-                          throw new IdempotencyExpiredException();
-                        if (!mcp.fingerprint().equals(rows.getString(1)))
-                          throw new IdempotencyConflictException();
-                        return new Receipt(
-                            snapshot(db, rows.getString(2)).orElseThrow().context(), true);
-                      }
-                    }
-                  }
-                  try (var query = db.prepareStatement("SELECT 1 FROM sessions WHERE session_id=?")) {
-                    query.setString(1, metadata.sessionId());
-                    try (var rows = query.executeQuery()) {
-                      if (rows.next())
-                        try (var owner =
-                            db.prepareStatement(
-                                "SELECT 1 FROM mcp_sessions WHERE session_id=? AND principal='local-mcp' AND project_id=?")) {
-                          owner.setString(1, metadata.sessionId());
-                          owner.setString(2, metadata.projectId());
-                          try (var owned = owner.executeQuery()) {
-                            if (!owned.next()) throw new ResourceNotFoundException("Session");
-                          }
-                        }
-                    }
+    return database.withWriterLock(() -> {
+      if (closed) throw new IllegalStateException("Admission store closed");
+      return database.transaction(db -> {
+        if (mcp != null) {
+          if (context.requestSource() != AgentRunContext.RequestSource.MCP
+              || context.mode() != AgentRunContext.Mode.READ_ONLY)
+            throw new IllegalArgumentException("MCP requires READ_ONLY");
+          try (var query =
+              db.prepareStatement(
+                  "SELECT fingerprint,run_id,expires_at FROM mcp_requests WHERE principal='local-mcp' AND request_hash=?")) {
+            query.setString(1, mcp.requestHash());
+            try (var rows = query.executeQuery()) {
+              if (rows.next()) {
+                if (!clock.instant().isBefore(Instant.parse(rows.getString(3))))
+                  throw new IdempotencyExpiredException();
+                if (!mcp.fingerprint().equals(rows.getString(1)))
+                  throw new IdempotencyConflictException();
+                return new Receipt(snapshot(db, rows.getString(2)).orElseThrow().context(), true);
+              }
+            }
+          }
+          try (var query = db.prepareStatement("SELECT 1 FROM sessions WHERE session_id=?")) {
+            query.setString(1, metadata.sessionId());
+            try (var rows = query.executeQuery()) {
+              if (rows.next())
+                try (var owner =
+                    db.prepareStatement(
+                        "SELECT 1 FROM mcp_sessions WHERE session_id=? AND principal='local-mcp' AND project_id=?")) {
+                  owner.setString(1, metadata.sessionId());
+                  owner.setString(2, metadata.projectId());
+                  try (var owned = owner.executeQuery()) {
+                    if (!owned.next()) throw new ResourceNotFoundException("Session");
                   }
                 }
-                if (hash != null) {
-                  var old = receipt(db, hash);
-                  if (old != null) {
-                    unexpired(old);
-                    if (!old.fingerprint().equals(fingerprint))
-                      throw new IdempotencyConflictException();
-                    return new Receipt(snapshot(db, old.runId()).orElseThrow().context(), true);
-                  }
-                  capacity(db, true);
-                }
-                reserve(db, context);
-                long revision = 1;
-                SessionMetadata next = metadata;
-                try (var query =
-                    db.prepareStatement("SELECT record,revision FROM sessions WHERE session_id=?")) {
-                  query.setString(1, metadata.sessionId());
-                  try (var rows = query.executeQuery()) {
-                    if (rows.next()) {
-                      var old =
-                          StorageDatabase.JSON.readValue(rows.getString(1), SessionMetadata.class);
-                      // 別のプロジェクトの情報を、この作業の対象として扱わせない。
-                      if (!old.projectId().equals(metadata.projectId())
-                          || !old.createdAt().equals(metadata.createdAt())
-                          || !old.title().equals(metadata.title()))
-                        throw new IllegalArgumentException("Immutable Session metadata");
-                      revision = Math.addExact(rows.getLong(2), 1);
-                      next = metadata.touched(old.updatedAt());
-                    }
-                  }
-                }
-                SqliteSessionRepository.put(db, next, revision, null);
-                if (hash != null)
-                  try (var write = db.prepareStatement("INSERT INTO chat_receipts VALUES(?,?,?,?)")) {
-                    write.setString(1, hash);
-                    write.setString(2, fingerprint);
-                    write.setString(3, context.runId());
-                    write.setString(4, clock.instant().plus(RECEIPT_RETENTION).toString());
-                    write.executeUpdate();
-                  }
-                if (mcp != null) {
-                  try (var write =
-                      db.prepareStatement(
-                          "INSERT OR IGNORE INTO mcp_sessions VALUES(?,'local-mcp',?)")) {
-                    write.setString(1, metadata.sessionId());
-                    write.setString(2, metadata.projectId());
-                    write.executeUpdate();
-                  }
-                  try (var write =
-                      db.prepareStatement(
-                          "INSERT INTO mcp_requests(principal,request_hash,fingerprint,project_id,session_id,run_id,created_at,expires_at,total_criteria,criteria_json) VALUES('local-mcp',?,?,?,?,?,?,?,?,?)")) {
-                    write.setString(1, mcp.requestHash());
-                    write.setString(2, mcp.fingerprint());
-                    write.setString(3, metadata.projectId());
-                    write.setString(4, metadata.sessionId());
-                    write.setString(5, context.runId());
-                    write.setString(6, clock.instant().toString());
-                    write.setString(7, clock.instant().plus(mcp.retention()).toString());
-                    write.setInt(8, mcp.totalCriteria());
-                    write.setString(9, StorageDatabase.JSON.writeValueAsString(mcp.criteria()));
-                    write.executeUpdate();
-                  }
-                }
-                return new Receipt(context, false);
-              });
-        });
+            }
+          }
+        }
+        if (hash != null) {
+          var old = receipt(db, hash);
+          if (old != null) {
+            unexpired(old);
+            if (!old.fingerprint().equals(fingerprint)) throw new IdempotencyConflictException();
+            return new Receipt(snapshot(db, old.runId()).orElseThrow().context(), true);
+          }
+          capacity(db, true);
+        }
+        reserve(db, context);
+        long revision = 1;
+        SessionMetadata next = metadata;
+        try (var query =
+            db.prepareStatement("SELECT record,revision FROM sessions WHERE session_id=?")) {
+          query.setString(1, metadata.sessionId());
+          try (var rows = query.executeQuery()) {
+            if (rows.next()) {
+              var old = StorageDatabase.JSON.readValue(rows.getString(1), SessionMetadata.class);
+              // 別のプロジェクトの情報を、この作業の対象として扱わせない。
+              if (!old.projectId().equals(metadata.projectId())
+                  || !old.createdAt().equals(metadata.createdAt())
+                  || !old.title().equals(metadata.title()))
+                throw new IllegalArgumentException("Immutable Session metadata");
+              revision = Math.addExact(rows.getLong(2), 1);
+              next = metadata.touched(old.updatedAt());
+            }
+          }
+        }
+        SqliteSessionRepository.put(db, next, revision, null);
+        if (hash != null)
+          try (var write = db.prepareStatement("INSERT INTO chat_receipts VALUES(?,?,?,?)")) {
+            write.setString(1, hash);
+            write.setString(2, fingerprint);
+            write.setString(3, context.runId());
+            write.setString(4, clock.instant().plus(RECEIPT_RETENTION).toString());
+            write.executeUpdate();
+          }
+        if (mcp != null) {
+          try (var write =
+              db.prepareStatement("INSERT OR IGNORE INTO mcp_sessions VALUES(?,'local-mcp',?)")) {
+            write.setString(1, metadata.sessionId());
+            write.setString(2, metadata.projectId());
+            write.executeUpdate();
+          }
+          try (var write =
+              db.prepareStatement(
+                  "INSERT INTO mcp_requests(principal,request_hash,fingerprint,project_id,session_id,run_id,created_at,expires_at,total_criteria,criteria_json) VALUES('local-mcp',?,?,?,?,?,?,?,?,?)")) {
+            write.setString(1, mcp.requestHash());
+            write.setString(2, mcp.fingerprint());
+            write.setString(3, metadata.projectId());
+            write.setString(4, metadata.sessionId());
+            write.setString(5, context.runId());
+            write.setString(6, clock.instant().toString());
+            write.setString(7, clock.instant().plus(mcp.retention()).toString());
+            write.setInt(8, mcp.totalCriteria());
+            write.setString(9, StorageDatabase.JSON.writeValueAsString(mcp.criteria()));
+            write.executeUpdate();
+          }
+        }
+        return new Receipt(context, false);
+      });
+    });
   }
 
   /** 会話履歴と受付記録の管理に関する許容件数を処理する。 */
@@ -419,21 +411,19 @@ public final class ConversationAdmissionStore implements AutoCloseable {
    * <p>Checkpoint/Scheduler entry points also reserve known human Sessions before enqueue.
    */
   public void reserveKnownSession(AgentRunContext context) {
-    database.transaction(
-        db -> {
-          try (var query =
-              db.prepareStatement("SELECT project_id FROM sessions WHERE session_id=?")) {
-            query.setString(1, context.conversationId());
-            try (var rows = query.executeQuery()) {
-              if (rows.next()) {
-                if (!rows.getString(1).equals(context.projectId()))
-                  throw new SessionConflictException();
-                reserve(db, context);
-              }
-            }
+    database.transaction(db -> {
+      try (var query = db.prepareStatement("SELECT project_id FROM sessions WHERE session_id=?")) {
+        query.setString(1, context.conversationId());
+        try (var rows = query.executeQuery()) {
+          if (rows.next()) {
+            if (!rows.getString(1).equals(context.projectId()))
+              throw new SessionConflictException();
+            reserve(db, context);
           }
-          return null;
-        });
+        }
+      }
+      return null;
+    });
   }
 
   /** 競合する処理と利用範囲を調整するため、会話受付保存先を確保する。 */
@@ -494,37 +484,36 @@ public final class ConversationAdmissionStore implements AutoCloseable {
    * <p>Shell's existing exclusive queue remains pending until the preceding runner has cleaned up.
    */
   public void startExecution(AgentRunContext context) {
-    database.transaction(
-        db -> {
-          var saved = snapshot(db, context.runId());
-          if (saved.isEmpty()) return null;
-          // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
-          if (!saved.get().context().equals(context) || saved.get().status().isTerminal())
-            throw new IllegalStateException("Run cannot start");
-          try (var query =
-              db.prepareStatement(
-                  "SELECT run_id,status FROM conversation_admissions WHERE project_id=? AND session_id=? AND (active=1 OR status IN ('WAITING','WAITING_APPROVAL')) AND run_id<>?")) {
-            query.setString(1, context.projectId());
-            query.setString(2, context.conversationId());
-            query.setString(3, context.runId());
-            try (var rows = query.executeQuery()) {
-              if (rows.next())
-                throw new SessionBusyException(
-                    context.projectId(),
-                    context.conversationId(),
-                    rows.getString(1),
-                    rows.getString(2));
-            }
-          }
-          try (var write =
-              db.prepareStatement(
-                  "UPDATE conversation_admissions SET active=1 WHERE run_id=? AND owner_instance=?")) {
-            write.setString(1, context.runId());
-            write.setString(2, instance);
-            if (write.executeUpdate() != 1) throw new IllegalStateException("Run owner mismatch");
-          }
-          return null;
-        });
+    database.transaction(db -> {
+      var saved = snapshot(db, context.runId());
+      if (saved.isEmpty()) return null;
+      // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
+      if (!saved.get().context().equals(context) || saved.get().status().isTerminal())
+        throw new IllegalStateException("Run cannot start");
+      try (var query =
+          db.prepareStatement(
+              "SELECT run_id,status FROM conversation_admissions WHERE project_id=? AND session_id=? AND (active=1 OR status IN ('WAITING','WAITING_APPROVAL')) AND run_id<>?")) {
+        query.setString(1, context.projectId());
+        query.setString(2, context.conversationId());
+        query.setString(3, context.runId());
+        try (var rows = query.executeQuery()) {
+          if (rows.next())
+            throw new SessionBusyException(
+                context.projectId(),
+                context.conversationId(),
+                rows.getString(1),
+                rows.getString(2));
+        }
+      }
+      try (var write =
+          db.prepareStatement(
+              "UPDATE conversation_admissions SET active=1 WHERE run_id=? AND owner_instance=?")) {
+        write.setString(1, context.runId());
+        write.setString(2, instance);
+        if (write.executeUpdate() != 1) throw new IllegalStateException("Run owner mismatch");
+      }
+      return null;
+    });
   }
 
   /** 会話履歴と受付記録の管理に関するMCP受付失敗を処理する。 */
@@ -533,45 +522,42 @@ public final class ConversationAdmissionStore implements AutoCloseable {
         failure instanceof java.util.concurrent.RejectedExecutionException
             ? "CAPACITY_EXCEEDED"
             : failure instanceof SessionBusyException ? "SESSION_BUSY" : "INTERNAL_ERROR";
-    database.transaction(
-        db -> {
-          try (var q =
-              db.prepareStatement(
-                  "UPDATE mcp_requests SET admission_error=? WHERE run_id=? AND principal='local-mcp'")) {
-            q.setString(1, code);
-            q.setString(2, id);
-            q.executeUpdate();
-            return null;
-          }
-        });
+    database.transaction(db -> {
+      try (var q =
+          db.prepareStatement(
+              "UPDATE mcp_requests SET admission_error=? WHERE run_id=? AND principal='local-mcp'")) {
+        q.setString(1, code);
+        q.setString(2, id);
+        q.executeUpdate();
+        return null;
+      }
+    });
   }
 
   /** 会話履歴と受付記録の管理に関する状態の遷移を処理する。 */
   public void transition(String id, RunStatus next) {
-    database.transaction(
-        db -> {
-          var old = snapshot(db, id);
-          // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
-          if (old.isEmpty() || old.get().status().isTerminal() || next == RunStatus.QUEUED)
-            return null;
-          try (var write =
-              db.prepareStatement(
-                  "UPDATE conversation_admissions SET status=?,started=COALESCE(started,?),completed=? WHERE run_id=? AND owner_instance=?")) {
-            write.setString(1, next.name());
-            write.setString(2, next == RunStatus.RUNNING ? clock.instant().toString() : null);
-            write.setString(3, next.isTerminal() ? clock.instant().toString() : null);
-            write.setString(4, id);
-            write.setString(5, instance);
-            if (write.executeUpdate() != 1) return null;
-          }
-          try (var update =
-              db.prepareStatement("UPDATE mcp_requests SET state_updated_at=? WHERE run_id=?")) {
-            update.setString(1, clock.instant().toString());
-            update.setString(2, id);
-            update.executeUpdate();
-          }
-          return null;
-        });
+    database.transaction(db -> {
+      var old = snapshot(db, id);
+      // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
+      if (old.isEmpty() || old.get().status().isTerminal() || next == RunStatus.QUEUED) return null;
+      try (var write =
+          db.prepareStatement(
+              "UPDATE conversation_admissions SET status=?,started=COALESCE(started,?),completed=? WHERE run_id=? AND owner_instance=?")) {
+        write.setString(1, next.name());
+        write.setString(2, next == RunStatus.RUNNING ? clock.instant().toString() : null);
+        write.setString(3, next.isTerminal() ? clock.instant().toString() : null);
+        write.setString(4, id);
+        write.setString(5, instance);
+        if (write.executeUpdate() != 1) return null;
+      }
+      try (var update =
+          db.prepareStatement("UPDATE mcp_requests SET state_updated_at=? WHERE run_id=?")) {
+        update.setString(1, clock.instant().toString());
+        update.setString(2, id);
+        update.executeUpdate();
+      }
+      return null;
+    });
   }
 
   /**
@@ -580,74 +566,69 @@ public final class ConversationAdmissionStore implements AutoCloseable {
    * <p>Adopt only a durable external wait whose previous admission owner has exited.
    */
   public boolean claimWaiting(AgentRunContext context) {
-    return database.transaction(
-        db -> {
-          var saved = snapshot(db, context.runId());
-          if (saved.isEmpty()) return true;
-          if (!saved.get().status().isWaiting() || !saved.get().context().equals(context))
+    return database.transaction(db -> {
+      var saved = snapshot(db, context.runId());
+      if (saved.isEmpty()) return true;
+      if (!saved.get().status().isWaiting() || !saved.get().context().equals(context)) return false;
+      try (var query =
+          db.prepareStatement(
+              "SELECT owner_instance,owner_pid,owner_start FROM conversation_admissions WHERE run_id=?")) {
+        query.setString(1, context.runId());
+        try (var rows = query.executeQuery()) {
+          if (!rows.next()) return false;
+          if (instance.equals(rows.getString(1))) return true;
+          long pid = rows.getLong(2);
+          String start = rows.getString(3);
+          boolean alive =
+              start != null
+                  && ProcessHandle.of(pid)
+                      .filter(ProcessHandle::isAlive)
+                      .flatMap(p -> p.info().startInstant())
+                      .map(t -> t.toString().equals(start))
+                      .orElse(false);
+          if (alive && (pid != ProcessHandle.current().pid() || OPEN.contains(rows.getString(1))))
             return false;
-          try (var query =
-              db.prepareStatement(
-                  "SELECT owner_instance,owner_pid,owner_start FROM conversation_admissions WHERE run_id=?")) {
-            query.setString(1, context.runId());
-            try (var rows = query.executeQuery()) {
-              if (!rows.next()) return false;
-              if (instance.equals(rows.getString(1))) return true;
-              long pid = rows.getLong(2);
-              String start = rows.getString(3);
-              boolean alive =
-                  start != null
-                      && ProcessHandle.of(pid)
-                          .filter(ProcessHandle::isAlive)
-                          .flatMap(p -> p.info().startInstant())
-                          .map(t -> t.toString().equals(start))
-                          .orElse(false);
-              if (alive
-                  && (pid != ProcessHandle.current().pid() || OPEN.contains(rows.getString(1))))
-                return false;
-            }
-          }
-          try (var write =
-              db.prepareStatement(
-                  "UPDATE conversation_admissions SET owner_instance=?,owner_pid=?,owner_start=? WHERE run_id=?")) {
-            write.setString(1, instance);
-            write.setLong(2, ProcessHandle.current().pid());
-            write.setString(
-                3,
-                ProcessHandle.current().info().startInstant().map(Instant::toString).orElse(null));
-            write.setString(4, context.runId());
-            write.executeUpdate();
-          }
-          return true;
-        });
+        }
+      }
+      try (var write =
+          db.prepareStatement(
+              "UPDATE conversation_admissions SET owner_instance=?,owner_pid=?,owner_start=? WHERE run_id=?")) {
+        write.setString(1, instance);
+        write.setLong(2, ProcessHandle.current().pid());
+        write.setString(
+            3, ProcessHandle.current().info().startInstant().map(Instant::toString).orElse(null));
+        write.setString(4, context.runId());
+        write.executeUpdate();
+      }
+      return true;
+    });
   }
 
   /** 後続の処理が利用できるよう、会話受付保存先を解放する。 */
   public void release(String id) {
-    database.transaction(
-        db -> {
-          try (var query =
-              db.prepareStatement(
-                  "SELECT owner_instance FROM conversation_admissions WHERE run_id=?")) {
-            query.setString(1, id);
-            try (var rows = query.executeQuery()) {
-              if (!rows.next() || !instance.equals(rows.getString(1))) return null;
-            }
-          }
-          var old = snapshot(db, id);
-          if (old.isEmpty()) return null;
-          // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
-          if (!old.get().status().isTerminal() && !old.get().status().isWaiting()) unknown(db, id);
-          else
-            try (var write =
-                db.prepareStatement(
-                    "UPDATE conversation_admissions SET active=0 WHERE run_id=? AND owner_instance=?")) {
-              write.setString(1, id);
-              write.setString(2, instance);
-              write.executeUpdate();
-            }
-          return null;
-        });
+    database.transaction(db -> {
+      try (var query =
+          db.prepareStatement(
+              "SELECT owner_instance FROM conversation_admissions WHERE run_id=?")) {
+        query.setString(1, id);
+        try (var rows = query.executeQuery()) {
+          if (!rows.next() || !instance.equals(rows.getString(1))) return null;
+        }
+      }
+      var old = snapshot(db, id);
+      if (old.isEmpty()) return null;
+      // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
+      if (!old.get().status().isTerminal() && !old.get().status().isWaiting()) unknown(db, id);
+      else
+        try (var write =
+            db.prepareStatement(
+                "UPDATE conversation_admissions SET active=0 WHERE run_id=? AND owner_instance=?")) {
+          write.setString(1, id);
+          write.setString(2, instance);
+          write.executeUpdate();
+        }
+      return null;
+    });
   }
 
   /** 確定できない結果を、判定不能の情報として表す。 */
@@ -670,30 +651,28 @@ public final class ConversationAdmissionStore implements AutoCloseable {
   /** 会話履歴と受付記録の管理で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public void close() {
-    database.withWriterLock(
-        () -> {
-          if (closed) return;
-          closed = true;
-          if (subscription != null) subscription.unsubscribe();
-          try {
-            database.transaction(
-                db -> {
-                  var owned = new ArrayList<String>();
-                  try (var query =
-                      db.prepareStatement(
-                          "SELECT run_id FROM conversation_admissions WHERE owner_instance=? AND (active=1 OR status IN ('QUEUED','RUNNING','WAITING','WAITING_APPROVAL'))")) {
-                    query.setString(1, instance);
-                    try (var rows = query.executeQuery()) {
-                      while (rows.next()) owned.add(rows.getString(1));
-                    }
-                  }
-                  for (String id : owned) unknown(db, id);
-                  return null;
-                });
-          } finally {
-            OPEN.remove(instance);
-            deferredTerminals.clear();
+    database.withWriterLock(() -> {
+      if (closed) return;
+      closed = true;
+      if (subscription != null) subscription.unsubscribe();
+      try {
+        database.transaction(db -> {
+          var owned = new ArrayList<String>();
+          try (var query =
+              db.prepareStatement(
+                  "SELECT run_id FROM conversation_admissions WHERE owner_instance=? AND (active=1 OR status IN ('QUEUED','RUNNING','WAITING','WAITING_APPROVAL'))")) {
+            query.setString(1, instance);
+            try (var rows = query.executeQuery()) {
+              while (rows.next()) owned.add(rows.getString(1));
+            }
           }
+          for (String id : owned) unknown(db, id);
+          return null;
         });
+      } finally {
+        OPEN.remove(instance);
+        deferredTerminals.clear();
+      }
+    });
   }
 }

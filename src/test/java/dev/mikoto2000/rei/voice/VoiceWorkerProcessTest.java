@@ -57,10 +57,9 @@ class VoiceWorkerProcessTest {
       assertThat(worker.isAlive()).isFalse();
       worker.close();
     }
-    assertThatThrownBy(
-            () ->
-                VoiceWorkerProcess.start(
-                    launch("badhello"), Duration.ofSeconds(10), Duration.ofSeconds(1)))
+    assertThatThrownBy(() ->
+            VoiceWorkerProcess.start(
+                launch("badhello"), Duration.ofSeconds(10), Duration.ofSeconds(1)))
         .isInstanceOf(IOException.class);
   }
 
@@ -95,22 +94,20 @@ class VoiceWorkerProcessTest {
     var failure = new AtomicReference<Throwable>();
     var interruptPreserved = new AtomicBoolean();
     var startup =
-        new Thread(
-            () -> {
-              try {
-                var ignored =
-                    VoiceWorkerProcess.start(
-                        command, Duration.ofSeconds(10), Duration.ofSeconds(3));
-                try (ignored) {
-                  failure.set(new AssertionError("Interrupted startup must not complete"));
-                }
-              } catch (Throwable expected) {
-                failure.set(expected);
-              } finally {
-                vad.close();
-                interruptPreserved.set(Thread.currentThread().isInterrupted());
-              }
-            });
+        new Thread(() -> {
+          try {
+            var ignored =
+                VoiceWorkerProcess.start(command, Duration.ofSeconds(10), Duration.ofSeconds(3));
+            try (ignored) {
+              failure.set(new AssertionError("Interrupted startup must not complete"));
+            }
+          } catch (Throwable expected) {
+            failure.set(expected);
+          } finally {
+            vad.close();
+            interruptPreserved.set(Thread.currentThread().isInterrupted());
+          }
+        });
     startup.setDaemon(true);
     startup.start();
     try {
@@ -160,13 +157,12 @@ class VoiceWorkerProcessTest {
       if (mode.equals("slowexit"))
         Runtime.getRuntime()
             .addShutdownHook(
-                new Thread(
-                    () -> {
-                      try {
-                        Thread.sleep(30000);
-                      } catch (InterruptedException ignored) {
-                      }
-                    }));
+                new Thread(() -> {
+                  try {
+                    Thread.sleep(30000);
+                  } catch (InterruptedException ignored) {
+                  }
+                }));
       if (mode.equals("waithello")) {
         var marker = Path.of(args[1]);
         var staged = marker.resolveSibling(marker.getFileName() + ".tmp");

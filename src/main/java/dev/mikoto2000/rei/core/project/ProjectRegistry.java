@@ -11,8 +11,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.WeakHashMap;
 import java.util.UUID;
+import java.util.WeakHashMap;
 
 /**
  * プロジェクトを登録して管理し、識別子から対象を参照できるようにする。
@@ -41,10 +41,8 @@ public final class ProjectRegistry {
     Path normalized = file.toAbsolutePath().normalize();
     synchronized (REGISTRIES) {
       // Keep the actual weak key alive while any registry for this path uses the state.
-      this.file = REGISTRIES.keySet().stream()
-          .filter(normalized::equals)
-          .findFirst()
-          .orElse(normalized);
+      this.file =
+          REGISTRIES.keySet().stream().filter(normalized::equals).findFirst().orElse(normalized);
       this.state = REGISTRIES.computeIfAbsent(this.file, ignored -> new RegistryState());
     }
     synchronized (state) {
@@ -94,10 +92,7 @@ public final class ProjectRegistry {
       var entries = read();
       for (var entry : entries) if (Path.of(entry.path()).equals(canonical)) return entry.context();
       var entry =
-          new Entry(
-              UUID.randomUUID().toString(),
-              displayName(canonical),
-              canonical.toString());
+          new Entry(UUID.randomUUID().toString(), displayName(canonical), canonical.toString());
       entries.add(entry);
       save(entries);
       return entry.context();

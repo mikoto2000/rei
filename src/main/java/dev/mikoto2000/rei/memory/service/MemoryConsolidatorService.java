@@ -106,11 +106,11 @@ public class MemoryConsolidatorService {
         jdbcClient
             .sql(
                 """
-        SELECT content FROM SPRING_AI_CHAT_MEMORY
-        WHERE type IN ('USER', 'ASSISTANT')
-        ORDER BY timestamp DESC
-        LIMIT 200
-        """)
+                SELECT content FROM SPRING_AI_CHAT_MEMORY
+                WHERE type IN ('USER', 'ASSISTANT')
+                ORDER BY timestamp DESC
+                LIMIT 200
+                """)
             .query((rs, rowNum) -> rs.getString("content"))
             .list();
     if (messages.isEmpty()) {
@@ -231,10 +231,8 @@ public class MemoryConsolidatorService {
           memoryClient
               .get()
               .prompt(prompt)
-              .advisors(
-                  advisor ->
-                      advisor.param(
-                          ChatMemory.CONVERSATION_ID, ConversationIds.tool(conversation)));
+              .advisors(advisor ->
+                  advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool(conversation)));
       if (!budget.tokenLimitEnabled()) {
         invoked = true;
         var text = request.call().content();

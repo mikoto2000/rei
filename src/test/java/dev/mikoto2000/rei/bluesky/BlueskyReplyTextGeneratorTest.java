@@ -45,7 +45,8 @@ class BlueskyReplyTextGeneratorTest {
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     when(modelHolderService.get()).thenReturn("qwen-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse()).thenReturn(Flux.just(response("  返信"), response("本文  ")));
     BlueskyReplyTextGenerator generator =
@@ -155,7 +156,8 @@ class BlueskyReplyTextGeneratorTest {
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     when(modelHolderService.get()).thenReturn("qwen-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse()).thenReturn(Flux.just(response("返信")));
     BlueskyReplyTextGenerator generator =
@@ -182,7 +184,8 @@ class BlueskyReplyTextGeneratorTest {
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     when(modelHolderService.get()).thenReturn("qwen-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse()).thenReturn(Flux.just(response("返信")));
     BlueskyReplyTextGenerator generator =
@@ -210,7 +213,8 @@ class BlueskyReplyTextGeneratorTest {
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     when(modelHolderService.get()).thenReturn("qwen-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse()).thenReturn(Flux.just(response("ありが"), response("とうございます")));
     BlueskyReplyTextGenerator generator =
@@ -233,7 +237,8 @@ class BlueskyReplyTextGeneratorTest {
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     when(modelHolderService.get()).thenReturn("qwen-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse()).thenReturn(Flux.just(response(" "), response("")));
     BlueskyReplyTextGenerator generator =
@@ -429,7 +434,8 @@ class BlueskyReplyTextGeneratorTest {
     when(chatClientProvider.getObject()).thenReturn(chatClient);
     when(modelHolderService.get()).thenReturn("qwen-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(requestSpec);
+    when(requestSpec.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
+        .thenReturn(requestSpec);
     when(requestSpec.stream()).thenReturn(streamSpec);
     when(streamSpec.chatResponse()).thenReturn(responses);
     return new BlueskyReplyTextGenerator(chatClientProvider, modelHolderService);

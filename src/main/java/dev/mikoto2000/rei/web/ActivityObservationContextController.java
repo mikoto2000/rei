@@ -63,8 +63,7 @@ public class ActivityObservationContextController {
   @GetMapping("/api/v1/projects/{projectId}/activity/observation-context")
   public Report report(
       @PathVariable String projectId, @RequestParam(defaultValue = "today") String date) {
-    if (!projectExists.test(projectId))
-      throw new ResourceNotFoundException("Project");
+    if (!projectExists.test(projectId)) throw new ResourceNotFoundException("Project");
     var service = services.getIfAvailable();
     if (service == null)
       throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Activity is disabled");

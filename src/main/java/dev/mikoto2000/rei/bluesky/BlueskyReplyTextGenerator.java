@@ -109,14 +109,14 @@ public class BlueskyReplyTextGenerator {
             + """
 
 
-        Recent conversation history with this user:
-        """
+            Recent conversation history with this user:
+            """
             + (historyBlock.isBlank() ? "(none)" : historyBlock)
             + """
 
 
-        Post to reply:
-        """
+            Post to reply:
+            """
             + postText
             + "\n";
 

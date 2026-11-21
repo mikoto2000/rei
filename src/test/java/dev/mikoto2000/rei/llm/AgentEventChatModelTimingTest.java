@@ -103,11 +103,10 @@ class AgentEventChatModelTimingTest {
                       return Flux.just(empty);
                     })
                 .concatWith(
-                    Flux.defer(
-                        () -> {
-                          tick.set(9);
-                          return Flux.just(text);
-                        })));
+                    Flux.defer(() -> {
+                      tick.set(9);
+                      return Flux.just(text);
+                    })));
     assertEquals(List.of(empty, text), model(delegate).stream(prompt).collectList().block());
     var run = store.latest("project", "session").orElseThrow();
     var span = run.spans().getFirst();
@@ -121,7 +120,8 @@ class AgentEventChatModelTimingTest {
 
   @Test
   void streamingTimingStaysWithTheInvocationAcrossSubscriptionAndSignalScopes() {
-    var unrelated = new AgentRunContext("other-run", "other-session", owner.projectRoot(), "project");
+    var unrelated =
+        new AgentRunContext("other-run", "other-session", owner.projectRoot(), "project");
     store.beginRun(unrelated.runId(), unrelated.projectId(), unrelated.conversationId());
     var lexicalPrompt = new Prompt("stream without tool context");
     var delegate = mock(ChatModel.class);
@@ -130,15 +130,14 @@ class AgentEventChatModelTimingTest {
     try {
       when(delegate.stream(lexicalPrompt))
           .thenReturn(
-              Flux.create(
-                  sink -> {
-                    var scope = AgentRunScope.open(unrelated);
-                    try (scope) {
-                      tick.set(7);
-                      sink.next(response("ok"));
-                      sink.complete();
-                    }
-                  }));
+              Flux.create(sink -> {
+                var scope = AgentRunScope.open(unrelated);
+                try (scope) {
+                  tick.set(7);
+                  sink.next(response("ok"));
+                  sink.complete();
+                }
+              }));
       Flux<ChatResponse> stream;
       {
         var scope = AgentRunScope.open(owner);
@@ -262,7 +261,8 @@ class AgentEventChatModelTimingTest {
   void streamDisposalUsesTheOwningRunsCancellationRequest(
       boolean includeExecution, boolean cancelOwner) {
     var cancellation = new CommandCancellationService();
-    var unrelated = new AgentRunContext("other-run", "other-session", owner.projectRoot(), "project");
+    var unrelated =
+        new AgentRunContext("other-run", "other-session", owner.projectRoot(), "project");
     cancellation.prepare(owner);
     cancellation.prepare(unrelated);
     var execution = new RunExecutionContext(owner.runId(), null, null, null, null);
@@ -288,30 +288,27 @@ class AgentEventChatModelTimingTest {
         .withBean(AgentEventPublisher.class, InMemoryAgentEventBus::new)
         .withBean(TimingExecution.class, () -> new TimingExecution(store))
         .withBean(CommandCancellationService.class, () -> cancellation)
-        .run(
-            app -> {
-              var model = app.getBean(LlmModelProvider.class).chatModel(LlmFeature.CHAT);
-              Flux<ChatResponse> stream;
-              var scope = AgentRunScope.open(owner);
-              try (scope) {
-                stream = model.stream(request);
-              }
-              var subscription = stream.subscribe();
-              var stop = cancellation.requestRun((cancelOwner ? owner : unrelated).runId());
-              try {
-                assertTrue(stop.accepted());
-                assertFalse(execution.isCancelled());
-                // Disposal can arrive on another thread before cancellation hooks are dispatched.
-                CompletableFuture.runAsync(subscription::dispose)
-                    .orTimeout(5, TimeUnit.SECONDS)
-                    .join();
-                var span = store.latest("project", "session").orElseThrow().spans().getFirst();
-                assertEquals(cancelOwner ? Status.CANCELLED : Status.DISCONNECTED, span.status());
-              } finally {
-                stop.dispatch().run();
-                subscription.dispose();
-              }
-            });
+        .run(app -> {
+          var model = app.getBean(LlmModelProvider.class).chatModel(LlmFeature.CHAT);
+          Flux<ChatResponse> stream;
+          var scope = AgentRunScope.open(owner);
+          try (scope) {
+            stream = model.stream(request);
+          }
+          var subscription = stream.subscribe();
+          var stop = cancellation.requestRun((cancelOwner ? owner : unrelated).runId());
+          try {
+            assertTrue(stop.accepted());
+            assertFalse(execution.isCancelled());
+            // Disposal can arrive on another thread before cancellation hooks are dispatched.
+            CompletableFuture.runAsync(subscription::dispose).orTimeout(5, TimeUnit.SECONDS).join();
+            var span = store.latest("project", "session").orElseThrow().spans().getFirst();
+            assertEquals(cancelOwner ? Status.CANCELLED : Status.DISCONNECTED, span.status());
+          } finally {
+            stop.dispatch().run();
+            subscription.dispose();
+          }
+        });
   }
 
   /** 用途に応じたモデル利用で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */

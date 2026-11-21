@@ -18,10 +18,9 @@ class SharedRunTokenLimitTest {
       var tasks = new java.util.ArrayList<java.util.concurrent.Future<?>>();
       for (int worker = 0; worker < 8; worker++) {
         tasks.add(
-            executor.submit(
-                () -> {
-                  for (int i = 0; i < 10000; i++) budget.recordTotalTokens(1);
-                }));
+            executor.submit(() -> {
+              for (int i = 0; i < 10000; i++) budget.recordTotalTokens(1);
+            }));
       }
       for (var task : tasks) task.get();
     }

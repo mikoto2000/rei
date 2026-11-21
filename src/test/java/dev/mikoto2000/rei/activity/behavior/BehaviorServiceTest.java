@@ -129,11 +129,10 @@ class BehaviorServiceTest {
     assertEquals(3, events.size());
     verify(state)
         .appendEvent(
-            argThat(
-                e ->
-                    e.outcome() == BehaviorTimelineEvent.Outcome.EMITTED
-                        && e.id().equals(entries.getFirst().sourceId())
-                        && e.timestamp().equals(entries.getFirst().timestamp().toInstant())));
+            argThat(e ->
+                e.outcome() == BehaviorTimelineEvent.Outcome.EMITTED
+                    && e.id().equals(entries.getFirst().sourceId())
+                    && e.timestamp().equals(entries.getFirst().timestamp().toInstant())));
     assertEquals("BEHAVIOR_NOTIFICATION", entries.getFirst().source());
   }
 
@@ -216,12 +215,11 @@ class BehaviorServiceTest {
     var entered = new CountDownLatch(1);
     var release = new CountDownLatch(1);
     when(generator.generate(any()))
-        .thenAnswer(
-            inv -> {
-              entered.countDown();
-              assertTrue(release.await(5, TimeUnit.SECONDS));
-              return "message";
-            });
+        .thenAnswer(inv -> {
+          entered.countDown();
+          assertTrue(release.await(5, TimeUnit.SECONDS));
+          return "message";
+        });
     try (var executor = Executors.newSingleThreadExecutor()) {
       var future = executor.submit(service::tick);
       assertTrue(entered.await(5, TimeUnit.SECONDS));
@@ -241,11 +239,10 @@ class BehaviorServiceTest {
     var service = service();
     service.setEnabled(true);
     when(generator.generate(any()))
-        .thenAnswer(
-            inv -> {
-              service.tick();
-              return "message";
-            });
+        .thenAnswer(inv -> {
+          service.tick();
+          return "message";
+        });
     service.tick();
     verify(generator, times(1)).generate(any());
   }
@@ -256,22 +253,20 @@ class BehaviorServiceTest {
     var service = service();
     service.setEnabled(true);
     when(generator.generate(any()))
-        .thenAnswer(
-            inv -> {
-              var work = record(0, 3600, "development");
-              when(store.findBetween(any(), any())).thenReturn(sessions(List.of(work)));
-              when(store.findRecordsBetween(any(), any())).thenReturn(List.of(work));
-              return "message";
-            });
+        .thenAnswer(inv -> {
+          var work = record(0, 3600, "development");
+          when(store.findBetween(any(), any())).thenReturn(sessions(List.of(work)));
+          when(store.findRecordsBetween(any(), any())).thenReturn(List.of(work));
+          return "message";
+        });
     service.tick();
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(publisher);
     verify(state)
         .appendEvent(
-            argThat(
-                e ->
-                    e.outcome() == BehaviorTimelineEvent.Outcome.SUPPRESSED
-                        && e.reason().equals("CONTEXT_CHANGED")));
+            argThat(e ->
+                e.outcome() == BehaviorTimelineEvent.Outcome.SUPPRESSED
+                    && e.reason().equals("CONTEXT_CHANGED")));
   }
 
   /** SQLite再開用の記録について、再開の後も対象の情報が残ることを確認する。 */
@@ -387,11 +382,10 @@ class BehaviorServiceTest {
           }
         };
     when(generator.generate(any()))
-        .thenAnswer(
-            inv -> {
-              now.set(clock.instant().plusSeconds(30));
-              return "message";
-            });
+        .thenAnswer(inv -> {
+          now.set(clock.instant().plusSeconds(30));
+          return "message";
+        });
     var service =
         new BehaviorService(
             properties, activity, capture, store, state, generator, publisher, tracker, moving);
@@ -403,10 +397,9 @@ class BehaviorServiceTest {
     assertEquals(BehaviorTimelineEvent.Outcome.EMITTED, event.getValue().outcome());
     verify(publisher)
         .publish(
-            argThat(
-                m ->
-                    m.createdAt().equals(event.getValue().timestamp())
-                        && m.id().equals(event.getValue().id())));
+            argThat(m ->
+                m.createdAt().equals(event.getValue().timestamp())
+                    && m.id().equals(event.getValue().id())));
   }
 
   /** 実行環境上書きを利用することを確認する。 */

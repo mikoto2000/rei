@@ -110,10 +110,9 @@ public class ConversationTurnStore implements ConversationHistory {
     synchronized (turnLock) {
       var rows = new ArrayList<>(read(entry.conversationId()));
       if (rows.stream()
-          .anyMatch(
-              t ->
-                  ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(t.source())
-                      && entry.sourceId().equals(t.sourceId()))) return;
+          .anyMatch(t ->
+              ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(t.source())
+                  && entry.sourceId().equals(t.sourceId()))) return;
       rows.add(
           new Turn(
               "behavior:" + entry.sourceId(),
@@ -166,8 +165,7 @@ public class ConversationTurnStore implements ConversationHistory {
    * <p>Execution starts are serialized by the project queue. Preserve that order even on clock
    * ties/rollback.
    */
-  public void startOrdered(
-      AgentRunContext context, String request, java.time.Instant observedAt) {
+  public void startOrdered(AgentRunContext context, String request, java.time.Instant observedAt) {
     synchronized (turnLock) {
       var last =
           read(context.conversationId()).stream()
@@ -175,14 +173,15 @@ public class ConversationTurnStore implements ConversationHistory {
               .filter(Objects::nonNull)
               .max(Comparator.naturalOrder());
       var createdAt =
-          last.isPresent() && !observedAt.isAfter(last.get()) ? last.get().plusNanos(1) : observedAt;
+          last.isPresent() && !observedAt.isAfter(last.get())
+              ? last.get().plusNanos(1)
+              : observedAt;
       start(context, request, createdAt);
     }
   }
 
   /** 要求された処理を開始する。 */
-  public void start(
-      AgentRunContext context, String request, java.time.Instant createdAt) {
+  public void start(AgentRunContext context, String request, java.time.Instant createdAt) {
     synchronized (turnLock) {
       var turns = new ArrayList<>(read(context.conversationId()));
       turns.add(new Turn(context.runId(), request, Status.RUNNING, null, createdAt));
@@ -203,22 +202,22 @@ public class ConversationTurnStore implements ConversationHistory {
       if (status == Status.RUNNING)
         throw new IllegalArgumentException("Expected a terminal turn status");
       if (read(context.conversationId()).stream()
-          .noneMatch(t -> t.runId().equals(context.runId()) && t.status() == Status.RUNNING)) return;
+          .noneMatch(t -> t.runId().equals(context.runId()) && t.status() == Status.RUNNING))
+        return;
       var turns =
           read(context.conversationId()).stream()
-              .map(
-                  turn ->
-                      turn.runId().equals(context.runId()) && turn.status() == Status.RUNNING
-                          ? new Turn(
-                              turn.runId(),
-                              turn.request(),
-                              status,
-                              assistantMessage,
-                              turn.createdAt(),
-                              turn.source(),
-                              turn.sourceId(),
-                              turn.metadata())
-                          : turn)
+              .map(turn ->
+                  turn.runId().equals(context.runId()) && turn.status() == Status.RUNNING
+                      ? new Turn(
+                          turn.runId(),
+                          turn.request(),
+                          status,
+                          assistantMessage,
+                          turn.createdAt(),
+                          turn.source(),
+                          turn.sourceId(),
+                          turn.metadata())
+                      : turn)
               .toList();
       save(context.conversationId(), turns);
     }
@@ -249,21 +248,20 @@ public class ConversationTurnStore implements ConversationHistory {
     synchronized (turnLock) {
       var rows =
           read(context.conversationId()).stream()
-              .map(
-                  t -> {
-                    if (!t.runId().equals(context.runId())) return t;
-                    var combined = new HashMap<>(t.metadata());
-                    combined.putAll(metadata);
-                    return new Turn(
-                        t.runId(),
-                        t.request(),
-                        t.status(),
-                        t.assistantMessage(),
-                        t.createdAt(),
-                        t.source(),
-                        t.sourceId(),
-                        combined);
-                  })
+              .map(t -> {
+                if (!t.runId().equals(context.runId())) return t;
+                var combined = new HashMap<>(t.metadata());
+                combined.putAll(metadata);
+                return new Turn(
+                    t.runId(),
+                    t.request(),
+                    t.status(),
+                    t.assistantMessage(),
+                    t.createdAt(),
+                    t.source(),
+                    t.sourceId(),
+                    combined);
+              })
               .toList();
       save(context.conversationId(), rows);
     }
@@ -271,8 +269,7 @@ public class ConversationTurnStore implements ConversationHistory {
 
   /** 対象を特定できるよう、やり取り一覧を探す。 */
   @Override
-  public List<SessionTurn> findTurns(
-      String sessionId, CursorKey after, int fetchLimit) {
+  public List<SessionTurn> findTurns(String sessionId, CursorKey after, int fetchLimit) {
     synchronized (turnLock) {
       if (fetchLimit < 1 || fetchLimit > 101)
         throw new IllegalArgumentException("Invalid fetch limit");
@@ -280,24 +277,22 @@ public class ConversationTurnStore implements ConversationHistory {
       // messages.
       return read(sessionId).stream()
           .filter(turn -> turn.createdAt() != null)
-          .filter(
-              turn ->
-                  after == null
-                      || turn.createdAt().isAfter(after.time())
-                      || turn.createdAt().equals(after.time())
-                          && turn.runId().compareTo(after.id()) > 0)
+          .filter(turn ->
+              after == null
+                  || turn.createdAt().isAfter(after.time())
+                  || turn.createdAt().equals(after.time())
+                      && turn.runId().compareTo(after.id()) > 0)
           .sorted(Comparator.comparing(Turn::createdAt).thenComparing(Turn::runId))
           .limit(fetchLimit)
-          .map(
-              turn ->
-                  new SessionTurn(
-                      turn.runId(),
-                      turn.request(),
-                      turn.assistantMessage(),
-                      turn.createdAt(),
-                      turn.source(),
-                      turn.sourceId(),
-                      turn.metadata()))
+          .map(turn ->
+              new SessionTurn(
+                  turn.runId(),
+                  turn.request(),
+                  turn.assistantMessage(),
+                  turn.createdAt(),
+                  turn.source(),
+                  turn.sourceId(),
+                  turn.metadata()))
           .toList();
     }
   }
@@ -327,13 +322,13 @@ public class ConversationTurnStore implements ConversationHistory {
   }
 
   /** Reuses an already loaded lifecycle snapshot without another storage read. */
-  public static dev.mikoto2000.rei.context.CancelledTaskHistory promptHistoryFor(List<Turn> history) {
+  public static dev.mikoto2000.rei.context.CancelledTaskHistory promptHistoryFor(
+      List<Turn> history) {
     return dev.mikoto2000.rei.context.CancelledTaskHistory.from(
         history.stream()
-            .map(
-                t ->
-                    new dev.mikoto2000.rei.context.CancelledTaskHistory.Attempt(
-                        t.runId(), t.status().name(), t.createdAt()))
+            .map(t ->
+                new dev.mikoto2000.rei.context.CancelledTaskHistory.Attempt(
+                    t.runId(), t.status().name(), t.createdAt()))
             .toList());
   }
 

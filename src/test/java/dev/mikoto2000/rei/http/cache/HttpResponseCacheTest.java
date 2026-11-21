@@ -127,15 +127,14 @@ class HttpResponseCacheTest {
   @Test
   void forceRefreshRevalidatesEtagAndKeepsOriginalFetchTime() {
     when(fetcher.fetch(any(), anyMap(), any(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              if (calls.incrementAndGet() == 1)
-                return response(200, Map.of("etag", "\"a\""), "evidence", uri);
-              Map<String, String> headers = invocation.getArgument(1);
-              assertEquals("\"a\"", headers.get("if-none-match"));
-              assertTrue(headers.get("cache-control").contains("no-cache"));
-              return response(304, Map.of("etag", "\"a\"", "cache-control", "max-age=30"), "", uri);
-            });
+        .thenAnswer(invocation -> {
+          if (calls.incrementAndGet() == 1)
+            return response(200, Map.of("etag", "\"a\""), "evidence", uri);
+          Map<String, String> headers = invocation.getArgument(1);
+          assertEquals("\"a\"", headers.get("if-none-match"));
+          assertTrue(headers.get("cache-control").contains("no-cache"));
+          return response(304, Map.of("etag", "\"a\"", "cache-control", "max-age=30"), "", uri);
+        });
     try (var cache = cache()) {
       var first = get(cache, request(false));
       clock.advance(Duration.ofSeconds(5));
@@ -153,14 +152,13 @@ class HttpResponseCacheTest {
   void lastModifiedIsUsedWhenEtagIsAbsent() {
     String modified = "Wed, 31 Dec 2025 00:00:00 GMT";
     when(fetcher.fetch(any(), anyMap(), any(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              if (calls.incrementAndGet() == 1)
-                return response(200, Map.of("last-modified", modified), "evidence", uri);
-              Map<String, String> requestHeaders = invocation.getArgument(1);
-              assertEquals(modified, requestHeaders.get("if-modified-since"));
-              return response(304, Map.of(), "", uri);
-            });
+        .thenAnswer(invocation -> {
+          if (calls.incrementAndGet() == 1)
+            return response(200, Map.of("last-modified", modified), "evidence", uri);
+          Map<String, String> requestHeaders = invocation.getArgument(1);
+          assertEquals(modified, requestHeaders.get("if-modified-since"));
+          return response(304, Map.of(), "", uri);
+        });
     try (var cache = cache()) {
       get(cache, request(false));
       get(cache, request(true));
@@ -172,11 +170,10 @@ class HttpResponseCacheTest {
   @Test
   void mismatched304CannotValidateAnUnrelatedBody() {
     when(fetcher.fetch(any(), anyMap(), any(), any(), any()))
-        .thenAnswer(
-            invocation ->
-                calls.incrementAndGet() == 1
-                    ? response(200, Map.of("etag", "\"a\""), "evidence", uri)
-                    : response(304, Map.of("etag", "\"b\""), "", uri));
+        .thenAnswer(invocation ->
+            calls.incrementAndGet() == 1
+                ? response(200, Map.of("etag", "\"a\""), "evidence", uri)
+                : response(304, Map.of("etag", "\"b\""), "", uri));
     try (var cache = cache()) {
       get(cache, request(false));
       assertThrows(HttpFetchException.class, () -> get(cache, request(true)));
@@ -251,11 +248,10 @@ class HttpResponseCacheTest {
   @Test
   void private304InvalidatesThePreviouslyPublicEntry() {
     when(fetcher.fetch(any(), anyMap(), any(), any(), any()))
-        .thenAnswer(
-            invocation ->
-                calls.incrementAndGet() == 1
-                    ? response(200, Map.of("etag", "\"a\""), "evidence", uri)
-                    : response(304, Map.of("cache-control", "no-store"), "", uri));
+        .thenAnswer(invocation ->
+            calls.incrementAndGet() == 1
+                ? response(200, Map.of("etag", "\"a\""), "evidence", uri)
+                : response(304, Map.of("cache-control", "no-store"), "", uri));
     try (var cache = cache()) {
       get(cache, request(false));
       get(cache, request(true));

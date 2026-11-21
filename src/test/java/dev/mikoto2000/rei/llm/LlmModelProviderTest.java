@@ -105,27 +105,25 @@ class LlmModelProviderTest {
     var defaultModel =
         org.springframework.ai.openai.OpenAiChatModel.builder()
             .options(defaults.build())
-            .httpClientBuilderCustomizer(
-                builder ->
-                    builder.interceptor(
-                        chain -> {
-                          var body = new okio.Buffer();
-                          chain.request().body().writeTo(body);
-                          requests.add(
-                              new com.fasterxml.jackson.databind.ObjectMapper()
-                                  .readTree(body.readByteArray()));
-                          return new okhttp3.Response.Builder()
-                              .request(chain.request())
-                              .protocol(okhttp3.Protocol.HTTP_1_1)
-                              .code(200)
-                              .message("OK")
-                              .body(
-                                  okhttp3.ResponseBody.create(
-                                      "{\"id\":\"test\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"configured-model\","
-                                          + "\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\"done\"}}]}",
-                                      okhttp3.MediaType.get("application/json")))
-                              .build();
-                        }))
+            .httpClientBuilderCustomizer(builder ->
+                builder.interceptor(chain -> {
+                  var body = new okio.Buffer();
+                  chain.request().body().writeTo(body);
+                  requests.add(
+                      new com.fasterxml.jackson.databind.ObjectMapper()
+                          .readTree(body.readByteArray()));
+                  return new okhttp3.Response.Builder()
+                      .request(chain.request())
+                      .protocol(okhttp3.Protocol.HTTP_1_1)
+                      .code(200)
+                      .message("OK")
+                      .body(
+                          okhttp3.ResponseBody.create(
+                              "{\"id\":\"test\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"configured-model\","
+                                  + "\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\"done\"}}]}",
+                              okhttp3.MediaType.get("application/json")))
+                      .build();
+                }))
             .build();
     var properties = new LlmProperties();
     var feature = new LlmProperties.Server();

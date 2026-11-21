@@ -129,40 +129,36 @@ class ActivityObservationContextHttpTest {
         .withBean(ProjectRegistry.class, () -> projects)
         .withBean(ActivityWorkContextService.class, () -> service)
         .withUserConfiguration(Config.class)
-        .run(
-            context -> {
-              var mvc =
-                  MockMvcBuilders.webAppContextSetup(context)
-                      .addFilters(
-                          context.getBean(
-                              "springSecurityFilterChain", jakarta.servlet.Filter.class))
-                      .build();
-              String url =
-                  "/api/v1/projects/"
-                      + project.id()
-                      + "/activity/observation-context?date=2026-10-05";
-              mvc.perform(get(url)).andExpect(status().isUnauthorized());
-              String json =
-                  mvc.perform(get(url).header("Authorization", "Bearer secret"))
-                      .andExpect(status().isOk())
-                      .andExpect(jsonPath("$.scope").value("PROJECT_OBSERVATION_CONTEXT"))
-                      .andExpect(jsonPath("$.projectId").value(project.id()))
-                      .andExpect(jsonPath("$.partial").value(false))
-                      .andReturn()
-                      .getResponse()
-                      .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
-              assertTrue(json.contains("src/Main.java"));
-              assertTrue(json.contains("command-ref"));
-              assertFalse(json.contains("private-other"));
-              mvc.perform(
-                      get("/api/v1/projects/unknown/activity/observation-context")
-                          .header("Authorization", "Bearer secret"))
-                  .andExpect(status().isNotFound());
-              mvc.perform(
-                      get(url.replace("2026-10-05", "2026-10-06"))
-                          .header("Authorization", "Bearer secret"))
-                  .andExpect(status().isBadRequest());
-            });
+        .run(context -> {
+          var mvc =
+              MockMvcBuilders.webAppContextSetup(context)
+                  .addFilters(
+                      context.getBean("springSecurityFilterChain", jakarta.servlet.Filter.class))
+                  .build();
+          String url =
+              "/api/v1/projects/" + project.id() + "/activity/observation-context?date=2026-10-05";
+          mvc.perform(get(url)).andExpect(status().isUnauthorized());
+          String json =
+              mvc.perform(get(url).header("Authorization", "Bearer secret"))
+                  .andExpect(status().isOk())
+                  .andExpect(jsonPath("$.scope").value("PROJECT_OBSERVATION_CONTEXT"))
+                  .andExpect(jsonPath("$.projectId").value(project.id()))
+                  .andExpect(jsonPath("$.partial").value(false))
+                  .andReturn()
+                  .getResponse()
+                  .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+          assertTrue(json.contains("src/Main.java"));
+          assertTrue(json.contains("command-ref"));
+          assertFalse(json.contains("private-other"));
+          mvc.perform(
+                  get("/api/v1/projects/unknown/activity/observation-context")
+                      .header("Authorization", "Bearer secret"))
+              .andExpect(status().isNotFound());
+          mvc.perform(
+                  get(url.replace("2026-10-05", "2026-10-06"))
+                      .header("Authorization", "Bearer secret"))
+              .andExpect(status().isBadRequest());
+        });
   }
 
   /** 未対応の以前のについて、実施できない代替手段を保存することを確認する。 */
@@ -323,37 +319,33 @@ class ActivityObservationContextHttpTest {
         .withBean(ProjectRegistry.class, () -> projects)
         .withBean(ActivityWorkContextService.class, () -> service)
         .withUserConfiguration(Config.class)
-        .run(
-            context -> {
-              var mvc =
-                  MockMvcBuilders.webAppContextSetup(context)
-                      .addFilters(
-                          context.getBean(
-                              "springSecurityFilterChain", jakarta.servlet.Filter.class))
-                      .build();
-              mvc.perform(
-                      get("/api/v1/projects/" + project.id() + "/activity/observation-context")
-                          .header("Authorization", "Bearer secret"))
-                  .andExpect(status().isUnprocessableContent())
-                  .andExpect(jsonPath("$.report").doesNotExist());
-            });
+        .run(context -> {
+          var mvc =
+              MockMvcBuilders.webAppContextSetup(context)
+                  .addFilters(
+                      context.getBean("springSecurityFilterChain", jakarta.servlet.Filter.class))
+                  .build();
+          mvc.perform(
+                  get("/api/v1/projects/" + project.id() + "/activity/observation-context")
+                      .header("Authorization", "Bearer secret"))
+              .andExpect(status().isUnprocessableContent())
+              .andExpect(jsonPath("$.report").doesNotExist());
+        });
     new WebApplicationContextRunner()
         .withPropertyValues("rei.web.enabled=true")
         .withBean(ProjectRegistry.class, () -> projects)
         .withUserConfiguration(Config.class)
-        .run(
-            context -> {
-              var mvc =
-                  MockMvcBuilders.webAppContextSetup(context)
-                      .addFilters(
-                          context.getBean(
-                              "springSecurityFilterChain", jakarta.servlet.Filter.class))
-                      .build();
-              mvc.perform(
-                      get("/api/v1/projects/" + project.id() + "/activity/observation-context")
-                          .header("Authorization", "Bearer secret"))
-                  .andExpect(status().isServiceUnavailable());
-            });
+        .run(context -> {
+          var mvc =
+              MockMvcBuilders.webAppContextSetup(context)
+                  .addFilters(
+                      context.getBean("springSecurityFilterChain", jakarta.servlet.Filter.class))
+                  .build();
+          mvc.perform(
+                  get("/api/v1/projects/" + project.id() + "/activity/observation-context")
+                      .header("Authorization", "Bearer secret"))
+              .andExpect(status().isServiceUnavailable());
+        });
   }
 
   /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */

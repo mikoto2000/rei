@@ -244,18 +244,17 @@ public final class ConversationInputRouter {
     changed();
     try {
       registered.accept(execution);
-      executor.execute(
-          () -> {
-            try {
-              var scope = ExecutionScope.open(execution);
-              try (scope) {
-                work.accept(execution);
-              }
-            } finally {
-              background.remove(execution.id());
-              changed();
-            }
-          });
+      executor.execute(() -> {
+        try {
+          var scope = ExecutionScope.open(execution);
+          try (scope) {
+            work.accept(execution);
+          }
+        } finally {
+          background.remove(execution.id());
+          changed();
+        }
+      });
     } catch (RuntimeException | Error error) {
       background.remove(execution.id());
       changed();
@@ -495,10 +494,9 @@ public final class ConversationInputRouter {
     try (scope) {
       beginCancellation.run();
       try {
-        lifecycle.accept(
-            () -> {
-              if (!cancellationRequested.getAsBoolean()) operation.run();
-            });
+        lifecycle.accept(() -> {
+          if (!cancellationRequested.getAsBoolean()) operation.run();
+        });
       } finally {
         clearCancellation.run();
       }

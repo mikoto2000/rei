@@ -130,15 +130,14 @@ class FileBatchArgumentRepairTest {
   void originalTwentyTwoFileRequestAndNewBoundaryAreAccepted(int count) throws Exception {
     var requests =
         IntStream.range(0, count)
-            .mapToObj(
-                i -> {
-                  try {
-                    Files.writeString(root.resolve(i + ".txt"), "content");
-                  } catch (java.io.IOException error) {
-                    throw new java.io.UncheckedIOException(error);
-                  }
-                  return new Tools.ReadFileRequest(i + ".txt", null, null);
-                })
+            .mapToObj(i -> {
+              try {
+                Files.writeString(root.resolve(i + ".txt"), "content");
+              } catch (java.io.IOException error) {
+                throw new java.io.UncheckedIOException(error);
+              }
+              return new Tools.ReadFileRequest(i + ".txt", null, null);
+            })
             .toList();
     var tools = new Tools();
     assertThat(tools.readMultiFile(requests, root))

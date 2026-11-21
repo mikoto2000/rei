@@ -99,11 +99,11 @@ class OperationalSuggestionTest {
     var before = toolkit.rules().snapshot();
     String output =
         """
-      {"ruleType":"ENTERTAINMENT","id":"jvm-learning","priority":250,
-       "match":{"processRegex":null,"titleRegex":"JVM compilation","serviceRegex":"^YouTube$","contentRegex":null},
-       "classify":{"category":null,"service":null,"categoryConfidence":null,"serviceConfidence":null,"entertainmentDisposition":"NON_ENTERTAINMENT","confidence":0.9},
-       "proposalConfidence":0.85,"rationale":"Three consistent title samples"}
-      """;
+        {"ruleType":"ENTERTAINMENT","id":"jvm-learning","priority":250,
+         "match":{"processRegex":null,"titleRegex":"JVM compilation","serviceRegex":"^YouTube$","contentRegex":null},
+         "classify":{"category":null,"service":null,"categoryConfidence":null,"serviceConfidence":null,"entertainmentDisposition":"NON_ENTERTAINMENT","confidence":0.9},
+         "proposalConfidence":0.85,"rationale":"Three consistent title samples"}
+        """;
     var proposer =
         new ClassificationRuleSuggestions(
             toolkit,
@@ -158,12 +158,12 @@ class OperationalSuggestionTest {
     Files.writeString(
         toolkit.rules().path(),
         """
-      entertainmentRules:
-        - id: explicit-jvm
-          priority: 300
-          match: {serviceRegex: YouTube, titleRegex: JVM}
-          classify: {entertainmentDisposition: NON_ENTERTAINMENT, confidence: 0.9}
-      """);
+        entertainmentRules:
+          - id: explicit-jvm
+            priority: 300
+            match: {serviceRegex: YouTube, titleRegex: JVM}
+            classify: {entertainmentDisposition: NON_ENTERTAINMENT, confidence: 0.9}
+        """);
     assertTrue(toolkit.rules().reload());
     assertTrue(proposer.suggest(true).contains("候補なし"));
   }
@@ -433,11 +433,11 @@ class OperationalSuggestionTest {
     Files.writeString(
         toolkit.rules().path(),
         """
-      classificationRules:
-        - id: another-id
-          match: {processRegex: firefox, titleRegex: Hugging Face}
-          classify: {category: research}
-      """);
+        classificationRules:
+          - id: another-id
+            match: {processRegex: firefox, titleRegex: Hugging Face}
+            classify: {category: research}
+        """);
     assertTrue(toolkit.rules().reload());
     var proposer = new ClassificationRuleSuggestions(toolkit, (input, schema) -> "");
     assertTrue(

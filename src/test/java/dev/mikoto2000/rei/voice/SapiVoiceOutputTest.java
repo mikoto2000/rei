@@ -23,11 +23,10 @@ class SapiVoiceOutputTest {
     var process = mock(Process.class);
     var killed = new java.util.concurrent.CountDownLatch(1);
     when(process.destroyForcibly())
-        .thenAnswer(
-            call -> {
-              killed.countDown();
-              return process;
-            });
+        .thenAnswer(call -> {
+          killed.countDown();
+          return process;
+        });
     when(process.getOutputStream())
         .thenReturn(
             new java.io.OutputStream() {
@@ -60,11 +59,10 @@ class SapiVoiceOutputTest {
     when(process.exitValue()).thenReturn(0);
     var command = new java.util.ArrayList<String>();
     var output =
-        new SapiVoiceOutput(
-            args -> {
-              command.addAll(args);
-              return process;
-            });
+        new SapiVoiceOutput(args -> {
+          command.addAll(args);
+          return process;
+        });
     String text = "<speak>hello</speak> $(Get-Content secret)";
     output.speak("Haruka", text, () -> true);
     assertThat(command).noneMatch(arg -> arg.contains(text) || arg.contains("Haruka"));

@@ -193,10 +193,9 @@ class DesktopContextEvaluationTest {
     assertEquals(
         2,
         records.getAllValues().stream()
-            .filter(
-                r ->
-                    r.detection().visionDiagnostics().background().state()
-                        == VisionDiagnostics.State.USED)
+            .filter(r ->
+                r.detection().visionDiagnostics().background().state()
+                    == VisionDiagnostics.State.USED)
             .count());
     System.out.println(
         "Desktop synthetic comparison: observations=21 foreground_calls=2 desktop_calls=2 total_calls=4 max_parallel=1 pending_slots=2 screenshot_writes=0");

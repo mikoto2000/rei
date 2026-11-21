@@ -74,9 +74,8 @@ class StreamTimeoutRetryHttpTest {
       var model =
           OpenAiChatModel.builder()
               .options(options)
-              .httpClientBuilderCustomizer(
-                  builder ->
-                      builder.interceptor(new ChatStreamTimeoutInterceptor(Duration.ofMillis(200))))
+              .httpClientBuilderCustomizer(builder ->
+                  builder.interceptor(new ChatStreamTimeoutInterceptor(Duration.ofMillis(200))))
               .build();
       var budget = new OutputLimitRunBudget(2, 5);
       var context =

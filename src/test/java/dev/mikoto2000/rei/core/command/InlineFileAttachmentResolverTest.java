@@ -26,12 +26,11 @@ class InlineFileAttachmentResolverTest {
     Files.writeString(file, "hello file");
 
     InlineFileAttachmentResolver resolver =
-        new InlineFileAttachmentResolver(
-            () ->
-                new Media(
-                    MimeTypeUtils.TEXT_PLAIN,
-                    new org.springframework.core.io.ByteArrayResource(
-                        "clip".getBytes(StandardCharsets.UTF_8))));
+        new InlineFileAttachmentResolver(() ->
+            new Media(
+                MimeTypeUtils.TEXT_PLAIN,
+                new org.springframework.core.io.ByteArrayResource(
+                    "clip".getBytes(StandardCharsets.UTF_8))));
 
     String input = "please read `@file:" + file + "`";
     InlineFileAttachmentResolver.ResolvedPrompt resolved = resolver.resolve(input);
@@ -48,12 +47,11 @@ class InlineFileAttachmentResolverTest {
   @Test
   void resolveClipboardAddsTextMedia() {
     InlineFileAttachmentResolver resolver =
-        new InlineFileAttachmentResolver(
-            () ->
-                new Media(
-                    MimeTypeUtils.TEXT_PLAIN,
-                    new org.springframework.core.io.ByteArrayResource(
-                        "clip text".getBytes(StandardCharsets.UTF_8))));
+        new InlineFileAttachmentResolver(() ->
+            new Media(
+                MimeTypeUtils.TEXT_PLAIN,
+                new org.springframework.core.io.ByteArrayResource(
+                    "clip text".getBytes(StandardCharsets.UTF_8))));
 
     InlineFileAttachmentResolver.ResolvedPrompt resolved = resolver.resolve("use `@clipboard` now");
 
@@ -74,11 +72,10 @@ class InlineFileAttachmentResolverTest {
     byte[] pngBytes = out.toByteArray();
 
     InlineFileAttachmentResolver resolver =
-        new InlineFileAttachmentResolver(
-            () ->
-                new Media(
-                    MimeTypeUtils.parseMimeType("image/png"),
-                    new org.springframework.core.io.ByteArrayResource(pngBytes)));
+        new InlineFileAttachmentResolver(() ->
+            new Media(
+                MimeTypeUtils.parseMimeType("image/png"),
+                new org.springframework.core.io.ByteArrayResource(pngBytes)));
 
     InlineFileAttachmentResolver.ResolvedPrompt resolved = resolver.resolve("img `@clipboard`");
 
@@ -91,10 +88,9 @@ class InlineFileAttachmentResolverTest {
   @Test
   void resolveUnescapesEscapedTokensAndDoesNotAttach() {
     InlineFileAttachmentResolver resolver =
-        new InlineFileAttachmentResolver(
-            () -> {
-              throw new IllegalStateException("must not call");
-            });
+        new InlineFileAttachmentResolver(() -> {
+          throw new IllegalStateException("must not call");
+        });
 
     InlineFileAttachmentResolver.ResolvedPrompt resolved =
         resolver.resolve("\\`@file:path/to/file.txt` and \\`@clipboard`");

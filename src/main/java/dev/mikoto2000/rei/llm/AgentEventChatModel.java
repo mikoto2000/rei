@@ -142,73 +142,69 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     if (LlmFeature.ACTIVITY.equals(feature)) return Flux.defer(() -> delegate.stream(prompt));
     // Retain the caller before subscribeOn or provider callbacks can lose its lexical scope.
     var invocationOwner = owner(prompt);
-    return Flux.deferContextual(
-        context -> {
-          var resolvedOwner = invocationOwner == null ? owner(prompt) : invocationOwner;
-          var requestEventPublisher = publisher(resolvedOwner);
-          String runId = resolvedOwner == null ? null : resolvedOwner.runId();
-          String requestId = UUID.randomUUID().toString();
-          dev.mikoto2000.rei.timing.TimingAttempt trace =
-              context.getOrDefault(dev.mikoto2000.rei.timing.TimingAttempt.KEY, null);
-          var measured = measurement(prompt, runId, requestId, trace);
-          long startedAtNanos = System.nanoTime();
-          var metrics = new ResponseMetrics();
-          java.util.concurrent.atomic.AtomicBoolean firstTokenPublished =
-              new java.util.concurrent.atomic.AtomicBoolean();
-          requestEventPublisher.publish(
-              eventFactory.llmRequestStarted(runId, requestId, observedFeature(prompt)));
-          var permit = new java.util.concurrent.atomic.AtomicReference<ModelOutageGuard.Permit>();
-          return Flux.defer(
-                  () -> {
-                    if (cancelled(prompt, runId)) throw new java.util.concurrent.CancellationException();
-                    permit.set(outageGuard.acquire());
-                    return delegate.stream(prompt);
-                  })
-              .doOnNext(
-                  response -> {
-                    metrics.observe(response);
-                    observeChunk(runId, measured, response);
-                    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
-                    if (firstTokenPublished.compareAndSet(false, true)) {
-                      metrics.firstResponseMillis = elapsedMillis(startedAtNanos);
-                      requestEventPublisher.publish(
-                          eventFactory.llmResponseFirstToken(
-                              runId, requestId, elapsedMillis(startedAtNanos)));
-                    }
-                  })
-              .doOnComplete(
-                  () -> {
-                    outageGuard.completed(permit.get());
-                    if (measured != null)
-                      measured.finish(dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS);
-                    requestEventPublisher.publish(
-                        eventFactory.llmResponseCompleted(
-                            runId,
-                            requestId,
-                            elapsedMillis(startedAtNanos),
-                            metrics.firstResponseMillis,
-                            metrics.promptTokens,
-                            metrics.completionTokens));
-                  })
-              .doOnError(
-                  error -> {
-                    if (permit.get() != null) outageGuard.failed(permit.get(), error);
-                    if (measured != null)
-                      measured.finish(dev.mikoto2000.rei.timing.TimingExecution.status(error));
-                    requestEventPublisher.publish(
-                        eventFactory.llmRequestFailed(
-                            runId, requestId, elapsedMillis(startedAtNanos), error));
-                  })
-              .doOnCancel(
-                  () -> {
-                    if (permit.get() != null) outageGuard.cancelled(permit.get());
-                    if (measured != null)
-                      measured.finish(
-                          cancelled(prompt, runId)
-                              ? dev.mikoto2000.rei.timing.TimingRecorder.Status.CANCELLED
-                              : dev.mikoto2000.rei.timing.TimingRecorder.Status.DISCONNECTED);
-                  });
-        });
+    return Flux.deferContextual(context -> {
+      var resolvedOwner = invocationOwner == null ? owner(prompt) : invocationOwner;
+      var requestEventPublisher = publisher(resolvedOwner);
+      String runId = resolvedOwner == null ? null : resolvedOwner.runId();
+      String requestId = UUID.randomUUID().toString();
+      dev.mikoto2000.rei.timing.TimingAttempt trace =
+          context.getOrDefault(dev.mikoto2000.rei.timing.TimingAttempt.KEY, null);
+      var measured = measurement(prompt, runId, requestId, trace);
+      long startedAtNanos = System.nanoTime();
+      var metrics = new ResponseMetrics();
+      java.util.concurrent.atomic.AtomicBoolean firstTokenPublished =
+          new java.util.concurrent.atomic.AtomicBoolean();
+      requestEventPublisher.publish(
+          eventFactory.llmRequestStarted(runId, requestId, observedFeature(prompt)));
+      var permit = new java.util.concurrent.atomic.AtomicReference<ModelOutageGuard.Permit>();
+      return Flux.defer(
+              () -> {
+                if (cancelled(prompt, runId))
+                  throw new java.util.concurrent.CancellationException();
+                permit.set(outageGuard.acquire());
+                return delegate.stream(prompt);
+              })
+          .doOnNext(response -> {
+            metrics.observe(response);
+            observeChunk(runId, measured, response);
+            // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
+            if (firstTokenPublished.compareAndSet(false, true)) {
+              metrics.firstResponseMillis = elapsedMillis(startedAtNanos);
+              requestEventPublisher.publish(
+                  eventFactory.llmResponseFirstToken(
+                      runId, requestId, elapsedMillis(startedAtNanos)));
+            }
+          })
+          .doOnComplete(() -> {
+            outageGuard.completed(permit.get());
+            if (measured != null)
+              measured.finish(dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS);
+            requestEventPublisher.publish(
+                eventFactory.llmResponseCompleted(
+                    runId,
+                    requestId,
+                    elapsedMillis(startedAtNanos),
+                    metrics.firstResponseMillis,
+                    metrics.promptTokens,
+                    metrics.completionTokens));
+          })
+          .doOnError(error -> {
+            if (permit.get() != null) outageGuard.failed(permit.get(), error);
+            if (measured != null)
+              measured.finish(dev.mikoto2000.rei.timing.TimingExecution.status(error));
+            requestEventPublisher.publish(
+                eventFactory.llmRequestFailed(
+                    runId, requestId, elapsedMillis(startedAtNanos), error));
+          })
+          .doOnCancel(() -> {
+            if (permit.get() != null) outageGuard.cancelled(permit.get());
+            if (measured != null)
+              measured.finish(
+                  cancelled(prompt, runId)
+                      ? dev.mikoto2000.rei.timing.TimingRecorder.Status.CANCELLED
+                      : dev.mikoto2000.rei.timing.TimingRecorder.Status.DISCONNECTED);
+          });
+    });
   }
 
   /** 用途に応じたモデル利用で参照する選択可能な設定を返す。 */
@@ -285,50 +281,45 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
       dev.mikoto2000.rei.timing.TimingExecution.SpanLease measured,
       ChatResponse response) {
     if (measured == null) return;
-    timing.safely(
-        () -> {
-          measured.mark(dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_FRAMEWORK_CHUNK);
-          timing.markRun(
-              runId, dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_FRAMEWORK_CHUNK);
-          var generation = response == null ? null : response.getResult();
-          var output = generation == null ? null : generation.getOutput();
-          var content = output == null ? null : output.getText();
-          if (content != null && !content.isEmpty()) {
-            measured.mark(dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_GENERATION_TEXT);
-            timing.markRun(
-                runId, dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_GENERATION_TEXT);
-          }
-          observeUsage(measured, response);
-        });
+    timing.safely(() -> {
+      measured.mark(dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_FRAMEWORK_CHUNK);
+      timing.markRun(runId, dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_FRAMEWORK_CHUNK);
+      var generation = response == null ? null : response.getResult();
+      var output = generation == null ? null : generation.getOutput();
+      var content = output == null ? null : output.getText();
+      if (content != null && !content.isEmpty()) {
+        measured.mark(dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_GENERATION_TEXT);
+        timing.markRun(
+            runId, dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_GENERATION_TEXT);
+      }
+      observeUsage(measured, response);
+    });
   }
 
   /** 状況を判断する根拠を得るため、使用状況を観測する。 */
   private void observeUsage(
       dev.mikoto2000.rei.timing.TimingExecution.SpanLease measured, ChatResponse response) {
     if (measured == null) return;
-    timing.safely(
-        () -> {
-          if (response != null
-              && response.getMetadata() != null
-              && response.getMetadata().getUsage() != null
-              && !(response.getMetadata().getUsage()
-                  instanceof org.springframework.ai.chat.metadata.EmptyUsage)) {
-            var usage = response.getMetadata().getUsage();
-            measured.usage(
-                usage.getPromptTokens() == null ? null : usage.getPromptTokens().longValue(),
-                usage.getCompletionTokens() == null
-                    ? null
-                    : usage.getCompletionTokens().longValue(),
-                null,
-                null);
-            measured.cacheUsage(
-                usage.getNativeUsage() instanceof com.openai.models.completions.CompletionUsage
-                    ? "openai-compatible"
-                    : "UNKNOWN",
-                response.getMetadata().getModel(),
-                usage.getCacheReadInputTokens());
-          }
-        });
+    timing.safely(() -> {
+      if (response != null
+          && response.getMetadata() != null
+          && response.getMetadata().getUsage() != null
+          && !(response.getMetadata().getUsage()
+              instanceof org.springframework.ai.chat.metadata.EmptyUsage)) {
+        var usage = response.getMetadata().getUsage();
+        measured.usage(
+            usage.getPromptTokens() == null ? null : usage.getPromptTokens().longValue(),
+            usage.getCompletionTokens() == null ? null : usage.getCompletionTokens().longValue(),
+            null,
+            null);
+        measured.cacheUsage(
+            usage.getNativeUsage() instanceof com.openai.models.completions.CompletionUsage
+                ? "openai-compatible"
+                : "UNKNOWN",
+            response.getMetadata().getModel(),
+            usage.getCacheReadInputTokens());
+      }
+    });
   }
 
   /** 用途に応じたモデル利用で用いる通知先を返す。 */

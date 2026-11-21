@@ -76,12 +76,11 @@ public final class AutoSleepService implements AutoCloseable {
 
   /** 実行の担当。 */
   private final ExecutorService worker =
-      Executors.newSingleThreadExecutor(
-          r -> {
-            var thread = new Thread(r, "rei-auto-sleep");
-            thread.setDaemon(true);
-            return thread;
-          });
+      Executors.newSingleThreadExecutor(r -> {
+        var thread = new Thread(r, "rei-auto-sleep");
+        thread.setDaemon(true);
+        return thread;
+      });
 
   /** 実行中スレッド。 */
   private volatile Thread runningThread;
@@ -428,96 +427,92 @@ public final class AutoSleepService implements AutoCloseable {
         attempts.put(id, now);
         executing.set(true);
         runningSession = id;
-        worker.execute(
-            () -> {
-              runningThread = Thread.currentThread();
-              try {
-                var timeout = timeout(state.stage());
-                org.slf4j.LoggerFactory.getLogger(getClass())
-                    .info(
-                        "Auto Sleep session={} wait={} total={}",
+        worker.execute(() -> {
+          runningThread = Thread.currentThread();
+          try {
+            var timeout = timeout(state.stage());
+            org.slf4j.LoggerFactory.getLogger(getClass())
+                .info(
+                    "Auto Sleep session={} wait={} total={}",
+                    id,
+                    timeout,
+                    properties.totalTimeout());
+            var execution = new AutoSleepExecution(timeout, properties.totalTimeout());
+            var report =
+                performSleep.apply(
+                    new AutoRun(
                         id,
-                        timeout,
-                        properties.totalTimeout());
-                var execution = new AutoSleepExecution(timeout, properties.totalTimeout());
-                var report =
-                    performSleep.apply(
-                        new AutoRun(
-                            id,
-                            project,
-                            () ->
-                                closed
-                                    || activity.isAgentBusy()
-                                    || activity.activityVersion() != version,
-                            execution));
-                if (report.run().processedTurns() > 0 || execution.hasSavedProgress()) {
-                  try {
+                        project,
+                        () ->
+                            closed
+                                || activity.isAgentBusy()
+                                || activity.activityVersion() != version,
+                        execution));
+            if (report.run().processedTurns() > 0 || execution.hasSavedProgress()) {
+              try {
+                updateState.apply(
+                    state,
+                    new StateChange(
+                        null, null, clock.instant().toString(), properties.failureLimit()));
+              } catch (RuntimeException update) {
+                pendingUpdates.put(id, new Pending(state, null, null, clock.instant().toString()));
+                warnState(id, update);
+              }
+            }
+            if (request != null)
+              try {
+                if (unsleptTurns.applyAsLong(id) == 0) completeRequest.test(request);
+              } catch (RuntimeException update) {
+                warnState(id, update);
+              }
+          } catch (RuntimeException error) {
+            if (!dev.mikoto2000.rei.core.chat.RunCancellation.isCancellation(error)
+                && !Thread.currentThread().isInterrupted()
+                && !closed
+                && !activity.isAgentBusy()
+                && activity.activityVersion() == version
+                && !(error instanceof SleepService.SleepBusyException)
+                && !(error
+                    instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)) {
+              String code = classify(error),
+                  description = description(code, state.stage()),
+                  failedAt = clock.instant().toString();
+              // Log types, frames and fixed validation codes, never model input or output.
+              var logger = org.slf4j.LoggerFactory.getLogger(getClass());
+              for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+                logger.warn(
+                    "Auto Sleep session={} code={} exception={} frames={}",
+                    id,
+                    code,
+                    cause.getClass().getName(),
+                    Arrays.toString(
+                        Arrays.copyOf(
+                            cause.getStackTrace(), Math.min(12, cause.getStackTrace().length))));
+                if (cause instanceof OutputValidationDiagnostic validation)
+                  logger.warn(
+                      "Auto Sleep session={} code={} field={} reason={}",
+                      id,
+                      code,
+                      validation.fieldPath(),
+                      validation.reason());
+              }
+              try {
+                var updated =
                     updateState.apply(
                         state,
-                        new StateChange(
-                            null, null, clock.instant().toString(), properties.failureLimit()));
-                  } catch (RuntimeException update) {
-                    pendingUpdates.put(
-                        id, new Pending(state, null, null, clock.instant().toString()));
-                    warnState(id, update);
-                  }
-                }
-                if (request != null)
-                  try {
-                    if (unsleptTurns.applyAsLong(id) == 0) completeRequest.test(request);
-                  } catch (RuntimeException update) {
-                    warnState(id, update);
-                  }
-              } catch (RuntimeException error) {
-                if (!dev.mikoto2000.rei.core.chat.RunCancellation.isCancellation(error)
-                    && !Thread.currentThread().isInterrupted()
-                    && !closed
-                    && !activity.isAgentBusy()
-                    && activity.activityVersion() == version
-                    && !(error instanceof SleepService.SleepBusyException)
-                    && !(error
-                        instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException)) {
-                  String code = classify(error),
-                      description = description(code, state.stage()),
-                      failedAt = clock.instant().toString();
-                  // Log types, frames and fixed validation codes, never model input or output.
-                  var logger = org.slf4j.LoggerFactory.getLogger(getClass());
-                  for (Throwable cause = error; cause != null; cause = cause.getCause()) {
-                    logger.warn(
-                        "Auto Sleep session={} code={} exception={} frames={}",
-                        id,
-                        code,
-                        cause.getClass().getName(),
-                        Arrays.toString(
-                            Arrays.copyOf(
-                                cause.getStackTrace(),
-                                Math.min(12, cause.getStackTrace().length))));
-                    if (cause instanceof OutputValidationDiagnostic validation)
-                      logger.warn(
-                          "Auto Sleep session={} code={} field={} reason={}",
-                          id,
-                          code,
-                          validation.fieldPath(),
-                          validation.reason());
-                  }
-                  try {
-                    var updated =
-                        updateState.apply(
-                            state,
-                            new StateChange(
-                                code, description, failedAt, properties.failureLimit()));
-                    notifyStopped(state, updated);
-                  } catch (RuntimeException update) {
-                    pendingUpdates.put(id, new Pending(state, code, description, failedAt));
-                    warnState(id, update);
-                  }
-                }
-              } finally {
-                runningThread = null;
-                runningSession = null;
-                executing.set(false);
+                        new StateChange(code, description, failedAt, properties.failureLimit()));
+                notifyStopped(state, updated);
+              } catch (RuntimeException update) {
+                pendingUpdates.put(id, new Pending(state, code, description, failedAt));
+                warnState(id, update);
               }
-            });
+            }
+          } finally {
+            runningThread = null;
+            runningSession = null;
+            executing.set(false);
+          }
+        });
         return;
       } catch (RuntimeException error) {
         executing.set(false);

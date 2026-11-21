@@ -55,12 +55,11 @@ class IntegrationRunSubmitServiceTest {
     var calendar = mock(GoogleCalendarService.class);
     var tasks = mock(TaskService.class);
     when(tasks.listOpen(any()))
-        .thenAnswer(
-            call -> {
-              assertEquals(project.id(), AgentRunScope.current().projectId());
-              assertEquals("session", AgentRunScope.current().conversationId());
-              return java.util.List.of();
-            });
+        .thenAnswer(call -> {
+          assertEquals(project.id(), AgentRunScope.current().projectId());
+          assertEquals("session", AgentRunScope.current().conversationId());
+          return java.util.List.of();
+        });
     try (var runs = new RunService(registry, bus, events, cancellation, router::cancelQueued)) {
       var service =
           new IntegrationRunSubmitService(
@@ -107,12 +106,11 @@ class IntegrationRunSubmitServiceTest {
     var due = java.time.LocalDate.of(2026, 10, 20);
     var task = new Task(7, "Review", due, 2, TaskStatus.OPEN, java.time.OffsetDateTime.now(), null);
     when(tasks.add("Review", due, 2))
-        .thenAnswer(
-            call -> {
-              assertEquals(project.id(), AgentRunScope.current().projectId());
-              assertEquals("session", AgentRunScope.current().conversationId());
-              return task;
-            });
+        .thenAnswer(call -> {
+          assertEquals(project.id(), AgentRunScope.current().projectId());
+          assertEquals("session", AgentRunScope.current().conversationId());
+          return task;
+        });
     try (var runs = new RunService(registry, bus, events, cancellation, router::cancelQueued)) {
       var service =
           new IntegrationRunSubmitService(
@@ -168,12 +166,11 @@ class IntegrationRunSubmitServiceTest {
             eq("key"),
             anyString(),
             any()))
-        .thenAnswer(
-            call -> {
-              java.util.function.Consumer<AgentRunContext> admit = call.getArgument(8);
-              admit.accept(context);
-              return context;
-            });
+        .thenAnswer(call -> {
+          java.util.function.Consumer<AgentRunContext> admit = call.getArgument(8);
+          admit.accept(context);
+          return context;
+        });
     var calendar = mock(GoogleCalendarService.class);
     var tasks = mock(TaskService.class);
     doAnswer(

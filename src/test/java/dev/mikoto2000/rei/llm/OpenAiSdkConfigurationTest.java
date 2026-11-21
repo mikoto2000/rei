@@ -41,30 +41,29 @@ class OpenAiSdkConfigurationTest {
   void boundConnectionOptionsKeepLegacyWirePathsAndConfiguredModels() {
     runner()
         .withPropertyValues("rei.llm.read-timeout=8m")
-        .run(
-            context -> {
-              assertThat(context).hasNotFailed();
-              var chat = context.getBean(OpenAiChatModel.class);
-              assertThat(chat.getOptions().getModel()).isEqualTo("local-chat");
-              assertThat(chat.call(new Prompt("hello")).getResult().getOutput().getText())
-                  .isEqualTo("hello");
-              var image = context.getBean(OpenAiImageModel.class);
-              assertThat(image.getOptions().getModel()).isEqualTo("local-image");
-              assertThat(image.call(new ImagePrompt("cat")).getResult().getOutput().getB64Json())
-                  .isEqualTo("aW1hZ2U=");
-              assertThat(context.getBean(OpenAiEmbeddingModel.class).embed("document"))
-                  .containsExactly(0.1f, 0.2f);
-              assertThat(context.getBean(Requests.class).urls)
-                  .containsExactly(
-                      "https://provider.invalid/prefix/v1/chat/completions",
-                      "https://provider.invalid/prefix/v1/images/generations",
-                      "https://embedding.invalid/proxy/custom/embeddings");
-              assertThat(context.getBean(Requests.class).bodies.get(0))
-                  .contains("\"model\":\"local-chat\"");
-              assertThat(context.getBean(Requests.class).bodies.get(1))
-                  .contains("\"model\":\"local-image\"");
-              assertThat(context.getBean(Requests.class).readTimeouts.getFirst()).isEqualTo(480_000);
-            });
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          var chat = context.getBean(OpenAiChatModel.class);
+          assertThat(chat.getOptions().getModel()).isEqualTo("local-chat");
+          assertThat(chat.call(new Prompt("hello")).getResult().getOutput().getText())
+              .isEqualTo("hello");
+          var image = context.getBean(OpenAiImageModel.class);
+          assertThat(image.getOptions().getModel()).isEqualTo("local-image");
+          assertThat(image.call(new ImagePrompt("cat")).getResult().getOutput().getB64Json())
+              .isEqualTo("aW1hZ2U=");
+          assertThat(context.getBean(OpenAiEmbeddingModel.class).embed("document"))
+              .containsExactly(0.1f, 0.2f);
+          assertThat(context.getBean(Requests.class).urls)
+              .containsExactly(
+                  "https://provider.invalid/prefix/v1/chat/completions",
+                  "https://provider.invalid/prefix/v1/images/generations",
+                  "https://embedding.invalid/proxy/custom/embeddings");
+          assertThat(context.getBean(Requests.class).bodies.get(0))
+              .contains("\"model\":\"local-chat\"");
+          assertThat(context.getBean(Requests.class).bodies.get(1))
+              .contains("\"model\":\"local-image\"");
+          assertThat(context.getBean(Requests.class).readTimeouts.getFirst()).isEqualTo(480_000);
+        });
   }
 
   /** 検証で使用する実行の担当を、指定された条件に合わせて用意する。 */
@@ -112,31 +111,30 @@ class OpenAiSdkConfigurationTest {
     @Order(Ordered.LOWEST_PRECEDENCE)
     OpenAiHttpClientBuilderCustomizer recordRequests(Requests requests) {
       return builder ->
-          builder.interceptor(
-              chain -> {
-                var request = chain.request();
-                requests.readTimeouts.add(chain.readTimeoutMillis());
-                requests.urls.add(request.url().toString());
-                var buffer = new okio.Buffer();
-                request.body().writeTo(buffer);
-                requests.bodies.add(buffer.readUtf8());
-                String path = request.url().encodedPath();
-                String response =
-                    path.endsWith("chat/completions")
-                        ? "{\"id\":\"chat\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"local-chat\",\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\"hello\"}}]}"
-                        : path.endsWith("images/generations")
-                            ? "{\"created\":0,\"data\":[{\"b64_json\":\"aW1hZ2U=\"}]}"
-                            : "{\"object\":\"list\",\"model\":\"local-embedding\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[0.1,0.2]}],\"usage\":{\"prompt_tokens\":1,\"total_tokens\":1}}";
-                return new okhttp3.Response.Builder()
-                    .request(request)
-                    .protocol(okhttp3.Protocol.HTTP_1_1)
-                    .code(200)
-                    .message("OK")
-                    .body(
-                        okhttp3.ResponseBody.create(
-                            response, okhttp3.MediaType.get("application/json")))
-                    .build();
-              });
+          builder.interceptor(chain -> {
+            var request = chain.request();
+            requests.readTimeouts.add(chain.readTimeoutMillis());
+            requests.urls.add(request.url().toString());
+            var buffer = new okio.Buffer();
+            request.body().writeTo(buffer);
+            requests.bodies.add(buffer.readUtf8());
+            String path = request.url().encodedPath();
+            String response =
+                path.endsWith("chat/completions")
+                    ? "{\"id\":\"chat\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"local-chat\",\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\"hello\"}}]}"
+                    : path.endsWith("images/generations")
+                        ? "{\"created\":0,\"data\":[{\"b64_json\":\"aW1hZ2U=\"}]}"
+                        : "{\"object\":\"list\",\"model\":\"local-embedding\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[0.1,0.2]}],\"usage\":{\"prompt_tokens\":1,\"total_tokens\":1}}";
+            return new okhttp3.Response.Builder()
+                .request(request)
+                .protocol(okhttp3.Protocol.HTTP_1_1)
+                .code(200)
+                .message("OK")
+                .body(
+                    okhttp3.ResponseBody.create(
+                        response, okhttp3.MediaType.get("application/json")))
+                .build();
+          });
     }
   }
 }

@@ -48,7 +48,8 @@ public final class ScopedMemoryController {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (id == null || id.isBlank() || id.length() > 128)
       throw new IllegalArgumentException("Project ID required");
-    return findProject.apply(id)
+    return findProject
+        .apply(id)
         .orElseThrow(
             () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"))
         .id();

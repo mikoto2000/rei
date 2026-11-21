@@ -173,39 +173,37 @@ public final class PlanOAuth {
         || redirect.getQuery() != null
         || redirect.getFragment() != null
         || redirect.getUserInfo() != null) throw ChatGptException.of(AUTH_INVALID);
-    return store.locked(
-        s -> {
-          var old = s.load(account);
-          var client = old == null ? "dynamic_agent_client" : old.clientId();
-          var state = random();
-          var nonce = random();
-          var pkce = random();
-          var query = new LinkedHashMap<String, String>();
-          query.put("client_id", client);
-          if (old == null) query.put("agent_name_hint", "rei");
-          query.put("ext_agent_host_id", s.hostId());
-          query.put("response_type", "code");
-          query.put("redirect_uri", redirect.toString());
-          query.put(
-              "scope",
-              "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct");
-          query.put("resource", RESOURCE);
-          query.put("state", state);
-          query.put("nonce", nonce);
-          query.put("code_challenge_method", "S256");
-          query.put("code_challenge", challenge(pkce));
-          if (old != null && old.idToken() != null) query.put("id_token_hint", old.idToken());
-          return new Attempt(
-              account,
-              client,
-              old == null ? null : old.subject(),
-              state,
-              nonce,
-              pkce,
-              redirect,
-              clock.instant().plusSeconds(600),
-              URI.create("https://auth.openai.com/api/accounts/authorize?" + form(query)));
-        });
+    return store.locked(s -> {
+      var old = s.load(account);
+      var client = old == null ? "dynamic_agent_client" : old.clientId();
+      var state = random();
+      var nonce = random();
+      var pkce = random();
+      var query = new LinkedHashMap<String, String>();
+      query.put("client_id", client);
+      if (old == null) query.put("agent_name_hint", "rei");
+      query.put("ext_agent_host_id", s.hostId());
+      query.put("response_type", "code");
+      query.put("redirect_uri", redirect.toString());
+      query.put(
+          "scope", "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct");
+      query.put("resource", RESOURCE);
+      query.put("state", state);
+      query.put("nonce", nonce);
+      query.put("code_challenge_method", "S256");
+      query.put("code_challenge", challenge(pkce));
+      if (old != null && old.idToken() != null) query.put("id_token_hint", old.idToken());
+      return new Attempt(
+          account,
+          client,
+          old == null ? null : old.subject(),
+          state,
+          nonce,
+          pkce,
+          redirect,
+          clock.instant().plusSeconds(600),
+          URI.create("https://auth.openai.com/api/accounts/authorize?" + form(query)));
+    });
   }
 
   /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
@@ -241,92 +239,85 @@ public final class PlanOAuth {
     if (attempt.subject() != null && !attempt.subject().equals(identity.subject()))
       throw ChatGptException.of(AUTH_INVALID);
     var tokens = tokenSet(grant, client, identity, null);
-    store.locked(
-        s -> {
-          var current = s.load(attempt.account());
-          if (current != null
-              && (!current.clientId().equals(client)
-                  || !current.subject().equals(identity.subject())))
-            throw ChatGptException.of(AUTH_INVALID);
-          s.save(attempt.account(), tokens);
-          return null;
-        });
+    store.locked(s -> {
+      var current = s.load(attempt.account());
+      if (current != null
+          && (!current.clientId().equals(client) || !current.subject().equals(identity.subject())))
+        throw ChatGptException.of(AUTH_INVALID);
+      s.save(attempt.account(), tokens);
+      return null;
+    });
   }
 
   /** ChatGPTとの連携で用いるアクセスを返す。 */
   public TokenSet access(String account) {
-    return store.locked(
-        s -> {
-          var saved = s.load(account);
-          if (saved == null || saved.accessToken() == null)
-            throw ChatGptException.of(AUTH_REQUIRED);
-          if (!saved.scopes().contains("chatgpt.tokens.use.direct"))
-            throw ChatGptException.of(CONSENT_REQUIRED);
-          if (saved.expiresAt() > clock.instant().getEpochSecond()) return saved;
-          if (saved.refreshToken() == null) throw ChatGptException.of(AUTH_REQUIRED);
-          try {
-            var grant =
-                request(
-                    TOKEN,
-                    Map.of(
-                        "grant_type",
-                        "refresh_token",
-                        "client_id",
-                        saved.clientId(),
-                        "refresh_token",
-                        saved.refreshToken(),
-                        "resource",
-                        RESOURCE));
-            var replacement =
-                tokenSet(
-                    grant, saved.clientId(), new Identity(saved.subject(), saved.email()), saved);
-            s.save(account, replacement);
-            return replacement;
-          } catch (ChatGptException e) {
-            if (e.code() == AUTH_INVALID) s.save(account, saved.withoutTokens());
-            throw e;
-          }
-        });
+    return store.locked(s -> {
+      var saved = s.load(account);
+      if (saved == null || saved.accessToken() == null) throw ChatGptException.of(AUTH_REQUIRED);
+      if (!saved.scopes().contains("chatgpt.tokens.use.direct"))
+        throw ChatGptException.of(CONSENT_REQUIRED);
+      if (saved.expiresAt() > clock.instant().getEpochSecond()) return saved;
+      if (saved.refreshToken() == null) throw ChatGptException.of(AUTH_REQUIRED);
+      try {
+        var grant =
+            request(
+                TOKEN,
+                Map.of(
+                    "grant_type",
+                    "refresh_token",
+                    "client_id",
+                    saved.clientId(),
+                    "refresh_token",
+                    saved.refreshToken(),
+                    "resource",
+                    RESOURCE));
+        var replacement =
+            tokenSet(grant, saved.clientId(), new Identity(saved.subject(), saved.email()), saved);
+        s.save(account, replacement);
+        return replacement;
+      } catch (ChatGptException e) {
+        if (e.code() == AUTH_INVALID) s.save(account, saved.withoutTokens());
+        throw e;
+      }
+    });
   }
 
   /** ChatGPTとの連携において、ログアウトに該当するか判定する。 */
   public boolean logout(String account) {
-    return store.locked(
-        s -> {
-          var saved = s.load(account);
-          if (saved == null) return true;
-          boolean confirmed = false;
-          try {
-            if (saved.refreshToken() != null) {
-              var discovery = getDiscovery();
-              URI revoke = URI.create(required(discovery, "revocation_endpoint"));
-              if (!revoke.getScheme().equals("https")
-                  || !revoke.getHost().equals("auth.openai.com"))
-                throw ChatGptException.of(AUTH_INVALID);
-              try (var response =
-                  transport.send(
-                      revoke,
-                      "POST",
-                      Map.of("Content-Type", "application/x-www-form-urlencoded"),
-                      form(Map.of(
-                              "token",
-                              saved.refreshToken(),
-                              "token_type_hint",
-                              "refresh_token",
-                              "client_id",
-                              saved.clientId()))
-                          .getBytes(StandardCharsets.UTF_8),
-                      Duration.ofSeconds(15),
-                      () -> false)) {
-                confirmed = response.status() == 200;
-              }
-            } else confirmed = true;
-          } catch (RuntimeException ignored) {
-          } finally {
-            s.save(account, saved.withoutTokens());
+    return store.locked(s -> {
+      var saved = s.load(account);
+      if (saved == null) return true;
+      boolean confirmed = false;
+      try {
+        if (saved.refreshToken() != null) {
+          var discovery = getDiscovery();
+          URI revoke = URI.create(required(discovery, "revocation_endpoint"));
+          if (!revoke.getScheme().equals("https") || !revoke.getHost().equals("auth.openai.com"))
+            throw ChatGptException.of(AUTH_INVALID);
+          try (var response =
+              transport.send(
+                  revoke,
+                  "POST",
+                  Map.of("Content-Type", "application/x-www-form-urlencoded"),
+                  form(Map.of(
+                          "token",
+                          saved.refreshToken(),
+                          "token_type_hint",
+                          "refresh_token",
+                          "client_id",
+                          saved.clientId()))
+                      .getBytes(StandardCharsets.UTF_8),
+                  Duration.ofSeconds(15),
+                  () -> false)) {
+            confirmed = response.status() == 200;
           }
-          return confirmed;
-        });
+        } else confirmed = true;
+      } catch (RuntimeException ignored) {
+      } finally {
+        s.save(account, saved.withoutTokens());
+      }
+      return confirmed;
+    });
   }
 
   /** ChatGPTとの連携で用いる非公開化識別子を返す。 */
@@ -337,25 +328,23 @@ public final class PlanOAuth {
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
   public List<String> status() {
-    return store.locked(
-        s ->
-            s.accounts().stream()
-                .map(
-                    a -> {
-                      var token = s.load(a);
-                      return a
-                          + " | "
-                          + maskIdentifier(token.clientId())
-                          + " | "
-                          + maskIdentifier(token.subject())
-                          + " | "
-                          + (token.accessToken() == null
-                              ? "signed out"
-                              : token.scopes().contains("chatgpt.tokens.use.direct")
-                                  ? "ChatGPT plan authorized"
-                                  : "plan disabled");
-                    })
-                .toList());
+    return store.locked(s ->
+        s.accounts().stream()
+            .map(a -> {
+              var token = s.load(a);
+              return a
+                  + " | "
+                  + maskIdentifier(token.clientId())
+                  + " | "
+                  + maskIdentifier(token.subject())
+                  + " | "
+                  + (token.accessToken() == null
+                      ? "signed out"
+                      : token.scopes().contains("chatgpt.tokens.use.direct")
+                          ? "ChatGPT plan authorized"
+                          : "plan disabled");
+            })
+            .toList());
   }
 
   /**
@@ -364,16 +353,14 @@ public final class PlanOAuth {
    * <p>Local authorization labels only; no token, subject, client ID or network request.
    */
   public java.util.Set<String> authorizedAccounts() {
-    return store.locked(
-        s ->
-            s.accounts().stream()
-                .filter(
-                    account -> {
-                      var token = s.load(account);
-                      return token.accessToken() != null
-                          && token.scopes().contains("chatgpt.tokens.use.direct");
-                    })
-                .collect(java.util.stream.Collectors.toUnmodifiableSet()));
+    return store.locked(s ->
+        s.accounts().stream()
+            .filter(account -> {
+              var token = s.load(account);
+              return token.accessToken() != null
+                  && token.scopes().contains("chatgpt.tokens.use.direct");
+            })
+            .collect(java.util.stream.Collectors.toUnmodifiableSet()));
   }
 
   /** ChatGPTとの連携で参照する利用先の検出を返す。 */
@@ -470,11 +457,10 @@ public final class PlanOAuth {
   /** ChatGPTとの連携で用いるformを返す。 */
   static String form(Map<String, String> fields) {
     return fields.entrySet().stream()
-        .map(
-            e ->
-                URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8)
-                    + "="
-                    + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
+        .map(e ->
+            URLEncoder.encode(e.getKey(), StandardCharsets.UTF_8)
+                + "="
+                + URLEncoder.encode(e.getValue(), StandardCharsets.UTF_8))
         .collect(java.util.stream.Collectors.joining("&"));
   }
 

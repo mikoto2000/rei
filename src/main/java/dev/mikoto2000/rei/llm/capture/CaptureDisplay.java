@@ -78,14 +78,13 @@ final class CaptureDisplay {
     if (text == null) return "unknown";
     var out = new StringBuilder();
     text.codePoints()
-        .forEach(
-            c -> {
-              if (c != '\n'
-                  && c != '\t'
-                  && (Character.isISOControl(c) || Character.getType(c) == Character.FORMAT))
-                out.append(String.format("\\u%04x", c));
-              else out.appendCodePoint(c);
-            });
+        .forEach(c -> {
+          if (c != '\n'
+              && c != '\t'
+              && (Character.isISOControl(c) || Character.getType(c) == Character.FORMAT))
+            out.append(String.format("\\u%04x", c));
+          else out.appendCodePoint(c);
+        });
     return out.toString();
   }
 }

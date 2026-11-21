@@ -191,12 +191,11 @@ class DelegationPreflightFailureTest {
     assertEquals(1, refusalBoundaries.get());
     var refused =
         failures.stream()
-            .filter(
-                event ->
-                    ((ToolFailedPayload) event.payload())
-                        .error()
-                        .code()
-                        .equals("chatgpt_permission_denied"))
+            .filter(event ->
+                ((ToolFailedPayload) event.payload())
+                    .error()
+                    .code()
+                    .equals("chatgpt_permission_denied"))
             .findFirst()
             .orElseThrow();
     var payload = (ToolFailedPayload) refused.payload();

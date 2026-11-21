@@ -80,14 +80,13 @@ public class ExternalAgentProcessRunner {
       Future<?> stderr =
           readers.submit(() -> drain(running.getErrorStream(), capture, true, activity));
       Future<?> stdin =
-          readers.submit(
-              () -> {
-                try (var writer = running.getOutputStream()) {
-                  writer.write(input.getBytes(StandardCharsets.UTF_8));
-                } catch (IOException ignored) {
-                  /* Process may exit without consuming stdin. */
-                }
-              });
+          readers.submit(() -> {
+            try (var writer = running.getOutputStream()) {
+              writer.write(input.getBytes(StandardCharsets.UTF_8));
+            } catch (IOException ignored) {
+              /* Process may exit without consuming stdin. */
+            }
+          });
       while (true) {
         rememberDescendants(running, descendants);
         if (cancelled.getAsBoolean()) {
@@ -206,11 +205,10 @@ public class ExternalAgentProcessRunner {
     // Kill children while their parent can still reap them; retain handles across parent exit.
     List<ProcessHandle> children = new ArrayList<>(known);
     Set<Long> protectedIds = protectedProcessIds();
-    children.removeIf(
-        child ->
-            protectedIds.contains(child.pid())
-                || !child.isAlive()
-                || child.info().startInstant().isEmpty());
+    children.removeIf(child ->
+        protectedIds.contains(child.pid())
+            || !child.isAlive()
+            || child.info().startInstant().isEmpty());
     Collections.reverse(children);
     for (var child : children) if (child.isAlive()) child.destroyForcibly();
     boolean interrupted = false;

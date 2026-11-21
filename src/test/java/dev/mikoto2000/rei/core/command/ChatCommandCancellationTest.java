@@ -60,18 +60,17 @@ class ChatCommandCancellationTest {
     var executor = Executors.newSingleThreadExecutor();
     try {
       var future =
-          executor.submit(
-              () ->
-                  new CommandLine(
-                          new ChatCommand(
-                              chatClient,
-                              modelHolderService,
-                              cancellationService,
-                              Mockito.mock(ChatResponseNarrator.class),
-                              java.util.Optional.empty(),
-                              new AgentEventFactory(Clock.systemDefaultZone()),
-                              bus))
-                      .execute("hello"));
+          executor.submit(() ->
+              new CommandLine(
+                      new ChatCommand(
+                          chatClient,
+                          modelHolderService,
+                          cancellationService,
+                          Mockito.mock(ChatResponseNarrator.class),
+                          java.util.Optional.empty(),
+                          new AgentEventFactory(Clock.systemDefaultZone()),
+                          bus))
+                  .execute("hello"));
       assertTrue(subscribed.await(1, TimeUnit.SECONDS));
 
       cancellationService.cancel();

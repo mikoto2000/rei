@@ -150,8 +150,7 @@ public class SqliteVecInstaller {
         var tarInputStream = new TarArchiveInputStream(gzipInputStream)) {
       org.apache.commons.compress.archivers.tar.TarArchiveEntry entry;
       while ((entry = tarInputStream.getNextEntry()) != null) {
-        if (!entry.isFile()
-            || !libraryName.equals(entry.getName())) {
+        if (!entry.isFile() || !libraryName.equals(entry.getName())) {
           continue;
         }
         if (entry.getSize() <= 0 || entry.getSize() > HttpDownloadClient.MAX_ARCHIVE_BYTES) {
@@ -201,15 +200,16 @@ public class SqliteVecInstaller {
           validateDestination(uri, destination);
           HttpRequest request =
               HttpRequest.newBuilder(destination).timeout(Duration.ofSeconds(30)).GET().build();
-          HttpResponse<byte[]> response =
-              fetch(request);
+          HttpResponse<byte[]> response = fetch(request);
           int status = response.statusCode();
           if (status >= 200 && status < 300) return response.body();
           if (status != 301 && status != 302 && status != 303 && status != 307 && status != 308) {
             throw new IOException("sqlite-vec download HTTP " + status);
           }
           String location =
-              response.headers().firstValue("Location")
+              response
+                  .headers()
+                  .firstValue("Location")
                   .orElseThrow(() -> new IOException("sqlite-vec redirect に Location がありません"));
           destination = destination.resolve(location);
         }
@@ -225,10 +225,11 @@ public class SqliteVecInstaller {
     /** JDK 25 のヘッダー受信タイムアウトに加え、本文完了までの期限を設ける。 */
     private HttpResponse<byte[]> fetch(HttpRequest request)
         throws IOException, InterruptedException {
-      var transfer = httpClient.sendAsync(
-          request,
-          HttpResponse.BodyHandlers.limiting(
-              HttpResponse.BodyHandlers.ofByteArray(), MAX_ARCHIVE_BYTES));
+      var transfer =
+          httpClient.sendAsync(
+              request,
+              HttpResponse.BodyHandlers.limiting(
+                  HttpResponse.BodyHandlers.ofByteArray(), MAX_ARCHIVE_BYTES));
       try {
         return transfer.get(30, TimeUnit.SECONDS);
       } catch (TimeoutException e) {

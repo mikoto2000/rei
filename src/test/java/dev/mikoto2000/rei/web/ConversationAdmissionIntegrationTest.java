@@ -183,29 +183,28 @@ class ConversationAdmissionIntegrationTest {
                   org.mockito.ArgumentMatchers.anyString(),
                   org.mockito.ArgumentMatchers.anyString(),
                   org.mockito.ArgumentMatchers.anyBoolean()))
-          .thenAnswer(
-              call ->
-                  new dev.mikoto2000.rei.memory.service.SleepService.Report(
-                      new dev.mikoto2000.rei.memory.service.SleepRun(
-                          "sleep",
-                          call.getArgument(0),
-                          call.getArgument(1),
-                          "start",
-                          "end",
-                          "PREVIEW",
-                          0,
-                          0,
-                          0,
-                          0,
-                          0,
-                          0,
-                          0,
-                          0,
-                          0,
-                          0,
-                          0),
-                      List.of(),
-                      call.getArgument(2)));
+          .thenAnswer(call ->
+              new dev.mikoto2000.rei.memory.service.SleepService.Report(
+                  new dev.mikoto2000.rei.memory.service.SleepRun(
+                      "sleep",
+                      call.getArgument(0),
+                      call.getArgument(1),
+                      "start",
+                      "end",
+                      "PREVIEW",
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0),
+                  List.of(),
+                  call.getArgument(2)));
       return service;
     }
 

@@ -37,9 +37,7 @@ public record DailyBriefing(
     events = events == null ? null : Collections.unmodifiableList(new ArrayList<>(events));
     openTasks = openTasks == null ? null : Collections.unmodifiableList(new ArrayList<>(openTasks));
     overdueTasks =
-        overdueTasks == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(overdueTasks));
+        overdueTasks == null ? null : Collections.unmodifiableList(new ArrayList<>(overdueTasks));
     relatedDocuments =
         relatedDocuments == null
             ? null
@@ -50,12 +48,8 @@ public record DailyBriefing(
             ? null
             : Collections.unmodifiableList(new ArrayList<>(interestUpdates));
     cautionPoints =
-        cautionPoints == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(cautionPoints));
+        cautionPoints == null ? null : Collections.unmodifiableList(new ArrayList<>(cautionPoints));
     nextActions =
-        nextActions == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(nextActions));
+        nextActions == null ? null : Collections.unmodifiableList(new ArrayList<>(nextActions));
   }
 }

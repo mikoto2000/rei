@@ -108,11 +108,10 @@ class GroundingRefinementTest {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
     var model = mock(ChatModel.class);
     when(model.call(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              cancelled.set(true);
-              return SpringAiComputerVisionModelTest.response(point(p, false));
-            });
+        .thenAnswer(call -> {
+          cancelled.set(true);
+          return SpringAiComputerVisionModelTest.response(point(p, false));
+        });
     var vision =
         TestGroundingModels.create(
             this::click, model, OpenAiChatOptions::builder, cancelled::get, p);

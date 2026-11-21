@@ -67,8 +67,7 @@ public final class SessionRegistry {
   public synchronized void purgeExpired() {
     sessions
         .values()
-        .removeIf(
-            session ->
-                !clock.instant().isBefore(session.accessedAt().plus(Duration.ofMinutes(30))));
+        .removeIf(session ->
+            !clock.instant().isBefore(session.accessedAt().plus(Duration.ofMinutes(30))));
   }
 }

@@ -63,15 +63,11 @@ public final class WebContentDeduplication {
   /** Web上の情報の調査で用いる重複の有無別名一覧を返す。 */
   private static List<WebSourceAlias> duplicateAliases(List<WebSourceAlias> aliases) {
     return aliases.stream()
-        .map(
-            alias ->
-                "http_redirect".equals(alias.evidenceType())
-                    ? new WebSourceAlias(
-                        alias.url(),
-                        alias.title(),
-                        alias.publishedAt(),
-                        "duplicate_body_http_redirect")
-                    : alias)
+        .map(alias ->
+            "http_redirect".equals(alias.evidenceType())
+                ? new WebSourceAlias(
+                    alias.url(), alias.title(), alias.publishedAt(), "duplicate_body_http_redirect")
+                : alias)
         .toList();
   }
 }

@@ -163,12 +163,11 @@ class ChatGptSubAgentBackendTest {
             anyInt(),
             any(),
             any()))
-        .thenAnswer(
-            call -> {
-              if (call.getArgument(8) != null) ((Runnable) call.getArgument(8)).run();
-              return new PlanSseAssembler.Result(
-                  PlanSseAssembler.State.COMPLETED, VALID, 17, "resp", null);
-            });
+        .thenAnswer(call -> {
+          if (call.getArgument(8) != null) ((Runnable) call.getArgument(8)).run();
+          return new PlanSseAssembler.Result(
+              PlanSseAssembler.State.COMPLETED, VALID, 17, "resp", null);
+        });
   }
 
   /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
@@ -253,17 +252,16 @@ class ChatGptSubAgentBackendTest {
             anyInt(),
             any(),
             any()))
-        .thenAnswer(
-            call -> {
-              ((Runnable) call.getArgument(8)).run();
-              captured.add(call.getArgument(3));
-              return new PlanSseAssembler.Result(
-                  PlanSseAssembler.State.COMPLETED,
-                  captured.size() == 1 ? "not JSON" : VALID,
-                  17,
-                  "response",
-                  null);
-            });
+        .thenAnswer(call -> {
+          ((Runnable) call.getArgument(8)).run();
+          captured.add(call.getArgument(3));
+          return new PlanSseAssembler.Result(
+              PlanSseAssembler.State.COMPLETED,
+              captured.size() == 1 ? "not JSON" : VALID,
+              17,
+              "response",
+              null);
+        });
     var budget = mock(LlmCallReservation.class);
     when(budget.tryReserve()).thenReturn(true);
     var receipt = backend.run(request(List.of(), "{\"decision\":\"accept\"}"), owner, true, budget);
@@ -306,12 +304,11 @@ class ChatGptSubAgentBackendTest {
             anyInt(),
             any(),
             any()))
-        .thenAnswer(
-            call -> {
-              ((Runnable) call.getArgument(8)).run();
-              return new PlanSseAssembler.Result(
-                  PlanSseAssembler.State.COMPLETED, VALID, 17, "resp", null);
-            });
+        .thenAnswer(call -> {
+          ((Runnable) call.getArgument(8)).run();
+          return new PlanSseAssembler.Result(
+              PlanSseAssembler.State.COMPLETED, VALID, 17, "resp", null);
+        });
     var budget = mock(LlmCallReservation.class);
     when(budget.tryReserve()).thenReturn(true);
     var receipt = backend.run(request(List.of(), "{\"decision\":\"accept\"}"), owner, true, budget);
@@ -384,12 +381,11 @@ class ChatGptSubAgentBackendTest {
             anyInt(),
             any(),
             any()))
-        .thenAnswer(
-            call -> {
-              ((Runnable) call.getArgument(8)).run();
-              return new PlanSseAssembler.Result(
-                  PlanSseAssembler.State.COMPLETED, "invalid", 17, "resp", null);
-            });
+        .thenAnswer(call -> {
+          ((Runnable) call.getArgument(8)).run();
+          return new PlanSseAssembler.Result(
+              PlanSseAssembler.State.COMPLETED, "invalid", 17, "resp", null);
+        });
     var budget = mock(LlmCallReservation.class);
     when(budget.tryReserve()).thenReturn(true);
     var failed = backend.run(request(List.of(), "{\"decision\":\"accept\"}"), owner, true, budget);
@@ -743,11 +739,10 @@ class ChatGptSubAgentBackendTest {
             anyInt(),
             any(),
             any()))
-        .thenAnswer(
-            call -> {
-              if (call.getArgument(8) != null) ((Runnable) call.getArgument(8)).run();
-              throw ChatGptException.of(ChatGptException.Code.TIMEOUT);
-            });
+        .thenAnswer(call -> {
+          if (call.getArgument(8) != null) ((Runnable) call.getArgument(8)).run();
+          throw ChatGptException.of(ChatGptException.Code.TIMEOUT);
+        });
     var receipt = backend.run(request(List.of(), "{\"decision\":\"accept\"}"), owner, true, null);
     assertEquals(ChatGptSubAgentBackend.State.OUTCOME_UNKNOWN, receipt.state());
     assertEquals(RunStatus.UNKNOWN, runs.get(receipt.requestId()).status());

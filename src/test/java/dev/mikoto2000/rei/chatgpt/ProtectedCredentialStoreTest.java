@@ -53,18 +53,16 @@ class ProtectedCredentialStoreTest {
   @Test
   void atomicallyStoresProtectedTokensAndRetainsRegistrationOnLogout() throws Exception {
     var store = new ProtectedCredentialStore(root, TEST_PROTECTION);
-    store.locked(
-        s -> {
-          s.save("default", tokens("access-secret", "refresh-secret"));
-          return null;
-        });
+    store.locked(s -> {
+      s.save("default", tokens("access-secret", "refresh-secret"));
+      return null;
+    });
     assertFalse(Files.readString(root.resolve("credentials.bin")).contains("access-secret"));
     assertEquals("access-secret", store.locked(s -> s.load("default")).accessToken());
-    store.locked(
-        s -> {
-          s.save("default", s.load("default").withoutTokens());
-          return null;
-        });
+    store.locked(s -> {
+      s.save("default", s.load("default").withoutTokens());
+      return null;
+    });
     assertEquals("oaiapp_test", store.locked(s -> s.load("default")).clientId());
     assertNull(store.locked(s -> s.load("default")).refreshToken());
     assertFalse(tokens("access-secret", "refresh-secret").toString().contains("secret"));
@@ -85,28 +83,23 @@ class ProtectedCredentialStoreTest {
   void concurrentInstancesSerializeReadModifyWrite() throws Exception {
     var first = new ProtectedCredentialStore(root, TEST_PROTECTION);
     var second = new ProtectedCredentialStore(root, TEST_PROTECTION);
-    first.locked(
-        s -> {
-          s.save("default", tokens("0", "0"));
-          return null;
-        });
+    first.locked(s -> {
+      s.save("default", tokens("0", "0"));
+      return null;
+    });
     try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
       var jobs = new ArrayList<Future<?>>();
       for (int i = 0; i < 20; i++) {
         var store = i % 2 == 0 ? first : second;
         jobs.add(
-            pool.submit(
-                () ->
-                    store.locked(
-                        s -> {
-                          var old = s.load("default");
-                          s.save(
-                              "default",
-                              tokens(
-                                  Integer.toString(Integer.parseInt(old.accessToken()) + 1),
-                                  "rotated"));
-                          return null;
-                        })));
+            pool.submit(() ->
+                store.locked(s -> {
+                  var old = s.load("default");
+                  s.save(
+                      "default",
+                      tokens(Integer.toString(Integer.parseInt(old.accessToken()) + 1), "rotated"));
+                  return null;
+                })));
       }
       for (var job : jobs) job.get();
     }
@@ -134,11 +127,10 @@ class ProtectedCredentialStoreTest {
         assertThrows(
             ChatGptException.class,
             () ->
-                store.locked(
-                    s -> {
-                      s.save("default", tokens("access-secret", "refresh-secret"));
-                      return null;
-                    }));
+                store.locked(s -> {
+                  s.save("default", tokens("access-secret", "refresh-secret"));
+                  return null;
+                }));
     assertFalse(error.toString().contains("secret"));
     assertFalse(Files.exists(root.resolve("credentials.bin")));
   }

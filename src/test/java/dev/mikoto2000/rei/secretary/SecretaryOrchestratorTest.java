@@ -409,10 +409,8 @@ class SecretaryOrchestratorTest {
       assertEquals(SecretaryInterruptions.Decision.HOLD, service.admit(urgent).decision());
       clock.now = clock.now.plusSeconds(120);
       service.setActivities(
-          List.of(
-              (p, now) ->
-                  new SecretaryActivity.Snapshot(
-                      "DEVELOPMENT", now.minusSeconds(121), true, false)));
+          List.of((p, now) ->
+              new SecretaryActivity.Snapshot("DEVELOPMENT", now.minusSeconds(121), true, false)));
       var normal =
           new SecretaryNotifications.Notice(
               "n", "p", null, "DUE", "due", 3, "INBOX", clock.instant());

@@ -94,10 +94,9 @@ public final class ActivityObservationContextSource implements ActivityEvidenceS
     if (context != null) {
       var items =
           context.items().stream()
-              .filter(
-                  i ->
-                      i.status() != WorkContext.Status.SUPERSEDED
-                          && i.status() != WorkContext.Status.WITHDRAWN)
+              .filter(i ->
+                  i.status() != WorkContext.Status.SUPERSEDED
+                      && i.status() != WorkContext.Status.WITHDRAWN)
               .sorted(
                   Comparator.comparing(WorkContext.Item::updatedAt)
                       .reversed()
@@ -107,11 +106,10 @@ public final class ActivityObservationContextSource implements ActivityEvidenceS
       for (var item : items.stream().limit(20).toList()) {
         var sources =
             item.evidence().stream()
-                .filter(
-                    e ->
-                        e.origin() == WorkContext.Origin.TOOL
-                            && e.observedAt() != null
-                            && !e.observedAt().isAfter(at))
+                .filter(e ->
+                    e.origin() == WorkContext.Origin.TOOL
+                        && e.observedAt() != null
+                        && !e.observedAt().isAfter(at))
                 .sorted(
                     Comparator.comparing(WorkContext.Evidence::observedAt)
                         .reversed()
@@ -126,16 +124,15 @@ public final class ActivityObservationContextSource implements ActivityEvidenceS
                 item.certainty().name(),
                 sources.stream()
                     .limit(8)
-                    .map(
-                        e ->
-                            new ActivityEvidence.SourceReference(
-                                e.id(),
-                                e.sessionId(),
-                                e.turnId(),
-                                e.runId(),
-                                e.toolCallId(),
-                                relativeFile(project.root(), e.filePath()),
-                                e.observedAt()))
+                    .map(e ->
+                        new ActivityEvidence.SourceReference(
+                            e.id(),
+                            e.sessionId(),
+                            e.turnId(),
+                            e.runId(),
+                            e.toolCallId(),
+                            relativeFile(project.root(), e.filePath()),
+                            e.observedAt()))
                     .toList()));
       }
     }

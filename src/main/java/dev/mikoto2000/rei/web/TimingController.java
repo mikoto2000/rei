@@ -58,7 +58,8 @@ public final class TimingController {
     if (projectId == null || projectId.isBlank() || projectId.length() > 128)
       throw new IllegalArgumentException("Project ID required");
     var project =
-        findProject.apply(projectId)
+        findProject
+            .apply(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
     validateSession.accept(sessionId, project.id());

@@ -43,12 +43,11 @@ class MemoryFirstVisionTest {
   void unavailablePngWriterFailsWithoutInvokingVision() throws Exception {
     var model = mock(ChatModel.class);
     try (var io = mockStatic(ImageIO.class, CALLS_REAL_METHODS)) {
-      io.when(
-              () ->
-                  ImageIO.write(
-                      any(java.awt.image.RenderedImage.class),
-                      eq("png"),
-                      any(javax.imageio.stream.ImageOutputStream.class)))
+      io.when(() ->
+              ImageIO.write(
+                  any(java.awt.image.RenderedImage.class),
+                  eq("png"),
+                  any(javax.imageio.stream.ImageOutputStream.class)))
           .thenReturn(false);
       var extractor =
           new VisionActivityExtractor(() -> model, () -> OpenAiChatOptions.builder().build());
@@ -75,11 +74,10 @@ class MemoryFirstVisionTest {
     try (var io = mockStatic(ImageIO.class, CALLS_REAL_METHODS)) {
       var diskCacheFactoryUsed = new java.util.concurrent.atomic.AtomicBoolean();
       io.when(() -> ImageIO.createImageOutputStream(any()))
-          .thenAnswer(
-              invocation -> {
-                diskCacheFactoryUsed.set(true);
-                return invocation.callRealMethod();
-              });
+          .thenAnswer(invocation -> {
+            diskCacheFactoryUsed.set(true);
+            return invocation.callRealMethod();
+          });
       assertEquals(
           2,
           extractor

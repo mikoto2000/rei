@@ -15,20 +15,28 @@ class WebApiEventDtoTest {
   @Test
   void llmAndRunConnectionFailuresExposeFixedMessageWithoutInternalDetails() {
     var factory = new AgentEventFactory(Clock.systemUTC());
-    for (var cause : java.util.List.of(
-        new java.net.ConnectException("Connection refused PRIVATE_HOST secret"),
-        new java.net.NoRouteToHostException("PRIVATE_HOST secret"))) {
+    for (var cause :
+        java.util.List.of(
+            new java.net.ConnectException("Connection refused PRIVATE_HOST secret"),
+            new java.net.NoRouteToHostException("PRIVATE_HOST secret"))) {
       var failure = new IllegalStateException("PRIVATE_WRAPPER", cause);
-      for (var event : java.util.List.of(
-          factory.llmRequestFailed("run", "request", 2026, failure),
-          factory.runFailed("run", dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(failure)),
-          factory.runFailed("run", new ErrorInformation("PRIVATE_CLASS", "PRIVATE_HOST secret", "connection_failed")))) {
+      for (var event :
+          java.util.List.of(
+              factory.llmRequestFailed("run", "request", 2026, failure),
+              factory.runFailed(
+                  "run", dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(failure)),
+              factory.runFailed(
+                  "run",
+                  new ErrorInformation(
+                      "PRIVATE_CLASS", "PRIVATE_HOST secret", "connection_failed")))) {
         assertThat(WebApiEventDto.from(event, false, "").payload().get("error").toString())
             .contains("type=connection_failed", "接続先へ接続できませんでした", "ネットワーク")
             .doesNotContain("Operation failed.", "PRIVATE", "secret", "Exception");
       }
     }
-    var tool = factory.toolFailed("call", "read", new ErrorInformation("Private", "secret", "connection_failed"));
+    var tool =
+        factory.toolFailed(
+            "call", "read", new ErrorInformation("Private", "secret", "connection_failed"));
     assertThat(WebApiEventDto.from(tool, false, "").payload().get("error").toString())
         .contains("type=operation_failed")
         .doesNotContain("secret");
@@ -38,16 +46,23 @@ class WebApiEventDtoTest {
   void llmAndRunConnectionLossExposeFixedMessageWithoutInternalDetails() {
     var factory = new AgentEventFactory(Clock.systemUTC());
     var failure =
-        new IllegalStateException("PRIVATE_WRAPPER", new java.net.SocketException("Connection reset secret"));
-    for (var event : java.util.List.of(
-        factory.llmRequestFailed("run", "request", 26662, failure),
-        factory.runFailed("run", dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(failure)),
-        factory.runFailed("run", new ErrorInformation("PRIVATE_CLASS", "PRIVATE_PATH secret", "connection_lost")))) {
+        new IllegalStateException(
+            "PRIVATE_WRAPPER", new java.net.SocketException("Connection reset secret"));
+    for (var event :
+        java.util.List.of(
+            factory.llmRequestFailed("run", "request", 26662, failure),
+            factory.runFailed(
+                "run", dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(failure)),
+            factory.runFailed(
+                "run",
+                new ErrorInformation("PRIVATE_CLASS", "PRIVATE_PATH secret", "connection_lost")))) {
       assertThat(WebApiEventDto.from(event, false, "").payload().get("error").toString())
           .contains("type=connection_lost", "接続が切断", "ネットワーク", "再開")
           .doesNotContain("Operation failed.", "PRIVATE", "secret", "Exception");
     }
-    var tool = factory.toolFailed("call", "read", new ErrorInformation("Private", "secret", "connection_lost"));
+    var tool =
+        factory.toolFailed(
+            "call", "read", new ErrorInformation("Private", "secret", "connection_lost"));
     assertThat(WebApiEventDto.from(tool, false, "").payload().get("error").toString())
         .contains("type=operation_failed")
         .doesNotContain("secret");
@@ -103,21 +118,20 @@ class WebApiEventDtoTest {
             "ToolArgumentRepairExhausted", "tool_argument_repair_exhausted",
             "Stagnated", "stagnated",
             "LlmCallBudgetExceeded", "llm_call_budget_exceeded");
-    cases.forEach(
-        (errorType, publicType) -> {
-          var error = new ErrorInformation(errorType, "private credential=secret", "private-code");
-          var dto = WebApiEventDto.from(factory.runFailed("run", error), false, "");
-          assertThat(dto.payload().get("error").toString())
-              .contains("type=" + publicType)
-              .doesNotContain("Operation failed.", "private", "secret");
-          // 同名のツール例外は実行全体の停止理由として扱わない。
-          assertThat(
-                  WebApiEventDto.from(factory.toolFailed("call", "read", error), false, "")
-                      .payload()
-                      .get("error")
-                      .toString())
-              .contains("type=operation_failed");
-        });
+    cases.forEach((errorType, publicType) -> {
+      var error = new ErrorInformation(errorType, "private credential=secret", "private-code");
+      var dto = WebApiEventDto.from(factory.runFailed("run", error), false, "");
+      assertThat(dto.payload().get("error").toString())
+          .contains("type=" + publicType)
+          .doesNotContain("Operation failed.", "private", "secret");
+      // 同名のツール例外は実行全体の停止理由として扱わない。
+      assertThat(
+              WebApiEventDto.from(factory.toolFailed("call", "read", error), false, "")
+                  .payload()
+                  .get("error")
+                  .toString())
+          .contains("type=operation_failed");
+    });
     var exhausted =
         WebApiEventDto.from(
             factory.runFailed(

@@ -44,12 +44,11 @@ public class WorkContextMerger {
       WorkContextRepository.checkCancellation();
       var evidence =
           c.sourceIds().stream()
-              .map(
-                  id -> {
-                    var e = sources.get(id);
-                    if (e == null) throw new IllegalArgumentException("Unknown evidence: " + id);
-                    return e;
-                  })
+              .map(id -> {
+                var e = sources.get(id);
+                if (e == null) throw new IllegalArgumentException("Unknown evidence: " + id);
+                return e;
+              })
               .toList();
       Origin certainty =
           c.certainty() == null

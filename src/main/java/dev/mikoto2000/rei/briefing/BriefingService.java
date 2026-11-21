@@ -53,7 +53,8 @@ public class BriefingService {
   }
 
   /** 日次情報の案内で用いる日次案内対象を返す。 */
-  public DailyBriefing briefingFor(LocalDate date) throws java.io.IOException, java.security.GeneralSecurityException {
+  public DailyBriefing briefingFor(LocalDate date)
+      throws java.io.IOException, java.security.GeneralSecurityException {
     List<GoogleCalendarEventSummary> events = googleCalendarService.listEventsForDate(date);
     List<Task> openTasks = taskService.listOpen();
     List<Task> overdueTasks =
@@ -68,12 +69,11 @@ public class BriefingService {
             feedProperties.briefingMaxItems());
     List<String> interestUpdates =
         interestUpdateService.listRecent(24).stream()
-            .map(
-                update -> {
-                  String url =
-                      update.sourceUrls().isEmpty() ? "" : " | " + update.sourceUrls().getFirst();
-                  return update.topic() + " | " + update.summary() + url;
-                })
+            .map(update -> {
+              String url =
+                  update.sourceUrls().isEmpty() ? "" : " | " + update.sourceUrls().getFirst();
+              return update.topic() + " | " + update.summary() + url;
+            })
             .toList();
 
     if (events.isEmpty() && openTasks.isEmpty()) {

@@ -40,15 +40,15 @@ class WorkContextThinkingHttpTest {
           try (var body = exchange.getResponseBody()) {
             String chunks =
                 """
-            data: {"id":"chat","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"private analysis"},"finish_reason":null}]}
+                data: {"id":"chat","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"private analysis"},"finish_reason":null}]}
 
-            data: {"id":"chat","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{"content":CONTENT},"finish_reason":null}]}
+                data: {"id":"chat","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{"content":CONTENT},"finish_reason":null}]}
 
-            data: {"id":"chat","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+                data: {"id":"chat","object":"chat.completion.chunk","created":1,"model":"test","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
 
-            data: [DONE]
+                data: [DONE]
 
-            """;
+                """;
             chunks =
                 chunks.replace(
                     "CONTENT",

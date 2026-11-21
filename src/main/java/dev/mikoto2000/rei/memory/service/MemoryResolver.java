@@ -43,12 +43,10 @@ public class MemoryResolver {
       return new MemoryResolution(MemoryAction.IGNORE, List.of());
     var existing =
         memories.stream()
-            .filter(
-                m ->
-                    m.status() == MemoryStatus.ACTIVE
-                        && m.scope() == c.scope()
-                        && (c.scope() == MemoryScope.GLOBAL
-                            || Objects.equals(project, m.projectId())))
+            .filter(m ->
+                m.status() == MemoryStatus.ACTIVE
+                    && m.scope() == c.scope()
+                    && (c.scope() == MemoryScope.GLOBAL || Objects.equals(project, m.projectId())))
             .toList();
     var exact =
         existing.stream()

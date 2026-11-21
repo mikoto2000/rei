@@ -35,12 +35,11 @@ public class WebSearchPropertiesLogger implements ApplicationRunner {
             ? List.of()
             : providers.stream()
                 .filter(provider -> provider != null)
-                .map(
-                    provider ->
-                        "%s(apiKeyConfigured=%s)"
-                            .formatted(
-                                provider.getName(),
-                                provider.getApiKey() != null && !provider.getApiKey().isBlank()))
+                .map(provider ->
+                    "%s(apiKeyConfigured=%s)"
+                        .formatted(
+                            provider.getName(),
+                            provider.getApiKey() != null && !provider.getApiKey().isBlank()))
                 .toList();
 
     return "Web search config: enabled=%s, timeoutSeconds=%s, maxResults=%s, providersCount=%s, providers=%s"

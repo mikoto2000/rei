@@ -141,10 +141,9 @@ class AdaptiveFileReadTest {
     var options = OpenAiChatOptions.builder().model("test-model").toolCallbacks(callback).build();
     var calls =
         java.util.stream.IntStream.range(0, arguments.length)
-            .mapToObj(
-                i ->
-                    new AssistantMessage.ToolCall(
-                        "call-" + i, "function", "readMultiFile", arguments[i]))
+            .mapToObj(i ->
+                new AssistantMessage.ToolCall(
+                    "call-" + i, "function", "readMultiFile", arguments[i]))
             .toList();
     var scope = AgentRunScope.open(new AgentRunContext("run", "session", root, "project"));
     try (scope) {

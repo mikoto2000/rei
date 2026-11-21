@@ -21,10 +21,12 @@ public class FileGoalVerifier {
   /** 完了を判定する窓口。 */
   private GoalCompletionGate completionGate;
 
-  private java.util.function.BiFunction<String, String, String> durableVerification = (project, goal) -> "";
+  private java.util.function.BiFunction<String, String, String> durableVerification =
+      (project, goal) -> "";
 
   /** Host-wired additional predicate; models cannot replace the persisted task gate. */
-  public void setDurableVerification(java.util.function.BiFunction<String, String, String> verification) {
+  public void setDurableVerification(
+      java.util.function.BiFunction<String, String, String> verification) {
     durableVerification = java.util.Objects.requireNonNull(verification);
   }
 

@@ -251,9 +251,8 @@ class WebResearchResilienceTest {
               .toList();
       assertTrue(
           messages.stream()
-              .anyMatch(
-                  message ->
-                      message.contains("additional_search") && message.contains("IOException")));
+              .anyMatch(message ->
+                  message.contains("additional_search") && message.contains("IOException")));
       assertTrue(
           messages.stream().noneMatch(message -> message.contains("secret must not be logged")));
       assertTrue(appender.list.stream().allMatch(event -> event.getThrowableProxy() == null));

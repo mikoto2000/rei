@@ -79,14 +79,13 @@ class DocumentRendererProcessTest {
     var worker = Executors.newSingleThreadExecutor();
     try {
       var task =
-          worker.submit(
-              () -> {
-                try {
-                  return renderer.render("@startuml\nAlice -> Bob\n@enduml");
-                } catch (Exception failure) {
-                  throw new RuntimeException(failure);
-                }
-              });
+          worker.submit(() -> {
+            try {
+              return renderer.render("@startuml\nAlice -> Bob\n@enduml");
+            } catch (Exception failure) {
+              throw new RuntimeException(failure);
+            }
+          });
       Thread.sleep(300);
       assertTrue(task.cancel(true));
     } finally {

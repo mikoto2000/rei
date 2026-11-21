@@ -56,15 +56,14 @@ public final class SapiVoiceOutput implements VoiceSpeechOutput {
 
   /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SapiVoiceOutput() {
-    this(
-        args -> {
-          if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("windows"))
-            throw new IOException("Windows SAPI required");
-          return new ProcessBuilder(args)
-              .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-              .redirectError(ProcessBuilder.Redirect.DISCARD)
-              .start();
-        });
+    this(args -> {
+      if (!System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("windows"))
+        throw new IOException("Windows SAPI required");
+      return new ProcessBuilder(args)
+          .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+          .redirectError(ProcessBuilder.Redirect.DISCARD)
+          .start();
+    });
   }
 
   /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */

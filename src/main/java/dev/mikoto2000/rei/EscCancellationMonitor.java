@@ -34,7 +34,8 @@ public class EscCancellationMonitor {
       } catch (ExecutionException e) {
         Throwable cause = e.getCause();
         if (cause instanceof Error fatal) throw fatal;
-        if (cause instanceof java.util.concurrent.CancellationException cancellation) throw cancellation;
+        if (cause instanceof java.util.concurrent.CancellationException cancellation)
+          throw cancellation;
         if (cause instanceof IllegalStateException failure) throw failure;
         if (cause instanceof org.jline.reader.UserInterruptException interrupted) throw interrupted;
         if (cause instanceof org.jline.reader.EndOfFileException closed) throw closed;

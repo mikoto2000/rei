@@ -368,10 +368,9 @@ public final class CaptureStore {
     var s = sessions.get(call.runId);
     if (s != null)
       s.attempts.values().stream()
-          .filter(
-              a ->
-                  a.info.logicalCallId().equals(call.id)
-                      && List.of("PREPARED", "SEND_STARTED").contains(a.info.sendState()))
+          .filter(a ->
+              a.info.logicalCallId().equals(call.id)
+                  && List.of("PREPARED", "SEND_STARTED").contains(a.info.sendState()))
           .forEach(a -> outcome(a.info.attemptId(), "CANCELLED", null));
   }
 
@@ -444,10 +443,9 @@ public final class CaptureStore {
     var found =
         sessions.values().stream()
             .flatMap(s -> s.attempts.values().stream())
-            .filter(
-                a ->
-                    a.info.attemptId().equals(id)
-                        || id.length() >= 8 && a.info.attemptId().startsWith(id))
+            .filter(a ->
+                a.info.attemptId().equals(id)
+                    || id.length() >= 8 && a.info.attemptId().startsWith(id))
             .toList();
     if (found.size() != 1) throw new IllegalArgumentException("Unknown or ambiguous Attempt ID");
     return found.getFirst();
@@ -500,11 +498,10 @@ public final class CaptureStore {
   private static void erase(Session s) {
     s.attempts
         .values()
-        .forEach(
-            a -> {
-              if (a.body != null) Arrays.fill(a.body, (byte) 0);
-              a.body = null;
-            });
+        .forEach(a -> {
+          if (a.body != null) Arrays.fill(a.body, (byte) 0);
+          a.body = null;
+        });
     s.attempts.clear();
   }
 }

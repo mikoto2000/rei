@@ -63,9 +63,11 @@ class SqliteVecInstallerTest {
     String assetName = "sqlite-vec-0.1.9-loadable-linux-x86_64.tar.gz";
     byte[] archiveBytes = createTarGz("vec0.so", "sqlite-vec");
     String checksum = sha256(archiveBytes);
-    Map<URI, byte[]> responses = Map.of(
-        URI.create("https://github.com/asg017/sqlite-vec/releases/download/v0.1.9/" + assetName),
-        archiveBytes);
+    Map<URI, byte[]> responses =
+        Map.of(
+            URI.create(
+                "https://github.com/asg017/sqlite-vec/releases/download/v0.1.9/" + assetName),
+            archiveBytes);
 
     RecordingDownloadClient downloadClient = new RecordingDownloadClient(responses);
     SqliteVecInstaller installer =
@@ -89,9 +91,11 @@ class SqliteVecInstallerTest {
     properties.setCacheDir(tempDir.toString());
     String assetName = "sqlite-vec-0.1.9-loadable-linux-x86_64.tar.gz";
     byte[] archiveBytes = "bad".getBytes(StandardCharsets.UTF_8);
-    Map<URI, byte[]> responses = Map.of(
-        URI.create("https://github.com/asg017/sqlite-vec/releases/download/v0.1.9/" + assetName),
-        archiveBytes);
+    Map<URI, byte[]> responses =
+        Map.of(
+            URI.create(
+                "https://github.com/asg017/sqlite-vec/releases/download/v0.1.9/" + assetName),
+            archiveBytes);
 
     SqliteVecInstaller installer =
         new SqliteVecInstaller(

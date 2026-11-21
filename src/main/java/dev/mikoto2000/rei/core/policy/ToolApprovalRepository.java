@@ -94,12 +94,11 @@ public class ToolApprovalRepository implements dev.mikoto2000.rei.secretary.Secr
     return db.sql(
             "SELECT status,expires FROM tool_approvals WHERE project=? AND id=? AND tool=? AND digest=?")
         .params(project, id, tool, digest)
-        .query(
-            (r, n) ->
-                r.getLong(2) <= clock.millis()
-                        && java.util.Set.of("PENDING", "APPROVED").contains(r.getString(1))
-                    ? "EXPIRED"
-                    : r.getString(1))
+        .query((r, n) ->
+            r.getLong(2) <= clock.millis()
+                    && java.util.Set.of("PENDING", "APPROVED").contains(r.getString(1))
+                ? "EXPIRED"
+                : r.getString(1))
         .optional()
         .orElse("MISSING");
   }

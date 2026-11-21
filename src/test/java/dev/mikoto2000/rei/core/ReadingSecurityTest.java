@@ -67,7 +67,8 @@ class ReadingSecurityTest {
     assertEquals(excluded, rejected.path());
     assertEquals(List.of(), rejected.content());
     assertEquals("PROJECT_PATH_EXCLUDED", rejected.problem().code());
-    assertTrue(rejected.problem().recovery().contains("Retry with an allowed Project-relative path"));
+    assertTrue(
+        rejected.problem().recovery().contains("Retry with an allowed Project-relative path"));
     assertTrue(rejected.error().contains(rejected.problem().recovery()));
     assertEquals(List.of("allowed content"), results.getLast().content());
   }
@@ -84,8 +85,10 @@ class ReadingSecurityTest {
         };
     var queries =
         List.of(
-            new Tools.GrepQuery("needle", ".env", false, true, false, false, 0, 0, null, true, null, null),
-            new Tools.GrepQuery("needle", ".", false, true, false, false, 0, 0, null, true, null, null));
+            new Tools.GrepQuery(
+                "needle", ".env", false, true, false, false, 0, 0, null, true, null, null),
+            new Tools.GrepQuery(
+                "needle", ".", false, true, false, false, 0, 0, null, true, null, null));
 
     var grep = tools.grepMultiQuery(queries, root);
     assertEquals(2, grep.size());
@@ -135,11 +138,10 @@ class ReadingSecurityTest {
             evaluator.beforeTool("searchFilePage", "{}"));
     assertTrue(
         first.stream()
-            .anyMatch(
-                e ->
-                    e.category()
-                        == dev.mikoto2000.rei.core.stagnation.ProgressEvidence.Category
-                            .COVERAGE_ADVANCED));
+            .anyMatch(e ->
+                e.category()
+                    == dev.mikoto2000.rei.core.stagnation.ProgressEvidence.Category
+                        .COVERAGE_ADVANCED));
     var saved =
         StorageDatabase.JSON.readValue(
             StorageDatabase.JSON.writeValueAsString(evaluator.snapshot()),

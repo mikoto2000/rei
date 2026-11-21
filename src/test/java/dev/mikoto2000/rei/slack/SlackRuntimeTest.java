@@ -356,12 +356,11 @@ class SlackRuntimeTest {
     assertTrue(registry.transition(receipt.run(), RunStatus.RUNNING, null));
     assertTrue(registry.transition(receipt.run(), RunStatus.COMPLETED, null));
     when(router.containsRun(anyString(), anyString())).thenReturn(true);
-    runtime.onCompletedAnswer(
-        (session, run) -> {
-          assertEquals(receipt.session(), session);
-          assertEquals(receipt.run(), run);
-          return "final\nanswer";
-        });
+    runtime.onCompletedAnswer((session, run) -> {
+      assertEquals(receipt.session(), session);
+      assertEquals(receipt.run(), run);
+      return "final\nanswer";
+    });
     runtime.tick();
     assertTrue(store.replies().stream().noneMatch(r -> r.text().contains("final")));
     when(router.containsRun(anyString(), anyString())).thenReturn(false);

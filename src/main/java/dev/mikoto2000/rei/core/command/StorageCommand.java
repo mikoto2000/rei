@@ -205,12 +205,11 @@ public final class StorageCommand {
   private String reportRetention(RetentionAction action) {
     action.parent = new Retention();
     action.parent.parent = this;
-    return render(
-        out -> {
-          if (planner == null)
-            throw new IllegalStateException("Storage startup gate has not initialized retention");
-          action.execute(planner, out);
-        });
+    return render(out -> {
+      if (planner == null)
+        throw new IllegalStateException("Storage startup gate has not initialized retention");
+      action.execute(planner, out);
+    });
   }
 
   /** 共通の実行基盤で用いるレポート自動を返す。 */
@@ -218,24 +217,22 @@ public final class StorageCommand {
     action.parent = new Auto();
     action.parent.parent = new Retention();
     action.parent.parent.parent = this;
-    return render(
-        out -> {
-          if (automatic == null)
-            throw new IllegalStateException("Automatic retention has not initialized");
-          action.execute(automatic, out);
-        });
+    return render(out -> {
+      if (automatic == null)
+        throw new IllegalStateException("Automatic retention has not initialized");
+      action.execute(automatic, out);
+    });
   }
 
   /** 共通の実行基盤で用いるレポート保守を返す。 */
   private String reportMaintenance(MaintenanceAction action) {
     action.parent = new Maintenance();
     action.parent.parent = this;
-    return render(
-        out -> {
-          if (maintenance == null)
-            throw new IllegalStateException("Storage maintenance has not initialized");
-          action.execute(maintenance, out);
-        });
+    return render(out -> {
+      if (maintenance == null)
+        throw new IllegalStateException("Storage maintenance has not initialized");
+      action.execute(maintenance, out);
+    });
   }
 
   /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
@@ -807,16 +804,15 @@ public final class StorageCommand {
       out.println("category files records physical_bytes(file length) logical_bytes");
       report.categories().entrySet().stream()
           .sorted(java.util.Map.Entry.comparingByKey())
-          .forEach(
-              entry -> {
-                var row = entry.getValue();
-                out.printf(
-                    "%s %d %s %d unknown%n",
-                    entry.getKey(),
-                    row.files(),
-                    row.records() == null ? "unknown" : row.records(),
-                    row.physicalBytes());
-              });
+          .forEach(entry -> {
+            var row = entry.getValue();
+            out.printf(
+                "%s %d %s %d unknown%n",
+                entry.getKey(),
+                row.files(),
+                row.records() == null ? "unknown" : row.records(),
+                row.physicalBytes());
+          });
       out.printf(
           "delta_bytes=%s bytes_per_second=%s complete=%s%n",
           report.deltaBytes(), report.bytesPerSecond(), report.complete());
@@ -831,11 +827,10 @@ public final class StorageCommand {
                   + "; counts include audit tombstones; body bytes include quarantine and exclude deleted bodies, not a fresh content verification");
           managed
               .objects()
-              .forEach(
-                  row ->
-                      out.printf(
-                          "managed %s count=%d recorded_body_bytes=%d%n",
-                          row.kind(), row.count(), row.recordedBodyBytes()));
+              .forEach(row ->
+                  out.printf(
+                      "managed %s count=%d recorded_body_bytes=%d%n",
+                      row.kind(), row.count(), row.recordedBodyBytes()));
           managed
               .protectionReasons()
               .forEach((reason, count) -> out.printf("protected %s count=%d%n", reason, count));

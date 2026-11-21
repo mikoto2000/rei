@@ -339,10 +339,9 @@ public final class DocumentRendererService {
             .params(id, owner.projectId(), owner.projectRoot().toString(), owner.conversationId())
             .query(DocumentRendererService::row)
             .optional()
-            .orElseThrow(
-                () ->
-                    new IllegalArgumentException(
-                        "Renderer receipt not found in captured Project/root/session"));
+            .orElseThrow(() ->
+                new IllegalArgumentException(
+                    "Renderer receipt not found in captured Project/root/session"));
     if (row.status().equals("STARTED")
         && !(row.pid() == ProcessHandle.current().pid()
             && row.processStart().equals(start())
@@ -569,13 +568,12 @@ public final class DocumentRendererService {
           var png = workers.submit(() -> read(process.getInputStream(), 4194304, process));
           var errors = workers.submit(() -> read(process.getErrorStream(), 8192, process));
           var writing =
-              workers.submit(
-                  () -> {
-                    try (var out = process.getOutputStream()) {
-                      out.write(source.getBytes(StandardCharsets.UTF_8));
-                    }
-                    return true;
-                  });
+              workers.submit(() -> {
+                try (var out = process.getOutputStream()) {
+                  out.write(source.getBytes(StandardCharsets.UTF_8));
+                }
+                return true;
+              });
           try {
             if (!process.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS))
               throw new TimeoutException();
@@ -640,13 +638,12 @@ public final class DocumentRendererService {
     private static void stop(Process process) {
       process
           .descendants()
-          .forEach(
-              child -> {
-                try {
-                  child.destroyForcibly();
-                } catch (RuntimeException ignored) {
-                }
-              });
+          .forEach(child -> {
+            try {
+              child.destroyForcibly();
+            } catch (RuntimeException ignored) {
+            }
+          });
       if (process.isAlive()) process.destroyForcibly();
       try {
         process.getInputStream().close();

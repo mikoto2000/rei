@@ -30,46 +30,42 @@ class ProjectClientIsolationTest {
     var second = projects.newClient();
     try (var worker = Executors.newSingleThreadExecutor()) {
       worker
-          .submit(
-              () -> {
-                var scope = first.open();
-                try (scope) {
-                  projects.cd(a.toString());
-                }
-              })
+          .submit(() -> {
+            var scope = first.open();
+            try (scope) {
+              projects.cd(a.toString());
+            }
+          })
           .get();
       worker
-          .submit(
-              () -> {
-                var scope = second.open();
-                try (scope) {
-                  projects.cd(b.toString());
-                }
-              })
+          .submit(() -> {
+            var scope = second.open();
+            try (scope) {
+              projects.cd(b.toString());
+            }
+          })
           .get();
       worker
-          .submit(
-              () -> {
-                var scope = first.open();
-                try (scope) {
-                  assertThat(projects.currentProject()).isEqualTo(a);
-                  assertThat(ProjectService.contextForOperation().root()).isEqualTo(a);
-                  assertThat(projects.cd("child")).isEqualTo(a.resolve("child"));
-                }
-                assertThat(ProjectService.contextForOperation()).isNull();
-                assertThatThrownBy(() -> projects.cd(a.toString()))
-                    .isInstanceOf(IllegalStateException.class);
-              })
+          .submit(() -> {
+            var scope = first.open();
+            try (scope) {
+              assertThat(projects.currentProject()).isEqualTo(a);
+              assertThat(ProjectService.contextForOperation().root()).isEqualTo(a);
+              assertThat(projects.cd("child")).isEqualTo(a.resolve("child"));
+            }
+            assertThat(ProjectService.contextForOperation()).isNull();
+            assertThatThrownBy(() -> projects.cd(a.toString()))
+                .isInstanceOf(IllegalStateException.class);
+          })
           .get();
       worker
-          .submit(
-              () -> {
-                var scope = second.open();
-                try (scope) {
-                  assertThat(projects.currentProject()).isEqualTo(b);
-                  assertThat(ProjectService.currentProjectOrStartupDirectory()).isEqualTo(b);
-                }
-              })
+          .submit(() -> {
+            var scope = second.open();
+            try (scope) {
+              assertThat(projects.currentProject()).isEqualTo(b);
+              assertThat(ProjectService.currentProjectOrStartupDirectory()).isEqualTo(b);
+            }
+          })
           .get();
     }
   }
@@ -85,38 +81,35 @@ class ProjectClientIsolationTest {
     var ready = new CyclicBarrier(2);
     try (var workers = Executors.newFixedThreadPool(2)) {
       var one =
-          workers.submit(
-              () -> {
-                var scope = first.open();
-                try (scope) {
-                  projects.cd(a.toString());
-                  var owner = projects.currentContext();
-                  ready.await(5, TimeUnit.SECONDS);
-                  assertThat(ProjectService.contextForOperation()).isEqualTo(owner);
-                  assertThat(projects.currentProject()).isEqualTo(a);
-                  projects.cd(b.toString());
-                  var run =
-                      AgentRunScope.open(new AgentRunContext("run", owner, "chat:main"));
-                  try (run) {
-                    assertThat(ProjectService.contextForOperation()).isEqualTo(owner);
-                    assertThat(projects.currentProject()).isEqualTo(b);
-                    assertThat(ProjectService.currentProjectOrStartupDirectory()).isEqualTo(b);
-                  }
-                  assertThat(projects.currentProject()).isEqualTo(b);
-                }
-                return null;
-              });
+          workers.submit(() -> {
+            var scope = first.open();
+            try (scope) {
+              projects.cd(a.toString());
+              var owner = projects.currentContext();
+              ready.await(5, TimeUnit.SECONDS);
+              assertThat(ProjectService.contextForOperation()).isEqualTo(owner);
+              assertThat(projects.currentProject()).isEqualTo(a);
+              projects.cd(b.toString());
+              var run = AgentRunScope.open(new AgentRunContext("run", owner, "chat:main"));
+              try (run) {
+                assertThat(ProjectService.contextForOperation()).isEqualTo(owner);
+                assertThat(projects.currentProject()).isEqualTo(b);
+                assertThat(ProjectService.currentProjectOrStartupDirectory()).isEqualTo(b);
+              }
+              assertThat(projects.currentProject()).isEqualTo(b);
+            }
+            return null;
+          });
       var two =
-          workers.submit(
-              () -> {
-                var scope = second.open();
-                try (scope) {
-                  projects.cd(b.toString());
-                  ready.await(5, TimeUnit.SECONDS);
-                  assertThat(ProjectService.contextForOperation().root()).isEqualTo(b);
-                }
-                return null;
-              });
+          workers.submit(() -> {
+            var scope = second.open();
+            try (scope) {
+              projects.cd(b.toString());
+              ready.await(5, TimeUnit.SECONDS);
+              assertThat(ProjectService.contextForOperation().root()).isEqualTo(b);
+            }
+            return null;
+          });
       one.get(10, TimeUnit.SECONDS);
       two.get(10, TimeUnit.SECONDS);
     }

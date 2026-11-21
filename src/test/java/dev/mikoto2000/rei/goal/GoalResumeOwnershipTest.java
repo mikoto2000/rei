@@ -49,11 +49,10 @@ class GoalResumeOwnershipTest {
         .accept(new GoalLoopService.Outcome(ChatExecutionResult.success("done", false)));
     String current = repo.get("p", goal.id()).currentRunId();
     assertEquals(2, callbacks.size());
-    assertDoesNotThrow(
-        () ->
-            callbacks
-                .getFirst()
-                .accept(new GoalLoopService.Outcome(ChatExecutionResult.failed("late"))));
+    assertDoesNotThrow(() ->
+        callbacks
+            .getFirst()
+            .accept(new GoalLoopService.Outcome(ChatExecutionResult.failed("late"))));
     assertEquals(current, repo.get("p", goal.id()).currentRunId());
     assertEquals("RUNNING", repo.get("p", goal.id()).status());
     assertEquals("RUNNING", repo.attempts("p", goal.id()).getLast().status());

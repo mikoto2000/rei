@@ -24,11 +24,10 @@ class CaptureLifecycleTest {
     var listener = new AtomicReference<AgentEventListener>();
     var bus = mock(AgentEventBus.class);
     when(bus.subscribe(any()))
-        .thenAnswer(
-            invocation -> {
-              listener.set(invocation.getArgument(0));
-              return (AgentEventBus.Subscription) () -> {};
-            });
+        .thenAnswer(invocation -> {
+          listener.set(invocation.getArgument(0));
+          return (AgentEventBus.Subscription) () -> {};
+        });
     var lifecycle = new CaptureLifecycle(store, bus);
     try (lifecycle) {
       listener

@@ -54,8 +54,7 @@ public class PaperArtifactStore {
   /** 指定された内容を書き込み先へ反映する。 */
   public void write(String id, String kind, String ext, byte[] bytes, PaperOperation op) {
     op.check();
-    if (bytes.length
-        > maxArtifactBytes.getAsLong())
+    if (bytes.length > maxArtifactBytes.getAsLong())
       throw new PaperException(PaperException.Code.LIBRARY_STORAGE_FAILED, "Artifact サイズ上限");
     Path target = path(id, kind, ext), tmp = null;
     try {
@@ -79,11 +78,7 @@ public class PaperArtifactStore {
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   public Optional<byte[]> read(String id, String kind, String ext) {
-    return readBounded(
-        id,
-        kind,
-        ext,
-        maxArtifactBytes.getAsLong());
+    return readBounded(id, kind, ext, maxArtifactBytes.getAsLong());
   }
 
   /** 必要な内容を参照できるよう、上限内に収めたを読み取る。 */

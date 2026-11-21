@@ -109,21 +109,19 @@ public class ScheduleController {
   /** Web APIによる操作で用いるactivateを返す。 */
   @PostMapping("/{id}/activate")
   public Inspection activate(@PathVariable String projectId, @PathVariable String id) {
-    return control(
-        () -> {
-          activateSchedule.accept(projectId, id);
-          return show(projectId, id);
-        });
+    return control(() -> {
+      activateSchedule.accept(projectId, id);
+      return show(projectId, id);
+    });
   }
 
   /** 対象の実行をキャンセルする。 */
   @PostMapping("/{id}/cancel")
   public Inspection cancel(@PathVariable String projectId, @PathVariable String id) {
-    return control(
-        () -> {
-          cancelSchedule.accept(projectId, id);
-          return show(projectId, id);
-        });
+    return control(() -> {
+      cancelSchedule.accept(projectId, id);
+      return show(projectId, id);
+    });
   }
 
   /**
@@ -147,9 +145,8 @@ public class ScheduleController {
         || request.expectedRunId().length() > 128)
       throw new IllegalArgumentException(
           "Inspect effects and acknowledge the exact saved Run before reconciliation");
-    return control(
-        () ->
-            reconcileSchedule.apply(new ScheduleIdentity(projectId, id), request.expectedRunId()));
+    return control(() ->
+        reconcileSchedule.apply(new ScheduleIdentity(projectId, id), request.expectedRunId()));
   }
 
   /** Web APIによる操作で用いる制御を返す。 */

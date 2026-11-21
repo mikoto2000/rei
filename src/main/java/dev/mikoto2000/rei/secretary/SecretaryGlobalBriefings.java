@@ -211,26 +211,25 @@ public final class SecretaryGlobalBriefings {
       if (selected.add(List.of(task.projectId(), task.id()))) budget -= minutes;
       if (selected.size() == 3) break;
     }
-    values.replaceAll(
-        (project, value) -> {
-          var sections = new LinkedHashMap<>(value.sections());
-          sections.put(
-              "next",
-              sections.getOrDefault("next", List.of()).stream()
-                  .filter(t -> selected.contains(List.of(t.projectId(), t.id())))
-                  .toList());
-          return new SecretaryFollowups.Report(
-              value.date(),
-              value.zone(),
-              value.review(),
-              sections,
-              value.context(),
-              value.partial(),
-              value.evidence(),
-              value.cautions(),
-              value.held(),
-              value.meeting());
-        });
+    values.replaceAll((project, value) -> {
+      var sections = new LinkedHashMap<>(value.sections());
+      sections.put(
+          "next",
+          sections.getOrDefault("next", List.of()).stream()
+              .filter(t -> selected.contains(List.of(t.projectId(), t.id())))
+              .toList());
+      return new SecretaryFollowups.Report(
+          value.date(),
+          value.zone(),
+          value.review(),
+          sections,
+          value.context(),
+          value.partial(),
+          value.evidence(),
+          value.cautions(),
+          value.held(),
+          value.meeting());
+    });
     return aggregate(date, zone.getId(), review, values, unavailable);
   }
 
@@ -254,10 +253,9 @@ public final class SecretaryGlobalBriefings {
 
   private static Report subset(Report report, List<String> projects) {
     var values = new LinkedHashMap<String, SecretaryFollowups.Report>();
-    projects.forEach(
-        p -> {
-          if (report.projects().containsKey(p)) values.put(p, report.projects().get(p));
-        });
+    projects.forEach(p -> {
+      if (report.projects().containsKey(p)) values.put(p, report.projects().get(p));
+    });
     return aggregate(
         report.date(),
         report.zone(),

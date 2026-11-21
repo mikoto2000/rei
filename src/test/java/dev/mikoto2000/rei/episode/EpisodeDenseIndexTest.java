@@ -61,14 +61,13 @@ class EpisodeDenseIndexTest {
         new EpisodeRepository(new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("m.db")));
     var claims =
         java.util.stream.IntStream.range(0, 4)
-            .mapToObj(
-                i ->
-                    new Episode.Claim(
-                        "reason",
-                        "discussion ".repeat(170),
-                        Episode.Evidence.MODEL_PROPOSAL,
-                        "r",
-                        "assistant"))
+            .mapToObj(i ->
+                new Episode.Claim(
+                    "reason",
+                    "discussion ".repeat(170),
+                    Episode.Evidence.MODEL_PROPOSAL,
+                    "r",
+                    "assistant"))
             .toList();
     repo.saveBatch(
         "s",

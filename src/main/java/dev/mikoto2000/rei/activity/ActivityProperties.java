@@ -402,13 +402,12 @@ public class ActivityProperties {
         || desktopContext.masks.size() > 64
         || desktopContext.monitors.stream().anyMatch(id -> id == null || id.isBlank())
         || desktopContext.masks.stream()
-            .anyMatch(
-                m ->
-                    m == null
-                        || m.monitor() == null
-                        || m.monitor().isBlank()
-                        || m.width() <= 0
-                        || m.height() <= 0))
+            .anyMatch(m ->
+                m == null
+                    || m.monitor() == null
+                    || m.monitor().isBlank()
+                    || m.width() <= 0
+                    || m.height() <= 0))
       throw new IllegalArgumentException("Invalid desktop privacy settings");
     java.time.ZoneId.of(zone);
   }

@@ -37,14 +37,13 @@ class StorageReadReuseTest {
   }
 
   private int count(StorageDatabase database) {
-    return database.read(
-        db -> {
-          try (var sql = db.createStatement();
-              var rows = sql.executeQuery("SELECT count(*) FROM event_sequences")) {
-            assertThat(rows.next()).isTrue();
-            return rows.getInt(1);
-          }
-        });
+    return database.read(db -> {
+      try (var sql = db.createStatement();
+          var rows = sql.executeQuery("SELECT count(*) FROM event_sequences")) {
+        assertThat(rows.next()).isTrue();
+        return rows.getInt(1);
+      }
+    });
   }
 
   @Test
@@ -56,24 +55,21 @@ class StorageReadReuseTest {
       var connections = new ArrayList<Connection>();
       for (int i = 0; i < 100; i++) {
         new StorageDatabase(root)
-            .read(
-                db -> {
-                  connections.add(db);
-                  return null;
-                });
+            .read(db -> {
+              connections.add(db);
+              return null;
+            });
         assertThat(count(database)).isZero();
       }
       var firstReader = connections.getFirst();
       assertThat(connections).allMatch(connection -> connection == firstReader);
-      assertThatThrownBy(
-              () ->
-                  database.read(
-                      db -> {
-                        try (var sql = db.createStatement()) {
-                          sql.executeUpdate("INSERT INTO event_sequences VALUES('forbidden',1)");
-                        }
-                        return null;
-                      }))
+      assertThatThrownBy(() ->
+              database.read(db -> {
+                try (var sql = db.createStatement()) {
+                  sql.executeUpdate("INSERT INTO event_sequences VALUES('forbidden',1)");
+                }
+                return null;
+              }))
           .hasRootCauseInstanceOf(java.sql.SQLException.class);
       assertThat(firstReader.isClosed()).isTrue();
 
@@ -99,20 +95,19 @@ class StorageReadReuseTest {
   @Test
   void concurrentAndNestedReadsNeverWaitForAnOccupiedReader() throws Exception {
     var context = context();
-    try (context; var executor = Executors.newFixedThreadPool(2)) {
+    try (context;
+        var executor = Executors.newFixedThreadPool(2)) {
       var database = new StorageDatabase(root);
       var entered = new CountDownLatch(1);
       var release = new CountDownLatch(1);
       var first =
-          executor.submit(
-              () ->
-                  database.read(
-                      db -> {
-                        entered.countDown();
-                        assertThat(release.await(10, TimeUnit.SECONDS)).isTrue();
-                        assertThat(count(database)).isZero();
-                        return db;
-                      }));
+          executor.submit(() ->
+              database.read(db -> {
+                entered.countDown();
+                assertThat(release.await(10, TimeUnit.SECONDS)).isTrue();
+                assertThat(count(database)).isZero();
+                return db;
+              }));
       try {
         assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
         var other = executor.submit(() -> database.transaction(db -> count(database)));
@@ -132,21 +127,18 @@ class StorageReadReuseTest {
     try (context) {
       var database = new StorageDatabase(root);
       var reader = database.read(db -> db);
-      assertThatThrownBy(
-              () ->
-                  database.read(
-                      db -> {
-                        db.setAutoCommit(false);
-                        throw new java.io.IOException("failed read");
-                      }))
+      assertThatThrownBy(() ->
+              database.read(db -> {
+                db.setAutoCommit(false);
+                throw new java.io.IOException("failed read");
+              }))
           .hasRootCauseMessage("failed read");
       assertThat(reader.isClosed()).isTrue();
       var transactional =
-          database.read(
-              db -> {
-                db.setAutoCommit(false);
-                return db;
-              });
+          database.read(db -> {
+            db.setAutoCommit(false);
+            return db;
+          });
       assertThat(transactional.isClosed()).isTrue();
       assertThat(count(database)).isZero();
       try (var external = DriverManager.getConnection("jdbc:sqlite:" + root.resolve("storage.db"));
@@ -167,12 +159,11 @@ class StorageReadReuseTest {
         var first = database.keepWalOpen();
         try (first) {
           var late =
-              database.read(
-                  db -> {
-                    first.close();
-                    restarted.set(database.keepWalOpen());
-                    return db;
-                  });
+              database.read(db -> {
+                first.close();
+                restarted.set(database.keepWalOpen());
+                return db;
+              });
           assertThat(late.isClosed()).isTrue();
           assertThat(count(database)).isZero();
         }
@@ -194,14 +185,13 @@ class StorageReadReuseTest {
       assertThat(cursor.compareAndSet(project, initial, 0)).isFalse();
       cursor.reset(project);
       var database = new StorageDatabase(root);
-      database.transaction(
-          db -> {
-            try (var sql = db.createStatement()) {
-              sql.execute(
-                  "CREATE TRIGGER reject_cursor_update BEFORE UPDATE ON event_cursors BEGIN SELECT RAISE(ABORT,'unexpected write'); END");
-            }
-            return null;
-          });
+      database.transaction(db -> {
+        try (var sql = db.createStatement()) {
+          sql.execute(
+              "CREATE TRIGGER reject_cursor_update BEFORE UPDATE ON event_cursors BEGIN SELECT RAISE(ABORT,'unexpected write'); END");
+        }
+        return null;
+      });
       long walBytes = Files.size(root.resolve("storage.db-wal"));
       for (int i = 0; i < 100; i++) {
         assertThat(cursor.compareAndSet(project, initial, 0)).isTrue();
@@ -209,14 +199,13 @@ class StorageReadReuseTest {
       assertThat(Files.size(root.resolve("storage.db-wal"))).isEqualTo(walBytes);
       assertThat(cursor.compareAndSet(project, new SqliteEventCursorStore.Cursor(0, 1), 0))
           .isFalse();
-      database.transaction(
-          db -> {
-            try (var sql = db.createStatement()) {
-              sql.execute("DROP TRIGGER reject_cursor_update");
-              sql.executeUpdate("INSERT INTO event_sequences VALUES('" + project + "',1)");
-            }
-            return null;
-          });
+      database.transaction(db -> {
+        try (var sql = db.createStatement()) {
+          sql.execute("DROP TRIGGER reject_cursor_update");
+          sql.executeUpdate("INSERT INTO event_sequences VALUES('" + project + "',1)");
+        }
+        return null;
+      });
       assertThat(cursor.compareAndSet(project, initial, 1)).isTrue();
       assertThat(cursor.get(project).sequence()).isEqualTo(1);
       assertThat(cursor.compareAndSet(project, initial, 0)).isFalse();
@@ -224,13 +213,12 @@ class StorageReadReuseTest {
       assertThat(cursor.compareAndSet(project, initial, 0)).isFalse();
       assertThat(cursor.compareAndSet(project, cursor.get(project), 0)).isTrue();
       // 保存済みの末尾より先を指す不正カーソルを、同値でも成功にしない。
-      database.transaction(
-          db -> {
-            try (var sql = db.createStatement()) {
-              sql.executeUpdate("UPDATE event_cursors SET sequence=2");
-            }
-            return null;
-          });
+      database.transaction(db -> {
+        try (var sql = db.createStatement()) {
+          sql.executeUpdate("UPDATE event_cursors SET sequence=2");
+        }
+        return null;
+      });
       assertThat(cursor.compareAndSet(project, cursor.get(project), 2)).isFalse();
     }
   }
@@ -243,17 +231,16 @@ class StorageReadReuseTest {
       var context = context();
       try (context) {
         new StorageDatabase(root)
-            .transaction(
-                db -> {
-                  try (var sql = db.prepareStatement("INSERT INTO event_sequences VALUES(?,1)")) {
-                    for (int i = 0; i < 1000; i++) {
-                      sql.setString(1, "fixture-" + i);
-                      sql.addBatch();
-                    }
-                    sql.executeBatch();
-                  }
-                  return null;
-                });
+            .transaction(db -> {
+              try (var sql = db.prepareStatement("INSERT INTO event_sequences VALUES(?,1)")) {
+                for (int i = 0; i < 1000; i++) {
+                  sql.setString(1, "fixture-" + i);
+                  sql.addBatch();
+                }
+                sql.executeBatch();
+              }
+              return null;
+            });
       }
     }
     var results = new ArrayList<Map<String, Object>>();

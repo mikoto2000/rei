@@ -128,9 +128,7 @@ public final class GoalCompletionEvaluation {
       List<String> unmet) {
     public Result {
       conditions =
-          conditions == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(conditions));
+          conditions == null ? null : Collections.unmodifiableList(new ArrayList<>(conditions));
       unmet = unmet == null ? null : Collections.unmodifiableList(new ArrayList<>(unmet));
     }
   }

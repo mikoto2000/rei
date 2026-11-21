@@ -57,12 +57,11 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     write("a", true);
     var observation =
         new GoalStageVerifier(files).verify(goal, stages.list(goal).getFirst(), stages.list(goal));
-    goals.atomic(
-        () -> {
-          assertTrue(stages.finish(claim, attempt, observation));
-          goals.recordAttempt(claim, run, "VERIFIED", "criteria_verified");
-          return null;
-        });
+    goals.atomic(() -> {
+      assertTrue(stages.finish(claim, attempt, observation));
+      goals.recordAttempt(claim, run, "VERIFIED", "criteria_verified");
+      return null;
+    });
     var loop =
         loop(
             new GoalLoopService.Gateway() {
@@ -108,12 +107,13 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
             20);
     stages.define(goal, 0, List.of(stage("a"), stage("b", "a")));
     var result =
-        loop((claim, run, complete) -> {
-              assertTrue(goals.reserveLlm(claim, run));
-              goals.recordTotalTokens(claim, run, 10);
-              write("a", true);
-              complete.accept(done());
-            })
+        loop(
+                (claim, run, complete) -> {
+                  assertTrue(goals.reserveLlm(claim, run));
+                  goals.recordTotalTokens(claim, run, 10);
+                  write("a", true);
+                  complete.accept(done());
+                })
             .run("project", goal.id());
     assertEquals("BLOCKED", result.status());
     assertEquals(1, result.attempts());
@@ -126,11 +126,10 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
   void changedEvidenceReopensCompletedStagedGoalWithoutResettingBudget() {
     var goal = setup();
     var loop =
-        loop(
-            (claim, run, complete) -> {
-              write(stages.forRun(goal, run).stageId(), true);
-              complete.accept(done());
-            });
+        loop((claim, run, complete) -> {
+          write(stages.forRun(goal, run).stageId(), true);
+          complete.accept(done());
+        });
     assertEquals("COMPLETED", loop.run("project", goal.id()).status());
     try {
       java.nio.file.Files.writeString(dir.resolve("a.json"), "{ \"ok\": true }");
@@ -149,20 +148,18 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
   void repairedPredecessorAllowsIndependentRecheckOfKnownFinishedSuccessor() {
     var goal = setup();
     var first =
-        loop(
-            (claim, run, complete) -> {
-              String id = stages.forRun(goal, run).stageId();
-              write(id, true);
-              if (id.equals("b")) write("a", false);
-              complete.accept(done());
-            });
+        loop((claim, run, complete) -> {
+          String id = stages.forRun(goal, run).stageId();
+          write(id, true);
+          if (id.equals("b")) write("a", false);
+          complete.accept(done());
+        });
     assertEquals("BLOCKED", first.run("project", goal.id()).status());
     var repaired =
-        loop(
-            (claim, run, complete) -> {
-              if (stages.forRun(goal, run).stageId().equals("a")) write("a", true);
-              complete.accept(done());
-            });
+        loop((claim, run, complete) -> {
+          if (stages.forRun(goal, run).stageId().equals("a")) write("a", true);
+          complete.accept(done());
+        });
     assertEquals("COMPLETED", repaired.run("project", goal.id()).status());
   }
 
@@ -207,26 +204,27 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
   void splitCapabilityCanBeDisabledForRepairOnlyEvaluation() {
     var goal = setup();
     service.configureSplit(false);
-    loop((claim, run, complete) -> {
-          if (stages.forRun(goal, run).number() == 2)
-            assertThrows(
-                IllegalStateException.class,
-                () ->
-                    service.proposeSplit(
-                        new AgentRunContext(run, "session", dir, "project"),
-                        goal.id(),
-                        1,
-                        List.of(
-                            new GoalStageDefinition(
-                                "child",
-                                "a",
-                                "Child",
-                                List.of(criterion("child")),
-                                List.of(),
-                                List.of(),
-                                null))));
-          complete.accept(done());
-        })
+    loop(
+            (claim, run, complete) -> {
+              if (stages.forRun(goal, run).number() == 2)
+                assertThrows(
+                    IllegalStateException.class,
+                    () ->
+                        service.proposeSplit(
+                            new AgentRunContext(run, "session", dir, "project"),
+                            goal.id(),
+                            1,
+                            List.of(
+                                new GoalStageDefinition(
+                                    "child",
+                                    "a",
+                                    "Child",
+                                    List.of(criterion("child")),
+                                    List.of(),
+                                    List.of(),
+                                    null))));
+              complete.accept(done());
+            })
         .run("project", goal.id());
     assertEquals(1, stages.planVersion(goal));
   }
@@ -244,14 +242,15 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
             10);
     stages.define(goal, 0, List.of(stage("a")));
     var result =
-        loop((claim, run, complete) -> {
-              if (stages.forRun(goal, run) != null) write("a", true);
-              else {
-                write("final", true);
-                write("a", false);
-              }
-              complete.accept(done());
-            })
+        loop(
+                (claim, run, complete) -> {
+                  if (stages.forRun(goal, run) != null) write("a", true);
+                  else {
+                    write("final", true);
+                    write("a", false);
+                  }
+                  complete.accept(done());
+                })
             .run("project", goal.id());
     assertEquals("BLOCKED", result.status());
     assertEquals("STALE", stages.list(goal).getFirst().state());

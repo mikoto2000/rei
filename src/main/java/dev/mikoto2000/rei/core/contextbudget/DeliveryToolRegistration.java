@@ -53,13 +53,12 @@ public final class DeliveryToolRegistration {
         MethodToolCallbackProvider.builder().toolObjects(objects).build().getToolCallbacks();
     return () ->
         Arrays.stream(callbacks)
-            .map(
-                callback ->
-                    wrap(
-                        callback,
-                        policies.getOrDefault(
-                            callback.getToolDefinition().name(), ResultDelivery.Kind.GENERAL),
-                        reviewPages.contains(callback.getToolDefinition().name())))
+            .map(callback ->
+                wrap(
+                    callback,
+                    policies.getOrDefault(
+                        callback.getToolDefinition().name(), ResultDelivery.Kind.GENERAL),
+                    reviewPages.contains(callback.getToolDefinition().name())))
             .toArray(ToolCallback[]::new);
   }
 

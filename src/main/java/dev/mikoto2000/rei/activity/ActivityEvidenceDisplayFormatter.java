@@ -25,10 +25,9 @@ public final class ActivityEvidenceDisplayFormatter {
     var d = r.detection();
     if (d == null) return result;
     if (d.classificationSources().stream()
-        .anyMatch(
-            s ->
-                Set.of("FOREGROUND_WINDOW", "WINDOW_TITLE", "VISIBLE_WINDOWS", "WINDOW_METADATA")
-                    .contains(s))) result.add(Source.WINDOW_METADATA);
+        .anyMatch(s ->
+            Set.of("FOREGROUND_WINDOW", "WINDOW_TITLE", "VISIBLE_WINDOWS", "WINDOW_METADATA")
+                .contains(s))) result.add(Source.WINDOW_METADATA);
     var vision = VisionDiagnostics.of(d);
     if (vision.foreground() != null && vision.foreground().state() == VisionDiagnostics.State.USED)
       result.add(Source.FOREGROUND_VISION);
@@ -46,13 +45,12 @@ public final class ActivityEvidenceDisplayFormatter {
             : String.join(
                 " + ",
                 sources.stream()
-                    .map(
-                        s ->
-                            switch (s) {
-                              case WINDOW_METADATA -> "Window";
-                              case FOREGROUND_VISION -> "Foreground Vision";
-                              case BACKGROUND_VISION -> "Background Vision";
-                            })
+                    .map(s ->
+                        switch (s) {
+                          case WINDOW_METADATA -> "Window";
+                          case FOREGROUND_VISION -> "Foreground Vision";
+                          case BACKGROUND_VISION -> "Background Vision";
+                        })
                     .toList());
     var d = r.detection();
     var foreground = VisionDiagnostics.of(d).foreground();

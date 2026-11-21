@@ -73,13 +73,13 @@ class ReiApplicationCommandOutputTest {
       terminal.flush();
 
       assertEquals(charset, terminal.encoding());
+      assertEquals(charset, terminal.outputEncoding());
       // Native PTY providers drain output on a pump thread; flush does not join that thread.
       org.awaitility.Awaitility.await()
           .atMost(java.time.Duration.ofSeconds(2))
-          .untilAsserted(
-              () ->
-                  org.assertj.core.api.Assertions.assertThat(output.toString(charset))
-                      .contains("RSS/Atom フィードを操作します", "フィードを追加します"));
+          .untilAsserted(() ->
+              org.assertj.core.api.Assertions.assertThat(output.toString(charset))
+                  .contains("RSS/Atom フィードを操作します", "フィードを追加します"));
     }
   }
 
@@ -198,10 +198,9 @@ class ReiApplicationCommandOutputTest {
     CommandLine root = new CommandLine(CommandLine.Model.CommandSpec.create().name("rei"));
     root.addSubcommand(
         "summarize",
-        new SummarizeCommand(
-            uri -> {
-              throw new SummarizationException("EMPTY_CONTENT", "本文が空です");
-            }));
+        new SummarizeCommand(uri -> {
+          throw new SummarizationException("EMPTY_CONTENT", "本文が空です");
+        }));
     ByteArrayOutputStream output = configureOutput(root, encoding);
 
     if (afterCompletion) completeSummary(root);

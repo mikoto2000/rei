@@ -43,11 +43,8 @@ public record TurnCheckpoint(
             ? null
             : Collections.unmodifiableList(new ArrayList<>(pendingSummary));
     workingFiles =
-        workingFiles == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(workingFiles));
+        workingFiles == null ? null : Collections.unmodifiableList(new ArrayList<>(workingFiles));
   }
-
 
   /** LLM コンテキストに渡す簡潔な表現を組み立てる。 */
   public String renderForPrompt() {

@@ -36,17 +36,16 @@ class FileWriteExtensionTest {
         Map.of(
             "operations",
             java.util.Arrays.stream(paths)
-                .map(
-                    path ->
-                        Map.of(
-                            "kind",
-                            "UPDATE",
-                            "path",
-                            path,
-                            "baseVersion",
-                            TextDocumentTransaction.hash(text),
-                            "edits",
-                            List.of(Map.of("oldText", "old", "newText", "new"))))
+                .map(path ->
+                    Map.of(
+                        "kind",
+                        "UPDATE",
+                        "path",
+                        path,
+                        "baseVersion",
+                        TextDocumentTransaction.hash(text),
+                        "edits",
+                        List.of(Map.of("oldText", "old", "newText", "new"))))
                 .toList()),
         TextDocumentChangeSetService.Request.class);
   }

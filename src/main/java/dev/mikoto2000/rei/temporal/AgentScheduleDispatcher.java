@@ -198,10 +198,8 @@ public class AgentScheduleDispatcher {
                       var current =
                           sessions
                               .findById(owner.conversationId())
-                              .orElseThrow(
-                                  () ->
-                                      new IllegalStateException(
-                                          "Scheduled session no longer exists"));
+                              .orElseThrow(() ->
+                                  new IllegalStateException("Scheduled session no longer exists"));
                       if (!current.projectId().equals(owner.projectId()))
                         throw new IllegalStateException("Scheduled session ownership changed");
                       if (continuations != null) continuations.attachParent(owner, null, completed);

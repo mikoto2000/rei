@@ -132,10 +132,9 @@ public class ProjectCommand {
     public java.util.List<dev.mikoto2000.rei.core.completion.CompletionCandidate> choices(
         dev.mikoto2000.rei.core.completion.CompletionContext context) {
       return ProjectService.completionProjectPathStrings().stream()
-          .map(
-              path ->
-                  new dev.mikoto2000.rei.core.completion.CompletionCandidate(
-                      path, path, "Registered project", "project", true))
+          .map(path ->
+              new dev.mikoto2000.rei.core.completion.CompletionCandidate(
+                  path, path, "Registered project", "project", true))
           .toList();
     }
   }

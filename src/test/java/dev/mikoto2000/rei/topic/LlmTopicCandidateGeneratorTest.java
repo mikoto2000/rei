@@ -36,8 +36,8 @@ class LlmTopicCandidateGeneratorTest {
                     new Generation(
                         new AssistantMessage(
                             """
-            {"candidates":[{"topic":"測定","reason":"未実施","type":"unfinished_work","source":"conversation","priority":0.8,"freshness":0.8,"usefulness":0.9,"intrusiveness":0.1,"confidence":0.9}]}
-            """)))));
+                            {"candidates":[{"topic":"測定","reason":"未実施","type":"unfinished_work","source":"conversation","priority":0.8,"freshness":0.8,"usefulness":0.9,"intrusiveness":0.1,"confidence":0.9}]}
+                            """)))));
     LlmTopicCandidateGenerator generator =
         new LlmTopicCandidateGenerator(
             chatModel,

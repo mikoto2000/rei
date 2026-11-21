@@ -26,10 +26,9 @@ public class ProfileEventLogSubscriber {
   @PostConstruct
   void subscribe() {
     subscription =
-        eventBus.subscribe(
-            event -> {
-              if (streaming == null || !streaming.handles(event)) logStore.onEvent(event);
-            });
+        eventBus.subscribe(event -> {
+          if (streaming == null || !streaming.handles(event)) logStore.onEvent(event);
+        });
   }
 
   /** 実行状況の通知に関する購読の終了を処理する。 */

@@ -55,10 +55,8 @@ class InputAwareCaptureTest {
     var clock = new ActivityChangeScopeTest.Time();
     var ticks = new java.util.concurrent.atomic.AtomicLong(1000);
     when(observer.lightweight())
-        .thenAnswer(
-            i ->
-                new DesktopActivityObserver.Lightweight(
-                    100, ticks.get(), "1", "Default", false, true));
+        .thenAnswer(i ->
+            new DesktopActivityObserver.Lightweight(100, ticks.get(), "1", "Default", false, true));
     when(observer.foreground())
         .thenReturn(
             ActivityEvidenceClassifierTest.window(

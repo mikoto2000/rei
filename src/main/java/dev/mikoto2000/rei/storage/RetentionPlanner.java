@@ -183,23 +183,22 @@ public final class RetentionPlanner {
         || maxCount != null && maxCount < 1)
       throw new IllegalArgumentException(
           "Positive retention limits required (at least one second)");
-    transaction.run(
-        db -> {
-          var old = policy(db, id);
-          if (!Set.of("RAW_RESULT", "ACTIVITY_RAW", "EVENT", "REFLECTION").contains(old.kind())
-              && (retention != null || maxBytes != null || maxCount != null))
-            throw new IllegalArgumentException("This kind has no automatic retention policy");
-          try (var update =
-              db.prepareStatement(
-                  "UPDATE retention_policies SET retention_seconds=?,max_bytes=?,max_count=?,automatic=0,version=version+1 WHERE id=?")) {
-            update.setObject(1, retention == null ? null : retention.getSeconds());
-            update.setObject(2, maxBytes);
-            update.setObject(3, maxCount);
-            update.setString(4, id);
-            update.executeUpdate();
-          }
-          return null;
-        });
+    transaction.run(db -> {
+      var old = policy(db, id);
+      if (!Set.of("RAW_RESULT", "ACTIVITY_RAW", "EVENT", "REFLECTION").contains(old.kind())
+          && (retention != null || maxBytes != null || maxCount != null))
+        throw new IllegalArgumentException("This kind has no automatic retention policy");
+      try (var update =
+          db.prepareStatement(
+              "UPDATE retention_policies SET retention_seconds=?,max_bytes=?,max_count=?,automatic=0,version=version+1 WHERE id=?")) {
+        update.setObject(1, retention == null ? null : retention.getSeconds());
+        update.setObject(2, maxBytes);
+        update.setObject(3, maxCount);
+        update.setString(4, id);
+        update.executeUpdate();
+      }
+      return null;
+    });
   }
 
   /** 依頼を進めるための候補や手順を組み立てる。 */
@@ -207,118 +206,115 @@ public final class RetentionPlanner {
     if (maxObjects < 1 || maxObjects > 1000 || maxBytes < 1 || maxBytes > 1024L * 1024 * 1024)
       throw new IllegalArgumentException("Plan budget must be 1..1000 objects and 1..1GiB");
     String scope = suppliedScope == null ? "" : UUID.fromString(suppliedScope).toString();
-    return transaction.run(
-        db -> {
-          Policy policy = policy(db, policyId);
-          Instant now = clock.get();
-          var candidates = new ArrayList<StoredObject>();
-          var protectedReasons = new TreeMap<String, Long>();
-          long bytes = 0, totalBytes = 0, totalCount = 0;
-          boolean limited = false;
-          try (var query =
-              db.prepareStatement(
-                  "SELECT COALESCE(sum(size),0),count(*) FROM stored_objects WHERE kind=? AND scope=? AND status='AVAILABLE'")) {
-            query.setString(1, policy.kind());
-            query.setString(2, scope);
-            try (var rows = query.executeQuery()) {
-              rows.next();
-              totalBytes = rows.getLong(1);
-              totalCount = rows.getLong(2);
+    return transaction.run(db -> {
+      Policy policy = policy(db, policyId);
+      Instant now = clock.get();
+      var candidates = new ArrayList<StoredObject>();
+      var protectedReasons = new TreeMap<String, Long>();
+      long bytes = 0, totalBytes = 0, totalCount = 0;
+      boolean limited = false;
+      try (var query =
+          db.prepareStatement(
+              "SELECT COALESCE(sum(size),0),count(*) FROM stored_objects WHERE kind=? AND scope=? AND status='AVAILABLE'")) {
+        query.setString(1, policy.kind());
+        query.setString(2, scope);
+        try (var rows = query.executeQuery()) {
+          rows.next();
+          totalBytes = rows.getLong(1);
+          totalCount = rows.getLong(2);
+        }
+      }
+      try (var query =
+          db.prepareStatement(
+              "SELECT * FROM stored_objects WHERE kind=? AND scope=? AND status='AVAILABLE' ORDER BY created,id LIMIT 1001")) {
+        query.setString(1, policy.kind());
+        query.setString(2, scope);
+        try (var rows = query.executeQuery()) {
+          int scanned = 0;
+          while (rows.next()) {
+            if (++scanned > 1000) {
+              limited = true;
+              break;
             }
-          }
-          try (var query =
-              db.prepareStatement(
-                  "SELECT * FROM stored_objects WHERE kind=? AND scope=? AND status='AVAILABLE' ORDER BY created,id LIMIT 1001")) {
-            query.setString(1, policy.kind());
-            query.setString(2, scope);
-            try (var rows = query.executeQuery()) {
-              int scanned = 0;
-              while (rows.next()) {
-                if (++scanned > 1000) {
-                  limited = true;
-                  break;
-                }
-                StoredObject object = StorageObjectRegistry.row(rows);
-                var protection = findProtection.find(db, object);
-                if (protection.isPresent()) {
-                  protectedReasons.merge(protection.get(), 1L, Long::sum);
-                  continue;
-                }
-                if (object.created() == null) {
-                  protectedReasons.merge("unknown-age", 1L, Long::sum);
-                  continue;
-                }
-                boolean expired =
-                    policy.retentionSeconds() != null
-                        && !object.created().plusSeconds(policy.retentionSeconds()).isAfter(now);
-                boolean quota =
-                    policy.maxBytes() != null && totalBytes - bytes > policy.maxBytes()
-                        || policy.maxCount() != null
-                            && totalCount - candidates.size() > policy.maxCount();
-                if (!expired && !quota) continue;
-                // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-                if (candidates.size() >= maxObjects || object.size() > maxBytes - bytes) {
-                  limited = true;
-                  continue;
-                }
-                if (!validation.unchanged(object)) {
-                  protectedReasons.merge("changed-or-missing", 1L, Long::sum);
-                  continue;
-                }
-                candidates.add(object);
-                bytes = Math.addExact(bytes, object.size());
-              }
+            StoredObject object = StorageObjectRegistry.row(rows);
+            var protection = findProtection.find(db, object);
+            if (protection.isPresent()) {
+              protectedReasons.merge(protection.get(), 1L, Long::sum);
+              continue;
             }
-          }
-          String hash = snapshot(policyId, policy.version(), scope, candidates);
-          Plan plan =
-              new Plan(
-                  UUID.randomUUID().toString(),
-                  policyId,
-                  policy.version(),
-                  scope,
-                  hash,
-                  List.copyOf(candidates),
-                  bytes,
-                  Map.copyOf(protectedReasons),
-                  limited,
-                  now);
-          var metadata =
-              new Plan(
-                  plan.id(),
-                  policyId,
-                  policy.version(),
-                  scope,
-                  hash,
-                  List.of(),
-                  bytes,
-                  plan.protectedReasons(),
-                  limited,
-                  now);
-          try (var insert =
-              db.prepareStatement("INSERT INTO retention_plans VALUES(?,?,?,?,?,?,?)")) {
-            insert.setString(1, plan.id());
-            insert.setString(2, policyId);
-            insert.setLong(3, policy.version());
-            insert.setString(4, scope);
-            insert.setString(5, hash);
-            insert.setString(6, StorageDatabase.JSON.writeValueAsString(metadata));
-            insert.setString(7, now.toString());
-            insert.executeUpdate();
-          }
-          try (var insert =
-              db.prepareStatement("INSERT INTO retention_candidates VALUES(?,?,?,?)")) {
-            int ordinal = 0;
-            for (var object : candidates) {
-              insert.setString(1, plan.id());
-              insert.setString(2, object.id());
-              insert.setInt(3, ordinal++);
-              insert.setString(4, StorageDatabase.JSON.writeValueAsString(object));
-              insert.executeUpdate();
+            if (object.created() == null) {
+              protectedReasons.merge("unknown-age", 1L, Long::sum);
+              continue;
             }
+            boolean expired =
+                policy.retentionSeconds() != null
+                    && !object.created().plusSeconds(policy.retentionSeconds()).isAfter(now);
+            boolean quota =
+                policy.maxBytes() != null && totalBytes - bytes > policy.maxBytes()
+                    || policy.maxCount() != null
+                        && totalCount - candidates.size() > policy.maxCount();
+            if (!expired && !quota) continue;
+            // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
+            if (candidates.size() >= maxObjects || object.size() > maxBytes - bytes) {
+              limited = true;
+              continue;
+            }
+            if (!validation.unchanged(object)) {
+              protectedReasons.merge("changed-or-missing", 1L, Long::sum);
+              continue;
+            }
+            candidates.add(object);
+            bytes = Math.addExact(bytes, object.size());
           }
-          return plan;
-        });
+        }
+      }
+      String hash = snapshot(policyId, policy.version(), scope, candidates);
+      Plan plan =
+          new Plan(
+              UUID.randomUUID().toString(),
+              policyId,
+              policy.version(),
+              scope,
+              hash,
+              List.copyOf(candidates),
+              bytes,
+              Map.copyOf(protectedReasons),
+              limited,
+              now);
+      var metadata =
+          new Plan(
+              plan.id(),
+              policyId,
+              policy.version(),
+              scope,
+              hash,
+              List.of(),
+              bytes,
+              plan.protectedReasons(),
+              limited,
+              now);
+      try (var insert = db.prepareStatement("INSERT INTO retention_plans VALUES(?,?,?,?,?,?,?)")) {
+        insert.setString(1, plan.id());
+        insert.setString(2, policyId);
+        insert.setLong(3, policy.version());
+        insert.setString(4, scope);
+        insert.setString(5, hash);
+        insert.setString(6, StorageDatabase.JSON.writeValueAsString(metadata));
+        insert.setString(7, now.toString());
+        insert.executeUpdate();
+      }
+      try (var insert = db.prepareStatement("INSERT INTO retention_candidates VALUES(?,?,?,?)")) {
+        int ordinal = 0;
+        for (var object : candidates) {
+          insert.setString(1, plan.id());
+          insert.setString(2, object.id());
+          insert.setInt(3, ordinal++);
+          insert.setString(4, StorageDatabase.JSON.writeValueAsString(object));
+          insert.executeUpdate();
+        }
+      }
+      return plan;
+    });
   }
 
   /** 現在の状態を、後から参照できる記録として取り出す。 */
@@ -393,48 +389,46 @@ public final class RetentionPlanner {
 
   /** データ保存の共通処理で用いる承認を返す。 */
   public Approval approve(String id) {
-    return transaction.run(
-        db -> {
-          Plan plan = get(db, id);
-          validate(db, plan);
-          if (plan.candidates().isEmpty())
-            throw new IllegalStateException("An empty plan cannot be approved");
-          Instant now = clock.get();
-          try (var insert =
-              db.prepareStatement(
-                  "INSERT INTO retention_approvals VALUES(?,?,?) ON CONFLICT(plan_id) DO NOTHING")) {
-            insert.setString(1, id);
-            insert.setString(2, plan.snapshotHash());
-            insert.setString(3, now.toString());
-            insert.executeUpdate();
-          }
-          return new Approval(id, plan.snapshotHash(), now);
-        });
+    return transaction.run(db -> {
+      Plan plan = get(db, id);
+      validate(db, plan);
+      if (plan.candidates().isEmpty())
+        throw new IllegalStateException("An empty plan cannot be approved");
+      Instant now = clock.get();
+      try (var insert =
+          db.prepareStatement(
+              "INSERT INTO retention_approvals VALUES(?,?,?) ON CONFLICT(plan_id) DO NOTHING")) {
+        insert.setString(1, id);
+        insert.setString(2, plan.snapshotHash());
+        insert.setString(3, now.toString());
+        insert.executeUpdate();
+      }
+      return new Approval(id, plan.snapshotHash(), now);
+    });
   }
 
   /** 過去の記録を、条件に従って参照できる形で返す。 */
   public List<Summary> history() {
-    return read.run(
-        db -> {
-          var result = new ArrayList<Summary>();
-          try (var query = db.createStatement();
-              var rows =
-                  query.executeQuery(
-                      "SELECT record FROM retention_plans ORDER BY created DESC,id DESC LIMIT 100")) {
-            while (rows.next()) {
-              var metadata = StorageDatabase.JSON.readValue(rows.getString(1), Plan.class);
-              result.add(
-                  new Summary(
-                      metadata.id(),
-                      metadata.policyId(),
-                      metadata.scope(),
-                      metadata.snapshotHash(),
-                      metadata.recoverableBytes(),
-                      metadata.created()));
-            }
-          }
-          return List.copyOf(result);
-        });
+    return read.run(db -> {
+      var result = new ArrayList<Summary>();
+      try (var query = db.createStatement();
+          var rows =
+              query.executeQuery(
+                  "SELECT record FROM retention_plans ORDER BY created DESC,id DESC LIMIT 100")) {
+        while (rows.next()) {
+          var metadata = StorageDatabase.JSON.readValue(rows.getString(1), Plan.class);
+          result.add(
+              new Summary(
+                  metadata.id(),
+                  metadata.policyId(),
+                  metadata.scope(),
+                  metadata.snapshotHash(),
+                  metadata.recoverableBytes(),
+                  metadata.created()));
+        }
+      }
+      return List.copyOf(result);
+    });
   }
 
   /**
@@ -482,41 +476,40 @@ public final class RetentionPlanner {
 
   /** データ保存の共通処理で用いる状態対象範囲を返す。 */
   private Status statusScope(String scope) {
-    return read.run(
-        db -> {
-          var usages = new ArrayList<ObjectUsage>();
-          try (var query =
-              scope == null
-                  ? db.prepareStatement(USAGE_SQL + " GROUP BY kind")
-                  : db.prepareStatement(USAGE_SQL + " WHERE scope=? GROUP BY kind")) {
-            if (scope != null) query.setString(1, scope);
-            try (var rows = query.executeQuery()) {
-              while (rows.next())
-                usages.add(new ObjectUsage(rows.getString(1), rows.getLong(2), rows.getLong(3)));
+    return read.run(db -> {
+      var usages = new ArrayList<ObjectUsage>();
+      try (var query =
+          scope == null
+              ? db.prepareStatement(USAGE_SQL + " GROUP BY kind")
+              : db.prepareStatement(USAGE_SQL + " WHERE scope=? GROUP BY kind")) {
+        if (scope != null) query.setString(1, scope);
+        try (var rows = query.executeQuery()) {
+          while (rows.next())
+            usages.add(new ObjectUsage(rows.getString(1), rows.getLong(2), rows.getLong(3)));
+        }
+      }
+      var reasons = new TreeMap<String, Long>();
+      boolean limited = false;
+      try (var query =
+          scope == null
+              ? db.prepareStatement("SELECT * FROM stored_objects ORDER BY id LIMIT 1001")
+              : db.prepareStatement(
+                  "SELECT * FROM stored_objects WHERE scope=? ORDER BY id LIMIT 1001")) {
+        if (scope != null) query.setString(1, scope);
+        try (var rows = query.executeQuery()) {
+          int count = 0;
+          while (rows.next()) {
+            if (++count > 1000) {
+              limited = true;
+              break;
             }
+            findProtection
+                .find(db, StorageObjectRegistry.row(rows))
+                .ifPresent(reason -> reasons.merge(reason, 1L, Long::sum));
           }
-          var reasons = new TreeMap<String, Long>();
-          boolean limited = false;
-          try (var query =
-              scope == null
-                  ? db.prepareStatement("SELECT * FROM stored_objects ORDER BY id LIMIT 1001")
-                  : db.prepareStatement(
-                      "SELECT * FROM stored_objects WHERE scope=? ORDER BY id LIMIT 1001")) {
-            if (scope != null) query.setString(1, scope);
-            try (var rows = query.executeQuery()) {
-              int count = 0;
-              while (rows.next()) {
-                if (++count > 1000) {
-                  limited = true;
-                  break;
-                }
-                findProtection
-                    .find(db, StorageObjectRegistry.row(rows))
-                    .ifPresent(reason -> reasons.merge(reason, 1L, Long::sum));
-              }
-            }
-          }
-          return new Status(List.copyOf(usages), Map.copyOf(reasons), limited);
-        });
+        }
+      }
+      return new Status(List.copyOf(usages), Map.copyOf(reasons), limited);
+    });
   }
 }

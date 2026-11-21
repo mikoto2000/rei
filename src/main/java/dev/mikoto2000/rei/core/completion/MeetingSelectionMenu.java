@@ -70,8 +70,10 @@ public final class MeetingSelectionMenu {
   }
 
   /** Adapt primitive menu data supplied by the checkpoint command. */
-  public static Optional<String> chooseOne(LineReader reader, List<String> ids, List<String> labels) {
-    if (ids.size() != labels.size()) throw new IllegalArgumentException("Menu IDs and labels differ");
+  public static Optional<String> chooseOne(
+      LineReader reader, List<String> ids, List<String> labels) {
+    if (ids.size() != labels.size())
+      throw new IllegalArgumentException("Menu IDs and labels differ");
     var candidates = new ArrayList<Candidate>();
     for (int index = 0; index < ids.size(); index++)
       candidates.add(new Candidate(ids.get(index), labels.get(index)));

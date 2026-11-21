@@ -73,11 +73,10 @@ class DocumentRendererTest {
     var count = new AtomicInteger();
     byte[] png = png();
     var service =
-        service(
-            text -> {
-              count.incrementAndGet();
-              return new DocumentRendererService.Rendered(0, false, png, "fixture-renderer");
-            });
+        service(text -> {
+          count.incrementAndGet();
+          return new DocumentRendererService.Rendered(0, false, png, "fixture-renderer");
+        });
     var request = request();
     var result = service.validate(owner(), request);
     assertEquals("RENDERED", result.status());
@@ -162,31 +161,27 @@ class DocumentRendererTest {
   void timeoutCancellationAndFatalStopLeaveHonestDurableReceipts() throws Exception {
     var request = request();
     var timeout =
-        service(
-            text -> {
-              throw new java.util.concurrent.TimeoutException();
-            });
+        service(text -> {
+          throw new java.util.concurrent.TimeoutException();
+        });
     assertEquals("TIMEOUT", timeout.validate(owner(), request).status());
     var cancelled =
-        service(
-            text -> {
-              throw new java.util.concurrent.CancellationException();
-            });
+        service(text -> {
+          throw new java.util.concurrent.CancellationException();
+        });
     var other = new AgentRunContext("cancel", "session", root, project);
     assertThrows(
         java.util.concurrent.CancellationException.class, () -> cancelled.validate(other, request));
     var fatal =
-        service(
-            text -> {
-              throw new AssertionError("fatal");
-            });
+        service(text -> {
+          throw new AssertionError("fatal");
+        });
     var stopped = new AgentRunContext("fatal", "session", root, project);
     assertThrows(AssertionError.class, () -> fatal.validate(stopped, request));
     var restarted =
-        service(
-            text -> {
-              throw new AssertionError("no replay");
-            });
+        service(text -> {
+          throw new AssertionError("no replay");
+        });
     assertEquals("UNKNOWN", restarted.validate(stopped, request).status());
     assertEquals("UNKNOWN", restarted.validate(other, request).status());
   }
@@ -207,11 +202,10 @@ class DocumentRendererTest {
     var request = request();
     byte[] png = png();
     var service =
-        service(
-            text -> {
-              Files.writeString(root.resolve("diagram.puml"), "human changed");
-              return new DocumentRendererService.Rendered(0, false, png, "fixture");
-            });
+        service(text -> {
+          Files.writeString(root.resolve("diagram.puml"), "human changed");
+          return new DocumentRendererService.Rendered(0, false, png, "fixture");
+        });
     var result = service.validate(owner(), request);
     assertEquals("STALE", result.status());
     assertNull(result.artifact());

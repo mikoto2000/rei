@@ -88,91 +88,87 @@ public final class SecretaryOrchestrator
               SecretaryExecutionMode.PROPOSAL_ONLY));
     }
     values.sort(
-        java.util.Comparator.comparing(
-            p ->
-                SecretaryPreparation.prepareBy(
-                    ledger.get(project, p.suggestion().taskId()), zone)));
+        java.util.Comparator.comparing(p ->
+            SecretaryPreparation.prepareBy(ledger.get(project, p.suggestion().taskId()), zone)));
     return values.stream().limit(3).toList();
   }
 
   @Override
   public List<SecretaryContext.Item> context(String project, LocalDate date, ZoneId zone) {
     return preparation(project).stream()
-        .map(
-            p ->
-                new SecretaryContext.Item(
-                    "secretary-suggestion",
-                    p.suggestion().id(),
-                    p.suggestion().reason(),
-                    "PROPOSED",
-                    "Optional proposal; prep-minutes="
-                        + p.minutes()
-                        + "; load="
-                        + p.load()
-                        + "; feasible-now="
-                        + p.feasible()
-                        + "; mode="
-                        + p.mode()
-                        + "; expires="
-                        + p.expires(),
-                    SecretaryContext.Reliability.PROPOSAL,
-                    List.of(
-                        "secretary-task:" + p.suggestion().taskId(),
-                        "secretary-suggestion:" + p.suggestion().id())))
+        .map(p ->
+            new SecretaryContext.Item(
+                "secretary-suggestion",
+                p.suggestion().id(),
+                p.suggestion().reason(),
+                "PROPOSED",
+                "Optional proposal; prep-minutes="
+                    + p.minutes()
+                    + "; load="
+                    + p.load()
+                    + "; feasible-now="
+                    + p.feasible()
+                    + "; mode="
+                    + p.mode()
+                    + "; expires="
+                    + p.expires(),
+                SecretaryContext.Reliability.PROPOSAL,
+                List.of(
+                    "secretary-task:" + p.suggestion().taskId(),
+                    "secretary-suggestion:" + p.suggestion().id())))
         .toList();
   }
 
   private void refresh(String project) {
-    database.transaction(
-        db -> {
-          var values = new ArrayList<Suggestion>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT record FROM secretary_suggestions WHERE project=? AND status IN ('PROPOSED','EXECUTION_REQUESTED','APPROVAL_REQUESTED','DEFERRED') ORDER BY updated,id LIMIT 256")) {
-            q.setString(1, project);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                values.add(SecretaryJson.JSON.readValue(r.getString(1), Suggestion.class));
-            }
-          }
-          for (var value : values) {
-            String status = null;
-            try {
-              var task = ledger.getWithin(db, project, value.taskId());
-              if (task.revision() != value.taskRevision()
-                  || task.status() == SecretaryTask.Status.DONE
-                  || task.status() == SecretaryTask.Status.CANCELLED) status = "INVALIDATED";
-            } catch (IllegalArgumentException missing) {
-              status = "INVALIDATED";
-            }
-            var lifetime =
-                value.status().equals("DEFERRED") && value.notBefore().isAfter(value.updated())
-                    ? value.notBefore()
-                    : value.updated();
-            if (status == null && !lifetime.plusSeconds(7 * 86400L).isAfter(clock.instant()))
-              status = "EXPIRED";
-            if (status != null) {
-              var changed =
-                  new Suggestion(
-                      value.id(),
-                      project,
-                      value.taskId(),
-                      value.rule(),
-                      status,
-                      value.priority(),
-                      value.revision() + 1,
-                      value.taskRevision(),
-                      value.created(),
-                      clock.instant(),
-                      value.notBefore(),
-                      value.reason(),
-                      value.approvalId());
-              save(db, changed);
-              history(db, changed, status, "source revision or lifetime changed");
-            }
-          }
-          return null;
-        });
+    database.transaction(db -> {
+      var values = new ArrayList<Suggestion>();
+      try (var q =
+          db.prepareStatement(
+              "SELECT record FROM secretary_suggestions WHERE project=? AND status IN ('PROPOSED','EXECUTION_REQUESTED','APPROVAL_REQUESTED','DEFERRED') ORDER BY updated,id LIMIT 256")) {
+        q.setString(1, project);
+        try (var r = q.executeQuery()) {
+          while (r.next())
+            values.add(SecretaryJson.JSON.readValue(r.getString(1), Suggestion.class));
+        }
+      }
+      for (var value : values) {
+        String status = null;
+        try {
+          var task = ledger.getWithin(db, project, value.taskId());
+          if (task.revision() != value.taskRevision()
+              || task.status() == SecretaryTask.Status.DONE
+              || task.status() == SecretaryTask.Status.CANCELLED) status = "INVALIDATED";
+        } catch (IllegalArgumentException missing) {
+          status = "INVALIDATED";
+        }
+        var lifetime =
+            value.status().equals("DEFERRED") && value.notBefore().isAfter(value.updated())
+                ? value.notBefore()
+                : value.updated();
+        if (status == null && !lifetime.plusSeconds(7 * 86400L).isAfter(clock.instant()))
+          status = "EXPIRED";
+        if (status != null) {
+          var changed =
+              new Suggestion(
+                  value.id(),
+                  project,
+                  value.taskId(),
+                  value.rule(),
+                  status,
+                  value.priority(),
+                  value.revision() + 1,
+                  value.taskRevision(),
+                  value.created(),
+                  clock.instant(),
+                  value.notBefore(),
+                  value.reason(),
+                  value.approvalId());
+          save(db, changed);
+          history(db, changed, status, "source revision or lifetime changed");
+        }
+      }
+      return null;
+    });
   }
 
   public enum Feedback {
@@ -252,18 +248,17 @@ public final class SecretaryOrchestrator
 
   public Settings settings(String project) {
     required(project);
-    return database.read(
-        db -> {
-          try (var q =
-              db.prepareStatement("SELECT record FROM secretary_orchestration WHERE project=?")) {
-            q.setString(1, project);
-            try (var r = q.executeQuery()) {
-              return r.next()
-                  ? SecretaryJson.JSON.readValue(r.getString(1), Settings.class)
-                  : new Settings(project, false, false, null, 900, 86400);
-            }
-          }
-        });
+    return database.read(db -> {
+      try (var q =
+          db.prepareStatement("SELECT record FROM secretary_orchestration WHERE project=?")) {
+        q.setString(1, project);
+        try (var r = q.executeQuery()) {
+          return r.next()
+              ? SecretaryJson.JSON.readValue(r.getString(1), Settings.class)
+              : new Settings(project, false, false, null, 900, 86400);
+        }
+      }
+    });
   }
 
   public Settings configure(Settings value) {
@@ -276,23 +271,22 @@ public final class SecretaryOrchestrator
         || value.snoozedUntil() != null
             && value.snoozedUntil().isAfter(clock.instant().plusSeconds(2592000)))
       throw new IllegalArgumentException("Invalid interruption settings");
-    return database.transaction(
-        db -> {
-          try (var q = db.createStatement();
-              var r = q.executeQuery("SELECT COUNT(*) FROM secretary_orchestration")) {
-            r.next();
-            if (r.getInt(1) >= 256 && !hasSettings(db, value.projectId()))
-              throw new IllegalStateException("Secretary project capacity reached");
-          }
-          try (var q =
-              db.prepareStatement(
-                  "INSERT INTO secretary_orchestration VALUES(?,?) ON CONFLICT(project) DO UPDATE SET record=excluded.record")) {
-            q.setString(1, value.projectId());
-            q.setString(2, SecretaryJson.JSON.writeValueAsString(value));
-            q.executeUpdate();
-          }
-          return value;
-        });
+    return database.transaction(db -> {
+      try (var q = db.createStatement();
+          var r = q.executeQuery("SELECT COUNT(*) FROM secretary_orchestration")) {
+        r.next();
+        if (r.getInt(1) >= 256 && !hasSettings(db, value.projectId()))
+          throw new IllegalStateException("Secretary project capacity reached");
+      }
+      try (var q =
+          db.prepareStatement(
+              "INSERT INTO secretary_orchestration VALUES(?,?) ON CONFLICT(project) DO UPDATE SET record=excluded.record")) {
+        q.setString(1, value.projectId());
+        q.setString(2, SecretaryJson.JSON.writeValueAsString(value));
+        q.executeUpdate();
+      }
+      return value;
+    });
   }
 
   private static boolean hasSettings(Connection db, String project) throws java.sql.SQLException {
@@ -310,11 +304,10 @@ public final class SecretaryOrchestrator
     refresh(project);
     int offset = Math.toIntExact(database.read(db -> state(db, "proposal:cursor:" + project)));
     var tasks = ledger.list(project, offset, 64);
-    database.transaction(
-        db -> {
-          state(db, "proposal:cursor:" + project, tasks.size() < 64 ? 0 : offset + 64L);
-          return null;
-        });
+    database.transaction(db -> {
+      state(db, "proposal:cursor:" + project, tasks.size() < 64 ? 0 : offset + 64L);
+      return null;
+    });
     var routing = followups.getObject().settings(project);
     var report = followups.getObject().report(project, null, false);
     var date = clock.instant().atZone(ZoneId.of(routing.zone())).toLocalDate();
@@ -324,18 +317,17 @@ public final class SecretaryOrchestrator
         Math.max(
             0,
             3
-                - database.<Integer>read(
-                    db -> {
-                      try (var q =
-                          db.prepareStatement(
-                              "SELECT COUNT(*) FROM secretary_suggestions WHERE project=? AND status IN ('PROPOSED','EXECUTION_REQUESTED','APPROVAL_REQUESTED')")) {
-                        q.setString(1, project);
-                        try (var r = q.executeQuery()) {
-                          r.next();
-                          return r.getInt(1);
-                        }
-                      }
-                    }));
+                - database.<Integer>read(db -> {
+                  try (var q =
+                      db.prepareStatement(
+                          "SELECT COUNT(*) FROM secretary_suggestions WHERE project=? AND status IN ('PROPOSED','EXECUTION_REQUESTED','APPROVAL_REQUESTED')")) {
+                    q.setString(1, project);
+                    try (var r = q.executeQuery()) {
+                      r.next();
+                      return r.getInt(1);
+                    }
+                  }
+                }));
     var candidates = new ArrayList<Suggestion>();
     for (var task : orderedTasks) {
       if (candidates.size() >= slots) break;
@@ -366,24 +358,22 @@ public final class SecretaryOrchestrator
     var predecessors = task.references().stream().filter(r -> r.startsWith("after:")).toList();
     if (!predecessors.isEmpty()
         && predecessors.stream()
-            .allMatch(
-                reference -> {
-                  try {
-                    return ledger.get(task.projectId(), reference.substring(6)).status()
-                        == SecretaryTask.Status.DONE;
-                  } catch (IllegalArgumentException missing) {
-                    return false;
-                  }
-                })) return "NEXT_STEP";
+            .allMatch(reference -> {
+              try {
+                return ledger.get(task.projectId(), reference.substring(6)).status()
+                    == SecretaryTask.Status.DONE;
+              } catch (IllegalArgumentException missing) {
+                return false;
+              }
+            })) return "NEXT_STEP";
     if (task.priority() <= 2) return "IMPORTANT";
     long age = Duration.between(task.updated(), clock.instant()).getSeconds();
     if (age >= 14 * 86400L) return "NEGLECTED";
     if (age >= 7 * 86400L) return "STALLED";
     if (context.stream()
-        .anyMatch(
-            i ->
-                task.references().contains(i.source() + ":" + i.id())
-                    && Set.of("NEXT_ACTION", "CURRENT_WORK", "OPEN", "READY").contains(i.status())))
+        .anyMatch(i ->
+            task.references().contains(i.source() + ":" + i.id())
+                && Set.of("NEXT_ACTION", "CURRENT_WORK", "OPEN", "READY").contains(i.status())))
       return "CONTINUATION";
     return null;
   }
@@ -391,70 +381,68 @@ public final class SecretaryOrchestrator
   private Suggestion propose(
       Settings settings, SecretaryFollowups.Settings routing, SecretaryTask task, String rule) {
     String id = uuid(settings.projectId() + ":" + task.id() + ":" + rule);
-    return database.transaction(
-        db -> {
-          var old = find(db, settings.projectId(), id);
-          try (var q =
-              db.prepareStatement(
-                  "SELECT COUNT(*) FROM secretary_suggestions WHERE project=? AND status IN ('PROPOSED','EXECUTION_REQUESTED','APPROVAL_REQUESTED')")) {
-            q.setString(1, task.projectId());
-            try (var r = q.executeQuery()) {
-              r.next();
-              if (r.getInt(1) >= 3) return null;
-            }
-          }
-          try (var q =
-              db.prepareStatement(
-                  "SELECT 1 FROM secretary_suggestions WHERE project=? AND task=? AND (status IN ('MUTED','EXECUTION_REQUESTED','APPROVAL_REQUESTED','PROPOSED') OR (status IN ('DEFERRED','DISMISSED') AND next>?)) LIMIT 1")) {
-            q.setString(1, task.projectId());
-            q.setString(2, task.id());
-            q.setLong(3, clock.millis());
-            try (var r = q.executeQuery()) {
-              if (r.next()) return null;
-            }
-          }
-          if (old != null
-              && old.taskRevision() == task.revision()
-              && Set.of("EXPIRED", "INVALIDATED").contains(old.status())) return null;
-          if (old != null
-              && (Set.of("MUTED", "EXECUTION_REQUESTED", "APPROVAL_REQUESTED")
-                      .contains(old.status())
-                  || old.taskRevision() == task.revision()
-                      && old.notBefore().isAfter(clock.instant()))) return null;
-          var now = clock.instant();
-          int priority = rule.equals("OVERDUE") ? 1 : task.priority();
-          var suggestion =
-              new Suggestion(
-                  id,
-                  task.projectId(),
-                  task.id(),
-                  rule,
-                  "PROPOSED",
-                  priority,
-                  old == null ? 0 : old.revision() + 1,
-                  task.revision(),
-                  old == null ? now : old.created(),
-                  now,
-                  now.plusSeconds(settings.repeatSeconds()),
-                  rule + ": " + task.title(),
-                  null);
-          save(db, suggestion);
-          history(db, suggestion, "PROPOSED", rule);
-          if (routing.enabled() && routing.notifications()) {
-            queue(
-                db,
-                new SecretaryNotifications.Notice(
-                    uuid(id + ":" + suggestion.revision()),
-                    task.projectId(),
-                    task.id(),
-                    "SUGGESTION",
-                    suggestion.reason() + "; /secretary suggestion " + id,
-                    priority,
-                    routing.destination(),
-                    now));
-          }
-          return suggestion;
-        });
+    return database.transaction(db -> {
+      var old = find(db, settings.projectId(), id);
+      try (var q =
+          db.prepareStatement(
+              "SELECT COUNT(*) FROM secretary_suggestions WHERE project=? AND status IN ('PROPOSED','EXECUTION_REQUESTED','APPROVAL_REQUESTED')")) {
+        q.setString(1, task.projectId());
+        try (var r = q.executeQuery()) {
+          r.next();
+          if (r.getInt(1) >= 3) return null;
+        }
+      }
+      try (var q =
+          db.prepareStatement(
+              "SELECT 1 FROM secretary_suggestions WHERE project=? AND task=? AND (status IN ('MUTED','EXECUTION_REQUESTED','APPROVAL_REQUESTED','PROPOSED') OR (status IN ('DEFERRED','DISMISSED') AND next>?)) LIMIT 1")) {
+        q.setString(1, task.projectId());
+        q.setString(2, task.id());
+        q.setLong(3, clock.millis());
+        try (var r = q.executeQuery()) {
+          if (r.next()) return null;
+        }
+      }
+      if (old != null
+          && old.taskRevision() == task.revision()
+          && Set.of("EXPIRED", "INVALIDATED").contains(old.status())) return null;
+      if (old != null
+          && (Set.of("MUTED", "EXECUTION_REQUESTED", "APPROVAL_REQUESTED").contains(old.status())
+              || old.taskRevision() == task.revision() && old.notBefore().isAfter(clock.instant())))
+        return null;
+      var now = clock.instant();
+      int priority = rule.equals("OVERDUE") ? 1 : task.priority();
+      var suggestion =
+          new Suggestion(
+              id,
+              task.projectId(),
+              task.id(),
+              rule,
+              "PROPOSED",
+              priority,
+              old == null ? 0 : old.revision() + 1,
+              task.revision(),
+              old == null ? now : old.created(),
+              now,
+              now.plusSeconds(settings.repeatSeconds()),
+              rule + ": " + task.title(),
+              null);
+      save(db, suggestion);
+      history(db, suggestion, "PROPOSED", rule);
+      if (routing.enabled() && routing.notifications()) {
+        queue(
+            db,
+            new SecretaryNotifications.Notice(
+                uuid(id + ":" + suggestion.revision()),
+                task.projectId(),
+                task.id(),
+                "SUGGESTION",
+                suggestion.reason() + "; /secretary suggestion " + id,
+                priority,
+                routing.destination(),
+                now));
+      }
+      return suggestion;
+    });
   }
 
   public Suggestion feedback(
@@ -480,48 +468,45 @@ public final class SecretaryOrchestrator
         reaction == Feedback.ALLOW_AUTO
             ? permissions.requestSecretaryPermission(project, before.taskId(), before.rule())
             : null;
-    return database.transaction(
-        db -> {
-          var old = find(db, project, id);
-          if (old == null)
-            throw new IllegalArgumentException("Suggestion not found in this project");
-          if (old.revision() != revision) throw new SecretaryConflictException();
-          var now = clock.instant();
-          var next =
-              switch (reaction) {
-                case LATER ->
-                    now.plusSeconds(delaySeconds == 0 ? 3600 : Math.max(60, delaySeconds));
-                case DISMISS ->
-                    now.plusSeconds(Math.max(7 * 86400L, settings(project).repeatSeconds()));
-                default -> Instant.ofEpochMilli(Long.MAX_VALUE);
-              };
-          String status =
-              switch (reaction) {
-                case EXECUTE -> "EXECUTION_REQUESTED";
-                case LATER -> "DEFERRED";
-                case DISMISS -> "DISMISSED";
-                case NEVER -> "MUTED";
-                case ALLOW_AUTO -> "APPROVAL_REQUESTED";
-              };
-          var changed =
-              new Suggestion(
-                  old.id(),
-                  project,
-                  old.taskId(),
-                  old.rule(),
-                  status,
-                  old.priority(),
-                  revision + 1,
-                  old.taskRevision(),
-                  old.created(),
-                  now,
-                  next,
-                  old.reason(),
-                  approval);
-          save(db, changed);
-          history(db, changed, reaction.name(), approval == null ? status : approval);
-          return changed;
-        });
+    return database.transaction(db -> {
+      var old = find(db, project, id);
+      if (old == null) throw new IllegalArgumentException("Suggestion not found in this project");
+      if (old.revision() != revision) throw new SecretaryConflictException();
+      var now = clock.instant();
+      var next =
+          switch (reaction) {
+            case LATER -> now.plusSeconds(delaySeconds == 0 ? 3600 : Math.max(60, delaySeconds));
+            case DISMISS ->
+                now.plusSeconds(Math.max(7 * 86400L, settings(project).repeatSeconds()));
+            default -> Instant.ofEpochMilli(Long.MAX_VALUE);
+          };
+      String status =
+          switch (reaction) {
+            case EXECUTE -> "EXECUTION_REQUESTED";
+            case LATER -> "DEFERRED";
+            case DISMISS -> "DISMISSED";
+            case NEVER -> "MUTED";
+            case ALLOW_AUTO -> "APPROVAL_REQUESTED";
+          };
+      var changed =
+          new Suggestion(
+              old.id(),
+              project,
+              old.taskId(),
+              old.rule(),
+              status,
+              old.priority(),
+              revision + 1,
+              old.taskRevision(),
+              old.created(),
+              now,
+              next,
+              old.reason(),
+              approval);
+      save(db, changed);
+      history(db, changed, reaction.name(), approval == null ? status : approval);
+      return changed;
+    });
   }
 
   public Suggestion suggestion(String project, String id) {
@@ -539,56 +524,53 @@ public final class SecretaryOrchestrator
     required(project);
     required(id);
     required(execution);
-    database.transaction(
-        db -> {
-          var old = find(db, project, id);
-          if (old == null || old.taskRevision() != taskRevision) return null;
-          var now = clock.instant();
-          if (Set.of("PROPOSED", "EXECUTION_REQUESTED", "APPROVAL_REQUESTED")
-              .contains(old.status())) {
-            boolean stable = Set.of("COMPLETED", "PREPARED", "PAUSED", "UNCERTAIN").contains(state);
-            var changed =
-                new Suggestion(
-                    old.id(),
-                    project,
-                    old.taskId(),
-                    old.rule(),
-                    "EXECUTION_" + state,
-                    old.priority(),
-                    old.revision() + 1,
-                    old.taskRevision(),
-                    old.created(),
-                    now,
-                    stable
-                        ? Instant.ofEpochMilli(Long.MAX_VALUE)
-                        : now.plusSeconds(settings(project).repeatSeconds()),
-                    old.reason(),
-                    old.approvalId());
-            save(db, changed);
-            history(db, changed, "EXECUTION_RESULT", execution + ":" + state);
-          } else history(db, old, "EXECUTION_RESULT", execution + ":" + state);
-          return null;
-        });
+    database.transaction(db -> {
+      var old = find(db, project, id);
+      if (old == null || old.taskRevision() != taskRevision) return null;
+      var now = clock.instant();
+      if (Set.of("PROPOSED", "EXECUTION_REQUESTED", "APPROVAL_REQUESTED").contains(old.status())) {
+        boolean stable = Set.of("COMPLETED", "PREPARED", "PAUSED", "UNCERTAIN").contains(state);
+        var changed =
+            new Suggestion(
+                old.id(),
+                project,
+                old.taskId(),
+                old.rule(),
+                "EXECUTION_" + state,
+                old.priority(),
+                old.revision() + 1,
+                old.taskRevision(),
+                old.created(),
+                now,
+                stable
+                    ? Instant.ofEpochMilli(Long.MAX_VALUE)
+                    : now.plusSeconds(settings(project).repeatSeconds()),
+                old.reason(),
+                old.approvalId());
+        save(db, changed);
+        history(db, changed, "EXECUTION_RESULT", execution + ":" + state);
+      } else history(db, old, "EXECUTION_RESULT", execution + ":" + state);
+      return null;
+    });
   }
 
   public List<Suggestion> suggestions(String project, int limit) {
     required(project);
     limit(limit);
-    return database.read(
-        db -> {
-          var values = new ArrayList<Suggestion>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT record FROM secretary_suggestions WHERE project=? ORDER BY priority,updated DESC,id LIMIT ?")) {
-            q.setString(1, project);
-            q.setInt(2, limit);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                values.add(SecretaryJson.JSON.readValue(r.getString(1), Suggestion.class));
-            }
-          }
-          return List.copyOf(values);
-        });
+    return database.read(db -> {
+      var values = new ArrayList<Suggestion>();
+      try (var q =
+          db.prepareStatement(
+              "SELECT record FROM secretary_suggestions WHERE project=? ORDER BY priority,updated DESC,id LIMIT ?")) {
+        q.setString(1, project);
+        q.setInt(2, limit);
+        try (var r = q.executeQuery()) {
+          while (r.next())
+            values.add(SecretaryJson.JSON.readValue(r.getString(1), Suggestion.class));
+        }
+      }
+      return List.copyOf(values);
+    });
   }
 
   public List<Suggestion> executionCandidates(String project, int offset, int limit) {
@@ -596,65 +578,62 @@ public final class SecretaryOrchestrator
     refresh(project);
     limit(limit);
     if (offset < 0) throw new IllegalArgumentException("Invalid cursor");
-    return database.read(
-        db -> {
-          var values = new ArrayList<Suggestion>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT record FROM secretary_suggestions WHERE project=? AND status IN ('PROPOSED','EXECUTION_REQUESTED','APPROVAL_REQUESTED') ORDER BY id LIMIT ? OFFSET ?")) {
-            q.setString(1, project);
-            q.setInt(2, limit);
-            q.setInt(3, offset);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                values.add(SecretaryJson.JSON.readValue(r.getString(1), Suggestion.class));
-            }
-          }
-          return List.copyOf(values);
-        });
+    return database.read(db -> {
+      var values = new ArrayList<Suggestion>();
+      try (var q =
+          db.prepareStatement(
+              "SELECT record FROM secretary_suggestions WHERE project=? AND status IN ('PROPOSED','EXECUTION_REQUESTED','APPROVAL_REQUESTED') ORDER BY id LIMIT ? OFFSET ?")) {
+        q.setString(1, project);
+        q.setInt(2, limit);
+        q.setInt(3, offset);
+        try (var r = q.executeQuery()) {
+          while (r.next())
+            values.add(SecretaryJson.JSON.readValue(r.getString(1), Suggestion.class));
+        }
+      }
+      return List.copyOf(values);
+    });
   }
 
   public List<History> history(String project, String id, int limit) {
     suggestion(project, id);
     limit(limit);
-    return database.read(
-        db -> {
-          var values = new ArrayList<History>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT sequence,action,revision,at,detail FROM secretary_suggestion_history WHERE project=? AND suggestion=? ORDER BY sequence DESC LIMIT ?")) {
-            q.setString(1, project);
-            q.setString(2, id);
-            q.setInt(3, limit);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                values.add(
-                    new History(
-                        r.getLong(1),
-                        r.getString(2),
-                        r.getLong(3),
-                        Instant.ofEpochMilli(r.getLong(4)),
-                        r.getString(5)));
-            }
-          }
-          return List.copyOf(values);
-        });
+    return database.read(db -> {
+      var values = new ArrayList<History>();
+      try (var q =
+          db.prepareStatement(
+              "SELECT sequence,action,revision,at,detail FROM secretary_suggestion_history WHERE project=? AND suggestion=? ORDER BY sequence DESC LIMIT ?")) {
+        q.setString(1, project);
+        q.setString(2, id);
+        q.setInt(3, limit);
+        try (var r = q.executeQuery()) {
+          while (r.next())
+            values.add(
+                new History(
+                    r.getLong(1),
+                    r.getString(2),
+                    r.getLong(3),
+                    Instant.ofEpochMilli(r.getLong(4)),
+                    r.getString(5)));
+        }
+      }
+      return List.copyOf(values);
+    });
   }
 
   public Status status(String project) {
     long held =
-        database.read(
-            db -> {
-              try (var q =
-                  db.prepareStatement(
-                      "SELECT COUNT(*) FROM secretary_notices WHERE project=? AND status='HELD'")) {
-                q.setString(1, project);
-                try (var r = q.executeQuery()) {
-                  r.next();
-                  return r.getLong(1);
-                }
-              }
-            });
+        database.read(db -> {
+          try (var q =
+              db.prepareStatement(
+                  "SELECT COUNT(*) FROM secretary_notices WHERE project=? AND status='HELD'")) {
+            q.setString(1, project);
+            try (var r = q.executeQuery()) {
+              r.next();
+              return r.getLong(1);
+            }
+          }
+        });
     return new Status(
         settings(project), enabled, activity(project), suggestions(project, 20), held);
   }
@@ -697,22 +676,21 @@ public final class SecretaryOrchestrator
   }
 
   private boolean liveSuggestion(SecretaryNotifications.Notice notice) {
-    return database.read(
-        db -> {
-          try (var q =
-              db.prepareStatement(
-                  "SELECT record FROM secretary_suggestions WHERE project=? AND task=? AND status='PROPOSED'")) {
-            q.setString(1, notice.projectId());
-            q.setString(2, notice.taskId());
-            try (var r = q.executeQuery()) {
-              while (r.next()) {
-                var value = SecretaryJson.JSON.readValue(r.getString(1), Suggestion.class);
-                if (uuid(value.id() + ":" + value.revision()).equals(notice.id())) return true;
-              }
-              return false;
-            }
+    return database.read(db -> {
+      try (var q =
+          db.prepareStatement(
+              "SELECT record FROM secretary_suggestions WHERE project=? AND task=? AND status='PROPOSED'")) {
+        q.setString(1, notice.projectId());
+        q.setString(2, notice.taskId());
+        try (var r = q.executeQuery()) {
+          while (r.next()) {
+            var value = SecretaryJson.JSON.readValue(r.getString(1), Suggestion.class);
+            if (uuid(value.id() + ":" + value.revision()).equals(notice.id())) return true;
           }
-        });
+          return false;
+        }
+      }
+    });
   }
 
   @Override
@@ -720,33 +698,31 @@ public final class SecretaryOrchestrator
     var decision = assess(notice);
     if (decision.decision() != Decision.ALLOW || decision.reason().equals("unconfigured"))
       return decision;
-    return database.transaction(
-        db -> {
-          long previous = state(db, "notice:last:" + notice.projectId());
-          if (notice.priority() > 1
-              && previous != 0
-              && previous > clock.millis() - settings(notice.projectId()).minimumSeconds() * 1000)
-            return new Admission(Decision.HOLD, "frequency");
-          state(db, "notice:last:" + notice.projectId(), clock.millis());
-          return decision;
-        });
+    return database.transaction(db -> {
+      long previous = state(db, "notice:last:" + notice.projectId());
+      if (notice.priority() > 1
+          && previous != 0
+          && previous > clock.millis() - settings(notice.projectId()).minimumSeconds() * 1000)
+        return new Admission(Decision.HOLD, "frequency");
+      state(db, "notice:last:" + notice.projectId(), clock.millis());
+      return decision;
+    });
   }
 
   @Override
   public int release(String project) {
     if (project == null) {
       var projects =
-          database.read(
-              db -> {
-                var values = new ArrayList<String>();
-                try (var q = db.createStatement();
-                    var r =
-                        q.executeQuery(
-                            "SELECT DISTINCT project FROM secretary_notices WHERE status='HELD' LIMIT 16")) {
-                  while (r.next()) values.add(r.getString(1));
-                }
-                return values;
-              });
+          database.read(db -> {
+            var values = new ArrayList<String>();
+            try (var q = db.createStatement();
+                var r =
+                    q.executeQuery(
+                        "SELECT DISTINCT project FROM secretary_notices WHERE status='HELD' LIMIT 16")) {
+              while (r.next()) values.add(r.getString(1));
+            }
+            return values;
+          });
       int total = 0;
       for (var owner : projects) total += release(owner);
       return total;
@@ -756,22 +732,21 @@ public final class SecretaryOrchestrator
     if (SecretaryNotifications.GLOBAL_SCOPE.equals(project))
       return 0; // already aggregated across projects
     var held =
-        database.read(
-            db -> {
-              var values = new ArrayList<SecretaryNotifications.Notice>();
-              try (var q =
-                  db.prepareStatement(
-                      "SELECT record FROM secretary_notices WHERE project=? AND status='HELD' ORDER BY priority,CASE WHEN kind='DIGEST' THEN 0 ELSE 1 END,created,id LIMIT 8")) {
-                q.setString(1, project);
-                try (var r = q.executeQuery()) {
-                  while (r.next())
-                    values.add(
-                        SecretaryJson.JSON.readValue(
-                            r.getString(1), SecretaryNotifications.Notice.class));
-                }
-              }
-              return values;
-            });
+        database.read(db -> {
+          var values = new ArrayList<SecretaryNotifications.Notice>();
+          try (var q =
+              db.prepareStatement(
+                  "SELECT record FROM secretary_notices WHERE project=? AND status='HELD' ORDER BY priority,CASE WHEN kind='DIGEST' THEN 0 ELSE 1 END,created,id LIMIT 8")) {
+            q.setString(1, project);
+            try (var r = q.executeQuery()) {
+              while (r.next())
+                values.add(
+                    SecretaryJson.JSON.readValue(
+                        r.getString(1), SecretaryNotifications.Notice.class));
+            }
+          }
+          return values;
+        });
     var eligible = new ArrayList<SecretaryNotifications.Notice>();
     for (var notice : held) {
       boolean valid =
@@ -793,70 +768,63 @@ public final class SecretaryOrchestrator
     if (previous != 0 && previous > clock.millis() - settings(project).minimumSeconds() * 1000)
       eligible.removeIf(n -> n.priority() > 1);
     if (eligible.isEmpty()) return 0;
-    return database.transaction(
-        db -> {
-          var existingDigest =
-              eligible.stream()
-                  .filter(
-                      n ->
-                          n.kind().equals("DIGEST")
-                              && n.priority() <= eligible.getFirst().priority())
-                  .findFirst();
-          if (existingDigest.isPresent()) {
-            try (var q =
-                db.prepareStatement(
-                    "UPDATE secretary_notices SET status='PENDING',next=?,error='' WHERE project=? AND id=? AND status='HELD'")) {
-              q.setLong(1, clock.millis());
-              q.setString(2, project);
-              q.setString(3, existingDigest.get().id());
-              return q.executeUpdate();
-            }
-          }
-          var claimed = new ArrayList<SecretaryNotifications.Notice>();
-          for (var notice : eligible) {
-            if (notice.kind().equals("DIGEST")) continue;
-            try (var q =
-                db.prepareStatement(
-                    "UPDATE secretary_notices SET status='BUNDLED' WHERE id=? AND status='HELD'")) {
-              q.setString(1, notice.id());
-              if (q.executeUpdate() == 1) claimed.add(notice);
-            }
-          }
-          if (claimed.isEmpty()) return 0;
-          String ids =
-              claimed.stream()
-                  .map(SecretaryNotifications.Notice::id)
-                  .sorted()
-                  .collect(java.util.stream.Collectors.joining(","));
-          queue(
-              db,
-              new SecretaryNotifications.Notice(
-                  uuid("digest:" + project + ":" + ids),
-                  project,
-                  null,
-                  "DIGEST",
-                  "保留した通知 " + claimed.size() + "件。/secretary notifications で内容を確認してください。",
-                  claimed.stream()
-                      .mapToInt(SecretaryNotifications.Notice::priority)
-                      .min()
-                      .orElse(3),
-                  routing.destination(),
-                  clock.instant()));
-          return claimed.size();
-        });
+    return database.transaction(db -> {
+      var existingDigest =
+          eligible.stream()
+              .filter(
+                  n -> n.kind().equals("DIGEST") && n.priority() <= eligible.getFirst().priority())
+              .findFirst();
+      if (existingDigest.isPresent()) {
+        try (var q =
+            db.prepareStatement(
+                "UPDATE secretary_notices SET status='PENDING',next=?,error='' WHERE project=? AND id=? AND status='HELD'")) {
+          q.setLong(1, clock.millis());
+          q.setString(2, project);
+          q.setString(3, existingDigest.get().id());
+          return q.executeUpdate();
+        }
+      }
+      var claimed = new ArrayList<SecretaryNotifications.Notice>();
+      for (var notice : eligible) {
+        if (notice.kind().equals("DIGEST")) continue;
+        try (var q =
+            db.prepareStatement(
+                "UPDATE secretary_notices SET status='BUNDLED' WHERE id=? AND status='HELD'")) {
+          q.setString(1, notice.id());
+          if (q.executeUpdate() == 1) claimed.add(notice);
+        }
+      }
+      if (claimed.isEmpty()) return 0;
+      String ids =
+          claimed.stream()
+              .map(SecretaryNotifications.Notice::id)
+              .sorted()
+              .collect(java.util.stream.Collectors.joining(","));
+      queue(
+          db,
+          new SecretaryNotifications.Notice(
+              uuid("digest:" + project + ":" + ids),
+              project,
+              null,
+              "DIGEST",
+              "保留した通知 " + claimed.size() + "件。/secretary notifications で内容を確認してください。",
+              claimed.stream().mapToInt(SecretaryNotifications.Notice::priority).min().orElse(3),
+              routing.destination(),
+              clock.instant()));
+      return claimed.size();
+    });
   }
 
   private void suppress(String id) {
-    database.transaction(
-        db -> {
-          try (var q =
-              db.prepareStatement(
-                  "UPDATE secretary_notices SET status='SUPPRESSED' WHERE id=? AND status='HELD'")) {
-            q.setString(1, id);
-            q.executeUpdate();
-          }
-          return null;
-        });
+    database.transaction(db -> {
+      try (var q =
+          db.prepareStatement(
+              "UPDATE secretary_notices SET status='SUPPRESSED' WHERE id=? AND status='HELD'")) {
+        q.setString(1, id);
+        q.executeUpdate();
+      }
+      return null;
+    });
   }
 
   static void queue(Connection db, SecretaryNotifications.Notice notice)
@@ -961,14 +929,13 @@ public final class SecretaryOrchestrator
   public void tick() {
     if (!enabled || !busy.compareAndSet(false, true)) return;
     try {
-      worker.execute(
-          () -> {
-            try {
-              poll();
-            } finally {
-              busy.set(false);
-            }
-          });
+      worker.execute(() -> {
+        try {
+          poll();
+        } finally {
+          busy.set(false);
+        }
+      });
     } catch (RejectedExecutionException closed) {
       busy.set(false);
     }
@@ -977,17 +944,16 @@ public final class SecretaryOrchestrator
   private void poll() {
     try {
       var projects =
-          database.read(
-              db -> {
-                var values = new ArrayList<String>();
-                try (var q = db.createStatement();
-                    var r =
-                        q.executeQuery(
-                            "SELECT project FROM secretary_orchestration ORDER BY project LIMIT 256")) {
-                  while (r.next()) values.add(r.getString(1));
-                }
-                return values;
-              });
+          database.read(db -> {
+            var values = new ArrayList<String>();
+            try (var q = db.createStatement();
+                var r =
+                    q.executeQuery(
+                        "SELECT project FROM secretary_orchestration ORDER BY project LIMIT 256")) {
+              while (r.next()) values.add(r.getString(1));
+            }
+            return values;
+          });
       int cursor = Math.toIntExact(database.read(db -> state(db, "proposal:projects")));
       for (int i = 0; i < Math.min(16, projects.size()); i++) {
         if (Thread.currentThread().isInterrupted()) return;
@@ -1002,14 +968,13 @@ public final class SecretaryOrchestrator
                   unavailable.getClass().getSimpleName());
         }
       }
-      database.transaction(
-          db -> {
-            state(
-                db,
-                "proposal:projects",
-                projects.isEmpty() ? 0 : Math.floorMod(cursor + 16, projects.size()));
-            return null;
-          });
+      database.transaction(db -> {
+        state(
+            db,
+            "proposal:projects",
+            projects.isEmpty() ? 0 : Math.floorMod(cursor + 16, projects.size()));
+        return null;
+      });
     } catch (RuntimeException unavailable) {
       org.slf4j.LoggerFactory.getLogger(getClass())
           .warn("Secretary orchestration unavailable: {}", unavailable.getClass().getSimpleName());

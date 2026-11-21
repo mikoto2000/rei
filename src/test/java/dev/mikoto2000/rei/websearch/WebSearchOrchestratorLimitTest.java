@@ -45,11 +45,10 @@ class WebSearchOrchestratorLimitTest {
     var fetch = mock(WebPageFetcher.class);
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
     when(search.search(anyString(), anyInt()))
-        .thenAnswer(
-            invocation -> {
-              cancelled.set(true);
-              return List.of(new WebSearchResult("Java", "https://example.com/", "Java", null));
-            });
+        .thenAnswer(invocation -> {
+          cancelled.set(true);
+          return List.of(new WebSearchResult("Java", "https://example.com/", "Java", null));
+        });
     var scope =
         dev.mikoto2000.rei.http.FetchScope.enter(
             new dev.mikoto2000.rei.http.FetchOperation(

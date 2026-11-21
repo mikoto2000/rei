@@ -32,10 +32,10 @@ public final class FeedService {
         jdbcClient
             .sql(
                 """
-        INSERT INTO feeds (url, title, site_url, description, display_name, enabled, created_at, updated_at, last_fetched_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        RETURNING id
-        """)
+                INSERT INTO feeds (url, title, site_url, description, display_name, enabled, created_at, updated_at, last_fetched_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
+                """)
             .params(url, null, null, null, displayName, 1, now.toString(), now.toString(), null)
             .query(Long.class)
             .single();
@@ -48,10 +48,10 @@ public final class FeedService {
     return jdbcClient
         .sql(
             """
-        SELECT id, url, title, site_url, description, display_name, enabled, created_at, updated_at, last_fetched_at
-        FROM feeds
-        ORDER BY id ASC
-        """)
+            SELECT id, url, title, site_url, description, display_name, enabled, created_at, updated_at, last_fetched_at
+            FROM feeds
+            ORDER BY id ASC
+            """)
         .query(this::mapFeed)
         .list();
   }
@@ -61,11 +61,11 @@ public final class FeedService {
     return jdbcClient
         .sql(
             """
-        SELECT id, url, title, site_url, description, display_name, enabled, created_at, updated_at, last_fetched_at
-        FROM feeds
-        WHERE enabled = 1
-        ORDER BY id ASC
-        """)
+            SELECT id, url, title, site_url, description, display_name, enabled, created_at, updated_at, last_fetched_at
+            FROM feeds
+            WHERE enabled = 1
+            ORDER BY id ASC
+            """)
         .query(this::mapFeed)
         .list();
   }
@@ -81,10 +81,10 @@ public final class FeedService {
     jdbcClient
         .sql(
             """
-        UPDATE feeds
-        SET display_name = ?, enabled = ?, updated_at = ?
-        WHERE id = ?
-        """)
+            UPDATE feeds
+            SET display_name = ?, enabled = ?, updated_at = ?
+            WHERE id = ?
+            """)
         .params(resolvedDisplayName, resolvedEnabled ? 1 : 0, now.toString(), id)
         .update();
 
@@ -96,10 +96,10 @@ public final class FeedService {
     return jdbcClient
         .sql(
             """
-        SELECT id, url, title, site_url, description, display_name, enabled, created_at, updated_at, last_fetched_at
-        FROM feeds
-        WHERE id = ?
-        """)
+            SELECT id, url, title, site_url, description, display_name, enabled, created_at, updated_at, last_fetched_at
+            FROM feeds
+            WHERE id = ?
+            """)
         .param(id)
         .query(this::mapFeed)
         .single();
@@ -112,10 +112,10 @@ public final class FeedService {
     jdbcClient
         .sql(
             """
-        UPDATE feeds
-        SET title = ?, site_url = ?, description = ?, updated_at = ?, last_fetched_at = ?
-        WHERE id = ?
-        """)
+            UPDATE feeds
+            SET title = ?, site_url = ?, description = ?, updated_at = ?, last_fetched_at = ?
+            WHERE id = ?
+            """)
         .params(
             title == null || title.isBlank() ? current.title() : title,
             siteUrl == null || siteUrl.isBlank() ? current.siteUrl() : siteUrl,
@@ -140,10 +140,10 @@ public final class FeedService {
           jdbcClient
               .sql(
                   """
-          INSERT OR IGNORE INTO feed_items
-            (feed_id, title, url, description, content, published_at, fetched_at, created_at, updated_at, dedupe_key)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          """)
+                  INSERT OR IGNORE INTO feed_items
+                    (feed_id, title, url, description, content, published_at, fetched_at, created_at, updated_at, dedupe_key)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  """)
               .params(
                   feedId,
                   item.title(),
@@ -166,11 +166,11 @@ public final class FeedService {
     return jdbcClient
         .sql(
             """
-        SELECT id, feed_id, title, url, description, content, published_at, fetched_at, created_at, updated_at
-        FROM feed_items
-        WHERE feed_id = ?
-        ORDER BY published_at DESC, id DESC
-        """)
+            SELECT id, feed_id, title, url, description, content, published_at, fetched_at, created_at, updated_at
+            FROM feed_items
+            WHERE feed_id = ?
+            ORDER BY published_at DESC, id DESC
+            """)
         .param(feedId)
         .query(this::mapFeedItem)
         .list();
@@ -182,9 +182,9 @@ public final class FeedService {
     jdbcClient
         .sql(
             """
-        INSERT INTO feed_fetch_failures (feed_id, failed_at, error_message, http_status)
-        VALUES (?, ?, ?, ?)
-        """)
+            INSERT INTO feed_fetch_failures (feed_id, failed_at, error_message, http_status)
+            VALUES (?, ?, ?, ?)
+            """)
         .params(feedId, failedAt.toString(), errorMessage, httpStatus)
         .update();
   }
@@ -194,11 +194,11 @@ public final class FeedService {
     return jdbcClient
         .sql(
             """
-        SELECT id, feed_id, failed_at, error_message, http_status
-        FROM feed_fetch_failures
-        WHERE feed_id = ?
-        ORDER BY failed_at DESC, id DESC
-        """)
+            SELECT id, feed_id, failed_at, error_message, http_status
+            FROM feed_fetch_failures
+            WHERE feed_id = ?
+            ORDER BY failed_at DESC, id DESC
+            """)
         .param(feedId)
         .query(this::mapFeedFetchFailure)
         .list();
@@ -210,21 +210,21 @@ public final class FeedService {
     return jdbcClient
         .sql(
             """
-        SELECT id, title, url, description, content, published_at, feed_name
-        FROM (
-          SELECT i.id, i.title, i.url, i.description, i.content, i.published_at,
-                 COALESCE(NULLIF(f.display_name, ''), NULLIF(f.title, ''), f.url) AS feed_name,
-                 ROW_NUMBER() OVER (PARTITION BY i.feed_id ORDER BY i.published_at DESC, i.id DESC) AS row_num
-          FROM feed_items i
-          JOIN feeds f ON f.id = i.feed_id
-          WHERE f.enabled = 1
-            AND i.published_at IS NOT NULL
-            AND i.published_at >= ?
-            AND i.published_at <= ?
-        )
-        WHERE row_num <= ?
-        ORDER BY published_at DESC, id DESC
-        """)
+            SELECT id, title, url, description, content, published_at, feed_name
+            FROM (
+              SELECT i.id, i.title, i.url, i.description, i.content, i.published_at,
+                     COALESCE(NULLIF(f.display_name, ''), NULLIF(f.title, ''), f.url) AS feed_name,
+                     ROW_NUMBER() OVER (PARTITION BY i.feed_id ORDER BY i.published_at DESC, i.id DESC) AS row_num
+              FROM feed_items i
+              JOIN feeds f ON f.id = i.feed_id
+              WHERE f.enabled = 1
+                AND i.published_at IS NOT NULL
+                AND i.published_at >= ?
+                AND i.published_at <= ?
+            )
+            WHERE row_num <= ?
+            ORDER BY published_at DESC, id DESC
+            """)
         .params(from.toString(), to.toString(), maxItemsPerFeed)
         .query(this::mapFeedBriefingItem)
         .list();
@@ -235,12 +235,12 @@ public final class FeedService {
     return jdbcClient
         .sql(
             """
-        SELECT i.id, i.title, i.url, i.description, i.content, i.published_at,
-               COALESCE(NULLIF(f.display_name, ''), NULLIF(f.title, ''), f.url) AS feed_name
-        FROM feed_items i
-        JOIN feeds f ON f.id = i.feed_id
-        WHERE i.id = ?
-        """)
+            SELECT i.id, i.title, i.url, i.description, i.content, i.published_at,
+                   COALESCE(NULLIF(f.display_name, ''), NULLIF(f.title, ''), f.url) AS feed_name
+            FROM feed_items i
+            JOIN feeds f ON f.id = i.feed_id
+            WHERE i.id = ?
+            """)
         .param(itemId)
         .query(this::mapFeedBriefingItem)
         .single();
@@ -415,7 +415,8 @@ public final class FeedService {
     }
     try (var statement = connection.createStatement()) {
       switch (column) {
-        case "description" -> statement.executeUpdate("ALTER TABLE feed_items ADD COLUMN description TEXT");
+        case "description" ->
+            statement.executeUpdate("ALTER TABLE feed_items ADD COLUMN description TEXT");
         case "content" -> statement.executeUpdate("ALTER TABLE feed_items ADD COLUMN content TEXT");
         default -> throw new IllegalArgumentException("Unknown feed item column");
       }

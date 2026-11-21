@@ -30,17 +30,16 @@ class ThemeEnrichmentTest {
           .lines()
           .skip(1)
           .filter(s -> !s.isBlank())
-          .map(
-              line -> {
-                var p = line.split(",", -1);
-                return segment(
-                    Integer.parseInt(p[0]),
-                    Integer.parseInt(p[1]),
-                    p[2],
-                    p[3],
-                    p[4],
-                    EntertainmentDisposition.valueOf(p[5]));
-              })
+          .map(line -> {
+            var p = line.split(",", -1);
+            return segment(
+                Integer.parseInt(p[0]),
+                Integer.parseInt(p[1]),
+                p[2],
+                p[3],
+                p[4],
+                EntertainmentDisposition.valueOf(p[5]));
+          })
           .toList();
     } catch (java.io.IOException e) {
       throw new java.io.UncheckedIOException(e);
@@ -181,15 +180,14 @@ class ThemeEnrichmentTest {
     var ai = aggregate(differentProjects());
     var fallback = DailySummary.fallback(ai);
     assertThat(fallback.validated(ai)).isEqualTo(fallback);
-    assertThatThrownBy(
-            () ->
-                new DailySummary(
-                        fallback.overview() + "AI支援",
-                        fallback.timeOfDay(),
-                        fallback.workThemes(),
-                        fallback.nonWorkActivities(),
-                        fallback.trend())
-                    .validated(ai))
+    assertThatThrownBy(() ->
+            new DailySummary(
+                    fallback.overview() + "AI支援",
+                    fallback.timeOfDay(),
+                    fallback.workThemes(),
+                    fallback.nonWorkActivities(),
+                    fallback.trend())
+                .validated(ai))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

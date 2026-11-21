@@ -87,12 +87,11 @@ class VoiceSlowMicrophoneCloseTest {
             new ProjectContext(UUID.randomUUID().toString(), "test", Path.of(".")), "session");
     var device = new AudioDevice("dry", "DRY (VT-4)", "input", "vendor", "1");
     var caller =
-        Executors.newSingleThreadExecutor(
-            r -> {
-              var thread = new Thread(r, "off-fixture");
-              thread.setDaemon(true);
-              return thread;
-            });
+        Executors.newSingleThreadExecutor(r -> {
+          var thread = new Thread(r, "off-fixture");
+          thread.setDaemon(true);
+          return thread;
+        });
     try {
       voice.start(target, device, VoiceSettings.defaults());
       assertThat(voice.awaitStartup(Duration.ofSeconds(2)))

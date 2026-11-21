@@ -65,10 +65,9 @@ public class WebPageExtractor {
                 content
                     + "\n"
                     + document.select("pre,code").stream()
-                        .filter(
-                            element ->
-                                element.parents().stream()
-                                    .noneMatch(parent -> parent.normalName().equals("pre")))
+                        .filter(element ->
+                            element.parents().stream()
+                                .noneMatch(parent -> parent.normalName().equals("pre")))
                         .map(Element::wholeText)
                         .collect(java.util.stream.Collectors.joining("\n")));
     if (content.isBlank()) {

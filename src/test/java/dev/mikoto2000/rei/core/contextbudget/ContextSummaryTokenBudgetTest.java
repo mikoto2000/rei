@@ -152,11 +152,9 @@ class ContextSummaryTokenBudgetTest {
     var model = mock(ChatModel.class);
     for (Integer tokens : Arrays.asList(6, null)) {
       when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response("summary", tokens)));
-      assertThatThrownBy(
-              () ->
-                  compressor(model, properties)
-                      .summarize(
-                          "", List.of(new UserMessage("history")), 100, new Prompt("current")))
+      assertThatThrownBy(() ->
+              compressor(model, properties)
+                  .summarize("", List.of(new UserMessage("history")), 100, new Prompt("current")))
           .hasMessageContaining(tokens == null ? "TOKEN_USAGE_UNKNOWN" : "TOKEN_BUDGET_EXCEEDED");
     }
   }
@@ -174,10 +172,9 @@ class ContextSummaryTokenBudgetTest {
               "run", new OutputLimitRunBudget(0, 10, null, 5), null, null, null);
       var model = mock(ChatModel.class);
       when(model.stream(any(Prompt.class))).thenReturn(responses);
-      assertThatThrownBy(
-              () ->
-                  compressor(model)
-                      .summarize("", List.of(new UserMessage("history")), 100, owner(execution)))
+      assertThatThrownBy(() ->
+              compressor(model)
+                  .summarize("", List.of(new UserMessage("history")), 100, owner(execution)))
           .hasMessageContaining("TOKEN_USAGE_UNKNOWN");
       assertThat(execution.sharedLlmReservation().tryReserve()).isFalse();
     }
@@ -190,10 +187,9 @@ class ContextSummaryTokenBudgetTest {
     when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response("summary", 6)));
     var execution =
         new RunExecutionContext("run", new OutputLimitRunBudget(0, 10, null, 5), null, null, null);
-    assertThatThrownBy(
-            () ->
-                compressor(model)
-                    .summarize("", List.of(new UserMessage("history")), 100, owner(execution)))
+    assertThatThrownBy(() ->
+            compressor(model)
+                .summarize("", List.of(new UserMessage("history")), 100, owner(execution)))
         .hasMessageContaining("TOKEN_BUDGET_EXCEEDED");
     var legacy = new RunExecutionContext("old", new OutputLimitRunBudget(0, 10), null, null, null);
     when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response("summary", null)));
@@ -218,10 +214,9 @@ class ContextSummaryTokenBudgetTest {
                     ChatResponseMetadata.builder().usage(new DefaultUsage(1, 1)).build())));
     var budget = new OutputLimitRunBudget(0, 10, null, 100);
     var execution = new RunExecutionContext("run", budget, null, null, null);
-    assertThatThrownBy(
-            () ->
-                compressor(model)
-                    .summarize("", List.of(new UserMessage("history")), 100, owner(execution)))
+    assertThatThrownBy(() ->
+            compressor(model)
+                .summarize("", List.of(new UserMessage("history")), 100, owner(execution)))
         .isInstanceOfSatisfying(
             ContextCompressionException.class,
             failure ->
@@ -243,10 +238,9 @@ class ContextSummaryTokenBudgetTest {
             "run", new OutputLimitRunBudget(0, 10, null, 100), null, null, null);
     var properties = new ContextCompressionProperties();
     properties.setSummaryTimeoutSeconds(1);
-    assertThatThrownBy(
-            () ->
-                compressor(model, properties)
-                    .summarize("", List.of(new UserMessage("history")), 100, owner(execution)))
+    assertThatThrownBy(() ->
+            compressor(model, properties)
+                .summarize("", List.of(new UserMessage("history")), 100, owner(execution)))
         .isInstanceOfSatisfying(
             ExecutionStoppedException.class,
             stopped -> {
@@ -316,10 +310,9 @@ class ContextSummaryTokenBudgetTest {
       var model = mock(ChatModel.class);
       when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response("compact", 3)));
       var summaries = new ConversationSummaryRepository(dir.resolve("shared-" + callsOnly));
-      assertThatThrownBy(
-              () ->
-                  assembler(props, compressor(model, props), summaries)
-                      .assemble(standaloneHistorical(), "chat", "run", () -> {}))
+      assertThatThrownBy(() ->
+              assembler(props, compressor(model, props), summaries)
+                  .assemble(standaloneHistorical(), "chat", "run", () -> {}))
           .hasMessageContaining(callsOnly ? "LLM_CALL_BUDGET_EXCEEDED" : "TOKEN_BUDGET_EXCEEDED");
       verify(model, times(callsOnly ? 1 : 2)).stream(any(Prompt.class));
       assertThat(summaries.read("chat").throughSequence()).isEqualTo(1);
@@ -338,10 +331,9 @@ class ContextSummaryTokenBudgetTest {
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response("compact", null)));
     var summaries = new ConversationSummaryRepository(dir);
-    assertThatThrownBy(
-            () ->
-                assembler(props, compressor(model, props), summaries)
-                    .assemble(standaloneHistorical(), "chat", "run", () -> {}))
+    assertThatThrownBy(() ->
+            assembler(props, compressor(model, props), summaries)
+                .assemble(standaloneHistorical(), "chat", "run", () -> {}))
         .hasMessageContaining("TOKEN_USAGE_UNKNOWN");
     verify(model, times(1)).stream(any(Prompt.class));
     assertThat(summaries.read("chat").throughSequence()).isZero();
@@ -377,10 +369,9 @@ class ContextSummaryTokenBudgetTest {
         .thenReturn(Flux.<ChatResponse>never().doOnCancel(() -> cancelled.set(true)));
     var compressor = compressor(model, props);
     for (int i = 0; i < 2; i++)
-      assertThatThrownBy(
-              () ->
-                  compressor.summarize(
-                      "", List.of(new UserMessage("history")), 100, new Prompt("current")))
+      assertThatThrownBy(() ->
+              compressor.summarize(
+                  "", List.of(new UserMessage("history")), 100, new Prompt("current")))
           .hasMessageContaining("TOKEN_USAGE_UNKNOWN");
     assertThat(cancelled).isTrue();
   }
@@ -431,14 +422,9 @@ class ContextSummaryTokenBudgetTest {
           invoked.set(true);
           return "unaccounted";
         };
-    assertThatThrownBy(
-            () ->
-                legacy.summarize(
-                    "",
-                    List.of(),
-                    100,
-                    new Prompt("current"),
-                    StandaloneSummaryBudget.create(props)))
+    assertThatThrownBy(() ->
+            legacy.summarize(
+                "", List.of(), 100, new Prompt("current"), StandaloneSummaryBudget.create(props)))
         .hasMessageContaining("TOKEN_USAGE_UNKNOWN");
     assertThat(invoked).isFalse();
   }
@@ -499,10 +485,9 @@ class ContextSummaryTokenBudgetTest {
               events,
               event -> {});
       var parent = mock(ChatModel.class);
-      assertThatThrownBy(
-              () ->
-                  new StagnationChatModel(parent, assembler)
-                      .stream(historical(execution)).collectList().block())
+      assertThatThrownBy(() ->
+              new StagnationChatModel(parent, assembler)
+                  .stream(historical(execution)).collectList().block())
           .hasMessageContaining(usage == null ? "TOKEN_USAGE_UNKNOWN" : "TOKEN_BUDGET_EXCEEDED");
       // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(parent);

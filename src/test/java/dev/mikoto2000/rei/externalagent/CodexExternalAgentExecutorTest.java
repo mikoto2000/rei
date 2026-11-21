@@ -285,11 +285,10 @@ class CodexExternalAgentExecutorTest {
     assertTrue(command.stream().anyMatch(s -> s.contains("network={enabled=false}")));
     assertFalse(
         command.stream()
-            .anyMatch(
-                s ->
-                    s.contains("danger-full-access")
-                        || s.contains("workspace-write")
-                        || s.equals("resume")));
+            .anyMatch(s ->
+                s.contains("danger-full-access")
+                    || s.contains("workspace-write")
+                    || s.equals("resume")));
     assertFalse(command.contains("untrusted task"));
     assertTrue(
         command.stream()

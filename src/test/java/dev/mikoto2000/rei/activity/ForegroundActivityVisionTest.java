@@ -58,16 +58,14 @@ class ForegroundActivityVisionTest {
                 new ForegroundWindow("Firefox", 1, "PRIVATE_TITLE", "1"));
         assertTrue(
             appender.list.stream()
-                .anyMatch(
-                    e ->
-                        e.getFormattedMessage().contains("reasoning_tokens=1500")
-                            && e.getFormattedMessage().contains("max_output_tokens=2048")));
+                .anyMatch(e ->
+                    e.getFormattedMessage().contains("reasoning_tokens=1500")
+                        && e.getFormattedMessage().contains("max_output_tokens=2048")));
         assertTrue(
             appender.list.stream()
-                .noneMatch(
-                    e ->
-                        e.getFormattedMessage().contains("PRIVATE_TITLE")
-                            || e.getFormattedMessage().contains(VALID)));
+                .noneMatch(e ->
+                    e.getFormattedMessage().contains("PRIVATE_TITLE")
+                        || e.getFormattedMessage().contains(VALID)));
       }
     } finally {
       logger.detachAppender(appender);
@@ -128,19 +126,18 @@ class ForegroundActivityVisionTest {
   void tokenFixtureFailsAt1024AndSucceedsAt2048WithoutRepeatingTruncatedRequest() throws Exception {
     var model = mock(ChatModel.class);
     when(model.call(any(Prompt.class)))
-        .thenAnswer(
-            i ->
-                response(
-                    ((OpenAiChatOptions) ((Prompt) i.getArgument(0)).getOptions())
-                                .getMaxCompletionTokens()
-                            < 2048
-                        ? ""
-                        : VALID,
-                    ((OpenAiChatOptions) ((Prompt) i.getArgument(0)).getOptions())
-                                .getMaxCompletionTokens()
-                            < 2048
-                        ? "length"
-                        : "stop"));
+        .thenAnswer(i ->
+            response(
+                ((OpenAiChatOptions) ((Prompt) i.getArgument(0)).getOptions())
+                            .getMaxCompletionTokens()
+                        < 2048
+                    ? ""
+                    : VALID,
+                ((OpenAiChatOptions) ((Prompt) i.getArgument(0)).getOptions())
+                            .getMaxCompletionTokens()
+                        < 2048
+                    ? "length"
+                    : "stop"));
     var scope = org.slf4j.MDC.putCloseable("activityScope", "foreground");
     try (scope) {
       var low =

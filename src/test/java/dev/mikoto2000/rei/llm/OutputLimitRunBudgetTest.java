@@ -166,7 +166,9 @@ class OutputLimitRunBudgetTest {
     assertThat(budget.snapshot().argumentCorrections()).isEqualTo(15);
     var json = new com.fasterxml.jackson.databind.ObjectMapper();
     var restarted = new OutputLimitRunBudget(2, 1000);
-    restarted.restore(json.readValue(json.writeValueAsString(budget.snapshot()), OutputLimitRunBudget.Snapshot.class));
+    restarted.restore(
+        json.readValue(
+            json.writeValueAsString(budget.snapshot()), OutputLimitRunBudget.Snapshot.class));
     assertThat(restarted.tryCorrectArguments()).isFalse();
     restarted.restore(resumed);
     assertThat(restarted.tryCorrectArguments()).isFalse();
@@ -178,9 +180,11 @@ class OutputLimitRunBudgetTest {
   @Test
   void invalidRepairBaselinesAreRejectedAndExplicitResumeCannotBypassZeroLimit() {
     var budget = new OutputLimitRunBudget(2, 1000);
-    assertThatThrownBy(() -> budget.restore(new OutputLimitRunBudget.Snapshot(0, 0, 0, false, 0, 5, 6)))
+    assertThatThrownBy(
+            () -> budget.restore(new OutputLimitRunBudget.Snapshot(0, 0, 0, false, 0, 5, 6)))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> budget.restore(new OutputLimitRunBudget.Snapshot(0, 0, 0, false, 0, 5, -1)))
+    assertThatThrownBy(
+            () -> budget.restore(new OutputLimitRunBudget.Snapshot(0, 0, 0, false, 0, 5, -1)))
         .isInstanceOf(IllegalArgumentException.class);
     var disabled = new OutputLimitRunBudget(2, 1000, null, 0, 0);
     disabled.restore(new OutputLimitRunBudget.Snapshot(0, 0, 0, false, 0, 5).forExplicitResume());

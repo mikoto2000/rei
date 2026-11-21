@@ -301,57 +301,56 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
     try {
       for (var request : requests) {
         var future =
-            new FutureTask<Item>(
-                () -> {
-                  if (stopped.get() || Thread.currentThread().isInterrupted())
-                    return item(request, Status.CANCELLED, null);
-                  if (System.nanoTime() - deadline >= 0) {
-                    deadlineReached.set(true);
-                    return item(request, Status.TIMEOUT, null);
-                  }
-                  var scope = AgentRunScope.open(parent);
-                  try (scope) {
-                    ChatGptSubAgentBackend.Receipt receipt = null;
-                    SubAgentResult result;
-                    if (child == null && external(request.backendId())) {
-                      receipt =
-                          runner.runAutomaticBackend(
-                              new ChatGptSubAgentBackend.Request(
+            new FutureTask<Item>(() -> {
+              if (stopped.get() || Thread.currentThread().isInterrupted())
+                return item(request, Status.CANCELLED, null);
+              if (System.nanoTime() - deadline >= 0) {
+                deadlineReached.set(true);
+                return item(request, Status.TIMEOUT, null);
+              }
+              var scope = AgentRunScope.open(parent);
+              try (scope) {
+                ChatGptSubAgentBackend.Receipt receipt = null;
+                SubAgentResult result;
+                if (child == null && external(request.backendId())) {
+                  receipt =
+                      runner.runAutomaticBackend(
+                          new ChatGptSubAgentBackend.Request(
+                              request.agent(),
+                              request.backendId(),
+                              request.modelId(),
+                              request.accountRef(),
+                              request.task(),
+                              request.sourceRefs() == null ? List.of() : request.sourceRefs(),
+                              request.expectedOutput()),
+                          parent,
+                          effectiveReservation);
+                  result = receipt.result();
+                } else
+                  result =
+                      child != null
+                          ? child.apply(request, effectiveReservation)
+                          : effectiveReservation == null
+                              ? runner.run(request.agent(), request.task(), request.context())
+                              : runner.run(
                                   request.agent(),
-                                  request.backendId(),
-                                  request.modelId(),
-                                  request.accountRef(),
                                   request.task(),
-                                  request.sourceRefs() == null ? List.of() : request.sourceRefs(),
-                                  request.expectedOutput()),
-                              parent,
-                              effectiveReservation);
-                      result = receipt.result();
-                    } else
-                      result =
-                          child != null
-                              ? child.apply(request, effectiveReservation)
-                              : effectiveReservation == null
-                                  ? runner.run(request.agent(), request.task(), request.context())
-                                  : runner.run(
-                                      request.agent(),
-                                      request.task(),
-                                      request.context(),
-                                      effectiveReservation);
-                    var state =
-                        switch (result.status()) {
-                          case COMPLETED -> Status.COMPLETED;
-                          case CANCELLED -> Status.CANCELLED;
-                          case TIMEOUT -> Status.TIMEOUT;
-                          default -> Status.FAILED;
-                        };
-                    if (external
-                        && result.structuredOutput() != null
-                        && result.structuredOutput().status() == SubAgentOutput.Status.PARTIAL)
-                      state = Status.PARTIAL;
-                    return new Item(request.id(), request.agent(), state, result, receipt);
-                  }
-                });
+                                  request.context(),
+                                  effectiveReservation);
+                var state =
+                    switch (result.status()) {
+                      case COMPLETED -> Status.COMPLETED;
+                      case CANCELLED -> Status.CANCELLED;
+                      case TIMEOUT -> Status.TIMEOUT;
+                      default -> Status.FAILED;
+                    };
+                if (external
+                    && result.structuredOutput() != null
+                    && result.structuredOutput().status() == SubAgentOutput.Status.PARTIAL)
+                  state = Status.PARTIAL;
+                return new Item(request.id(), request.agent(), state, result, receipt);
+              }
+            });
         futures.add(future);
         if (stopped.get()) future.cancel(true);
         else

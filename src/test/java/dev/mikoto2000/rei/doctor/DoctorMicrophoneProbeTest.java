@@ -25,11 +25,10 @@ class DoctorMicrophoneProbeTest {
     var catalog = new java.util.concurrent.atomic.AtomicInteger();
     try (var probe =
         new DoctorMicrophoneProbe(
-            new AudioDeviceService(
-                () -> {
-                  catalog.incrementAndGet();
-                  return List.of(device);
-                }),
+            new AudioDeviceService(() -> {
+              catalog.incrementAndGet();
+              return List.of(device);
+            }),
             d -> acquired.incrementAndGet())) {
       assertEquals(
           DoctorMicrophoneProbe.Result.NOT_CONFIGURED,
@@ -80,10 +79,9 @@ class DoctorMicrophoneProbeTest {
   void cancellationPropagatesBeforeAcquisition() {
     try (var probe =
         new DoctorMicrophoneProbe(
-            new AudioDeviceService(
-                () -> {
-                  throw new AssertionError();
-                }),
+            new AudioDeviceService(() -> {
+              throw new AssertionError();
+            }),
             d -> {
               throw new AssertionError();
             })) {

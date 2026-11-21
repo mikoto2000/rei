@@ -51,12 +51,11 @@ public final class VoiceWorkerProcess implements AutoCloseable {
 
   /** 入出力を担当する実行先。 */
   private final ExecutorService io =
-      Executors.newSingleThreadExecutor(
-          r -> {
-            var t = new Thread(r, "voice-worker-ipc");
-            t.setDaemon(true);
-            return t;
-          });
+      Executors.newSingleThreadExecutor(r -> {
+        var t = new Thread(r, "voice-worker-ipc");
+        t.setDaemon(true);
+        return t;
+      });
 
   /** 終了済み。 */
   private final AtomicBoolean closed = new AtomicBoolean();
@@ -145,7 +144,8 @@ public final class VoiceWorkerProcess implements AutoCloseable {
             write(2, copy);
             if (input.readInt() != 2) throw new IOException("Invalid ASR response");
             int size = input.readInt();
-            if (size < 0 || size > MAX_TEXT_BYTES) throw new IOException("Invalid ASR response size");
+            if (size < 0 || size > MAX_TEXT_BYTES)
+              throw new IOException("Invalid ASR response size");
             byte[] bytes = new byte[size];
             input.readFully(bytes);
             return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString();

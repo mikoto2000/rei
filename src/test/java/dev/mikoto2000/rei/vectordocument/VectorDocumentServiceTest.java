@@ -466,10 +466,7 @@ class VectorDocumentServiceTest {
     SqliteVecProperties properties = new SqliteVecProperties();
     properties.setExtensionPath(vecExtensionPath().toString());
     SqliteVecInstaller installer =
-        new SqliteVecInstaller(
-            properties,
-            new PlatformDetector(),
-            new SqliteVecAssetResolver());
+        new SqliteVecInstaller(properties, new PlatformDetector(), new SqliteVecAssetResolver());
     SqliteVecExtensionLoader loader = new SqliteVecExtensionLoader(properties, installer);
     SqliteVectorStore vectorStore =
         new SqliteVectorStore(

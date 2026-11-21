@@ -112,25 +112,24 @@ class WebFetchBatchHttpTest {
       var closed = new CountDownLatch(1);
       var accepted = new CountDownLatch(1);
       var peer =
-          server.submit(
-              () -> {
-                try (var socket = listener.accept()) {
-                  socket.setSoTimeout(2000);
-                  var reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                  for (String line; (line = reader.readLine()) != null && !line.isEmpty(); ) {}
-                  socket
-                      .getOutputStream()
-                      .write(
-                          "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n"
-                              .getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-                  socket.getOutputStream().flush();
-                  accepted.countDown();
-                  if (socket.getInputStream().read() == -1) closed.countDown();
-                } catch (java.net.SocketException reset) {
-                  closed.countDown();
-                }
-                return null;
-              });
+          server.submit(() -> {
+            try (var socket = listener.accept()) {
+              socket.setSoTimeout(2000);
+              var reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+              for (String line; (line = reader.readLine()) != null && !line.isEmpty(); ) {}
+              socket
+                  .getOutputStream()
+                  .write(
+                      "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nok\r\n"
+                          .getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+              socket.getOutputStream().flush();
+              accepted.countDown();
+              if (socket.getInputStream().read() == -1) closed.countDown();
+            } catch (java.net.SocketException reset) {
+              closed.countDown();
+            }
+            return null;
+          });
       URI origin = URI.create("http://127.0.0.1:" + listener.getLocalPort());
       var policy =
           new HttpFetchPolicy(

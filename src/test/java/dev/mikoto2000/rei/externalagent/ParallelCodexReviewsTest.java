@@ -52,10 +52,9 @@ class ParallelCodexReviewsTest {
   /** {@code requests} の条件を再現するための補助情報を返す。 */
   List<ExternalAgentDelegationService.ParallelRequest> requests(int count) {
     return java.util.stream.IntStream.range(0, count)
-        .mapToObj(
-            i ->
-                new ExternalAgentDelegationService.ParallelRequest(
-                    "item-" + i, "review " + i, null, null))
+        .mapToObj(i ->
+            new ExternalAgentDelegationService.ParallelRequest(
+                "item-" + i, "review " + i, null, null))
         .toList();
   }
 
@@ -89,23 +88,22 @@ class ParallelCodexReviewsTest {
     var calls = new AtomicInteger();
     var run = run("Codex に複数の対象を並列レビューして", 10);
     try (var service =
-        service(
-            (request, cancelled) -> {
-              int current = active.incrementAndGet();
-              maximum.accumulateAndGet(current, Math::max);
-              calls.incrementAndGet();
-              entered.countDown();
-              try {
-                assertTrue(entered.await(2, TimeUnit.SECONDS));
-                assertEquals(run.runContext(), AgentRunScope.current());
-                assertEquals(ExternalAgentRequest.Action.REVIEW, request.action());
-                return success();
-              } catch (InterruptedException e) {
-                throw new CancellationException();
-              } finally {
-                active.decrementAndGet();
-              }
-            })) {
+        service((request, cancelled) -> {
+          int current = active.incrementAndGet();
+          maximum.accumulateAndGet(current, Math::max);
+          calls.incrementAndGet();
+          entered.countDown();
+          try {
+            assertTrue(entered.await(2, TimeUnit.SECONDS));
+            assertEquals(run.runContext(), AgentRunScope.current());
+            assertEquals(ExternalAgentRequest.Action.REVIEW, request.action());
+            return success();
+          } catch (InterruptedException e) {
+            throw new CancellationException();
+          } finally {
+            active.decrementAndGet();
+          }
+        })) {
       var result = service.reviewParallel(run, requests(3));
       assertEquals(ExternalAgentDelegationService.ParallelStatus.COMPLETED, result.status());
       assertEquals(
@@ -170,11 +168,10 @@ class ParallelCodexReviewsTest {
   void exhaustedParentBudgetCannotStartAProviderEvenWhenLegacyInheritanceIsDisabled() {
     var calls = new AtomicInteger();
     try (var service =
-        service(
-            (request, cancelled) -> {
-              calls.incrementAndGet();
-              return success();
-            })) {
+        service((request, cancelled) -> {
+          calls.incrementAndGet();
+          return success();
+        })) {
       var run = run("please ask Codex to review in parallel", 0);
       assertThrows(ExecutionStoppedException.class, () -> service.reviewParallel(run, requests(2)));
       assertEquals(0, calls.get());
@@ -246,27 +243,26 @@ class ParallelCodexReviewsTest {
     var entered = new CountDownLatch(2);
     var finished = new CountDownLatch(2);
     try (var service =
-            service(
-                (request, cancelled) -> {
-                  entered.countDown();
-                  while (!cancelled.getAsBoolean())
-                    java.util.concurrent.locks.LockSupport.parkNanos(1_000_000);
-                  try {
-                    Thread.sleep(200);
-                  } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                  } finally {
-                    finished.countDown();
-                  }
-                  return new ExternalAgentResult(
-                      ExternalAgentResult.Status.CANCELLED,
-                      "cancelled",
-                      List.of(),
-                      List.of(),
-                      1,
-                      null,
-                      "");
-                });
+            service((request, cancelled) -> {
+              entered.countDown();
+              while (!cancelled.getAsBoolean())
+                java.util.concurrent.locks.LockSupport.parkNanos(1_000_000);
+              try {
+                Thread.sleep(200);
+              } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+              } finally {
+                finished.countDown();
+              }
+              return new ExternalAgentResult(
+                  ExternalAgentResult.Status.CANCELLED,
+                  "cancelled",
+                  List.of(),
+                  List.of(),
+                  1,
+                  null,
+                  "");
+            });
         var caller = Executors.newSingleThreadExecutor()) {
       service.reviewHistory(history);
       var props = new CodexProperties();
@@ -294,11 +290,10 @@ class ParallelCodexReviewsTest {
     java.nio.file.Files.writeString(root.resolve("inside.txt"), "safe");
     var calls = new AtomicInteger();
     try (var service =
-        service(
-            (request, cancelled) -> {
-              calls.incrementAndGet();
-              return success();
-            })) {
+        service((request, cancelled) -> {
+          calls.incrementAndGet();
+          return success();
+        })) {
       for (var batch :
           List.of(
               requests(5),
@@ -325,16 +320,15 @@ class ParallelCodexReviewsTest {
     var entered = new CountDownLatch(2);
     var release = new CountDownLatch(1);
     try (var service =
-            service(
-                (request, cancelled) -> {
-                  entered.countDown();
-                  try {
-                    assertTrue(release.await(3, TimeUnit.SECONDS));
-                    return success();
-                  } catch (InterruptedException interrupted) {
-                    throw new CancellationException();
-                  }
-                });
+            service((request, cancelled) -> {
+              entered.countDown();
+              try {
+                assertTrue(release.await(3, TimeUnit.SECONDS));
+                return success();
+              } catch (InterruptedException interrupted) {
+                throw new CancellationException();
+              }
+            });
         var caller = Executors.newSingleThreadExecutor()) {
       var first =
           caller.submit(() -> service.reviewParallel(run("Codex に並列レビューして", 10), requests(2)));
@@ -360,26 +354,25 @@ class ParallelCodexReviewsTest {
     var firstEntered = new CountDownLatch(1);
     var stopped = new CountDownLatch(1);
     try (var service =
-            service(
-                (request, cancelled) -> {
-                  if (request.task().contains("review 1")) {
-                    try {
-                      assertTrue(firstEntered.await(2, TimeUnit.SECONDS));
-                    } catch (InterruptedException interrupted) {
-                      throw new CancellationException();
-                    }
-                    throw new ExecutionStoppedException(
-                        ExecutionStoppedException.Reason.LLM_CALL_BUDGET_EXCEEDED);
-                  }
-                  firstEntered.countDown();
-                  try {
-                    while (!cancelled.getAsBoolean())
-                      java.util.concurrent.locks.LockSupport.parkNanos(1_000_000);
-                    throw new CancellationException();
-                  } finally {
-                    stopped.countDown();
-                  }
-                });
+            service((request, cancelled) -> {
+              if (request.task().contains("review 1")) {
+                try {
+                  assertTrue(firstEntered.await(2, TimeUnit.SECONDS));
+                } catch (InterruptedException interrupted) {
+                  throw new CancellationException();
+                }
+                throw new ExecutionStoppedException(
+                    ExecutionStoppedException.Reason.LLM_CALL_BUDGET_EXCEEDED);
+              }
+              firstEntered.countDown();
+              try {
+                while (!cancelled.getAsBoolean())
+                  java.util.concurrent.locks.LockSupport.parkNanos(1_000_000);
+                throw new CancellationException();
+              } finally {
+                stopped.countDown();
+              }
+            });
         var caller = Executors.newSingleThreadExecutor()) {
       var future =
           caller.submit(() -> service.reviewParallel(run("Codex に並列レビューして", 10), requests(2)));
@@ -418,14 +411,13 @@ class ParallelCodexReviewsTest {
     var calls = new AtomicInteger();
     var run = run("Codex に並列レビューして", 10);
     try (var service =
-            service(
-                (request, cancelled) -> {
-                  calls.incrementAndGet();
-                  entered.countDown();
-                  while (!cancelled.getAsBoolean())
-                    java.util.concurrent.locks.LockSupport.parkNanos(1_000_000);
-                  throw new CancellationException();
-                });
+            service((request, cancelled) -> {
+              calls.incrementAndGet();
+              entered.countDown();
+              while (!cancelled.getAsBoolean())
+                java.util.concurrent.locks.LockSupport.parkNanos(1_000_000);
+              throw new CancellationException();
+            });
         var caller = Executors.newSingleThreadExecutor()) {
       var future = caller.submit(() -> service.reviewParallel(run, requests(4)));
       assertTrue(entered.await(2, TimeUnit.SECONDS));
@@ -531,10 +523,9 @@ class ParallelCodexReviewsTest {
       assertThrows(IllegalArgumentException.class, () -> props.setParallelReviewTimeout(invalid));
     assertThrows(IllegalArgumentException.class, () -> props.setParallelReviewTimeout(null));
     var service =
-        service(
-            (request, cancelled) -> {
-              throw new AssertionError();
-            });
+        service((request, cancelled) -> {
+          throw new AssertionError();
+        });
     service.close();
     var run = run("Codex に並列レビューして", 10);
     assertEquals(

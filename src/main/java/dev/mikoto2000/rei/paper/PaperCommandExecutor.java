@@ -55,9 +55,7 @@ public class PaperCommandExecutor {
                       p,
                       r.quick
                           ? PaperSummary.Mode.QUICK
-                          : r.detailed
-                              ? PaperSummary.Mode.DETAILED
-                              : config.defaultSummaryMode(),
+                          : r.detailed ? PaperSummary.Mode.DETAILED : config.defaultSummaryMode(),
                       r.refresh,
                       op);
               yield Map.of(

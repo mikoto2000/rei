@@ -167,17 +167,15 @@ class StoragePageLayoutTest {
     var child = new ProcessBuilder(executable, "@" + arguments).redirectErrorStream(true).start();
     try {
       var ready =
-          java.util.concurrent.CompletableFuture.supplyAsync(
-              () -> {
-                try (var reader = child.inputReader()) {
-                  String line;
-                  while ((line = reader.readLine()) != null)
-                    if (line.equals("APPLYING")) return true;
-                  return false;
-                } catch (java.io.IOException failure) {
-                  throw new java.io.UncheckedIOException(failure);
-                }
-              });
+          java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try (var reader = child.inputReader()) {
+              String line;
+              while ((line = reader.readLine()) != null) if (line.equals("APPLYING")) return true;
+              return false;
+            } catch (java.io.IOException failure) {
+              throw new java.io.UncheckedIOException(failure);
+            }
+          });
       assertThat(ready.get(30, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
       assertThatThrownBy(() -> new StorageMigrationCoordinator(root))
           .isInstanceOf(java.io.IOException.class);

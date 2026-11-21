@@ -84,22 +84,21 @@ public final class StorageMaintenance {
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
   public Status status() {
-    return read.run(
-        db -> {
-          long pageSize = pragma(db, "page_size"),
-              pages = pragma(db, "page_count"),
-              free = pragma(db, "freelist_count");
-          return new Status(
-              size("storage.db"),
-              size("storage.db-wal"),
-              size("storage.db-journal"),
-              pageSize,
-              pages,
-              free,
-              Math.multiplyExact(pages - free, pageSize),
-              (int) pragma(db, "auto_vacuum"),
-              Files.getFileStore(root).getUsableSpace());
-        });
+    return read.run(db -> {
+      long pageSize = pragma(db, "page_size"),
+          pages = pragma(db, "page_count"),
+          free = pragma(db, "freelist_count");
+      return new Status(
+          size("storage.db"),
+          size("storage.db-wal"),
+          size("storage.db-journal"),
+          pageSize,
+          pages,
+          free,
+          Math.multiplyExact(pages - free, pageSize),
+          (int) pragma(db, "auto_vacuum"),
+          Files.getFileStore(root).getUsableSpace());
+    });
   }
 
   /** データ保存の共通処理で用いる再開用の記録を返す。 */
@@ -120,57 +119,55 @@ public final class StorageMaintenance {
   public boolean incrementalVacuum(int pages) {
     if (pages < 1 || pages > 10000)
       throw new IllegalArgumentException("Incremental vacuum requires 1..10,000 pages");
-    return maintenance.run(
-        db -> {
-          if (pragma(db, "auto_vacuum") != 2) return false;
-          try (var query = db.createStatement()) {
-            query.execute("PRAGMA incremental_vacuum(" + pages + ")");
-          }
-          return true;
-        });
+    return maintenance.run(db -> {
+      if (pragma(db, "auto_vacuum") != 2) return false;
+      try (var query = db.createStatement()) {
+        query.execute("PRAGMA incremental_vacuum(" + pages + ")");
+      }
+      return true;
+    });
   }
 
   /** データ保存の共通処理に関する保存領域の整理を処理する。 */
   public void vacuum(Duration window) {
     if (window == null || window.toSeconds() < 1 || window.toSeconds() > 3600)
       throw new IllegalArgumentException("Explicit maintenance window must be 1..3600 seconds");
-    maintenance.run(
-        db -> {
-          try (var query = db.createStatement();
-              var rows =
-                  query.executeQuery(
-                      "SELECT 1 FROM turns WHERE status='RUNNING' UNION ALL SELECT 1 FROM conversation_admissions WHERE active=1 LIMIT 1")) {
-            if (rows.next()) throw new IllegalStateException("Active Run; reschedule maintenance");
-          }
-          long required =
-              Math.addExact(
-                  Math.addExact(Math.multiplyExact(size("storage.db"), 2), size("storage.db-wal")),
-                  64L * 1024 * 1024);
-          if (Files.getFileStore(root).getUsableSpace() < required)
-            throw new IllegalStateException("Insufficient disk space for VACUUM");
-          var checkpoint = checkpoint(db);
-          if (checkpoint.busy() != 0 || checkpoint.logFrames() > checkpoint.checkpointedFrames())
-            throw new IllegalStateException("Reader prevents checkpoint; reschedule maintenance");
-          long deadline = System.nanoTime() + window.toNanos();
-          org.sqlite.ProgressHandler.setHandler(
-              db,
-              10000,
-              new org.sqlite.ProgressHandler() {
-                /** データ保存の共通処理で用いる進捗を返す。 */
-                @Override
-                protected int progress() {
-                  return Thread.currentThread().isInterrupted() || System.nanoTime() >= deadline
-                      ? 1
-                      : 0;
-                }
-              });
-          try (var query = db.createStatement()) {
-            query.execute("PRAGMA busy_timeout=" + Math.min(5000, window.toMillis()));
-            query.execute("VACUUM");
-          } finally {
-            org.sqlite.ProgressHandler.clearHandler(db);
-          }
-          return null;
-        });
+    maintenance.run(db -> {
+      try (var query = db.createStatement();
+          var rows =
+              query.executeQuery(
+                  "SELECT 1 FROM turns WHERE status='RUNNING' UNION ALL SELECT 1 FROM conversation_admissions WHERE active=1 LIMIT 1")) {
+        if (rows.next()) throw new IllegalStateException("Active Run; reschedule maintenance");
+      }
+      long required =
+          Math.addExact(
+              Math.addExact(Math.multiplyExact(size("storage.db"), 2), size("storage.db-wal")),
+              64L * 1024 * 1024);
+      if (Files.getFileStore(root).getUsableSpace() < required)
+        throw new IllegalStateException("Insufficient disk space for VACUUM");
+      var checkpoint = checkpoint(db);
+      if (checkpoint.busy() != 0 || checkpoint.logFrames() > checkpoint.checkpointedFrames())
+        throw new IllegalStateException("Reader prevents checkpoint; reschedule maintenance");
+      long deadline = System.nanoTime() + window.toNanos();
+      org.sqlite.ProgressHandler.setHandler(
+          db,
+          10000,
+          new org.sqlite.ProgressHandler() {
+            /** データ保存の共通処理で用いる進捗を返す。 */
+            @Override
+            protected int progress() {
+              return Thread.currentThread().isInterrupted() || System.nanoTime() >= deadline
+                  ? 1
+                  : 0;
+            }
+          });
+      try (var query = db.createStatement()) {
+        query.execute("PRAGMA busy_timeout=" + Math.min(5000, window.toMillis()));
+        query.execute("VACUUM");
+      } finally {
+        org.sqlite.ProgressHandler.clearHandler(db);
+      }
+      return null;
+    });
   }
 }

@@ -251,6 +251,7 @@ dev.mikoto2000.rei.application.session.ShellConversationService$Owned -> dev.mik
 dev.mikoto2000.rei.application.session.ShellConversationService$Owned -> dev.mikoto2000.rei.core.project.ProjectClient
 dev.mikoto2000.rei.application.state.SkillReloadService -> dev.mikoto2000.rei.skills.AgentSkillRepository
 dev.mikoto2000.rei.application.state.StatefulOperationService -> dev.mikoto2000.rei.application.run.ResourceNotFoundException
+dev.mikoto2000.rei.application.state.StatefulOperationService -> dev.mikoto2000.rei.feed.DuplicateFeedException
 dev.mikoto2000.rei.application.state.StatefulOperationService -> dev.mikoto2000.rei.feed.Feed
 dev.mikoto2000.rei.application.state.StatefulOperationService -> dev.mikoto2000.rei.feed.FeedService
 dev.mikoto2000.rei.application.state.StatefulOperationService -> dev.mikoto2000.rei.interest.InterestUpdate
@@ -264,6 +265,7 @@ dev.mikoto2000.rei.application.state.StatefulOperationService -> dev.mikoto2000.
 dev.mikoto2000.rei.application.state.StatefulOperationService -> dev.mikoto2000.rei.reminder.ReminderService
 dev.mikoto2000.rei.application.state.StatefulOperationService -> dev.mikoto2000.rei.skills.AgentSkillRepository
 dev.mikoto2000.rei.artifact.ArtifactSourceExport -> dev.mikoto2000.rei.application.run.ResourceNotFoundException
+dev.mikoto2000.rei.artifact.ArtifactSourceExport -> dev.mikoto2000.rei.application.run.SessionConflictException
 dev.mikoto2000.rei.artifact.ArtifactSourceExport -> dev.mikoto2000.rei.application.session.SessionLifecycle
 dev.mikoto2000.rei.artifact.ArtifactSourceExport -> dev.mikoto2000.rei.core.TextChangeSetService
 dev.mikoto2000.rei.artifact.ArtifactSourceExport -> dev.mikoto2000.rei.core.project.ProjectRegistry
@@ -271,6 +273,7 @@ dev.mikoto2000.rei.artifact.ArtifactSourceExport -> dev.mikoto2000.rei.paper.Pap
 dev.mikoto2000.rei.artifact.ArtifactSourceExport -> dev.mikoto2000.rei.paper.PaperLibraryService$CachedExport
 dev.mikoto2000.rei.artifact.ArtifactSourceExport -> dev.mikoto2000.rei.paper.PaperOperation
 dev.mikoto2000.rei.artifact.ArtifactStore -> dev.mikoto2000.rei.application.run.ResourceNotFoundException
+dev.mikoto2000.rei.artifact.ArtifactStore -> dev.mikoto2000.rei.application.run.RunNotFoundException
 dev.mikoto2000.rei.artifact.ArtifactStore -> dev.mikoto2000.rei.application.run.RunRegistry
 dev.mikoto2000.rei.artifact.ArtifactStore -> dev.mikoto2000.rei.application.run.RunSnapshot
 dev.mikoto2000.rei.artifact.ArtifactStore -> dev.mikoto2000.rei.application.run.RunSnapshot$ChildOrigin
@@ -757,9 +760,11 @@ dev.mikoto2000.rei.core.chat.RunContinuation -> dev.mikoto2000.rei.llm.OutputLim
 dev.mikoto2000.rei.core.chat.RunContinuation$Saved -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
 dev.mikoto2000.rei.core.chat.RunScopedAdvisor -> dev.mikoto2000.rei.core.service.CommandCancellationService
 dev.mikoto2000.rei.core.chat.RunScopedAdvisor -> dev.mikoto2000.rei.core.service.CommandCancellationService$ChildLease
+dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.chatgpt.ChatGptException
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration$Registered
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.contextbudget.ResultDelivery$Kind
+dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.policy.ToolPermissionException
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.service.CommandCancellationService$ChildLease
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
@@ -1162,6 +1167,7 @@ dev.mikoto2000.rei.core.working.WorkingSetAdvisor -> dev.mikoto2000.rei.event.Ag
 dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.chat.BoundedToolLoop
 dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.chat.BoundedToolLoop$Outcome
+dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.chat.BoundedToolLoop$SharedBudgetExceeded
 dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.chat.RunCancellation
 dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.chat.ToolLoopSupport
 dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.dependency.JavaHttpDependencyProbe
@@ -1378,9 +1384,11 @@ dev.mikoto2000.rei.externalagent.BeginnerReviewRequest -> dev.mikoto2000.rei.cor
 dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.chat.BoundedToolLoop
 dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.chat.BoundedToolLoop$Outcome
+dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.chat.BoundedToolLoop$SharedBudgetExceeded
 dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.chat.RunCancellation
 dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.chat.ToolLoopSupport
 dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.policy.ToolPermissionGuard
+dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException
 dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.event.CredentialRedactor
 dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.llm.LlmModelProvider
@@ -1495,6 +1503,7 @@ dev.mikoto2000.rei.github.GitHubNotificationOutbox -> dev.mikoto2000.rei.core.pr
 dev.mikoto2000.rei.github.GitHubNotificationOutbox -> dev.mikoto2000.rei.core.project.ProjectRegistry
 dev.mikoto2000.rei.github.GitHubNotificationOutbox -> dev.mikoto2000.rei.event.AgentEventPublisher
 dev.mikoto2000.rei.github.GitHubWebhookService -> dev.mikoto2000.rei.application.run.ResourceNotFoundException
+dev.mikoto2000.rei.github.GitHubWebhookService -> dev.mikoto2000.rei.application.run.SessionConflictException
 dev.mikoto2000.rei.github.GitHubWebhookService -> dev.mikoto2000.rei.application.session.SessionLifecycle
 dev.mikoto2000.rei.github.GitHubWebhookService -> dev.mikoto2000.rei.application.state.OperationConflictException
 dev.mikoto2000.rei.github.GitHubWebhookService -> dev.mikoto2000.rei.attention.AttentionRepository
@@ -1506,6 +1515,7 @@ dev.mikoto2000.rei.goal.FileGoalVerifier -> dev.mikoto2000.rei.timing.TimingExec
 dev.mikoto2000.rei.goal.FileGoalVerifier -> dev.mikoto2000.rei.timing.TimingExecution$SpanLease
 dev.mikoto2000.rei.goal.FileGoalVerifier -> dev.mikoto2000.rei.timing.TimingRecorder$Category
 dev.mikoto2000.rei.goal.FileGoalVerifier -> dev.mikoto2000.rei.timing.TimingRecorder$Status
+dev.mikoto2000.rei.goal.GoalChatGateway -> dev.mikoto2000.rei.application.run.RunNotFoundException
 dev.mikoto2000.rei.goal.GoalChatGateway -> dev.mikoto2000.rei.application.run.RunRegistry
 dev.mikoto2000.rei.goal.GoalChatGateway -> dev.mikoto2000.rei.application.run.RunService
 dev.mikoto2000.rei.goal.GoalChatGateway -> dev.mikoto2000.rei.application.run.RunSnapshot
@@ -2041,6 +2051,7 @@ dev.mikoto2000.rei.slack.SlackAgentContinuationStore -> dev.mikoto2000.rei.llm.O
 dev.mikoto2000.rei.slack.SlackAgentContinuationStore$Document -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
 dev.mikoto2000.rei.slack.SlackAgentRepository -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.slack.SlackAgentRepository -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
+dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.application.run.RunNotFoundException
 dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.application.run.RunRegistry
 dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.application.run.RunService
 dev.mikoto2000.rei.slack.SlackAgentService -> dev.mikoto2000.rei.application.run.RunSnapshot
@@ -2068,6 +2079,7 @@ dev.mikoto2000.rei.slack.SlackAgentTools -> dev.mikoto2000.rei.core.policy.ToolP
 dev.mikoto2000.rei.slack.SlackAgentTools -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 dev.mikoto2000.rei.slack.SlackAgentTools -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$LlmCallReservation
 dev.mikoto2000.rei.slack.SlackReplies -> dev.mikoto2000.rei.event.CredentialRedactor
+dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.application.run.RunNotFoundException
 dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.application.run.RunRegistry
 dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.application.run.RunService
 dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.application.run.RunService$CancellationResult
@@ -2078,6 +2090,7 @@ dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.application.session.
 dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.core.chat.AgentRunContext$RequestSource
 dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.core.chat.ConversationInputRouter
+dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.core.chat.ProjectRunQueue$CapacityExceededException
 dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.core.project.ProjectRegistry
 dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.event.AgentEvent
 dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.event.AgentEventType
@@ -2455,6 +2468,7 @@ dev.mikoto2000.rei.ui.shell.ConversationModeCommand -> dev.mikoto2000.rei.applic
 dev.mikoto2000.rei.ui.shell.ConversationModeCommand -> dev.mikoto2000.rei.application.session.ShellConversationService
 dev.mikoto2000.rei.ui.shell.ConversationModeCommand -> dev.mikoto2000.rei.core.chat.ResponseStyle
 dev.mikoto2000.rei.ui.shell.ConversationModeCommand -> dev.mikoto2000.rei.event.FailureMessages
+dev.mikoto2000.rei.ui.shell.HistoryCommand -> dev.mikoto2000.rei.application.run.ResourceNotFoundException
 dev.mikoto2000.rei.ui.shell.HistoryCommand -> dev.mikoto2000.rei.application.session.HistoryPage
 dev.mikoto2000.rei.ui.shell.HistoryCommand -> dev.mikoto2000.rei.application.session.Pagination
 dev.mikoto2000.rei.ui.shell.HistoryCommand -> dev.mikoto2000.rei.application.session.SessionMetadata
@@ -2494,6 +2508,8 @@ dev.mikoto2000.rei.ui.shell.ProjectShellActivity -> dev.mikoto2000.rei.event.Age
 dev.mikoto2000.rei.ui.shell.ProjectShellActivity -> dev.mikoto2000.rei.event.BackgroundExecutionPayload
 dev.mikoto2000.rei.ui.shell.ProjectShellActivity -> dev.mikoto2000.rei.event.ProjectAgentEventStore
 dev.mikoto2000.rei.ui.shell.ProjectShellActivity -> dev.mikoto2000.rei.workcontext.WorkContextPresenter
+dev.mikoto2000.rei.ui.shell.ResumeConversationCommand -> dev.mikoto2000.rei.application.run.ResourceNotFoundException
+dev.mikoto2000.rei.ui.shell.ResumeConversationCommand -> dev.mikoto2000.rei.application.run.SessionConflictException
 dev.mikoto2000.rei.ui.shell.ResumeConversationCommand -> dev.mikoto2000.rei.application.session.ShellConversationService
 dev.mikoto2000.rei.ui.shell.ResumeConversationCommand -> dev.mikoto2000.rei.conversation.HistoryFormatter
 dev.mikoto2000.rei.ui.shell.ResumeConversationCommand -> dev.mikoto2000.rei.event.FailureMessages
@@ -2541,6 +2557,7 @@ dev.mikoto2000.rei.ui.shell.RootCommand -> dev.mikoto2000.rei.temporal.TimerComm
 dev.mikoto2000.rei.ui.shell.RootCommand -> dev.mikoto2000.rei.timing.TimingCommand
 dev.mikoto2000.rei.ui.shell.RootCommand -> dev.mikoto2000.rei.voice.VoiceCommand
 dev.mikoto2000.rei.ui.shell.RootCommand -> dev.mikoto2000.rei.workcontext.WorkCommand
+dev.mikoto2000.rei.ui.shell.SessionCommand -> dev.mikoto2000.rei.application.run.ResourceNotFoundException
 dev.mikoto2000.rei.ui.shell.SessionCommand -> dev.mikoto2000.rei.application.session.HistoryPage
 dev.mikoto2000.rei.ui.shell.SessionCommand -> dev.mikoto2000.rei.application.session.SessionMetadata
 dev.mikoto2000.rei.ui.shell.SessionCommand -> dev.mikoto2000.rei.application.session.SessionQueryService
@@ -2666,6 +2683,7 @@ dev.mikoto2000.rei.urlfetch.UrlContentFetchService -> dev.mikoto2000.rei.websear
 dev.mikoto2000.rei.urlfetch.UrlContentFetchTools -> dev.mikoto2000.rei.http.FetchScope
 dev.mikoto2000.rei.urlfetch.UrlContentFetchTools -> dev.mikoto2000.rei.websearch.WebResultBudget
 dev.mikoto2000.rei.urlfetch.UrlFetchProperties -> dev.mikoto2000.rei.http.HttpFetchPolicy
+dev.mikoto2000.rei.urlfetch.UrlValidator -> dev.mikoto2000.rei.http.HttpFetchException
 dev.mikoto2000.rei.urlfetch.UrlValidator -> dev.mikoto2000.rei.http.PublicNetworkPolicy
 dev.mikoto2000.rei.vectordocument.RerankService -> dev.mikoto2000.rei.core.chat.RunCancellation
 dev.mikoto2000.rei.vectordocument.RerankService -> dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException
@@ -2824,6 +2842,7 @@ dev.mikoto2000.rei.workcontext.WorkContextFormatter -> dev.mikoto2000.rei.conver
 dev.mikoto2000.rei.workcontext.WorkContextFormatter -> dev.mikoto2000.rei.core.contextbudget.TokenEstimator
 dev.mikoto2000.rei.workcontext.WorkContextOutput -> dev.mikoto2000.rei.subagent.SubAgentResultParser
 dev.mikoto2000.rei.workcontext.WorkContextOutput -> dev.mikoto2000.rei.subagent.SubAgentResultSchema
+dev.mikoto2000.rei.workcontext.WorkContextOutput -> dev.mikoto2000.rei.subagent.SubAgentValidationException
 dev.mikoto2000.rei.workcontext.WorkContextPresenter -> dev.mikoto2000.rei.core.project.ProjectContext
 dev.mikoto2000.rei.workcontext.WorkContextService -> dev.mikoto2000.rei.application.run.ResourceNotFoundException
 dev.mikoto2000.rei.workcontext.WorkContextService -> dev.mikoto2000.rei.application.session.SessionMetadata

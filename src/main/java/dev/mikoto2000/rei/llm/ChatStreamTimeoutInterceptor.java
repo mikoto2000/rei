@@ -48,8 +48,6 @@ final class ChatStreamTimeoutInterceptor implements Interceptor {
       asyncTimeout.exit();
     }
     timeout.clearTimeout().clearDeadline();
-    return chain
-        .withReadTimeout(readTimeoutMillis, TimeUnit.MILLISECONDS)
-        .proceed(chain.request());
+    return chain.withReadTimeout(readTimeoutMillis, TimeUnit.MILLISECONDS).proceed(chain.request());
   }
 }

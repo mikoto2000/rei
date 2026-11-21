@@ -33,9 +33,7 @@ public final class PlanReviewComparison {
       List<String> unresolved) {
     public Comparison {
       conclusions =
-          conclusions == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(conclusions));
+          conclusions == null ? null : Collections.unmodifiableList(new ArrayList<>(conclusions));
       commonFindings =
           commonFindings == null
               ? null
@@ -45,13 +43,9 @@ public final class PlanReviewComparison {
               ? null
               : Collections.unmodifiableMap(new LinkedHashMap<>(independentFindings));
       evidence =
-          evidence == null
-              ? null
-              : Collections.unmodifiableMap(new LinkedHashMap<>(evidence));
+          evidence == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(evidence));
       unresolved =
-          unresolved == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(unresolved));
+          unresolved == null ? null : Collections.unmodifiableList(new ArrayList<>(unresolved));
     }
   }
 
@@ -124,9 +118,8 @@ public final class PlanReviewComparison {
             .sorted()
             .toList();
     var independent = new LinkedHashMap<String, List<String>>();
-    findings.forEach(
-        (id, values) ->
-            independent.put(id, values.stream().filter(v -> counts.get(v) == 1).toList()));
+    findings.forEach((id, values) ->
+        independent.put(id, values.stream().filter(v -> counts.get(v) == 1).toList()));
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (conclusions.size() > 1)
       unresolved.add(

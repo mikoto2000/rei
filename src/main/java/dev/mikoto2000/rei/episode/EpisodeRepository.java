@@ -35,50 +35,48 @@ public class EpisodeRepository {
   public EpisodeRepository(@Qualifier("memoryConsolidationDataSource") DataSource source) {
     var db = JdbcClient.create(source);
     var transactions = new TransactionTemplate(new DataSourceTransactionManager(source));
-    transactions.execute(
-        s -> {
-          db.sql(
-                  "CREATE TABLE IF NOT EXISTS episodes(id TEXT NOT NULL,revision TEXT NOT NULL,project_id TEXT NOT NULL,session_id TEXT NOT NULL,occurred_at TEXT NOT NULL,created_at TEXT NOT NULL,record TEXT NOT NULL,PRIMARY KEY(id,revision))")
-              .update();
-          db.sql(
-                  "CREATE INDEX IF NOT EXISTS episode_project_time ON episodes(project_id,occurred_at)")
-              .update();
-          db.sql("CREATE INDEX IF NOT EXISTS episode_revision_owner ON episodes(id,project_id)")
-              .update();
-          db.sql("CREATE INDEX IF NOT EXISTS episode_session ON episodes(session_id)").update();
-          db.sql(
-                  "CREATE TABLE IF NOT EXISTS episode_dense_indexed(id TEXT PRIMARY KEY,revision TEXT NOT NULL)")
-              .update();
-          if (!db.sql("PRAGMA table_info(episode_dense_indexed)")
-              .query((r, n) -> r.getString("name"))
-              .list()
-              .contains("generation"))
-            db.sql(
-                    "ALTER TABLE episode_dense_indexed ADD COLUMN generation TEXT NOT NULL DEFAULT 'default'")
-                .update();
-          db.sql(
-                  "CREATE TABLE IF NOT EXISTS episode_processing_checkpoints(session_id TEXT PRIMARY KEY,position INTEGER NOT NULL)")
-              .update();
-          db.sql(
-                  "CREATE TABLE IF NOT EXISTS episode_processing_leases(session_id TEXT PRIMARY KEY,owner TEXT NOT NULL,expires_at INTEGER NOT NULL)")
-              .update();
-          db.sql(
-                  "CREATE TABLE IF NOT EXISTS episode_sources(episode_id TEXT NOT NULL,revision TEXT NOT NULL,session_id TEXT NOT NULL,run_id TEXT NOT NULL,speaker TEXT NOT NULL,source_id TEXT NOT NULL DEFAULT '',PRIMARY KEY(episode_id,revision,session_id,run_id,speaker,source_id))")
-              .update();
-          if (!db.sql("PRAGMA table_info(episode_sources)")
-              .query((r, n) -> r.getString("name"))
-              .list()
-              .contains("source_id"))
-            db.sql("ALTER TABLE episode_sources ADD COLUMN source_id TEXT NOT NULL DEFAULT ''")
-                .update();
-          db.sql(
-                  "CREATE TABLE IF NOT EXISTS episode_relations(episode_id TEXT NOT NULL,target_id TEXT NOT NULL,kind TEXT NOT NULL,PRIMARY KEY(episode_id,target_id,kind))")
-              .update();
-          db.sql(
-                  "CREATE VIRTUAL TABLE IF NOT EXISTS episode_fts USING fts5(id UNINDEXED,revision UNINDEXED,content,tokenize='trigram')")
-              .update();
-          return null;
-        });
+    transactions.execute(s -> {
+      db.sql(
+              "CREATE TABLE IF NOT EXISTS episodes(id TEXT NOT NULL,revision TEXT NOT NULL,project_id TEXT NOT NULL,session_id TEXT NOT NULL,occurred_at TEXT NOT NULL,created_at TEXT NOT NULL,record TEXT NOT NULL,PRIMARY KEY(id,revision))")
+          .update();
+      db.sql("CREATE INDEX IF NOT EXISTS episode_project_time ON episodes(project_id,occurred_at)")
+          .update();
+      db.sql("CREATE INDEX IF NOT EXISTS episode_revision_owner ON episodes(id,project_id)")
+          .update();
+      db.sql("CREATE INDEX IF NOT EXISTS episode_session ON episodes(session_id)").update();
+      db.sql(
+              "CREATE TABLE IF NOT EXISTS episode_dense_indexed(id TEXT PRIMARY KEY,revision TEXT NOT NULL)")
+          .update();
+      if (!db.sql("PRAGMA table_info(episode_dense_indexed)")
+          .query((r, n) -> r.getString("name"))
+          .list()
+          .contains("generation"))
+        db.sql(
+                "ALTER TABLE episode_dense_indexed ADD COLUMN generation TEXT NOT NULL DEFAULT 'default'")
+            .update();
+      db.sql(
+              "CREATE TABLE IF NOT EXISTS episode_processing_checkpoints(session_id TEXT PRIMARY KEY,position INTEGER NOT NULL)")
+          .update();
+      db.sql(
+              "CREATE TABLE IF NOT EXISTS episode_processing_leases(session_id TEXT PRIMARY KEY,owner TEXT NOT NULL,expires_at INTEGER NOT NULL)")
+          .update();
+      db.sql(
+              "CREATE TABLE IF NOT EXISTS episode_sources(episode_id TEXT NOT NULL,revision TEXT NOT NULL,session_id TEXT NOT NULL,run_id TEXT NOT NULL,speaker TEXT NOT NULL,source_id TEXT NOT NULL DEFAULT '',PRIMARY KEY(episode_id,revision,session_id,run_id,speaker,source_id))")
+          .update();
+      if (!db.sql("PRAGMA table_info(episode_sources)")
+          .query((r, n) -> r.getString("name"))
+          .list()
+          .contains("source_id"))
+        db.sql("ALTER TABLE episode_sources ADD COLUMN source_id TEXT NOT NULL DEFAULT ''")
+            .update();
+      db.sql(
+              "CREATE TABLE IF NOT EXISTS episode_relations(episode_id TEXT NOT NULL,target_id TEXT NOT NULL,kind TEXT NOT NULL,PRIMARY KEY(episode_id,target_id,kind))")
+          .update();
+      db.sql(
+              "CREATE VIRTUAL TABLE IF NOT EXISTS episode_fts USING fts5(id UNINDEXED,revision UNINDEXED,content,tokenize='trigram')")
+          .update();
+      return null;
+    });
     super();
     this.db = db;
     this.transactions = transactions;
@@ -120,82 +118,81 @@ public class EpisodeRepository {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (expected < 0 || next < expected || episodes.size() > 50)
       throw new IllegalArgumentException("Invalid episode batch");
-    transactions.execute(
-        s -> {
-          db.sql("INSERT OR IGNORE INTO episode_processing_checkpoints VALUES(?,0)")
-              .param(session)
-              .update();
-          if (db.sql(
-                      "UPDATE episode_processing_checkpoints SET position=? WHERE session_id=? AND position=?")
-                  .params(next, session, expected)
-                  .update()
-              != 1) throw new IllegalStateException("Episode checkpoint changed; retry");
-          for (var episode : episodes) {
-            if (!episode.sessionId().equals(session))
-              throw new IllegalArgumentException("Episode belongs to another session");
-            var owner =
-                db.sql("SELECT project_id FROM episodes WHERE id=? LIMIT 1")
-                    .param(episode.id())
-                    .query(String.class)
-                    .optional();
-            if (owner.isPresent() && !owner.get().equals(episode.projectId()))
-              throw new IllegalArgumentException("Episode belongs to another project");
-            String record = encode(episode);
-            if (new dev.mikoto2000.rei.memory.util.SensitiveInfoDetector()
-                .containsSensitiveInfo(
-                    episode.title()
-                        + episode.summary()
-                        + episode.claims().stream()
-                            .map(Episode.Claim::text)
-                            .reduce("", String::concat)))
-              throw new IllegalArgumentException("Sensitive episode content");
-            int inserted =
-                db.sql("INSERT OR IGNORE INTO episodes VALUES(?,?,?,?,?,?,?)")
-                    .params(
-                        episode.id(),
-                        episode.revision(),
-                        episode.projectId(),
-                        session,
-                        EpisodeTimeRange.sortable(java.time.Instant.parse(episode.occurredAt())),
-                        java.time.Instant.now().toString(),
-                        record)
-                    .update();
-            if (inserted == 0) {
-              String old =
-                  db.sql("SELECT record FROM episodes WHERE id=? AND revision=?")
-                      .params(episode.id(), episode.revision())
-                      .query(String.class)
-                      .single();
-              if (!old.equals(record))
-                throw new IllegalArgumentException("Immutable episode revision conflict");
-              continue;
-            }
-            for (var claim : episode.claims())
-              db.sql(
-                      "INSERT OR IGNORE INTO episode_sources(episode_id,revision,session_id,run_id,speaker,source_id) VALUES(?,?,?,?,?,?)")
-                  .params(
-                      episode.id(),
-                      episode.revision(),
-                      session,
-                      claim.runId(),
-                      claim.speaker(),
-                      Objects.toString(claim.sourceId(), ""))
-                  .update();
-            db.sql("INSERT INTO episode_fts VALUES(?,?,?)")
+    transactions.execute(s -> {
+      db.sql("INSERT OR IGNORE INTO episode_processing_checkpoints VALUES(?,0)")
+          .param(session)
+          .update();
+      if (db.sql(
+                  "UPDATE episode_processing_checkpoints SET position=? WHERE session_id=? AND position=?")
+              .params(next, session, expected)
+              .update()
+          != 1) throw new IllegalStateException("Episode checkpoint changed; retry");
+      for (var episode : episodes) {
+        if (!episode.sessionId().equals(session))
+          throw new IllegalArgumentException("Episode belongs to another session");
+        var owner =
+            db.sql("SELECT project_id FROM episodes WHERE id=? LIMIT 1")
+                .param(episode.id())
+                .query(String.class)
+                .optional();
+        if (owner.isPresent() && !owner.get().equals(episode.projectId()))
+          throw new IllegalArgumentException("Episode belongs to another project");
+        String record = encode(episode);
+        if (new dev.mikoto2000.rei.memory.util.SensitiveInfoDetector()
+            .containsSensitiveInfo(
+                episode.title()
+                    + episode.summary()
+                    + episode.claims().stream()
+                        .map(Episode.Claim::text)
+                        .reduce("", String::concat)))
+          throw new IllegalArgumentException("Sensitive episode content");
+        int inserted =
+            db.sql("INSERT OR IGNORE INTO episodes VALUES(?,?,?,?,?,?,?)")
                 .params(
                     episode.id(),
                     episode.revision(),
-                    episode.title()
-                        + " "
-                        + episode.summary()
-                        + " "
-                        + episode.claims().stream()
-                            .map(Episode.Claim::text)
-                            .reduce("", (a, b) -> a + " " + b))
+                    episode.projectId(),
+                    session,
+                    EpisodeTimeRange.sortable(java.time.Instant.parse(episode.occurredAt())),
+                    java.time.Instant.now().toString(),
+                    record)
                 .update();
-          }
-          return null;
-        });
+        if (inserted == 0) {
+          String old =
+              db.sql("SELECT record FROM episodes WHERE id=? AND revision=?")
+                  .params(episode.id(), episode.revision())
+                  .query(String.class)
+                  .single();
+          if (!old.equals(record))
+            throw new IllegalArgumentException("Immutable episode revision conflict");
+          continue;
+        }
+        for (var claim : episode.claims())
+          db.sql(
+                  "INSERT OR IGNORE INTO episode_sources(episode_id,revision,session_id,run_id,speaker,source_id) VALUES(?,?,?,?,?,?)")
+              .params(
+                  episode.id(),
+                  episode.revision(),
+                  session,
+                  claim.runId(),
+                  claim.speaker(),
+                  Objects.toString(claim.sourceId(), ""))
+              .update();
+        db.sql("INSERT INTO episode_fts VALUES(?,?,?)")
+            .params(
+                episode.id(),
+                episode.revision(),
+                episode.title()
+                    + " "
+                    + episode.summary()
+                    + " "
+                    + episode.claims().stream()
+                        .map(Episode.Claim::text)
+                        .reduce("", (a, b) -> a + " " + b))
+            .update();
+      }
+      return null;
+    });
   }
 
   /** 対象を特定できるよう、経験の記録保存と検索の窓口を探す。 */
@@ -315,15 +312,14 @@ public class EpisodeRepository {
             .query(String.class)
             .optional()
             .orElseThrow(() -> new IllegalArgumentException("Unknown or foreign related memory"));
-    transactions.execute(
-        s -> {
-          for (String run : runs)
-            db.sql(
-                    "INSERT OR IGNORE INTO episode_relations SELECT DISTINCT e.id,?,? FROM episodes e JOIN episode_sources s ON s.episode_id=e.id AND s.revision=e.revision WHERE e.project_id=? AND s.session_id=? AND s.run_id=?")
-                .params(memory, type, project, session, run)
-                .update();
-          return null;
-        });
+    transactions.execute(s -> {
+      for (String run : runs)
+        db.sql(
+                "INSERT OR IGNORE INTO episode_relations SELECT DISTINCT e.id,?,? FROM episodes e JOIN episode_sources s ON s.episode_id=e.id AND s.revision=e.revision WHERE e.project_id=? AND s.session_id=? AND s.run_id=?")
+            .params(memory, type, project, session, run)
+            .update();
+      return null;
+    });
   }
 
   /** 過去の経験の活用で用いる関連一覧を返す。 */
@@ -341,18 +337,17 @@ public class EpisodeRepository {
    * <p>Only actual persisted Work Context items supplied by WorkContextService can be linked.
    */
   public void linkWorkContext(dev.mikoto2000.rei.workcontext.WorkContext context, String session) {
-    transactions.execute(
-        s -> {
-          for (var item : context.items().stream().limit(100).toList())
-            for (var source : item.evidence().stream().limit(32).toList()) {
-              if (!session.equals(source.sessionId()) || source.runId() == null) continue;
-              db.sql(
-                      "INSERT OR IGNORE INTO episode_relations SELECT DISTINCT e.id,?,'WORK_CONTEXT' FROM episodes e JOIN episode_sources s ON s.episode_id=e.id AND s.revision=e.revision WHERE e.project_id=? AND s.session_id=? AND s.run_id=?")
-                  .params(item.id(), context.projectId(), session, source.runId())
-                  .update();
-            }
-          return null;
-        });
+    transactions.execute(s -> {
+      for (var item : context.items().stream().limit(100).toList())
+        for (var source : item.evidence().stream().limit(32).toList()) {
+          if (!session.equals(source.sessionId()) || source.runId() == null) continue;
+          db.sql(
+                  "INSERT OR IGNORE INTO episode_relations SELECT DISTINCT e.id,?,'WORK_CONTEXT' FROM episodes e JOIN episode_sources s ON s.episode_id=e.id AND s.revision=e.revision WHERE e.project_id=? AND s.session_id=? AND s.run_id=?")
+              .params(item.id(), context.projectId(), session, source.runId())
+              .update();
+        }
+      return null;
+    });
   }
 
   /** 指定された検索条件に合う情報を探し、候補を返す。 */

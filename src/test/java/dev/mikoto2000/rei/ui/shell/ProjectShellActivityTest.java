@@ -170,15 +170,13 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
     text.setLength(0);
     try (var worker = java.util.concurrent.Executors.newSingleThreadExecutor()) {
       worker
-          .submit(
-              () -> {
-                activity.onEvent(
-                    events.messageDelta("old-message", "OLD-LEAK").withOwnership(first));
-                activity.onEvent(
-                    events.messageStarted("new-message", "assistant").withOwnership(second));
-                activity.onEvent(
-                    events.messageDelta("new-message", "NEW-CONTENT").withOwnership(second));
-              })
+          .submit(() -> {
+            activity.onEvent(events.messageDelta("old-message", "OLD-LEAK").withOwnership(first));
+            activity.onEvent(
+                events.messageStarted("new-message", "assistant").withOwnership(second));
+            activity.onEvent(
+                events.messageDelta("new-message", "NEW-CONTENT").withOwnership(second));
+          })
           .get();
     }
     assertThat(text.toString()).contains("NEW-CONTENT").doesNotContain("OLD-LEAK");

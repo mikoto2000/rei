@@ -39,19 +39,18 @@ class ActiveRunPromptTest {
     var buffer = new BufferImpl();
     when(reader.getBuffer()).thenReturn(buffer);
     when(reader.readLine(anyString()))
-        .thenAnswer(
-            call -> {
-              buffer.write("入力途中");
-              buffer.cursor(2);
-              store.update(
-                  "run",
-                  new dev.mikoto2000.rei.context.TaskStateSnapshot(
-                      "目的", "IN_PROGRESS", java.util.List.of("調査"), java.util.List.of("実装")));
-              assertThat(buffer.toString()).isEqualTo("入力途中");
-              assertThat(buffer.cursor()).isEqualTo(2);
-              verify(reader).setPrompt("updated progress");
-              return buffer.toString();
-            });
+        .thenAnswer(call -> {
+          buffer.write("入力途中");
+          buffer.cursor(2);
+          store.update(
+              "run",
+              new dev.mikoto2000.rei.context.TaskStateSnapshot(
+                  "目的", "IN_PROGRESS", java.util.List.of("調査"), java.util.List.of("実装")));
+          assertThat(buffer.toString()).isEqualTo("入力途中");
+          assertThat(buffer.cursor()).isEqualTo(2);
+          verify(reader).setPrompt("updated progress");
+          return buffer.toString();
+        });
     try (var prompt = new ActiveRunPrompt(reader, null, () -> "updated progress", display)) {
       prompt.readLine();
     }
@@ -81,27 +80,26 @@ class ActiveRunPromptTest {
     var tasks = new ArrayList<Runnable>();
     var router = new ConversationInputRouter(tasks::add, (c, p, q) -> {});
     when(reader.readLine(anyString()))
-        .thenAnswer(
-            call -> {
-              buffer.write("入力途中");
-              buffer.cursor(2);
-              if (type == dev.mikoto2000.rei.core.execution.ExecutionType.AGENT) {
-                router.submit(Path.of("a"), "chat:main", "work");
-              } else {
-                router.submitBackground(
-                    new dev.mikoto2000.rei.core.project.ProjectContext(
-                        UUID.randomUUID().toString(), "rei", Path.of("a")),
-                    type,
-                    "work",
-                    e -> {});
-              }
-              verify(reader).setPrompt("[rei] [1 running]\n09:42 test-model> ");
-              tasks.getFirst().run();
-              verify(reader).setPrompt("[rei] [0 running]\n09:42 test-model> ");
-              assertThat(buffer.toString()).isEqualTo("入力途中");
-              assertThat(buffer.cursor()).isEqualTo(2);
-              return buffer.toString();
-            });
+        .thenAnswer(call -> {
+          buffer.write("入力途中");
+          buffer.cursor(2);
+          if (type == dev.mikoto2000.rei.core.execution.ExecutionType.AGENT) {
+            router.submit(Path.of("a"), "chat:main", "work");
+          } else {
+            router.submitBackground(
+                new dev.mikoto2000.rei.core.project.ProjectContext(
+                    UUID.randomUUID().toString(), "rei", Path.of("a")),
+                type,
+                "work",
+                e -> {});
+          }
+          verify(reader).setPrompt("[rei] [1 running]\n09:42 test-model> ");
+          tasks.getFirst().run();
+          verify(reader).setPrompt("[rei] [0 running]\n09:42 test-model> ");
+          assertThat(buffer.toString()).isEqualTo("入力途中");
+          assertThat(buffer.cursor()).isEqualTo(2);
+          return buffer.toString();
+        });
     try (var prompt =
         new ActiveRunPrompt(
             reader,

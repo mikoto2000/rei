@@ -361,12 +361,11 @@ class ImplementationRequestServiceTest {
     var release = new java.util.concurrent.CountDownLatch(1);
     when(delegation.executeSpecification(
             any(), anyString(), any(), anyString(), anyString(), anyInt()))
-        .thenAnswer(
-            call -> {
-              started.countDown();
-              assertTrue(release.await(10, java.util.concurrent.TimeUnit.SECONDS));
-              return receipt("READY_FOR_APPROVAL");
-            });
+        .thenAnswer(call -> {
+          started.countDown();
+          assertTrue(release.await(10, java.util.concurrent.TimeUnit.SECONDS));
+          return receipt("READY_FOR_APPROVAL");
+        });
     var other =
         new ImplementationRequestService(
             repository,
@@ -470,11 +469,10 @@ class ImplementationRequestServiceTest {
     var prepared = service.prepare(run, specification, null);
     when(delegation.executeSpecification(
             any(), anyString(), any(), anyString(), anyString(), anyInt()))
-        .thenAnswer(
-            call -> {
-              assertEquals("exit 0", call.getArgument(4));
-              return receipt("READY_FOR_APPROVAL");
-            });
+        .thenAnswer(call -> {
+          assertEquals("exit 0", call.getArgument(4));
+          return receipt("READY_FOR_APPROVAL");
+        });
     service.execute(run, prepared.requestId(), 1, prepared.specificationSha256());
   }
 

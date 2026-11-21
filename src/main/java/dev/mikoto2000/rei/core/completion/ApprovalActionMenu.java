@@ -111,12 +111,11 @@ public final class ApprovalActionMenu implements AutoCloseable {
   public synchronized void follow(PendingSource source) {
     if (updates != null) throw new IllegalStateException("Already following approvals");
     updates =
-        java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
-            r -> {
-              var thread = new Thread(r, "approval-display");
-              thread.setDaemon(true);
-              return thread;
-            });
+        java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+          var thread = new Thread(r, "approval-display");
+          thread.setDaemon(true);
+          return thread;
+        });
     updates.scheduleWithFixedDelay(
         () -> {
           if (closed) return;

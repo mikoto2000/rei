@@ -201,6 +201,7 @@ business: dev.mikoto2000.rei.conversation.SqliteConversationTurnStore -> dev.mik
 business: dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.chat.BoundedToolLoop
 business: dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.chat.BoundedToolLoop$Outcome
+business: dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.chat.BoundedToolLoop$SharedBudgetExceeded
 business: dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.chat.RunCancellation
 business: dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.chat.ToolLoopSupport
 business: dev.mikoto2000.rei.doctor.DoctorActiveService -> dev.mikoto2000.rei.core.dependency.JavaHttpDependencyProbe
@@ -290,9 +291,11 @@ business: dev.mikoto2000.rei.externalagent.BeginnerReviewRequest -> dev.mikoto20
 business: dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.chat.BoundedToolLoop
 business: dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.chat.BoundedToolLoop$Outcome
+business: dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.chat.BoundedToolLoop$SharedBudgetExceeded
 business: dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.chat.RunCancellation
 business: dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.chat.ToolLoopSupport
 business: dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.policy.ToolPermissionGuard
+business: dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException
 business: dev.mikoto2000.rei.externalagent.BeginnerReviewService -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 business: dev.mikoto2000.rei.externalagent.ClaudeCodeExternalAgentExecutor -> dev.mikoto2000.rei.core.TextChangeSetService$Request
 business: dev.mikoto2000.rei.externalagent.ClaudeCodeExternalAgentExecutor -> dev.mikoto2000.rei.core.chat.RunCancellation
@@ -602,6 +605,7 @@ business: dev.mikoto2000.rei.slack.SlackAgentTools -> dev.mikoto2000.rei.core.st
 business: dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.core.chat.AgentRunContext$RequestSource
 business: dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.core.chat.ConversationInputRouter
+business: dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.core.chat.ProjectRunQueue$CapacityExceededException
 business: dev.mikoto2000.rei.slack.SlackRuntime -> dev.mikoto2000.rei.core.project.ProjectRegistry
 business: dev.mikoto2000.rei.slack.SlackSdkConnection -> dev.mikoto2000.rei.core.chat.ConversationInputRouter
 business: dev.mikoto2000.rei.slack.SlackSdkConnection -> dev.mikoto2000.rei.core.project.ProjectRegistry

@@ -59,8 +59,7 @@ final class CapturingChatModel implements ChatModel {
   /** 用途に応じたモデル利用で用いるlogicalを返す。 */
   private CaptureStore.LogicalCall logical(Prompt prompt) {
     if (!(prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options))
-      return null;
+        instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options)) return null;
     var context = options.getToolContext();
     if (context == null) return null;
     AgentRunContext owner = null;
@@ -150,30 +149,29 @@ final class CapturingChatModel implements ChatModel {
 
   /** 用途に応じたモデル利用で用いる逐次データを返す。 */
   public Flux<ChatResponse> stream(Prompt prompt) {
-    return Flux.defer(
-        () -> {
-          var logical = logical(prompt);
-          if (logical == null) return delegate.stream(prompt);
-          Owned owned;
-          try {
-            owned = create(logical);
-          } catch (RuntimeException failure) {
-            store.missed(logical);
-            return delegate.stream(prompt);
-          }
-          boolean handedOff = false;
-          try {
-            var stream = owned.model.stream(prompt)
-                .doFinally(
-                    signal -> {
-                      if (signal == reactor.core.publisher.SignalType.CANCEL) store.cancel(logical);
-                      owned.close();
-                    });
-            handedOff = true;
-            return stream;
-          } finally {
-            if (!handedOff) owned.close();
-          }
-        });
+    return Flux.defer(() -> {
+      var logical = logical(prompt);
+      if (logical == null) return delegate.stream(prompt);
+      Owned owned;
+      try {
+        owned = create(logical);
+      } catch (RuntimeException failure) {
+        store.missed(logical);
+        return delegate.stream(prompt);
+      }
+      boolean handedOff = false;
+      try {
+        var stream =
+            owned.model.stream(prompt)
+                .doFinally(signal -> {
+                  if (signal == reactor.core.publisher.SignalType.CANCEL) store.cancel(logical);
+                  owned.close();
+                });
+        handedOff = true;
+        return stream;
+      } finally {
+        if (!handedOff) owned.close();
+      }
+    });
   }
 }

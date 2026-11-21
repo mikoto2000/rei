@@ -259,13 +259,12 @@ class HttpCacheSingleFlightTest {
     try (var cache = cache(new HttpCacheProperties());
         var pool = Executors.newFixedThreadPool(2)) {
       var first =
-          pool.submit(
-              () ->
-                  cache.fetch(
-                      request(uri),
-                      FetchOperation.active().withTimeout(Duration.ofMillis(400)),
-                      HttpFetchObserver.NONE,
-                      fetcher));
+          pool.submit(() ->
+              cache.fetch(
+                  request(uri),
+                  FetchOperation.active().withTimeout(Duration.ofMillis(400)),
+                  HttpFetchObserver.NONE,
+                  fetcher));
       assertTrue(started.await(2, TimeUnit.SECONDS));
       var second = pool.submit(() -> get(cache, uri, new AtomicBoolean()));
       await(() -> cache.waiters() == 2);

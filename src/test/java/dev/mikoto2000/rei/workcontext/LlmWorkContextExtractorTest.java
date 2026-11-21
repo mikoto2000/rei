@@ -46,24 +46,19 @@ class LlmWorkContextExtractorTest {
     when(models.memoryChatModel()).thenReturn(model);
     when(models.chatOptions("memory", null)).thenReturn(base);
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              var options = (OpenAiChatOptions) ((Prompt) call.getArgument(0)).getOptions();
-              assertEquals(
+        .thenAnswer(call -> {
+          var options = (OpenAiChatOptions) ((Prompt) call.getArgument(0)).getOptions();
+          assertEquals(
+              Map.of(
+                  "chat_template_kwargs",
                   Map.of(
-                      "chat_template_kwargs",
-                      Map.of(
-                          "enable_thinking",
-                          thinking == null ? true : thinking,
-                          "format",
-                          "original"),
-                      "other",
-                      7),
-                  options.getExtraBody());
-              return Flux.just(
-                  new ChatResponse(
-                      List.of(new Generation(new AssistantMessage("{\"changes\":[]}")))));
-            });
+                      "enable_thinking", thinking == null ? true : thinking, "format", "original"),
+                  "other",
+                  7),
+              options.getExtraBody());
+          return Flux.just(
+              new ChatResponse(List.of(new Generation(new AssistantMessage("{\"changes\":[]}")))));
+        });
     var extractor =
         new LlmWorkContextExtractor(
             models,
@@ -103,26 +98,23 @@ class LlmWorkContextExtractorTest {
     when(models.memoryChatModel()).thenReturn(model);
     var count = new java.util.concurrent.atomic.AtomicInteger();
     when(models.chatOptions("memory", null))
-        .thenAnswer(
-            call -> {
-              int limit = count.getAndIncrement() == 0 ? 32000 : 512;
-              var builder = OpenAiChatOptions.builder();
-              return completion
-                  ? builder.maxCompletionTokens(limit).build()
-                  : builder.maxTokens(limit).build();
-            });
+        .thenAnswer(call -> {
+          int limit = count.getAndIncrement() == 0 ? 32000 : 512;
+          var builder = OpenAiChatOptions.builder();
+          return completion
+              ? builder.maxCompletionTokens(limit).build()
+              : builder.maxTokens(limit).build();
+        });
     var limits = new ArrayList<Integer>();
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              var options = (OpenAiChatOptions) ((Prompt) call.getArgument(0)).getOptions();
-              limits.add(completion ? options.getMaxCompletionTokens() : options.getMaxTokens());
-              assertEquals(
-                  null, completion ? options.getMaxTokens() : options.getMaxCompletionTokens());
-              return Flux.just(
-                  new ChatResponse(
-                      List.of(new Generation(new AssistantMessage("{\"changes\":[]}")))));
-            });
+        .thenAnswer(call -> {
+          var options = (OpenAiChatOptions) ((Prompt) call.getArgument(0)).getOptions();
+          limits.add(completion ? options.getMaxCompletionTokens() : options.getMaxTokens());
+          assertEquals(
+              null, completion ? options.getMaxTokens() : options.getMaxCompletionTokens());
+          return Flux.just(
+              new ChatResponse(List.of(new Generation(new AssistantMessage("{\"changes\":[]}")))));
+        });
     var extractor =
         new LlmWorkContextExtractor(
             models, new WorkContextProperties(false, true, 1200, 12000, 240, 20));
@@ -180,15 +172,14 @@ class LlmWorkContextExtractorTest {
         new ChatResponse(List.of(new Generation(new AssistantMessage("{\"changes\":[]}"))));
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              if (calls.incrementAndGet() == 1) {
-                firstEntered.countDown();
-                return first.asMono().flux();
-              }
-              secondEntered.countDown();
-              return Flux.just(response);
-            });
+        .thenAnswer(call -> {
+          if (calls.incrementAndGet() == 1) {
+            firstEntered.countDown();
+            return first.asMono().flux();
+          }
+          secondEntered.countDown();
+          return Flux.just(response);
+        });
     var extractor =
         new LlmWorkContextExtractor(
             models, new WorkContextProperties(false, true, 1200, 12000, 5, 20));
@@ -197,11 +188,10 @@ class LlmWorkContextExtractorTest {
           executor.submit(() -> extractor.extract(evidence("project a"), List.of(), "COMPLETED"));
       assertTrue(firstEntered.await(2, java.util.concurrent.TimeUnit.SECONDS));
       var b =
-          executor.submit(
-              () -> {
-                secondStarted.countDown();
-                return extractor.extract(evidence("project b"), List.of(), "COMPLETED");
-              });
+          executor.submit(() -> {
+            secondStarted.countDown();
+            return extractor.extract(evidence("project b"), List.of(), "COMPLETED");
+          });
       assertTrue(secondStarted.await(2, java.util.concurrent.TimeUnit.SECONDS));
       try {
         assertFalse(secondEntered.await(100, java.util.concurrent.TimeUnit.MILLISECONDS));
@@ -222,14 +212,12 @@ class LlmWorkContextExtractorTest {
     when(models.chatOptions("work-context", null))
         .thenReturn(OpenAiChatOptions.builder().model("handoff-model").build());
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              Prompt prompt = call.getArgument(0);
-              assertEquals("handoff-model", prompt.getOptions().getModel());
-              return Flux.just(
-                  new ChatResponse(
-                      List.of(new Generation(new AssistantMessage("{\"changes\":[]}")))));
-            });
+        .thenAnswer(call -> {
+          Prompt prompt = call.getArgument(0);
+          assertEquals("handoff-model", prompt.getOptions().getModel());
+          return Flux.just(
+              new ChatResponse(List.of(new Generation(new AssistantMessage("{\"changes\":[]}")))));
+        });
     assertTrue(
         new LlmWorkContextExtractor(
                 models,

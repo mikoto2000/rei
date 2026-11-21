@@ -69,9 +69,8 @@ final class CachedCatalog {
     if (command == null
         || !command.commands().isEmpty()
         || command.options().stream()
-            .allMatch(
-                option ->
-                    option.names().contains("--help") || option.names().contains("--version")))
+            .allMatch(option ->
+                option.names().contains("--help") || option.names().contains("--version")))
       return words;
     var line =
         new picocli.CommandLine(dev.mikoto2000.rei.application.cli.CliGrammar.describe(command));

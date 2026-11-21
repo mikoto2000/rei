@@ -114,16 +114,15 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
       var b = ActivityImages.physicalBounds(g);
       var matches =
           monitors.stream()
-              .filter(
-                  m ->
-                      m != null
-                          && m.bounds() != null
-                          && m.id() != null
-                          && !m.id().isBlank()
-                          && m.bounds().x() == b.x
-                          && m.bounds().y() == b.y
-                          && m.bounds().width() == b.width
-                          && m.bounds().height() == b.height)
+              .filter(m ->
+                  m != null
+                      && m.bounds() != null
+                      && m.id() != null
+                      && !m.id().isBlank()
+                      && m.bounds().x() == b.x
+                      && m.bounds().y() == b.y
+                      && m.bounds().width() == b.width
+                      && m.bounds().height() == b.height)
               .toList();
       if (matches.size() != 1) throw new IllegalStateException("Desktop identity ambiguous");
       mapped.add(

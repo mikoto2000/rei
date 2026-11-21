@@ -29,12 +29,12 @@ class ConversationHistoryServiceTest {
       statement.executeUpdate(
           String.format(
               """
-          INSERT INTO SPRING_AI_CHAT_MEMORY (conversation_id, content, type, timestamp)
-          VALUES
-          ('c1', 'vim の devcontainer を改善したい', 'USER', %d),
-          ('c1', '了解しました', 'ASSISTANT', %d),
-          ('c2', 'neovim plugin の最近動向が気になる', 'USER', %d)
-          """,
+              INSERT INTO SPRING_AI_CHAT_MEMORY (conversation_id, content, type, timestamp)
+              VALUES
+              ('c1', 'vim の devcontainer を改善したい', 'USER', %d),
+              ('c1', '了解しました', 'ASSISTANT', %d),
+              ('c2', 'neovim plugin の最近動向が気になる', 'USER', %d)
+              """,
               now - 2_000, now - 1_000, now));
     }
 

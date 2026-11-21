@@ -46,15 +46,14 @@ class McpFileSnapshotTest {
         try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
           executor
               .submit(
-                  Tools.captureReadingScope(
-                      () -> {
-                        assertThrows(
-                            java.io.IOException.class,
-                            () ->
-                                FileSnapshots.verifiedInventoryAttributes(
-                                    root.toRealPath(), Path.of("runtime-data/config.json")));
-                        return null;
-                      }))
+                  Tools.captureReadingScope(() -> {
+                    assertThrows(
+                        java.io.IOException.class,
+                        () ->
+                            FileSnapshots.verifiedInventoryAttributes(
+                                root.toRealPath(), Path.of("runtime-data/config.json")));
+                    return null;
+                  }))
               .get();
         }
         assertDoesNotThrow(() -> new FileSnapshots().get(root, Path.of("App.java")));

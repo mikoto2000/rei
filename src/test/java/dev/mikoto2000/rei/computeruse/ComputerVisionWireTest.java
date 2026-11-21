@@ -141,33 +141,30 @@ class ComputerVisionWireTest {
       List<com.fasterxml.jackson.databind.JsonNode> requests) {
     return OpenAiChatModel.builder()
         .options(options)
-        .httpClientBuilderCustomizer(
-            builder ->
-                builder
-                    .interceptor(new dev.mikoto2000.rei.llm.ShowUiSdkRequestInterceptor())
-                    .interceptor(
-                        chain -> {
-                          var request = chain.request();
-                          assertEquals(
-                              "https://vision.invalid/v1/chat/completions",
-                              request.url().toString());
-                          assertEquals("POST", request.method());
-                          var body = new okio.Buffer();
-                          assertNotNull(request.body());
-                          request.body().writeTo(body);
-                          var bytes = body.readByteArray();
-                          assertEquals(bytes.length, request.body().contentLength());
-                          requests.add(JSON.readTree(bytes));
-                          return new okhttp3.Response.Builder()
-                              .request(request)
-                              .protocol(okhttp3.Protocol.HTTP_1_1)
-                              .code(200)
-                              .message("OK")
-                              .body(
-                                  okhttp3.ResponseBody.create(
-                                      response, okhttp3.MediaType.get("application/json")))
-                              .build();
-                        }))
+        .httpClientBuilderCustomizer(builder ->
+            builder
+                .interceptor(new dev.mikoto2000.rei.llm.ShowUiSdkRequestInterceptor())
+                .interceptor(chain -> {
+                  var request = chain.request();
+                  assertEquals(
+                      "https://vision.invalid/v1/chat/completions", request.url().toString());
+                  assertEquals("POST", request.method());
+                  var body = new okio.Buffer();
+                  assertNotNull(request.body());
+                  request.body().writeTo(body);
+                  var bytes = body.readByteArray();
+                  assertEquals(bytes.length, request.body().contentLength());
+                  requests.add(JSON.readTree(bytes));
+                  return new okhttp3.Response.Builder()
+                      .request(request)
+                      .protocol(okhttp3.Protocol.HTTP_1_1)
+                      .code(200)
+                      .message("OK")
+                      .body(
+                          okhttp3.ResponseBody.create(
+                              response, okhttp3.MediaType.get("application/json")))
+                      .build();
+                }))
         .build();
   }
 }

@@ -47,15 +47,14 @@ class LlmConversationCompressorTest {
     org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(
         java.time.Duration.ofSeconds(2),
         () -> {
-          assertThatThrownBy(
-                  () ->
-                      compressor.summarizeResult(
-                          "",
-                          List.of(new UserMessage("page")),
-                          100,
-                          new Prompt("owner"),
-                          null,
-                          java.time.Duration.ofMillis(30)))
+          assertThatThrownBy(() ->
+                  compressor.summarizeResult(
+                      "",
+                      List.of(new UserMessage("page")),
+                      100,
+                      new Prompt("owner"),
+                      null,
+                      java.time.Duration.ofMillis(30)))
               .isInstanceOfSatisfying(
                   ContextCompressionException.class,
                   failure -> assertThat(failure.reason()).isEqualTo(TIMEOUT));
@@ -71,12 +70,11 @@ class LlmConversationCompressorTest {
     when(models.chatOptions("context-summary", null))
         .thenReturn(OpenAiChatOptions.builder().model("small-summary").build());
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              Prompt prompt = call.getArgument(0);
-              assertThat(prompt.getOptions().getModel()).isEqualTo("small-summary");
-              return Flux.just(response("summary", "stop"));
-            });
+        .thenAnswer(call -> {
+          Prompt prompt = call.getArgument(0);
+          assertThat(prompt.getOptions().getModel()).isEqualTo("small-summary");
+          return Flux.just(response("summary", "stop"));
+        });
     ObjectProvider<LlmModelProvider> provider = mock();
     when(provider.getObject()).thenReturn(models);
     var properties = new ContextCompressionProperties();
@@ -161,21 +159,20 @@ class LlmConversationCompressorTest {
     var usage =
         new org.springframework.ai.chat.metadata.DefaultUsage(20, 12003, 12023, nativeUsage);
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              Prompt prompt = invocation.getArgument(0);
-              var options = (OpenAiChatOptions) prompt.getOptions();
-              assertThat(prompt.getSystemMessage().getText())
-                  .contains("at most 2000 tokens", "hard text limit is 12000");
-              // Reproduce a model that uses the old 12,000-token API cap for reasoning alone.
-              if (options.getMaxTokens() < 12003) return Flux.just(response("", "length"));
-              return Flux.just(
-                  new ChatResponse(
-                      response("compact summary", "stop").getResults(),
-                      org.springframework.ai.chat.metadata.ChatResponseMetadata.builder()
-                          .usage(usage)
-                          .build()));
-            });
+        .thenAnswer(invocation -> {
+          Prompt prompt = invocation.getArgument(0);
+          var options = (OpenAiChatOptions) prompt.getOptions();
+          assertThat(prompt.getSystemMessage().getText())
+              .contains("at most 2000 tokens", "hard text limit is 12000");
+          // Reproduce a model that uses the old 12,000-token API cap for reasoning alone.
+          if (options.getMaxTokens() < 12003) return Flux.just(response("", "length"));
+          return Flux.just(
+              new ChatResponse(
+                  response("compact summary", "stop").getResults(),
+                  org.springframework.ai.chat.metadata.ChatResponseMetadata.builder()
+                      .usage(usage)
+                      .build()));
+        });
     var budget = mock(dev.mikoto2000.rei.llm.ModelCallBudget.class);
     var summary =
         compressor(model, new ContextCompressionProperties())
@@ -248,10 +245,9 @@ class LlmConversationCompressorTest {
   void blankResponsesHaveTheirOwnReason(String text) {
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response(text, "stop")));
-    assertThatThrownBy(
-            () ->
-                compressor(model, new ContextCompressionProperties())
-                    .summarize("", List.of(), 100, new Prompt("owner")))
+    assertThatThrownBy(() ->
+            compressor(model, new ContextCompressionProperties())
+                .summarize("", List.of(), 100, new Prompt("owner")))
         .isInstanceOfSatisfying(
             ContextCompressionException.class,
             error -> assertThat(error.reason()).isEqualTo(EMPTY_SUMMARY));
@@ -262,10 +258,9 @@ class LlmConversationCompressorTest {
   void thinkingOnlyLengthResponseIsOutputLimitInsteadOfEmptySummary() {
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class))).thenReturn(Flux.just(response("", "length")));
-    assertThatThrownBy(
-            () ->
-                compressor(model, new ContextCompressionProperties())
-                    .summarize("", List.of(), 100, new Prompt("owner")))
+    assertThatThrownBy(() ->
+            compressor(model, new ContextCompressionProperties())
+                .summarize("", List.of(), 100, new Prompt("owner")))
         .isInstanceOfSatisfying(
             ContextCompressionException.class,
             error -> {
@@ -286,10 +281,9 @@ class LlmConversationCompressorTest {
             .build();
     when(model.stream(any(Prompt.class)))
         .thenReturn(Flux.just(new ChatResponse(List.of(new Generation(output)))));
-    assertThatThrownBy(
-            () ->
-                compressor(model, new ContextCompressionProperties())
-                    .summarize("", List.of(), 100, new Prompt("owner")))
+    assertThatThrownBy(() ->
+            compressor(model, new ContextCompressionProperties())
+                .summarize("", List.of(), 100, new Prompt("owner")))
         .isInstanceOfSatisfying(
             ContextCompressionException.class,
             error -> assertThat(error.reason()).isEqualTo(INVALID_RESPONSE));
@@ -319,10 +313,9 @@ class LlmConversationCompressorTest {
             java.nio.charset.StandardCharsets.UTF_8);
     when(model.stream(any(Prompt.class)))
         .thenReturn(Flux.error(new IllegalStateException(PRIVATE, failure)));
-    assertThatThrownBy(
-            () ->
-                compressor(model, new ContextCompressionProperties())
-                    .summarize("", List.of(), 100, new Prompt("owner")))
+    assertThatThrownBy(() ->
+            compressor(model, new ContextCompressionProperties())
+                .summarize("", List.of(), 100, new Prompt("owner")))
         .isInstanceOfSatisfying(
             ContextCompressionException.class,
             error -> {
@@ -341,10 +334,9 @@ class LlmConversationCompressorTest {
     when(failure.statusCode()).thenReturn(429);
     when(failure.getMessage()).thenReturn(PRIVATE);
     when(model.stream(any(Prompt.class))).thenReturn(Flux.error(failure));
-    assertThatThrownBy(
-            () ->
-                compressor(model, new ContextCompressionProperties())
-                    .summarize("", List.of(), 100, new Prompt("owner")))
+    assertThatThrownBy(() ->
+            compressor(model, new ContextCompressionProperties())
+                .summarize("", List.of(), 100, new Prompt("owner")))
         .isInstanceOfSatisfying(
             ContextCompressionException.class,
             error -> {
@@ -396,10 +388,9 @@ class LlmConversationCompressorTest {
   void cancellationIsStillControlFlowInsteadOfDiagnosticFailure() {
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class))).thenReturn(Flux.error(new CancellationException()));
-    assertThatThrownBy(
-            () ->
-                compressor(model, new ContextCompressionProperties())
-                    .summarize("", List.of(), 100, new Prompt("owner")))
+    assertThatThrownBy(() ->
+            compressor(model, new ContextCompressionProperties())
+                .summarize("", List.of(), 100, new Prompt("owner")))
         .isInstanceOf(CancellationException.class);
   }
 
@@ -414,10 +405,9 @@ class LlmConversationCompressorTest {
                 .LLM_CALL_BUDGET_EXCEEDED);
     when(model.stream(any(Prompt.class)))
         .thenReturn(Flux.error(wrapped ? new IllegalStateException(PRIVATE, stopped) : stopped));
-    assertThatThrownBy(
-            () ->
-                compressor(model, new ContextCompressionProperties())
-                    .summarize("", List.of(), 100, new Prompt("owner")))
+    assertThatThrownBy(() ->
+            compressor(model, new ContextCompressionProperties())
+                .summarize("", List.of(), 100, new Prompt("owner")))
         .isSameAs(stopped);
   }
 
@@ -489,11 +479,10 @@ class LlmConversationCompressorTest {
             .build();
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              captured.set(invocation.getArgument(0));
-              return Flux.just(response("summary", "stop"));
-            });
+        .thenAnswer(invocation -> {
+          captured.set(invocation.getArgument(0));
+          return Flux.just(response("summary", "stop"));
+        });
     compressor(model, new ContextCompressionProperties())
         .summarize("", List.of(), 100, new Prompt("owner", original));
     var sent = (OpenAiChatOptions) captured.get().getOptions();

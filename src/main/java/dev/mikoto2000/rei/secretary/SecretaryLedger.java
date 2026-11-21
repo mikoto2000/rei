@@ -31,38 +31,37 @@ public final class SecretaryLedger {
     required(event, 512);
     required(text, 32768);
     String fingerprint = hash(text);
-    return database.transaction(
-        db -> {
-          input(db, project, event, fingerprint);
-          var result = new ArrayList<SecretaryTask>();
-          String[] sentences = text.split("[。！？!?\\r\\n]+");
-          for (int i = 0; i < sentences.length && result.size() < 16; i++) {
-            String sentence = sentences[i].strip();
-            if (sentence.length() > 1000 || !actionable(sentence)) continue;
-            var intent =
-                sentence.matches("(?i).*(したい|進めたい|やりたい|できたら|あたり|someday|would like).*")
-                    ? SecretaryTask.Intent.IDEA
-                    : sentence.matches(".*(約束|必ず|します|will|promise).*")
-                        ? SecretaryTask.Intent.COMMITMENT
-                        : SecretaryTask.Intent.TODO;
-            result.add(
-                register(
-                    db,
-                    project,
-                    event,
-                    i,
-                    fingerprint,
-                    sentence,
-                    intent,
-                    SecretaryTask.Status.CANDIDATE,
-                    null,
-                    3,
-                    List.of(),
-                    List.of(),
-                    "CONVERSATION"));
-          }
-          return List.copyOf(result);
-        });
+    return database.transaction(db -> {
+      input(db, project, event, fingerprint);
+      var result = new ArrayList<SecretaryTask>();
+      String[] sentences = text.split("[。！？!?\\r\\n]+");
+      for (int i = 0; i < sentences.length && result.size() < 16; i++) {
+        String sentence = sentences[i].strip();
+        if (sentence.length() > 1000 || !actionable(sentence)) continue;
+        var intent =
+            sentence.matches("(?i).*(したい|進めたい|やりたい|できたら|あたり|someday|would like).*")
+                ? SecretaryTask.Intent.IDEA
+                : sentence.matches(".*(約束|必ず|します|will|promise).*")
+                    ? SecretaryTask.Intent.COMMITMENT
+                    : SecretaryTask.Intent.TODO;
+        result.add(
+            register(
+                db,
+                project,
+                event,
+                i,
+                fingerprint,
+                sentence,
+                intent,
+                SecretaryTask.Status.CANDIDATE,
+                null,
+                3,
+                List.of(),
+                List.of(),
+                "CONVERSATION"));
+      }
+      return List.copyOf(result);
+    });
   }
 
   private static boolean actionable(String text) {
@@ -94,24 +93,23 @@ public final class SecretaryLedger {
                         tags,
                         references))
                 .toString());
-    return database.transaction(
-        db -> {
-          input(db, project, key, fingerprint);
-          return register(
-              db,
-              project,
-              key,
-              0,
-              fingerprint,
-              title.strip(),
-              intent,
-              SecretaryTask.Status.OPEN,
-              due,
-              priority,
-              tags,
-              references,
-              "EXPLICIT");
-        });
+    return database.transaction(db -> {
+      input(db, project, key, fingerprint);
+      return register(
+          db,
+          project,
+          key,
+          0,
+          fingerprint,
+          title.strip(),
+          intent,
+          SecretaryTask.Status.OPEN,
+          due,
+          priority,
+          tags,
+          references,
+          "EXPLICIT");
+    });
   }
 
   /** Intake an external fact as a candidate; this method cannot confirm or execute it. */
@@ -282,21 +280,20 @@ public final class SecretaryLedger {
     required(project, 128);
     if (offset < 0 || limit < 1 || limit > 1000)
       throw new IllegalArgumentException("Invalid page bounds");
-    return database.read(
-        db -> {
-          try (var query =
-              db.prepareStatement(
-                  "SELECT record FROM secretary_tasks WHERE project=? ORDER BY priority,id LIMIT ? OFFSET ?")) {
-            query.setString(1, project);
-            query.setInt(2, limit);
-            query.setInt(3, offset);
-            var result = new ArrayList<SecretaryTask>();
-            try (var rows = query.executeQuery()) {
-              while (rows.next()) result.add(decode(rows.getString(1)));
-            }
-            return List.copyOf(result);
-          }
-        });
+    return database.read(db -> {
+      try (var query =
+          db.prepareStatement(
+              "SELECT record FROM secretary_tasks WHERE project=? ORDER BY priority,id LIMIT ? OFFSET ?")) {
+        query.setString(1, project);
+        query.setInt(2, limit);
+        query.setInt(3, offset);
+        var result = new ArrayList<SecretaryTask>();
+        try (var rows = query.executeQuery()) {
+          while (rows.next()) result.add(decode(rows.getString(1)));
+        }
+        return List.copyOf(result);
+      }
+    });
   }
 
   public SecretaryTask transition(
@@ -329,10 +326,9 @@ public final class SecretaryLedger {
     validate(project, title, intent, priority, tags, references);
     if (status == null || revision < 0)
       throw new IllegalArgumentException("Status and revision required");
-    return database.transaction(
-        db ->
-            updateWithin(
-                db, project, id, revision, title, intent, status, due, priority, tags, references));
+    return database.transaction(db ->
+        updateWithin(
+            db, project, id, revision, title, intent, status, due, priority, tags, references));
   }
 
   /** Same ledger invariants inside an already-owned storage transaction. */
@@ -421,37 +417,35 @@ public final class SecretaryLedger {
 
   public List<SecretaryTask> history(String project, String id) {
     get(project, id);
-    return database.read(
-        db -> {
-          try (var query =
-              db.prepareStatement(
-                  "SELECT record FROM secretary_history WHERE task=? ORDER BY revision LIMIT 1000")) {
-            query.setString(1, id);
-            var result = new ArrayList<SecretaryTask>();
-            try (var rows = query.executeQuery()) {
-              while (rows.next()) result.add(decode(rows.getString(1)));
-            }
-            return List.copyOf(result);
-          }
-        });
+    return database.read(db -> {
+      try (var query =
+          db.prepareStatement(
+              "SELECT record FROM secretary_history WHERE task=? ORDER BY revision LIMIT 1000")) {
+        query.setString(1, id);
+        var result = new ArrayList<SecretaryTask>();
+        try (var rows = query.executeQuery()) {
+          while (rows.next()) result.add(decode(rows.getString(1)));
+        }
+        return List.copyOf(result);
+      }
+    });
   }
 
   public List<String> sources(String project, String id) {
     get(project, id);
-    return database.read(
-        db -> {
-          try (var query =
-              db.prepareStatement(
-                  "SELECT event,ordinal FROM secretary_sources WHERE project=? AND task=? ORDER BY event,ordinal LIMIT 1000")) {
-            query.setString(1, project);
-            query.setString(2, id);
-            var result = new ArrayList<String>();
-            try (var rows = query.executeQuery()) {
-              while (rows.next()) result.add(rows.getString(1) + "#" + rows.getInt(2));
-            }
-            return List.copyOf(result);
-          }
-        });
+    return database.read(db -> {
+      try (var query =
+          db.prepareStatement(
+              "SELECT event,ordinal FROM secretary_sources WHERE project=? AND task=? ORDER BY event,ordinal LIMIT 1000")) {
+        query.setString(1, project);
+        query.setString(2, id);
+        var result = new ArrayList<String>();
+        try (var rows = query.executeQuery()) {
+          while (rows.next()) result.add(rows.getString(1) + "#" + rows.getInt(2));
+        }
+        return List.copyOf(result);
+      }
+    });
   }
 
   /** Bounded local similarity; a hint only, never silently combines distinct work. */
@@ -461,16 +455,15 @@ public final class SecretaryLedger {
     var grams = grams(title);
     return list(project, 0, 1000).stream()
         .filter(t -> !t.id().equals(id))
-        .filter(
-            t -> {
-              if (title.equals(normalize(t.title()))) return true;
-              if (SecretaryRelatedness.related(task.title(), task.tags(), t.title(), t.tags()))
-                return true;
-              var other = grams(normalize(t.title()));
-              long common = grams.stream().filter(other::contains).count();
-              return common >= 2
-                  && (double) common / Math.max(1, Math.min(grams.size(), other.size())) >= 0.5;
-            })
+        .filter(t -> {
+          if (title.equals(normalize(t.title()))) return true;
+          if (SecretaryRelatedness.related(task.title(), task.tags(), t.title(), t.tags()))
+            return true;
+          var other = grams(normalize(t.title()));
+          long common = grams.stream().filter(other::contains).count();
+          return common >= 2
+              && (double) common / Math.max(1, Math.min(grams.size(), other.size())) >= 0.5;
+        })
         .limit(20)
         .toList();
   }

@@ -85,11 +85,10 @@ class PlanClientTest {
   /** {@code oauth} の条件を再現するための補助情報を返す。 */
   PlanOAuth oauth(PlanTransport transport) {
     var store = new ProtectedCredentialStore(root, ProtectedCredentialStoreTest.TEST_PROTECTION);
-    store.locked(
-        s -> {
-          s.save("default", ProtectedCredentialStoreTest.tokens("access-secret", "refresh-secret"));
-          return null;
-        });
+    store.locked(s -> {
+      s.save("default", ProtectedCredentialStoreTest.tokens("access-secret", "refresh-secret"));
+      return null;
+    });
     return new PlanOAuth(store, transport, (i, c, n) -> null, Clock.systemUTC());
   }
 
@@ -460,21 +459,20 @@ class PlanClientTest {
   @Test
   void receiveLimitBeforeModelsIdentifiesOAuthRefreshWithoutClearingCredentials() {
     var store = new ProtectedCredentialStore(root, ProtectedCredentialStoreTest.TEST_PROTECTION);
-    store.locked(
-        s -> {
-          s.save(
-              "default",
-              new TokenSet(
-                  "oaiapp_test",
-                  "subject",
-                  null,
-                  "id-secret",
-                  "expired-secret",
-                  "refresh-secret",
-                  Set.of("chatgpt.tokens.use.direct"),
-                  0));
-          return null;
-        });
+    store.locked(s -> {
+      s.save(
+          "default",
+          new TokenSet(
+              "oaiapp_test",
+              "subject",
+              null,
+              "id-secret",
+              "expired-secret",
+              "refresh-secret",
+              Set.of("chatgpt.tokens.use.direct"),
+              0));
+      return null;
+    });
     PlanTransport transport =
         (u, m, h, b, t, c) -> {
           assertTrue(u.getPath().endsWith("/oauth/token"));

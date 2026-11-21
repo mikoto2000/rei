@@ -55,42 +55,38 @@ class SecurityConfigTest {
     new WebApplicationContextRunner()
         .withPropertyValues("rei.web.enabled=true")
         .withUserConfiguration(Config.class)
-        .run(
-            context -> {
-              MockMvc mvc =
-                  MockMvcBuilders.webAppContextSetup(context)
-                      .addFilters(
-                          context.getBean(
-                              "springSecurityFilterChain", jakarta.servlet.Filter.class))
-                      .build();
-              mvc.perform(get("/actuator/health")).andExpect(status().isOk());
-              for (String header :
-                  new String[] {"", "Basic test-secret", "Bearer ", "Bearer wrong"}) {
-                var response =
-                    mvc.perform(get("/api/v1/probe").header("Authorization", header))
-                        .andExpect(status().isUnauthorized())
-                        .andReturn();
-                assertThat(response.getResponse().getContentAsString())
-                    .doesNotContain("test-secret", "wrong");
-                assertThat(response.getRequest().getSession(false)).isNull();
-              }
-              mvc.perform(get("/api/v1/probe")).andExpect(status().isUnauthorized());
-              for (var request :
-                  java.util.List.of(
-                      get("/api/v1/probe"),
-                      post("/api/v1/probe"),
-                      get("/api/v1/probe")
-                          .with(
-                              request -> {
-                                request.setDispatcherType(jakarta.servlet.DispatcherType.ASYNC);
-                                return request;
-                              }))) {
-                var result =
-                    mvc.perform(request.header("Authorization", "Bearer test-secret"))
-                        .andExpect(status().isOk())
-                        .andReturn();
-                assertThat(result.getRequest().getSession(false)).isNull();
-              }
-            });
+        .run(context -> {
+          MockMvc mvc =
+              MockMvcBuilders.webAppContextSetup(context)
+                  .addFilters(
+                      context.getBean("springSecurityFilterChain", jakarta.servlet.Filter.class))
+                  .build();
+          mvc.perform(get("/actuator/health")).andExpect(status().isOk());
+          for (String header : new String[] {"", "Basic test-secret", "Bearer ", "Bearer wrong"}) {
+            var response =
+                mvc.perform(get("/api/v1/probe").header("Authorization", header))
+                    .andExpect(status().isUnauthorized())
+                    .andReturn();
+            assertThat(response.getResponse().getContentAsString())
+                .doesNotContain("test-secret", "wrong");
+            assertThat(response.getRequest().getSession(false)).isNull();
+          }
+          mvc.perform(get("/api/v1/probe")).andExpect(status().isUnauthorized());
+          for (var request :
+              java.util.List.of(
+                  get("/api/v1/probe"),
+                  post("/api/v1/probe"),
+                  get("/api/v1/probe")
+                      .with(request -> {
+                        request.setDispatcherType(jakarta.servlet.DispatcherType.ASYNC);
+                        return request;
+                      }))) {
+            var result =
+                mvc.perform(request.header("Authorization", "Bearer test-secret"))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            assertThat(result.getRequest().getSession(false)).isNull();
+          }
+        });
   }
 }

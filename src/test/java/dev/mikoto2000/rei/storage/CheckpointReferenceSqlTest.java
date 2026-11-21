@@ -57,60 +57,53 @@ class CheckpointReferenceSqlTest {
   void hundredsOfRepeatedReferencesPrepareOnlyThreeStatementsAndStayIdempotent() throws Exception {
     var registry = registry();
     var state = checkpoint(500, 100);
-    registry.database.transaction(
-        db -> {
-          try (var insert =
-              db.prepareStatement(
-                  "INSERT INTO stored_objects(id,kind,scope,relative_path,size,sha256,origin_verified) VALUES(?,'EVENT','','available',1,'hash',1)")) {
-            insert.setString(1, "event:" + project + ":e0");
-            insert.executeUpdate();
-          }
-          return null;
-        });
+    registry.database.transaction(db -> {
+      try (var insert =
+          db.prepareStatement(
+              "INSERT INTO stored_objects(id,kind,scope,relative_path,size,sha256,origin_verified) VALUES(?,'EVENT','','available',1,'hash',1)")) {
+        insert.setString(1, "event:" + project + ":e0");
+        insert.executeUpdate();
+      }
+      return null;
+    });
     var prepared = new AtomicInteger();
-    registry.database.transaction(
-        db -> {
-          StorageObjectRegistry.protectCheckpoint(counted(db, prepared), root, state);
-          return null;
-        });
+    registry.database.transaction(db -> {
+      StorageObjectRegistry.protectCheckpoint(counted(db, prepared), root, state);
+      return null;
+    });
     assertThat(prepared).hasValue(3);
     for (int i = 0; i < 100; i++)
       assertThat(registry.references("event:" + project + ":e" + i)).hasSize(1);
     registry.protectCheckpoint(state);
     assertThat(registry.references("event:" + project + ":e0")).hasSize(1);
     long revision =
-        registry.database.read(
-            db ->
-                StorageObjectRegistry.find(db, "event:" + project + ":e0")
-                    .orElseThrow()
-                    .revision());
+        registry.database.read(db ->
+            StorageObjectRegistry.find(db, "event:" + project + ":e0").orElseThrow().revision());
     assertThat(revision).isEqualTo(2);
   }
 
   @Test
   void unavailableLaterReferenceRollsBackEarlierProtection() throws Exception {
     var registry = registry();
-    registry.database.transaction(
-        db -> {
-          try (var insert =
-              db.prepareStatement(
-                  "INSERT INTO stored_objects(id,kind,scope,relative_path,size,sha256,origin_verified,status) VALUES(?,'EVENT','','purged',1,'hash',1,'PURGED')")) {
-            insert.setString(1, "event:" + project + ":e1");
-            insert.executeUpdate();
-          }
-          return null;
-        });
+    registry.database.transaction(db -> {
+      try (var insert =
+          db.prepareStatement(
+              "INSERT INTO stored_objects(id,kind,scope,relative_path,size,sha256,origin_verified,status) VALUES(?,'EVENT','','purged',1,'hash',1,'PURGED')")) {
+        insert.setString(1, "event:" + project + ":e1");
+        insert.executeUpdate();
+      }
+      return null;
+    });
     assertThatThrownBy(() -> registry.protectCheckpoint(checkpoint(2, 2)))
         .isInstanceOf(IllegalStateException.class);
     assertThat(registry.references("event:" + project + ":e0")).isEmpty();
     assertThat(registry.references("event:" + project + ":e1")).isEmpty();
-    registry.database.transaction(
-        db -> {
-          try (var sql = db.createStatement()) {
-            sql.execute("UPDATE stored_objects SET status='AVAILABLE',created='invalid-timestamp'");
-          }
-          return null;
-        });
+    registry.database.transaction(db -> {
+      try (var sql = db.createStatement()) {
+        sql.execute("UPDATE stored_objects SET status='AVAILABLE',created='invalid-timestamp'");
+      }
+      return null;
+    });
     assertThatThrownBy(() -> registry.protectCheckpoint(checkpoint(2, 2)))
         .isInstanceOf(java.time.format.DateTimeParseException.class);
     assertThat(registry.references("event:" + project + ":e0")).isEmpty();

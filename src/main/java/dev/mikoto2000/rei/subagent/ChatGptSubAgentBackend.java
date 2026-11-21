@@ -645,7 +645,8 @@ public final class ChatGptSubAgentBackend {
                 + SubAgentResultSchema.envelope().json()
                 + (role.resultSchema() == null
                     ? ""
-                    : "\nsubagent.result must conform to this schema:\n" + role.resultSchema().json())
+                    : "\nsubagent.result must conform to this schema:\n"
+                        + role.resultSchema().json())
                 + "\n"
                 + "conclusion must equal subagent.summary. findings, proposals and unverified are"
                 + " arrays. If subagent.result has findings or unverified, copy them to the top-level"
@@ -759,7 +760,9 @@ public final class ChatGptSubAgentBackend {
         int maxRepairs =
             execution.enabled() ? Math.min(role.maxRepairs(), execution.maxRepairs()) : 0;
         Duration limit =
-            role.timeout().compareTo(execution.timeout()) < 0 ? role.timeout() : execution.timeout();
+            role.timeout().compareTo(execution.timeout()) < 0
+                ? role.timeout()
+                : execution.timeout();
         long deadline = System.nanoTime() + limit.toNanos();
         int attempt = 0;
         for (int groupIndex = 0; groupIndex < plan.size(); groupIndex++) {
@@ -862,17 +865,22 @@ public final class ChatGptSubAgentBackend {
             unknownUsage |= callUsage == null;
             usage = unknownUsage ? null : Math.addExact(usage == null ? 0 : usage, callUsage);
             groupUsage =
-                groupUsage == null || callUsage == null ? null : Math.addExact(groupUsage, callUsage);
+                groupUsage == null || callUsage == null
+                    ? null
+                    : Math.addExact(groupUsage, callUsage);
             // Every inference and repair consumes the same parent reservation, including invalid
             // output.
             if (sharedBudget != null) {
               try {
-                int accounted = backendId.equals("codex-app-server") ? client.takeNativeTokens() : 0;
+                int accounted =
+                    backendId.equals("codex-app-server") ? client.takeNativeTokens() : 0;
                 if (callUsage == null) sharedBudget.recordTotalTokens(null);
-                else if (callUsage > accounted) sharedBudget.recordTotalTokens(callUsage - accounted);
+                else if (callUsage > accounted)
+                  sharedBudget.recordTotalTokens(callUsage - accounted);
                 else if (callUsage < accounted) throw ChatGptException.of(PROTOCOL);
               } catch (RuntimeException exhausted) {
-                throw ChatGptException.of(callUsage == null ? USAGE_UNAVAILABLE : PERMISSION_DENIED);
+                throw ChatGptException.of(
+                    callUsage == null ? USAGE_UNAVAILABLE : PERMISSION_DENIED);
               }
             }
             if (System.nanoTime() >= deadline) throw ChatGptException.of(TIMEOUT);
@@ -1281,12 +1289,11 @@ public final class ChatGptSubAgentBackend {
         errors.add(new ValidationError("/scope", "Scope does not match supplied materials"));
       expected
           .properties()
-          .forEach(
-              entry -> {
-                if (!Objects.equals(result.get(entry.getKey()), entry.getValue()))
-                  errors.add(
-                      new ValidationError("/subagent/result", "Expected result condition unmet"));
-              });
+          .forEach(entry -> {
+            if (!Objects.equals(result.get(entry.getKey()), entry.getValue()))
+              errors.add(
+                  new ValidationError("/subagent/result", "Expected result condition unmet"));
+          });
       validateReferences(wrapper.get("references"), sources, errors);
       if (execution.enabled() && execution.semanticValidation()) {
         errors.addAll(new PlanReviewSemanticValidator().validate(wrapper).issues());
@@ -1420,10 +1427,9 @@ public final class ChatGptSubAgentBackend {
     String paths =
         errors.stream()
             .limit(8)
-            .map(
-                e ->
-                    dev.mikoto2000.rei.event.CredentialRedactor.redact(e.path())
-                        .replaceAll("[\\p{Cntrl}]", " "))
+            .map(e ->
+                dev.mikoto2000.rei.event.CredentialRedactor.redact(e.path())
+                    .replaceAll("[\\p{Cntrl}]", " "))
             .map(p -> p.length() > 160 ? p.substring(0, 160) : p)
             .collect(java.util.stream.Collectors.joining(", "));
     String advice =

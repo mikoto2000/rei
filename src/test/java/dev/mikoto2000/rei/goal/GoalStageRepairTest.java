@@ -13,11 +13,10 @@ class GoalStageRepairTest extends GoalStageLoopTest {
   void unchangedEvidenceStopsRepairWithoutConsumingAllRuns() {
     var goal = setup();
     var loop =
-        loop(
-            (claim, run, done) -> {
-              goals.reserveLlm(claim);
-              done.accept(done());
-            });
+        loop((claim, run, done) -> {
+          goals.reserveLlm(claim);
+          done.accept(done());
+        });
     var result = loop.run("project", goal.id());
     assertEquals("BLOCKED", result.status());
     assertEquals("stage_repair_stalled", result.reason());
@@ -31,19 +30,16 @@ class GoalStageRepairTest extends GoalStageLoopTest {
     var goal = setup();
     service.configureRepair(2);
     var loop =
-        loop(
-            (claim, run, complete) -> {
-              try {
-                java.nio.file.Files.writeString(
-                    dir.resolve("a.json"),
-                    "{\"ok\":false,\"attempt\":"
-                        + goals.get("project", goal.id()).attempts()
-                        + "}");
-              } catch (Exception e) {
-                throw new IllegalStateException(e);
-              }
-              complete.accept(done());
-            });
+        loop((claim, run, complete) -> {
+          try {
+            java.nio.file.Files.writeString(
+                dir.resolve("a.json"),
+                "{\"ok\":false,\"attempt\":" + goals.get("project", goal.id()).attempts() + "}");
+          } catch (Exception e) {
+            throw new IllegalStateException(e);
+          }
+          complete.accept(done());
+        });
     var result = loop.run("project", goal.id());
     assertEquals("stage_repair_limit", result.reason());
     assertEquals(3, result.attempts());

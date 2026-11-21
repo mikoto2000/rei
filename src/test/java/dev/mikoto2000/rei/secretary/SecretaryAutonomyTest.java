@@ -123,16 +123,15 @@ class SecretaryAutonomyTest {
           service.create(
               request(
                   task, "one", SecretaryAutonomy.Kind.UPDATE_TASK, SecretaryTask.Status.WAITING));
-      db.transaction(
-          connection -> {
-            try (var q =
-                connection.prepareStatement(
-                    "UPDATE secretary_jobs SET state='PAUSED',attempts=1 WHERE id=?")) {
-              q.setString(1, job.id());
-              q.executeUpdate();
-            }
-            return null;
-          });
+      db.transaction(connection -> {
+        try (var q =
+            connection.prepareStatement(
+                "UPDATE secretary_jobs SET state='PAUSED',attempts=1 WHERE id=?")) {
+          q.setString(1, job.id());
+          q.executeUpdate();
+        }
+        return null;
+      });
       var result = service.resume("p", job.id(), service.get("p", job.id()).revision());
       assertEquals("WAITING_APPROVAL", result.state());
       assertEquals(SecretaryTask.Status.OPEN, ledger.get("p", task.id()).status());
@@ -604,10 +603,9 @@ class SecretaryAutonomyTest {
       assertEquals("RUNNING", service.get("p", ready.id()).state());
       assertTrue(
           service.list("p", 20).stream()
-                  .filter(
-                      j ->
-                          j.state().equals("WAITING_APPROVAL")
-                              && j.notBefore().isAfter(clock.instant()))
+                  .filter(j ->
+                      j.state().equals("WAITING_APPROVAL")
+                          && j.notBefore().isAfter(clock.instant()))
                   .count()
               >= 7);
     }

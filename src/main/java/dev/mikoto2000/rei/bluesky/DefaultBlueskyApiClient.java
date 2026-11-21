@@ -378,8 +378,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     HttpRequest request =
         requestBuilder(getRecordUri).header("Authorization", "Bearer " + accessJwt).GET().build();
     HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-    log.debug(
-        "Bluesky getRecord response: status={}", response.statusCode());
+    log.debug("Bluesky getRecord response: status={}", response.statusCode());
     if (response.statusCode() / 100 != 2) {
       return false;
     }

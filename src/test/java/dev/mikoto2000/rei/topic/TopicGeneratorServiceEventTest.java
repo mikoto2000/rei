@@ -160,10 +160,9 @@ class TopicGeneratorServiceEventTest {
     TopicGeneratorService service =
         service(
             properties,
-            List.of(
-                context -> {
-                  throw new IllegalStateException("credential=abc");
-                }),
+            List.of(context -> {
+              throw new IllegalStateException("credential=abc");
+            }),
             new DeterministicTopicRanker(),
             new TemplateTopicMessageGenerator(),
             bus);

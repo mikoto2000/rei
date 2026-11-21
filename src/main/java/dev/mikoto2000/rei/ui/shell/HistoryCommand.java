@@ -120,13 +120,12 @@ public class HistoryCommand implements Callable<Integer> {
 
   /** ターミナルでの対話で用いるレポート会話一覧を返す。 */
   public String reportSessions(String project, Integer limit, String cursor) {
-    return report(
-        command -> {
-          command.projectId = project;
-          command.limit = limit;
-          command.cursor = cursor;
-          command.call();
-        });
+    return report(command -> {
+      command.projectId = project;
+      command.limit = limit;
+      command.cursor = cursor;
+      command.call();
+    });
   }
 
   /** ターミナルでの対話で用いるレポート会話を返す。 */
@@ -187,31 +186,30 @@ public class HistoryCommand implements Callable<Integer> {
   /** 会話履歴の表示・検索。 */
   @Override
   public Integer call() {
-    return execute(
-        out -> {
-          var page = sessions.listSessions(projectId, limit, cursor);
-          if (page.items().isEmpty()) {
-            out.accept("No sessions.");
-            return;
-          }
-          out.accept("SESSION ID  UPDATED  PROJECT  TITLE");
-          for (var row : page.items())
-            out.accept(
-                format.label(row.sessionId())
-                    + "  "
-                    + format.timestamp(row.updatedAt().toString())
-                    + "  "
-                    + projectLabel(row.projectId())
-                    + "  "
-                    + format.label(row.title()));
-          if (page.nextCursor() != null)
-            out.accept(
-                "Next page: /history --limit "
-                    + Pagination.limit(limit)
-                    + (projectId == null ? "" : " --project-id " + format.label(projectId))
-                    + " --cursor "
-                    + page.nextCursor());
-        });
+    return execute(out -> {
+      var page = sessions.listSessions(projectId, limit, cursor);
+      if (page.items().isEmpty()) {
+        out.accept("No sessions.");
+        return;
+      }
+      out.accept("SESSION ID  UPDATED  PROJECT  TITLE");
+      for (var row : page.items())
+        out.accept(
+            format.label(row.sessionId())
+                + "  "
+                + format.timestamp(row.updatedAt().toString())
+                + "  "
+                + projectLabel(row.projectId())
+                + "  "
+                + format.label(row.title()));
+      if (page.nextCursor() != null)
+        out.accept(
+            "Next page: /history --limit "
+                + Pagination.limit(limit)
+                + (projectId == null ? "" : " --project-id " + format.label(projectId))
+                + " --cursor "
+                + page.nextCursor());
+    });
   }
 
   /** ターミナルでの対話で用いるプロジェクト表示名を返す。 */
@@ -221,67 +219,66 @@ public class HistoryCommand implements Callable<Integer> {
 
   /** 利用者が内容を確認できるよう、会話を表示する。 */
   private int showSession(String requestedId, Integer limit, String cursor) {
-    return execute(
-        out -> {
-          String id = requestedId;
-          if (id == null) {
-            Pagination.limit(limit);
-            var selectedProject = selectedProjectId.get();
-            if (selectedProject.isEmpty()) {
-              out.accept("No sessions.");
-              return;
-            }
-            var latest = sessions.listSessions(selectedProject.get(), 1, null);
-            if (latest.items().isEmpty()) {
-              out.accept("No sessions.");
-              return;
-            }
-            id = latest.items().getFirst().sessionId();
-          }
-          SessionMetadata row;
-          try {
-            row = sessions.getSession(id);
-          } catch (ResourceNotFoundException error) {
-            // Older logs have no admission metadata; preserve explicit conversation lookup.
-            if (id.contains(":") && limit == null && cursor == null) {
-              service.show(null, id, HistoryShellService.DEFAULT_LAST, false, out);
-              return;
-            }
-            throw error;
-          }
-          var page = sessions.listTurns(id, limit, cursor);
-          out.accept("Session: " + format.label(row.sessionId()));
-          out.accept("Project: " + projectLabel(row.projectId()));
-          out.accept("Title: " + format.label(row.title()));
-          out.accept("Created: " + format.timestamp(row.createdAt().toString()));
-          out.accept("Updated: " + format.timestamp(row.updatedAt().toString()));
-          if (page.items().isEmpty()) out.accept("No turns.");
-          for (var turn : page.items()) {
-            out.accept(
-                "\nTurn: "
-                    + format.label(turn.runId())
-                    + "  "
-                    + format.timestamp(turn.createdAt().toString()));
-            if (turn.userMessage() != null && !turn.userMessage().isBlank())
-              out.accept("User:\n" + format.body(turn.userMessage()));
-            if (turn.source() != null) out.accept("Source: " + format.label(turn.source()));
-            if (turn.metadata().containsKey("severity"))
-              out.accept("Severity: " + format.label(turn.metadata().get("severity")));
-            out.accept(
-                "Rei:\n"
-                    + (turn.assistantMessage() == null
-                        ? "(No response recorded)"
-                        : format.body(turn.assistantMessage())));
-          }
-          if (page.nextCursor() != null)
-            out.accept(
-                "Next page: /history show "
-                    + format.label(id)
-                    + " --limit "
-                    + Pagination.limit(limit)
-                    + " --cursor "
-                    + page.nextCursor());
-        });
+    return execute(out -> {
+      String id = requestedId;
+      if (id == null) {
+        Pagination.limit(limit);
+        var selectedProject = selectedProjectId.get();
+        if (selectedProject.isEmpty()) {
+          out.accept("No sessions.");
+          return;
+        }
+        var latest = sessions.listSessions(selectedProject.get(), 1, null);
+        if (latest.items().isEmpty()) {
+          out.accept("No sessions.");
+          return;
+        }
+        id = latest.items().getFirst().sessionId();
+      }
+      SessionMetadata row;
+      try {
+        row = sessions.getSession(id);
+      } catch (ResourceNotFoundException error) {
+        // Older logs have no admission metadata; preserve explicit conversation lookup.
+        if (id.contains(":") && limit == null && cursor == null) {
+          service.show(null, id, HistoryShellService.DEFAULT_LAST, false, out);
+          return;
+        }
+        throw error;
+      }
+      var page = sessions.listTurns(id, limit, cursor);
+      out.accept("Session: " + format.label(row.sessionId()));
+      out.accept("Project: " + projectLabel(row.projectId()));
+      out.accept("Title: " + format.label(row.title()));
+      out.accept("Created: " + format.timestamp(row.createdAt().toString()));
+      out.accept("Updated: " + format.timestamp(row.updatedAt().toString()));
+      if (page.items().isEmpty()) out.accept("No turns.");
+      for (var turn : page.items()) {
+        out.accept(
+            "\nTurn: "
+                + format.label(turn.runId())
+                + "  "
+                + format.timestamp(turn.createdAt().toString()));
+        if (turn.userMessage() != null && !turn.userMessage().isBlank())
+          out.accept("User:\n" + format.body(turn.userMessage()));
+        if (turn.source() != null) out.accept("Source: " + format.label(turn.source()));
+        if (turn.metadata().containsKey("severity"))
+          out.accept("Severity: " + format.label(turn.metadata().get("severity")));
+        out.accept(
+            "Rei:\n"
+                + (turn.assistantMessage() == null
+                    ? "(No response recorded)"
+                    : format.body(turn.assistantMessage())));
+      }
+      if (page.nextCursor() != null)
+        out.accept(
+            "Next page: /history show "
+                + format.label(id)
+                + " --limit "
+                + Pagination.limit(limit)
+                + " --cursor "
+                + page.nextCursor());
+    });
   }
 
   /** Conversation一覧を行うための利用者コマンド。 */
@@ -356,18 +353,16 @@ public class HistoryCommand implements Callable<Integer> {
     public Integer call() {
       if (project == null && range == null) {
         if (conversation == null && cursor != null)
-          return parent.execute(
-              out -> {
-                throw new IllegalArgumentException("--cursor requires a session ID");
-              });
+          return parent.execute(out -> {
+            throw new IllegalArgumentException("--cursor requires a session ID");
+          });
         return parent.showSession(conversation, limit, cursor);
       }
       if (limit != null || cursor != null)
-        return parent.execute(
-            out -> {
-              throw new IllegalArgumentException(
-                  "--limit/--cursor require a session ID without legacy options");
-            });
+        return parent.execute(out -> {
+          throw new IllegalArgumentException(
+              "--limit/--cursor require a session ID without legacy options");
+        });
       return parent.show(
           project,
           conversation,

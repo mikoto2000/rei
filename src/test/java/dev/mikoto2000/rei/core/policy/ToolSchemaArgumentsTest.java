@@ -15,17 +15,15 @@ class ToolSchemaArgumentsTest {
     assertThatCode(
             () -> ToolSchemaArguments.validate("grep-query", schema, "{\"pattern\":\"needle\"}"))
         .doesNotThrowAnyException();
-    assertThatCode(
-            () ->
-                ToolSchemaArguments.validate(
-                    "grep-query",
-                    schema,
-                    "{\"pattern\":\"needle\",\"charset\":null,\"excludeGlob\":null}"))
+    assertThatCode(() ->
+            ToolSchemaArguments.validate(
+                "grep-query",
+                schema,
+                "{\"pattern\":\"needle\",\"charset\":null,\"excludeGlob\":null}"))
         .doesNotThrowAnyException();
-    assertThatThrownBy(
-            () ->
-                ToolSchemaArguments.validate(
-                    "grep-query", schema, "{\"pattern\":\"needle\",\"charset\":42}"))
+    assertThatThrownBy(() ->
+            ToolSchemaArguments.validate(
+                "grep-query", schema, "{\"pattern\":\"needle\",\"charset\":42}"))
         .isInstanceOf(InvalidToolArgumentsException.class)
         .hasMessageContaining("charset");
     assertThatThrownBy(() -> ToolSchemaArguments.validate("grep-query", schema, "{}"))
@@ -58,10 +56,9 @@ class ToolSchemaArgumentsTest {
 
   @Test
   void defaultsAndOpaqueContractsRemainWithOwningTools() {
-    assertThatCode(
-            () ->
-                ToolSchemaArguments.validate(
-                    "otherTool", SCHEMA, "{\"request\":{\"path\":\"a\",\"optional\":null}}"))
+    assertThatCode(() ->
+            ToolSchemaArguments.validate(
+                "otherTool", SCHEMA, "{\"request\":{\"path\":\"a\",\"optional\":null}}"))
         .doesNotThrowAnyException();
     assertThat(ToolSchemaArguments.supports("{}")).isFalse();
     assertThat(ToolSchemaArguments.supports("broken")).isFalse();
@@ -81,16 +78,13 @@ class ToolSchemaArgumentsTest {
             () -> ToolSchemaArguments.validate("arrayTool", schema, "{\"entries\":[{}]}"))
         .isInstanceOf(InvalidToolArgumentsException.class)
         .hasMessageContaining("entries[0].id")
-        .satisfies(
-            error ->
-                assertThat(((InvalidToolArgumentsException) error).issues())
-                    .containsExactly(
-                        new dev.mikoto2000.rei.toolcontract.ArgumentIssue(
-                            "arguments.entries[0].id", "is required")));
-    assertThatCode(
-            () ->
-                ToolSchemaArguments.validate(
-                    "arrayTool", schema, "{\"entries\":[{\"id\":\"known\"}]}"))
+        .satisfies(error ->
+            assertThat(((InvalidToolArgumentsException) error).issues())
+                .containsExactly(
+                    new dev.mikoto2000.rei.toolcontract.ArgumentIssue(
+                        "arguments.entries[0].id", "is required")));
+    assertThatCode(() ->
+            ToolSchemaArguments.validate("arrayTool", schema, "{\"entries\":[{\"id\":\"known\"}]}"))
         .doesNotThrowAnyException();
   }
 }

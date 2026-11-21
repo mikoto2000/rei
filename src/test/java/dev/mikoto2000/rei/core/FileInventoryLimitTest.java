@@ -24,11 +24,10 @@ class FileInventoryLimitTest {
   void accepts4096NamesWithoutReadingContentsAndCachesTheInventory() throws Exception {
     var reads = new AtomicInteger();
     var snapshots =
-        new FileSnapshots(
-            path -> {
-              reads.incrementAndGet();
-              throw new AssertionError("Inventory must not read file contents");
-            });
+        new FileSnapshots(path -> {
+          reads.incrementAndGet();
+          throw new AssertionError("Inventory must not read file contents");
+        });
     var expected = paths(4096).stream().sorted().toList();
     var actual = snapshots.inventory(".", () -> expected);
     assertEquals(expected, actual);
@@ -84,11 +83,10 @@ class FileInventoryLimitTest {
     for (var path : names) Files.createFile(root.resolve(path));
     var reads = new AtomicInteger();
     var snapshots =
-        new FileSnapshots(
-            path -> {
-              reads.incrementAndGet();
-              return Files.readAllBytes(path);
-            });
+        new FileSnapshots(path -> {
+          reads.incrementAndGet();
+          return Files.readAllBytes(path);
+        });
     assertEquals(1025, snapshots.inventory(".", () -> names).size());
     for (int i = 0; i < 1024; i++) snapshots.get(root, root.resolve(names.get(i)));
     var error =

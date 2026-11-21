@@ -180,13 +180,11 @@ final class JavaSymbolReads {
     var overview =
         Boolean.TRUE.equals(request.includeOwnerOverview())
             ? metadata.get(candidate.path()).symbols().stream()
-                .filter(
-                    value ->
-                        value.name().equals(symbol.owner())
-                            && RepositoryMapService.typeKind(value.kind()))
-                .map(
-                    value ->
-                        value.signature().substring(0, Math.min(256, value.signature().length())))
+                .filter(value ->
+                    value.name().equals(symbol.owner())
+                        && RepositoryMapService.typeKind(value.kind()))
+                .map(value ->
+                    value.signature().substring(0, Math.min(256, value.signature().length())))
                 .limit(4)
                 .toList()
             : List.<String>of();

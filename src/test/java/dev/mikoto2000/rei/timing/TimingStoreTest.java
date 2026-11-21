@@ -269,17 +269,9 @@ class TimingStoreTest {
     assertEquals(8, span.outputTokens());
     assertTrue(
         Arrays.stream(Span.class.getRecordComponents())
-            .noneMatch(
-                c ->
-                    Set.of(
-                            "prompt",
-                            "response",
-                            "arguments",
-                            "content",
-                            "body",
-                            "audio",
-                            "metadata")
-                        .contains(c.getName())));
+            .noneMatch(c ->
+                Set.of("prompt", "response", "arguments", "content", "body", "audio", "metadata")
+                    .contains(c.getName())));
   }
 
   /** 実行時間の把握で、指定した条件に対する結果と状態の変化を確認する。 */

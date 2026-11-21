@@ -153,12 +153,11 @@ class ProjectRunSwitchIntegrationTest
       service.setChatMemory(memory);
       service.setConversationLogStore(new ConversationLogStore());
       var queue =
-          new UserInterventionQueue(
-              entry ->
-                  bus.publish(
-                      events
-                          .intervention(run.runId(), entry.id(), entry.text(), false)
-                          .withOwnership(run)));
+          new UserInterventionQueue(entry ->
+              bus.publish(
+                  events
+                      .intervention(run.runId(), entry.id(), entry.text(), false)
+                      .withOwnership(run)));
       var future = executor.submit(() -> service.execute(run, "fix", queue));
       try {
         assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
@@ -177,9 +176,8 @@ class ProjectRunSwitchIntegrationTest
             .extracting(ConversationLogEntry::content)
             .contains("keep README", "done in A");
         assertThat(memory.get(run.conversationId()))
-            .anyMatch(
-                message ->
-                    message instanceof UserMessage && message.getText().equals("keep README"));
+            .anyMatch(message ->
+                message instanceof UserMessage && message.getText().equals("keep README"));
       } finally {
         release.countDown();
       }

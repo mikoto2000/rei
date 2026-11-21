@@ -79,11 +79,10 @@ class FallbackChatModelTest {
                         dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, context))
                 .build());
     when(primary.stream(prompt))
-        .thenAnswer(
-            invocation -> {
-              context.cancel();
-              return Flux.error(new RuntimeException("connection closed"));
-            });
+        .thenAnswer(invocation -> {
+          context.cancel();
+          return Flux.error(new RuntimeException("connection closed"));
+        });
     var model = new FallbackChatModel("chat", primary, fallback, null);
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> model.stream(prompt).blockLast())
         .isInstanceOf(java.util.concurrent.CancellationException.class);

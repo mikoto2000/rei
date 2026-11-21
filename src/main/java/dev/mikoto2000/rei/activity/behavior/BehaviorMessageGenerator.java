@@ -2,7 +2,6 @@ package dev.mikoto2000.rei.activity.behavior;
 
 import java.io.IOException;
 
-
 /** 作業習慣メッセージの内容を生成する。 */
 @FunctionalInterface
 public interface BehaviorMessageGenerator {

@@ -101,8 +101,7 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
 
   /** 指定された内容を書き込み先へ反映する。 */
   @Override
-  public DailySummary write(DailySummaryAggregate aggregate)
-      throws JsonProcessingException {
+  public DailySummary write(DailySummaryAggregate aggregate) throws JsonProcessingException {
     String input = structuredInput(aggregate);
     log.debug("[summary-trace] llm-input {}", input);
     log.debug(
@@ -116,8 +115,7 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
   }
 
   /** 作業状況の把握で用いる項目に整理した内容入力を返す。 */
-  static String structuredInput(DailySummaryAggregate aggregate)
-      throws JsonProcessingException {
+  static String structuredInput(DailySummaryAggregate aggregate) throws JsonProcessingException {
     var structured = JSON.valueToTree(aggregate);
     // Work labels come exclusively from final candidates, not pre-consolidation project/block
     // lists.
@@ -139,15 +137,14 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
       }
     structured
         .path("timeOfDay")
-        .forEach(
-            bucket -> {
-              ((com.fasterxml.jackson.databind.node.ObjectNode) bucket).remove("dominantProjects");
-              var associations =
-                  (com.fasterxml.jackson.databind.node.ArrayNode) bucket.path("strongAssociations");
-              for (int i = associations.size() - 1; i >= 0; i--)
-                if (hiddenProjects.contains(associations.get(i).path("canonicalProject").asText()))
-                  associations.remove(i);
-            });
+        .forEach(bucket -> {
+          ((com.fasterxml.jackson.databind.node.ObjectNode) bucket).remove("dominantProjects");
+          var associations =
+              (com.fasterxml.jackson.databind.node.ArrayNode) bucket.path("strongAssociations");
+          for (int i = associations.size() - 1; i >= 0; i--)
+            if (hiddenProjects.contains(associations.get(i).path("canonicalProject").asText()))
+              associations.remove(i);
+        });
     String input = JSON.writeValueAsString(structured);
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (input.length() > 16000 || sensitiveText(structured))
@@ -180,18 +177,17 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
     // worker is used.
     chat.stream(
             new Prompt(List.of(new SystemMessage(INSTRUCTIONS), new UserMessage(input)), request))
-        .doOnNext(
-            response -> {
-              if (response.hasToolCalls()
-                  || dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
-                throw new IllegalArgumentException("Invalid summary completion");
-              var generation = response.getResult();
-              var output = generation == null ? null : generation.getOutput();
-              var content = output == null ? null : output.getText();
-              if (content != null) result.append(content);
-              // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-              if (result.length() > 8000) throw new IllegalArgumentException("Summary too large");
-            })
+        .doOnNext(response -> {
+          if (response.hasToolCalls()
+              || dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
+            throw new IllegalArgumentException("Invalid summary completion");
+          var generation = response.getResult();
+          var output = generation == null ? null : generation.getOutput();
+          var content = output == null ? null : output.getText();
+          if (content != null) result.append(content);
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
+          if (result.length() > 8000) throw new IllegalArgumentException("Summary too large");
+        })
         .blockLast(timeout);
     var parsed = parse(result.toString(), aggregate);
     if (log.isDebugEnabled())

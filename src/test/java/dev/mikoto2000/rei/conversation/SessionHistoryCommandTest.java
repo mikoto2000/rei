@@ -157,9 +157,7 @@ class SessionHistoryCommandTest extends ProjectClientTestSupport {
     var context = new AgentRunContext("run", "session", temp);
     turns.start(context, question, now);
     turns.finish(context, ConversationTurnStore.Status.COMPLETED, answer);
-    assertThat(run("show", "session"))
-        .contains(question, answer)
-        .doesNotContain("(truncated)");
+    assertThat(run("show", "session")).contains(question, answer).doesNotContain("(truncated)");
   }
 
   /** 会話履歴と受付記録の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */

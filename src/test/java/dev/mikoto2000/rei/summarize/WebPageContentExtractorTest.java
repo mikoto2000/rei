@@ -17,25 +17,25 @@ class WebPageContentExtractorTest {
         extractor.extract(
             "https://example.com/article",
             """
-        <html>
-          <head>
-            <script>console.log('ignore')</script>
-            <style>body { color: red; }</style>
-          </head>
-          <body>
-            <header>site header</header>
-            <nav>menu</nav>
-            <main>
-              <article>
-                Important article content
-              </article>
-            </main>
-            <footer>footer</footer>
-            <noscript>noscript fallback</noscript>
-            <iframe src="ad.html"></iframe>
-          </body>
-        </html>
-        """);
+            <html>
+              <head>
+                <script>console.log('ignore')</script>
+                <style>body { color: red; }</style>
+              </head>
+              <body>
+                <header>site header</header>
+                <nav>menu</nav>
+                <main>
+                  <article>
+                    Important article content
+                  </article>
+                </main>
+                <footer>footer</footer>
+                <noscript>noscript fallback</noscript>
+                <iframe src="ad.html"></iframe>
+              </body>
+            </html>
+            """);
 
     assertEquals("Important article content", content);
     assertFalse(content.contains("menu"));

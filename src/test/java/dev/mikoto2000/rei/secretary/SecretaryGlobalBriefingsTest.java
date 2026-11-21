@@ -483,12 +483,11 @@ class SecretaryGlobalBriefingsTest {
       var command = new SecretaryCommand();
       command.setFollowups(beans.getBeanProvider(SecretaryFollowups.class));
       var selections = new java.util.concurrent.atomic.AtomicInteger();
-      command.setMeetingSelector(
-          (report, output) -> {
-            selections.incrementAndGet();
-            assertTrue(report.path("meeting").isObject());
-            return confirm ? java.util.Optional.of(List.of()) : java.util.Optional.empty();
-          });
+      command.setMeetingSelector((report, output) -> {
+        selections.incrementAndGet();
+        assertTrue(report.path("meeting").isObject());
+        return confirm ? java.util.Optional.of(List.of()) : java.util.Optional.empty();
+      });
       var cli = new picocli.CommandLine(command);
       var text = new java.io.StringWriter();
       cli.setOut(new java.io.PrintWriter(text));

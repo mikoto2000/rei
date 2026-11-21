@@ -101,17 +101,16 @@ class AutoSleepModelWaitTest {
     var processor = processor();
     var error = new java.util.concurrent.atomic.AtomicReference<Throwable>();
     var thread =
-        new Thread(
-            () -> {
-              try {
-                processor.call(
-                    "system",
-                    "data",
-                    new AutoSleepExecution(Duration.ofSeconds(480), Duration.ofSeconds(600)));
-              } catch (Throwable e) {
-                error.set(e);
-              }
-            });
+        new Thread(() -> {
+          try {
+            processor.call(
+                "system",
+                "data",
+                new AutoSleepExecution(Duration.ofSeconds(480), Duration.ofSeconds(600)));
+          } catch (Throwable e) {
+            error.set(e);
+          }
+        });
     thread.start();
     assertTrue(subscribed.await(2, TimeUnit.SECONDS));
     thread.interrupt();

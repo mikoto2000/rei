@@ -165,9 +165,8 @@ public class SearchCommand implements Runnable {
               .get()
               .prompt(
                   new Prompt(buildPrompt(query, vectorResults, webContext), searchOptions.get()))
-              .advisors(
-                  advisor ->
-                      advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("search")));
+              .advisors(advisor ->
+                  advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("search")));
 
       if (result.webSearchSkippedMessage() != null) {
         println("[web search skipped] " + result.webSearchSkippedMessage());
@@ -259,15 +258,15 @@ public class SearchCommand implements Runnable {
   private String buildPrompt(
       String query, List<VectorDocumentSearchResult> vectorResults, WebSearchContext webContext) {
     return """
-        次の検索結果を材料に、日本語で回答してください。
-        - まず結論を簡潔に示してください。
-        - ベクトルストア由来の情報と Web 検索由来の情報を必要に応じて統合してください。
-        - Web 一次情報を優先し、Web 補足情報は補強として扱ってください。
-        - 情報が不足している点や不確かな点は断定しないでください。
-        - Web 由来の記述には、可能な範囲で URL を文中または末尾に示してください。
+    次の検索結果を材料に、日本語で回答してください。
+    - まず結論を簡潔に示してください。
+    - ベクトルストア由来の情報と Web 検索由来の情報を必要に応じて統合してください。
+    - Web 一次情報を優先し、Web 補足情報は補強として扱ってください。
+    - 情報が不足している点や不確かな点は断定しないでください。
+    - Web 由来の記述には、可能な範囲で URL を文中または末尾に示してください。
 
-        質問:
-        """
+    質問:
+    """
         + query
         + """
 

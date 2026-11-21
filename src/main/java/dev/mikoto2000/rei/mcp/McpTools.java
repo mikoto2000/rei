@@ -124,19 +124,15 @@ public final class McpTools {
             projects.list().stream()
                 .filter(p -> allowlist.contains(p.id()))
                 .limit(100)
-                .<Map<String, Object>>map(
-                    p ->
-                        Map.of(
-                            "project_id",
-                            p.id(),
-                            "name",
-                            CredentialRedactor.redact(p.name()),
-                            "capabilities",
-                            List.of(
-                                "READ_CONTEXT",
-                                "SUBMIT_READ_ONLY",
-                                "READ_OWN_RUN",
-                                "CANCEL_OWN_RUN")))
+                .<Map<String, Object>>map(p ->
+                    Map.of(
+                        "project_id",
+                        p.id(),
+                        "name",
+                        CredentialRedactor.redact(p.name()),
+                        "capabilities",
+                        List.of(
+                            "READ_CONTEXT", "SUBMIT_READ_ONLY", "READ_OWN_RUN", "CANCEL_OWN_RUN")))
                 .toList();
     this.allowed = Set.copyOf(allowed);
     this.contexts = contexts;
@@ -255,7 +251,9 @@ public final class McpTools {
     }
     try {
       return new McpSchema.CallToolResult(
-          List.of(McpSchema.TextContent.builder(StorageDatabase.JSON.writeValueAsString(output)).build()),
+          List.of(
+              McpSchema.TextContent.builder(StorageDatabase.JSON.writeValueAsString(output))
+                  .build()),
           error,
           output,
           null);
@@ -378,17 +376,16 @@ public final class McpTools {
     var items =
         value.items().stream()
             .limit(100)
-            .map(
-                i ->
-                    Map.of(
-                        "id",
-                        i.id(),
-                        "kind",
-                        i.kind().name(),
-                        "text",
-                        clip(CredentialRedactor.redact(i.text()), 2000),
-                        "status",
-                        i.status().name()))
+            .map(i ->
+                Map.of(
+                    "id",
+                    i.id(),
+                    "kind",
+                    i.kind().name(),
+                    "text",
+                    clip(CredentialRedactor.redact(i.text()), 2000),
+                    "status",
+                    i.status().name()))
             .toList();
     return Map.of(
         "project_id",
@@ -411,15 +408,14 @@ public final class McpTools {
         value.items().stream()
             .flatMap(i -> i.evidence().stream())
             .limit(32)
-            .map(
-                e ->
-                    Map.of(
-                        "id",
-                        e.id(),
-                        "origin",
-                        e.origin().name(),
-                        "text",
-                        clip(CredentialRedactor.redact(e.text()), 1000)))
+            .map(e ->
+                Map.of(
+                    "id",
+                    e.id(),
+                    "origin",
+                    e.origin().name(),
+                    "text",
+                    clip(CredentialRedactor.redact(e.text()), 1000)))
             .toList(),
         "source_type",
         "HISTORICAL_REFERENCE_UNTRUSTED",
@@ -532,15 +528,14 @@ public final class McpTools {
     var approval =
         listApprovals.apply(r.project()).stream()
             .filter(v -> v.runId().equals(r.run()))
-            .map(
-                v ->
-                    Map.of(
-                        "id",
-                        v.id(),
-                        "status",
-                        v.status(),
-                        "resume_required",
-                        status != RunStatus.RUNNING && status != RunStatus.QUEUED))
+            .map(v ->
+                Map.of(
+                    "id",
+                    v.id(),
+                    "status",
+                    v.status(),
+                    "resume_required",
+                    status != RunStatus.RUNNING && status != RunStatus.QUEUED))
             .toList();
     var out = new LinkedHashMap<String, Object>();
     out.put("run_id", r.run());

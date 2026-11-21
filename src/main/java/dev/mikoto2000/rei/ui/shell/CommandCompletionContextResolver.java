@@ -77,10 +77,9 @@ public final class CommandCompletionContextResolver {
       selected
           .getCommandSpec()
           .optionsMap()
-          .forEach(
-              (name, option) -> {
-                if (!option.hidden()) choices.add(CompletionCandidate.value(name, "option"));
-              });
+          .forEach((name, option) -> {
+            if (!option.hidden()) choices.add(CompletionCandidate.value(name, "option"));
+          });
       return context(line, prefix, path, argument, types, choices, directory);
     }
     if (pending == null && argument == 0 && options && !selected.getSubcommands().isEmpty()) {

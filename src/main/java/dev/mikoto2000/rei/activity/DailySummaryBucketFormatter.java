@@ -59,11 +59,9 @@ public final class DailySummaryBucketFormatter {
     if (String.join("、", work).length() > 130) work = work.subList(0, 1);
     var nonWork =
         DailySummaryAggregator.top(b.categorySeconds(), 1).stream()
-            .filter(
-                v ->
-                    !Set.of("development", "research", "documentation", "unknown")
-                            .contains(v.name())
-                        && v.seconds() >= b.observedSeconds() * .65)
+            .filter(v ->
+                !Set.of("development", "research", "documentation", "unknown").contains(v.name())
+                    && v.seconds() >= b.observedSeconds() * .65)
             .map(v -> categoryLabel(v.name()))
             .findFirst();
     if (work.isEmpty())

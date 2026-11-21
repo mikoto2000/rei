@@ -25,7 +25,16 @@ class ReviewToolsTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"valid", "blankEvidence", "emptyEvidence", "unknown", "wrongPath", "wrongQuote", "blank", "foreign"})
+      strings = {
+        "valid",
+        "blankEvidence",
+        "emptyEvidence",
+        "unknown",
+        "wrongPath",
+        "wrongQuote",
+        "blank",
+        "foreign"
+      })
   void corroboratedDismissalPreservesEvidenceCoverageAndIsScopedAndIdempotent(String kind)
       throws Exception {
     Files.writeString(dir.resolve("lesson.md"), "source evidence\n");
@@ -72,9 +81,10 @@ class ReviewToolsTest {
             new dev.mikoto2000.rei.core.stagnation.InformationLedger.State(
                 List.of(), fullHistory, false));
         var beforeDismissal = progress.beforeTool("dismissReviewFinding", "{}");
-        String optionalEvidence = kind.equals("blankEvidence") ? " \t\n "
-            : kind.equals("emptyEvidence") ? "" : null;
-        var result = tools.dismissReviewFinding(job.id(), "F1", "lesson.md", reason, optionalEvidence);
+        String optionalEvidence =
+            kind.equals("blankEvidence") ? " \t\n " : kind.equals("emptyEvidence") ? "" : null;
+        var result =
+            tools.dismissReviewFinding(job.id(), "F1", "lesson.md", reason, optionalEvidence);
         assertThat(result.changed()).isTrue();
         String receipt = StorageDatabase.JSON.writeValueAsString(result);
         assertThat(progress.afterTool("dismissReviewFinding", "{}", receipt, beforeDismissal))
@@ -117,8 +127,7 @@ class ReviewToolsTest {
         assertThat(rebuilt.ranges().getFirst().stale()).isTrue();
       } else {
         if (kind.equals("foreign")) {
-          var other =
-              AgentRunScope.open(new AgentRunContext("foreign", "chat", dir, "project"));
+          var other = AgentRunScope.open(new AgentRunContext("foreign", "chat", dir, "project"));
           try (other) {
             assertThatThrownBy(dismiss).hasMessage("REVIEW_ACCESS_DENIED");
           }
@@ -189,8 +198,7 @@ class ReviewToolsTest {
       assertThat(tools.reviewFindings(job.id(), Integer.MAX_VALUE, 5).findings()).isEmpty();
       assertThat(tools.continuationSummary(owner))
           .contains(job.id(), "reviewFindings", "findingJobs");
-      var foreign =
-          AgentRunScope.open(new AgentRunContext("foreign", "chat", dir, "project"));
+      var foreign = AgentRunScope.open(new AgentRunContext("foreign", "chat", dir, "project"));
       try (foreign) {
         assertThatThrownBy(() -> tools.reviewFindings(job.id(), 0, 5))
             .hasMessage("REVIEW_ACCESS_DENIED");
@@ -266,8 +274,7 @@ class ReviewToolsTest {
             .isEqualTo(finding.evidence());
       } else {
         if (kind.equals("foreign")) {
-          var other =
-              AgentRunScope.open(new AgentRunContext("foreign", "chat", dir, "project"));
+          var other = AgentRunScope.open(new AgentRunContext("foreign", "chat", dir, "project"));
           try (other) {
             assertThatThrownBy(submit)
                 .isInstanceOf(IllegalArgumentException.class)
@@ -357,8 +364,12 @@ class ReviewToolsTest {
       migration.prepare();
     }
     var ledger = new ReviewCoverageLedger(new StorageDatabase(dir.resolve("data")));
-    var tools = new ReviewTools(ledger, new RawToolResultStore(dir.resolve("data")),
-        new Tools(), TokenEstimator.conservative());
+    var tools =
+        new ReviewTools(
+            ledger,
+            new RawToolResultStore(dir.resolve("data")),
+            new Tools(),
+            TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "chat", dir, "project");
     var scope = AgentRunScope.open(owner);
     try (scope) {
@@ -368,10 +379,18 @@ class ReviewToolsTest {
       tools.confirmed(owner, List.of(page));
       assertThat(page.reviewed()).isFalse();
       int middle = source.indexOf('\n') + 1;
-      var first = new ReviewCoverageLedger.Range("lesson.md", version,
-          new ReviewCoverageLedger.Span(0, middle, 1, 2, 0, 0), ReviewTools.hash(source.substring(0, middle)));
-      var last = new ReviewCoverageLedger.Range("lesson.md", version,
-          new ReviewCoverageLedger.Span(middle, source.length(), 2, 3, 0, 0), ReviewTools.hash(source.substring(middle)));
+      var first =
+          new ReviewCoverageLedger.Range(
+              "lesson.md",
+              version,
+              new ReviewCoverageLedger.Span(0, middle, 1, 2, 0, 0),
+              ReviewTools.hash(source.substring(0, middle)));
+      var last =
+          new ReviewCoverageLedger.Range(
+              "lesson.md",
+              version,
+              new ReviewCoverageLedger.Span(middle, source.length(), 2, 3, 0, 0),
+              ReviewTools.hash(source.substring(middle)));
       var actor = ReviewTools.scope(owner);
       ledger.fetched(job.id(), actor, first);
       ledger.delivered(job.id(), actor, List.of(first));
@@ -387,7 +406,8 @@ class ReviewToolsTest {
       assertThat(ledger.get(job.id(), actor).revision()).isEqualTo(revision);
       assertThat(tools.reviewStatus(job.id()).status()).isEqualTo("REVIEW_PARTIAL");
       var other = tools.beginReview(List.of("lesson.md"), "style", "v1");
-      assertThat(tools.readReviewFile(other.id(), "lesson.md", version, 0, 512).reviewed()).isFalse();
+      assertThat(tools.readReviewFile(other.id(), "lesson.md", version, 0, 512).reviewed())
+          .isFalse();
       Files.writeString(dir.resolve("lesson.md"), source + "changed");
       assertThatThrownBy(() -> tools.readReviewFile(job.id(), "lesson.md", version, 0, 512))
           .hasMessageContaining("STALE_VERSION");
@@ -457,7 +477,8 @@ class ReviewToolsTest {
       try (scope) {
         var job = tools.beginReview(List.of("lesson.md"), "correctness", "v1");
         id = job.id();
-        var page = tools.readReviewFile(id, "lesson.md", job.targets().getFirst().version(), 0, 256);
+        var page =
+            tools.readReviewFile(id, "lesson.md", job.targets().getFirst().version(), 0, 256);
         nextOffset = page.nextOffset();
         tools.confirmed(old, List.of(page));
         tools.submitReviewResult(id, page.range(), "Checked this delivered range", List.of());

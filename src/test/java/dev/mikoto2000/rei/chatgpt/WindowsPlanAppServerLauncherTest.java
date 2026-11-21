@@ -32,12 +32,10 @@ class WindowsPlanAppServerLauncherTest {
         .withPropertyValues(
             "rei.chatgpt-plan.app-server.enabled=true",
             "rei.chatgpt-plan.app-server.executable=C:/Codex/codex.exe")
-        .run(
-            context -> {
-              assertNull(context.getStartupFailure());
-              assertEquals(
-                  "windows", context.getBean(PlanAppServerProperties.class).executionMode());
-            });
+        .run(context -> {
+          assertNull(context.getStartupFailure());
+          assertEquals("windows", context.getBean(PlanAppServerProperties.class).executionMode());
+        });
   }
 
   /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */

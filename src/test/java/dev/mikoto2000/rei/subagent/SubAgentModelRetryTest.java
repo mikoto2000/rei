@@ -74,9 +74,8 @@ class SubAgentModelRetryTest {
                 "secret provider diagnostics",
                 new java.net.SocketTimeoutException("read timed out")),
             new OpenAIRetryableException("secret provider diagnostics"))
-        .flatMap(
-            error ->
-                Stream.of(error, new CompletionException(error), new ExecutionException(error)));
+        .flatMap(error ->
+            Stream.of(error, new CompletionException(error), new ExecutionException(error)));
   }
 
   /** {@code permanentSdkFailures} の条件を再現するための補助情報を返す。 */
@@ -452,10 +451,8 @@ class SubAgentModelRetryTest {
     String id =
         f.events.stream()
             .filter(e -> e.payload() instanceof dev.mikoto2000.rei.event.SubAgentLifecyclePayload)
-            .map(
-                e ->
-                    ((dev.mikoto2000.rei.event.SubAgentLifecyclePayload) e.payload())
-                        .subAgentRunId())
+            .map(e ->
+                ((dev.mikoto2000.rei.event.SubAgentLifecyclePayload) e.payload()).subAgentRunId())
             .findFirst()
             .orElseThrow();
     assertTrue(runner.cancel(id));

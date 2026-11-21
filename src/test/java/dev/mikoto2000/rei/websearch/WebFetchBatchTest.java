@@ -43,17 +43,16 @@ class WebFetchBatchTest {
       var release = new CountDownLatch(1);
       var input = candidates("a.example", "b.example", "c.example");
       var future =
-          caller.submit(
-              () ->
-                  batch.fetch(
-                      input,
-                      Duration.ofSeconds(3),
-                      candidate -> {
-                        started.countDown();
-                        assertTrue(release.await(2, TimeUnit.SECONDS));
-                        Thread.sleep((2 - candidate.rank()) * 40L);
-                        return candidate.rank();
-                      }));
+          caller.submit(() ->
+              batch.fetch(
+                  input,
+                  Duration.ofSeconds(3),
+                  candidate -> {
+                    started.countDown();
+                    assertTrue(release.await(2, TimeUnit.SECONDS));
+                    Thread.sleep((2 - candidate.rank()) * 40L);
+                    return candidate.rank();
+                  }));
       assertTrue(started.await(2, TimeUnit.SECONDS), "All three must start before any may finish");
       release.countDown();
       assertEquals(
@@ -88,19 +87,17 @@ class WebFetchBatchTest {
             }
           };
       var first =
-          callers.submit(
-              () ->
-                  batch.fetch(
-                      candidates("a.example", "a.example", "b.example"),
-                      Duration.ofSeconds(3),
-                      loader));
+          callers.submit(() ->
+              batch.fetch(
+                  candidates("a.example", "a.example", "b.example"),
+                  Duration.ofSeconds(3),
+                  loader));
       var second =
-          callers.submit(
-              () ->
-                  batch.fetch(
-                      candidates("a.example", "c.example", "d.example"),
-                      Duration.ofSeconds(3),
-                      loader));
+          callers.submit(() ->
+              batch.fetch(
+                  candidates("a.example", "c.example", "d.example"),
+                  Duration.ofSeconds(3),
+                  loader));
       assertTrue(first.get().stream().allMatch(WebFetchBatch.Outcome::success));
       assertTrue(second.get().stream().allMatch(WebFetchBatch.Outcome::success));
       assertTrue(max.get() <= 3);
@@ -168,27 +165,26 @@ class WebFetchBatchTest {
       var stop = new AtomicBoolean();
       var calls = new AtomicInteger();
       var future =
-          caller.submit(
-              () -> {
-                var scope =
-                    FetchScope.enter(
-                        new FetchOperation(
-                            () -> {
-                              if (stop.get()) throw new CancellationException();
-                            },
-                            Long.MAX_VALUE));
-                try (scope) {
-                  return batch.fetch(
-                      candidates("a.example", "b.example"),
-                      Duration.ofSeconds(5),
-                      candidate -> {
-                        calls.incrementAndGet();
-                        started.countDown();
-                        Thread.sleep(5000);
-                        return 1;
-                      });
-                }
-              });
+          caller.submit(() -> {
+            var scope =
+                FetchScope.enter(
+                    new FetchOperation(
+                        () -> {
+                          if (stop.get()) throw new CancellationException();
+                        },
+                        Long.MAX_VALUE));
+            try (scope) {
+              return batch.fetch(
+                  candidates("a.example", "b.example"),
+                  Duration.ofSeconds(5),
+                  candidate -> {
+                    calls.incrementAndGet();
+                    started.countDown();
+                    Thread.sleep(5000);
+                    return 1;
+                  });
+            }
+          });
       assertTrue(started.await(2, TimeUnit.SECONDS));
       stop.set(true);
       assertInstanceOf(
@@ -212,16 +208,15 @@ class WebFetchBatchTest {
     try (var caller = Executors.newSingleThreadExecutor()) {
       var started = new CountDownLatch(1);
       var future =
-          caller.submit(
-              () ->
-                  batch.fetch(
-                      candidates("a.example", "b.example", "c.example", "d.example"),
-                      Duration.ofSeconds(5),
-                      candidate -> {
-                        started.countDown();
-                        Thread.sleep(5000);
-                        return 1;
-                      }));
+          caller.submit(() ->
+              batch.fetch(
+                  candidates("a.example", "b.example", "c.example", "d.example"),
+                  Duration.ofSeconds(5),
+                  candidate -> {
+                    started.countDown();
+                    Thread.sleep(5000);
+                    return 1;
+                  }));
       assertTrue(started.await(2, TimeUnit.SECONDS));
       // The bounded queue cannot admit all four candidates.
       Thread.sleep(100);

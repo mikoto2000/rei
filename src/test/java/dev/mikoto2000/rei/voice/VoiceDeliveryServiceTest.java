@@ -129,11 +129,10 @@ class VoiceDeliveryServiceTest {
     options.set(VoiceAdvancedOptions.defaults());
     delivery.accept(stop);
     assertThat(tasks).isEmpty();
-    assertThatThrownBy(
-            () ->
-                delivery.accept(
-                    new ConversationInput(
-                        stop.inputId(), InputSource.VOICE, target, "different", clock.instant())))
+    assertThatThrownBy(() ->
+            delivery.accept(
+                new ConversationInput(
+                    stop.inputId(), InputSource.VOICE, target, "different", clock.instant())))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -152,11 +151,10 @@ class VoiceDeliveryServiceTest {
     }
     var ordinary = input(target);
     delivery.accept(ordinary);
-    assertThatThrownBy(
-            () ->
-                delivery.accept(
-                    new ConversationInput(
-                        ordinary.inputId(), InputSource.VOICE, target, "実行を停止", clock.instant())))
+    assertThatThrownBy(() ->
+            delivery.accept(
+                new ConversationInput(
+                    ordinary.inputId(), InputSource.VOICE, target, "実行を停止", clock.instant())))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -185,11 +183,10 @@ class VoiceDeliveryServiceTest {
             false,
             router,
             clock);
-    shell.onActiveCancellation(
-        context -> {
-          cancelled.add(context.runId());
-          return true;
-        });
+    shell.onActiveCancellation(context -> {
+      cancelled.add(context.runId());
+      return true;
+    });
     var options =
         new VoiceAdvancedOptions(
             false, "れい", true, false, VoiceAdvancedOptions.defaults().ttsVoice(), 800);
@@ -338,10 +335,9 @@ class VoiceDeliveryServiceTest {
     delivery.accept(input);
     assertThat(tasks).isEmpty();
     assertThat(events)
-        .anyMatch(
-            e ->
-                e.type() == VoiceEventPublisher.Type.REVIEW_REQUIRED
-                    && e.detail().equals(input.inputId().toString()));
+        .anyMatch(e ->
+            e.type() == VoiceEventPublisher.Type.REVIEW_REQUIRED
+                && e.detail().equals(input.inputId().toString()));
     assertThat(events).noneMatch(e -> e.detail().contains("recognized"));
     delivery.confirm(input.inputId(), "corrected");
     tasks.removeFirst().run();

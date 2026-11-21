@@ -130,11 +130,10 @@ public class DotDelegationService {
             : owner ->
                 checkpoints
                     .findByRun(owner.projectId(), owner.runId())
-                    .filter(
-                        checkpoint ->
-                            checkpoint.projectRoot().equals(owner.projectRoot().toString())
-                                && checkpoint.sessionId().equals(owner.conversationId())
-                                && checkpoint.status().equals("RUNNING"))
+                    .filter(checkpoint ->
+                        checkpoint.projectRoot().equals(owner.projectRoot().toString())
+                            && checkpoint.sessionId().equals(owner.conversationId())
+                            && checkpoint.status().equals("RUNNING"))
                     .map(checkpoint -> checkpoint.taskId());
     this.authorization =
         policy == null

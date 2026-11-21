@@ -73,9 +73,8 @@ class ArtifactSourceExportTest {
         new ArtifactStore(
             db, projects, root.resolve("delivery"), Clock.systemUTC(), new ArtifactProperties());
     var exports = new ArtifactSourceExport(store, projects, sessions, changes, null);
-    assertThatThrownBy(
-            () ->
-                exports.export(project.id(), "foreign", "CHANGE_SET_PROPOSAL", proposal.id(), null))
+    assertThatThrownBy(() ->
+            exports.export(project.id(), "foreign", "CHANGE_SET_PROPOSAL", proposal.id(), null))
         .isInstanceOf(dev.mikoto2000.rei.application.run.ResourceNotFoundException.class);
     assertThat(store.list(project.id(), null, null, 10, null).items()).isEmpty();
     var item = exports.export(project.id(), "owned", "CHANGE_SET_PROPOSAL", proposal.id(), null);

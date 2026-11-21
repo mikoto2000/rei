@@ -227,26 +227,23 @@ class ApprovalContinuationTest {
     service.decide(owner.projectId(), id, true, true);
     var controller = new dev.mikoto2000.rei.web.RunController(runs, router, true);
     when(chat.execute(eq(owner), anyString(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              assertEquals(RunStatus.RUNNING, registry.get(owner.runId()).status());
-              var input =
-                  new dev.mikoto2000.rei.web.RunController.InputRequest(
-                      owner.projectId(),
-                      owner.conversationId(),
-                      "Complete all remaining review pages");
-              assertEquals(202, controller.input(owner.runId(), input).getStatusCode().value());
-              assertTrue(
-                  !router.offerIntervention(
-                      "wrong-project", owner.conversationId(), owner.runId(), "wrong"));
-              assertTrue(
-                  !router.offerIntervention(
-                      owner.projectId(), "wrong-session", owner.runId(), "wrong"));
-              dev.mikoto2000.rei.core.chat.UserInterventionQueue queue = invocation.getArgument(2);
-              assertEquals(List.of(input.message()), queue.drain());
-              assertEquals(1, store.document(store.find(id).orElseThrow()).budget().llmCalls());
-              return ChatExecutionResult.success("done", false);
-            });
+        .thenAnswer(invocation -> {
+          assertEquals(RunStatus.RUNNING, registry.get(owner.runId()).status());
+          var input =
+              new dev.mikoto2000.rei.web.RunController.InputRequest(
+                  owner.projectId(), owner.conversationId(), "Complete all remaining review pages");
+          assertEquals(202, controller.input(owner.runId(), input).getStatusCode().value());
+          assertTrue(
+              !router.offerIntervention(
+                  "wrong-project", owner.conversationId(), owner.runId(), "wrong"));
+          assertTrue(
+              !router.offerIntervention(
+                  owner.projectId(), "wrong-session", owner.runId(), "wrong"));
+          dev.mikoto2000.rei.core.chat.UserInterventionQueue queue = invocation.getArgument(2);
+          assertEquals(List.of(input.message()), queue.drain());
+          assertEquals(1, store.document(store.find(id).orElseThrow()).budget().llmCalls());
+          return ChatExecutionResult.success("done", false);
+        });
     service.pump();
     verify(chat, times(1)).execute(eq(owner), anyString(), any(), any());
     assertEquals("COMPLETED", service.state(id).orElseThrow());

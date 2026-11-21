@@ -42,12 +42,11 @@ class ReadingMetricsPersistenceTest {
   }
 
   private ReadingStateStore store(java.util.function.Consumer<Boolean> beforeAccess) {
-    return new ReadingStateStore(
-        (write, work) -> {
-          beforeAccess.accept(write);
-          if (write) db.transaction(work::run);
-          else db.read(work::run);
-        });
+    return new ReadingStateStore((write, work) -> {
+      beforeAccess.accept(write);
+      if (write) db.transaction(work::run);
+      else db.read(work::run);
+    });
   }
 
   private static void await(CountDownLatch latch) {
@@ -65,26 +64,24 @@ class ReadingMetricsPersistenceTest {
     var release = new CountDownLatch(1);
     var writes = new AtomicInteger();
     var store =
-        store(
-            write -> {
-              if (write && writes.incrementAndGet() == 1) {
-                entered.countDown();
-                await(release);
-              }
-            });
+        store(write -> {
+          if (write && writes.incrementAndGet() == 1) {
+            entered.countDown();
+            await(release);
+          }
+        });
     ReadingMetrics.add(first, "count", 1);
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
       var save = executor.submit(() -> ReadingMetrics.flush(first, store));
       await(entered);
       try {
         executor
-            .submit(
-                () -> {
-                  ReadingMetrics.add(first, "count", 1);
-                  ReadingMetrics.add(second, "count", 7);
-                  assertThat(ReadingMetrics.snapshot(second)).containsEntry("count", 7L);
-                  ReadingMetrics.flush(second, store);
-                })
+            .submit(() -> {
+              ReadingMetrics.add(first, "count", 1);
+              ReadingMetrics.add(second, "count", 7);
+              assertThat(ReadingMetrics.snapshot(second)).containsEntry("count", 7L);
+              ReadingMetrics.flush(second, store);
+            })
             .get(3, TimeUnit.SECONDS);
         var queued = executor.submit(() -> ReadingMetrics.flush(first, store));
         release.countDown();
@@ -110,24 +107,22 @@ class ReadingMetricsPersistenceTest {
     var entered = new CountDownLatch(1);
     var release = new CountDownLatch(1);
     var store =
-        store(
-            write -> {
-              if (!write) {
-                entered.countDown();
-                await(release);
-              }
-            });
+        store(write -> {
+          if (!write) {
+            entered.countDown();
+            await(release);
+          }
+        });
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
       var restore = executor.submit(() -> ReadingMetrics.restore(first, store));
       await(entered);
       try {
         executor
-            .submit(
-                () -> {
-                  ReadingMetrics.add(first, "current", 3);
-                  ReadingMetrics.add(second, "count", 7);
-                  ReadingMetrics.flush(second, normal);
-                })
+            .submit(() -> {
+              ReadingMetrics.add(first, "current", 3);
+              ReadingMetrics.add(second, "count", 7);
+              ReadingMetrics.flush(second, normal);
+            })
             .get(3, TimeUnit.SECONDS);
         release.countDown();
         restore.get(3, TimeUnit.SECONDS);
@@ -144,10 +139,9 @@ class ReadingMetricsPersistenceTest {
   void nestedOperationsSaveOnceAndKeepEveryCounter() throws Exception {
     var writes = new AtomicInteger();
     var store =
-        store(
-            write -> {
-              if (write) writes.incrementAndGet();
-            });
+        store(write -> {
+          if (write) writes.incrementAndGet();
+        });
     var scope = AgentRunScope.open(first);
     try (scope) {
       var outer = ReadingMetrics.operation("outer");
@@ -174,11 +168,10 @@ class ReadingMetricsPersistenceTest {
   void exceptionAndPersistenceFailureReleaseOperationScope() {
     var writes = new AtomicInteger();
     var failed =
-        store(
-            write -> {
-              if (write) writes.incrementAndGet();
-              throw new IllegalStateException("unavailable");
-            });
+        store(write -> {
+          if (write) writes.incrementAndGet();
+          throw new IllegalStateException("unavailable");
+        });
     var scope = AgentRunScope.open(first);
     try (scope) {
       assertThatThrownBy(

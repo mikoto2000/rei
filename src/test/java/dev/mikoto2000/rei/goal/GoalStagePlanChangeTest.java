@@ -29,11 +29,12 @@ class GoalStagePlanChangeTest extends GoalStageLoopTest {
         goals.get("project", goal.id()), 1, List.of(stage("a"), stage("b", "a"), child("c", "a")));
     service.configureRepair(2);
     var result =
-        loop((claim, run, complete) -> {
-              var active = stages.forRun(goal, run);
-              if (active.stageId().equals("c")) write("c", true);
-              complete.accept(done());
-            })
+        loop(
+                (claim, run, complete) -> {
+                  var active = stages.forRun(goal, run);
+                  if (active.stageId().equals("c")) write("c", true);
+                  complete.accept(done());
+                })
             .run("project", goal.id());
     assertEquals("BLOCKED", result.status());
     assertEquals(
@@ -54,23 +55,24 @@ class GoalStagePlanChangeTest extends GoalStageLoopTest {
   void modelProposalIsValidatedAndAppliedOnlyByHostAfterUnverifiedAttempt() {
     var goal = setup();
     var result =
-        loop((claim, run, complete) -> {
-              var active = stages.forRun(goal, run);
-              if (active.stageId().equals("a") && active.number() == 2) {
-                service.proposeSplit(
-                    new AgentRunContext(run, "session", dir, "project"),
-                    goal.id(),
-                    1,
-                    List.of(child("c", "a")));
-                assertEquals(1, stages.planVersion(goal));
-              }
-              if (active.stageId().equals("c")) {
-                write("c", true);
-                write("a", true);
-              }
-              if (active.stageId().equals("b")) write("b", true);
-              complete.accept(done());
-            })
+        loop(
+                (claim, run, complete) -> {
+                  var active = stages.forRun(goal, run);
+                  if (active.stageId().equals("a") && active.number() == 2) {
+                    service.proposeSplit(
+                        new AgentRunContext(run, "session", dir, "project"),
+                        goal.id(),
+                        1,
+                        List.of(child("c", "a")));
+                    assertEquals(1, stages.planVersion(goal));
+                  }
+                  if (active.stageId().equals("c")) {
+                    write("c", true);
+                    write("a", true);
+                  }
+                  if (active.stageId().equals("b")) write("b", true);
+                  complete.accept(done());
+                })
             .run("project", goal.id());
     assertEquals("COMPLETED", result.status());
     assertEquals(2, stages.planVersion(goal));
@@ -119,12 +121,11 @@ class GoalStagePlanChangeTest extends GoalStageLoopTest {
     assertThrows(
         IllegalStateException.class,
         () ->
-            goals.atomic(
-                () -> {
-                  assertTrue(stages.finish(claim, attempt, observation));
-                  goals.recordAttempt(claim, run, "VERIFIED", "criteria_verified");
-                  throw new IllegalStateException("Simulated failure before commit");
-                }));
+            goals.atomic(() -> {
+              assertTrue(stages.finish(claim, attempt, observation));
+              goals.recordAttempt(claim, run, "VERIFIED", "criteria_verified");
+              throw new IllegalStateException("Simulated failure before commit");
+            }));
     assertEquals("RUNNING", stages.list(goal).getFirst().state());
     assertEquals("RUNNING", stages.attempts(goal).getFirst().status());
     assertTrue(stages.evidence(goal).isEmpty());

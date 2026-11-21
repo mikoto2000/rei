@@ -58,28 +58,26 @@ class DotPersistenceConcurrencyTest {
       for (int i = 0; i < 2; i++) {
         String claim = "claim" + i;
         calls.add(
-            pool.submit(
-                () -> {
-                  barrier.await();
-                  try {
-                    repo.claim("p", id, claim);
-                    return true;
-                  } catch (DotException conflict) {
-                    return false;
-                  }
-                }));
+            pool.submit(() -> {
+              barrier.await();
+              try {
+                repo.claim("p", id, claim);
+                return true;
+              } catch (DotException conflict) {
+                return false;
+              }
+            }));
       }
       assertEquals(
           1,
           calls.stream()
-              .filter(
-                  f -> {
-                    try {
-                      return f.get();
-                    } catch (Exception e) {
-                      throw new RuntimeException(e);
-                    }
-                  })
+              .filter(f -> {
+                try {
+                  return f.get();
+                } catch (Exception e) {
+                  throw new RuntimeException(e);
+                }
+              })
               .count());
     }
   }
@@ -92,22 +90,20 @@ class DotPersistenceConcurrencyTest {
     try (var pool = Executors.newFixedThreadPool(2)) {
       var barrier = new CyclicBarrier(2);
       var cancel =
-          pool.submit(
-              () -> {
-                barrier.await();
-                return repo.cancel("p", id);
-              });
+          pool.submit(() -> {
+            barrier.await();
+            return repo.cancel("p", id);
+          });
       var submit =
-          pool.submit(
-              () -> {
-                barrier.await();
-                try {
-                  return repo.submit(
-                      "p", id, "claim", "submission", Map.of("summary", "report"), "hash");
-                } catch (DotException late) {
-                  return Map.of();
-                }
-              });
+          pool.submit(() -> {
+            barrier.await();
+            try {
+              return repo.submit(
+                  "p", id, "claim", "submission", Map.of("summary", "report"), "hash");
+            } catch (DotException late) {
+              return Map.of();
+            }
+          });
       cancel.get();
       submit.get();
       assertEquals("CANCELLED", repo.get("p", id).get("status"));

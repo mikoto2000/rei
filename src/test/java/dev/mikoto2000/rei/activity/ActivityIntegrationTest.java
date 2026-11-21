@@ -98,13 +98,12 @@ class ActivityIntegrationTest {
         .withBean(
             dev.mikoto2000.rei.core.service.ModelHolderService.class,
             () -> mock(dev.mikoto2000.rei.core.service.ModelHolderService.class))
-        .run(
-            context -> {
-              assertNull(context.getStartupFailure());
-              assertFalse(context.getBean(ActivityProperties.class).isEnabled());
-              // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
-              verifyNoInteractions(ds, provider);
-            });
+        .run(context -> {
+          assertNull(context.getStartupFailure());
+          assertFalse(context.getBean(ActivityProperties.class).isEnabled());
+          // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
+          verifyNoInteractions(ds, provider);
+        });
   }
 
   /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */

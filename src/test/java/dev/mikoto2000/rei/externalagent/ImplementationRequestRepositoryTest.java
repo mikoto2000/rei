@@ -93,17 +93,15 @@ class ImplementationRequestRepositoryTest {
     try (var pool = Executors.newFixedThreadPool(2)) {
       var start = new CountDownLatch(1);
       var a =
-          pool.submit(
-              () -> {
-                start.await();
-                return first.claim("id", "one");
-              });
+          pool.submit(() -> {
+            start.await();
+            return first.claim("id", "one");
+          });
       var b =
-          pool.submit(
-              () -> {
-                start.await();
-                return second.claim("id", "two");
-              });
+          pool.submit(() -> {
+            start.await();
+            return second.claim("id", "two");
+          });
       start.countDown();
       assertNotEquals(a.get(), b.get());
     }

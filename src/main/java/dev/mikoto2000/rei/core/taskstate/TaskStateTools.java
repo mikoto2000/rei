@@ -49,14 +49,14 @@ public class TaskStateTools {
       name = "updateTaskState",
       description =
           """
-      現在の作業目的・進捗・次に行うべきことを更新する。
-      status は必須で、IDLE / IN_PROGRESS / COMPLETED / BLOCKED のいずれかを指定する。
-      goal は新しいタスクを開始する場合に指定し、既存タスクの継続では省略できる。
-      completed と pending は文字列の JSON 配列。例: {"status":"IN_PROGRESS","completed":["資料の特定"],"pending":["レビュー委譲","指摘の検証"]}。
-      作業がなければ [] または項目自体を省略する。カンマ区切りの文字列や JSON 配列を文字列化した値は指定しない。
-      複数工程の作業では、着手時に全体の工程を pending に登録し、工程を終えるたびに同じ文言を completed に追加する。
-      この記録は利用者向けの全体進捗表示にも使われる。実際に完了した工程だけを completed に記録する。
-      """)
+          現在の作業目的・進捗・次に行うべきことを更新する。
+          status は必須で、IDLE / IN_PROGRESS / COMPLETED / BLOCKED のいずれかを指定する。
+          goal は新しいタスクを開始する場合に指定し、既存タスクの継続では省略できる。
+          completed と pending は文字列の JSON 配列。例: {"status":"IN_PROGRESS","completed":["資料の特定"],"pending":["レビュー委譲","指摘の検証"]}。
+          作業がなければ [] または項目自体を省略する。カンマ区切りの文字列や JSON 配列を文字列化した値は指定しない。
+          複数工程の作業では、着手時に全体の工程を pending に登録し、工程を終えるたびに同じ文言を completed に追加する。
+          この記録は利用者向けの全体進捗表示にも使われる。実際に完了した工程だけを completed に記録する。
+          """)
   String updateTaskState(
       @ToolParam(required = false, description = "現在の目的。新しいタスクでは指定し、既存タスクの継続では省略可能。") String goal,
       @ToolParam(description = "必須。IDLE / IN_PROGRESS / COMPLETED / BLOCKED のいずれか。") String status,

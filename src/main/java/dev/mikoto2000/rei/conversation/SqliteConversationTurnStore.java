@@ -23,19 +23,18 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
   /** 会話履歴と受付記録の管理で用いる一回のやり取り件数を返す。 */
   @Override
   public long turnCount(String conversation) {
-    return database.read(
-        connection -> {
-          try (var query =
-              connection.prepareStatement(
-                  "SELECT COUNT(*) FROM turns WHERE project_id=? AND conversation_key=?")) {
-            query.setString(1, scope(conversation));
-            query.setString(2, key(conversation));
-            try (var rows = query.executeQuery()) {
-              rows.next();
-              return rows.getLong(1);
-            }
-          }
-        });
+    return database.read(connection -> {
+      try (var query =
+          connection.prepareStatement(
+              "SELECT COUNT(*) FROM turns WHERE project_id=? AND conversation_key=?")) {
+        query.setString(1, scope(conversation));
+        query.setString(2, key(conversation));
+        try (var rows = query.executeQuery()) {
+          rows.next();
+          return rows.getLong(1);
+        }
+      }
+    });
   }
 
   /** 必要な内容を参照できるよう、対象範囲を読み取る。 */
@@ -43,43 +42,41 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
   public List<Turn> readRange(String conversation, long from, int limit) {
     if (from < 0 || limit < 1 || limit > 100)
       throw new IllegalArgumentException("Invalid turn range");
-    return database.read(
-        connection -> {
-          try (var query =
-              connection.prepareStatement(
-                  "SELECT record FROM turns WHERE project_id=? AND conversation_key=? AND ordinal>=? ORDER BY ordinal LIMIT ?")) {
-            query.setString(1, scope(conversation));
-            query.setString(2, key(conversation));
-            query.setLong(3, from);
-            query.setInt(4, limit);
-            var result = new ArrayList<Turn>();
-            try (var rows = query.executeQuery()) {
-              while (rows.next())
-                result.add(StorageDatabase.JSON.readValue(rows.getString(1), Turn.class));
-            }
-            return List.copyOf(result);
-          }
-        });
+    return database.read(connection -> {
+      try (var query =
+          connection.prepareStatement(
+              "SELECT record FROM turns WHERE project_id=? AND conversation_key=? AND ordinal>=? ORDER BY ordinal LIMIT ?")) {
+        query.setString(1, scope(conversation));
+        query.setString(2, key(conversation));
+        query.setLong(3, from);
+        query.setInt(4, limit);
+        var result = new ArrayList<Turn>();
+        try (var rows = query.executeQuery()) {
+          while (rows.next())
+            result.add(StorageDatabase.JSON.readValue(rows.getString(1), Turn.class));
+        }
+        return List.copyOf(result);
+      }
+    });
   }
 
   /** 対象を特定できるよう、実行を探す。 */
   @Override
   public Optional<Turn> findRun(String conversation, String run) {
-    return database.read(
-        connection -> {
-          try (var query =
-              connection.prepareStatement(
-                  "SELECT record FROM turns WHERE project_id=? AND conversation_key=? AND run_id=? LIMIT 1")) {
-            query.setString(1, scope(conversation));
-            query.setString(2, key(conversation));
-            query.setString(3, run);
-            try (var rows = query.executeQuery()) {
-              return rows.next()
-                  ? Optional.of(StorageDatabase.JSON.readValue(rows.getString(1), Turn.class))
-                  : Optional.empty();
-            }
-          }
-        });
+    return database.read(connection -> {
+      try (var query =
+          connection.prepareStatement(
+              "SELECT record FROM turns WHERE project_id=? AND conversation_key=? AND run_id=? LIMIT 1")) {
+        query.setString(1, scope(conversation));
+        query.setString(2, key(conversation));
+        query.setString(3, run);
+        try (var rows = query.executeQuery()) {
+          return rows.next()
+              ? Optional.of(StorageDatabase.JSON.readValue(rows.getString(1), Turn.class))
+              : Optional.empty();
+        }
+      }
+    });
   }
 
   /** データベース。 */
@@ -87,43 +84,41 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
 
   @Override
   protected boolean hasCancelled(String conversation) {
-    return database.read(
-        connection -> {
-          try (var query =
-              connection.prepareStatement(
-                  "SELECT EXISTS(SELECT 1 FROM turns WHERE project_id=? AND conversation_key=? AND status='CANCELLED')")) {
-            query.setString(1, scope(conversation));
-            query.setString(2, key(conversation));
-            try (var rows = query.executeQuery()) {
-              return rows.next() && rows.getBoolean(1);
-            }
-          }
-        });
+    return database.read(connection -> {
+      try (var query =
+          connection.prepareStatement(
+              "SELECT EXISTS(SELECT 1 FROM turns WHERE project_id=? AND conversation_key=? AND status='CANCELLED')")) {
+        query.setString(1, scope(conversation));
+        query.setString(2, key(conversation));
+        try (var rows = query.executeQuery()) {
+          return rows.next() && rows.getBoolean(1);
+        }
+      }
+    });
   }
 
   @Override
   public dev.mikoto2000.rei.context.CancelledTaskHistory promptHistory(String conversation) {
-    return database.read(
-        connection -> {
-          try (var query =
-              connection.prepareStatement(
-                  "SELECT run_id,status,created_seconds,created_nanos FROM turns WHERE project_id=? AND conversation_key=? ORDER BY ordinal")) {
-            query.setString(1, scope(conversation));
-            query.setString(2, key(conversation));
-            var attempts = new ArrayList<dev.mikoto2000.rei.context.CancelledTaskHistory.Attempt>();
-            try (var rows = query.executeQuery()) {
-              while (rows.next())
-                attempts.add(
-                    new dev.mikoto2000.rei.context.CancelledTaskHistory.Attempt(
-                        rows.getString(1),
-                        rows.getString(2),
-                        rows.getObject(3) == null
-                            ? null
-                            : Instant.ofEpochSecond(rows.getLong(3), rows.getInt(4))));
-            }
-            return dev.mikoto2000.rei.context.CancelledTaskHistory.from(attempts);
-          }
-        });
+    return database.read(connection -> {
+      try (var query =
+          connection.prepareStatement(
+              "SELECT run_id,status,created_seconds,created_nanos FROM turns WHERE project_id=? AND conversation_key=? ORDER BY ordinal")) {
+        query.setString(1, scope(conversation));
+        query.setString(2, key(conversation));
+        var attempts = new ArrayList<dev.mikoto2000.rei.context.CancelledTaskHistory.Attempt>();
+        try (var rows = query.executeQuery()) {
+          while (rows.next())
+            attempts.add(
+                new dev.mikoto2000.rei.context.CancelledTaskHistory.Attempt(
+                    rows.getString(1),
+                    rows.getString(2),
+                    rows.getObject(3) == null
+                        ? null
+                        : Instant.ofEpochSecond(rows.getLong(3), rows.getInt(4))));
+        }
+        return dev.mikoto2000.rei.context.CancelledTaskHistory.from(attempts);
+      }
+    });
   }
 
   /** 指定された値や利用先を使って、SqliteConversationTurnStoreを初期化する。 */
@@ -188,66 +183,63 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
   /** 要求された処理を開始する。 */
   @Override
   public void start(AgentRunContext context, String request, Instant time) {
-    database.transaction(
-        connection -> {
-          String scope = scope(context.conversationId()), key = key(context.conversationId());
-          put(
-              connection,
-              scope,
-              key,
-              next(connection, scope, key),
-              new Turn(context.runId(), request, Status.RUNNING, null, time));
-          return null;
-        });
+    database.transaction(connection -> {
+      String scope = scope(context.conversationId()), key = key(context.conversationId());
+      put(
+          connection,
+          scope,
+          key,
+          next(connection, scope, key),
+          new Turn(context.runId(), request, Status.RUNNING, null, time));
+      return null;
+    });
   }
 
   /** 要求された処理を利用できるよう、Orderedを開始する。 */
   @Override
   public void startOrdered(AgentRunContext context, String request, Instant observed) {
-    database.transaction(
-        connection -> {
-          String scope = scope(context.conversationId()), key = key(context.conversationId());
-          Instant time = Objects.requireNonNull(observed);
-          try (var query =
-              connection.prepareStatement(
-                  "SELECT created_seconds,created_nanos FROM turns WHERE project_id=? AND conversation_key=? AND created_seconds IS NOT NULL ORDER BY created_seconds DESC,created_nanos DESC LIMIT 1")) {
-            query.setString(1, scope);
-            query.setString(2, key);
-            try (var rows = query.executeQuery()) {
-              if (rows.next()) {
-                var last = Instant.ofEpochSecond(rows.getLong(1), rows.getInt(2));
-                if (!time.isAfter(last)) time = last.plusNanos(1);
-              }
-            }
+    database.transaction(connection -> {
+      String scope = scope(context.conversationId()), key = key(context.conversationId());
+      Instant time = Objects.requireNonNull(observed);
+      try (var query =
+          connection.prepareStatement(
+              "SELECT created_seconds,created_nanos FROM turns WHERE project_id=? AND conversation_key=? AND created_seconds IS NOT NULL ORDER BY created_seconds DESC,created_nanos DESC LIMIT 1")) {
+        query.setString(1, scope);
+        query.setString(2, key);
+        try (var rows = query.executeQuery()) {
+          if (rows.next()) {
+            var last = Instant.ofEpochSecond(rows.getLong(1), rows.getInt(2));
+            if (!time.isAfter(last)) time = last.plusNanos(1);
           }
-          put(
-              connection,
-              scope,
-              key,
-              next(connection, scope, key),
-              new Turn(context.runId(), request, Status.RUNNING, null, time));
-          return null;
-        });
+        }
+      }
+      put(
+          connection,
+          scope,
+          key,
+          next(connection, scope, key),
+          new Turn(context.runId(), request, Status.RUNNING, null, time));
+      return null;
+    });
   }
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   @Override
   public List<Turn> read(String conversation) {
-    return database.read(
-        connection -> {
-          try (var query =
-              connection.prepareStatement(
-                  "SELECT record FROM turns WHERE project_id=? AND conversation_key=? ORDER BY ordinal")) {
-            query.setString(1, scope(conversation));
-            query.setString(2, key(conversation));
-            var result = new ArrayList<Turn>();
-            try (var rows = query.executeQuery()) {
-              while (rows.next())
-                result.add(StorageDatabase.JSON.readValue(rows.getString(1), Turn.class));
-            }
-            return List.copyOf(result);
-          }
-        });
+    return database.read(connection -> {
+      try (var query =
+          connection.prepareStatement(
+              "SELECT record FROM turns WHERE project_id=? AND conversation_key=? ORDER BY ordinal")) {
+        query.setString(1, scope(conversation));
+        query.setString(2, key(conversation));
+        var result = new ArrayList<Turn>();
+        try (var rows = query.executeQuery()) {
+          while (rows.next())
+            result.add(StorageDatabase.JSON.readValue(rows.getString(1), Turn.class));
+        }
+        return List.copyOf(result);
+      }
+    });
   }
 
   /** 終了時に必要な状態を反映し、処理を完了させる。 */
@@ -285,28 +277,27 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
 
   /** 会話履歴と受付記録の管理に関するmutateを処理する。 */
   private void mutate(AgentRunContext context, boolean runningOnly, Mutation mutation) {
-    database.transaction(
-        connection -> {
-          String scope = scope(context.conversationId()), key = key(context.conversationId());
-          try (var query =
-              connection.prepareStatement(
-                  "SELECT ordinal,record FROM turns WHERE project_id=? AND conversation_key=? AND run_id=?"
-                      + (runningOnly ? " AND status='RUNNING'" : ""))) {
-            query.setString(1, scope);
-            query.setString(2, key);
-            query.setString(3, context.runId());
-            try (var rows = query.executeQuery()) {
-              while (rows.next())
-                put(
-                    connection,
-                    scope,
-                    key,
-                    rows.getLong(1),
-                    mutation.apply(StorageDatabase.JSON.readValue(rows.getString(2), Turn.class)));
-            }
-          }
-          return null;
-        });
+    database.transaction(connection -> {
+      String scope = scope(context.conversationId()), key = key(context.conversationId());
+      try (var query =
+          connection.prepareStatement(
+              "SELECT ordinal,record FROM turns WHERE project_id=? AND conversation_key=? AND run_id=?"
+                  + (runningOnly ? " AND status='RUNNING'" : ""))) {
+        query.setString(1, scope);
+        query.setString(2, key);
+        query.setString(3, context.runId());
+        try (var rows = query.executeQuery()) {
+          while (rows.next())
+            put(
+                connection,
+                scope,
+                key,
+                rows.getLong(1),
+                mutation.apply(StorageDatabase.JSON.readValue(rows.getString(2), Turn.class)));
+        }
+      }
+      return null;
+    });
   }
 
   /** 後から経緯や使用量を確認できるよう、付随情報を記録する。 */
@@ -333,75 +324,73 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
   /** 既存の記録へ経緯を残すため、アシスタント通知を追記する。 */
   @Override
   public void appendAssistantNotification(ConversationLogEntry entry) {
-    database.transaction(
-        connection -> {
-          String scope = scope(entry.conversationId()), key = key(entry.conversationId());
-          try (var query =
-              connection.prepareStatement(
-                  "SELECT 1 FROM turns WHERE project_id=? AND conversation_key=? AND source=? AND source_id=? LIMIT 1")) {
-            query.setString(1, scope);
-            query.setString(2, key);
-            query.setString(3, ConversationLogStore.BEHAVIOR_NOTIFICATION);
-            query.setString(4, Objects.requireNonNull(entry.sourceId()));
-            try (var rows = query.executeQuery()) {
-              if (rows.next()) return null;
-            }
-          }
-          put(
-              connection,
-              scope,
-              key,
-              next(connection, scope, key),
-              new Turn(
-                  "behavior:" + entry.sourceId(),
-                  "",
-                  Status.COMPLETED,
-                  entry.content(),
-                  entry.timestamp().toInstant(),
-                  entry.source(),
-                  entry.sourceId(),
-                  entry.metadata()));
-          return null;
-        });
+    database.transaction(connection -> {
+      String scope = scope(entry.conversationId()), key = key(entry.conversationId());
+      try (var query =
+          connection.prepareStatement(
+              "SELECT 1 FROM turns WHERE project_id=? AND conversation_key=? AND source=? AND source_id=? LIMIT 1")) {
+        query.setString(1, scope);
+        query.setString(2, key);
+        query.setString(3, ConversationLogStore.BEHAVIOR_NOTIFICATION);
+        query.setString(4, Objects.requireNonNull(entry.sourceId()));
+        try (var rows = query.executeQuery()) {
+          if (rows.next()) return null;
+        }
+      }
+      put(
+          connection,
+          scope,
+          key,
+          next(connection, scope, key),
+          new Turn(
+              "behavior:" + entry.sourceId(),
+              "",
+              Status.COMPLETED,
+              entry.content(),
+              entry.timestamp().toInstant(),
+              entry.source(),
+              entry.sourceId(),
+              entry.metadata()));
+      return null;
+    });
   }
 
   /** 対象を特定できるよう、やり取り一覧を探す。 */
   @Override
   public List<SessionTurn> findTurns(String conversation, CursorKey after, int limit) {
     if (limit < 1 || limit > 101) throw new IllegalArgumentException("Invalid fetch limit");
-    return database.read(
-        connection -> {
-          String sql =
-              "SELECT record FROM turns WHERE project_id=? AND conversation_key=? AND created_seconds IS NOT NULL"
-                  + (after == null ? "" : " AND (created_seconds,created_nanos,run_order)>(?,?,?)")
-                  + " ORDER BY created_seconds,created_nanos,run_order,ordinal LIMIT ?";
-          try (var query = connection.prepareStatement(sql)) {
-            query.setString(1, scope(conversation));
-            query.setString(2, key(conversation));
-            int index = 3;
-            if (after != null) {
-              query.setLong(index++, after.time().getEpochSecond());
-              query.setInt(index++, after.time().getNano());
-              query.setBytes(index++, StorageDatabase.orderKey(after.id()));
-            }
-            query.setInt(index, limit);
-            var result = new ArrayList<SessionTurn>();
-            try (var rows = query.executeQuery()) {
-              while (rows.next()) {
-                var turn = StorageDatabase.JSON.readValue(rows.getString(1), Turn.class);
-                result.add(
-                    new SessionTurn(
-                        turn.runId(),
-                        turn.request(),
-                        turn.assistantMessage(),
-                        turn.createdAt(),
-                        turn.source(),
-                        turn.sourceId(),
-                        turn.metadata()));
-              }
-            }
-            return List.copyOf(result);
+    return database.read(connection -> {
+      String sql =
+          "SELECT record FROM turns WHERE project_id=? AND conversation_key=? AND created_seconds IS NOT NULL"
+              + (after == null ? "" : " AND (created_seconds,created_nanos,run_order)>(?,?,?)")
+              + " ORDER BY created_seconds,created_nanos,run_order,ordinal LIMIT ?";
+      try (var query = connection.prepareStatement(sql)) {
+        query.setString(1, scope(conversation));
+        query.setString(2, key(conversation));
+        int index = 3;
+        if (after != null) {
+          query.setLong(index++, after.time().getEpochSecond());
+          query.setInt(index++, after.time().getNano());
+          query.setBytes(index++, StorageDatabase.orderKey(after.id()));
+        }
+        query.setInt(index, limit);
+        var result = new ArrayList<SessionTurn>();
+        try (var rows = query.executeQuery()) {
+          while (rows.next()) {
+            var turn = StorageDatabase.JSON.readValue(rows.getString(1), Turn.class);
+            result.add(
+                new SessionTurn(
+                    turn.runId(),
+                    turn.request(),
+                    turn.assistantMessage(),
+                    turn.createdAt(),
+                    turn.source(),
+                    turn.sourceId(),
+                    turn.metadata()));
           }
-        });
+        }
+        return List.copyOf(result);
+      }
+    });
   }
 }

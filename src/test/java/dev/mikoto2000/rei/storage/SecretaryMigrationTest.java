@@ -60,16 +60,14 @@ class SecretaryMigrationTest {
     var database = new StorageDatabase(root);
     assertEquals(
         "run",
-        database.read(
-            db -> {
-              SecretaryMigration.verify(db);
-              try (var sql = db.createStatement();
-                  var rows =
-                      sql.executeQuery("SELECT run FROM review_participants WHERE job='job'")) {
-                rows.next();
-                return rows.getString(1);
-              }
-            }));
+        database.read(db -> {
+          SecretaryMigration.verify(db);
+          try (var sql = db.createStatement();
+              var rows = sql.executeQuery("SELECT run FROM review_participants WHERE job='job'")) {
+            rows.next();
+            return rows.getString(1);
+          }
+        }));
     try (var migration = new StorageMigrationCoordinator(root)) {
       assertNull(migration.prepare().backup());
     }

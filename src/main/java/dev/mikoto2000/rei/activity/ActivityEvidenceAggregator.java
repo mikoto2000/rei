@@ -50,13 +50,12 @@ public final class ActivityEvidenceAggregator {
         metadata.visibleWindows() == null
             ? List.<ActivityEvidence.VisibleWindow>of()
             : metadata.visibleWindows().stream()
-                .filter(
-                    w ->
-                        w != null
-                            && w.visible()
-                            && !w.minimized()
-                            && !w.offScreen()
-                            && !policy.excluded(w.window()))
+                .filter(w ->
+                    w != null
+                        && w.visible()
+                        && !w.minimized()
+                        && !w.offScreen()
+                        && !policy.excluded(w.window()))
                 .filter(w -> !w.window().windowId().equals(metadata.foreground().windowId()))
                 .limit(32)
                 .toList();

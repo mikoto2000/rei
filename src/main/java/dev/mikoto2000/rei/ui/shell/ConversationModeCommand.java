@@ -46,11 +46,10 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
   /** ターミナルでの対話で用いる自動を返す。 */
   @Command(name = "auto", description = "音声入力は会話、文字入力は通常へ自動切替する", mixinStandardHelpOptions = true)
   public int auto() {
-    return display(
-        () -> {
-          setStyle.accept(ResponseStyle.AUTO, false);
-          show();
-        });
+    return display(() -> {
+      setStyle.accept(ResponseStyle.AUTO, false);
+      show();
+    });
   }
 
   /** ターミナルでの対話で用いる通常を返す。 */
@@ -59,11 +58,10 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
       description = "現在のSessionを通常の応答スタイルに戻す",
       mixinStandardHelpOptions = true)
   public int normal() {
-    return display(
-        () -> {
-          setStyle.accept(ResponseStyle.NORMAL, false);
-          show();
-        });
+    return display(() -> {
+      setStyle.accept(ResponseStyle.NORMAL, false);
+      show();
+    });
   }
 
   /** ターミナルでの対話で用いる会話を返す。 */
@@ -79,11 +77,10 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
               defaultValue = "false",
               description = "音声入力だけに会話スタイルを適用する")
           boolean voiceOnly) {
-    return display(
-        () -> {
-          setStyle.accept(ResponseStyle.CONVERSATION, voiceOnly);
-          show();
-        });
+    return display(() -> {
+      setStyle.accept(ResponseStyle.CONVERSATION, voiceOnly);
+      show();
+    });
   }
 
   /** 対象の現在の状態を、照会用の情報として返す。 */

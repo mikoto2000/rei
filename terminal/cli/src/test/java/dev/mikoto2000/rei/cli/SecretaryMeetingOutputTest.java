@@ -73,12 +73,12 @@ class SecretaryMeetingOutputTest {
         new JsonMapper()
             .readTree(
                 """
-        {"date":"2026-11-20","review":true,"meeting":{"question":"選んでください",
-         "confirmed":false,"sections":{"carryover":[
-           {"projectId":"p","id":"run:r","title":"調査","state":"UNKNOWN"},
-           {"projectId":"p","id":"run:r","title":"重複","state":"UNKNOWN"}],
-           "completed":[{"projectId":"p","id":"run:done"}]}}}
-        """);
+                {"date":"2026-11-20","review":true,"meeting":{"question":"選んでください",
+                 "confirmed":false,"sections":{"carryover":[
+                   {"projectId":"p","id":"run:r","title":"調査","state":"UNKNOWN"},
+                   {"projectId":"p","id":"run:r","title":"重複","state":"UNKNOWN"}],
+                   "completed":[{"projectId":"p","id":"run:done"}]}}}
+                """);
     var candidates = MeetingSelectionMenu.candidates(report);
     assertEquals(1, candidates.size());
     assertEquals("p::run:r", candidates.getFirst().id());

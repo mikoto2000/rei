@@ -113,21 +113,20 @@ class ToolRecoveryRegressionTest {
     var execution = execution();
     var calls = new AtomicInteger();
     var model =
-        model(
-            prompt -> {
-              if (calls.incrementAndGet() == 1)
-                return batch(sibling("before"), rejected, sibling("after"));
-              var response = latestToolResponse(prompt);
-              assertThat(response.getResponses())
-                  .extracting(ToolResponseMessage.ToolResponse::id)
-                  .containsExactly("before", "rejected", "after");
-              assertThat(response.getResponses().getFirst().responseData()).isEqualTo("1");
-              assertThat(response.getResponses().getLast().responseData()).isEqualTo("2");
-              assertThat(response.getResponses().get(1).responseData())
-                  .contains("\"error\":\"" + code + "\"", "\"guidance\":");
-              assertThat(response.getMetadata().get("rei.reviewReceipts")).isNull();
-              return new AssistantMessage("Continued.");
-            });
+        model(prompt -> {
+          if (calls.incrementAndGet() == 1)
+            return batch(sibling("before"), rejected, sibling("after"));
+          var response = latestToolResponse(prompt);
+          assertThat(response.getResponses())
+              .extracting(ToolResponseMessage.ToolResponse::id)
+              .containsExactly("before", "rejected", "after");
+          assertThat(response.getResponses().getFirst().responseData()).isEqualTo("1");
+          assertThat(response.getResponses().getLast().responseData()).isEqualTo("2");
+          assertThat(response.getResponses().get(1).responseData())
+              .contains("\"error\":\"" + code + "\"", "\"guidance\":");
+          assertThat(response.getMetadata().get("rei.reviewReceipts")).isNull();
+          return new AssistantMessage("Continued.");
+        });
     var output = new StagnationChatModel(model).call(prompt(execution));
     assertThat(output.getResult().getOutput().getText()).isEqualTo("Continued.");
     assertThat(siblingCalls).hasValue(2);
@@ -150,24 +149,23 @@ class ToolRecoveryRegressionTest {
     var calls = new AtomicInteger();
     var execution = execution();
     var model =
-        model(
-            prompt ->
-                switch (calls.incrementAndGet()) {
-                  case 1 -> batch(rejected);
-                  case 2 -> {
-                    var response = latestToolResponse(prompt);
-                    assertThat(response.getResponses().getFirst().responseData())
-                        .contains("INVALID_TOOL_ARGUMENTS");
-                    yield batch(call("fixed", "listReviewTasks", Map.of()));
-                  }
-                  case 3 -> {
-                    var response = latestToolResponse(prompt);
-                    assertThat(response.getResponses().getFirst().responseData())
-                        .contains("\"entries\":[]");
-                    yield new AssistantMessage("Continued.");
-                  }
-                  default -> throw new AssertionError("Unexpected model call");
-                });
+        model(prompt ->
+            switch (calls.incrementAndGet()) {
+              case 1 -> batch(rejected);
+              case 2 -> {
+                var response = latestToolResponse(prompt);
+                assertThat(response.getResponses().getFirst().responseData())
+                    .contains("INVALID_TOOL_ARGUMENTS");
+                yield batch(call("fixed", "listReviewTasks", Map.of()));
+              }
+              case 3 -> {
+                var response = latestToolResponse(prompt);
+                assertThat(response.getResponses().getFirst().responseData())
+                    .contains("\"entries\":[]");
+                yield new AssistantMessage("Continued.");
+              }
+              default -> throw new AssertionError("Unexpected model call");
+            });
     new StagnationChatModel(model).call(prompt(execution));
     assertThat(calls).hasValue(3);
     assertThat(execution.progressSnapshot().budget().argumentCorrections()).isEqualTo(1);
@@ -178,31 +176,24 @@ class ToolRecoveryRegressionTest {
     var calls = new AtomicInteger();
     var execution = execution();
     var model =
-        model(
-            prompt ->
-                switch (calls.incrementAndGet()) {
-                  case 1 -> batch(sibling("saved"));
-                  case 2 -> batch(sibling("duplicate"), sibling("duplicate"));
-                  case 3 -> {
-                    assertThat(prompt.getContents())
-                        .contains("duplicate tool-call IDs");
-                    assertThat(prompt.getInstructions())
-                        .anySatisfy(
-                            message -> {
-                              assertThat(message).isInstanceOf(ToolResponseMessage.class);
-                              assertThat(
-                                      ((ToolResponseMessage) message)
-                                          .getResponses()
-                                          .getFirst()
-                                          .id())
-                                  .isEqualTo("saved");
-                            });
-                    assertThat(siblingCalls).hasValue(1);
-                    yield batch(sibling("fixed"));
-                  }
-                  case 4 -> new AssistantMessage("Continued.");
-                  default -> throw new AssertionError("Unexpected model call");
-                });
+        model(prompt ->
+            switch (calls.incrementAndGet()) {
+              case 1 -> batch(sibling("saved"));
+              case 2 -> batch(sibling("duplicate"), sibling("duplicate"));
+              case 3 -> {
+                assertThat(prompt.getContents()).contains("duplicate tool-call IDs");
+                assertThat(prompt.getInstructions())
+                    .anySatisfy(message -> {
+                      assertThat(message).isInstanceOf(ToolResponseMessage.class);
+                      assertThat(((ToolResponseMessage) message).getResponses().getFirst().id())
+                          .isEqualTo("saved");
+                    });
+                assertThat(siblingCalls).hasValue(1);
+                yield batch(sibling("fixed"));
+              }
+              case 4 -> new AssistantMessage("Continued.");
+              default -> throw new AssertionError("Unexpected model call");
+            });
     new StagnationChatModel(model).call(prompt(execution));
     assertThat(siblingCalls).hasValue(2);
     assertThat(calls).hasValue(4);
@@ -213,18 +204,17 @@ class ToolRecoveryRegressionTest {
   void helperModelCanCorrectUnavailableToolWithinItsStepBudget() {
     var calls = new AtomicInteger();
     var model =
-        model(
-            prompt ->
-                switch (calls.incrementAndGet()) {
-                  case 1 -> batch(call("typo", "siblnig", Map.of()));
-                  case 2 -> {
-                    assertThat(prompt.getInstructions().getLast().getText())
-                        .contains("unavailable tool");
-                    yield batch(sibling("corrected"));
-                  }
-                  case 3 -> new AssistantMessage("Continued.");
-                  default -> throw new AssertionError("Unexpected model call");
-                });
+        model(prompt ->
+            switch (calls.incrementAndGet()) {
+              case 1 -> batch(call("typo", "siblnig", Map.of()));
+              case 2 -> {
+                assertThat(prompt.getInstructions().getLast().getText())
+                    .contains("unavailable tool");
+                yield batch(sibling("corrected"));
+              }
+              case 3 -> new AssistantMessage("Continued.");
+              default -> throw new AssertionError("Unexpected model call");
+            });
     var options = OpenAiChatOptions.builder().toolCallbacks(callbacks).build();
     assertThat(
             new BoundedToolLoop()

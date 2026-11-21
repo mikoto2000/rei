@@ -431,12 +431,11 @@ public final class ClassificationTelemetryRepository {
     var d = last.diagnostics();
     long open =
         rows.stream()
-            .filter(
-                r ->
-                    kind.equals("unknown")
-                        ? !r.diagnostics().classificationUsable()
-                        : r.diagnostics().entertainmentDisposition()
-                            == EntertainmentDisposition.UNCERTAIN)
+            .filter(r ->
+                kind.equals("unknown")
+                    ? !r.diagnostics().classificationUsable()
+                    : r.diagnostics().entertainmentDisposition()
+                        == EntertainmentDisposition.UNCERTAIN)
             .count();
     var outcomes = new TreeMap<String, Long>();
     var reasons = new TreeSet<String>();

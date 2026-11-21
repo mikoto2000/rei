@@ -29,10 +29,9 @@ class TimingConcurrencyTest {
       var tasks = new ArrayList<Callable<Boolean>>();
       for (int index = 0; index < 400; index++) {
         String id = "span-" + index;
-        tasks.add(
-            () ->
-                store.beginSpan("run", id, "run", "request", id, Category.LLM)
-                    && store.endSpan("run", id, Status.SUCCESS));
+        tasks.add(() ->
+            store.beginSpan("run", id, "run", "request", id, Category.LLM)
+                && store.endSpan("run", id, Status.SUCCESS));
       }
       for (var result : pool.invokeAll(tasks)) assertTrue(result.get());
     }

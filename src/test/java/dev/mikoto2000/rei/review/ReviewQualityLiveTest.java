@@ -45,19 +45,16 @@ class ReviewQualityLiveTest {
           try {
             var messages =
                 prompt.getInstructions().stream()
-                    .map(
-                        m ->
-                            Map.of(
-                                "role",
-                                m instanceof org.springframework.ai.chat.messages.SystemMessage
-                                    ? "system"
-                                    : "user",
-                                "content",
-                                m
-                                        instanceof
-                                        org.springframework.ai.chat.messages.ToolResponseMessage t
-                                    ? t.getResponses().getFirst().responseData()
-                                    : m.getText()))
+                    .map(m ->
+                        Map.of(
+                            "role",
+                            m instanceof org.springframework.ai.chat.messages.SystemMessage
+                                ? "system"
+                                : "user",
+                            "content",
+                            m instanceof org.springframework.ai.chat.messages.ToolResponseMessage t
+                                ? t.getResponses().getFirst().responseData()
+                                : m.getText()))
                     .toList();
             String body =
                 StorageDatabase.JSON.writeValueAsString(

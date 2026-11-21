@@ -20,11 +20,10 @@ class ExpectedOutputConditionsTest {
   @Test
   void acceptsPartialLiteralConditionsWithoutDemandingAllRequiredFields() {
     assertDoesNotThrow(() -> ExpectedOutputConditions.validate("{\"unverified\":[]}", reviewer));
-    assertDoesNotThrow(
-        () ->
-            ExpectedOutputConditions.validate(
-                "{\"findings\":[{\"severity\":\"HIGH\",\"message\":\"具体的な指摘\",\"location\":\"docs/a.md\"}]}",
-                reviewer));
+    assertDoesNotThrow(() ->
+        ExpectedOutputConditions.validate(
+            "{\"findings\":[{\"severity\":\"HIGH\",\"message\":\"具体的な指摘\",\"location\":\"docs/a.md\"}]}",
+            reviewer));
   }
 
   /** データ形式雛形一覧不明項目一覧を受け付けないことを確認する。 */

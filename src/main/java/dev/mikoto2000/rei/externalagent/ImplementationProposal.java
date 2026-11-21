@@ -100,10 +100,9 @@ public record ImplementationProposal(List<Edit> edits) {
       if (name.codePoints().anyMatch(Character::isISOControl)
           || ExternalAgentSourceSnapshot.excluded(Path.of(name))
           || Arrays.stream(name.split("/"))
-              .anyMatch(
-                  p ->
-                      Set.of(".gitattributes", ".gitmodules", ".gitignore")
-                          .contains(p.toLowerCase(Locale.ROOT))))
+              .anyMatch(p ->
+                  Set.of(".gitattributes", ".gitmodules", ".gitignore")
+                      .contains(p.toLowerCase(Locale.ROOT))))
         throw new IllegalArgumentException(
             "Repository execution or excluded configuration cannot be edited by implementation proposals");
       Path path = root.resolve(name);

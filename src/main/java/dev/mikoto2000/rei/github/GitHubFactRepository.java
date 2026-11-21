@@ -163,22 +163,19 @@ public final class GitHubFactRepository {
     var sameId =
         db.sql("SELECT * FROM github_webhook_deliveries WHERE id=?")
             .param(delivery)
-            .query(
-                (row, n) -> {
-                  if (!row.getString("digest").equals(digest))
-                    throw new OperationConflictException();
-                  return new Receipt(
-                      row.getString("id"), row.getString("status"), true, row.getInt("matched"));
-                })
+            .query((row, n) -> {
+              if (!row.getString("digest").equals(digest)) throw new OperationConflictException();
+              return new Receipt(
+                  row.getString("id"), row.getString("status"), true, row.getInt("matched"));
+            })
             .optional();
     return sameId.isPresent()
         ? sameId
         : db.sql("SELECT * FROM github_webhook_deliveries WHERE digest=?")
             .param(digest)
-            .query(
-                (row, n) ->
-                    new Receipt(
-                        row.getString("id"), row.getString("status"), true, row.getInt("matched")))
+            .query((row, n) ->
+                new Receipt(
+                    row.getString("id"), row.getString("status"), true, row.getInt("matched")))
             .optional();
   }
 
@@ -203,17 +200,16 @@ public final class GitHubFactRepository {
   public List<Notification> pendingNotifications() {
     return db.sql(
             "SELECT * FROM github_notification_outbox WHERE sent=0 ORDER BY julianday(created),id LIMIT 16")
-        .query(
-            (row, n) ->
-                new Notification(
-                    row.getString("id"),
-                    row.getString("project"),
-                    row.getString("root"),
-                    row.getString("session"),
-                    row.getString("parent"),
-                    row.getString("kind"),
-                    row.getString("message"),
-                    Instant.parse(row.getString("created"))))
+        .query((row, n) ->
+            new Notification(
+                row.getString("id"),
+                row.getString("project"),
+                row.getString("root"),
+                row.getString("session"),
+                row.getString("parent"),
+                row.getString("kind"),
+                row.getString("message"),
+                Instant.parse(row.getString("created"))))
         .list();
   }
 
@@ -238,75 +234,65 @@ public final class GitHubFactRepository {
       int maxDeliveries,
       int maxFacts,
       java.util.function.Consumer<OwnedFact> effects) {
-    return tx.execute(
-        status -> {
-          var existing =
-              db.sql("SELECT * FROM github_webhook_deliveries WHERE id=?")
-                  .param(delivery)
-                  .query(
-                      (row, n) -> {
-                        if (row.getString("id").equals(delivery)
-                            && !row.getString("digest").equals(digest))
-                          throw new OperationConflictException();
-                        return new Receipt(
-                            row.getString("id"),
-                            row.getString("status"),
-                            true,
-                            row.getInt("matched"));
-                      })
-                  .optional();
-          if (existing.isPresent()) return existing.get();
-          var replay =
-              db.sql("SELECT * FROM github_webhook_deliveries WHERE digest=?")
-                  .param(digest)
-                  .query(
-                      (row, n) ->
-                          new Receipt(
-                              row.getString("id"),
-                              row.getString("status"),
-                              true,
-                              row.getInt("matched")))
-                  .optional();
-          if (replay.isPresent()) return replay.get();
-          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-          if (facts.size() > 128
-              || db.sql("SELECT COUNT(*) FROM github_webhook_facts").query(Long.class).single()
-                      + facts.size()
-                  > maxFacts) throw new CapacityExceeded();
-          String state = facts.isEmpty() ? "IGNORED" : "APPLIED";
-          int inserted =
-              db.sql(
-                      "INSERT INTO github_webhook_deliveries SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM github_webhook_deliveries)<?")
-                  .params(
-                      delivery,
-                      digest,
-                      event,
-                      state,
-                      facts.size(),
-                      clock.instant().toString(),
-                      maxDeliveries)
-                  .update();
-          if (inserted != 1) throw new CapacityExceeded();
-          for (var owned : facts) {
-            var fact = owned.fact();
-            db.sql("INSERT INTO github_webhook_facts VALUES(?,?,?,?,?,?,?,?,?,?,?)")
-                .params(
-                    owned.id(),
-                    delivery,
-                    owned.project().id(),
-                    owned.project().root().toString(),
-                    owned.sessionId(),
-                    fact.sourceId(),
-                    fact.type(),
-                    fact.repository(),
-                    fact.pullRequest(),
-                    encode(fact),
-                    clock.instant().toString())
-                .update();
-            effects.accept(owned);
-          }
-          return new Receipt(delivery, state, false, facts.size());
-        });
+    return tx.execute(status -> {
+      var existing =
+          db.sql("SELECT * FROM github_webhook_deliveries WHERE id=?")
+              .param(delivery)
+              .query((row, n) -> {
+                if (row.getString("id").equals(delivery) && !row.getString("digest").equals(digest))
+                  throw new OperationConflictException();
+                return new Receipt(
+                    row.getString("id"), row.getString("status"), true, row.getInt("matched"));
+              })
+              .optional();
+      if (existing.isPresent()) return existing.get();
+      var replay =
+          db.sql("SELECT * FROM github_webhook_deliveries WHERE digest=?")
+              .param(digest)
+              .query((row, n) ->
+                  new Receipt(
+                      row.getString("id"), row.getString("status"), true, row.getInt("matched")))
+              .optional();
+      if (replay.isPresent()) return replay.get();
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
+      if (facts.size() > 128
+          || db.sql("SELECT COUNT(*) FROM github_webhook_facts").query(Long.class).single()
+                  + facts.size()
+              > maxFacts) throw new CapacityExceeded();
+      String state = facts.isEmpty() ? "IGNORED" : "APPLIED";
+      int inserted =
+          db.sql(
+                  "INSERT INTO github_webhook_deliveries SELECT ?,?,?,?,?,? WHERE (SELECT COUNT(*) FROM github_webhook_deliveries)<?")
+              .params(
+                  delivery,
+                  digest,
+                  event,
+                  state,
+                  facts.size(),
+                  clock.instant().toString(),
+                  maxDeliveries)
+              .update();
+      if (inserted != 1) throw new CapacityExceeded();
+      for (var owned : facts) {
+        var fact = owned.fact();
+        db.sql("INSERT INTO github_webhook_facts VALUES(?,?,?,?,?,?,?,?,?,?,?)")
+            .params(
+                owned.id(),
+                delivery,
+                owned.project().id(),
+                owned.project().root().toString(),
+                owned.sessionId(),
+                fact.sourceId(),
+                fact.type(),
+                fact.repository(),
+                fact.pullRequest(),
+                encode(fact),
+                clock.instant().toString())
+            .update();
+        effects.accept(owned);
+      }
+      return new Receipt(delivery, state, false, facts.size());
+    });
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
@@ -314,16 +300,15 @@ public final class GitHubFactRepository {
     return db.sql(
             "SELECT * FROM github_webhook_facts WHERE id=? AND project=? AND root=? AND session=?")
         .params(id, owner.id(), owner.root().toString(), session)
-        .query(
-            (row, n) ->
-                new View(
-                    row.getString("id"),
-                    row.getString("delivery"),
-                    owner.id(),
-                    session,
-                    row.getString("source"),
-                    decode(row.getString("fact")),
-                    Instant.parse(row.getString("received"))))
+        .query((row, n) ->
+            new View(
+                row.getString("id"),
+                row.getString("delivery"),
+                owner.id(),
+                session,
+                row.getString("source"),
+                decode(row.getString("fact")),
+                Instant.parse(row.getString("received"))))
         .optional()
         .orElseThrow(() -> new ResourceNotFoundException("GitHub fact"));
   }
@@ -334,16 +319,15 @@ public final class GitHubFactRepository {
         db.sql(
                 "SELECT * FROM github_webhook_facts WHERE delivery=? AND project=? AND root=? AND session=? ORDER BY id LIMIT 128")
             .params(delivery, owner.id(), owner.root().toString(), session)
-            .query(
-                (row, n) ->
-                    new View(
-                        row.getString("id"),
-                        delivery,
-                        owner.id(),
-                        session,
-                        row.getString("source"),
-                        decode(row.getString("fact")),
-                        Instant.parse(row.getString("received"))))
+            .query((row, n) ->
+                new View(
+                    row.getString("id"),
+                    delivery,
+                    owner.id(),
+                    session,
+                    row.getString("source"),
+                    decode(row.getString("fact")),
+                    Instant.parse(row.getString("received"))))
             .list();
     if (views.isEmpty()) throw new ResourceNotFoundException("GitHub facts");
     return views;

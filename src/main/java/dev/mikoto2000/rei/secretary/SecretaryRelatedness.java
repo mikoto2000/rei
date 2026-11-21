@@ -24,10 +24,9 @@ final class SecretaryRelatedness {
       return true;
     String a = left.toLowerCase(Locale.ROOT), b = right.toLowerCase(Locale.ROOT);
     return CONCEPTS.stream()
-        .anyMatch(
-            group ->
-                group.stream().anyMatch(term -> matches(a, term))
-                    && group.stream().anyMatch(term -> matches(b, term)));
+        .anyMatch(group ->
+            group.stream().anyMatch(term -> matches(a, term))
+                && group.stream().anyMatch(term -> matches(b, term)));
   }
 
   private static boolean matches(String text, String term) {

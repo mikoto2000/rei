@@ -49,12 +49,11 @@ class ActivityCaptureTest {
     when(life.valid(any())).thenReturn(true);
     capture.useLifeContext(life);
     when(extractor.extract(any(), any()))
-        .thenAnswer(
-            invocation -> {
-              when(life.observationAllowed(any(java.time.Instant.class))).thenReturn(false);
-              return new ActivityExtractor.Result(
-                  ActivityPolicyTest.record("2026-09-22T10:00:00Z", "coding").inference(), .8);
-            });
+        .thenAnswer(invocation -> {
+          when(life.observationAllowed(any(java.time.Instant.class))).thenReturn(false);
+          return new ActivityExtractor.Result(
+              ActivityPolicyTest.record("2026-09-22T10:00:00Z", "coding").inference(), .8);
+        });
     capture.tick();
     verify(extractor).extract(any(), any());
     verify(store, never()).append(any());
@@ -212,18 +211,16 @@ class ActivityCaptureTest {
   void evidenceIsSavedOnlyAfterExtractionCompletes() throws Exception {
     properties.setKeepScreenshots(true);
     when(observer.capture())
-        .thenAnswer(
-            i -> {
-              verify(screenshots, never()).save(anyString(), any(), any());
-              return screen(20);
-            });
+        .thenAnswer(i -> {
+          verify(screenshots, never()).save(anyString(), any(), any());
+          return screen(20);
+        });
     when(extractor.extract(any(), any()))
-        .thenAnswer(
-            i -> {
-              verify(screenshots, never()).save(anyString(), any(), any());
-              return new ActivityExtractor.Result(
-                  ActivityPolicyTest.record("2026-09-22T10:00:00Z", "coding").inference(), .8);
-            });
+        .thenAnswer(i -> {
+          verify(screenshots, never()).save(anyString(), any(), any());
+          return new ActivityExtractor.Result(
+              ActivityPolicyTest.record("2026-09-22T10:00:00Z", "coding").inference(), .8);
+        });
     capture.tick();
     var order = inOrder(extractor, screenshots, store);
     order.verify(extractor).extract(any(), any());
@@ -323,11 +320,10 @@ class ActivityCaptureTest {
   void pauseDuringFailureDiscardsEvidence() throws Exception {
     properties.setKeepOnExtractionFailure(true);
     when(extractor.extract(any(), any()))
-        .thenAnswer(
-            i -> {
-              capture.pause();
-              throw new java.io.IOException("vision");
-            });
+        .thenAnswer(i -> {
+          capture.pause();
+          throw new java.io.IOException("vision");
+        });
     capture.tick();
     verify(screenshots, never()).save(anyString(), any(), any());
   }
@@ -394,12 +390,11 @@ class ActivityCaptureTest {
   @Test
   void pauseDiscardsInflightResult() throws Exception {
     when(extractor.extract(any(), any()))
-        .thenAnswer(
-            invocation -> {
-              capture.pause();
-              return new ActivityExtractor.Result(
-                  ActivityPolicyTest.record("2026-09-22T10:00:00Z", "coding").inference(), .8);
-            });
+        .thenAnswer(invocation -> {
+          capture.pause();
+          return new ActivityExtractor.Result(
+              ActivityPolicyTest.record("2026-09-22T10:00:00Z", "coding").inference(), .8);
+        });
     capture.tick();
     verify(store, never()).append(any());
     verify(screenshots, never()).save(anyString(), any(), any());

@@ -201,11 +201,10 @@ class SlackNotificationProviderTest {
             "rei.attention.slack.bot-token=fixture-token",
             "rei.attention.slack.channel=C123ABCDE",
             "rei.attention.slack.channels=C123ABCDE")
-        .run(
-            context -> {
-              assertNull(context.getStartupFailure());
-              assertEquals("SLACK", context.getBean(SlackNotificationProvider.class).name());
-            });
+        .run(context -> {
+          assertNull(context.getStartupFailure());
+          assertEquals("SLACK", context.getBean(SlackNotificationProvider.class).name());
+        });
   }
 
   /** 注意の管理で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */

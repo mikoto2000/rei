@@ -708,10 +708,10 @@ class SqliteVectorStoreTest {
         var statement =
             connection.prepareStatement(
                 """
-            SELECT COUNT(*)
-            FROM sqlite_master
-            WHERE type = 'table' AND name = 'documents'
-            """);
+                SELECT COUNT(*)
+                FROM sqlite_master
+                WHERE type = 'table' AND name = 'documents'
+                """);
         var rs = statement.executeQuery()) {
       assertTrue(rs.next());
       assertEquals(0, rs.getInt(1));
@@ -1044,8 +1044,7 @@ class SqliteVectorStoreTest {
     SqliteVecProperties properties = new SqliteVecProperties();
     properties.setExtensionPath(vecExtensionPath().toString());
     SqliteVecInstaller installer =
-        new SqliteVecInstaller(
-            properties, new PlatformDetector(), new SqliteVecAssetResolver());
+        new SqliteVecInstaller(properties, new PlatformDetector(), new SqliteVecAssetResolver());
     SqliteVecExtensionLoader loader = new SqliteVecExtensionLoader(properties, installer);
     return new SqliteVecDataSource(delegate, loader);
   }

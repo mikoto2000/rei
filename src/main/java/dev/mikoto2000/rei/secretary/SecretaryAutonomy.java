@@ -301,26 +301,25 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
       identifier(value.sessionId(), 256);
       required(runtimes).validate(value.projectId(), value.sessionId());
     }
-    return database.transaction(
-        db -> {
-          try (var q = db.createStatement();
-              var r = q.executeQuery("SELECT COUNT(*) FROM secretary_autonomy_settings")) {
-            r.next();
-            if (r.getInt(1) >= 256 && !configured(db, value.projectId()))
-              throw new IllegalStateException("Autonomy Project capacity reached");
-          }
-          var old = settings(db, value.projectId());
-          try (var q =
-              db.prepareStatement(
-                  "INSERT INTO secretary_autonomy_settings VALUES(?,?,?) ON CONFLICT(project) DO UPDATE SET record=excluded.record,configured=CASE WHEN ? THEN excluded.configured ELSE configured END")) {
-            q.setString(1, value.projectId());
-            q.setString(2, encode(value));
-            q.setLong(3, clock.millis());
-            q.setBoolean(4, !old.enabled() && value.enabled());
-            q.executeUpdate();
-          }
-          return value;
-        });
+    return database.transaction(db -> {
+      try (var q = db.createStatement();
+          var r = q.executeQuery("SELECT COUNT(*) FROM secretary_autonomy_settings")) {
+        r.next();
+        if (r.getInt(1) >= 256 && !configured(db, value.projectId()))
+          throw new IllegalStateException("Autonomy Project capacity reached");
+      }
+      var old = settings(db, value.projectId());
+      try (var q =
+          db.prepareStatement(
+              "INSERT INTO secretary_autonomy_settings VALUES(?,?,?) ON CONFLICT(project) DO UPDATE SET record=excluded.record,configured=CASE WHEN ? THEN excluded.configured ELSE configured END")) {
+        q.setString(1, value.projectId());
+        q.setString(2, encode(value));
+        q.setLong(3, clock.millis());
+        q.setBoolean(4, !old.enabled() && value.enabled());
+        q.executeUpdate();
+      }
+      return value;
+    });
   }
 
   private static boolean configured(Connection db, String project) throws java.sql.SQLException {
@@ -410,39 +409,38 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
             evidence == null ? null : evidence.modelFingerprint());
     String id = uuid(request.projectId() + ":" + request.key());
     var created =
-        database.transaction(
-            db -> {
-              var repeated = receipt(db, request.projectId(), request.key());
-              if (repeated != null) {
-                if (!repeated.spec().fingerprint().equals(fingerprint))
-                  throw new SecretaryConflictException();
-                return repeated;
-              }
-              try (var q =
-                      db.prepareStatement(
-                          "SELECT COUNT(*) FROM secretary_jobs WHERE state NOT IN ('PREPARED','COMPLETED','FAILED','CANCELLED','TIMED_OUT','BLOCKED','UNCERTAIN','LIMITED')");
-                  var r = q.executeQuery()) {
-                r.next();
-                if (r.getInt(1) >= 256)
-                  throw new IllegalStateException("Secretary execution capacity reached");
-              }
-              try (var q =
+        database.transaction(db -> {
+          var repeated = receipt(db, request.projectId(), request.key());
+          if (repeated != null) {
+            if (!repeated.spec().fingerprint().equals(fingerprint))
+              throw new SecretaryConflictException();
+            return repeated;
+          }
+          try (var q =
                   db.prepareStatement(
-                      "INSERT INTO secretary_jobs(id,project,task,receipt,spec,state,revision,attempts,calls,allocated,deadline,next,reason,created,updated) VALUES(?,?,?,?,?,'READY',0,0,0,0,0,?,'',?,?)")) {
-                q.setString(1, id);
-                q.setString(2, request.projectId());
-                q.setString(3, request.taskId());
-                q.setString(4, request.key());
-                q.setString(5, encode(spec));
-                q.setLong(6, clock.millis());
-                q.setLong(7, clock.millis());
-                q.setLong(8, clock.millis());
-                q.executeUpdate();
-              }
-              var job = find(db, request.projectId(), id);
-              history(db, job);
-              return job;
-            });
+                      "SELECT COUNT(*) FROM secretary_jobs WHERE state NOT IN ('PREPARED','COMPLETED','FAILED','CANCELLED','TIMED_OUT','BLOCKED','UNCERTAIN','LIMITED')");
+              var r = q.executeQuery()) {
+            r.next();
+            if (r.getInt(1) >= 256)
+              throw new IllegalStateException("Secretary execution capacity reached");
+          }
+          try (var q =
+              db.prepareStatement(
+                  "INSERT INTO secretary_jobs(id,project,task,receipt,spec,state,revision,attempts,calls,allocated,deadline,next,reason,created,updated) VALUES(?,?,?,?,?,'READY',0,0,0,0,0,?,'',?,?)")) {
+            q.setString(1, id);
+            q.setString(2, request.projectId());
+            q.setString(3, request.taskId());
+            q.setString(4, request.key());
+            q.setString(5, encode(spec));
+            q.setLong(6, clock.millis());
+            q.setLong(7, clock.millis());
+            q.setLong(8, clock.millis());
+            q.executeUpdate();
+          }
+          var job = find(db, request.projectId(), id);
+          history(db, job);
+          return job;
+        });
     return authorize(created, authority, false);
   }
 
@@ -491,17 +489,16 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
       String permit =
           approvals.requestSecretaryAction(
               job.spec().request().projectId(), action, canonical(job));
-      return database.transaction(
-          db -> {
-            var current = find(db, job.spec().request().projectId(), job.id());
-            expected(current, job.revision());
-            try (var q = db.prepareStatement("UPDATE secretary_jobs SET permit=? WHERE id=?")) {
-              q.setString(1, permit);
-              q.setString(2, job.id());
-              q.executeUpdate();
-            }
-            return change(db, current, "WAITING_APPROVAL", "action_approval_pending");
-          });
+      return database.transaction(db -> {
+        var current = find(db, job.spec().request().projectId(), job.id());
+        expected(current, job.revision());
+        try (var q = db.prepareStatement("UPDATE secretary_jobs SET permit=? WHERE id=?")) {
+          q.setString(1, permit);
+          q.setString(2, job.id());
+          q.executeUpdate();
+        }
+        return change(db, current, "WAITING_APPROVAL", "action_approval_pending");
+      });
     }
     String state =
         approvals.secretaryActionStatus(
@@ -552,81 +549,77 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
     var authorized = authorized(job, authority) ? job : authorize(job, authority, false);
     if (TERMINAL.contains(authorized.state())) return authorized;
     if (!approvalReady(authorized, authority)) {
-      database.transaction(
-          db -> {
-            try (var q =
-                db.prepareStatement(
-                    "UPDATE secretary_jobs SET next=? WHERE id=? AND revision=? AND state='WAITING_APPROVAL'")) {
-              q.setLong(1, clock.millis() + 60000);
-              q.setString(2, id);
-              q.setLong(3, authorized.revision());
-              q.executeUpdate();
-            }
-            return null;
-          });
+      database.transaction(db -> {
+        try (var q =
+            db.prepareStatement(
+                "UPDATE secretary_jobs SET next=? WHERE id=? AND revision=? AND state='WAITING_APPROVAL'")) {
+          q.setLong(1, clock.millis() + 60000);
+          q.setString(2, id);
+          q.setLong(3, authorized.revision());
+          q.executeUpdate();
+        }
+        return null;
+      });
       return get(project, id);
     }
     Job claimed =
-        database.transaction(
-            db -> {
-              var current = find(db, project, id);
-              expected(current, authorized.revision());
-              if (current.deadline() != null && !clock.instant().isBefore(current.deadline()))
-                return change(db, current, "TIMED_OUT", "deadline_exhausted");
-              if (current.attempts() >= current.spec().maxRetries() + 1)
-                return change(db, current, "LIMITED", "attempt_budget_exhausted");
-              try (var q =
-                  db.prepareStatement(
-                      "SELECT COUNT(*),COALESCE(SUM(CASE WHEN project=? THEN 1 ELSE 0 END),0),COALESCE(SUM(CASE WHEN project=? AND task=? THEN 1 ELSE 0 END),0) FROM secretary_jobs WHERE state IN ('DISPATCHING','RUNNING','WAITING','CANCELLING','SUSPENDING','TIMING_OUT','FINALIZING')")) {
-                q.setString(1, project);
-                q.setString(2, project);
-                q.setString(3, current.spec().request().taskId());
-                try (var r = q.executeQuery()) {
-                  r.next();
-                  if (r.getInt(1) >= 2
-                      || r.getInt(2) >= settings.maxConcurrent()
-                      || r.getInt(3) > 0) return current;
-                }
-              }
-              var started = change(db, current, "DISPATCHING", "");
-              try (var q =
-                  db.prepareStatement(
-                      "UPDATE secretary_jobs SET run=?,attempts=attempts+1,deadline=CASE WHEN deadline=0 THEN ? ELSE deadline END WHERE id=?")) {
-                q.setString(1, uuid(id + ":" + (current.attempts() + 1)));
-                q.setLong(2, clock.millis() + current.spec().maxSeconds() * 1000L);
-                q.setString(3, id);
-                q.executeUpdate();
-              }
-              return find(db, project, started.id());
-            });
+        database.transaction(db -> {
+          var current = find(db, project, id);
+          expected(current, authorized.revision());
+          if (current.deadline() != null && !clock.instant().isBefore(current.deadline()))
+            return change(db, current, "TIMED_OUT", "deadline_exhausted");
+          if (current.attempts() >= current.spec().maxRetries() + 1)
+            return change(db, current, "LIMITED", "attempt_budget_exhausted");
+          try (var q =
+              db.prepareStatement(
+                  "SELECT COUNT(*),COALESCE(SUM(CASE WHEN project=? THEN 1 ELSE 0 END),0),COALESCE(SUM(CASE WHEN project=? AND task=? THEN 1 ELSE 0 END),0) FROM secretary_jobs WHERE state IN ('DISPATCHING','RUNNING','WAITING','CANCELLING','SUSPENDING','TIMING_OUT','FINALIZING')")) {
+            q.setString(1, project);
+            q.setString(2, project);
+            q.setString(3, current.spec().request().taskId());
+            try (var r = q.executeQuery()) {
+              r.next();
+              if (r.getInt(1) >= 2 || r.getInt(2) >= settings.maxConcurrent() || r.getInt(3) > 0)
+                return current;
+            }
+          }
+          var started = change(db, current, "DISPATCHING", "");
+          try (var q =
+              db.prepareStatement(
+                  "UPDATE secretary_jobs SET run=?,attempts=attempts+1,deadline=CASE WHEN deadline=0 THEN ? ELSE deadline END WHERE id=?")) {
+            q.setString(1, uuid(id + ":" + (current.attempts() + 1)));
+            q.setLong(2, clock.millis() + current.spec().maxSeconds() * 1000L);
+            q.setString(3, id);
+            q.executeUpdate();
+          }
+          return find(db, project, started.id());
+        });
     if (!claimed.state().equals("DISPATCHING")) return claimed;
     // This marker commits before consuming a one-use approval or calling an executor in another DB.
     var consumed = authorized(claimed, authority) ? claimed : authorize(claimed, authority, true);
     if (!consumed.state().equals("DISPATCHING")) return consumed;
     var admitted =
-        database.transaction(
-            db -> {
-              var current = find(db, project, id);
-              if (!current.state().equals("DISPATCHING")
-                  || !java.util.Objects.equals(current.runId(), consumed.runId())) return current;
-              String proof =
-                  level(current.spec().request().kind()) == 1
-                      ? "READ_ONLY"
-                      : authorized(current, authority)
-                          ? current.authorization()
-                          : preparationPermit(current)
-                              ? "PREPARATION:" + current.spec().preparationPermit()
-                              : current.permitId() != null
-                                  ? "ACTION:" + current.permitId()
-                                  : "POLICY:" + authority.fingerprint();
-              try (var q =
-                  db.prepareStatement("UPDATE secretary_jobs SET authorization=? WHERE id=?")) {
-                q.setString(1, proof);
-                q.setString(2, id);
-                q.executeUpdate();
-              }
-              return find(db, project, id);
-            });
+        database.transaction(db -> {
+          var current = find(db, project, id);
+          if (!current.state().equals("DISPATCHING")
+              || !java.util.Objects.equals(current.runId(), consumed.runId())) return current;
+          String proof =
+              level(current.spec().request().kind()) == 1
+                  ? "READ_ONLY"
+                  : authorized(current, authority)
+                      ? current.authorization()
+                      : preparationPermit(current)
+                          ? "PREPARATION:" + current.spec().preparationPermit()
+                          : current.permitId() != null
+                              ? "ACTION:" + current.permitId()
+                              : "POLICY:" + authority.fingerprint();
+          try (var q =
+              db.prepareStatement("UPDATE secretary_jobs SET authorization=? WHERE id=?")) {
+            q.setString(1, proof);
+            q.setString(2, id);
+            q.executeUpdate();
+          }
+          return find(db, project, id);
+        });
     if (!admitted.state().equals("DISPATCHING")) return admitted;
     if (life != null && !life.backgroundAllowed(project, admitted.spec().request().taskId()))
       return transition(admitted, "PAUSED", "life_policy");
@@ -646,13 +639,12 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
                     captured.spec().privateModelFingerprint()),
                 budget(captured),
                 outcome -> completed(project, id, captured.runId(), outcome));
-        database.transaction(
-            db -> {
-              var current = find(db, project, id);
-              if (current.state().equals("DISPATCHING") && captured.runId().equals(current.runId()))
-                change(db, current, "RUNNING", "");
-              return null;
-            });
+        database.transaction(db -> {
+          var current = find(db, project, id);
+          if (current.state().equals("DISPATCHING") && captured.runId().equals(current.runId()))
+            change(db, current, "RUNNING", "");
+          return null;
+        });
       }
     } catch (RuntimeException failure) {
       var current = get(project, id);
@@ -715,38 +707,35 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
           if (!externalAllowed(owner, currentTask)) return false;
         }
         String day = day(owner.spec().request().projectId());
-        return database.transaction(
-            db -> {
-              var job = find(db, owner.spec().request().projectId(), owner.id());
-              var settings = settings(db, owner.spec().request().projectId());
-              var task =
-                  ledger.getWithin(
-                      db, owner.spec().request().projectId(), owner.spec().request().taskId());
-              if (task.revision() != owner.spec().request().taskRevision()
-                  || !Set.of(SecretaryTask.Status.OPEN, SecretaryTask.Status.WAITING)
-                      .contains(task.status())) return false;
-              if (job == null
-                  || !owner.runId().equals(job.runId())
-                  || !Set.of("DISPATCHING", "RUNNING", "WAITING").contains(job.state())
-                  || !settings.enabled()
-                  || level(job.spec().request().kind()) > settings.maxLevel()
-                  || job.deadline() == null
-                  || !clock.instant().isBefore(job.deadline())
-                  || !policy(job.spec().request().kind()).enabled()
-                  || policy(job.spec().request().kind()).decision().equals("DENY")
-                  || !authorized(job, policy(job.spec().request().kind()))
-                  || job.calls() >= Math.min(job.spec().maxLlmCalls(), settings.maxLlmCalls())
-                  || daily(db, job.spec().request().projectId(), day)
-                      >= Math.min(job.spec().maxDailyCalls(), settings.maxDailyCalls()))
-                return false;
-              reserveDaily(db, job.spec().request().projectId(), day, 1);
-              try (var q =
-                  db.prepareStatement("UPDATE secretary_jobs SET calls=calls+1 WHERE id=?")) {
-                q.setString(1, job.id());
-                q.executeUpdate();
-              }
-              return true;
-            });
+        return database.transaction(db -> {
+          var job = find(db, owner.spec().request().projectId(), owner.id());
+          var settings = settings(db, owner.spec().request().projectId());
+          var task =
+              ledger.getWithin(
+                  db, owner.spec().request().projectId(), owner.spec().request().taskId());
+          if (task.revision() != owner.spec().request().taskRevision()
+              || !Set.of(SecretaryTask.Status.OPEN, SecretaryTask.Status.WAITING)
+                  .contains(task.status())) return false;
+          if (job == null
+              || !owner.runId().equals(job.runId())
+              || !Set.of("DISPATCHING", "RUNNING", "WAITING").contains(job.state())
+              || !settings.enabled()
+              || level(job.spec().request().kind()) > settings.maxLevel()
+              || job.deadline() == null
+              || !clock.instant().isBefore(job.deadline())
+              || !policy(job.spec().request().kind()).enabled()
+              || policy(job.spec().request().kind()).decision().equals("DENY")
+              || !authorized(job, policy(job.spec().request().kind()))
+              || job.calls() >= Math.min(job.spec().maxLlmCalls(), settings.maxLlmCalls())
+              || daily(db, job.spec().request().projectId(), day)
+                  >= Math.min(job.spec().maxDailyCalls(), settings.maxDailyCalls())) return false;
+          reserveDaily(db, job.spec().request().projectId(), day, 1);
+          try (var q = db.prepareStatement("UPDATE secretary_jobs SET calls=calls+1 WHERE id=?")) {
+            q.setString(1, job.id());
+            q.executeUpdate();
+          }
+          return true;
+        });
       }
 
       @Override
@@ -821,15 +810,14 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
         && clock.instant().isBefore(job.deadline())
         && job.calls() < job.spec().maxLlmCalls()) {
       var retry = transition(job, "RETRY_PENDING", "transient");
-      database.transaction(
-          db -> {
-            try (var q = db.prepareStatement("UPDATE secretary_jobs SET next=? WHERE id=?")) {
-              q.setLong(1, clock.millis() + 60000L * (1L << Math.min(3, retry.attempts() - 1)));
-              q.setString(2, id);
-              q.executeUpdate();
-            }
-            return null;
-          });
+      database.transaction(db -> {
+        try (var q = db.prepareStatement("UPDATE secretary_jobs SET next=? WHERE id=?")) {
+          q.setLong(1, clock.millis() + 60000L * (1L << Math.min(3, retry.attempts() - 1)));
+          q.setString(2, id);
+          q.executeUpdate();
+        }
+        return null;
+      });
     } else
       finish(
           job,
@@ -842,51 +830,50 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
     String project = job.spec().request().projectId();
     String destination = destination(project);
     var changed =
-        database.transaction(
-            db -> {
-              var current = find(db, project, job.id());
-              if (!current.state().equals("DISPATCHING")
-                  || !java.util.Objects.equals(current.runId(), job.runId())) return current;
-              var authority = policy(current.spec().request().kind());
-              if (!settings(db, project).enabled()
-                  || !authority.enabled()
-                  || authority.decision().equals("DENY")
-                  || !authorized(current, authority))
-                return finishWithin(
-                    db, current, "BLOCKED", "policy_or_project_disabled", null, destination);
-              var task = ledger.getWithin(db, project, current.spec().request().taskId());
-              if (task.revision() != current.spec().request().taskRevision())
-                return finishWithin(db, current, "BLOCKED", "task_changed", null, destination);
-              var finalizing = change(db, current, "FINALIZING", "");
-              var refs = new ArrayList<>(task.references());
-              refs.add("secretary-execution:" + job.id());
-              var updated =
-                  ledger.updateWithin(
-                      db,
-                      project,
-                      task.id(),
-                      task.revision(),
-                      task.title(),
-                      task.intent(),
-                      current.spec().request().targetStatus(),
-                      task.due(),
-                      task.priority(),
-                      task.tags(),
-                      refs);
-              var result =
-                  new Result(
-                      updated.status().name(),
-                      hash(updated.id() + ":" + updated.revision() + ":" + updated.status()),
-                      null,
-                      "ledger_revision_and_execution_reference");
-              return finishWithin(
+        database.transaction(db -> {
+          var current = find(db, project, job.id());
+          if (!current.state().equals("DISPATCHING")
+              || !java.util.Objects.equals(current.runId(), job.runId())) return current;
+          var authority = policy(current.spec().request().kind());
+          if (!settings(db, project).enabled()
+              || !authority.enabled()
+              || authority.decision().equals("DENY")
+              || !authorized(current, authority))
+            return finishWithin(
+                db, current, "BLOCKED", "policy_or_project_disabled", null, destination);
+          var task = ledger.getWithin(db, project, current.spec().request().taskId());
+          if (task.revision() != current.spec().request().taskRevision())
+            return finishWithin(db, current, "BLOCKED", "task_changed", null, destination);
+          var finalizing = change(db, current, "FINALIZING", "");
+          var refs = new ArrayList<>(task.references());
+          refs.add("secretary-execution:" + job.id());
+          var updated =
+              ledger.updateWithin(
                   db,
-                  finalizing,
-                  "COMPLETED",
-                  "task_state_and_reference_verified",
-                  result,
-                  destination);
-            });
+                  project,
+                  task.id(),
+                  task.revision(),
+                  task.title(),
+                  task.intent(),
+                  current.spec().request().targetStatus(),
+                  task.due(),
+                  task.priority(),
+                  task.tags(),
+                  refs);
+          var result =
+              new Result(
+                  updated.status().name(),
+                  hash(updated.id() + ":" + updated.revision() + ":" + updated.status()),
+                  null,
+                  "ledger_revision_and_execution_reference");
+          return finishWithin(
+              db,
+              finalizing,
+              "COMPLETED",
+              "task_state_and_reference_verified",
+              result,
+              destination);
+        });
     recordProposal(changed);
   }
 
@@ -899,26 +886,23 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
     }
     if (job.allocated() == 0) {
       boolean allocated =
-          database.transaction(
-              db -> {
-                var settings = settings(db, job.spec().request().projectId());
-                String day = day(job.spec().request().projectId());
-                int calls = current.remainingCalls();
-                if (calls > Math.min(job.spec().maxLlmCalls(), settings.maxLlmCalls())
-                    || daily(db, job.spec().request().projectId(), day) + calls
-                        > Math.min(job.spec().maxDailyCalls(), settings.maxDailyCalls()))
-                  return false;
-                reserveDaily(db, job.spec().request().projectId(), day, calls);
-                try (var q =
-                    db.prepareStatement(
-                        "UPDATE secretary_jobs SET allocated=?,calls=? WHERE id=?")) {
-                  q.setInt(1, calls);
-                  q.setInt(2, calls);
-                  q.setString(3, job.id());
-                  q.executeUpdate();
-                }
-                return true;
-              });
+          database.transaction(db -> {
+            var settings = settings(db, job.spec().request().projectId());
+            String day = day(job.spec().request().projectId());
+            int calls = current.remainingCalls();
+            if (calls > Math.min(job.spec().maxLlmCalls(), settings.maxLlmCalls())
+                || daily(db, job.spec().request().projectId(), day) + calls
+                    > Math.min(job.spec().maxDailyCalls(), settings.maxDailyCalls())) return false;
+            reserveDaily(db, job.spec().request().projectId(), day, calls);
+            try (var q =
+                db.prepareStatement("UPDATE secretary_jobs SET allocated=?,calls=? WHERE id=?")) {
+              q.setInt(1, calls);
+              q.setInt(2, calls);
+              q.setString(3, job.id());
+              q.executeUpdate();
+            }
+            return true;
+          });
       if (!allocated) {
         finish(
             get(job.spec().request().projectId(), job.id()),
@@ -951,17 +935,16 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
               && observed.attempts() - fresh.spec().goal().attempts() <= limits.maxRetries() + 1;
         });
     var after = source.describe(job.spec().request().projectId(), job.spec().request().goalId());
-    database.transaction(
-        db -> {
-          var fresh = find(db, job.spec().request().projectId(), job.id());
-          try (var q = db.prepareStatement("UPDATE secretary_jobs SET run=? WHERE id=?")) {
-            q.setString(1, after.runId());
-            q.setString(2, job.id());
-            q.executeUpdate();
-          }
-          if (fresh.state().equals("DISPATCHING")) change(db, fresh, "RUNNING", "");
-          return null;
-        });
+    database.transaction(db -> {
+      var fresh = find(db, job.spec().request().projectId(), job.id());
+      try (var q = db.prepareStatement("UPDATE secretary_jobs SET run=? WHERE id=?")) {
+        q.setString(1, after.runId());
+        q.setString(2, job.id());
+        q.executeUpdate();
+      }
+      if (fresh.state().equals("DISPATCHING")) change(db, fresh, "RUNNING", "");
+      return null;
+    });
     monitor(get(job.spec().request().projectId(), job.id()));
   }
 
@@ -998,17 +981,16 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
     String project = job.spec().request().projectId();
     if (goal(job)) {
       String run = required(goals).stopRun(project, job.spec().request().goalId(), cancel);
-      database.transaction(
-          db -> {
-            try (var q =
-                db.prepareStatement(
-                    "UPDATE secretary_jobs SET run=? WHERE id=? AND state IN ('CANCELLING','SUSPENDING','TIMING_OUT')")) {
-              q.setString(1, run);
-              q.setString(2, job.id());
-              q.executeUpdate();
-            }
-            return null;
-          });
+      database.transaction(db -> {
+        try (var q =
+            db.prepareStatement(
+                "UPDATE secretary_jobs SET run=? WHERE id=? AND state IN ('CANCELLING','SUSPENDING','TIMING_OUT')")) {
+          q.setString(1, run);
+          q.setString(2, job.id());
+          q.executeUpdate();
+        }
+        return null;
+      });
     } else required(runtimes).cancel(project, job.spec().sessionId(), job.runId());
   }
 
@@ -1125,15 +1107,14 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
         return;
       }
       if (observed.runId() != null && !observed.runId().equals(job.runId()))
-        database.transaction(
-            db -> {
-              try (var q = db.prepareStatement("UPDATE secretary_jobs SET run=? WHERE id=?")) {
-                q.setString(1, observed.runId());
-                q.setString(2, job.id());
-                q.executeUpdate();
-              }
-              return null;
-            });
+        database.transaction(db -> {
+          try (var q = db.prepareStatement("UPDATE secretary_jobs SET run=? WHERE id=?")) {
+            q.setString(1, observed.runId());
+            q.setString(2, job.id());
+            q.executeUpdate();
+          }
+          return null;
+        });
       if (observed.state().equals("RUNNING")
           && (observed.runId() == null
               || !required(runtimes)
@@ -1202,17 +1183,16 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
     var proposals = optional(orchestrators);
     if (proposals == null) return;
     var projects =
-        database.read(
-            db -> {
-              var values = new ArrayList<String>();
-              try (var q = db.createStatement();
-                  var r =
-                      q.executeQuery(
-                          "SELECT project FROM secretary_autonomy_settings ORDER BY project LIMIT 256")) {
-                while (r.next()) values.add(r.getString(1));
-              }
-              return values;
-            });
+        database.read(db -> {
+          var values = new ArrayList<String>();
+          try (var q = db.createStatement();
+              var r =
+                  q.executeQuery(
+                      "SELECT project FROM secretary_autonomy_settings ORDER BY project LIMIT 256")) {
+            while (r.next()) values.add(r.getString(1));
+          }
+          return values;
+        });
     int projectCursor = Math.toIntExact(database.read(db -> cursor(db, "autonomy:projects")));
     for (int index = 0; index < Math.min(16, projects.size()); index++) {
       var project = projects.get(Math.floorMod(projectCursor + index, projects.size()));
@@ -1221,11 +1201,10 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
       int offset =
           Math.toIntExact(database.read(db -> cursor(db, "autonomy:proposals:" + project)));
       var batch = proposals.executionCandidates(project, offset, 32);
-      database.transaction(
-          db -> {
-            cursor(db, "autonomy:proposals:" + project, batch.size() < 32 ? 0 : offset + 32L);
-            return null;
-          });
+      database.transaction(db -> {
+        cursor(db, "autonomy:proposals:" + project, batch.size() < 32 ? 0 : offset + 32L);
+        return null;
+      });
       for (var proposal : batch) {
         boolean explicit =
             Set.of("EXECUTION_REQUESTED", "APPROVAL_REQUESTED").contains(proposal.status());
@@ -1233,17 +1212,16 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
             && !(automatic && settings.autoPrepare() && proposal.status().equals("PROPOSED")))
           continue;
         long configured =
-            database.read(
-                db -> {
-                  try (var q =
-                      db.prepareStatement(
-                          "SELECT configured FROM secretary_autonomy_settings WHERE project=?")) {
-                    q.setString(1, project);
-                    try (var r = q.executeQuery()) {
-                      return r.next() ? r.getLong(1) : Long.MAX_VALUE;
-                    }
-                  }
-                });
+            database.read(db -> {
+              try (var q =
+                  db.prepareStatement(
+                      "SELECT configured FROM secretary_autonomy_settings WHERE project=?")) {
+                q.setString(1, project);
+                try (var r = q.executeQuery()) {
+                  return r.next() ? r.getLong(1) : Long.MAX_VALUE;
+                }
+              }
+            });
         if (explicit && proposal.updated().toEpochMilli() < configured) continue;
         try {
           var kind =
@@ -1263,14 +1241,13 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
         }
       }
     }
-    database.transaction(
-        db -> {
-          cursor(
-              db,
-              "autonomy:projects",
-              projects.isEmpty() ? 0 : Math.floorMod(projectCursor + 16, projects.size()));
-          return null;
-        });
+    database.transaction(db -> {
+      cursor(
+          db,
+          "autonomy:projects",
+          projects.isEmpty() ? 0 : Math.floorMod(projectCursor + 16, projects.size()));
+      return null;
+    });
   }
 
   private static long cursor(Connection db, String key) throws java.sql.SQLException {
@@ -1323,60 +1300,58 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
   }
 
   private List<Job> query(String project, String mode, int limit) {
-    return database.read(
-        db -> {
-          var values = new ArrayList<Job>();
-          var statement =
-              switch (mode) {
-                case "ACTIVE" ->
-                    db.prepareStatement(
-                        "SELECT * FROM secretary_jobs WHERE state IN ('DISPATCHING','RUNNING','WAITING','CANCELLING','SUSPENDING','TIMING_OUT','FINALIZING') ORDER BY updated,id LIMIT ?");
-                case "READY" ->
-                    db.prepareStatement(
-                        "SELECT * FROM secretary_jobs WHERE state IN ('RETRY_PENDING','READY','WAITING_APPROVAL') AND next<=? ORDER BY CASE WHEN state='RETRY_PENDING' THEN 0 WHEN state='READY' THEN 1 ELSE 2 END,next,created,id LIMIT ?");
-                case "LIST" ->
-                    db.prepareStatement(
-                        "SELECT * FROM secretary_jobs WHERE project=? ORDER BY created DESC,id LIMIT ?");
-                default -> throw new IllegalArgumentException("Unknown execution query");
-              };
-          try (var q = statement) {
-            int index = 1;
-            if (mode.equals("LIST")) q.setString(index++, project);
-            else if (mode.equals("READY")) q.setLong(index++, clock.millis());
-            q.setInt(index, limit);
-            try (var r = q.executeQuery()) {
-              while (r.next()) values.add(row(r));
-            }
-          }
-          return List.copyOf(values);
-        });
+    return database.read(db -> {
+      var values = new ArrayList<Job>();
+      var statement =
+          switch (mode) {
+            case "ACTIVE" ->
+                db.prepareStatement(
+                    "SELECT * FROM secretary_jobs WHERE state IN ('DISPATCHING','RUNNING','WAITING','CANCELLING','SUSPENDING','TIMING_OUT','FINALIZING') ORDER BY updated,id LIMIT ?");
+            case "READY" ->
+                db.prepareStatement(
+                    "SELECT * FROM secretary_jobs WHERE state IN ('RETRY_PENDING','READY','WAITING_APPROVAL') AND next<=? ORDER BY CASE WHEN state='RETRY_PENDING' THEN 0 WHEN state='READY' THEN 1 ELSE 2 END,next,created,id LIMIT ?");
+            case "LIST" ->
+                db.prepareStatement(
+                    "SELECT * FROM secretary_jobs WHERE project=? ORDER BY created DESC,id LIMIT ?");
+            default -> throw new IllegalArgumentException("Unknown execution query");
+          };
+      try (var q = statement) {
+        int index = 1;
+        if (mode.equals("LIST")) q.setString(index++, project);
+        else if (mode.equals("READY")) q.setLong(index++, clock.millis());
+        q.setInt(index, limit);
+        try (var r = q.executeQuery()) {
+          while (r.next()) values.add(row(r));
+        }
+      }
+      return List.copyOf(values);
+    });
   }
 
   public List<History> history(String project, String id, int limit) {
     get(project, id);
     bounded(limit);
-    return database.read(
-        db -> {
-          var values = new ArrayList<History>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT sequence,state,reason,revision,at FROM secretary_job_history WHERE project=? AND job=? ORDER BY sequence DESC LIMIT ?")) {
-            q.setString(1, project);
-            q.setString(2, id);
-            q.setInt(3, limit);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                values.add(
-                    new History(
-                        r.getLong(1),
-                        r.getString(2),
-                        r.getString(3),
-                        r.getLong(4),
-                        Instant.ofEpochMilli(r.getLong(5))));
-            }
-          }
-          return List.copyOf(values);
-        });
+    return database.read(db -> {
+      var values = new ArrayList<History>();
+      try (var q =
+          db.prepareStatement(
+              "SELECT sequence,state,reason,revision,at FROM secretary_job_history WHERE project=? AND job=? ORDER BY sequence DESC LIMIT ?")) {
+        q.setString(1, project);
+        q.setString(2, id);
+        q.setInt(3, limit);
+        try (var r = q.executeQuery()) {
+          while (r.next())
+            values.add(
+                new History(
+                    r.getLong(1),
+                    r.getString(2),
+                    r.getString(3),
+                    r.getLong(4),
+                    Instant.ofEpochMilli(r.getLong(5))));
+        }
+      }
+      return List.copyOf(values);
+    });
   }
 
   public Status status(String project) {
@@ -1388,42 +1363,40 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
     identifier(project, 128);
     long from = date.atStartOfDay(zone).toInstant().toEpochMilli();
     long until = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli();
-    return database.read(
-        db -> {
-          var values = new ArrayList<Item>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT * FROM secretary_jobs WHERE project=? AND updated>=? AND updated<? ORDER BY updated DESC,id LIMIT 256")) {
-            q.setString(1, project);
-            q.setLong(2, from);
-            q.setLong(3, until);
-            try (var r = q.executeQuery()) {
-              while (r.next()) {
-                var job = row(r);
-                String detail =
-                    job.spec().privateModelFingerprint() != null
-                        ? "Private draft retained in the authenticated execution result."
-                        : job.result() == null ? job.reason() : job.result().text();
-                if (detail.length() > 512) detail = detail.substring(0, 512) + "…";
-                values.add(
-                    new Item(
-                        "secretary-execution",
-                        job.id(),
-                        job.spec().request().kind()
-                            + ": "
-                            + (job.spec().privateModelFingerprint() != null
-                                ? "Private external preparation"
-                                : job.spec().objective()),
-                        job.state(),
-                        detail,
-                        Reliability.PROPOSAL,
-                        List.of(
-                            "secretary-job:" + job.id(), "execution-mode:" + executionMode(job))));
-              }
-            }
+    return database.read(db -> {
+      var values = new ArrayList<Item>();
+      try (var q =
+          db.prepareStatement(
+              "SELECT * FROM secretary_jobs WHERE project=? AND updated>=? AND updated<? ORDER BY updated DESC,id LIMIT 256")) {
+        q.setString(1, project);
+        q.setLong(2, from);
+        q.setLong(3, until);
+        try (var r = q.executeQuery()) {
+          while (r.next()) {
+            var job = row(r);
+            String detail =
+                job.spec().privateModelFingerprint() != null
+                    ? "Private draft retained in the authenticated execution result."
+                    : job.result() == null ? job.reason() : job.result().text();
+            if (detail.length() > 512) detail = detail.substring(0, 512) + "…";
+            values.add(
+                new Item(
+                    "secretary-execution",
+                    job.id(),
+                    job.spec().request().kind()
+                        + ": "
+                        + (job.spec().privateModelFingerprint() != null
+                            ? "Private external preparation"
+                            : job.spec().objective()),
+                    job.state(),
+                    detail,
+                    Reliability.PROPOSAL,
+                    List.of("secretary-job:" + job.id(), "execution-mode:" + executionMode(job))));
           }
-          return List.copyOf(values);
-        });
+        }
+      }
+      return List.copyOf(values);
+    });
   }
 
   private static void bounded(int limit) {
@@ -1526,12 +1499,11 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
   }
 
   private Job transition(Job job, String state, String reason) {
-    return database.transaction(
-        db -> {
-          var current = find(db, job.spec().request().projectId(), job.id());
-          expected(current, job.revision());
-          return change(db, current, state, reason);
-        });
+    return database.transaction(db -> {
+      var current = find(db, job.spec().request().projectId(), job.id());
+      expected(current, job.revision());
+      return change(db, current, state, reason);
+    });
   }
 
   private static void history(Connection db, Job job) throws java.sql.SQLException {
@@ -1551,15 +1523,14 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
   private void finish(Job job, String state, String reason, Result result) {
     String destination = destination(job.spec().request().projectId());
     var changed =
-        database.transaction(
-            db -> {
-              var current = find(db, job.spec().request().projectId(), job.id());
-              if (current == null
-                  || !java.util.Objects.equals(current.runId(), job.runId())
-                  || !ACTIVE.contains(current.state()) && !current.state().equals("UNCERTAIN"))
-                return null;
-              return finishWithin(db, current, state, reason, result, destination);
-            });
+        database.transaction(db -> {
+          var current = find(db, job.spec().request().projectId(), job.id());
+          if (current == null
+              || !java.util.Objects.equals(current.runId(), job.runId())
+              || !ACTIVE.contains(current.state()) && !current.state().equals("UNCERTAIN"))
+            return null;
+          return finishWithin(db, current, state, reason, result, destination);
+        });
     recordProposal(changed);
   }
 
@@ -1638,18 +1609,16 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
   public void tick() {
     if (closed.get() || !busy.compareAndSet(false, true)) return;
     try {
-      worker.execute(
-          () -> {
-            try {
-              check();
-            } catch (RuntimeException unavailable) {
-              org.slf4j.LoggerFactory.getLogger(getClass())
-                  .warn(
-                      "Secretary autonomy unavailable: {}", unavailable.getClass().getSimpleName());
-            } finally {
-              busy.set(false);
-            }
-          });
+      worker.execute(() -> {
+        try {
+          check();
+        } catch (RuntimeException unavailable) {
+          org.slf4j.LoggerFactory.getLogger(getClass())
+              .warn("Secretary autonomy unavailable: {}", unavailable.getClass().getSimpleName());
+        } finally {
+          busy.set(false);
+        }
+      });
     } catch (RejectedExecutionException rejected) {
       busy.set(false);
     }

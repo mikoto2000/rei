@@ -35,7 +35,8 @@ final class EventMigration {
   private record LegacyCursor(long offset, boolean discard) {}
 
   /** 指定された内容を、現在の対象へ反映する。 */
-  static void apply(Connection db, Path root) throws IOException, SQLException, NoSuchAlgorithmException {
+  static void apply(Connection db, Path root)
+      throws IOException, SQLException, NoSuchAlgorithmException {
     try (var sql = db.createStatement()) {
       sql.execute(
           "CREATE TABLE agent_events(project_id TEXT NOT NULL,sequence INTEGER NOT NULL,id TEXT NOT NULL,event_type TEXT NOT NULL,created_seconds INTEGER NOT NULL,created_nanos INTEGER NOT NULL,session_id TEXT,run_id TEXT,turn_scope TEXT,conversation_key TEXT,legacy_replayable INTEGER NOT NULL,legacy_start INTEGER,legacy_end INTEGER,record TEXT NOT NULL,PRIMARY KEY(project_id,sequence),UNIQUE(project_id,id))");

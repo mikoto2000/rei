@@ -54,11 +54,10 @@ class HttpApiBoundaryTest {
   void dispatchedWriteTimeoutHasUnknownOutcomeAndSingleAttempt() {
     var fetcher = mock(SafeHttpFetcher.class);
     when(fetcher.exchange(any(), anyString(), any(), anyMap(), any(), any(), any(), anyBoolean()))
-        .thenAnswer(
-            call -> {
-              call.<HttpFetchObserver>getArgument(6).request(false);
-              throw new HttpFetchException(HttpFetchException.Code.TOTAL_TIMEOUT);
-            });
+        .thenAnswer(call -> {
+          call.<HttpFetchObserver>getArgument(6).request(false);
+          throw new HttpFetchException(HttpFetchException.Code.TOTAL_TIMEOUT);
+        });
     var service = new HttpApiService(fetcher, new HttpApiProperties(null, null, null, null, null));
     var result =
         service.write(

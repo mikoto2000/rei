@@ -211,15 +211,13 @@ class StandaloneSubAgentBudgetTest {
       assertEquals(2, calls.get());
       assertTrue(
           result.items().stream()
-              .anyMatch(
-                  i ->
-                      i.result() != null && i.result().output().contains("TOKEN_BUDGET_EXCEEDED")));
+              .anyMatch(i ->
+                  i.result() != null && i.result().output().contains("TOKEN_BUDGET_EXCEEDED")));
       assertTrue(
           result.items().stream()
-              .noneMatch(
-                  i ->
-                      i.status() == ParallelSubAgentDelegator.Status.COMPLETED
-                          && i.id().matches("item-[23]")));
+              .noneMatch(i ->
+                  i.status() == ParallelSubAgentDelegator.Status.COMPLETED
+                      && i.id().matches("item-[23]")));
     }
   }
 
@@ -316,9 +314,8 @@ class StandaloneSubAgentBudgetTest {
         assertEquals(1, calls.get());
         assertTrue(
             result.items().stream()
-                .anyMatch(
-                    i ->
-                        i.result() != null && i.result().output().contains("TOKEN_USAGE_UNKNOWN")));
+                .anyMatch(i ->
+                    i.result() != null && i.result().output().contains("TOKEN_USAGE_UNKNOWN")));
         assertFalse(result.toString().contains("private provider detail"));
       }
     }

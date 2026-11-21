@@ -19,20 +19,19 @@ class CleanupCancellationTest {
         new ConversationInputRouter(
             work -> Thread.ofVirtual().start(work),
             (c, p, q) -> {
-              cancellation.register(
-                  () -> {
-                    disposing.countDown();
-                    boolean interrupted = false;
-                    while (true) {
-                      try {
-                        release.await();
-                        break;
-                      } catch (InterruptedException stop) {
-                        interrupted = true;
-                      }
-                    }
-                    if (interrupted) Thread.currentThread().interrupt();
-                  });
+              cancellation.register(() -> {
+                disposing.countDown();
+                boolean interrupted = false;
+                while (true) {
+                  try {
+                    release.await();
+                    break;
+                  } catch (InterruptedException stop) {
+                    interrupted = true;
+                  }
+                }
+                if (interrupted) Thread.currentThread().interrupt();
+              });
             });
     router.setCancellation(cancellation);
     router.onCleanup(c -> finished.countDown());

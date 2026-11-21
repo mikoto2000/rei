@@ -139,11 +139,10 @@ final class RunManagementService implements RunManagement {
     }
     return result.stream()
         .sorted(
-            Comparator.comparing(
-                    (Run row) ->
-                        row.startedAt() == null
-                            ? java.time.Instant.MIN
-                            : java.time.Instant.parse(row.startedAt()))
+            Comparator.comparing((Run row) ->
+                    row.startedAt() == null
+                        ? java.time.Instant.MIN
+                        : java.time.Instant.parse(row.startedAt()))
                 .reversed()
                 .thenComparing(Run::runId))
         .toList();
@@ -153,17 +152,16 @@ final class RunManagementService implements RunManagement {
   public List<Checkpoint> checkpoints(String project, String run) {
     requireProject(project);
     return checkpoints.checkpointsForRun(project, run).stream()
-        .map(
-            state ->
-                new Checkpoint(
-                    state.taskId(),
-                    state.runId(),
-                    state.originalRunId(),
-                    state.createdAt().toString(),
-                    state.status(),
-                    state.revision(),
-                    summary(state.request()),
-                    !live(project, run) && checkpoints.canDiscard(state, id -> live(project, id))))
+        .map(state ->
+            new Checkpoint(
+                state.taskId(),
+                state.runId(),
+                state.originalRunId(),
+                state.createdAt().toString(),
+                state.status(),
+                state.revision(),
+                summary(state.request()),
+                !live(project, run) && checkpoints.canDiscard(state, id -> live(project, id))))
         .toList();
   }
 

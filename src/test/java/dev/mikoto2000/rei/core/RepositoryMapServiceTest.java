@@ -38,12 +38,11 @@ class RepositoryMapServiceTest {
     write("src/main/java/p/Helper.java", "package p; public class Helper {}");
     write("src/test/java/p/AppTest.java", "package p; public class AppTest {}");
     var service =
-        new RepositoryMapService(
-            path ->
-                List.of(
-                    "src/main/java/p/App.java",
-                    "src/main/java/p/Helper.java",
-                    "src/test/java/p/AppTest.java"));
+        new RepositoryMapService(path ->
+            List.of(
+                "src/main/java/p/App.java",
+                "src/main/java/p/Helper.java",
+                "src/test/java/p/AppTest.java"));
     var map = service.map(root, "", 50);
     assertEquals(3, map.filesScanned());
     assertFalse(map.partial());
@@ -93,13 +92,12 @@ class RepositoryMapServiceTest {
     write("app/src/test/java/p/AppTest.java", "package p; public class AppTest {}");
     write("README.md", "PRIVATE_SOURCE_BODY");
     var service =
-        new RepositoryMapService(
-            path ->
-                List.of(
-                    "app/src/main/java/p/App.java",
-                    "lib/src/main/java/q/Helper.java",
-                    "app/src/test/java/p/AppTest.java",
-                    "README.md"));
+        new RepositoryMapService(path ->
+            List.of(
+                "app/src/main/java/p/App.java",
+                "lib/src/main/java/q/Helper.java",
+                "app/src/test/java/p/AppTest.java",
+                "README.md"));
     var view = service.map(root, "Helper", 1);
     var summary = view.summary();
     assertEquals(1, view.items().size());
@@ -110,9 +108,8 @@ class RepositoryMapServiceTest {
     assertEquals(1, summary.testNameCandidates());
     assertTrue(
         summary.modules().stream()
-            .anyMatch(
-                module ->
-                    module.name().equals("app") && module.files() == 2 && module.testFiles() == 1));
+            .anyMatch(module ->
+                module.name().equals("app") && module.files() == 2 && module.testFiles() == 1));
     assertTrue(
         summary.packages().stream().anyMatch(pkg -> pkg.name().equals("p") && pkg.files() == 2));
     assertEquals("p.App.main", summary.entryPoints().getFirst().symbol());
@@ -165,14 +162,13 @@ class RepositoryMapServiceTest {
     write("Large.java", "x".repeat(140000));
     write("Bad.java", "class Broken { invalid ???");
     var service =
-        new RepositoryMapService(
-            path ->
-                List.of(
-                    "../escape.java",
-                    root.resolve("credentials.java").toString(),
-                    "credentials.java",
-                    "Large.java",
-                    "Bad.java"));
+        new RepositoryMapService(path ->
+            List.of(
+                "../escape.java",
+                root.resolve("credentials.java").toString(),
+                "credentials.java",
+                "Large.java",
+                "Bad.java"));
     var map = service.map(root, "", 10);
     assertEquals(2, map.items().size());
     assertTrue(map.partial());

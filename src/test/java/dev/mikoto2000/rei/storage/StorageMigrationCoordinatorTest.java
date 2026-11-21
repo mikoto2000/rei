@@ -426,17 +426,15 @@ class StorageMigrationCoordinatorTest {
     var child = new ProcessBuilder(executable, "@" + arguments).redirectErrorStream(true).start();
     try {
       var ready =
-          java.util.concurrent.CompletableFuture.supplyAsync(
-              () -> {
-                try (var reader = child.inputReader()) {
-                  String line;
-                  while ((line = reader.readLine()) != null)
-                    if (line.equals("APPLYING")) return true;
-                  return false;
-                } catch (IOException error) {
-                  throw new java.io.UncheckedIOException(error);
-                }
-              });
+          java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try (var reader = child.inputReader()) {
+              String line;
+              while ((line = reader.readLine()) != null) if (line.equals("APPLYING")) return true;
+              return false;
+            } catch (IOException error) {
+              throw new java.io.UncheckedIOException(error);
+            }
+          });
       assertThat(ready.get(30, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
       assertThatThrownBy(() -> new StorageMigrationCoordinator(root))
           .isInstanceOf(IOException.class)
@@ -483,17 +481,15 @@ class StorageMigrationCoordinatorTest {
     var child = startHotJournalWorker();
     try {
       var ready =
-          java.util.concurrent.CompletableFuture.supplyAsync(
-              () -> {
-                try (var reader = child.inputReader()) {
-                  String line;
-                  while ((line = reader.readLine()) != null)
-                    if (line.equals("SPILLED")) return true;
-                  return false;
-                } catch (IOException error) {
-                  throw new java.io.UncheckedIOException(error);
-                }
-              });
+          java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try (var reader = child.inputReader()) {
+              String line;
+              while ((line = reader.readLine()) != null) if (line.equals("SPILLED")) return true;
+              return false;
+            } catch (IOException error) {
+              throw new java.io.UncheckedIOException(error);
+            }
+          });
       assertThat(ready.get(30, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
     } finally {
       child.destroyForcibly();
@@ -550,17 +546,15 @@ class StorageMigrationCoordinatorTest {
     var child = startHotJournalWorker();
     try {
       var ready =
-          java.util.concurrent.CompletableFuture.supplyAsync(
-              () -> {
-                try (var reader = child.inputReader()) {
-                  String line;
-                  while ((line = reader.readLine()) != null)
-                    if (line.equals("SPILLED")) return true;
-                  return false;
-                } catch (IOException error) {
-                  throw new java.io.UncheckedIOException(error);
-                }
-              });
+          java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try (var reader = child.inputReader()) {
+              String line;
+              while ((line = reader.readLine()) != null) if (line.equals("SPILLED")) return true;
+              return false;
+            } catch (IOException error) {
+              throw new java.io.UncheckedIOException(error);
+            }
+          });
       assertThat(ready.get(30, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
     } finally {
       child.destroyForcibly();

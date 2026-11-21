@@ -42,11 +42,10 @@ public class ResumeContextAdvisor implements BaseAdvisor {
     var current = request.prompt().getUserMessage();
     // ContextHistoryAdvisor has already replayed logs/turns/legacy memory. Those immutable
     // records may contain obsolete host controls; they are not renewed user requests.
-    messages.removeIf(
-        m ->
-            m != current
-                && m instanceof org.springframework.ai.chat.messages.UserMessage
-                && supersededRequest.test(run.runId(), m.getText()));
+    messages.removeIf(m ->
+        m != current
+            && m instanceof org.springframework.ai.chat.messages.UserMessage
+            && supersededRequest.test(run.runId(), m.getText()));
     messages.addFirst(
         SystemMessage.builder()
             .text(context)

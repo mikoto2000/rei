@@ -75,15 +75,14 @@ class SearchCommandCancellationTest {
     System.setOut(new PrintStream(out));
     try {
       var future =
-          executor.submit(
-              () ->
-                  new CommandLine(
-                          new SearchCommand(
-                              chatClient,
-                              modelHolderService,
-                              searchKnowledgeService,
-                              cancellationService))
-                      .execute("spring ai"));
+          executor.submit(() ->
+              new CommandLine(
+                      new SearchCommand(
+                          chatClient,
+                          modelHolderService,
+                          searchKnowledgeService,
+                          cancellationService))
+                  .execute("spring ai"));
       assertTrue(subscribed.await(1, TimeUnit.SECONDS));
 
       cancellationService.cancel();

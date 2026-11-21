@@ -117,11 +117,10 @@ class VoiceCorrectionServiceTest {
     var timer = mock(ScheduledExecutorService.class);
     var actions = new CopyOnWriteArrayList<Runnable>();
     when(timer.schedule(any(Runnable.class), anyLong(), eq(TimeUnit.MILLISECONDS)))
-        .thenAnswer(
-            invocation -> {
-              actions.add(invocation.getArgument(0));
-              return mock(ScheduledFuture.class);
-            });
+        .thenAnswer(invocation -> {
+          actions.add(invocation.getArgument(0));
+          return mock(ScheduledFuture.class);
+        });
     var entered = new CountDownLatch(1);
     var release = new CountDownLatch(1);
     var events = new CopyOnWriteArrayList<VoiceEventPublisher.Event>();

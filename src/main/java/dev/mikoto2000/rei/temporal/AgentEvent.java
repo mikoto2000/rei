@@ -17,6 +17,7 @@ public record AgentEvent(
     Instant timestamp, String type, String subject, Map<String, Object> payload) {
   /** 通知や要求の内容を、受け取った時点の状態で保持する。 */
   public AgentEvent {
-    payload = payload == null ? null : Collections.unmodifiableMap(JsonObjectSnapshot.copy(payload));
+    payload =
+        payload == null ? null : Collections.unmodifiableMap(JsonObjectSnapshot.copy(payload));
   }
 }

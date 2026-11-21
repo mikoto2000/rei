@@ -170,27 +170,25 @@ public class DotRequestRepository {
 
   /** 利用者の状態表示で用いる続きの取得位置キーを返す。 */
   public byte[] cursorKey() {
-    return read(
-        c -> {
-          try (var s = c.createStatement();
-              var r = s.executeQuery("SELECT value FROM mcp_settings WHERE name='cursor_key'")) {
-            if (!r.next()) throw new IllegalStateException("Missing cursor key");
-            return HexFormat.of().parseHex(r.getString(1));
-          }
-        });
+    return read(c -> {
+      try (var s = c.createStatement();
+          var r = s.executeQuery("SELECT value FROM mcp_settings WHERE name='cursor_key'")) {
+        if (!r.next()) throw new IllegalStateException("Missing cursor key");
+        return HexFormat.of().parseHex(r.getString(1));
+      }
+    });
   }
 
   /** 利用者の状態表示で用いるプロジェクトを返す。 */
   public Optional<String> project(String id) {
-    return read(
-        c -> {
-          try (var s = c.prepareStatement("SELECT project FROM dot_requests WHERE id=?")) {
-            s.setString(1, id);
-            try (var r = s.executeQuery()) {
-              return r.next() ? Optional.of(r.getString(1)) : Optional.empty();
-            }
-          }
-        });
+    return read(c -> {
+      try (var s = c.prepareStatement("SELECT project FROM dot_requests WHERE id=?")) {
+        s.setString(1, id);
+        try (var r = s.executeQuery()) {
+          return r.next() ? Optional.of(r.getString(1)) : Optional.empty();
+        }
+      }
+    });
   }
 
   /** 利用者の状態表示に関する監査記録を処理する。 */
@@ -211,11 +209,10 @@ public class DotRequestRepository {
 
   /** 利用者の状態表示に関する監査記録を処理する。 */
   public void audit(String project, String id, String actor, String operation, String outcome) {
-    db.transaction(
-        c -> {
-          audit(c, id, project, actor, operation, outcome);
-          return null;
-        });
+    db.transaction(c -> {
+      audit(c, id, project, actor, operation, outcome);
+      return null;
+    });
   }
 
   /** 指定された内容から新しい対象を作成する。 */
@@ -249,47 +246,45 @@ public class DotRequestRepository {
     String fingerprint =
         dev.mikoto2000.rei.conversation.ConversationAdmissionStore.hash(
             json(Arrays.asList(project, session, run, root, publication, timeout.toMillis())));
-    return db.transaction(
-        c -> {
-          try (var query =
-              c.prepareStatement(
-                  "SELECT project,creation_fingerprint FROM dot_requests WHERE id=?")) {
-            query.setString(1, id);
-            try (var existing = query.executeQuery()) {
-              if (existing.next()) {
-                if (!project.equals(existing.getString(1))
-                    || !fingerprint.equals(existing.getString(2)))
-                  throw new DotException("REQUEST_CONFLICT");
-                audit(c, id, project, "human", "CREATE", "REPLAYED");
-                return get(c, project, id);
-              }
-            }
+    return db.transaction(c -> {
+      try (var query =
+          c.prepareStatement("SELECT project,creation_fingerprint FROM dot_requests WHERE id=?")) {
+        query.setString(1, id);
+        try (var existing = query.executeQuery()) {
+          if (existing.next()) {
+            if (!project.equals(existing.getString(1))
+                || !fingerprint.equals(existing.getString(2)))
+              throw new DotException("REQUEST_CONFLICT");
+            audit(c, id, project, "human", "CREATE", "REPLAYED");
+            return get(c, project, id);
           }
-          if (count(
-                  c,
-                  "SELECT count(*) FROM dot_requests WHERE status IN"
-                      + " ('PENDING','CLAIMED','RESULT_RECEIVED','UNKNOWN')")
-              >= activeLimit + queueLimit) throw new DotException("CAPACITY_EXCEEDED");
-          if (run != null && count(c, "SELECT count(*) FROM dot_requests WHERE run=?", run) > 0)
-            throw new DotException("DELEGATION_ALREADY_USED");
-          update(
+        }
+      }
+      if (count(
               c,
-              "INSERT INTO"
-                  + " dot_requests(id,project,session,run,root,publication,status,created,expires,published,creation_fingerprint)"
-                  + " VALUES(?,?,?,?,?,?,'PENDING',?,?,?,?)",
-              id,
-              project,
-              session,
-              run,
-              root,
-              json(publication),
-              clock.millis(),
-              clock.instant().plus(timeout).toEpochMilli(),
-              run == null ? 1 : 0,
-              fingerprint);
-          audit(c, id, project, run == null ? "human" : "parent-llm", "CREATE", "PENDING");
-          return get(c, project, id);
-        });
+              "SELECT count(*) FROM dot_requests WHERE status IN"
+                  + " ('PENDING','CLAIMED','RESULT_RECEIVED','UNKNOWN')")
+          >= activeLimit + queueLimit) throw new DotException("CAPACITY_EXCEEDED");
+      if (run != null && count(c, "SELECT count(*) FROM dot_requests WHERE run=?", run) > 0)
+        throw new DotException("DELEGATION_ALREADY_USED");
+      update(
+          c,
+          "INSERT INTO"
+              + " dot_requests(id,project,session,run,root,publication,status,created,expires,published,creation_fingerprint)"
+              + " VALUES(?,?,?,?,?,?,'PENDING',?,?,?,?)",
+          id,
+          project,
+          session,
+          run,
+          root,
+          json(publication),
+          clock.millis(),
+          clock.instant().plus(timeout).toEpochMilli(),
+          run == null ? 1 : 0,
+          fingerprint);
+      audit(c, id, project, run == null ? "human" : "parent-llm", "CREATE", "PENDING");
+      return get(c, project, id);
+    });
   }
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
@@ -312,41 +307,40 @@ public class DotRequestRepository {
             .contains(status)) throw new DotException("INVALID_ARGUMENT");
     maintain();
     if (projects.isEmpty()) return List.of();
-    return read(
-        c -> {
-          var out = new ArrayList<Map<String, Object>>();
-          try (var s =
-              c.prepareStatement(
-                  """
-                  SELECT id,project,publication,status,created,expires FROM dot_requests
-                  WHERE project IN (SELECT value FROM json_each(?))
-                    AND status=? AND id>? AND publication IS NOT NULL AND published=1
-                  ORDER BY id LIMIT ?
-                  """)) {
-            s.setString(1, StorageDatabase.JSON.writeValueAsString(projects));
-            s.setString(2, status);
-            s.setString(3, after == null ? "" : after);
-            s.setInt(4, limit);
-            try (var r = s.executeQuery()) {
-              while (r.next())
-                out.add(
-                    Map.of(
-                        "request_id",
-                        r.getString("id"),
-                        "project_id",
-                        r.getString("project"),
-                        "category",
-                        document(r.getString("publication")).get("category"),
-                        "status",
-                        r.getString("status"),
-                        "created_at",
-                        Instant.ofEpochMilli(r.getLong("created")).toString(),
-                        "expires_at",
-                        Instant.ofEpochMilli(r.getLong("expires")).toString()));
-            }
-          }
-          return List.copyOf(out);
-        });
+    return read(c -> {
+      var out = new ArrayList<Map<String, Object>>();
+      try (var s =
+          c.prepareStatement(
+              """
+              SELECT id,project,publication,status,created,expires FROM dot_requests
+              WHERE project IN (SELECT value FROM json_each(?))
+                AND status=? AND id>? AND publication IS NOT NULL AND published=1
+              ORDER BY id LIMIT ?
+              """)) {
+        s.setString(1, StorageDatabase.JSON.writeValueAsString(projects));
+        s.setString(2, status);
+        s.setString(3, after == null ? "" : after);
+        s.setInt(4, limit);
+        try (var r = s.executeQuery()) {
+          while (r.next())
+            out.add(
+                Map.of(
+                    "request_id",
+                    r.getString("id"),
+                    "project_id",
+                    r.getString("project"),
+                    "category",
+                    document(r.getString("publication")).get("category"),
+                    "status",
+                    r.getString("status"),
+                    "created_at",
+                    Instant.ofEpochMilli(r.getLong("created")).toString(),
+                    "expires_at",
+                    Instant.ofEpochMilli(r.getLong("expires")).toString()));
+        }
+      }
+      return List.copyOf(out);
+    });
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
@@ -384,52 +378,51 @@ public class DotRequestRepository {
   /** 対象を処理する担当を決めるため、状態表示要求保存と検索の窓口の利用権を確保する。 */
   public Map<String, Object> claim(String project, String id, String claim) {
     maintain();
-    return db.transaction(
-        c -> {
-          var o = owner(c, project, id);
-          try (var s = c.prepareStatement("SELECT claim,claim_json FROM dot_requests WHERE id=?")) {
-            s.setString(1, id);
-            try (var r = s.executeQuery()) {
-              r.next();
-              if (claim.equals(r.getString(1))) return document(r.getString(2));
-              if (r.getString(1) != null) throw new DotException("CLAIM_CONFLICT");
-            }
-          }
-          if (count(c, "SELECT count(*) FROM dot_requests WHERE id=? AND published=1", id) != 1)
-            throw new DotException("NOT_FOUND");
-          if (!parentAvailable(c, o)) throw new DotException("PARENT_NOT_WAITING");
-          if (!o.status().equals("PENDING") || o.expires() <= clock.millis())
-            throw new DotException("REQUEST_NOT_PENDING");
-          if (count(
-                  c,
-                  "SELECT count(*) FROM dot_requests WHERE status IN"
-                      + " ('CLAIMED','RESULT_RECEIVED','UNKNOWN')")
-              >= activeLimit) throw new DotException("CAPACITY_EXCEEDED");
-          long deadline = Math.min(o.expires(), clock.instant().plus(lease).toEpochMilli());
-          var response =
-              Map.<String, Object>of(
-                  "schema_version",
-                  1,
-                  "request_id",
-                  id,
-                  "claim_id",
-                  claim,
-                  "status",
-                  "CLAIMED",
-                  "lease_expires_at",
-                  Instant.ofEpochMilli(deadline).toString());
-          if (update(
-                  c,
-                  "UPDATE dot_requests SET claim=?,claim_json=?,lease=?,status='CLAIMED' WHERE id=?"
-                      + " AND status='PENDING'",
-                  claim,
-                  json(response),
-                  deadline,
-                  id)
-              != 1) throw new DotException("CLAIM_CONFLICT");
-          audit(c, id, project, "local-mcp", "CLAIM", "CLAIMED");
-          return response;
-        });
+    return db.transaction(c -> {
+      var o = owner(c, project, id);
+      try (var s = c.prepareStatement("SELECT claim,claim_json FROM dot_requests WHERE id=?")) {
+        s.setString(1, id);
+        try (var r = s.executeQuery()) {
+          r.next();
+          if (claim.equals(r.getString(1))) return document(r.getString(2));
+          if (r.getString(1) != null) throw new DotException("CLAIM_CONFLICT");
+        }
+      }
+      if (count(c, "SELECT count(*) FROM dot_requests WHERE id=? AND published=1", id) != 1)
+        throw new DotException("NOT_FOUND");
+      if (!parentAvailable(c, o)) throw new DotException("PARENT_NOT_WAITING");
+      if (!o.status().equals("PENDING") || o.expires() <= clock.millis())
+        throw new DotException("REQUEST_NOT_PENDING");
+      if (count(
+              c,
+              "SELECT count(*) FROM dot_requests WHERE status IN"
+                  + " ('CLAIMED','RESULT_RECEIVED','UNKNOWN')")
+          >= activeLimit) throw new DotException("CAPACITY_EXCEEDED");
+      long deadline = Math.min(o.expires(), clock.instant().plus(lease).toEpochMilli());
+      var response =
+          Map.<String, Object>of(
+              "schema_version",
+              1,
+              "request_id",
+              id,
+              "claim_id",
+              claim,
+              "status",
+              "CLAIMED",
+              "lease_expires_at",
+              Instant.ofEpochMilli(deadline).toString());
+      if (update(
+              c,
+              "UPDATE dot_requests SET claim=?,claim_json=?,lease=?,status='CLAIMED' WHERE id=?"
+                  + " AND status='PENDING'",
+              claim,
+              json(response),
+              deadline,
+              id)
+          != 1) throw new DotException("CLAIM_CONFLICT");
+      audit(c, id, project, "local-mcp", "CLAIM", "CLAIMED");
+      return response;
+    });
   }
 
   /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
@@ -441,375 +434,349 @@ public class DotRequestRepository {
       Map<String, Object> result,
       String fingerprint) {
     maintain();
-    return db.transaction(
-        c -> {
-          var o = owner(c, project, id);
-          try (var s =
-              c.prepareStatement(
-                  "SELECT submission,fingerprint,receipt FROM dot_receipts WHERE request=?")) {
-            s.setString(1, id);
-            try (var r = s.executeQuery()) {
-              if (r.next()) {
-                if (submission.equals(r.getString(1)) && fingerprint.equals(r.getString(2)))
-                  return document(r.getString(3));
-                throw new DotException("SUBMISSION_CONFLICT");
-              }
-            }
-          }
-          try (var s = c.prepareStatement("SELECT claim,lease FROM dot_requests WHERE id=?")) {
-            s.setString(1, id);
-            try (var r = s.executeQuery()) {
-              r.next();
-              if (!claim.equals(r.getString(1))) throw new DotException("CLAIM_MISMATCH");
-              if (r.getLong(2) <= clock.millis()) throw new DotException("LATE_RESULT");
-            }
-          }
-          if (!parentAvailable(c, o)) throw new DotException("PARENT_NOT_WAITING");
-          if (!o.status().equals("CLAIMED") || o.expires() <= clock.millis())
-            throw new DotException("LATE_RESULT");
-          if (count(c, "SELECT count(*) FROM dot_receipts WHERE submission=?", submission) > 0)
+    return db.transaction(c -> {
+      var o = owner(c, project, id);
+      try (var s =
+          c.prepareStatement(
+              "SELECT submission,fingerprint,receipt FROM dot_receipts WHERE request=?")) {
+        s.setString(1, id);
+        try (var r = s.executeQuery()) {
+          if (r.next()) {
+            if (submission.equals(r.getString(1)) && fingerprint.equals(r.getString(2)))
+              return document(r.getString(3));
             throw new DotException("SUBMISSION_CONFLICT");
-          var receipt =
-              Map.<String, Object>of(
-                  "schema_version",
-                  1,
-                  "request_id",
-                  id,
-                  "submission_id",
-                  submission,
-                  "receipt_id",
-                  UUID.randomUUID().toString(),
-                  "persisted",
-                  true,
-                  "validation_status",
-                  "PENDING_REVIEW",
-                  "resume_status",
-                  "NOT_REQUESTED");
-          update(
-              c,
-              "INSERT INTO dot_receipts VALUES(?,?,?,?,?,?)",
+          }
+        }
+      }
+      try (var s = c.prepareStatement("SELECT claim,lease FROM dot_requests WHERE id=?")) {
+        s.setString(1, id);
+        try (var r = s.executeQuery()) {
+          r.next();
+          if (!claim.equals(r.getString(1))) throw new DotException("CLAIM_MISMATCH");
+          if (r.getLong(2) <= clock.millis()) throw new DotException("LATE_RESULT");
+        }
+      }
+      if (!parentAvailable(c, o)) throw new DotException("PARENT_NOT_WAITING");
+      if (!o.status().equals("CLAIMED") || o.expires() <= clock.millis())
+        throw new DotException("LATE_RESULT");
+      if (count(c, "SELECT count(*) FROM dot_receipts WHERE submission=?", submission) > 0)
+        throw new DotException("SUBMISSION_CONFLICT");
+      var receipt =
+          Map.<String, Object>of(
+              "schema_version",
+              1,
+              "request_id",
               id,
+              "submission_id",
               submission,
-              fingerprint,
-              json(result),
-              json(receipt),
-              clock.millis());
-          update(
-              c,
-              "INSERT INTO dot_resume_intents(request,status,run,updated)"
-                  + " VALUES(?,'NOT_REQUESTED',NULL,?)",
-              id,
-              clock.millis());
-          update(
-              c,
-              "UPDATE dot_requests SET status='RESULT_RECEIVED',validation='PENDING_REVIEW' WHERE"
-                  + " id=?",
-              id);
-          audit(c, id, project, "local-mcp", "RESULT_SUBMIT", "PERSISTED");
-          return receipt;
-        });
+              "receipt_id",
+              UUID.randomUUID().toString(),
+              "persisted",
+              true,
+              "validation_status",
+              "PENDING_REVIEW",
+              "resume_status",
+              "NOT_REQUESTED");
+      update(
+          c,
+          "INSERT INTO dot_receipts VALUES(?,?,?,?,?,?)",
+          id,
+          submission,
+          fingerprint,
+          json(result),
+          json(receipt),
+          clock.millis());
+      update(
+          c,
+          "INSERT INTO dot_resume_intents(request,status,run,updated)"
+              + " VALUES(?,'NOT_REQUESTED',NULL,?)",
+          id,
+          clock.millis());
+      update(
+          c,
+          "UPDATE dot_requests SET status='RESULT_RECEIVED',validation='PENDING_REVIEW' WHERE"
+              + " id=?",
+          id);
+      audit(c, id, project, "local-mcp", "RESULT_SUBMIT", "PERSISTED");
+      return receipt;
+    });
   }
 
   /** 対象の実行をキャンセルする。 */
   public Map<String, Object> cancel(String project, String id) {
     maintain();
-    return db.transaction(
-        c -> {
-          var o = owner(c, project, id);
-          if (Set.of("VERIFIED", "PARTIALLY_VERIFIED", "REJECTED", "FAILED", "EXPIRED")
-              .contains(o.status())) throw new DotException("REQUEST_TERMINAL");
-          if (!o.status().equals("CANCELLED")) {
-            update(c, "UPDATE dot_requests SET status='CANCELLED' WHERE id=?", id);
-            audit(c, id, project, "human", "CANCEL", "CANCELLED");
-          }
-          update(
-              c,
-              "UPDATE dot_resume_intents SET status='CANCELLED',updated=? WHERE request=? AND"
-                  + " status IN ('NOT_REQUESTED','REQUESTED')",
-              clock.millis(),
-              id);
-          return status(c, project, id);
-        });
+    return db.transaction(c -> {
+      var o = owner(c, project, id);
+      if (Set.of("VERIFIED", "PARTIALLY_VERIFIED", "REJECTED", "FAILED", "EXPIRED")
+          .contains(o.status())) throw new DotException("REQUEST_TERMINAL");
+      if (!o.status().equals("CANCELLED")) {
+        update(c, "UPDATE dot_requests SET status='CANCELLED' WHERE id=?", id);
+        audit(c, id, project, "human", "CANCEL", "CANCELLED");
+      }
+      update(
+          c,
+          "UPDATE dot_resume_intents SET status='CANCELLED',updated=? WHERE request=? AND"
+              + " status IN ('NOT_REQUESTED','REQUESTED')",
+          clock.millis(),
+          id);
+      return status(c, project, id);
+    });
   }
 
   /** 利用者の状態表示で用いる結果を返す。 */
   public Map<String, Object> result(String project, String id) {
     maintain();
-    return read(
-        c -> {
-          var owner = owner(c, project, id);
-          try (var s =
-              c.prepareStatement("SELECT result,receipt FROM dot_receipts WHERE request=?")) {
-            s.setString(1, id);
-            try (var r = s.executeQuery()) {
-              if (!r.next()) throw new DotException("RESULT_NOT_READY");
-              if (r.getString(1) == null) throw new DotException("RESULT_EXPIRED");
-              var out = new LinkedHashMap<String, Object>(document(r.getString(1)));
-              out.put("receipt", document(r.getString(2)));
-              out.put("untrusted", true);
-              out.put("validation_status", owner.validation());
-              return out;
-            }
-          }
-        });
+    return read(c -> {
+      var owner = owner(c, project, id);
+      try (var s = c.prepareStatement("SELECT result,receipt FROM dot_receipts WHERE request=?")) {
+        s.setString(1, id);
+        try (var r = s.executeQuery()) {
+          if (!r.next()) throw new DotException("RESULT_NOT_READY");
+          if (r.getString(1) == null) throw new DotException("RESULT_EXPIRED");
+          var out = new LinkedHashMap<String, Object>(document(r.getString(1)));
+          out.put("receipt", document(r.getString(2)));
+          out.put("untrusted", true);
+          out.put("validation_status", owner.validation());
+          return out;
+        }
+      }
+    });
   }
 
   /** 利用者の状態表示において、公開に該当するか判定する。 */
   public boolean published(String project, String id) {
-    return read(
-        c ->
-            count(
-                    c,
-                    "SELECT count(*) FROM dot_requests WHERE id=? AND project=? AND published=1",
-                    id,
-                    project)
-                == 1);
+    return read(c ->
+        count(
+                c,
+                "SELECT count(*) FROM dot_requests WHERE id=? AND project=? AND published=1",
+                id,
+                project)
+            == 1);
   }
 
   /** 利用者の状態表示で用いる別実行を返す。 */
   public Optional<Owner> byRun(String project, String run) {
-    return read(
-        c -> {
-          try (var s =
-              c.prepareStatement("SELECT id FROM dot_requests WHERE project=? AND run=?")) {
-            s.setString(1, project);
-            s.setString(2, run);
-            try (var r = s.executeQuery()) {
-              return r.next() ? Optional.of(owner(c, project, r.getString(1))) : Optional.empty();
-            }
-          }
-        });
+    return read(c -> {
+      try (var s = c.prepareStatement("SELECT id FROM dot_requests WHERE project=? AND run=?")) {
+        s.setString(1, project);
+        s.setString(2, run);
+        try (var r = s.executeQuery()) {
+          return r.next() ? Optional.of(owner(c, project, r.getString(1))) : Optional.empty();
+        }
+      }
+    });
   }
 
   /** 後続の照会で対応する対象を見つけられるよう、状態表示要求保存と検索の窓口を関連付ける。 */
   public void bind(
       String id, String project, String task, String dependency, Map<String, Object> authority) {
-    db.transaction(
-        c -> {
-          owner(c, project, id);
-          update(
-              c,
-              "UPDATE dot_requests SET task=?,dependency=?,authority=? WHERE id=? AND project=? AND"
-                  + " published=0",
-              task,
-              dependency,
-              json(authority),
-              id,
-              project);
-          return null;
-        });
+    db.transaction(c -> {
+      owner(c, project, id);
+      update(
+          c,
+          "UPDATE dot_requests SET task=?,dependency=?,authority=? WHERE id=? AND project=? AND"
+              + " published=0",
+          task,
+          dependency,
+          json(authority),
+          id,
+          project);
+      return null;
+    });
   }
 
   /** 状態や結果を購読先へ通知する。 */
   public void publish(String project, String id) {
-    db.transaction(
-        c -> {
-          var o = owner(c, project, id);
-          if (o.task() == null || o.dependency() == null || !o.status().equals("PENDING"))
-            throw new DotException("ADMISSION_UNKNOWN");
-          update(c, "UPDATE dot_requests SET published=1 WHERE id=? AND project=?", id, project);
-          audit(c, id, project, "parent-llm", "WAIT", "PUBLISHED");
-          return null;
-        });
+    db.transaction(c -> {
+      var o = owner(c, project, id);
+      if (o.task() == null || o.dependency() == null || !o.status().equals("PENDING"))
+        throw new DotException("ADMISSION_UNKNOWN");
+      update(c, "UPDATE dot_requests SET published=1 WHERE id=? AND project=?", id, project);
+      audit(c, id, project, "parent-llm", "WAIT", "PUBLISHED");
+      return null;
+    });
   }
 
   /** 利用者の状態表示に関するabandon受付を処理する。 */
   public void abandonAdmission(String project, String id) {
-    db.transaction(
-        c -> {
-          owner(c, project, id);
-          update(
-              c,
-              "UPDATE dot_requests SET status='UNKNOWN',published=0 WHERE id=? AND project=?",
-              id,
-              project);
-          return null;
-        });
+    db.transaction(c -> {
+      owner(c, project, id);
+      update(
+          c,
+          "UPDATE dot_requests SET status='UNKNOWN',published=0 WHERE id=? AND project=?",
+          id,
+          project);
+      return null;
+    });
   }
 
   /** 処理を継続できる状態に戻すため、受付台帳を復旧する。 */
   public void recoverAdmissions() {
-    db.transaction(
-        c -> {
-          update(
-              c, "UPDATE dot_requests SET status='UNKNOWN' WHERE published=0 AND status='PENDING'");
-          return null;
-        });
+    db.transaction(c -> {
+      update(c, "UPDATE dot_requests SET status='UNKNOWN' WHERE published=0 AND status='PENDING'");
+      return null;
+    });
   }
 
   /** 利用者の状態表示に関するmaintainを処理する。 */
   public void maintain() {
-    db.transaction(
-        c -> {
-          long now = clock.millis();
-          update(
-              c,
-              "UPDATE dot_requests SET status='UNKNOWN' WHERE status='CLAIMED' AND (lease<=? OR"
-                  + " expires<=?)",
-              now,
-              now);
-          update(
-              c,
-              "UPDATE dot_requests SET status='EXPIRED' WHERE status='PENDING' AND expires<=?",
-              now);
-          update(
-              c,
-              "UPDATE dot_receipts SET result=NULL WHERE received<=?",
-              now - resultRetention.toMillis());
-          update(
-              c,
-              "UPDATE dot_requests SET publication=NULL,review_note=NULL WHERE created<=?",
-              now - requestRetention.toMillis());
-          update(c, "DELETE FROM dot_audit WHERE created<=?", now - requestRetention.toMillis());
-          return null;
-        });
+    db.transaction(c -> {
+      long now = clock.millis();
+      update(
+          c,
+          "UPDATE dot_requests SET status='UNKNOWN' WHERE status='CLAIMED' AND (lease<=? OR"
+              + " expires<=?)",
+          now,
+          now);
+      update(
+          c, "UPDATE dot_requests SET status='EXPIRED' WHERE status='PENDING' AND expires<=?", now);
+      update(
+          c,
+          "UPDATE dot_receipts SET result=NULL WHERE received<=?",
+          now - resultRetention.toMillis());
+      update(
+          c,
+          "UPDATE dot_requests SET publication=NULL,review_note=NULL WHERE created<=?",
+          now - requestRetention.toMillis());
+      update(c, "DELETE FROM dot_audit WHERE created<=?", now - requestRetention.toMillis());
+      return null;
+    });
   }
 
   /** 利用者の状態表示で用いるレビューを返す。 */
   public Map<String, Object> review(
       String project, String id, String status, List<Integer> satisfied, String note) {
     maintain();
-    return db.transaction(
-        c -> {
-          var o = owner(c, project, id);
-          if (!Set.of("VERIFIED", "PARTIALLY_VERIFIED", "REJECTED", "FAILED").contains(status)
-              || !Set.of("RESULT_RECEIVED", "PARTIALLY_VERIFIED").contains(o.status()))
-            throw new DotException("REVIEW_NOT_ALLOWED");
-          if (count(
-                  c, "SELECT count(*) FROM dot_receipts WHERE request=? AND result IS NOT NULL", id)
-              != 1) throw new DotException("RESULT_EXPIRED");
-          var criteria = (List<?>) get(c, project, id).get("acceptance_criteria");
-          var unique = new HashSet<Integer>(satisfied);
-          if (unique.size() != satisfied.size()
-              || unique.stream().anyMatch(n -> n < 0 || n >= criteria.size())
-              || status.equals("VERIFIED") && unique.size() != criteria.size())
-            throw new DotException("ACCEPTANCE_NOT_VERIFIED");
-          String safe = DotPayload.safe(note == null ? "" : note);
-          if (safe.isBlank()
-              || safe.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 4096)
-            throw new DotException("REVIEW_NOTE_REQUIRED");
-          update(
-              c,
-              "UPDATE dot_requests SET status=?,validation=?,review_note=? WHERE id=?",
-              status,
-              status,
-              json(Map.of("note", safe, "satisfied", satisfied)),
-              id);
-          audit(c, id, project, "human", "VERIFY", status);
-          return get(c, project, id);
-        });
+    return db.transaction(c -> {
+      var o = owner(c, project, id);
+      if (!Set.of("VERIFIED", "PARTIALLY_VERIFIED", "REJECTED", "FAILED").contains(status)
+          || !Set.of("RESULT_RECEIVED", "PARTIALLY_VERIFIED").contains(o.status()))
+        throw new DotException("REVIEW_NOT_ALLOWED");
+      if (count(c, "SELECT count(*) FROM dot_receipts WHERE request=? AND result IS NOT NULL", id)
+          != 1) throw new DotException("RESULT_EXPIRED");
+      var criteria = (List<?>) get(c, project, id).get("acceptance_criteria");
+      var unique = new HashSet<Integer>(satisfied);
+      if (unique.size() != satisfied.size()
+          || unique.stream().anyMatch(n -> n < 0 || n >= criteria.size())
+          || status.equals("VERIFIED") && unique.size() != criteria.size())
+        throw new DotException("ACCEPTANCE_NOT_VERIFIED");
+      String safe = DotPayload.safe(note == null ? "" : note);
+      if (safe.isBlank() || safe.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 4096)
+        throw new DotException("REVIEW_NOTE_REQUIRED");
+      update(
+          c,
+          "UPDATE dot_requests SET status=?,validation=?,review_note=? WHERE id=?",
+          status,
+          status,
+          json(Map.of("note", safe, "satisfied", satisfied)),
+          id);
+      audit(c, id, project, "human", "VERIFY", status);
+      return get(c, project, id);
+    });
   }
 
   /** 利用者の状態表示において、要求再開に該当するか判定する。 */
   public boolean requestResume(String project, String id, long revision) {
     maintain();
-    return db.transaction(
-        c -> {
-          var o = owner(c, project, id);
-          if (!o.status().equals("VERIFIED")
-              || count(
-                      c,
-                      "SELECT count(*) FROM dot_receipts WHERE request=? AND result IS NOT NULL",
-                      id)
-                  != 1) throw new DotException("VERIFIED_RESULT_REQUIRED");
-          if (update(
-                  c,
-                  "UPDATE dot_resume_intents SET status='REQUESTED',revision=?,updated=? WHERE"
-                      + " request=? AND status='NOT_REQUESTED'",
-                  revision,
-                  clock.millis(),
-                  id)
-              == 1) {
-            audit(c, id, project, "human", "RESUME", "REQUESTED");
-            return true;
-          }
-          return false;
-        });
+    return db.transaction(c -> {
+      var o = owner(c, project, id);
+      if (!o.status().equals("VERIFIED")
+          || count(
+                  c, "SELECT count(*) FROM dot_receipts WHERE request=? AND result IS NOT NULL", id)
+              != 1) throw new DotException("VERIFIED_RESULT_REQUIRED");
+      if (update(
+              c,
+              "UPDATE dot_resume_intents SET status='REQUESTED',revision=?,updated=? WHERE"
+                  + " request=? AND status='NOT_REQUESTED'",
+              revision,
+              clock.millis(),
+              id)
+          == 1) {
+        audit(c, id, project, "human", "RESUME", "REQUESTED");
+        return true;
+      }
+      return false;
+    });
   }
 
   /** 利用者の状態表示に関する関連付け実行予定を処理する。 */
   public void attachSchedule(String project, String id, String schedule) {
-    db.transaction(
-        c -> {
-          owner(c, project, id);
-          if (update(
-                  c,
-                  "UPDATE dot_resume_intents SET schedule=?,updated=? WHERE request=? AND"
-                      + " status='REQUESTED' AND schedule IS NULL",
-                  schedule,
-                  clock.millis(),
-                  id)
-              != 1) throw new DotException("RESUME_CONFLICT");
-          return null;
-        });
+    db.transaction(c -> {
+      owner(c, project, id);
+      if (update(
+              c,
+              "UPDATE dot_resume_intents SET schedule=?,updated=? WHERE request=? AND"
+                  + " status='REQUESTED' AND schedule IS NULL",
+              schedule,
+              clock.millis(),
+              id)
+          != 1) throw new DotException("RESUME_CONFLICT");
+      return null;
+    });
   }
 
   /** 要求された処理を利用できるよう、再開を開始する。 */
   public boolean startResume(String project, String id, String schedule, String run) {
-    return db.transaction(
-        c -> {
-          var o = owner(c, project, id);
-          if (!o.status().equals("VERIFIED")) throw new DotException("VERIFIED_RESULT_REQUIRED");
-          return update(
-                  c,
-                  "UPDATE dot_resume_intents SET status='STARTED',run=?,updated=? WHERE request=?"
-                      + " AND schedule=? AND status='REQUESTED'",
-                  run,
-                  clock.millis(),
-                  id,
-                  schedule)
-              == 1;
-        });
+    return db.transaction(c -> {
+      var o = owner(c, project, id);
+      if (!o.status().equals("VERIFIED")) throw new DotException("VERIFIED_RESULT_REQUIRED");
+      return update(
+              c,
+              "UPDATE dot_resume_intents SET status='STARTED',run=?,updated=? WHERE request=?"
+                  + " AND schedule=? AND status='REQUESTED'",
+              run,
+              clock.millis(),
+              id,
+              schedule)
+          == 1;
+    });
   }
 
   /** 利用者の状態表示で用いる意図を返す。 */
   public Map<String, Object> intent(String project, String id) {
-    return read(
-        c -> {
-          owner(c, project, id);
-          try (var s = c.prepareStatement("SELECT * FROM dot_resume_intents WHERE request=?")) {
-            s.setString(1, id);
-            try (var r = s.executeQuery()) {
-              if (!r.next()) throw new DotException("RESULT_NOT_READY");
-              var out = new LinkedHashMap<String, Object>();
-              out.put("status", r.getString("status"));
-              out.put("run", r.getString("run"));
-              out.put("schedule", r.getString("schedule"));
-              out.put("revision", r.getLong("revision"));
-              return out;
-            }
-          }
-        });
+    return read(c -> {
+      owner(c, project, id);
+      try (var s = c.prepareStatement("SELECT * FROM dot_resume_intents WHERE request=?")) {
+        s.setString(1, id);
+        try (var r = s.executeQuery()) {
+          if (!r.next()) throw new DotException("RESULT_NOT_READY");
+          var out = new LinkedHashMap<String, Object>();
+          out.put("status", r.getString("status"));
+          out.put("run", r.getString("run"));
+          out.put("schedule", r.getString("schedule"));
+          out.put("revision", r.getLong("revision"));
+          return out;
+        }
+      }
+    });
   }
 
   /** 終了時の状態を確定するため、再開を完了させる。 */
   public void finishResume(String project, String id, String status) {
-    db.transaction(
-        c -> {
-          owner(c, project, id);
-          update(
-              c,
-              "UPDATE dot_resume_intents SET status=?,updated=? WHERE request=? AND status IN"
-                  + " ('REQUESTED','STARTED')",
-              status,
-              clock.millis(),
-              id);
-          audit(c, id, project, "scheduler", "RESUME", status);
-          return null;
-        });
+    db.transaction(c -> {
+      owner(c, project, id);
+      update(
+          c,
+          "UPDATE dot_resume_intents SET status=?,updated=? WHERE request=? AND status IN"
+              + " ('REQUESTED','STARTED')",
+          status,
+          clock.millis(),
+          id);
+      audit(c, id, project, "scheduler", "RESUME", status);
+      return null;
+    });
   }
 
   /** 処理を継続できる状態に戻すため、再開Intentsを復旧する。 */
   public void recoverResumeIntents() {
-    db.transaction(
-        c -> {
-          update(
-              c,
-              "UPDATE dot_resume_intents SET status='UNKNOWN',updated=? WHERE status='STARTED' OR"
-                  + " (status='REQUESTED' AND schedule IS NULL)",
-              clock.millis());
-          return null;
-        });
+    db.transaction(c -> {
+      update(
+          c,
+          "UPDATE dot_resume_intents SET status='UNKNOWN',updated=? WHERE status='STARTED' OR"
+              + " (status='REQUESTED' AND schedule IS NULL)",
+          clock.millis());
+      return null;
+    });
   }
 
   /**
@@ -820,41 +787,40 @@ public class DotRequestRepository {
    */
   public List<Map<String, Object>> open(String project) {
     maintain();
-    return read(
-        c -> {
-          var out = new ArrayList<Map<String, Object>>();
-          try (var q =
-              c.prepareStatement(
-                  "SELECT q.id,q.status,q.validation,q.publication,q.created,q.expires,i.status AS"
-                      + " resume_status FROM dot_requests q LEFT JOIN dot_resume_intents i ON"
-                      + " q.id=i.request WHERE q.project=? AND q.status IN"
-                      + " ('PENDING','CLAIMED','RESULT_RECEIVED','UNKNOWN') ORDER BY q.created,q.id"
-                      + " LIMIT 20")) {
-            q.setString(1, project);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                out.add(
-                    Map.of(
-                        "request_id",
-                        r.getString("id"),
-                        "project_id",
-                        project,
-                        "status",
-                        r.getString("status"),
-                        "validation_status",
-                        r.getString("validation"),
-                        "resume_status",
-                        Objects.toString(r.getString("resume_status"), "NOT_REQUESTED"),
-                        "snapshot_expired",
-                        r.getString("publication") == null,
-                        "created_at",
-                        Instant.ofEpochMilli(r.getLong("created")).toString(),
-                        "expires_at",
-                        Instant.ofEpochMilli(r.getLong("expires")).toString()));
-            }
-          }
-          return List.copyOf(out);
-        });
+    return read(c -> {
+      var out = new ArrayList<Map<String, Object>>();
+      try (var q =
+          c.prepareStatement(
+              "SELECT q.id,q.status,q.validation,q.publication,q.created,q.expires,i.status AS"
+                  + " resume_status FROM dot_requests q LEFT JOIN dot_resume_intents i ON"
+                  + " q.id=i.request WHERE q.project=? AND q.status IN"
+                  + " ('PENDING','CLAIMED','RESULT_RECEIVED','UNKNOWN') ORDER BY q.created,q.id"
+                  + " LIMIT 20")) {
+        q.setString(1, project);
+        try (var r = q.executeQuery()) {
+          while (r.next())
+            out.add(
+                Map.of(
+                    "request_id",
+                    r.getString("id"),
+                    "project_id",
+                    project,
+                    "status",
+                    r.getString("status"),
+                    "validation_status",
+                    r.getString("validation"),
+                    "resume_status",
+                    Objects.toString(r.getString("resume_status"), "NOT_REQUESTED"),
+                    "snapshot_expired",
+                    r.getString("publication") == null,
+                    "created_at",
+                    Instant.ofEpochMilli(r.getLong("created")).toString(),
+                    "expires_at",
+                    Instant.ofEpochMilli(r.getLong("expires")).toString()));
+        }
+      }
+      return List.copyOf(out);
+    });
   }
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
@@ -914,20 +880,19 @@ public class DotRequestRepository {
    */
   public Optional<Map<String, Object>> replayReceipt(
       String project, String id, String submission, String fingerprint) {
-    return read(
-        c -> {
-          owner(c, project, id);
-          try (var q =
-              c.prepareStatement(
-                  "SELECT submission,fingerprint,receipt FROM dot_receipts WHERE request=?")) {
-            q.setString(1, id);
-            try (var r = q.executeQuery()) {
-              if (!r.next()) return Optional.empty();
-              if (!submission.equals(r.getString(1)) || !fingerprint.equals(r.getString(2)))
-                throw new DotException("SUBMISSION_CONFLICT");
-              return Optional.of(document(r.getString(3)));
-            }
-          }
-        });
+    return read(c -> {
+      owner(c, project, id);
+      try (var q =
+          c.prepareStatement(
+              "SELECT submission,fingerprint,receipt FROM dot_receipts WHERE request=?")) {
+        q.setString(1, id);
+        try (var r = q.executeQuery()) {
+          if (!r.next()) return Optional.empty();
+          if (!submission.equals(r.getString(1)) || !fingerprint.equals(r.getString(2)))
+            throw new DotException("SUBMISSION_CONFLICT");
+          return Optional.of(document(r.getString(3)));
+        }
+      }
+    });
   }
 }

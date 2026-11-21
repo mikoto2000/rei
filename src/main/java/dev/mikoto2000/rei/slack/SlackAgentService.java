@@ -317,24 +317,22 @@ public final class SlackAgentService implements RunContinuation {
     requests.forRun(owner.runId()).forEach(q -> byCall.put(q.call(), q));
     var messages =
         s.messages().stream()
-            .map(
-                m -> {
-                  if (!(m instanceof ToolResponseMessage tool)) return m;
-                  return (Message)
-                      ToolResponseMessage.builder()
-                          .responses(
-                              tool.getResponses().stream()
-                                  .map(
-                                      r -> {
-                                        var q = byCall.get(r.id());
-                                        return q != null && r.name().equals("askExternalAgent")
-                                            ? new ToolResponseMessage.ToolResponse(
-                                                r.id(), r.name(), requests.result(q.id()))
-                                            : r;
-                                      })
-                                  .toList())
-                          .build();
-                })
+            .map(m -> {
+              if (!(m instanceof ToolResponseMessage tool)) return m;
+              return (Message)
+                  ToolResponseMessage.builder()
+                      .responses(
+                          tool.getResponses().stream()
+                              .map(r -> {
+                                var q = byCall.get(r.id());
+                                return q != null && r.name().equals("askExternalAgent")
+                                    ? new ToolResponseMessage.ToolResponse(
+                                        r.id(), r.name(), requests.result(q.id()))
+                                    : r;
+                              })
+                              .toList())
+                      .build();
+            })
             .toList();
     return new Saved(s.request(), messages, s.budget());
   }
@@ -541,13 +539,12 @@ public final class SlackAgentService implements RunContinuation {
     runs.finishMissingTerminal(owner, RunStatus.UNKNOWN);
     var parent = managed.remove(owner.runId());
     if (parent != null)
-      completionNotifications.add(
-          () ->
-              parent
-                  .completed()
-                  .accept(
-                      ChatExecutionResult.failed(
-                          "External continuation owner unavailable", "external_owner_unknown")));
+      completionNotifications.add(() ->
+          parent
+              .completed()
+              .accept(
+                  ChatExecutionResult.failed(
+                      "External continuation owner unavailable", "external_owner_unknown")));
   }
 
   /** 最新の内容を後続の処理に反映するため、依存条件一覧を更新する。 */

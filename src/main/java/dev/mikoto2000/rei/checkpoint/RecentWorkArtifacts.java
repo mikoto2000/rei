@@ -34,11 +34,10 @@ final class RecentWorkArtifacts {
       inspected++;
       var reference =
           state.evidence().stream()
-              .filter(
-                  e ->
-                      e.origin().equals("RAW_RESULT_REFERENCE")
-                          && Objects.equals(e.toolCallId(), operation.toolCallId())
-                          && Objects.equals(e.runId(), operation.runId()))
+              .filter(e ->
+                  e.origin().equals("RAW_RESULT_REFERENCE")
+                      && Objects.equals(e.toolCallId(), operation.toolCallId())
+                      && Objects.equals(e.runId(), operation.runId()))
               .findFirst();
       if (reference.isEmpty()) continue;
       try {

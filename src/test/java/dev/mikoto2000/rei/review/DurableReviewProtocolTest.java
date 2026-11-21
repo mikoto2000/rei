@@ -124,10 +124,9 @@ class DurableReviewProtocolTest {
         assertThat(firstPage.content()).isEqualTo(source.substring(0, firstPage.nextOffset()));
         assertThat(TokenEstimator.conservative().text(firstPage.content()))
             .isLessThanOrEqualTo(256);
-        assertThatThrownBy(
-                () ->
-                    tools.submitReviewWorkItem(
-                        claim.item().id(), claim.attempt(), "checked", List.of()))
+        assertThatThrownBy(() ->
+                tools.submitReviewWorkItem(
+                    claim.item().id(), claim.attempt(), "checked", List.of()))
             .hasMessageContaining("SOURCE_NOT_DELIVERED");
         tools.confirmed(owner, List.of(firstPage));
         tools.submitReviewWorkItem(
@@ -170,14 +169,12 @@ class DurableReviewProtocolTest {
       var saved = tools.listReviewTaskResults(task, null, null);
       assertThat(saved.entries())
           .singleElement()
-          .satisfies(
-              result -> {
-                assertThat(result.body().assessment()).isEqualTo("checked");
-                assertThat(result.body().findings())
-                    .singleElement()
-                    .satisfies(
-                        finding -> assertThat(finding.assessment()).isEqualTo("saved finding"));
-              });
+          .satisfies(result -> {
+            assertThat(result.body().assessment()).isEqualTo("checked");
+            assertThat(result.body().findings())
+                .singleElement()
+                .satisfies(finding -> assertThat(finding.assessment()).isEqualTo("saved finding"));
+          });
       assertThat(saved.nextCursor()).isNull();
       tools.resumeRepositoryReview(task);
       tools.confirmed(
@@ -190,10 +187,9 @@ class DurableReviewProtocolTest {
         assertThat(page.content()).isEqualTo(source.substring(end, page.nextOffset()));
         tools.confirmed(resumed, List.of(page));
         if (end == firstPage.nextOffset()) {
-          assertThatThrownBy(
-                  () ->
-                      tools.submitReviewWorkItem(
-                          page.workItemId(), firstPage.attempt(), "checked", List.of()))
+          assertThatThrownBy(() ->
+                  tools.submitReviewWorkItem(
+                      page.workItemId(), firstPage.attempt(), "checked", List.of()))
               .isInstanceOfSatisfying(
                   ReviewResultRejectedException.class,
                   rejection -> {

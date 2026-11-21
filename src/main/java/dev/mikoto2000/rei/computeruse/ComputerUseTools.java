@@ -54,8 +54,7 @@ public final class ComputerUseTools {
   public ComputerUseResult computerUse(String goal) {
     var owner = AgentRunScope.current();
     Thread worker = Thread.currentThread();
-    var registration =
-        onCancel.apply(owner == null ? null : owner.runId(), worker::interrupt);
+    var registration = onCancel.apply(owner == null ? null : owner.runId(), worker::interrupt);
     try {
       return service.run(goal);
     } finally {

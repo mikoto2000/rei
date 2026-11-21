@@ -345,8 +345,7 @@ class StorageEventMigrationTest {
   /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void hundredThousandEventsMigrateInSixtyFourMiBWithoutChangingSource() throws Exception {
-    var timing =
-        dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("event-jsonl-fixture");
+    var timing = dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("event-jsonl-fixture");
     try (timing) {
       Files.createDirectories(source().getParent());
       try (var output = Files.newBufferedWriter(source())) {

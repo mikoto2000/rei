@@ -30,31 +30,30 @@ class ApprovalSchedulingTest {
   @Test
   void approvalPumpContinuesWhileDefaultSchedulerIsBlocked() {
     var release = new CountDownLatch(1);
-    runner.run(
-        context -> {
-          var defaultScheduler = context.getBean("taskScheduler", TaskScheduler.class);
-          var started = new CountDownLatch(1);
-          defaultScheduler.schedule(
-              () -> {
-                started.countDown();
-                try {
-                  release.await();
-                } catch (InterruptedException interrupted) {
-                  Thread.currentThread().interrupt();
-                }
-              },
-              Instant.now());
-          try {
-            assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
-            var pumped = new CountDownLatch(1);
-            context.getBean(Probe.class).next.set(pumped);
-            assertThat(pumped.await(3, TimeUnit.SECONDS))
-                .as("approval continuation must not wait for an unrelated scheduled job")
-                .isTrue();
-          } finally {
-            release.countDown();
-          }
-        });
+    runner.run(context -> {
+      var defaultScheduler = context.getBean("taskScheduler", TaskScheduler.class);
+      var started = new CountDownLatch(1);
+      defaultScheduler.schedule(
+          () -> {
+            started.countDown();
+            try {
+              release.await();
+            } catch (InterruptedException interrupted) {
+              Thread.currentThread().interrupt();
+            }
+          },
+          Instant.now());
+      try {
+        assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
+        var pumped = new CountDownLatch(1);
+        context.getBean(Probe.class).next.set(pumped);
+        assertThat(pumped.await(3, TimeUnit.SECONDS))
+            .as("approval continuation must not wait for an unrelated scheduled job")
+            .isTrue();
+      } finally {
+        release.countDown();
+      }
+    });
   }
 
   /** 一般の自動設定と利用者指定を維持し、専用スケジューラーは閉鎖する。 */
@@ -65,17 +64,16 @@ class ApprovalSchedulingTest {
         .withPropertyValues(
             "spring.task.scheduling.pool.size=3",
             "spring.task.scheduling.thread-name-prefix=custom-general-")
-        .run(
-            context -> {
-              var normal = context.getBean("taskScheduler", ThreadPoolTaskScheduler.class);
-              assertThat(normal.getScheduledThreadPoolExecutor().getCorePoolSize()).isEqualTo(3);
-              assertThat(normal.getThreadNamePrefix()).isEqualTo("custom-general-");
-              var approval =
-                  context.getBean("approvalContinuationScheduler", ThreadPoolTaskScheduler.class);
-              assertThat(approval).isNotSameAs(normal);
-              assertThat(approval.getScheduledThreadPoolExecutor().getCorePoolSize()).isEqualTo(1);
-              dedicated.set(approval);
-            });
+        .run(context -> {
+          var normal = context.getBean("taskScheduler", ThreadPoolTaskScheduler.class);
+          assertThat(normal.getScheduledThreadPoolExecutor().getCorePoolSize()).isEqualTo(3);
+          assertThat(normal.getThreadNamePrefix()).isEqualTo("custom-general-");
+          var approval =
+              context.getBean("approvalContinuationScheduler", ThreadPoolTaskScheduler.class);
+          assertThat(approval).isNotSameAs(normal);
+          assertThat(approval.getScheduledThreadPoolExecutor().getCorePoolSize()).isEqualTo(1);
+          dedicated.set(approval);
+        });
     assertThat(dedicated.get().getScheduledThreadPoolExecutor().isShutdown()).isTrue();
   }
 

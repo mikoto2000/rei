@@ -100,10 +100,8 @@ class ComputerDiagnosticsTest {
                 e -> e.phase().equals("diagnostics") && e.reason().contains(directory.toString())));
     assertTrue(
         events.stream()
-            .anyMatch(
-                e ->
-                    e.phase().equals("input_coordinates")
-                        && e.reason().contains("robot=(-600,100)")));
+            .anyMatch(e ->
+                e.phase().equals("input_coordinates") && e.reason().contains("robot=(-600,100)")));
     try (var files = Files.walk(directory)) {
       assertEquals(
           1, files.filter(p -> p.getFileName().toString().equals("dispatched.json")).count());

@@ -195,20 +195,19 @@ public class TextChangeSetRepository {
   Saved peek(String project, String id) {
     return db.sql("SELECT * FROM text_change_sets WHERE project_id=? AND id=?")
         .params(project, id)
-        .query(
-            (row, n) ->
-                new Saved(
-                    row.getString("id"),
-                    row.getString("project_id"),
-                    row.getString("root"),
-                    row.getString("path"),
-                    row.getString("baseline"),
-                    row.getString("proposed"),
-                    row.getString("baseline_hash"),
-                    row.getString("proposed_hash"),
-                    row.getString("proposal_hash"),
-                    row.getString("status"),
-                    Instant.parse(row.getString("created_at"))))
+        .query((row, n) ->
+            new Saved(
+                row.getString("id"),
+                row.getString("project_id"),
+                row.getString("root"),
+                row.getString("path"),
+                row.getString("baseline"),
+                row.getString("proposed"),
+                row.getString("baseline_hash"),
+                row.getString("proposed_hash"),
+                row.getString("proposal_hash"),
+                row.getString("status"),
+                Instant.parse(row.getString("created_at"))))
         .optional()
         .orElseThrow(() -> new IllegalArgumentException("Unknown Change Set in this Project"));
   }

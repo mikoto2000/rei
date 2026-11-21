@@ -54,22 +54,20 @@ class SkillResourceReadTest {
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> tools.readSkillResource("review", List.of()))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(
-            () ->
-                tools.readSkillResource(
-                    "review", java.util.Collections.nCopies(Tools.MAX_READ_FILES + 1, valid)))
+    assertThatThrownBy(() ->
+            tools.readSkillResource(
+                "review", java.util.Collections.nCopies(Tools.MAX_READ_FILES + 1, valid)))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(
             () -> tools.readSkillResource("review", java.util.Arrays.asList(valid, null)))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(
-            () ->
-                tools.readSkillResource(
-                    "review",
-                    List.of(
-                        valid,
-                        new Tools.ReadFileRequest(
-                            temporary.resolve("outside.md").toString(), null, null))))
+    assertThatThrownBy(() ->
+            tools.readSkillResource(
+                "review",
+                List.of(
+                    valid,
+                    new Tools.ReadFileRequest(
+                        temporary.resolve("outside.md").toString(), null, null))))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -88,24 +86,22 @@ class SkillResourceReadTest {
                 new Tools.ReadFileRequest("references/guide.md", null, null),
                 new Tools.ReadFileRequest("references/other.md", null, null)));
     assertThat(first)
-        .allSatisfy(
-            result -> {
-              assertThat(result.error()).isNull();
-              assertThat(result.truncated()).isTrue();
-              assertThat(result.nextRead()).isNotNull();
-            });
+        .allSatisfy(result -> {
+          assertThat(result.error()).isNull();
+          assertThat(result.truncated()).isTrue();
+          assertThat(result.nextRead()).isNotNull();
+        });
     var next =
         tools.readSkillResource(
             "review", first.stream().map(Tools.ReadFileResult::nextRead).toList());
     assertThat(next)
         .hasSize(2)
-        .allSatisfy(
-            result -> {
-              assertThat(result.error()).isNull();
-              assertThat(result.content()).isNotEmpty();
-              assertThat(result.startLine()).isGreaterThan(1);
-              assertThat(result.truncated()).isFalse();
-            });
+        .allSatisfy(result -> {
+          assertThat(result.error()).isNull();
+          assertThat(result.content()).isNotEmpty();
+          assertThat(result.startLine()).isGreaterThan(1);
+          assertThat(result.truncated()).isFalse();
+        });
   }
 
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
@@ -175,13 +171,12 @@ class SkillResourceReadTest {
         .contains("outside Project");
     assertThat(readOne(tools, "review", new Tools.ReadFileRequest(".env", null, null)).error())
         .contains("Excluded");
-    assertThatThrownBy(
-            () ->
-                readOne(
-                    tools,
-                    "review",
-                    new Tools.ReadFileRequest(
-                        temporary.resolve("skills/outside.md").toString(), null, null)))
+    assertThatThrownBy(() ->
+            readOne(
+                tools,
+                "review",
+                new Tools.ReadFileRequest(
+                    temporary.resolve("skills/outside.md").toString(), null, null)))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(
             () -> readOne(tools, "missing", new Tools.ReadFileRequest("guide.md", null, null)))
@@ -206,16 +201,12 @@ class SkillResourceReadTest {
         instructions
         """);
     repository.reload();
-    assertThatThrownBy(
-            () ->
-                readOne(
-                    tools, "review", new Tools.ReadFileRequest("references/guide.md", null, null)))
+    assertThatThrownBy(() ->
+            readOne(tools, "review", new Tools.ReadFileRequest("references/guide.md", null, null)))
         .isInstanceOf(IllegalArgumentException.class);
     properties.setEnabled(false);
-    assertThatThrownBy(
-            () ->
-                readOne(
-                    tools, "review", new Tools.ReadFileRequest("references/guide.md", null, null)))
+    assertThatThrownBy(() ->
+            readOne(tools, "review", new Tools.ReadFileRequest("references/guide.md", null, null)))
         .isInstanceOf(IllegalStateException.class);
   }
 
@@ -261,11 +252,11 @@ class SkillResourceReadTest {
     var response =
         callback.call(
             """
-        {"skillName":"review","files":[
-          {"path":"references/guide.md","startLine":1,"endLine":1},
-          {"path":"references/guide.md","startLine":3,"endLine":3}
-        ]}
-        """);
+            {"skillName":"review","files":[
+              {"path":"references/guide.md","startLine":1,"endLine":1},
+              {"path":"references/guide.md","startLine":3,"endLine":3}
+            ]}
+            """);
     assertThat(response).contains("first", "third").doesNotContain("second");
   }
 

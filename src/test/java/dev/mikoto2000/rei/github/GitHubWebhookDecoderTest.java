@@ -57,13 +57,12 @@ class GitHubWebhookDecoderTest {
     assertThatThrownBy(
             () -> decoder().decode("pull_request_review", "sha256=" + "0".repeat(64), bytes))
         .isInstanceOf(SecurityException.class);
-    assertThatThrownBy(
-            () ->
-                decoder()
-                    .decode(
-                        "pull_request_review",
-                        signature(bytes),
-                        java.util.Arrays.copyOf(bytes, bytes.length - 1)))
+    assertThatThrownBy(() ->
+            decoder()
+                .decode(
+                    "pull_request_review",
+                    signature(bytes),
+                    java.util.Arrays.copyOf(bytes, bytes.length - 1)))
         .isInstanceOf(SecurityException.class);
     assertThatThrownBy(() -> decoder().decode("workflow_run", signature(bytes), bytes))
         .isInstanceOf(IllegalArgumentException.class);

@@ -111,7 +111,10 @@ class ShellFileReadArgumentRepairTest {
       var prompt = prompt(context);
       var loop = new ToolLoopSupport();
       int before = reads.get();
-      var calls = List.of(call("read", "readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}"), call("bad", "runCommand", input));
+      var calls =
+          List.of(
+              call("read", "readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}"),
+              call("bad", "runCommand", input));
       var response =
           new ChatResponse(
               List.of(new Generation(AssistantMessage.builder().toolCalls(calls).build())));

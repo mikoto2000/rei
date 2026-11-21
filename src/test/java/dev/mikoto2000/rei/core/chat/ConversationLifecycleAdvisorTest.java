@@ -17,16 +17,30 @@ class ConversationLifecycleAdvisorTest {
   @Test
   void cancelledHistoryPreservesResumeMetadataAndOtherSystemContexts() {
     var turns = mock(ConversationTurnStore.class);
-    when(turns.cancelledContext("conversation")).thenReturn("Cancelled history; explicit resume allowed");
-    var handoff = SystemMessage.builder().text("verified handoff")
-        .metadata(Map.of("rei.resumeContext", true, "rei.resumeRunId", "current",
-            "rei.knownFileInventory", true)).build();
+    when(turns.cancelledContext("conversation"))
+        .thenReturn("Cancelled history; explicit resume allowed");
+    var handoff =
+        SystemMessage.builder()
+            .text("verified handoff")
+            .metadata(
+                Map.of(
+                    "rei.resumeContext",
+                    true,
+                    "rei.resumeRunId",
+                    "current",
+                    "rei.knownFileInventory",
+                    true))
+            .build();
     var other = new SystemMessage("other context");
-    var request = ChatClientRequest.builder().prompt(new Prompt(
-        List.of(handoff, other, new UserMessage("Resume")))).build();
-    var result = new ConversationLifecycleAdvisor(turns, "conversation").before(request, null).prompt();
+    var request =
+        ChatClientRequest.builder()
+            .prompt(new Prompt(List.of(handoff, other, new UserMessage("Resume"))))
+            .build();
+    var result =
+        new ConversationLifecycleAdvisor(turns, "conversation").before(request, null).prompt();
     assertThat(result.getInstructions().getFirst().getMetadata()).isEqualTo(handoff.getMetadata());
-    assertThat(result.getInstructions().getFirst().getText()).contains("verified handoff", "Cancelled history");
+    assertThat(result.getInstructions().getFirst().getText())
+        .contains("verified handoff", "Cancelled history");
     assertThat(result.getInstructions().get(1)).isSameAs(other);
   }
 }

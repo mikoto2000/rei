@@ -57,7 +57,7 @@ class VoiceModelManagerTest {
 
   /** {@code manager} の条件を再現するための補助情報を返す。 */
   VoiceModelManager manager(VoiceModelManifest manifest, VoiceAssetTransport transport) {
-    return new VoiceModelManager(root, manifest, transport, (state) -> {});
+    return new VoiceModelManager(root, manifest, transport, state -> {});
   }
 
   /** {@code finish} の条件を再現するための補助情報を返す。 */
@@ -239,16 +239,14 @@ class VoiceModelManagerTest {
     var good = manifest().assets().getFirst();
     for (String path :
         List.of("../escape", "/absolute", "models/../../escape", "C:/escape", "models\\escape")) {
-      assertThatThrownBy(
-              () ->
-                  new VoiceModelManifest.Asset(
-                      path, good.url(), good.bytes(), good.sha256(), good.license()))
+      assertThatThrownBy(() ->
+              new VoiceModelManifest.Asset(
+                  path, good.url(), good.bytes(), good.sha256(), good.license()))
           .isInstanceOf(IllegalArgumentException.class);
     }
-    assertThatThrownBy(
-            () ->
-                new VoiceModelManifest.Asset(
-                    "safe", URI.create("http://example.org/file"), 1, good.sha256(), "MIT"))
+    assertThatThrownBy(() ->
+            new VoiceModelManifest.Asset(
+                "safe", URI.create("http://example.org/file"), 1, good.sha256(), "MIT"))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new VoiceModelManifest("../bad", List.of(good)))
         .isInstanceOf(IllegalArgumentException.class);
@@ -291,10 +289,9 @@ class VoiceModelManagerTest {
     var big =
         new VoiceModelManifest.Asset("weights", a.url(), 2600325120L, a.sha256(), a.license());
     assertThat(new VoiceModelManifest("large", List.of(big)).totalBytes()).isEqualTo(2600325120L);
-    assertThatThrownBy(
-            () ->
-                new VoiceModelManifest.Asset(
-                    "oversize", a.url(), 3L * 1024 * 1024 * 1024 + 1, a.sha256(), a.license()))
+    assertThatThrownBy(() ->
+            new VoiceModelManifest.Asset(
+                "oversize", a.url(), 3L * 1024 * 1024 * 1024 + 1, a.sha256(), a.license()))
         .isInstanceOf(IllegalArgumentException.class);
     var second =
         new VoiceModelManifest.Asset("second", a.url(), big.bytes(), a.sha256(), a.license());

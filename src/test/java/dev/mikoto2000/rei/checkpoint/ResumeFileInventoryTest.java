@@ -167,7 +167,9 @@ class ResumeFileInventoryTest {
             null,
             null)) {
       ReflectionTestUtils.setField(
-          service, "active", new java.util.concurrent.ConcurrentHashMap<>(Map.of("resumed", saved)));
+          service,
+          "active",
+          new java.util.concurrent.ConcurrentHashMap<>(Map.of("resumed", saved)));
       ReflectionTestUtils.setField(service, "rawResults", raw);
       String before = json.writeValueAsString(saved);
       long writes = raw.bodyWriteCount();

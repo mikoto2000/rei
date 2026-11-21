@@ -34,11 +34,10 @@ class WorkContextLifecycleTest {
     command.setShellOutput(new java.io.PrintWriter(text));
     assertEquals(
         2,
-        command.execute(
-            () -> {
-              throw new WorkContextExtractionException(
-                  WorkContextExtractionException.Reason.INPUT_TOO_LARGE, 13000, 12000);
-            }));
+        command.execute(() -> {
+          throw new WorkContextExtractionException(
+              WorkContextExtractionException.Reason.INPUT_TOO_LARGE, 13000, 12000);
+        }));
     assertTrue(text.toString().contains("13000 tokens"));
     assertTrue(text.toString().contains("12000 tokens"));
     assertTrue(text.toString().contains("rei.work-context.max-input-tokens"));
@@ -61,11 +60,10 @@ class WorkContextLifecycleTest {
     verifyNoInteractions(service);
     var ended = new CountDownLatch(1);
     var events = new CopyOnWriteArrayList<AgentEvent>();
-    bus.subscribe(
-        e -> {
-          events.add(e);
-          if (e.type() == AgentEventType.WORK_CONTEXT_UPDATE_FAILED) ended.countDown();
-        });
+    bus.subscribe(e -> {
+      events.add(e);
+      if (e.type() == AgentEventType.WORK_CONTEXT_UPDATE_FAILED) ended.countDown();
+    });
     when(service.update("session", "run"))
         .thenThrow(
             new IllegalStateException(

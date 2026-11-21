@@ -88,11 +88,8 @@ class CapturingChatModelHttpTest {
                 "\"tool_calls\"")
             + "data: [DONE]\n\n";
     try (var fixture =
-        new Fixture(
-            (n, e) ->
-                n == 1
-                    ? (streaming ? toolStream : toolResponse)
-                    : (streaming ? STREAM : RESPONSE))) {
+        new Fixture((n, e) ->
+            n == 1 ? (streaming ? toolStream : toolResponse) : (streaming ? STREAM : RESPONSE))) {
       if (capture) fixture.activate();
       var calls = new AtomicInteger();
       var callback =
@@ -157,13 +154,11 @@ class CapturingChatModelHttpTest {
           new CapturingChatModel(
               delegate,
               fixture.store,
-              List.of(
-                  builder ->
-                      builder.interceptor(
-                          chain -> {
-                            observedTimeout.set(chain.call().timeout().timeoutNanos());
-                            return chain.proceed(chain.request());
-                          })),
+              List.of(builder ->
+                  builder.interceptor(chain -> {
+                    observedTimeout.set(chain.call().timeout().timeoutNanos());
+                    return chain.proceed(chain.request());
+                  })),
               io.micrometer.observation.ObservationRegistry.NOOP,
               null);
       var prompt = new Prompt("timeout", fixture.options("run-a"));
@@ -187,10 +182,9 @@ class CapturingChatModelHttpTest {
           new CapturingChatModel(
               delegate,
               fixture.store,
-              List.of(
-                  builder -> {
-                    throw new IllegalStateException("fixture failure");
-                  }),
+              List.of(builder -> {
+                throw new IllegalStateException("fixture failure");
+              }),
               io.micrometer.observation.ObservationRegistry.NOOP,
               null);
       assertThat(
@@ -304,14 +298,13 @@ class CapturingChatModelHttpTest {
   @Test
   void realStagnationToolLoopRecordsTwoLogicalCalls() throws Exception {
     try (var fixture =
-        new Fixture(
-            (n, e) ->
-                n == 1
-                    ? event(
-                            "{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"tool-id\",\"type\":\"function\",\"function\":{\"name\":\"readFile\",\"arguments\":\"{}\"}}]}",
-                            "\"tool_calls\"")
-                        + "data: [DONE]\n\n"
-                    : STREAM)) {
+        new Fixture((n, e) ->
+            n == 1
+                ? event(
+                        "{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"tool-id\",\"type\":\"function\",\"function\":{\"name\":\"readFile\",\"arguments\":\"{}\"}}]}",
+                        "\"tool_calls\"")
+                    + "data: [DONE]\n\n"
+                : STREAM)) {
       fixture.activate();
       var events = new ArrayList<AgentEvent>();
       var execution =
@@ -373,11 +366,10 @@ class CapturingChatModelHttpTest {
   @Test
   void sdkRetryRetainsLogicalIdAndIncrementsAttempts() throws Exception {
     try (var fixture =
-        new Fixture(
-            (n, e) -> {
-              if (n == 1) e.status = 503;
-              return RESPONSE;
-            })) {
+        new Fixture((n, e) -> {
+          if (n == 1) e.status = 503;
+          return RESPONSE;
+        })) {
       fixture.activate();
       fixture.model(1).call(new Prompt("retry", fixture.options("run-a")));
       fixture.assertMatches(2);
@@ -445,17 +437,15 @@ class CapturingChatModelHttpTest {
   void httpErrorsPropagateOnAndOff() throws Exception {
     for (boolean enabled : List.of(false, true))
       try (var fixture =
-          new Fixture(
-              (n, e) -> {
-                e.status = 500;
-                return "{\"error\":{\"message\":\"failed\"}}";
-              })) {
+          new Fixture((n, e) -> {
+            e.status = 500;
+            return "{\"error\":{\"message\":\"failed\"}}";
+          })) {
         if (enabled) fixture.activate();
-        assertThatThrownBy(
-                () ->
-                    fixture.model().stream(new Prompt("error", fixture.options("run-a")))
-                        .collectList()
-                        .block(Duration.ofSeconds(10)))
+        assertThatThrownBy(() ->
+                fixture.model().stream(new Prompt("error", fixture.options("run-a")))
+                    .collectList()
+                    .block(Duration.ofSeconds(10)))
             .isInstanceOf(java.util.concurrent.CompletionException.class)
             .hasRootCauseInstanceOf(com.openai.errors.InternalServerException.class);
         assertThat(fixture.received).hasSize(1);
@@ -553,11 +543,10 @@ class CapturingChatModelHttpTest {
               .options(options("run-a").mutate().maxRetries(retries).build())
               .build(),
           store,
-          List.of(
-              builder ->
-                  builder
-                      .interceptor(new ChatStreamTimeoutInterceptor())
-                      .interceptor(new ShowUiSdkRequestInterceptor())),
+          List.of(builder ->
+              builder
+                  .interceptor(new ChatStreamTimeoutInterceptor())
+                  .interceptor(new ShowUiSdkRequestInterceptor())),
           io.micrometer.observation.ObservationRegistry.NOOP,
           null);
     }

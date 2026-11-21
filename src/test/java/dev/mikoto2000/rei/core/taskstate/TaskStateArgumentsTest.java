@@ -74,19 +74,17 @@ class TaskStateArgumentsTest {
     for (String status : List.of("IDLE", "IN_PROGRESS", "COMPLETED", "BLOCKED")) {
       assertDoesNotThrow(
           () -> TaskStateArguments.validate("updateTaskState", "{\"status\":\"" + status + "\"}"));
-      assertDoesNotThrow(
-          () ->
-              TaskStateArguments.validate(
-                  "updateTaskState",
-                  "{\"goal\":null,\"status\":\""
-                      + status
-                      + "\",\"completed\":null,\"pending\":[null,\"\",\"review\"]}"));
+      assertDoesNotThrow(() ->
+          TaskStateArguments.validate(
+              "updateTaskState",
+              "{\"goal\":null,\"status\":\""
+                  + status
+                  + "\",\"completed\":null,\"pending\":[null,\"\",\"review\"]}"));
     }
-    assertDoesNotThrow(
-        () ->
-            TaskStateArguments.validate(
-                "updateTaskState",
-                "{\"goal\":\"\",\"status\":\"IN_PROGRESS\",\"completed\":[],\"pending\":[]}"));
+    assertDoesNotThrow(() ->
+        TaskStateArguments.validate(
+            "updateTaskState",
+            "{\"goal\":\"\",\"status\":\"IN_PROGRESS\",\"completed\":[],\"pending\":[]}"));
     assertDoesNotThrow(
         () -> TaskStateArguments.validate("readMultiFile", "any unsupported tool input"));
   }

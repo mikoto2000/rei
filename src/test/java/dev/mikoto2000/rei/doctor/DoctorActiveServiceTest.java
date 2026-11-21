@@ -181,18 +181,17 @@ class DoctorActiveServiceTest {
     var model = mock(ChatModel.class);
     when(models.subAgentChatModel()).thenReturn(model);
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              var prompt = (Prompt) call.getArgument(0);
-              var options = (org.springframework.ai.openai.OpenAiChatOptions) prompt.getOptions();
-              assertTrue(options.getToolCallbacks().isEmpty());
-              assertEquals("none", options.getToolChoice());
-              assertEquals("selected", options.getModel());
-              assertTrue(prompt.getUserMessage().getText().length() < 100);
-              return Flux.just(
-                  new ChatResponse(
-                      List.of(new Generation(new AssistantMessage("SECRET MODEL OUTPUT")))));
-            });
+        .thenAnswer(call -> {
+          var prompt = (Prompt) call.getArgument(0);
+          var options = (org.springframework.ai.openai.OpenAiChatOptions) prompt.getOptions();
+          assertTrue(options.getToolCallbacks().isEmpty());
+          assertEquals("none", options.getToolChoice());
+          assertEquals("selected", options.getModel());
+          assertTrue(prompt.getUserMessage().getText().length() < 100);
+          return Flux.just(
+              new ChatResponse(
+                  List.of(new Generation(new AssistantMessage("SECRET MODEL OUTPUT")))));
+        });
     assertEquals(
         DoctorResult.Status.OK,
         service().active(run(1), request("inference")).results().getFirst().status());
@@ -284,15 +283,13 @@ class DoctorActiveServiceTest {
     var model = mock(ChatModel.class);
     when(models.subAgentChatModel()).thenReturn(model);
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              var options =
-                  (org.springframework.ai.openai.OpenAiChatOptions)
-                      ((Prompt) call.getArgument(0)).getOptions();
-              assertEquals("before", options.getModel());
-              return Flux.just(
-                  new ChatResponse(List.of(new Generation(new AssistantMessage("OK")))));
-            });
+        .thenAnswer(call -> {
+          var options =
+              (org.springframework.ai.openai.OpenAiChatOptions)
+                  ((Prompt) call.getArgument(0)).getOptions();
+          assertEquals("before", options.getModel());
+          return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("OK")))));
+        });
     assertEquals(
         DoctorResult.Status.OK,
         service().active(run(1), request("inference")).results().getFirst().status());

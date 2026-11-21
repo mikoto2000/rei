@@ -62,9 +62,7 @@ public final class StorageInventory {
       boolean complete) {
     public Report {
       categories =
-          categories == null
-              ? null
-              : Collections.unmodifiableMap(new LinkedHashMap<>(categories));
+          categories == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(categories));
       unknown = unknown == null ? null : Collections.unmodifiableList(new ArrayList<>(unknown));
     }
   }

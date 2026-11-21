@@ -127,23 +127,22 @@ public final class LlmTemporalActivityModel implements TemporalActivityInference
           chat.stream(
                   new Prompt(
                       List.of(new SystemMessage(INSTRUCTIONS), new UserMessage(input)), request))
-              .doOnNext(
-                  response -> {
-                    var metadata = response.getMetadata();
-                    var measured = metadata == null ? null : metadata.getUsage();
-                    var tokens = measured == null ? null : measured.getTotalTokens();
-                    if (tokens != null && tokens > 0)
-                      usage.accumulateAndGet(tokens, (a, b) -> a == null ? b : Math.max(a, b));
-                    if (response.hasToolCalls() || OutputLimitDetector.isOutputLimitReached(response))
-                      throw new IllegalArgumentException("Unsupported temporal completion");
-                    var generation = response.getResult();
-                    var output = generation == null ? null : generation.getOutput();
-                    var content = output == null ? null : output.getText();
-                    if (content != null) text.append(content);
-                    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-                    if (text.length() > 2000)
-                      throw new IllegalArgumentException("Temporal output exceeds limit");
-                  })
+              .doOnNext(response -> {
+                var metadata = response.getMetadata();
+                var measured = metadata == null ? null : metadata.getUsage();
+                var tokens = measured == null ? null : measured.getTotalTokens();
+                if (tokens != null && tokens > 0)
+                  usage.accumulateAndGet(tokens, (a, b) -> a == null ? b : Math.max(a, b));
+                if (response.hasToolCalls() || OutputLimitDetector.isOutputLimitReached(response))
+                  throw new IllegalArgumentException("Unsupported temporal completion");
+                var generation = response.getResult();
+                var output = generation == null ? null : generation.getOutput();
+                var content = output == null ? null : output.getText();
+                if (content != null) text.append(content);
+                // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
+                if (text.length() > 2000)
+                  throw new IllegalArgumentException("Temporal output exceeds limit");
+              })
               .blockLast(Duration.ofSeconds(timeoutSeconds));
         }
       } finally {

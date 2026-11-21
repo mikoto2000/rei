@@ -111,10 +111,9 @@ public class TaskService {
       }
       return items.stream()
           .map(this::toTask)
-          .filter(
-              task ->
-                  query.dueBefore() == null
-                      || (task.dueDate() != null && !task.dueDate().isAfter(query.dueBefore())))
+          .filter(task ->
+              query.dueBefore() == null
+                  || (task.dueDate() != null && !task.dueDate().isAfter(query.dueBefore())))
           .toList();
     } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
       throw new IllegalStateException("Google Tasks の一覧取得に失敗しました", e);

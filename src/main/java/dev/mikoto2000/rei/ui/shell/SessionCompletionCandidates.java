@@ -53,10 +53,8 @@ public class SessionCompletionCandidates implements CompletionMetadata {
         .sorted(
             Comparator.comparing(dev.mikoto2000.rei.application.session.SessionMetadata::updatedAt)
                 .reversed())
-        .map(
-            row ->
-                new CompletionCandidate(
-                    row.sessionId(), row.sessionId(), row.title(), "session", true))
+        .map(row ->
+            new CompletionCandidate(row.sessionId(), row.sessionId(), row.title(), "session", true))
         .toList();
   }
 
@@ -79,10 +77,9 @@ public class SessionCompletionCandidates implements CompletionMetadata {
           projectId ->
               projects != null
                   && projects.completionProjects().stream()
-                      .anyMatch(
-                          project ->
-                              project.id().equals(projectId)
-                                  && project.root().equals(projects.currentProject()));
+                      .anyMatch(project ->
+                          project.id().equals(projectId)
+                              && project.root().equals(projects.currentProject()));
     }
 
     /** ターミナルでの対話で判断に用いるacceptsの条件を確認する。 */

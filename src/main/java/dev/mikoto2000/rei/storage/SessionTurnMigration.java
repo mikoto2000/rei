@@ -28,7 +28,8 @@ final class SessionTurnMigration {
   private SessionTurnMigration() {}
 
   /** 指定された内容を、現在の対象へ反映する。 */
-  static void apply(Connection connection, Path root) throws IOException, NoSuchAlgorithmException, SQLException {
+  static void apply(Connection connection, Path root)
+      throws IOException, NoSuchAlgorithmException, SQLException {
     try (var schema = connection.createStatement()) {
       schema.execute(
           "CREATE TABLE sessions(session_id TEXT PRIMARY KEY,project_id TEXT NOT NULL,created_seconds INTEGER NOT NULL,created_nanos INTEGER NOT NULL,updated_seconds INTEGER NOT NULL,updated_nanos INTEGER NOT NULL,updated_sort_seconds INTEGER GENERATED ALWAYS AS (-updated_seconds) STORED,updated_sort_nanos INTEGER GENERATED ALWAYS AS (-updated_nanos) STORED,id_order BLOB NOT NULL,record TEXT NOT NULL,revision INTEGER NOT NULL,import_order INTEGER UNIQUE)");

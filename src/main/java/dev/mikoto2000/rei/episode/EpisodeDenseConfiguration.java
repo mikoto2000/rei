@@ -46,20 +46,17 @@ public class EpisodeDenseConfiguration {
             repository,
             new LazySqliteVectorStore(new SqliteVecDataSource(source, loader), model, json),
             generation);
-    index.setSourceAvailable(
-        e ->
-            e.claims().stream()
-                .allMatch(
-                    c ->
-                        turns.findRun(e.sessionId(), c.runId()).isPresent()
-                            && (!c.speaker().equals("tool")
-                                || events
-                                    .findEvent(e.projectId(), c.sourceId())
-                                    .filter(
-                                        event ->
-                                            e.sessionId().equals(event.sessionId())
-                                                && c.runId().equals(event.runId()))
-                                    .isPresent())));
+    index.setSourceAvailable(e ->
+        e.claims().stream()
+            .allMatch(c ->
+                turns.findRun(e.sessionId(), c.runId()).isPresent()
+                    && (!c.speaker().equals("tool")
+                        || events
+                            .findEvent(e.projectId(), c.sourceId())
+                            .filter(event ->
+                                e.sessionId().equals(event.sessionId())
+                                    && c.runId().equals(event.runId()))
+                            .isPresent())));
     return index;
   }
 }

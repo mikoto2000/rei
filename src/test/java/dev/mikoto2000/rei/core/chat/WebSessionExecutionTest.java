@@ -121,11 +121,10 @@ class WebSessionExecutionTest {
         assertThat(projectService.currentProject()).isEqualTo(second.root());
         assertThat(executed).containsExactly(a, b, continuation);
         assertThat(turns.read(a.conversationId()))
-            .allSatisfy(
-                turn -> {
-                  assertThat(turn.assistantMessage()).isEqualTo("answer");
-                  assertThat(turn.createdAt()).isNotNull();
-                });
+            .allSatisfy(turn -> {
+              assertThat(turn.assistantMessage()).isEqualTo("answer");
+              assertThat(turn.createdAt()).isNotNull();
+            });
         assertThat(executed).allMatch(context -> context.projectRoot().equals(first.root()));
         assertThat(turns.read(a.conversationId()))
             .extracting(ConversationTurnStore.Turn::runId)
@@ -144,13 +143,13 @@ class WebSessionExecutionTest {
             .doesNotContain("beta-marker");
         for (var context : executed) {
           assertThat(runs.get(context.runId()).status()).isEqualTo(RunStatus.COMPLETED);
-          assertThat(events.stream().filter(event -> context.runId().equals(event.runId())).toList())
+          assertThat(
+                  events.stream().filter(event -> context.runId().equals(event.runId())).toList())
               .isNotEmpty()
-              .allMatch(
-                  event ->
-                      context.conversationId().equals(event.sessionId())
-                          && context.runId().equals(event.turnId())
-                          && first.id().equals(event.projectId()));
+              .allMatch(event ->
+                  context.conversationId().equals(event.sessionId())
+                      && context.runId().equals(event.turnId())
+                      && first.id().equals(event.projectId()));
         }
       }
     }

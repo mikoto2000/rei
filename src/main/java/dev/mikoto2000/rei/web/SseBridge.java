@@ -98,18 +98,17 @@ public final class SseBridge implements AutoCloseable {
     this.writers = writers;
     this.heartbeats = heartbeats;
     lifecycleSubscription =
-        bus.subscribe(
-            event -> {
-              if (event.type() != AgentEventType.APPLICATION_SHUTDOWN_STARTED) return;
-              shutdownEvent = event;
-              var active = java.util.List.copyOf(connections);
-              shutdownDelivery =
-                  CompletableFuture.allOf(
-                      active.stream()
-                          .map(connection -> connection.deliveryComplete)
-                          .toArray(CompletableFuture[]::new));
-              // Live observers offer shutdown after all earlier queued run frames.
-            });
+        bus.subscribe(event -> {
+          if (event.type() != AgentEventType.APPLICATION_SHUTDOWN_STARTED) return;
+          shutdownEvent = event;
+          var active = java.util.List.copyOf(connections);
+          shutdownDelivery =
+              CompletableFuture.allOf(
+                  active.stream()
+                      .map(connection -> connection.deliveryComplete)
+                      .toArray(CompletableFuture[]::new));
+          // Live observers offer shutdown after all earlier queued run frames.
+        });
   }
 
   /** Web APIによる操作で用いる接続を返す。 */
@@ -120,39 +119,38 @@ public final class SseBridge implements AutoCloseable {
   /** Web APIによる操作で用いる接続を返す。 */
   public Connection connect(String runId, Long lastEventId, Sink sink) {
     var connection =
-        bus.withReplaySnapshot(
-            () -> {
-              var run = runs.get(runId);
-              if (run.status() == RunStatus.UNKNOWN) throw new ReplayGapException();
-              var registered = new Connection(runId, sink);
-              var replay =
-                  bus.subscribeObserver(
-                      runId,
-                      lastEventId == null ? 0 : lastEventId,
-                      event -> registered.offer(new Frame(event)),
-                      event -> event.type() == AgentEventType.APPLICATION_SHUTDOWN_STARTED);
-              // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
-              if (run.status().isTerminal()
-                  && runs.restored(runId)
-                  && replay.terminalSequence() == null) {
-                replay.subscription().unsubscribe();
-                throw new ReplayGapException();
-              }
-              registered.subscription = replay.subscription();
-              registered.replay = replay.replay();
-              registered.alreadyComplete =
-                  run.status().isTerminal()
-                      && replay.terminalSequence() != null
-                      && lastEventId != null
-                      && lastEventId >= replay.terminalSequence();
-              connections.add(registered);
-              if (shutdownEvent != null) {
-                registered.offer(new Frame(shutdownEvent));
-                shutdownDelivery =
-                    CompletableFuture.allOf(shutdownDelivery, registered.deliveryComplete);
-              }
-              return registered;
-            });
+        bus.withReplaySnapshot(() -> {
+          var run = runs.get(runId);
+          if (run.status() == RunStatus.UNKNOWN) throw new ReplayGapException();
+          var registered = new Connection(runId, sink);
+          var replay =
+              bus.subscribeObserver(
+                  runId,
+                  lastEventId == null ? 0 : lastEventId,
+                  event -> registered.offer(new Frame(event)),
+                  event -> event.type() == AgentEventType.APPLICATION_SHUTDOWN_STARTED);
+          // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
+          if (run.status().isTerminal()
+              && runs.restored(runId)
+              && replay.terminalSequence() == null) {
+            replay.subscription().unsubscribe();
+            throw new ReplayGapException();
+          }
+          registered.subscription = replay.subscription();
+          registered.replay = replay.replay();
+          registered.alreadyComplete =
+              run.status().isTerminal()
+                  && replay.terminalSequence() != null
+                  && lastEventId != null
+                  && lastEventId >= replay.terminalSequence();
+          connections.add(registered);
+          if (shutdownEvent != null) {
+            registered.offer(new Frame(shutdownEvent));
+            shutdownDelivery =
+                CompletableFuture.allOf(shutdownDelivery, registered.deliveryComplete);
+          }
+          return registered;
+        });
     connection.start();
     return connection;
   }
@@ -257,14 +255,13 @@ public final class SseBridge implements AutoCloseable {
       cleanup();
       // Even error completion can interact with servlet IO: never invoke it on the publisher
       // thread.
-      writers.execute(
-          () -> {
-            try {
-              sink.complete(error);
-            } finally {
-              deliveryComplete.complete(null);
-            }
-          });
+      writers.execute(() -> {
+        try {
+          sink.complete(error);
+        } finally {
+          deliveryComplete.complete(null);
+        }
+      });
     }
 
     /** Web APIによる操作において、終了済みかどうかを判定する。 */

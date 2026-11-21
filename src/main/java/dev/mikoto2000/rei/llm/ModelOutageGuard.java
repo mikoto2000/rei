@@ -51,10 +51,9 @@ final class ModelOutageGuard {
         cause != null && causes.size() < 16 && seen.add(cause);
         cause = cause.getCause()) causes.add(cause);
     if (causes.stream()
-        .anyMatch(
-            c ->
-                c instanceof InterruptedException
-                    || c instanceof java.util.concurrent.CancellationException)) return false;
+        .anyMatch(c ->
+            c instanceof InterruptedException
+                || c instanceof java.util.concurrent.CancellationException)) return false;
     for (var cause : causes) {
       if (cause instanceof java.net.SocketTimeoutException
           || cause instanceof java.net.SocketException

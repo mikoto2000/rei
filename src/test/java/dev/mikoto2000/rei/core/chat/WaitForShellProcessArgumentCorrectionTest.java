@@ -80,7 +80,8 @@ class WaitForShellProcessArgumentCorrectionTest {
                 var correction = JsonMapper.builder().build().readTree(latestToolResponse(prompt));
                 assertThat(correction.path("error").asString()).isEqualTo("INVALID_TOOL_ARGUMENTS");
                 assertThat(correction.path("executed").asBoolean()).isFalse();
-                assertThat(correction.path("guidance").asString()).contains("timeoutSeconds", "120");
+                assertThat(correction.path("guidance").asString())
+                    .contains("timeoutSeconds", "120");
                 assertThat(correction.path("correctionsRemaining").asInt()).isEqualTo(1);
                 return waitCall("corrected-wait", 120);
               }
@@ -132,8 +133,7 @@ class WaitForShellProcessArgumentCorrectionTest {
 
     assertThat(result.status()).isEqualTo(ChatExecutionResult.Status.FAILED);
     assertThat(result.stopCode()).isEqualTo("tool_argument_repair_exhausted");
-    assertThat(result.errorMessage())
-        .contains("2回", "/resume <taskId>", "同じタスク", "累積使用量");
+    assertThat(result.errorMessage()).contains("2回", "/resume <taskId>", "同じタスク", "累積使用量");
     assertThat(calls).hasValue(3);
     assertThat(remaining).containsExactly(1, 0);
     var rejections = invalidArgumentEvents(fixture.events());
@@ -233,7 +233,8 @@ class WaitForShellProcessArgumentCorrectionTest {
             .defaultTools(callback)
             .build();
     var properties = new LlmProperties();
-    properties.updateOutputLimit(limits -> limits.setMaxToolArgumentCorrectionsPerRun(correctionLimit));
+    properties.updateOutputLimit(
+        limits -> limits.setMaxToolArgumentCorrectionsPerRun(correctionLimit));
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
     var events = new ArrayList<AgentEvent>();

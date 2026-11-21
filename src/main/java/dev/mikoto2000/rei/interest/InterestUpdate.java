@@ -26,8 +26,6 @@ public record InterestUpdate(
     OffsetDateTime createdAt) {
   public InterestUpdate {
     sourceUrls =
-        sourceUrls == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(sourceUrls));
+        sourceUrls == null ? null : Collections.unmodifiableList(new ArrayList<>(sourceUrls));
   }
 }

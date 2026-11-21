@@ -28,22 +28,21 @@ class ActivityDiagnosticsCommandTest {
     var store = mock(ActivityStore.class);
     var capture = mock(ActivityCapture.class);
     when(store.findRecordsBetween(any(), any()))
-        .thenAnswer(
-            inv -> {
-              var r = ActivitySemanticTest.dev(0, "Terminal", "X");
-              return List.of(
-                  new ActivityRecord(
-                      r.id(),
-                      ((Instant) inv.getArgument(0)).plusSeconds(3600),
-                      60,
-                      r.observations(),
-                      r.foreground(),
-                      r.inference(),
-                      r.confidence(),
-                      List.of(),
-                      0,
-                      false));
-            });
+        .thenAnswer(inv -> {
+          var r = ActivitySemanticTest.dev(0, "Terminal", "X");
+          return List.of(
+              new ActivityRecord(
+                  r.id(),
+                  ((Instant) inv.getArgument(0)).plusSeconds(3600),
+                  60,
+                  r.observations(),
+                  r.foreground(),
+                  r.inference(),
+                  r.confidence(),
+                  List.of(),
+                  0,
+                  false));
+        });
     var timeline =
         new ActivityTimeline(store, Clock.fixed(ActivitySemanticTest.START, ZoneOffset.UTC));
     var command =

@@ -146,11 +146,10 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
     synchronized (eventLock) {
       var snapshot = replay.snapshot(runId, fromSequence);
       var subscription =
-          subscribe(
-              event -> {
-                if (runId.equals(event.runId()) && event.sequence() > snapshot.latestSequence())
-                  listener.onEvent(event);
-              });
+          subscribe(event -> {
+            if (runId.equals(event.runId()) && event.sequence() > snapshot.latestSequence())
+              listener.onEvent(event);
+          });
       return new ReplaySubscription(
           snapshot.events(), subscription, snapshot.latestSequence(), snapshot.terminalSequence());
     }
@@ -233,11 +232,10 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
     synchronized (eventLock) {
       var snapshot = replay.snapshot(runId, fromSequence);
       var subscription =
-          subscribeObserver(
-              event -> {
-                if ((runId.equals(event.runId()) || global.test(event))
-                    && event.sequence() > snapshot.latestSequence()) listener.onEvent(event);
-              });
+          subscribeObserver(event -> {
+            if ((runId.equals(event.runId()) || global.test(event))
+                && event.sequence() > snapshot.latestSequence()) listener.onEvent(event);
+          });
       return new ReplaySubscription(
           snapshot.events(), subscription, snapshot.latestSequence(), snapshot.terminalSequence());
     }

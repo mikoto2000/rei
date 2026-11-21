@@ -21,9 +21,9 @@ public class ClockTools {
       name = "getCurrentTime",
       description =
           """
-      現在日時を取得します。現在日時を推測せず、この Tool の結果を使用してください。
-      戻り値は ISO-8601 timestamp と timezone を含みます。
-      """)
+          現在日時を取得します。現在日時を推測せず、この Tool の結果を使用してください。
+          戻り値は ISO-8601 timestamp と timezone を含みます。
+          """)
   CurrentTime getCurrentTime() {
     ZonedDateTime now = ZonedDateTime.now(clock);
     return new CurrentTime(now.toOffsetDateTime().toString(), now.getZone().getId());

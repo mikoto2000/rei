@@ -149,23 +149,22 @@ class SlackAgentServiceTest {
               return SlackTransport.Delivery.sent("100.1");
             });
     f.service()
-        .onResume(
-            (o, saved) -> {
-              assertEquals(owner(), o);
-              assertInstanceOf(ToolResponseMessage.class, saved.messages().getLast());
-              assertTrue(
-                  saved.messages().getLast().getText() == null
-                      || !saved.messages().getLast().getText().contains("FINAL:"));
-              var data =
-                  ((ToolResponseMessage) saved.messages().getLast())
-                      .getResponses()
-                      .getFirst()
-                      .responseData();
-              assertTrue(data.contains("UNTRUSTED DATA"));
-              assertTrue(data.contains("result"));
-              resumes.incrementAndGet();
-              return ChatExecutionResult.success("integrated", false);
-            });
+        .onResume((o, saved) -> {
+          assertEquals(owner(), o);
+          assertInstanceOf(ToolResponseMessage.class, saved.messages().getLast());
+          assertTrue(
+              saved.messages().getLast().getText() == null
+                  || !saved.messages().getLast().getText().contains("FINAL:"));
+          var data =
+              ((ToolResponseMessage) saved.messages().getLast())
+                  .getResponses()
+                  .getFirst()
+                  .responseData();
+          assertTrue(data.contains("UNTRUSTED DATA"));
+          assertTrue(data.contains("result"));
+          resumes.incrementAndGet();
+          return ChatExecutionResult.success("integrated", false);
+        });
     f.service().pump();
     assertEquals("WAITING", f.repo().get(q.id()).state());
     assertEquals(0, resumes.get());
@@ -217,11 +216,10 @@ class SlackAgentServiceTest {
                     "channel",
                     "FINAL: late")));
     f.service()
-        .onResume(
-            (o, s) -> {
-              fail("Cancelled Run resumed");
-              return null;
-            });
+        .onResume((o, s) -> {
+          fail("Cancelled Run resumed");
+          return null;
+        });
     f.service().pump();
     assertEquals("CANCELLED", f.saved().state("run"));
   }
@@ -242,16 +240,15 @@ class SlackAgentServiceTest {
               return SlackTransport.Delivery.unknown();
             });
     f.service()
-        .onResume(
-            (o, s) -> {
-              assertTrue(
-                  ((ToolResponseMessage) s.messages().getLast())
-                      .getResponses()
-                      .getFirst()
-                      .responseData()
-                      .contains("UNKNOWN"));
-              return ChatExecutionResult.success("uncertain", false);
-            });
+        .onResume((o, s) -> {
+          assertTrue(
+              ((ToolResponseMessage) s.messages().getLast())
+                  .getResponses()
+                  .getFirst()
+                  .responseData()
+                  .contains("UNKNOWN"));
+          return ChatExecutionResult.success("uncertain", false);
+        });
     f.service().pump();
     f.service().pump();
     assertEquals(1, sends.get());
@@ -289,11 +286,10 @@ class SlackAgentServiceTest {
               return SlackTransport.Delivery.sent("100.1");
             });
     f.service()
-        .onResume(
-            (o, s) -> {
-              resumes.incrementAndGet();
-              return ChatExecutionResult.success("done", false);
-            });
+        .onResume((o, s) -> {
+          resumes.incrementAndGet();
+          return ChatExecutionResult.success("done", false);
+        });
     f.service().pump();
     assertTrue(accepted.get());
     assertEquals("COMPLETED", f.repo().get(q.id()).state());
@@ -381,18 +377,17 @@ class SlackAgentServiceTest {
                     "accepted, working")));
     f.repo().expire(clock.instant().plusSeconds(2));
     f.service()
-        .onResume(
-            (o, s) -> {
-              String data =
-                  ((ToolResponseMessage) s.messages().getLast())
-                      .getResponses()
-                      .getFirst()
-                      .responseData();
-              assertTrue(data.contains("TIMED_OUT"));
-              assertTrue(data.contains("accepted, working"));
-              assertTrue(data.contains("not verified completion"));
-              return ChatExecutionResult.success("partial, uncertain", false);
-            });
+        .onResume((o, s) -> {
+          String data =
+              ((ToolResponseMessage) s.messages().getLast())
+                  .getResponses()
+                  .getFirst()
+                  .responseData();
+          assertTrue(data.contains("TIMED_OUT"));
+          assertTrue(data.contains("accepted, working"));
+          assertTrue(data.contains("not verified completion"));
+          return ChatExecutionResult.success("partial, uncertain", false);
+        });
     f.service().pump();
     assertEquals("TIMED_OUT", f.repo().get(q.id()).state());
     assertEquals(RunStatus.COMPLETED, f.registry().get("run").status());
@@ -460,13 +455,12 @@ class SlackAgentServiceTest {
           return null;
         });
     var resumes = new AtomicInteger();
-    service.onResume(
-        (o, s) -> {
-          assertEquals(owner(), o);
-          assertEquals("original request", s.request());
-          resumes.incrementAndGet();
-          return ChatExecutionResult.success("restored", false);
-        });
+    service.onResume((o, s) -> {
+      assertEquals(owner(), o);
+      assertEquals("original request", s.request());
+      resumes.incrementAndGet();
+      return ChatExecutionResult.success("restored", false);
+    });
     assertTrue(
         service.receive(
             new SlackMessage(
@@ -518,10 +512,9 @@ class SlackAgentServiceTest {
     var q = f.repo().create(owner(), "call", "tenten", "question", "", 300, null, settings());
     pause(f);
     f.service()
-        .onValidate(
-            o -> {
-              throw new IllegalStateException("moved");
-            });
+        .onValidate(o -> {
+          throw new IllegalStateException("moved");
+        });
     f.service()
         .attach(
             "U1",
@@ -643,14 +636,12 @@ class SlackAgentServiceTest {
     f.service().dependencies(dependencies, observations);
     var q =
         f.repo()
-            .transaction(
-                () -> {
-                  var request =
-                      f.repo()
-                          .create(owner(), "call", "tenten", "question", "", 300, null, settings());
-                  f.service().registered(request);
-                  return request;
-                });
+            .transaction(() -> {
+              var request =
+                  f.repo().create(owner(), "call", "tenten", "question", "", 300, null, settings());
+              f.service().registered(request);
+              return request;
+            });
     var id = f.repo().dependency(q.id());
     assertEquals("session", dependencies.get("project", id).sessionId());
     assertEquals(
@@ -683,22 +674,14 @@ class SlackAgentServiceTest {
         IllegalStateException.class,
         () ->
             f.repo()
-                .transaction(
-                    () -> {
-                      var request =
-                          f.repo()
-                              .create(
-                                  owner(),
-                                  "rollback",
-                                  "tenten",
-                                  "rollback",
-                                  "",
-                                  300,
-                                  null,
-                                  settings());
-                      f.service().registered(request);
-                      throw new IllegalStateException("rollback");
-                    }));
+                .transaction(() -> {
+                  var request =
+                      f.repo()
+                          .create(
+                              owner(), "rollback", "tenten", "rollback", "", 300, null, settings());
+                  f.service().registered(request);
+                  throw new IllegalStateException("rollback");
+                }));
     assertEquals(1, f.repo().forRun("run").size());
     assertEquals(1, dependencies.list("project").size());
   }
@@ -731,11 +714,10 @@ class SlackAgentServiceTest {
                     "channel",
                     "FINAL: result")));
     f.service()
-        .onResume(
-            (o, s) -> {
-              fail("Lost Goal reservation resumed");
-              return null;
-            });
+        .onResume((o, s) -> {
+          fail("Lost Goal reservation resumed");
+          return null;
+        });
     f.service().pump();
     assertEquals("UNKNOWN", f.saved().state("run"));
     assertEquals(RunStatus.UNKNOWN, f.registry().get("run").status());

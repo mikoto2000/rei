@@ -129,29 +129,28 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
     var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     long version = refreshVersion.incrementAndGet();
     try {
-      refreshExecutor.execute(
-          () -> {
-            try {
-              var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
-              try (scope) {
-                if (!lifeAllowed()) return;
-                var lease = life == null ? null : life.begin();
-                var context = contextProvider.currentContext();
-                if (!lifeAllowed() || !lifeValid(lease)) return;
-                List<TopicCandidate> candidates =
-                    topicGeneratorService.prepareCandidates(
-                        context, () -> lifeAllowed() && lifeValid(lease));
-                if (!lifeAllowed() || !lifeValid(lease)) return;
-                if (refreshVersion.get() != version || Thread.currentThread().isInterrupted()) return;
-                replaceCandidates.accept(candidates, Instant.now(clock));
-                eventPublisher.publish(
-                    eventFactory.topicCandidatesRefreshed(
-                        candidates.size(), candidates.stream().map(TopicCandidate::topic).toList()));
-              }
-            } catch (RuntimeException failure) {
-              log.warn("Topic candidate refresh failed", failure);
-            }
-          });
+      refreshExecutor.execute(() -> {
+        try {
+          var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner);
+          try (scope) {
+            if (!lifeAllowed()) return;
+            var lease = life == null ? null : life.begin();
+            var context = contextProvider.currentContext();
+            if (!lifeAllowed() || !lifeValid(lease)) return;
+            List<TopicCandidate> candidates =
+                topicGeneratorService.prepareCandidates(
+                    context, () -> lifeAllowed() && lifeValid(lease));
+            if (!lifeAllowed() || !lifeValid(lease)) return;
+            if (refreshVersion.get() != version || Thread.currentThread().isInterrupted()) return;
+            replaceCandidates.accept(candidates, Instant.now(clock));
+            eventPublisher.publish(
+                eventFactory.topicCandidatesRefreshed(
+                    candidates.size(), candidates.stream().map(TopicCandidate::topic).toList()));
+          }
+        } catch (RuntimeException failure) {
+          log.warn("Topic candidate refresh failed", failure);
+        }
+      });
     } catch (java.util.concurrent.RejectedExecutionException closing) {
       log.debug("Topic candidate refresh skipped during shutdown");
     }

@@ -87,29 +87,28 @@ class VoiceAutoStartTest {
 
   /** {@code coordinator} の条件を再現するための補助情報を返す。 */
   VoiceInputCoordinator coordinator() {
-    return coordinator(
-        settings -> {
-          backendOpens.incrementAndGet();
-          return new VoiceBackend(
-              new VoiceActivityDetector() {
-                /** {@code probability} の条件を再現するための補助情報を返す。 */
-                public float probability(float[] frame) {
-                  return 0;
-                }
+    return coordinator(settings -> {
+      backendOpens.incrementAndGet();
+      return new VoiceBackend(
+          new VoiceActivityDetector() {
+            /** {@code probability} の条件を再現するための補助情報を返す。 */
+            public float probability(float[] frame) {
+              return 0;
+            }
 
-                /** 検証で利用した対象の終了を扱う。 */
-                public void close() {}
-              },
-              new SpeechRecognizer() {
-                /** {@code recognize} の条件を再現するための補助情報を返す。 */
-                public String recognize(SpeechSegment segment) {
-                  return "unused";
-                }
+            /** 検証で利用した対象の終了を扱う。 */
+            public void close() {}
+          },
+          new SpeechRecognizer() {
+            /** {@code recognize} の条件を再現するための補助情報を返す。 */
+            public String recognize(SpeechSegment segment) {
+              return "unused";
+            }
 
-                /** 検証で利用した対象の終了を扱う。 */
-                public void close() {}
-              });
-        });
+            /** 検証で利用した対象の終了を扱う。 */
+            public void close() {}
+          });
+    });
   }
 
   /** {@code coordinator} の条件を再現するための補助情報を返す。 */
@@ -277,10 +276,9 @@ class VoiceAutoStartTest {
   @Test
   void nativeStartupFailureReturnsToOffWithoutStoppingTheShell() {
     try (var voice =
-        coordinator(
-            settings -> {
-              throw new UnsatisfiedLinkError("fake native failure");
-            })) {
+        coordinator(settings -> {
+          throw new UnsatisfiedLinkError("fake native failure");
+        })) {
       command(voice).autoStart(true, writer::println);
       await()
           .atMost(Duration.ofSeconds(3))
@@ -297,18 +295,17 @@ class VoiceAutoStartTest {
     var entered = new CountDownLatch(1);
     var release = new CountDownLatch(1);
     when(models.readyDirectory())
-        .thenAnswer(
-            invocation -> {
-              entered.countDown();
-              // A slow resource may finish despite interruption. Admission must still be cancelled.
-              while (true)
-                try {
-                  release.await();
-                  break;
-                } catch (InterruptedException ignored) {
-                }
-              return Path.of("unused");
-            });
+        .thenAnswer(invocation -> {
+          entered.countDown();
+          // A slow resource may finish despite interruption. Admission must still be cancelled.
+          while (true)
+            try {
+              release.await();
+              break;
+            } catch (InterruptedException ignored) {
+            }
+          return Path.of("unused");
+        });
     try {
       var voice = coordinator();
       try (voice) {
@@ -328,7 +325,8 @@ class VoiceAutoStartTest {
         assertThat(captureOpens).hasValue(0);
         assertThat(backendOpens).hasValue(0);
         assertThat(voice.state())
-            .isEqualTo(close ? VoiceInputCoordinator.State.CLOSED : VoiceInputCoordinator.State.OFF);
+            .isEqualTo(
+                close ? VoiceInputCoordinator.State.CLOSED : VoiceInputCoordinator.State.OFF);
       }
     } finally {
       release.countDown();
@@ -343,20 +341,19 @@ class VoiceAutoStartTest {
     var release = new CountDownLatch(1);
     var checks = new AtomicInteger();
     when(models.readyDirectory())
-        .thenAnswer(
-            invocation -> {
-              if (checks.incrementAndGet() == 1) {
-                entered.countDown();
-                while (true)
-                  try {
-                    release.await();
-                    break;
-                  } catch (InterruptedException ignored) {
-                  }
-                throw new IOException("old automatic attempt failed late");
+        .thenAnswer(invocation -> {
+          if (checks.incrementAndGet() == 1) {
+            entered.countDown();
+            while (true)
+              try {
+                release.await();
+                break;
+              } catch (InterruptedException ignored) {
               }
-              return Path.of("unused");
-            });
+            throw new IOException("old automatic attempt failed late");
+          }
+          return Path.of("unused");
+        });
     try (var voice = coordinator()) {
       var command = command(voice);
       command.autoStart(true, writer::println);
@@ -391,12 +388,11 @@ class VoiceAutoStartTest {
     var entered = new CountDownLatch(1);
     var release = new CountDownLatch(1);
     when(models.readyDirectory())
-        .thenAnswer(
-            invocation -> {
-              entered.countDown();
-              release.await();
-              return Path.of("unused");
-            });
+        .thenAnswer(invocation -> {
+          entered.countDown();
+          release.await();
+          return Path.of("unused");
+        });
     try (var voice = coordinator()) {
       var command = command(voice);
       command.autoStart(true, writer::println);
@@ -422,12 +418,11 @@ class VoiceAutoStartTest {
       throws Exception {
     var entered = new CountDownLatch(1);
     var voice =
-        coordinator(
-            settings -> {
-              entered.countDown();
-              Thread.sleep(60000);
-              throw new AssertionError();
-            });
+        coordinator(settings -> {
+          entered.countDown();
+          Thread.sleep(60000);
+          throw new AssertionError();
+        });
     try (voice) {
       var command = command(voice);
       command.autoStart(true, writer::println);

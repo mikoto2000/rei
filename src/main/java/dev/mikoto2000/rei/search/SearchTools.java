@@ -36,10 +36,10 @@ public class SearchTools {
       name = "searchKnowledge",
       description =
           """
-      Search the agent's indexed knowledge base and supplement it with public-web sources.
-      Use this hybrid workflow when registered internal knowledge is relevant to the question.
-      For public-web-only research, prefer webSearchAndRead.
-      """)
+          Search the agent's indexed knowledge base and supplement it with public-web sources.
+          Use this hybrid workflow when registered internal knowledge is relevant to the question.
+          For public-web-only research, prefer webSearchAndRead.
+          """)
   String searchKnowledge(
       String query,
       Integer vectorTopK,
@@ -55,8 +55,7 @@ public class SearchTools {
     var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
     try (scope) {
       var refresh =
-          dev.mikoto2000.rei.http.FetchScope.withForceRefresh(
-              Boolean.TRUE.equals(forceRefresh));
+          dev.mikoto2000.rei.http.FetchScope.withForceRefresh(Boolean.TRUE.equals(forceRefresh));
       try (refresh) {
         resultBudget.requireAvailable(context);
         var result = searchKnowledgeService.search(query, vectorTopK, webTopK, threshold, source);
@@ -89,7 +88,9 @@ public class SearchTools {
             trimmed |= !fitted.omissions().isEmpty();
             entries.add(
                 "\nWeb external_untrusted sourceType="
-                    + (result.webContext().primaryResults().contains(page) ? "primary" : "secondary")
+                    + (result.webContext().primaryResults().contains(page)
+                        ? "primary"
+                        : "secondary")
                     + ": "
                     + resultBudget.encoded(fitted));
           }
@@ -102,7 +103,8 @@ public class SearchTools {
                 + "\nWeb retrieval: "
                 + resultBudget.encoded(
                     trimmed
-                        ? dev.mikoto2000.rei.websearch.WebRetrievalAssessment.unknown("output_budget")
+                        ? dev.mikoto2000.rei.websearch.WebRetrievalAssessment.unknown(
+                            "output_budget")
                         : result.webContext().assessment()),
             entries,
             context);

@@ -265,14 +265,12 @@ class EvidenceProgressTest {
                 org.mockito.ArgumentMatchers.eq(1),
                 org.mockito.ArgumentMatchers.eq(0.5),
                 org.mockito.ArgumentMatchers.isNull()))
-        .thenAnswer(
-            inv ->
-                new dev.mikoto2000.rei.search.SearchKnowledgeResult(
-                    inv.getArgument(0),
-                    java.util.List.of(),
-                    dev.mikoto2000.rei.websearch.WebSearchContext.primaryOnly(
-                        java.util.List.of(page)),
-                    null));
+        .thenAnswer(inv ->
+            new dev.mikoto2000.rei.search.SearchKnowledgeResult(
+                inv.getArgument(0),
+                java.util.List.of(),
+                dev.mikoto2000.rei.websearch.WebSearchContext.primaryOnly(java.util.List.of(page)),
+                null));
     var callback =
         org.springframework.ai.tool.method.MethodToolCallbackProvider.builder()
             .toolObjects(new dev.mikoto2000.rei.search.SearchTools(service))

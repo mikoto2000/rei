@@ -35,12 +35,11 @@ class VoiceTypingProtectionTest {
     var input = new PipedInputStream(keyboard, 8192);
     var display = new ByteArrayOutputStream();
     var worker =
-        Executors.newSingleThreadExecutor(
-            r -> {
-              var t = new Thread(r, "typing-fixture");
-              t.setDaemon(true);
-              return t;
-            });
+        Executors.newSingleThreadExecutor(r -> {
+          var t = new Thread(r, "typing-fixture");
+          t.setDaemon(true);
+          return t;
+        });
     try (var terminal =
         new DumbTerminal("voice-fixture", "xterm", input, display, StandardCharsets.UTF_8)) {
       terminal.setSize(new Size(80, 24));

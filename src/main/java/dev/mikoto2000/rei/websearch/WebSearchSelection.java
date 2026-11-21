@@ -311,16 +311,13 @@ public final class WebSearchSelection {
   public static boolean official(String query, String url) {
     String host = host(url), lower = query.toLowerCase(Locale.ROOT);
     return OFFICIAL.entrySet().stream()
-            .anyMatch(
-                entry ->
-                    (host.equals(entry.getKey()) || host.endsWith("." + entry.getKey()))
-                        && entry.getValue().stream()
-                            .anyMatch(
-                                term ->
-                                    Pattern.compile(
-                                            "(?<![a-z0-9])" + Pattern.quote(term) + "(?![a-z0-9])")
-                                        .matcher(lower)
-                                        .find()))
+            .anyMatch(entry ->
+                (host.equals(entry.getKey()) || host.endsWith("." + entry.getKey()))
+                    && entry.getValue().stream()
+                        .anyMatch(term ->
+                            Pattern.compile("(?<![a-z0-9])" + Pattern.quote(term) + "(?![a-z0-9])")
+                                .matcher(lower)
+                                .find()))
         || host.endsWith(".gov")
         || host.endsWith(".edu");
   }

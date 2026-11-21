@@ -142,10 +142,9 @@ class RunExecutionContextTest {
     assertThatThrownBy(context::consumeNextLlmCall)
         .hasMessageContaining("LLM_CALL_BUDGET_EXCEEDED");
     assertThat(events)
-        .anyMatch(
-            e ->
-                e.payload() instanceof ExecutionProgressPayload p
-                    && "waiting_for_dependency".equals(p.reason()));
+        .anyMatch(e ->
+            e.payload() instanceof ExecutionProgressPayload p
+                && "waiting_for_dependency".equals(p.reason()));
   }
 
   /** 実行の停滞への対処で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */

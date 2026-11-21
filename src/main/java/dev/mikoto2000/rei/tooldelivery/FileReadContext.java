@@ -101,7 +101,9 @@ public final class FileReadContext implements AutoCloseable {
             - promptCost.applyAsLong(current.prompt)
             - textCost.applyAsInt(current.assistant)
             - 512L * current.calls;
-    return (int) Math.max(0, Math.min(Math.min(maximum, capacity / windowDivisor), available / current.calls));
+    return (int)
+        Math.max(
+            0, Math.min(Math.min(maximum, capacity / windowDivisor), available / current.calls));
   }
 
   public static void used(int tokens) {

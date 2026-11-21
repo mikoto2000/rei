@@ -40,12 +40,11 @@ public final class ActivityClassifier {
                 .find();
     boolean recentTool =
         evidence.events().stream()
-            .anyMatch(
-                e ->
-                    Objects.equals(e.projectId(), evidence.projectId())
-                        && !e.at().isAfter(evidence.capturedAt())
-                        && Duration.between(e.at(), evidence.capturedAt()).toSeconds() <= 120
-                        && Set.of("SHELL", "FILE_EDIT", "BUILD_TEST").contains(e.kind()));
+            .anyMatch(e ->
+                Objects.equals(e.projectId(), evidence.projectId())
+                    && !e.at().isAfter(evidence.capturedAt())
+                    && Duration.between(e.at(), evidence.capturedAt()).toSeconds() <= 120
+                    && Set.of("SHELL", "FILE_EDIT", "BUILD_TEST").contains(e.kind()));
     if (projectMatches && (process.equals("vscode") || process.equals("terminal") && recentTool)) {
       primary =
           new ActivityRecord.Activity(

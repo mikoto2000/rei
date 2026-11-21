@@ -82,28 +82,27 @@ class ManagedActivityLogTest {
     var interrupted = new java.util.concurrent.atomic.AtomicBoolean();
     var caller =
         Thread.ofVirtual()
-            .start(
-                () -> {
-                  try {
-                    activity.appendWith(
-                        null,
-                        entry("during", "session", "run"),
-                        root,
-                        db -> {
-                          entered.countDown();
-                          try {
-                            if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
-                              throw new AssertionError("Commit barrier timed out");
-                          } catch (InterruptedException cancelled) {
-                            Thread.currentThread().interrupt();
-                          }
-                          return null;
-                        });
-                    interrupted.set(Thread.currentThread().isInterrupted());
-                  } catch (Throwable error) {
-                    failure.set(error);
-                  }
-                });
+            .start(() -> {
+              try {
+                activity.appendWith(
+                    null,
+                    entry("during", "session", "run"),
+                    root,
+                    db -> {
+                      entered.countDown();
+                      try {
+                        if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                          throw new AssertionError("Commit barrier timed out");
+                      } catch (InterruptedException cancelled) {
+                        Thread.currentThread().interrupt();
+                      }
+                      return null;
+                    });
+                interrupted.set(Thread.currentThread().isInterrupted());
+              } catch (Throwable error) {
+                failure.set(error);
+              }
+            });
     try {
       assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
       caller.interrupt();
@@ -124,27 +123,25 @@ class ManagedActivityLogTest {
   void failedActivityCommitPropagatesCancellationAndLeavesLogUsable() {
     var activity = new ManagedActivityLog(registry);
     var cancellation = new java.util.concurrent.CancellationException("cancel commit");
-    org.assertj.core.api.Assertions.assertThatThrownBy(
-            () ->
-                activity.appendWith(
-                    null,
-                    entry("cancelled", "session", "run"),
-                    root,
-                    db -> {
-                      throw cancellation;
-                    }))
+    org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            activity.appendWith(
+                null,
+                entry("cancelled", "session", "run"),
+                root,
+                db -> {
+                  throw cancellation;
+                }))
         .isSameAs(cancellation);
 
     var fatal = new AssertionError("fatal commit");
-    org.assertj.core.api.Assertions.assertThatThrownBy(
-            () ->
-                activity.appendWith(
-                    null,
-                    entry("failed", "session", "run"),
-                    root,
-                    db -> {
-                      throw fatal;
-                    }))
+    org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+            activity.appendWith(
+                null,
+                entry("failed", "session", "run"),
+                root,
+                db -> {
+                  throw fatal;
+                }))
         .isSameAs(fatal);
 
     activity.append(null, entry("next", "session", "run"));
@@ -225,14 +222,13 @@ class ManagedActivityLogTest {
   /** データ保存の共通処理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedMetadataCommitDoesNotPublishAnUncommittedArchive() throws Exception {
-    registry.database.transaction(
-        db -> {
-          try (var query = db.createStatement()) {
-            query.execute(
-                "CREATE TRIGGER fail_activity BEFORE UPDATE ON activity_segments BEGIN SELECT RAISE(ABORT,'fixture disk/write failure'); END");
-          }
-          return null;
-        });
+    registry.database.transaction(db -> {
+      try (var query = db.createStatement()) {
+        query.execute(
+            "CREATE TRIGGER fail_activity BEFORE UPDATE ON activity_segments BEGIN SELECT RAISE(ABORT,'fixture disk/write failure'); END");
+      }
+      return null;
+    });
     var log = new ManagedActivityLog(registry, 1024);
     assertThatThrownBy(() -> log.append(null, entry("uncommitted", null, null)))
         .isInstanceOf(IllegalStateException.class);

@@ -285,11 +285,10 @@ public final class ClassificationToolkit {
       return repository
           .candidates(kind, clock.instant().minus(Duration.ofDays(registry.retentionDays())))
           .stream()
-          .filter(
-              c ->
-                  !sensitive.containsSensitiveInfo(c.title() + c.content() + c.service())
-                      && !capturePolicy.excluded(
-                          new ForegroundWindow(c.process(), 1, c.title(), "registry", null)))
+          .filter(c ->
+              !sensitive.containsSensitiveInfo(c.title() + c.content() + c.service())
+                  && !capturePolicy.excluded(
+                      new ForegroundWindow(c.process(), 1, c.title(), "registry", null)))
           .toList();
     } catch (SQLException | JsonProcessingException | RuntimeException e) {
       log.warn("Activity classification registry unavailable");
@@ -387,11 +386,10 @@ public final class ClassificationToolkit {
     var m = metrics();
     long n = m.getOrDefault("observations", 0L);
     text.append("Today (retained telemetry):\n");
-    m.forEach(
-        (key, value) -> {
-          if (!key.startsWith("hit:"))
-            text.append("  ").append(key).append(": ").append(value).append('\n');
-        });
+    m.forEach((key, value) -> {
+      if (!key.startsWith("hit:"))
+        text.append("  ").append(key).append(": ").append(value).append('\n');
+    });
     for (String key : List.of("evidence_only", "vision_fallback", "unknown", "vision_observations"))
       text.append(key)
           .append(" rate: ")
@@ -406,19 +404,18 @@ public final class ClassificationToolkit {
   public String listRules() {
     var m = metrics();
     return rules.snapshot().rules().stream()
-        .map(
-            r ->
-                r.id()
-                    + " type="
-                    + r.type()
-                    + " source="
-                    + r.source()
-                    + " priority="
-                    + r.priority()
-                    + " enabled="
-                    + r.enabled()
-                    + " hits(today)="
-                    + m.getOrDefault("hit:" + r.id(), 0L))
+        .map(r ->
+            r.id()
+                + " type="
+                + r.type()
+                + " source="
+                + r.source()
+                + " priority="
+                + r.priority()
+                + " enabled="
+                + r.enabled()
+                + " hits(today)="
+                + m.getOrDefault("hit:" + r.id(), 0L))
         .collect(java.util.stream.Collectors.joining("\n"));
   }
 
@@ -426,33 +423,32 @@ public final class ClassificationToolkit {
   public String listCandidates(String kind, int top) {
     return candidates(kind).stream()
         .limit(Math.max(1, Math.min(100, top)))
-        .map(
-            c ->
-                c.process()
-                    + " / "
-                    + c.service()
-                    + "\n  "
-                    + c.title()
-                    + "\n  count="
-                    + c.count()
-                    + " open="
-                    + c.open()
-                    + " state="
-                    + c.state()
-                    + " last="
-                    + c.lastSeen()
-                    + "\n  category="
-                    + c.category()
-                    + " disposition="
-                    + c.disposition()
-                    + " reasons="
-                    + c.reasons()
-                    + "\n  vision="
-                    + c.visionSuccess()
-                    + "/"
-                    + c.visionAttempted()
-                    + " outcomes="
-                    + c.outcomes())
+        .map(c ->
+            c.process()
+                + " / "
+                + c.service()
+                + "\n  "
+                + c.title()
+                + "\n  count="
+                + c.count()
+                + " open="
+                + c.open()
+                + " state="
+                + c.state()
+                + " last="
+                + c.lastSeen()
+                + "\n  category="
+                + c.category()
+                + " disposition="
+                + c.disposition()
+                + " reasons="
+                + c.reasons()
+                + "\n  vision="
+                + c.visionSuccess()
+                + "/"
+                + c.visionAttempted()
+                + " outcomes="
+                + c.outcomes())
         .collect(java.util.stream.Collectors.joining("\n"));
   }
 

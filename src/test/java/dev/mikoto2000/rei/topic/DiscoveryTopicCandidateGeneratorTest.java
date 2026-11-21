@@ -40,18 +40,17 @@ class DiscoveryTopicCandidateGeneratorTest {
     DiscoveryTopicCandidateGenerator generator =
         generator(
             properties,
-            List.of(
-                context ->
-                    List.of(
-                        new DiscoveryItem(
-                            "1",
-                            "Dify MCP authentication release",
-                            "related release",
-                            "https://example.test/1",
-                            TopicSource.GITHUB,
-                            now().minusSeconds(3600),
-                            0.9,
-                            "Dify MCP authentication"))));
+            List.of(context ->
+                List.of(
+                    new DiscoveryItem(
+                        "1",
+                        "Dify MCP authentication release",
+                        "related release",
+                        "https://example.test/1",
+                        TopicSource.GITHUB,
+                        now().minusSeconds(3600),
+                        0.9,
+                        "Dify MCP authentication"))));
 
     List<TopicCandidate> candidates = generator.generate(seedContext());
 
@@ -87,13 +86,11 @@ class DiscoveryTopicCandidateGeneratorTest {
     DiscoveryTopicCandidateGenerator generator =
         new DiscoveryTopicCandidateGenerator(
             new DiscoverySeedGenerator(properties),
-            List.of(
-                context ->
-                    List.of(
-                        new DiscoveryItem(
-                            "low", "low", "", "low", TopicSource.WEB, now(), 0.2, "seed"),
-                        new DiscoveryItem(
-                            "seen", "seen", "", "seen", TopicSource.WEB, now(), 0.9, "seed"))),
+            List.of(context ->
+                List.of(
+                    new DiscoveryItem("low", "low", "", "low", TopicSource.WEB, now(), 0.2, "seed"),
+                    new DiscoveryItem(
+                        "seen", "seen", "", "seen", TopicSource.WEB, now(), 0.9, "seed"))),
             seen,
             properties);
 

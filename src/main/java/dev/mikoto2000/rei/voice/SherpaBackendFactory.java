@@ -98,11 +98,10 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
    */
   static List<VoiceModelManifest.Asset> roleAssets(boolean withVad, boolean withRecognizer) {
     return VoiceModelManifest.pinned().assets().stream()
-        .filter(
-            a ->
-                a.path().endsWith(".jar")
-                    || (withVad && a.path().equals("models/silero_vad.onnx"))
-                    || (withRecognizer && a.path().startsWith("models/turbo-")))
+        .filter(a ->
+            a.path().endsWith(".jar")
+                || (withVad && a.path().equals("models/silero_vad.onnx"))
+                || (withRecognizer && a.path().startsWith("models/turbo-")))
         .toList();
   }
 

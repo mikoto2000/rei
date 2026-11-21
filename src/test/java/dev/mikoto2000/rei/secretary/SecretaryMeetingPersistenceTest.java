@@ -171,24 +171,23 @@ class SecretaryMeetingPersistenceTest {
         (SecretaryContext)
             (p, d, z) ->
                 java.util.stream.IntStream.range(0, 210)
-                    .mapToObj(
-                        i ->
-                            new SecretaryContext.Item(
-                                "work-context",
-                                "item" + i,
-                                "レビュー " + i,
-                                "PENDING",
-                                "saved",
-                                SecretaryContext.Reliability.PROPOSAL,
-                                List.of("work-evidence:" + i),
-                                new SecretaryContext.Observation(
-                                    "run:" + i,
-                                    clock.instant(),
-                                    "UNKNOWN",
-                                    false,
-                                    "続きを確認",
-                                    null,
-                                    "PENDING")))
+                    .mapToObj(i ->
+                        new SecretaryContext.Item(
+                            "work-context",
+                            "item" + i,
+                            "レビュー " + i,
+                            "PENDING",
+                            "saved",
+                            SecretaryContext.Reliability.PROPOSAL,
+                            List.of("work-evidence:" + i),
+                            new SecretaryContext.Observation(
+                                "run:" + i,
+                                clock.instant(),
+                                "UNKNOWN",
+                                false,
+                                "続きを確認",
+                                null,
+                                "PENDING")))
                     .toList());
     try (var service = service()) {
       service.setContexts(beans.getBeanProvider(SecretaryContext.class));
@@ -268,31 +267,30 @@ class SecretaryMeetingPersistenceTest {
                 "jdbc:sqlite:" + root.resolve("work.db")));
     var items =
         java.util.stream.Stream.of("one", "two")
-            .map(
-                id ->
-                    new dev.mikoto2000.rei.workcontext.WorkContext.Item(
-                        id,
-                        dev.mikoto2000.rei.workcontext.WorkContext.Kind.PENDING,
-                        "別々の作業",
-                        "saved",
-                        dev.mikoto2000.rei.workcontext.WorkContext.Status.OPEN,
-                        List.of(
-                            new dev.mikoto2000.rei.workcontext.WorkContext.Evidence(
-                                id,
-                                dev.mikoto2000.rei.workcontext.WorkContext.Origin.USER,
-                                null,
-                                null,
-                                "",
-                                null,
-                                null,
-                                null,
-                                clock.instant(),
-                                clock.instant(),
-                                "registered")),
-                        clock.instant(),
-                        clock.instant(),
-                        false,
-                        null))
+            .map(id ->
+                new dev.mikoto2000.rei.workcontext.WorkContext.Item(
+                    id,
+                    dev.mikoto2000.rei.workcontext.WorkContext.Kind.PENDING,
+                    "別々の作業",
+                    "saved",
+                    dev.mikoto2000.rei.workcontext.WorkContext.Status.OPEN,
+                    List.of(
+                        new dev.mikoto2000.rei.workcontext.WorkContext.Evidence(
+                            id,
+                            dev.mikoto2000.rei.workcontext.WorkContext.Origin.USER,
+                            null,
+                            null,
+                            "",
+                            null,
+                            null,
+                            null,
+                            clock.instant(),
+                            clock.instant(),
+                            "registered")),
+                    clock.instant(),
+                    clock.instant(),
+                    false,
+                    null))
             .toList();
     repository.save(
         new dev.mikoto2000.rei.workcontext.WorkContext(

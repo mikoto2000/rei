@@ -33,12 +33,12 @@ public class SchedulerTools {
       name = "scheduleAfter",
       description =
           """
-      指定時間後の一回限り continuation を PENDING として永続登録します。登録だけでは実行しません。
-      ユーザーが /timer show ID で確認し /timer activate ID で有効化する必要があります。
-      自動 dispatch は rei.agent-scheduler.enabled と Tool permission が有効な場合だけです。
-      duration は 10s, 10m, 2h, 1d または ISO-8601 Duration で指定します。
-      action には再開時に行う内容、conversationId には現在の会話/タスク識別子を指定します。
-      """)
+          指定時間後の一回限り continuation を PENDING として永続登録します。登録だけでは実行しません。
+          ユーザーが /timer show ID で確認し /timer activate ID で有効化する必要があります。
+          自動 dispatch は rei.agent-scheduler.enabled と Tool permission が有効な場合だけです。
+          duration は 10s, 10m, 2h, 1d または ISO-8601 Duration で指定します。
+          action には再開時に行う内容、conversationId には現在の会話/タスク識別子を指定します。
+          """)
   public ScheduledAgentTask scheduleAfter(String duration, String action, String conversationId) {
     return scheduler.scheduleAfter(parseDuration(duration), action, conversationId);
   }
@@ -48,11 +48,11 @@ public class SchedulerTools {
       name = "scheduleAt",
       description =
           """
-      指定日時の一回限り continuation を PENDING として永続登録します。登録だけでは実行しません。
-      ユーザーが /timer show ID で確認し /timer activate ID で有効化する必要があります。
-      timestamp は ISO-8601 形式で指定します。
-      action には再開時に行う内容、conversationId には現在の会話/タスク識別子を指定します。
-      """)
+          指定日時の一回限り continuation を PENDING として永続登録します。登録だけでは実行しません。
+          ユーザーが /timer show ID で確認し /timer activate ID で有効化する必要があります。
+          timestamp は ISO-8601 形式で指定します。
+          action には再開時に行う内容、conversationId には現在の会話/タスク識別子を指定します。
+          """)
   public ScheduledAgentTask scheduleAt(String timestamp, String action, String conversationId) {
     Instant when;
     try {
@@ -80,11 +80,11 @@ public class SchedulerTools {
       name = "cancelScheduledAction",
       description =
           """
-      タイマー ID を指定し、現在の Project/Session の未実行タイマーを取り消します。
-      listScheduledActions で取得した ID を指定してください。PENDING、SCHEDULED、WAITING_EVENT が対象です。
-      定期実行も以降の実行を停止します。実行中や終了済みのタイマーは取り消せません。
-      履歴は保持されます。
-      """)
+          タイマー ID を指定し、現在の Project/Session の未実行タイマーを取り消します。
+          listScheduledActions で取得した ID を指定してください。PENDING、SCHEDULED、WAITING_EVENT が対象です。
+          定期実行も以降の実行を停止します。実行中や終了済みのタイマーは取り消せません。
+          履歴は保持されます。
+          """)
   public String cancelScheduledAction(String timerId) {
     scheduler.cancel(timerId);
     return "Schedule cancelled";

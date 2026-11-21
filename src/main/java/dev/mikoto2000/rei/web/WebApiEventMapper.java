@@ -125,67 +125,63 @@ public final class WebApiEventMapper {
         && event.payload() instanceof ExecutionProgressPayload progress
         && "waiting_for_dependency".equals(progress.reason()))
       payload.put("reason", "waiting_for_dependency");
-    source.forEach(
-        (name, value) -> {
-          if (fields(event.type()).contains(name) && name.equals("error") && value != null) {
-            // Internal exception messages may contain arbitrary credentials, paths or stack traces.
-            if (value instanceof Map<?, ?> error
-                && dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.CODE.equals(
-                    error.get("code")))
-              payload.put(
-                  name,
-                  Map.of(
-                      "type",
-                          dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.CODE,
-                      "message",
-                          dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException
-                              .MESSAGE));
-            else if (value instanceof Map<?, ?> error
-                && "ContextHardLimit".equals(error.get("errorType")))
-              payload.put(
-                  name,
-                  Map.of(
-                      "type",
-                      "context_hard_limit",
-                      "message",
-                      "CONTEXT_HARD_LIMIT: context remains too large after compression."));
-            else if ((event.type() == AgentEventType.LLM_REQUEST_FAILED
-                    || event.type() == AgentEventType.AGENT_RUN_FAILED)
-                && value instanceof Map<?, ?> error
-                && "timeout".equals(error.get("code")))
-              // Only the known code selects this fixed public message; never forward error text.
-              payload.put(
-                  name,
-                  Map.of(
-                      "type", "timeout",
-                      "message", "応答待ちがタイムアウトしました。接続先とタイムアウト設定を確認し、実行結果を確認してから再開してください。"));
-            else if ((event.type() == AgentEventType.LLM_REQUEST_FAILED
-                    || event.type() == AgentEventType.AGENT_RUN_FAILED)
-                && value instanceof Map<?, ?> error
-                && "connection_lost".equals(error.get("code")))
-              payload.put(
-                  name,
-                  Map.of(
-                      "type", "connection_lost",
-                      "message",
-                          dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics
-                              .CONNECTION_LOST_MESSAGE));
-            else if ((event.type() == AgentEventType.LLM_REQUEST_FAILED
-                    || event.type() == AgentEventType.AGENT_RUN_FAILED)
-                && value instanceof Map<?, ?> error
-                && "connection_failed".equals(error.get("code")))
-              payload.put(
-                  name,
-                  Map.of(
-                      "type", "connection_failed",
-                      "message", "接続先へ接続できませんでした。サービスの起動・URL・プロキシ・ネットワークを確認してください。"));
-            else if (event.type() == AgentEventType.AGENT_RUN_FAILED
-                && value instanceof Map<?, ?> error)
-              payload.put(name, runStopError(error.get("errorType")));
-            else
-              payload.put(name, Map.of("type", "operation_failed", "message", "Operation failed."));
-          } else if (fields(event.type()).contains(name)) payload.put(name, clean(value, apiKey));
-        });
+    source.forEach((name, value) -> {
+      if (fields(event.type()).contains(name) && name.equals("error") && value != null) {
+        // Internal exception messages may contain arbitrary credentials, paths or stack traces.
+        if (value instanceof Map<?, ?> error
+            && dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.CODE.equals(
+                error.get("code")))
+          payload.put(
+              name,
+              Map.of(
+                  "type", dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.CODE,
+                  "message",
+                      dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.MESSAGE));
+        else if (value instanceof Map<?, ?> error
+            && "ContextHardLimit".equals(error.get("errorType")))
+          payload.put(
+              name,
+              Map.of(
+                  "type",
+                  "context_hard_limit",
+                  "message",
+                  "CONTEXT_HARD_LIMIT: context remains too large after compression."));
+        else if ((event.type() == AgentEventType.LLM_REQUEST_FAILED
+                || event.type() == AgentEventType.AGENT_RUN_FAILED)
+            && value instanceof Map<?, ?> error
+            && "timeout".equals(error.get("code")))
+          // Only the known code selects this fixed public message; never forward error text.
+          payload.put(
+              name,
+              Map.of(
+                  "type", "timeout",
+                  "message", "応答待ちがタイムアウトしました。接続先とタイムアウト設定を確認し、実行結果を確認してから再開してください。"));
+        else if ((event.type() == AgentEventType.LLM_REQUEST_FAILED
+                || event.type() == AgentEventType.AGENT_RUN_FAILED)
+            && value instanceof Map<?, ?> error
+            && "connection_lost".equals(error.get("code")))
+          payload.put(
+              name,
+              Map.of(
+                  "type",
+                  "connection_lost",
+                  "message",
+                  dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.CONNECTION_LOST_MESSAGE));
+        else if ((event.type() == AgentEventType.LLM_REQUEST_FAILED
+                || event.type() == AgentEventType.AGENT_RUN_FAILED)
+            && value instanceof Map<?, ?> error
+            && "connection_failed".equals(error.get("code")))
+          payload.put(
+              name,
+              Map.of(
+                  "type", "connection_failed",
+                  "message", "接続先へ接続できませんでした。サービスの起動・URL・プロキシ・ネットワークを確認してください。"));
+        else if (event.type() == AgentEventType.AGENT_RUN_FAILED
+            && value instanceof Map<?, ?> error)
+          payload.put(name, runStopError(error.get("errorType")));
+        else payload.put(name, Map.of("type", "operation_failed", "message", "Operation failed."));
+      } else if (fields(event.type()).contains(name)) payload.put(name, clean(value, apiKey));
+    });
     String type =
         cancelled
                 && (event.type() == AgentEventType.AGENT_RUN_FAILED
@@ -225,7 +221,8 @@ public final class WebApiEventMapper {
       case "ToolArgumentRepairExhausted" ->
           Map.of(
               "type", "tool_argument_repair_exhausted",
-              "message", "ツール引数の修正回数が上限に達しました。直前の引数エラーを確認し、/resume で同じタスクを再開できます。明示再開で修正枠を更新し、累積使用量とモデル呼び出し・トークンの上限は保持します。");
+              "message",
+                  "ツール引数の修正回数が上限に達しました。直前の引数エラーを確認し、/resume で同じタスクを再開できます。明示再開で修正枠を更新し、累積使用量とモデル呼び出し・トークンの上限は保持します。");
       case "Stagnated" ->
           Map.of(
               "type", "stagnated",
@@ -253,11 +250,10 @@ public final class WebApiEventMapper {
     }
     if (value instanceof Map<?, ?> map) {
       var result = new LinkedHashMap<String, Object>();
-      map.forEach(
-          (name, child) -> {
-            if (!Set.of("stackTrace", "exception", "@class").contains(name.toString()))
-              result.put(name.toString(), clean(child, key));
-          });
+      map.forEach((name, child) -> {
+        if (!Set.of("stackTrace", "exception", "@class").contains(name.toString()))
+          result.put(name.toString(), clean(child, key));
+      });
       return result;
     }
     if (value instanceof List<?> list)

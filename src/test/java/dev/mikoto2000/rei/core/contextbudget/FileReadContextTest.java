@@ -15,14 +15,16 @@ class FileReadContextTest {
     {
       var scope = FileReadContext.open(new Prompt("x".repeat(700000)), 2, "");
       try (scope) {
-        assertThat(FileReadContext.bulkBudget(100000, p -> 800000,
-            p -> 700000L, s -> 0, 8)).isEqualTo(49488);
+        assertThat(FileReadContext.bulkBudget(100000, p -> 800000, p -> 700000L, s -> 0, 8))
+            .isEqualTo(49488);
       }
     }
     var scope = FileReadContext.open(new Prompt("small"), 1, "");
     try (scope) {
-      assertThat(FileReadContext.bulkBudget(100000, p -> 800000, p -> 0L, s -> 0, 8)).isEqualTo(100000);
-      assertThat(FileReadContext.bulkBudget(100000, p -> 32000, p -> 0L, s -> 0, 8)).isEqualTo(4000);
+      assertThat(FileReadContext.bulkBudget(100000, p -> 800000, p -> 0L, s -> 0, 8))
+          .isEqualTo(100000);
+      assertThat(FileReadContext.bulkBudget(100000, p -> 32000, p -> 0L, s -> 0, 8))
+          .isEqualTo(4000);
       assertThat(FileReadContext.bulkBudget(100000, p -> 32000, p -> 32000L, s -> 0, 8)).isZero();
     }
   }
@@ -83,7 +85,9 @@ class FileReadContextTest {
   void capturesNullableToolContextOnceForTheReadScope() {
     var options =
         org.mockito.Mockito.mock(org.springframework.ai.model.tool.ToolCallingChatOptions.class);
-    org.mockito.Mockito.when(options.getToolContext()).thenReturn(java.util.Map.of()).thenReturn(null);
+    org.mockito.Mockito.when(options.getToolContext())
+        .thenReturn(java.util.Map.of())
+        .thenReturn(null);
     var scope = FileReadContext.open(new Prompt("read", options), 1, "");
     try (scope) {
       assertThat(FileReadContext.active()).isTrue();

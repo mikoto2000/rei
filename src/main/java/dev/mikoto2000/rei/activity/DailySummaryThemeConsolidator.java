@@ -49,9 +49,7 @@ public final class DailySummaryThemeConsolidator {
   public record Result(List<SummaryThemeCandidate> candidates, Metrics metrics) {
     public Result {
       candidates =
-          candidates == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(candidates));
+          candidates == null ? null : Collections.unmodifiableList(new ArrayList<>(candidates));
     }
 
     /** 作業状況の把握で用いる表示名一覧を返す。 */
@@ -69,10 +67,9 @@ public final class DailySummaryThemeConsolidator {
     for (var group : config.groups()) {
       var members =
           input.stream()
-              .filter(
-                  s ->
-                      !s.canonicalProject().isBlank()
-                          && group.projects().contains(s.canonicalProject()))
+              .filter(s ->
+                  !s.canonicalProject().isBlank()
+                      && group.projects().contains(s.canonicalProject()))
               .toList();
       long seconds = members.stream().mapToLong(ProjectThemeStat::observedSeconds).sum();
       double coverage = total == 0 ? 0 : seconds / (double) total;
@@ -99,11 +96,10 @@ public final class DailySummaryThemeConsolidator {
       double themeSupport =
           input.stream()
               .filter(s -> s.canonicalProject().isBlank() && !s.themeCandidates().isEmpty())
-              .mapToDouble(
-                  s ->
-                      score(s)
-                          * s.themeCandidates().stream().filter(group.themes()::contains).count()
-                          / s.themeCandidates().size())
+              .mapToDouble(s ->
+                  score(s)
+                      * s.themeCandidates().stream().filter(group.themes()::contains).count()
+                      / s.themeCandidates().size())
               .sum();
       double score =
           members.stream().mapToDouble(DailySummaryThemeConsolidator::score).sum()

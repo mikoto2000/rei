@@ -137,29 +137,27 @@ class DelegatedToolApprovalTest {
     assertEquals("APPROVED", repository.get("project", request.id()).status());
     try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
       var first =
-          executor.submit(
-              () -> {
-                try {
-                  guard.checkDelegated("readMultiFile", READ_ARGUMENTS, child, parent);
-                  return true;
-                } catch (ToolPermissionException refused) {
-                  return false;
-                }
-              });
+          executor.submit(() -> {
+            try {
+              guard.checkDelegated("readMultiFile", READ_ARGUMENTS, child, parent);
+              return true;
+            } catch (ToolPermissionException refused) {
+              return false;
+            }
+          });
       var second =
-          executor.submit(
-              () -> {
-                try {
-                  guard.checkDelegated(
-                      "readMultiFile",
-                      READ_ARGUMENTS,
-                      new AgentRunContext("other", "subagent:other", directory, "project"),
-                      parent);
-                  return true;
-                } catch (ToolPermissionException refused) {
-                  return false;
-                }
-              });
+          executor.submit(() -> {
+            try {
+              guard.checkDelegated(
+                  "readMultiFile",
+                  READ_ARGUMENTS,
+                  new AgentRunContext("other", "subagent:other", directory, "project"),
+                  parent);
+              return true;
+            } catch (ToolPermissionException refused) {
+              return false;
+            }
+          });
       assertNotEquals(first.get(), second.get());
     }
     assertEquals("CONSUMED", repository.get("project", request.id()).status());

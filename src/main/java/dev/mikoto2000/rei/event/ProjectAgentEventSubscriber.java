@@ -21,26 +21,24 @@ public class ProjectAgentEventSubscriber implements AutoCloseable {
   /** 指定された値や利用先を使って、ProjectAgentEventSubscriberを初期化する。 */
   public ProjectAgentEventSubscriber(AgentEventBus bus, ProjectAgentEventStore store) {
     boundary =
-        bus.subscribeBoundary(
-            event -> {
-              if (event.projectId() != null && (streaming == null || !streaming.handles(event))) {
-                store.append(event);
-                synchronized (persisted) {
-                  persisted.add(event.id());
-                  if (persisted.size() > 1024) persisted.remove(persisted.iterator().next());
-                }
-              }
-            });
+        bus.subscribeBoundary(event -> {
+          if (event.projectId() != null && (streaming == null || !streaming.handles(event))) {
+            store.append(event);
+            synchronized (persisted) {
+              persisted.add(event.id());
+              if (persisted.size() > 1024) persisted.remove(persisted.iterator().next());
+            }
+          }
+        });
     subscription =
-        bus.subscribe(
-            event -> {
-              if (streaming != null && streaming.handles(event)) return;
-              boolean already;
-              synchronized (persisted) {
-                already = persisted.remove(event.id());
-              }
-              if (!already) store.onEvent(event);
-            });
+        bus.subscribe(event -> {
+          if (streaming != null && streaming.handles(event)) return;
+          boolean already;
+          synchronized (persisted) {
+            already = persisted.remove(event.id());
+          }
+          if (!already) store.onEvent(event);
+        });
   }
 
   /** 実行状況の通知で利用した資源や登録を解放し、利用を終了する。 */

@@ -30,22 +30,20 @@ class OpenAiImageGenerationClientTest {
                     .timeout(java.time.Duration.ofSeconds(117))
                     .maxRetries(0)
                     .build())
-            .httpClientBuilderCustomizer(
-                builder ->
-                    builder.interceptor(
-                        chain -> {
-                          timeout.set(chain.readTimeoutMillis());
-                          return new okhttp3.Response.Builder()
-                              .request(chain.request())
-                              .protocol(okhttp3.Protocol.HTTP_1_1)
-                              .code(200)
-                              .message("OK")
-                              .body(
-                                  okhttp3.ResponseBody.create(
-                                      "{\"created\":0,\"data\":[{\"b64_json\":\"aW1hZ2U=\"}]}",
-                                      okhttp3.MediaType.get("application/json")))
-                              .build();
-                        }))
+            .httpClientBuilderCustomizer(builder ->
+                builder.interceptor(chain -> {
+                  timeout.set(chain.readTimeoutMillis());
+                  return new okhttp3.Response.Builder()
+                      .request(chain.request())
+                      .protocol(okhttp3.Protocol.HTTP_1_1)
+                      .code(200)
+                      .message("OK")
+                      .body(
+                          okhttp3.ResponseBody.create(
+                              "{\"created\":0,\"data\":[{\"b64_json\":\"aW1hZ2U=\"}]}",
+                              okhttp3.MediaType.get("application/json")))
+                      .build();
+                }))
             .build();
     var provider = Mockito.mock(ImageModelProvider.class);
     when(provider.imageModel()).thenReturn(model);
@@ -152,9 +150,8 @@ class OpenAiImageGenerationClientTest {
     when(imageModel.call(Mockito.any(ImagePrompt.class))).thenReturn(response(""));
     OpenAiImageGenerationClient client = new OpenAiImageGenerationClient(provider);
 
-    assertThatThrownBy(
-            () ->
-                client.generate(new ImageGenerationRequest("cat", null, null, new ImageSize(1, 1))))
+    assertThatThrownBy(() ->
+            client.generate(new ImageGenerationRequest("cat", null, null, new ImageSize(1, 1))))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("画像データ");
   }

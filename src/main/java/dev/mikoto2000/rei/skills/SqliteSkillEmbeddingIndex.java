@@ -50,10 +50,10 @@ public final class SqliteSkillEmbeddingIndex implements SkillEmbeddingIndex {
       try (var statement =
           connection.prepareStatement(
               """
-          SELECT substr(profile_sha,1,65) AS profile_sha,dimension,length(vector) AS bytes,
-                 substr(vector,1,32769) AS vector,substr(vector_sha,1,65) AS vector_sha
-          FROM skill_embedding_index WHERE namespace=? LIMIT 257
-          """)) {
+              SELECT substr(profile_sha,1,65) AS profile_sha,dimension,length(vector) AS bytes,
+                     substr(vector,1,32769) AS vector,substr(vector_sha,1,65) AS vector_sha
+              FROM skill_embedding_index WHERE namespace=? LIMIT 257
+              """)) {
         statement.setQueryTimeout(5);
         statement.setString(1, namespace);
         var result = new LinkedHashMap<String, float[]>();

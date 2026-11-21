@@ -37,10 +37,9 @@ class ReadingMetricsTest {
         root.resolve("fixture.txt"), "needle 日本語\n" + "unrelated\n".repeat(100) + "needle end\n");
     var queries =
         java.util.stream.IntStream.range(0, 8)
-            .mapToObj(
-                i ->
-                    new Tools.GrepQuery(
-                        "needle", ".", false, true, false, false, 0, 0, null, true, null, null))
+            .mapToObj(i ->
+                new Tools.GrepQuery(
+                    "needle", ".", false, true, false, false, 0, 0, null, true, null, null))
             .toList();
     var tools =
         new Tools() {

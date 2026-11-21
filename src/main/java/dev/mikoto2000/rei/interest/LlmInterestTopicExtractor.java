@@ -86,15 +86,13 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
   private String callWithTimeout(Prompt prompt) {
     ExecutorService executor = Executors.newSingleThreadExecutor();
     Future<String> future =
-        executor.submit(
-            () -> {
-              var response = featureModel.get().call(prompt);
-              var generation = response == null ? null : response.getResult();
-              var output = generation == null ? null : generation.getOutput();
-              if (output == null)
-                throw new IllegalStateException("Missing interest extraction output");
-              return output.getText();
-            });
+        executor.submit(() -> {
+          var response = featureModel.get().call(prompt);
+          var generation = response == null ? null : response.getResult();
+          var output = generation == null ? null : generation.getOutput();
+          if (output == null) throw new IllegalStateException("Missing interest extraction output");
+          return output.getText();
+        });
     try {
       return future.get(EXTRACT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     } catch (TimeoutException e) {
@@ -125,11 +123,11 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
             .collect(Collectors.joining("\n", "", ""));
 
     return """
-        Extract candidate interest topics from user conversation history for later web search.
-        Requirements:
-        - Output must be a JSON array only.
-        - Maximum\s\
-        """
+    Extract candidate interest topics from user conversation history for later web search.
+    Requirements:
+    - Output must be a JSON array only.
+    - Maximum\s\
+    """
         + String.format("%d", maxTopics)
         + """
          items.

@@ -34,12 +34,10 @@ class HttpCacheTransferBudgetTest {
   @Test
   void revalidated304ChargesTheReusedDecodedBody() {
     var calls = new AtomicInteger();
-    doAnswer(
-            invocation ->
-                calls.incrementAndGet() == 1
-                    ? new SafeHttpFetcher.Response(
-                        200, Map.of("etag", "\"a\""), "data".getBytes(), uri)
-                    : new SafeHttpFetcher.Response(304, Map.of("etag", "\"a\""), new byte[0], uri))
+    doAnswer(invocation ->
+            calls.incrementAndGet() == 1
+                ? new SafeHttpFetcher.Response(200, Map.of("etag", "\"a\""), "data".getBytes(), uri)
+                : new SafeHttpFetcher.Response(304, Map.of("etag", "\"a\""), new byte[0], uri))
         .when(raw)
         .fetch(any(), anyMap(), any(), any(), any());
     try (var cache = cache()) {
@@ -139,24 +137,22 @@ class HttpCacheTransferBudgetTest {
         var pool = Executors.newFixedThreadPool(2)) {
       try {
         var first =
-            pool.submit(
-                () -> {
-                  var scope = TransferScope.enter(new TransferBudget(1, 10));
-                  try (scope) {
-                    return get(cache);
-                  }
-                });
+            pool.submit(() -> {
+              var scope = TransferScope.enter(new TransferBudget(1, 10));
+              try (scope) {
+                return get(cache);
+              }
+            });
         long deadline = System.nanoTime() + Duration.ofSeconds(1).toNanos();
         while (calls.get() == 0 && System.nanoTime() < deadline) Thread.sleep(5);
         assertEquals(1, calls.get());
         var second =
-            pool.submit(
-                () -> {
-                  var scope = TransferScope.enter(new TransferBudget(10, 10));
-                  try (scope) {
-                    return get(cache);
-                  }
-                });
+            pool.submit(() -> {
+              var scope = TransferScope.enter(new TransferBudget(10, 10));
+              try (scope) {
+                return get(cache);
+              }
+            });
         assertTrue(started.await(1, TimeUnit.SECONDS));
         release.countDown();
         assertEquals(

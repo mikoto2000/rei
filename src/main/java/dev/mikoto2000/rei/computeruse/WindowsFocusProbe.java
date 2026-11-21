@@ -112,7 +112,9 @@ final class WindowsFocusProbe implements Supplier<String> {
       Files.deleteIfExists(file);
     } catch (Exception failure) {
       org.slf4j.LoggerFactory.getLogger(WindowsFocusProbe.class)
-          .warn("Could not remove temporary focus probe file ({})", failure.getClass().getSimpleName());
+          .warn(
+              "Could not remove temporary focus probe file ({})",
+              failure.getClass().getSimpleName());
     }
   }
 

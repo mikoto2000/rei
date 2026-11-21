@@ -92,10 +92,9 @@ class BeginnerReviewServiceTest {
             .anyMatch(f -> f.issue().contains("カレントディレクトリ") && f.line() == 5));
     assertTrue(
         report.findings().stream()
-            .anyMatch(
-                f ->
-                    f.issue().contains("config.yaml")
-                        && f.verification() == BeginnerReviewService.Verification.STATIC_FACT));
+            .anyMatch(f ->
+                f.issue().contains("config.yaml")
+                    && f.verification() == BeginnerReviewService.Verification.STATIC_FACT));
     assertTrue(
         report.findings().stream().allMatch(f -> !f.evidence().isBlank() && !f.fix().isBlank()));
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
@@ -139,21 +138,20 @@ class BeginnerReviewServiceTest {
     var model = mock(ChatModel.class);
     when(models.subAgentChatModel()).thenReturn(model);
     when(model.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
-        .thenAnswer(
-            call -> {
-              var prompt = (org.springframework.ai.chat.prompt.Prompt) call.getArgument(0);
-              var options =
-                  (org.springframework.ai.model.tool.ToolCallingChatOptions) prompt.getOptions();
-              assertTrue(options.getToolCallbacks().isEmpty());
-              assertEquals("none", ((OpenAiChatOptions) options).getToolChoice());
-              assertTrue(prompt.getSystemMessage().getText().contains("untrusted"));
-              return Flux.just(
-                  new ChatResponse(
-                      List.of(
-                          new Generation(
-                              new AssistantMessage(
-                                  "{\"findings\":[{\"line\":999,\"issue\":\"invented\",\"evidence\":\"invented\",\"impact\":\"confusion\",\"severity\":\"HIGH\",\"confidence\":0.9,\"fix\":\"explain\"}],\"explained\":[]}")))));
-            });
+        .thenAnswer(call -> {
+          var prompt = (org.springframework.ai.chat.prompt.Prompt) call.getArgument(0);
+          var options =
+              (org.springframework.ai.model.tool.ToolCallingChatOptions) prompt.getOptions();
+          assertTrue(options.getToolCallbacks().isEmpty());
+          assertEquals("none", ((OpenAiChatOptions) options).getToolChoice());
+          assertTrue(prompt.getSystemMessage().getText().contains("untrusted"));
+          return Flux.just(
+              new ChatResponse(
+                  List.of(
+                      new Generation(
+                          new AssistantMessage(
+                              "{\"findings\":[{\"line\":999,\"issue\":\"invented\",\"evidence\":\"invented\",\"impact\":\"confusion\",\"severity\":\"HIGH\",\"confidence\":0.9,\"fix\":\"explain\"}],\"explained\":[]}")))));
+        });
     var report =
         new BeginnerReviewService(models, mock(ToolPermissionGuard.class))
             .review(execution(), request("--mode", "llm"));
@@ -209,24 +207,22 @@ class BeginnerReviewServiceTest {
     when(models.subAgentChatModel()).thenReturn(model);
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     when(model.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
-        .thenAnswer(
-            call -> {
-              var prompt = (org.springframework.ai.chat.prompt.Prompt) call.getArgument(0);
-              String answer;
-              if (calls.getAndIncrement() == 0)
-                answer =
-                    "{\"findings\":[],\"explained\":[{\"concept\":\"container\",\"line\":1,\"evidence\":\"A container is an isolated process.\"},{\"concept\":\"Docker\",\"line\":2,\"evidence\":\"Docker\"}]}";
-              else {
-                var data =
-                    new com.fasterxml.jackson.databind.ObjectMapper()
-                        .readTree(prompt.getUserMessage().getText());
-                assertTrue(data.path("known").toString().contains("container"));
-                assertFalse(data.path("known").toString().contains("Docker"));
-                answer = "{\"findings\":[],\"explained\":[]}";
-              }
-              return Flux.just(
-                  new ChatResponse(List.of(new Generation(new AssistantMessage(answer)))));
-            });
+        .thenAnswer(call -> {
+          var prompt = (org.springframework.ai.chat.prompt.Prompt) call.getArgument(0);
+          String answer;
+          if (calls.getAndIncrement() == 0)
+            answer =
+                "{\"findings\":[],\"explained\":[{\"concept\":\"container\",\"line\":1,\"evidence\":\"A container is an isolated process.\"},{\"concept\":\"Docker\",\"line\":2,\"evidence\":\"Docker\"}]}";
+          else {
+            var data =
+                new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readTree(prompt.getUserMessage().getText());
+            assertTrue(data.path("known").toString().contains("container"));
+            assertFalse(data.path("known").toString().contains("Docker"));
+            answer = "{\"findings\":[],\"explained\":[]}";
+          }
+          return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage(answer)))));
+        });
     var report =
         new BeginnerReviewService(models, mock(ToolPermissionGuard.class))
             .review(execution(), request("--chapter", "b.md", "--mode", "llm"));

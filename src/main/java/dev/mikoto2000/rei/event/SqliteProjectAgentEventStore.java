@@ -26,20 +26,19 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
   /** 対象を特定できるよう、イベントを探す。 */
   @Override
   public Optional<AgentEvent> findEvent(String project, String id) {
-    return database.read(
-        db -> {
-          try (var query =
-              db.prepareStatement(
-                  "SELECT record FROM agent_events WHERE project_id=? AND id=? LIMIT 1")) {
-            query.setString(1, scope(project));
-            query.setString(2, id);
-            try (var rows = query.executeQuery()) {
-              return rows.next()
-                  ? Optional.of(json.readValue(rows.getString(1), AgentEvent.class))
-                  : Optional.empty();
-            }
-          }
-        });
+    return database.read(db -> {
+      try (var query =
+          db.prepareStatement(
+              "SELECT record FROM agent_events WHERE project_id=? AND id=? LIMIT 1")) {
+        query.setString(1, scope(project));
+        query.setString(2, id);
+        try (var rows = query.executeQuery()) {
+          return rows.next()
+              ? Optional.of(json.readValue(rows.getString(1), AgentEvent.class))
+              : Optional.empty();
+        }
+      }
+    });
   }
 
   /** 最大記録バイト数。 */
@@ -170,29 +169,27 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
   /** 実行状況の通知で用いる直近発生順序を返す。 */
   @Override
   public long lastSequence(String project) {
-    return database.read(
-        db -> {
-          try (var query =
-              db.prepareStatement("SELECT sequence FROM event_sequences WHERE project_id=?")) {
-            query.setString(1, scope(project));
-            try (var rows = query.executeQuery()) {
-              return rows.next() ? rows.getLong(1) : 0;
-            }
-          }
-        });
+    return database.read(db -> {
+      try (var query =
+          db.prepareStatement("SELECT sequence FROM event_sequences WHERE project_id=?")) {
+        query.setString(1, scope(project));
+        try (var rows = query.executeQuery()) {
+          return rows.next() ? rows.getLong(1) : 0;
+        }
+      }
+    });
   }
 
   /** 実行状況の通知で用いる直近を返す。 */
   @Override
   public List<AgentEvent> recent(String project, int limit) {
     checkLimit(limit);
-    return database.read(
-        db -> {
-          var result = read(db, project, 0, limit, true, false).events();
-          var copy = new ArrayList<>(result);
-          Collections.reverse(copy);
-          return List.copyOf(copy);
-        });
+    return database.read(db -> {
+      var result = read(db, project, 0, limit, true, false).events();
+      var copy = new ArrayList<>(result);
+      Collections.reverse(copy);
+      return List.copyOf(copy);
+    });
   }
 
   /** 必要な内容を参照できるよう、変更後を読み取る。 */
@@ -215,26 +212,25 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   @Override
   public List<AgentEvent> runLifecycle(String projectId) {
-    return database.read(
-        db -> {
-          var result = new ArrayList<AgentEvent>();
-          try (var query =
-              db.prepareStatement(
-                  """
-          SELECT record FROM agent_events WHERE project_id=?
-            AND event_type IN (
-              'AGENT_RUN_STARTED','AGENT_RUN_COMPLETED','AGENT_RUN_FAILED','AGENT_RUN_CANCELLED',
-              'EXECUTION_STARTED','EXECUTION_COMPLETED','EXECUTION_FAILED','EXECUTION_CANCELLED'
-            )
-          ORDER BY sequence
-          """)) {
-            query.setString(1, scope(projectId));
-            try (var rows = query.executeQuery()) {
-              while (rows.next()) result.add(json.readValue(rows.getString(1), AgentEvent.class));
-            }
-          }
-          return List.copyOf(result);
-        });
+    return database.read(db -> {
+      var result = new ArrayList<AgentEvent>();
+      try (var query =
+          db.prepareStatement(
+              """
+              SELECT record FROM agent_events WHERE project_id=?
+                AND event_type IN (
+                  'AGENT_RUN_STARTED','AGENT_RUN_COMPLETED','AGENT_RUN_FAILED','AGENT_RUN_CANCELLED',
+                  'EXECUTION_STARTED','EXECUTION_COMPLETED','EXECUTION_FAILED','EXECUTION_CANCELLED'
+                )
+              ORDER BY sequence
+              """)) {
+        query.setString(1, scope(projectId));
+        try (var rows = query.executeQuery()) {
+          while (rows.next()) result.add(json.readValue(rows.getString(1), AgentEvent.class));
+        }
+      }
+      return List.copyOf(result);
+    });
   }
 
   private Page read(
@@ -276,21 +272,20 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
   public Map<String, String> referenceStatus(String project, Set<String> ids) {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (ids.size() > 10000) throw new IllegalArgumentException("Reference lookup exceeds budget");
-    return database.read(
-        db -> {
-          var result = new HashMap<String, String>();
-          try (var query =
-              db.prepareStatement("SELECT 1 FROM agent_events WHERE project_id=? AND id=?")) {
-            for (String id : ids) {
-              query.setString(1, scope(project));
-              query.setString(2, id);
-              try (var rows = query.executeQuery()) {
-                result.put(id, rows.next() ? "available" : "not-found");
-              }
-            }
+    return database.read(db -> {
+      var result = new HashMap<String, String>();
+      try (var query =
+          db.prepareStatement("SELECT 1 FROM agent_events WHERE project_id=? AND id=?")) {
+        for (String id : ids) {
+          query.setString(1, scope(project));
+          query.setString(2, id);
+          try (var rows = query.executeQuery()) {
+            result.put(id, rows.next() ? "available" : "not-found");
           }
-          return Map.copyOf(result);
-        });
+        }
+      }
+      return Map.copyOf(result);
+    });
   }
 
   /** 後続の操作を進められるか判断するため、上限を確認する。 */

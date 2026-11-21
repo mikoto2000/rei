@@ -67,11 +67,7 @@ class ReadApiTest {
     var searches = mock(SearchKnowledgeService.class);
     var service =
         new ReadQueryService(
-            feeds,
-            skills,
-            mock(ProfileEventLogStore.class),
-            searches,
-            mock(BriefingService.class));
+            feeds, skills, mock(ProfileEventLogStore.class), searches, mock(BriefingService.class));
     var mvc =
         MockMvcBuilders.standaloneSetup(new ReadController(service))
             .setControllerAdvice(new ApiExceptionHandler())

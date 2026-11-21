@@ -209,14 +209,9 @@ public class FeedCommand {
       out.println(label + ":");
       entries.stream()
           .limit(MAX_DETAILS)
-          .forEach(
-              entry ->
-                  out.println(
-                      "- "
-                          + singleLine(entry.subscription().xmlUrl())
-                          + " ("
-                          + entry.reason()
-                          + ")"));
+          .forEach(entry ->
+              out.println(
+                  "- " + singleLine(entry.subscription().xmlUrl()) + " (" + entry.reason() + ")"));
       // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (entries.size() > MAX_DETAILS)
         out.println("... and " + (entries.size() - MAX_DETAILS) + " more");

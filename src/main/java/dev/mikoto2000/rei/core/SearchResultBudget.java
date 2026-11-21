@@ -35,20 +35,19 @@ final class SearchResultBudget {
         bounded.set(last, reduced);
       } else if (bounded.size() > 1) {
         bounded.remove(last);
-        bounded.replaceAll(
-            item ->
-                new Tools.SearchAndReadResult(
-                    item.path(),
-                    item.matches(),
-                    item.sections(),
-                    item.error(),
-                    item.truncated(),
-                    true,
-                    item.version(),
-                    item.nextRead(),
-                    item.score(),
-                    item.matchedBy(),
-                    item.omittedMatches()));
+        bounded.replaceAll(item ->
+            new Tools.SearchAndReadResult(
+                item.path(),
+                item.matches(),
+                item.sections(),
+                item.error(),
+                item.truncated(),
+                true,
+                item.version(),
+                item.nextRead(),
+                item.score(),
+                item.matchedBy(),
+                item.omittedMatches()));
       } else {
         // Never report an empty successful search when even one result cannot fit.
         FileResultBudget.require(bounded, bytes, tokens);

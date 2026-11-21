@@ -91,13 +91,9 @@ public final class TestReportDiagnosisService {
     /** 受け取った情報からResultを作成する。 */
     public Result {
       failedTests =
-          failedTests == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(failedTests));
+          failedTests == null ? null : Collections.unmodifiableList(new ArrayList<>(failedTests));
       nextActions =
-          nextActions == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(nextActions));
+          nextActions == null ? null : Collections.unmodifiableList(new ArrayList<>(nextActions));
       warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
       testCases = testCases == null ? List.of() : List.copyOf(testCases);
     }

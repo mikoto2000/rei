@@ -33,9 +33,7 @@ public record BriefingResponse(
     events = events == null ? null : Collections.unmodifiableList(new ArrayList<>(events));
     openTasks = openTasks == null ? null : Collections.unmodifiableList(new ArrayList<>(openTasks));
     overdueTasks =
-        overdueTasks == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(overdueTasks));
+        overdueTasks == null ? null : Collections.unmodifiableList(new ArrayList<>(overdueTasks));
     relatedDocuments =
         relatedDocuments == null
             ? null
@@ -46,13 +44,9 @@ public record BriefingResponse(
             ? null
             : Collections.unmodifiableList(new ArrayList<>(interestUpdates));
     cautionPoints =
-        cautionPoints == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(cautionPoints));
+        cautionPoints == null ? null : Collections.unmodifiableList(new ArrayList<>(cautionPoints));
     nextActions =
-        nextActions == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(nextActions));
+        nextActions == null ? null : Collections.unmodifiableList(new ArrayList<>(nextActions));
   }
 
   /**
@@ -107,23 +101,21 @@ public record BriefingResponse(
         b.date().toString(),
         b.overview(),
         b.events().stream()
-            .map(
-                e ->
-                    new EventResponse(
-                        e.id(), e.summary(), e.start(), e.end(), e.location(), e.status()))
+            .map(e ->
+                new EventResponse(
+                    e.id(), e.summary(), e.start(), e.end(), e.location(), e.status()))
             .toList(),
         b.openTasks().stream().map(TaskResponse::from).toList(),
         b.overdueTasks().stream().map(TaskResponse::from).toList(),
         b.relatedDocuments(),
         b.feedItems().stream()
-            .map(
-                f ->
-                    new ArticleResponse(
-                        f.id(),
-                        f.title(),
-                        f.url(),
-                        f.publishedAt() == null ? null : f.publishedAt().toString(),
-                        f.feedName()))
+            .map(f ->
+                new ArticleResponse(
+                    f.id(),
+                    f.title(),
+                    f.url(),
+                    f.publishedAt() == null ? null : f.publishedAt().toString(),
+                    f.feedName()))
             .toList(),
         b.interestUpdates(),
         b.cautionPoints(),

@@ -263,10 +263,9 @@ class AutoSleepMetadataRefreshTest {
   /** {@code stubState} の条件を再現するための補助情報を返す。 */
   static SleepService stubState(SleepService sleep) {
     when(sleep.autoState(anyString(), anyString()))
-        .thenAnswer(
-            a ->
-                new dev.mikoto2000.rei.memory.service.MemoryRepository.AutoState(
-                    a.getArgument(0), a.getArgument(1), 0, 0, null, null, null, null, 0));
+        .thenAnswer(a ->
+            new dev.mikoto2000.rei.memory.service.MemoryRepository.AutoState(
+                a.getArgument(0), a.getArgument(1), 0, 0, null, null, null, null, 0));
     return sleep;
   }
 

@@ -1,5 +1,29 @@
 # Live AgentEvent Activity validation
 
+## 依存ライブラリ更新（2026-11-21）
+
+Windows / JDK 25 / Rust 1.99.1 / Node.js 24.22.1。
+Vite 8.3.8、Vitest 5.1.1、jsdom 31.0.1、reqwest 0.13.5、Argon2 0.6 を含む
+最新安定版へ更新し、npm / Cargo のロックファイルも更新しました。
+
+| 検証                                   | 結果                                                     |
+| -------------------------------------- | -------------------------------------------------------- |
+| Vitest                                 | 26 files / 103 tests、全成功                             |
+| Rust `cargo test`                      | 130 tests、全成功                                        |
+| Playwright Desktop / Mobile Chrome     | 38 tests、全成功                                         |
+| typecheck / build / lint / Prettier    | 成功                                                     |
+| `cargo fmt -- --check` / 厳格な Clippy | 成功                                                     |
+| Tauri debug assets 埋込みビルド        | 成功                                                     |
+| 旧 Argon2 0.5.3 で作成した Vault       | 既存値の取得、無変更での解錠、新規値の追記、再解錠が成功 |
+
+Vite の通常の依存事前バンドルがこの環境で停止するため、開発時は
+`experimental.bundledDev` を有効にし、設定を `runner` で読み込みます。
+Vitest の `test` mode では無効にし、E2E は fixture 専用のエントリーと起動待ち URL を使います。
+本番 bundle に fixture の会話データが混入しないことも確認しました。
+
+タスク制御の引数契約を維持する4箇所には、理由付きの `too_many_arguments` 例外を限定して付けています。
+GUI 実操作、Android / iOS 実機、実モデルへの外部接続は今回の検証に含みません。
+
 ## Web API Phase 1〜4 対応（2026-10-03）
 
 ブランチ `feature/native-client-web-api`、基点 `feature/web-api-phase4`（`a70dfb3`）。

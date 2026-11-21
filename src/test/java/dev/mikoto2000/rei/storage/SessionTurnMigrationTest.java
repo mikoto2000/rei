@@ -89,22 +89,20 @@ class SessionTurnMigrationTest {
     var first = metadata("one");
     store.accept(
         first, () -> assertThat(new SqliteSessionRepository(root).findById("one")).contains(first));
-    assertThatThrownBy(
-            () ->
-                store.accept(
-                    first.touched(now.plusSeconds(2)),
-                    () -> {
-                      throw new IllegalStateException("reject");
-                    }))
+    assertThatThrownBy(() ->
+            store.accept(
+                first.touched(now.plusSeconds(2)),
+                () -> {
+                  throw new IllegalStateException("reject");
+                }))
         .hasMessage("reject");
     assertThat(new SqliteSessionRepository(root).findById("one")).contains(first);
-    assertThatThrownBy(
-            () ->
-                store.accept(
-                    metadata("new"),
-                    () -> {
-                      throw new IllegalStateException("reject");
-                    }))
+    assertThatThrownBy(() ->
+            store.accept(
+                metadata("new"),
+                () -> {
+                  throw new IllegalStateException("reject");
+                }))
         .hasMessage("reject");
     assertThat(store.findById("new")).isEmpty();
     store.accept(first.touched(now.plusSeconds(3)), () -> {});
@@ -304,12 +302,11 @@ class SessionTurnMigrationTest {
       for (int i = 1; i <= 20; i++) {
         int index = i;
         jobs.add(
-            executor.submit(
-                () -> {
-                  var repository = index % 2 == 0 ? first : second;
-                  repository.accept(metadata("one").touched(now.plusSeconds(index)), () -> {});
-                  repository.accept(metadata("new-" + index), () -> {});
-                }));
+            executor.submit(() -> {
+              var repository = index % 2 == 0 ? first : second;
+              repository.accept(metadata("one").touched(now.plusSeconds(index)), () -> {});
+              repository.accept(metadata("new-" + index), () -> {});
+            }));
       }
       for (var job : jobs) job.get(20, java.util.concurrent.TimeUnit.SECONDS);
     }
@@ -329,13 +326,12 @@ class SessionTurnMigrationTest {
               + " failure fixture'); END");
     }
     var repository = new SqliteSessionRepository(root);
-    assertThatThrownBy(
-            () ->
-                repository.accept(
-                    metadata("one"),
-                    () -> {
-                      throw new AssertionError("must not dispatch");
-                    }))
+    assertThatThrownBy(() ->
+            repository.accept(
+                metadata("one"),
+                () -> {
+                  throw new AssertionError("must not dispatch");
+                }))
         .isInstanceOf(IllegalStateException.class);
     assertThat(repository.findById("one")).isEmpty();
   }
@@ -350,9 +346,8 @@ class SessionTurnMigrationTest {
         var query = reader.createStatement();
         var rows = query.executeQuery("SELECT record FROM turns")) {
       assertThat(rows.next()).isTrue();
-      assertThatCode(
-              () ->
-                  turns.start(new AgentRunContext("second", "chat", root), "two", now.plusNanos(1)))
+      assertThatCode(() ->
+              turns.start(new AgentRunContext("second", "chat", root), "two", now.plusNanos(1)))
           .doesNotThrowAnyException();
     }
     assertThat(new SqliteConversationTurnStore(root).read("chat")).hasSize(2);
@@ -478,17 +473,15 @@ class SessionTurnMigrationTest {
             .start();
     try {
       var ready =
-          java.util.concurrent.CompletableFuture.supplyAsync(
-              () -> {
-                try (var reader = child.inputReader()) {
-                  String line;
-                  while ((line = reader.readLine()) != null)
-                    if (line.equals("APPLYING")) return true;
-                  return false;
-                } catch (java.io.IOException error) {
-                  throw new java.io.UncheckedIOException(error);
-                }
-              });
+          java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try (var reader = child.inputReader()) {
+              String line;
+              while ((line = reader.readLine()) != null) if (line.equals("APPLYING")) return true;
+              return false;
+            } catch (java.io.IOException error) {
+              throw new java.io.UncheckedIOException(error);
+            }
+          });
       assertThat(ready.get(60, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
       assertThatThrownBy(() -> new StorageMigrationCoordinator(root))
           .isInstanceOf(java.io.IOException.class);
@@ -500,14 +493,13 @@ class SessionTurnMigrationTest {
     prepare();
     long count =
         new StorageDatabase(root)
-            .read(
-                connection -> {
-                  try (var query = connection.createStatement();
-                      var rows = query.executeQuery("SELECT count(*) FROM sessions")) {
-                    rows.next();
-                    return rows.getLong(1);
-                  }
-                });
+            .read(connection -> {
+              try (var query = connection.createStatement();
+                  var rows = query.executeQuery("SELECT count(*) FROM sessions")) {
+                rows.next();
+                return rows.getLong(1);
+              }
+            });
     assertThat(count).isEqualTo(15000);
     assertThat(StorageBackup.hash(source)).isEqualTo(original);
     prepare();

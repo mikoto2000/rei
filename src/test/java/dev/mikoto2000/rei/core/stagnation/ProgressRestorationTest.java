@@ -58,11 +58,10 @@ class ProgressRestorationTest {
     assertThat(resumed.detector().stagnationCount()).isEqualTo(3);
     assertThat(resumed.budgetSnapshot()).isEqualTo(original.budgetSnapshot());
     assertThat(events)
-        .anyMatch(
-            e ->
-                e.payload() instanceof ExecutionProgressPayload p
-                    && p.evidence() != null
-                    && p.evidence().kind() == ProgressEvent.CONTEXT_RESTORED);
+        .anyMatch(e ->
+            e.payload() instanceof ExecutionProgressPayload p
+                && p.evidence() != null
+                && p.evidence().kind() == ProgressEvent.CONTEXT_RESTORED);
     read(resumed, 1);
     assertThat(resumed.detector().isStagnant()).isTrue();
     var again = context();

@@ -14,17 +14,16 @@ public final class SecretaryOrchestrationEvents {
 
   public SecretaryOrchestrationEvents(AgentEventBus events, SecretaryOrchestrator service) {
     subscription =
-        events.subscribe(
-            event -> {
-              if (event.projectId() != null
-                  && java.util.Set.of(
-                          AgentEventType.AGENT_RUN_COMPLETED,
-                          AgentEventType.AGENT_RUN_FAILED,
-                          AgentEventType.DEPENDENCY_COMPLETED,
-                          AgentEventType.DEPENDENCY_UPDATED,
-                          AgentEventType.GOAL_UPDATED)
-                      .contains(event.type())) service.tick();
-            });
+        events.subscribe(event -> {
+          if (event.projectId() != null
+              && java.util.Set.of(
+                      AgentEventType.AGENT_RUN_COMPLETED,
+                      AgentEventType.AGENT_RUN_FAILED,
+                      AgentEventType.DEPENDENCY_COMPLETED,
+                      AgentEventType.DEPENDENCY_UPDATED,
+                      AgentEventType.GOAL_UPDATED)
+                  .contains(event.type())) service.tick();
+        });
   }
 
   @jakarta.annotation.PreDestroy

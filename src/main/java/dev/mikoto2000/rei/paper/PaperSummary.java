@@ -79,13 +79,9 @@ public record PaperSummary(
       datasets = datasets == null ? null : Collections.unmodifiableList(new ArrayList<>(datasets));
       results = results == null ? null : Collections.unmodifiableList(new ArrayList<>(results));
       limitations =
-          limitations == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(limitations));
+          limitations == null ? null : Collections.unmodifiableList(new ArrayList<>(limitations));
       futureWork =
-          futureWork == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(futureWork));
+          futureWork == null ? null : Collections.unmodifiableList(new ArrayList<>(futureWork));
     }
   }
 }

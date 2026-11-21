@@ -274,11 +274,10 @@ class ContextAssemblerTest {
         ConversationSummaryRepository.runKey("conversation", "run"),
         new ConversationSummary("saved decision", 1, java.time.Instant.now()));
     var a =
-        assembler(
-            (previous, messages, budget, request) -> {
-              calls.incrementAndGet();
-              return "unexpected";
-            });
+        assembler((previous, messages, budget, request) -> {
+          calls.incrementAndGet();
+          return "unexpected";
+        });
     var original =
         new Prompt(
             List.of(
@@ -299,11 +298,10 @@ class ContextAssemblerTest {
   @Test
   void activeHistoryCompressionPreservesConversationPrefix() {
     var a =
-        assembler(
-            (previous, messages, budget, request) -> {
-              calls.incrementAndGet();
-              return "summarized tool work";
-            });
+        assembler((previous, messages, budget, request) -> {
+          calls.incrementAndGet();
+          return "summarized tool work";
+        });
     var system = new SystemMessage("system");
     var pastUser = ContextHistoryAdvisor.historical(new UserMessage("past request"), 1);
     var pastAssistant = ContextHistoryAdvisor.historical(new AssistantMessage("past reply"), 2);
@@ -585,20 +583,18 @@ class ContextAssemblerTest {
   void cancellationDoesNotCommitSummaryOrFallBack() {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
     var a =
-        assembler(
-            (previous, messages, budget, request) -> {
-              cancelled.set(true);
-              return "summary";
-            });
-    assertThatThrownBy(
-            () ->
-                a.assemble(
-                    prompt("old ".repeat(500)),
-                    "conversation",
-                    "run",
-                    () -> {
-                      if (cancelled.get()) throw new java.util.concurrent.CancellationException();
-                    }))
+        assembler((previous, messages, budget, request) -> {
+          cancelled.set(true);
+          return "summary";
+        });
+    assertThatThrownBy(() ->
+            a.assemble(
+                prompt("old ".repeat(500)),
+                "conversation",
+                "run",
+                () -> {
+                  if (cancelled.get()) throw new java.util.concurrent.CancellationException();
+                }))
         .isInstanceOf(java.util.concurrent.CancellationException.class);
     assertThat(new ConversationSummaryRepository(dir).read("conversation").throughSequence())
         .isZero();
@@ -608,21 +604,16 @@ class ContextAssemblerTest {
   @Test
   void rollingSummarySeesOnlyPreviousSummaryAndNewPrefix() {
     var a =
-        assembler(
-            (previous, messages, budget, request) -> {
-              if (calls.incrementAndGet() == 1) {
-                assertThat(previous).isEmpty();
-                return "first decision";
-              }
-              assertThat(previous).isEqualTo("first decision");
-              assertThat(messages)
-                  .extracting(Message::getText)
-                  .noneMatch(t -> t.contains("old old"));
-              assertThat(messages)
-                  .extracting(Message::getText)
-                  .anyMatch(t -> t.contains("new new"));
-              return "first decision; second decision";
-            });
+        assembler((previous, messages, budget, request) -> {
+          if (calls.incrementAndGet() == 1) {
+            assertThat(previous).isEmpty();
+            return "first decision";
+          }
+          assertThat(previous).isEqualTo("first decision");
+          assertThat(messages).extracting(Message::getText).noneMatch(t -> t.contains("old old"));
+          assertThat(messages).extracting(Message::getText).anyMatch(t -> t.contains("new new"));
+          return "first decision; second decision";
+        });
     a.assemble(prompt("old ".repeat(500)), "conversation", "run", () -> {});
     var expanded = new ArrayList<Message>(prompt("old ".repeat(500)).getInstructions());
     expanded.add(3, ContextHistoryAdvisor.historical(new UserMessage("new ".repeat(500)), 3));
@@ -636,11 +627,10 @@ class ContextAssemblerTest {
   @Test
   void concurrentRequestsGenerateOneSummary() throws Exception {
     var a =
-        assembler(
-            (previous, messages, budget, request) -> {
-              calls.incrementAndGet();
-              return "shared summary";
-            });
+        assembler((previous, messages, budget, request) -> {
+          calls.incrementAndGet();
+          return "shared summary";
+        });
     try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
       var futures = new ArrayList<java.util.concurrent.Future<Prompt>>();
       for (int i = 0; i < 8; i++)
@@ -655,17 +645,15 @@ class ContextAssemblerTest {
   /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void hardLimitDoesNotDiscardCurrentRequestOrSystem() {
-    assertThatThrownBy(
-            () ->
-                assembler((p, m, b, r) -> "summary")
-                    .assemble(
-                        new Prompt(
-                            List.of(
-                                new SystemMessage("policy"),
-                                new UserMessage("current ".repeat(1000)))),
-                        "chat",
-                        "run",
-                        () -> {}))
+    assertThatThrownBy(() ->
+            assembler((p, m, b, r) -> "summary")
+                .assemble(
+                    new Prompt(
+                        List.of(
+                            new SystemMessage("policy"), new UserMessage("current ".repeat(1000)))),
+                    "chat",
+                    "run",
+                    () -> {}))
         .hasMessageContaining("CONTEXT_HARD_LIMIT");
   }
 
@@ -673,11 +661,10 @@ class ContextAssemblerTest {
   @Test
   void workingSetIsRefreshedAndNeverSentToSummarizer() {
     var a =
-        assembler(
-            (p, m, b, r) -> {
-              assertThat(m).extracting(Message::getText).noneMatch(t -> t.contains("Working Set"));
-              return "summary";
-            });
+        assembler((p, m, b, r) -> {
+          assertThat(m).extracting(Message::getText).noneMatch(t -> t.contains("Working Set"));
+          return "summary";
+        });
     a.setWorkingSet(() -> "Working Set: changed-file.java, next task");
     var messages = new ArrayList<Message>(prompt("old ".repeat(500)).getInstructions());
     messages.add(

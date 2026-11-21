@@ -98,35 +98,34 @@ class GoalStageLoopTest {
   void runningObservationUsesIndependentConditionsAndKeepsStageCompletionWithHost() {
     var goal = setup();
     var loop =
-        loop(
-            (claim, run, completed) -> {
-              var owner = new AgentRunContext(run, "session", dir, "project");
-              var stage = stages.forRun(goal, run);
-              assertEquals(
-                  GoalStageVerifier.Result.UNSATISFIED,
-                  ((GoalStageVerifier.Observation)
-                          service.inspectRunning(owner, goal.id()).get("observation"))
-                      .result());
-              write(stage.stageId(), true);
-              var verified = service.inspectRunning(owner, goal.id());
-              assertEquals(stage.stageId(), verified.get("stageId"));
-              var observation = (GoalStageVerifier.Observation) verified.get("observation");
-              assertEquals(GoalStageVerifier.Result.VERIFIED, observation.result());
-              assertFalse(observation.artifactVersions().isEmpty());
-              assertEquals(
-                  "RUNNING",
-                  stages.list(goal).stream()
-                      .filter(s -> s.definition().id().equals(stage.stageId()))
-                      .findFirst()
-                      .orElseThrow()
-                      .state());
-              assertThrows(
-                  IllegalStateException.class,
-                  () ->
-                      service.inspectRunning(
-                          new AgentRunContext("other", "session", dir, "project"), goal.id()));
-              completed.accept(done());
-            });
+        loop((claim, run, completed) -> {
+          var owner = new AgentRunContext(run, "session", dir, "project");
+          var stage = stages.forRun(goal, run);
+          assertEquals(
+              GoalStageVerifier.Result.UNSATISFIED,
+              ((GoalStageVerifier.Observation)
+                      service.inspectRunning(owner, goal.id()).get("observation"))
+                  .result());
+          write(stage.stageId(), true);
+          var verified = service.inspectRunning(owner, goal.id());
+          assertEquals(stage.stageId(), verified.get("stageId"));
+          var observation = (GoalStageVerifier.Observation) verified.get("observation");
+          assertEquals(GoalStageVerifier.Result.VERIFIED, observation.result());
+          assertFalse(observation.artifactVersions().isEmpty());
+          assertEquals(
+              "RUNNING",
+              stages.list(goal).stream()
+                  .filter(s -> s.definition().id().equals(stage.stageId()))
+                  .findFirst()
+                  .orElseThrow()
+                  .state());
+          assertThrows(
+              IllegalStateException.class,
+              () ->
+                  service.inspectRunning(
+                      new AgentRunContext("other", "session", dir, "project"), goal.id()));
+          completed.accept(done());
+        });
     assertEquals("COMPLETED", loop.run("project", goal.id()).status());
   }
 
@@ -135,16 +134,15 @@ class GoalStageLoopTest {
     var goal = setup();
     var calls = new AtomicInteger();
     var loop =
-        loop(
-            (claim, run, completed) -> {
-              assertTrue(goals.reserveLlm(claim));
-              var active = stages.forRun(goal, run);
-              int call = calls.incrementAndGet();
-              assertEquals(call <= 2 ? "a" : "b", active.stageId());
-              if (call != 1) write(active.stageId(), true);
-              completed.accept(done());
-              completed.accept(done());
-            });
+        loop((claim, run, completed) -> {
+          assertTrue(goals.reserveLlm(claim));
+          var active = stages.forRun(goal, run);
+          int call = calls.incrementAndGet();
+          assertEquals(call <= 2 ? "a" : "b", active.stageId());
+          if (call != 1) write(active.stageId(), true);
+          completed.accept(done());
+          completed.accept(done());
+        });
     assertEquals("COMPLETED", loop.run("project", goal.id()).status());
     assertEquals(3, calls.get());
     assertTrue(stages.list(goal).stream().allMatch(s -> s.state().equals("VERIFIED")));
@@ -157,14 +155,13 @@ class GoalStageLoopTest {
     var goal = setup();
     var calls = new AtomicInteger();
     var loop =
-        loop(
-            (claim, run, completed) -> {
-              calls.incrementAndGet();
-              var active = stages.forRun(goal, run);
-              write(active.stageId(), true);
-              if (active.stageId().equals("b")) write("a", false);
-              completed.accept(done());
-            });
+        loop((claim, run, completed) -> {
+          calls.incrementAndGet();
+          var active = stages.forRun(goal, run);
+          write(active.stageId(), true);
+          if (active.stageId().equals("b")) write("a", false);
+          completed.accept(done());
+        });
     assertEquals("BLOCKED", loop.run("project", goal.id()).status());
     assertFalse(files.verify(goals.get("project", goal.id())).satisfied());
     assertTrue(calls.get() <= 10);
@@ -208,11 +205,10 @@ class GoalStageLoopTest {
     callback.get().accept(done());
     assertEquals("PAUSED", goals.get("project", goal.id()).status());
     var resumed =
-        loop(
-            (claim, run, completed) -> {
-              assertEquals("b", stages.forRun(goal, run).stageId());
-              completed.accept(done());
-            });
+        loop((claim, run, completed) -> {
+          assertEquals("b", stages.forRun(goal, run).stageId());
+          completed.accept(done());
+        });
     assertEquals("COMPLETED", resumed.run("project", goal.id()).status());
     assertEquals(1, stages.attempts(goal).stream().filter(a -> a.stageId().equals("a")).count());
   }
@@ -222,12 +218,11 @@ class GoalStageLoopTest {
   void parentAndFinalGoalEachNeedTheirOwnIndependentVerification() {
     var goal = setup();
     var loop =
-        loop(
-            (claim, run, completed) -> {
-              var active = stages.forRun(goal, run);
-              write(active.stageId(), true);
-              completed.accept(done());
-            });
+        loop((claim, run, completed) -> {
+          var active = stages.forRun(goal, run);
+          write(active.stageId(), true);
+          completed.accept(done());
+        });
     // Satisfying both stages cannot substitute a different mandatory final condition.
     var other =
         goals.create(
@@ -239,12 +234,11 @@ class GoalStageLoopTest {
     stages.define(other, 0, List.of(stage("a")));
     var calls = new AtomicInteger();
     var finalLoop =
-        loop(
-            (claim, run, completed) -> {
-              calls.incrementAndGet();
-              write("a", true);
-              completed.accept(done());
-            });
+        loop((claim, run, completed) -> {
+          calls.incrementAndGet();
+          write("a", true);
+          completed.accept(done());
+        });
     assertEquals("BLOCKED", finalLoop.run("project", other.id()).status());
     assertFalse(files.verify(goals.get("project", other.id())).satisfied());
     assertEquals("VERIFIED", stages.list(other).getFirst().state());

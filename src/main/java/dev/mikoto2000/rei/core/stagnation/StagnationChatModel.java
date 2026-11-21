@@ -138,335 +138,299 @@ public final class StagnationChatModel implements ChatModel {
                         }
                       })
                   .subscribeOn(Schedulers.boundedElastic())
-                  .flatMapMany(
-                      result -> {
-                        if (result.returnDirect())
-                          return Flux.just(
-                              new ChatResponse(ToolExecutionResult.buildGenerations(result)));
-                        return iteration(
-                            new Prompt(
-                                withoutResumeWorkReminder(result.conversationHistory()),
-                                prepared.getOptions()),
-                            context,
-                            false,
-                            context.progressVersion());
-                      });
+                  .flatMapMany(result -> {
+                    if (result.returnDirect())
+                      return Flux.just(
+                          new ChatResponse(ToolExecutionResult.buildGenerations(result)));
+                    return iteration(
+                        new Prompt(
+                            withoutResumeWorkReminder(result.conversationHistory()),
+                            prepared.getOptions()),
+                        context,
+                        false,
+                        context.progressVersion());
+                  });
             })
-        .doOnError(
-            error -> {
-              if (assemblePrompt != null)
-                finishReview.accept(
-                    context.runContext(),
-                    error instanceof java.util.concurrent.CancellationException);
-            })
-        .doOnCancel(
-            () -> {
-              if (assemblePrompt != null) finishReview.accept(context.runContext(), true);
-            });
+        .doOnError(error -> {
+          if (assemblePrompt != null)
+            finishReview.accept(
+                context.runContext(), error instanceof java.util.concurrent.CancellationException);
+        })
+        .doOnCancel(() -> {
+          if (assemblePrompt != null) finishReview.accept(context.runContext(), true);
+        });
   }
 
   /** 実行の停滞への対処で用いる繰り返しを返す。 */
   private Flux<ChatResponse> iteration(
       Prompt prompt, RunExecutionContext context, boolean prepaid, long progressAtLimit) {
-    return Flux.defer(
-        () -> {
-          context.checkActive();
-          context.checkModelTokenBudget();
-          if (!prepaid) context.consumeNextLlmCall();
-          Prompt actionPrompt = resumeRecoveryPrompt(prompt, context);
-          String feedback = context.progressFeedback() + context.resumeBatchFeedback();
-          String reviewGuidance = "";
-          if (hasReviewProtocol(prompt)) {
-            reviewGuidance +=
-                " For a new whole-repository review prefer beginRepositoryReview, scanReviewSnapshot"
-                    + " until SEALED, then readNextReviewWorkItem with tokenBudget omitted. It claims and reads"
-                    + " one semantic unit with a host-selected budget up to 100000 estimated tokens, bounded"
-                    + " by 1/8 of effective model input capacity and current free context. Assess the whole"
-                    + " delivered unit with submitReviewWorkItem(workItemId,attempt,assessment,findings)."
-                    + " When continuing an existing durable task in a new Run, call resumeRepositoryReview"
-                    + " with that taskId before acquiring or submitting work. Use listReviewTasks if the"
-                    + " taskId is unknown. Reading status or saved results does not bind the task."
-                    + " Do not create a second legacy job for the same durable task. Submit assessed"
-                    + " units first and read the next unit in the same tool-call response. Read cross-file"
-                    + " dependencies when necessary to corroborate findings. Existing legacy jobs must be"
-                    + " completed through their original ledger. Prefer readNextReviewWorkItem(taskId='legacy:'"
-                    + " + reviewJobId) and submitReviewWorkItem using the returned workItemId/attempt; this"
-                    + " continues pending semantic units without losing saved legacy assessments. The following legacy guidance applies ONLY"
-                    + " to explicit-target reviews or existing legacy jobs.";
-            if (!context.isResumedContext())
-              reviewGuidance +=
-                  " For authorized review work, use beginReview for the explicit targets and criteria."
-                      + " Read a bounded unit with readReviewFile/readReviewPages, then persist its"
-                      + " evidence-backed assessment with submitReviewPage/submitReviewPages before"
-                      + " bulk-reading the next unit. Use only available tools. Preserve job IDs, exact"
-                      + " delivered coordinates, findings and unresolved gaps; use reviewPending and"
-                      + " reviewFindings to continue. Fetched content is not reviewed coverage."
-                      + " Do not defer all assessments until the entire corpus has been read.";
-            else
-              reviewGuidance +=
-                  " For review work, persist each assessed source range with beginReview, readReviewFile"
-                      + " and a delivered-page assessment. Prefer readReviewPages and submitReviewPages for bounded batches; otherwise submitReviewPage: copy only"
-                      + " the delivered path/offset/nextOffset and cite unique exact evidence quotes; the server"
-                      + " supplies hashes and source coordinates. The legacy submitReviewResult requires the"
-                      + " exact unchanged Range object. A matching quote proves presence, not that a defect exists."
-                      + " Corroborate cross-file claims against referenced source, navigation/configuration and rendered"
-                      + " output before repairs. Use dismissReviewFinding, when available, for disproved candidates"
-                      + " with a reason citing the counterevidence. If no reviewJobId exists, create one with beginReview"
-                      + " for the explicit authorized targets and criteria; the missing ID is not a blocker."
-                      + " Use reviewPending to select unfinished ranges and reviewFindings for preserved candidates."
-                      + " Do not declare a previously submitted assessment unreviewed merely because its source"
-                      + " left the current prompt. Changed source versions require restartReview."
-                      + " Reports supplement the ledger; repeatedly appending a list of unread files does not"
-                      + " complete their review. An exact registered review page can be acquired at the unit"
-                      + " boundary to prepare its structured assessment; submit that delivered range before"
-                      + " further bulk reading. If that page leaves the prompt, redeliver it with the same"
-                      + " job/path/version/offset/tokenBudget before assessing; never invent an assessment from"
-                      + " ledger counts. Batch a work unit into one tool-call response: submit all assessed"
-                      + " delivered pages first, then request their known nextOffset pages in the same response."
-                      + " Assess only text already delivered. This confirms outcomes before acquiring new source. Follow the original scope"
-                      + " through all remaining targets.";
-            if (assemblePrompt != null) feedback += reviewContinuation.apply(context.runContext());
-          }
-          if (actionPrompt != prompt && !context.needsResumeContentWork())
-            feedback +=
-                " Broad discovery tools are temporarily unavailable during this depleted resume. "
-                    + "Use the handed-off historical inventory, fetched coverage and read excerpts to select an unfinished file or chapter. Read named missing content across pages, then save one consolidated result for that work unit. "
-                    + "The inventory is not proof that all files exist unchanged or that review is complete. "
-                    + "Normal discovery returns after verified work or step advancement; new coverage alone does not end this recovery. Budgets are not replenished.";
-          if (actionPrompt != prompt && context.needsResumeContentWork())
-            feedback +=
-                " Content acquisition is temporarily unavailable at the resumed work-unit boundary. "
-                    + "Use only the text actually visible in this context to record an authorized partial assessment for this unit. "
-                    + "Cite the delivered path/range and evidence, distinguish assessed content from unread or omitted content, and state exact unresolved gaps. "
-                    + "For review, use submitReviewResult for a delivered review range or update the authorized review artifact incrementally. "
-                    + "Do not invent findings, evidence, authorization or completion. "
-                    + "If an assessment is not supportable, explain the specific blockage instead of fabricating work. "
-                    + "Actual work advancement restores acquisition for the next work unit; failed writes, annotations and repeated text alone do not.";
-          var invocationMessages = new ArrayList<Message>(actionPrompt.getInstructions());
-          if (!reviewGuidance.isEmpty()) {
-            // Fixed protocol belongs beside the original system prefix; live state follows history.
-            int prefixEnd = 0;
-            while (prefixEnd < invocationMessages.size()
-                && invocationMessages.get(prefixEnd) instanceof SystemMessage) prefixEnd++;
-            invocationMessages.add(
-                prefixEnd,
-                SystemMessage.builder()
-                    .text(reviewGuidance)
-                    .metadata(java.util.Map.of("rei.reviewGuidance", true))
-                    .build());
-          }
-          if (!feedback.isEmpty())
-            invocationMessages.add(
-                SystemMessage.builder()
-                    .text(feedback)
-                    .metadata(java.util.Map.of("rei.progressFeedback", true))
-                    .build());
-          Prompt invocationPrompt = new Prompt(invocationMessages, actionPrompt.getOptions());
-          context.beginIteration();
-          AtomicReference<ChatResponse> aggregate = new AtomicReference<>();
-          AtomicReference<Prompt> sent = new AtomicReference<>();
-          var invoked = new java.util.concurrent.atomic.AtomicBoolean();
-          var reported = new java.util.concurrent.atomic.AtomicBoolean();
-          Flux<ChatResponse> requests =
-              assemblePrompt == null || context.runContext() == null
-                  ? Flux.defer(
+    return Flux.defer(() -> {
+      context.checkActive();
+      context.checkModelTokenBudget();
+      if (!prepaid) context.consumeNextLlmCall();
+      Prompt actionPrompt = resumeRecoveryPrompt(prompt, context);
+      String feedback = context.progressFeedback() + context.resumeBatchFeedback();
+      String reviewGuidance = "";
+      if (hasReviewProtocol(prompt)) {
+        reviewGuidance +=
+            " For a new whole-repository review prefer beginRepositoryReview, scanReviewSnapshot"
+                + " until SEALED, then readNextReviewWorkItem with tokenBudget omitted. It claims and reads"
+                + " one semantic unit with a host-selected budget up to 100000 estimated tokens, bounded"
+                + " by 1/8 of effective model input capacity and current free context. Assess the whole"
+                + " delivered unit with submitReviewWorkItem(workItemId,attempt,assessment,findings)."
+                + " When continuing an existing durable task in a new Run, call resumeRepositoryReview"
+                + " with that taskId before acquiring or submitting work. Use listReviewTasks if the"
+                + " taskId is unknown. Reading status or saved results does not bind the task."
+                + " Do not create a second legacy job for the same durable task. Submit assessed"
+                + " units first and read the next unit in the same tool-call response. Read cross-file"
+                + " dependencies when necessary to corroborate findings. Existing legacy jobs must be"
+                + " completed through their original ledger. Prefer readNextReviewWorkItem(taskId='legacy:'"
+                + " + reviewJobId) and submitReviewWorkItem using the returned workItemId/attempt; this"
+                + " continues pending semantic units without losing saved legacy assessments. The following legacy guidance applies ONLY"
+                + " to explicit-target reviews or existing legacy jobs.";
+        if (!context.isResumedContext())
+          reviewGuidance +=
+              " For authorized review work, use beginReview for the explicit targets and criteria."
+                  + " Read a bounded unit with readReviewFile/readReviewPages, then persist its"
+                  + " evidence-backed assessment with submitReviewPage/submitReviewPages before"
+                  + " bulk-reading the next unit. Use only available tools. Preserve job IDs, exact"
+                  + " delivered coordinates, findings and unresolved gaps; use reviewPending and"
+                  + " reviewFindings to continue. Fetched content is not reviewed coverage."
+                  + " Do not defer all assessments until the entire corpus has been read.";
+        else
+          reviewGuidance +=
+              " For review work, persist each assessed source range with beginReview, readReviewFile"
+                  + " and a delivered-page assessment. Prefer readReviewPages and submitReviewPages for bounded batches; otherwise submitReviewPage: copy only"
+                  + " the delivered path/offset/nextOffset and cite unique exact evidence quotes; the server"
+                  + " supplies hashes and source coordinates. The legacy submitReviewResult requires the"
+                  + " exact unchanged Range object. A matching quote proves presence, not that a defect exists."
+                  + " Corroborate cross-file claims against referenced source, navigation/configuration and rendered"
+                  + " output before repairs. Use dismissReviewFinding, when available, for disproved candidates"
+                  + " with a reason citing the counterevidence. If no reviewJobId exists, create one with beginReview"
+                  + " for the explicit authorized targets and criteria; the missing ID is not a blocker."
+                  + " Use reviewPending to select unfinished ranges and reviewFindings for preserved candidates."
+                  + " Do not declare a previously submitted assessment unreviewed merely because its source"
+                  + " left the current prompt. Changed source versions require restartReview."
+                  + " Reports supplement the ledger; repeatedly appending a list of unread files does not"
+                  + " complete their review. An exact registered review page can be acquired at the unit"
+                  + " boundary to prepare its structured assessment; submit that delivered range before"
+                  + " further bulk reading. If that page leaves the prompt, redeliver it with the same"
+                  + " job/path/version/offset/tokenBudget before assessing; never invent an assessment from"
+                  + " ledger counts. Batch a work unit into one tool-call response: submit all assessed"
+                  + " delivered pages first, then request their known nextOffset pages in the same response."
+                  + " Assess only text already delivered. This confirms outcomes before acquiring new source. Follow the original scope"
+                  + " through all remaining targets.";
+        if (assemblePrompt != null) feedback += reviewContinuation.apply(context.runContext());
+      }
+      if (actionPrompt != prompt && !context.needsResumeContentWork())
+        feedback +=
+            " Broad discovery tools are temporarily unavailable during this depleted resume. "
+                + "Use the handed-off historical inventory, fetched coverage and read excerpts to select an unfinished file or chapter. Read named missing content across pages, then save one consolidated result for that work unit. "
+                + "The inventory is not proof that all files exist unchanged or that review is complete. "
+                + "Normal discovery returns after verified work or step advancement; new coverage alone does not end this recovery. Budgets are not replenished.";
+      if (actionPrompt != prompt && context.needsResumeContentWork())
+        feedback +=
+            " Content acquisition is temporarily unavailable at the resumed work-unit boundary. "
+                + "Use only the text actually visible in this context to record an authorized partial assessment for this unit. "
+                + "Cite the delivered path/range and evidence, distinguish assessed content from unread or omitted content, and state exact unresolved gaps. "
+                + "For review, use submitReviewResult for a delivered review range or update the authorized review artifact incrementally. "
+                + "Do not invent findings, evidence, authorization or completion. "
+                + "If an assessment is not supportable, explain the specific blockage instead of fabricating work. "
+                + "Actual work advancement restores acquisition for the next work unit; failed writes, annotations and repeated text alone do not.";
+      var invocationMessages = new ArrayList<Message>(actionPrompt.getInstructions());
+      if (!reviewGuidance.isEmpty()) {
+        // Fixed protocol belongs beside the original system prefix; live state follows history.
+        int prefixEnd = 0;
+        while (prefixEnd < invocationMessages.size()
+            && invocationMessages.get(prefixEnd) instanceof SystemMessage) prefixEnd++;
+        invocationMessages.add(
+            prefixEnd,
+            SystemMessage.builder()
+                .text(reviewGuidance)
+                .metadata(java.util.Map.of("rei.reviewGuidance", true))
+                .build());
+      }
+      if (!feedback.isEmpty())
+        invocationMessages.add(
+            SystemMessage.builder()
+                .text(feedback)
+                .metadata(java.util.Map.of("rei.progressFeedback", true))
+                .build());
+      Prompt invocationPrompt = new Prompt(invocationMessages, actionPrompt.getOptions());
+      context.beginIteration();
+      AtomicReference<ChatResponse> aggregate = new AtomicReference<>();
+      AtomicReference<Prompt> sent = new AtomicReference<>();
+      var invoked = new java.util.concurrent.atomic.AtomicBoolean();
+      var reported = new java.util.concurrent.atomic.AtomicBoolean();
+      Flux<ChatResponse> requests =
+          assemblePrompt == null || context.runContext() == null
+              ? Flux.defer(() -> {
+                context.checkModelTokenBudget();
+                invoked.set(true);
+                return StreamTimeoutRetry.stream(
+                    delegate, invocationPrompt, context, maxStreamTimeoutRetries, aggregate::set);
+              })
+              : Mono.fromCallable(
                       () -> {
-                        context.checkModelTokenBudget();
-                        invoked.set(true);
-                        return StreamTimeoutRetry.stream(
-                            delegate,
-                            invocationPrompt,
-                            context,
-                            maxStreamTimeoutRetries,
-                            aggregate::set);
+                        var scope =
+                            dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext());
+                        try (scope) {
+                          try {
+                            return assemblePrompt.apply(
+                                invocationPrompt,
+                                new Assembly(
+                                    context.runContext().conversationId(),
+                                    context.runContext().runId(),
+                                    context::checkActive));
+                          } catch (java.util.concurrent.CancellationException cancelled) {
+                            // Disposal may interrupt the summary worker after the downstream
+                            // subscriber has gone away.
+                            if (context.isCancelled()) return null;
+                            throw cancelled;
+                          }
+                        }
                       })
-                  : Mono.fromCallable(
+                  .subscribeOn(Schedulers.boundedElastic())
+                  .flatMapMany(projected -> {
+                    context.checkActive();
+                    context.checkModelTokenBudget();
+                    invoked.set(true);
+                    sent.set(projected);
+                    return StreamTimeoutRetry.stream(
+                        delegate, projected, context, maxStreamTimeoutRetries, aggregate::set);
+                  });
+      Flux<ChatResponse> response = requests;
+      return response
+          .concatWith(
+              Flux.defer(() -> {
+                ChatResponse result = aggregate.get();
+                var generation = result == null ? null : result.getResult();
+                if (generation == null) {
+                  reported.set(true);
+                  context.recordTotalTokens(null);
+                  context.endIteration();
+                  if (context.hasPendingResumeContentWork())
+                    return continuePendingContentWork(prompt, null, context, progressAtLimit);
+                  return finishOrContinueReview(prompt, null, context, progressAtLimit);
+                }
+                context.checkActive();
+                if (assemblePrompt != null && sent.get() != null)
+                  confirmDelivery.accept(sent.get(), context.runContext());
+                var usage = result.getMetadata().getUsage();
+                if (usage != null && usage.getPromptTokens() != null && usage.getPromptTokens() > 0)
+                  dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
+                      context.runContext(), "providerInputTokens", usage.getPromptTokens());
+                else
+                  dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
+                      context.runContext(), "providerInputTokensUnavailable", 1);
+                reported.set(true);
+                context.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+                if (usage != null && usage.getCompletionTokens() != null) {
+                  context.recordCompletionTokens(usage.getCompletionTokens());
+                }
+                if (result.hasToolCalls() && !OutputLimitDetector.isOutputLimitReached(result)) {
+                  return Mono.fromCallable(
                           () -> {
-                            var scope =
-                                dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-                                    context.runContext());
-                            try (scope) {
-                              try {
-                                return assemblePrompt.apply(
-                                    invocationPrompt,
-                                    new Assembly(
-                                        context.runContext().conversationId(),
-                                        context.runContext().runId(),
-                                        context::checkActive));
-                              } catch (java.util.concurrent.CancellationException cancelled) {
-                                // Disposal may interrupt the summary worker after the downstream
-                                // subscriber has gone away.
-                                if (context.isCancelled()) return null;
-                                throw cancelled;
-                              }
+                            context.checkActive();
+                            try {
+                              context.planTools(generation.getOutput().getToolCalls());
+                              var toolResult =
+                                  tools.executeResumable(
+                                      dev.mikoto2000.rei.tooldelivery.FileReadContext
+                                          .withProjection(
+                                              actionPrompt,
+                                              sent.get() == null ? invocationPrompt : sent.get()),
+                                      result,
+                                      context);
+                              var history =
+                                  withoutResumeWorkReminder(toolResult.conversationHistory());
+                              if (assemblePrompt != null && context.runContext() != null)
+                                preserveDeliveredResults.accept(history, context.runContext());
+                              context.preserveToolResults(history);
+                              context.suspendIfWaiting(history);
+                              return toolResult;
+                            } finally {
+                              context.endIteration();
                             }
                           })
                       .subscribeOn(Schedulers.boundedElastic())
-                      .flatMapMany(
-                          projected -> {
-                            context.checkActive();
-                            context.checkModelTokenBudget();
-                            invoked.set(true);
-                            sent.set(projected);
-                            return StreamTimeoutRetry.stream(
-                                delegate,
-                                projected,
-                                context,
-                                maxStreamTimeoutRetries,
-                                aggregate::set);
-                          });
-          Flux<ChatResponse> response = requests;
-          return response
-              .concatWith(
-                  Flux.defer(
-                      () -> {
-                        ChatResponse result = aggregate.get();
-                        var generation = result == null ? null : result.getResult();
-                        if (generation == null) {
-                          reported.set(true);
-                          context.recordTotalTokens(null);
-                          context.endIteration();
-                          if (context.hasPendingResumeContentWork())
-                            return continuePendingContentWork(
-                                prompt, null, context, progressAtLimit);
-                          return finishOrContinueReview(prompt, null, context, progressAtLimit);
-                        }
-                        context.checkActive();
-                        if (assemblePrompt != null && sent.get() != null)
-                          confirmDelivery.accept(sent.get(), context.runContext());
-                        var usage = result.getMetadata().getUsage();
-                        if (usage != null
-                            && usage.getPromptTokens() != null
-                            && usage.getPromptTokens() > 0)
-                          dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
-                              context.runContext(), "providerInputTokens", usage.getPromptTokens());
-                        else
-                          dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
-                              context.runContext(), "providerInputTokensUnavailable", 1);
-                        reported.set(true);
-                        context.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
-                        if (usage != null && usage.getCompletionTokens() != null) {
-                          context.recordCompletionTokens(usage.getCompletionTokens());
-                        }
-                        if (result.hasToolCalls()
-                            && !OutputLimitDetector.isOutputLimitReached(result)) {
-                          return Mono.fromCallable(
-                                  () -> {
-                                    context.checkActive();
-                                    try {
-                                      context.planTools(generation.getOutput().getToolCalls());
-                                      var toolResult =
-                                          tools.executeResumable(
-                                              dev.mikoto2000.rei.tooldelivery.FileReadContext
-                                                  .withProjection(
-                                                      actionPrompt,
-                                                      sent.get() == null
-                                                          ? invocationPrompt
-                                                          : sent.get()),
-                                              result,
-                                              context);
-                                      var history =
-                                          withoutResumeWorkReminder(
-                                              toolResult.conversationHistory());
-                                      if (assemblePrompt != null && context.runContext() != null)
-                                        preserveDeliveredResults.accept(
-                                            history, context.runContext());
-                                      context.preserveToolResults(history);
-                                      context.suspendIfWaiting(history);
-                                      return toolResult;
-                                    } finally {
-                                      context.endIteration();
-                                    }
-                                  })
-                              .subscribeOn(Schedulers.boundedElastic())
-                              .flatMapMany(
-                                  toolResult -> {
-                                    if (toolResult.returnDirect())
-                                      return Flux.just(
-                                          new ChatResponse(
-                                              ToolExecutionResult.buildGenerations(toolResult)));
-                                    List<Message> messages =
-                                        new ArrayList<>(
-                                            withoutResumeWorkReminder(
-                                                toolResult.conversationHistory()));
-                                    messages.addAll(context.applyInterventions());
-                                    String notice = context.requestReplan();
-                                    if (notice != null) messages.add(new UserMessage(notice));
-                                    return iteration(
-                                        new Prompt(messages, prompt.getOptions()),
-                                        context,
-                                        false,
-                                        progressAtLimit);
-                                  });
-                        }
-                        context.endIteration();
-                        if (!OutputLimitDetector.isOutputLimitReached(result)) {
-                          var guidance = context.applyInterventions();
-                          if (guidance.isEmpty()) {
-                            if (context.hasPendingResumeContentWork())
-                              return continuePendingContentWork(
-                                  prompt, generation.getOutput(), context, progressAtLimit);
-                            return finishOrContinueReview(
-                                prompt, generation.getOutput(), context, progressAtLimit);
-                          }
-                          List<Message> messages = new ArrayList<>(prompt.getInstructions());
-                          messages.add(generation.getOutput());
-                          messages.addAll(guidance);
-                          return iteration(
-                              new Prompt(messages, prompt.getOptions()),
-                              context,
-                              false,
-                              progressAtLimit);
-                        }
+                      .flatMapMany(toolResult -> {
+                        if (toolResult.returnDirect())
+                          return Flux.just(
+                              new ChatResponse(ToolExecutionResult.buildGenerations(toolResult)));
+                        List<Message> messages =
+                            new ArrayList<>(
+                                withoutResumeWorkReminder(toolResult.conversationHistory()));
+                        messages.addAll(context.applyInterventions());
                         String notice = context.requestReplan();
-                        if (notice != null || context.progressVersion() > progressAtLimit) {
-                          List<Message> messages = new ArrayList<>(prompt.getInstructions());
-                          // A length-truncated tool call has no complete arguments and must never
-                          // be replayed/executed.
-                          messages.add(
-                              new AssistantMessage(
-                                  Objects.toString(generation.getOutput().getText(), "")));
-                          messages.add(
-                              new UserMessage(
-                                  notice != null
-                                      ? notice
-                                      : "Continue the current goal from the verified progress. Do not repeat completed actions. Keep the next output concise."));
-                          return iteration(
-                              new Prompt(messages, prompt.getOptions()),
-                              context,
-                              false,
-                              context.progressVersion());
-                        }
-                        context.setOutputLimitHandoff(
-                            tools.captureOutputLimitHandoff(
-                                (sent.get() == null ? invocationPrompt : sent.get())
-                                    .getInstructions(),
-                                generation.getOutput().getText(),
-                                assemblePrompt == null
-                                    ? ""
-                                    : reviewContinuation.apply(context.runContext()),
-                                context.outputLimitHandoff()));
-                        return Flux
-                            .empty(); // Outer output-limit splitter handles a goal that made no
-                        // progress.
-                      }))
-              .doOnError(
-                  error -> {
-                    context.endIteration();
-                    if (invoked.get() && !reported.getAndSet(true)) context.recordTotalTokens(null);
-                  })
-              .doOnCancel(
-                  () -> {
-                    context.endIteration();
-                    if (invoked.get() && !reported.getAndSet(true)) {
-                      try {
-                        context.recordTotalTokens(null);
-                      } catch (RuntimeException stopped) {
-                        /* Already cancelled or blocked by unknown usage. */
-                      }
-                    }
-                  });
-        });
+                        if (notice != null) messages.add(new UserMessage(notice));
+                        return iteration(
+                            new Prompt(messages, prompt.getOptions()),
+                            context,
+                            false,
+                            progressAtLimit);
+                      });
+                }
+                context.endIteration();
+                if (!OutputLimitDetector.isOutputLimitReached(result)) {
+                  var guidance = context.applyInterventions();
+                  if (guidance.isEmpty()) {
+                    if (context.hasPendingResumeContentWork())
+                      return continuePendingContentWork(
+                          prompt, generation.getOutput(), context, progressAtLimit);
+                    return finishOrContinueReview(
+                        prompt, generation.getOutput(), context, progressAtLimit);
+                  }
+                  List<Message> messages = new ArrayList<>(prompt.getInstructions());
+                  messages.add(generation.getOutput());
+                  messages.addAll(guidance);
+                  return iteration(
+                      new Prompt(messages, prompt.getOptions()), context, false, progressAtLimit);
+                }
+                String notice = context.requestReplan();
+                if (notice != null || context.progressVersion() > progressAtLimit) {
+                  List<Message> messages = new ArrayList<>(prompt.getInstructions());
+                  // A length-truncated tool call has no complete arguments and must never
+                  // be replayed/executed.
+                  messages.add(
+                      new AssistantMessage(Objects.toString(generation.getOutput().getText(), "")));
+                  messages.add(
+                      new UserMessage(
+                          notice != null
+                              ? notice
+                              : "Continue the current goal from the verified progress. Do not repeat completed actions. Keep the next output concise."));
+                  return iteration(
+                      new Prompt(messages, prompt.getOptions()),
+                      context,
+                      false,
+                      context.progressVersion());
+                }
+                context.setOutputLimitHandoff(
+                    tools.captureOutputLimitHandoff(
+                        (sent.get() == null ? invocationPrompt : sent.get()).getInstructions(),
+                        generation.getOutput().getText(),
+                        assemblePrompt == null
+                            ? ""
+                            : reviewContinuation.apply(context.runContext()),
+                        context.outputLimitHandoff()));
+                return Flux.empty(); // Outer output-limit splitter handles a goal that made no
+                // progress.
+              }))
+          .doOnError(error -> {
+            context.endIteration();
+            if (invoked.get() && !reported.getAndSet(true)) context.recordTotalTokens(null);
+          })
+          .doOnCancel(() -> {
+            context.endIteration();
+            if (invoked.get() && !reported.getAndSet(true)) {
+              try {
+                context.recordTotalTokens(null);
+              } catch (RuntimeException stopped) {
+                /* Already cancelled or blocked by unknown usage. */
+              }
+            }
+          });
+    });
   }
 
   /** Use the registered range protocol only when its callbacks are actually available. */
@@ -539,11 +503,10 @@ public final class StagnationChatModel implements ChatModel {
   /** The reminder describes one decision, not a permanent restriction after verified work. */
   private List<Message> withoutResumeWorkReminder(List<Message> messages) {
     return messages.stream()
-        .filter(
-            m ->
-                !(m instanceof SystemMessage
-                    && (Boolean.TRUE.equals(m.getMetadata().get("rei.resumeWorkReminder"))
-                        || Boolean.TRUE.equals(m.getMetadata().get("rei.progressFeedback")))))
+        .filter(m ->
+            !(m instanceof SystemMessage
+                && (Boolean.TRUE.equals(m.getMetadata().get("rei.resumeWorkReminder"))
+                    || Boolean.TRUE.equals(m.getMetadata().get("rei.progressFeedback")))))
         .toList();
   }
 
@@ -554,11 +517,10 @@ public final class StagnationChatModel implements ChatModel {
     // The advisor prepends the current handoff; saved continuation messages follow it.
     boolean inventoryDelivered =
         prompt.getInstructions().stream()
-            .filter(
-                m ->
-                    m instanceof SystemMessage
-                        && Boolean.TRUE.equals(m.getMetadata().get("rei.resumeContext"))
-                        && owner.runId().equals(m.getMetadata().get("rei.resumeRunId")))
+            .filter(m ->
+                m instanceof SystemMessage
+                    && Boolean.TRUE.equals(m.getMetadata().get("rei.resumeContext"))
+                    && owner.runId().equals(m.getMetadata().get("rei.resumeRunId")))
             .findFirst()
             .map(m -> Boolean.TRUE.equals(m.getMetadata().get("rei.knownFileInventory")))
             .orElse(false);

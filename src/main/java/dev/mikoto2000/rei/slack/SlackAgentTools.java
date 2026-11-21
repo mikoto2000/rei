@@ -116,21 +116,20 @@ public final class SlackAgentTools {
             + expected;
     authorizeDelegation.accept(authorization, e.runContext());
     e.checkActive();
-    return repository.transaction(
-        () -> {
-          var q =
-              createRequest.apply(
-                  e.runContext(),
-                  new NewRequest(
-                      Objects.toString(context.getContext().get("toolCallId"), ""),
-                      agent,
-                      safe,
-                      expected,
-                      timeoutSeconds == null ? defaultTimeout.getAsInt() : timeoutSeconds,
-                      followUpRequestId));
-          registered.accept(q);
-          return new Receipt(q.id(), q.state(), q.agent());
-        });
+    return repository.transaction(() -> {
+      var q =
+          createRequest.apply(
+              e.runContext(),
+              new NewRequest(
+                  Objects.toString(context.getContext().get("toolCallId"), ""),
+                  agent,
+                  safe,
+                  expected,
+                  timeoutSeconds == null ? defaultTimeout.getAsInt() : timeoutSeconds,
+                  followUpRequestId));
+      registered.accept(q);
+      return new Receipt(q.id(), q.state(), q.agent());
+    });
   }
 
   /** Slackとの連携で用いる外部エージェント状態を返す。 */

@@ -13,11 +13,10 @@ class TokenEstimateCacheTest {
   void unchangedContextTextIsEstimatedOnceAndChangedTextIsRecounted() {
     var calls = new AtomicInteger();
     var cached =
-        TokenEstimator.boundedCache(
-            text -> {
-              calls.incrementAndGet();
-              return text.length();
-            });
+        TokenEstimator.boundedCache(text -> {
+          calls.incrementAndGet();
+          return text.length();
+        });
     for (int iteration = 0; iteration < 100; iteration++)
       assertThat(cached.text("unchanged tool schema")).isEqualTo(21);
     assertThat(calls).hasValue(1);
@@ -29,11 +28,10 @@ class TokenEstimateCacheTest {
   void leastRecentlyUsedEntriesAreEvictedAndHotEntriesRemain() {
     var calls = new AtomicInteger();
     var cached =
-        TokenEstimator.boundedCache(
-            text -> {
-              calls.incrementAndGet();
-              return text.length();
-            });
+        TokenEstimator.boundedCache(text -> {
+          calls.incrementAndGet();
+          return text.length();
+        });
     cached.text("hot");
     for (int index = 0; index < 1023; index++) cached.text("key-" + index);
     cached.text("hot");
@@ -48,11 +46,10 @@ class TokenEstimateCacheTest {
   void characterCapacityEvictsEntriesAndGiantTextBypassesRetention() {
     var calls = new AtomicInteger();
     var cached =
-        TokenEstimator.boundedCache(
-            text -> {
-              calls.incrementAndGet();
-              return text == null ? 0 : text.length();
-            });
+        TokenEstimator.boundedCache(text -> {
+          calls.incrementAndGet();
+          return text == null ? 0 : text.length();
+        });
     String first = "0" + "x".repeat(32000);
     for (int index = 0; index < 35; index++) cached.text(index + "x".repeat(32000));
     cached.text(first);
@@ -68,11 +65,10 @@ class TokenEstimateCacheTest {
   void failedEstimatesAreNotCached() {
     var calls = new AtomicInteger();
     var cached =
-        TokenEstimator.boundedCache(
-            text -> {
-              if (calls.incrementAndGet() == 1) throw new IllegalStateException("retryable");
-              return 7;
-            });
+        TokenEstimator.boundedCache(text -> {
+          if (calls.incrementAndGet() == 1) throw new IllegalStateException("retryable");
+          return 7;
+        });
     assertThatThrownBy(() -> cached.text("same")).isInstanceOf(IllegalStateException.class);
     assertThat(cached.text("same")).isEqualTo(7);
     assertThat(calls).hasValue(2);
@@ -96,13 +92,12 @@ class TokenEstimateCacheTest {
       var futures = new ArrayList<java.util.concurrent.Future<?>>();
       for (int worker = 0; worker < 4; worker++)
         futures.add(
-            executor.submit(
-                () -> {
-                  for (int index = 0; index < 1500; index++) {
-                    String text = "文😀" + index;
-                    assertThat(cached.text(text)).isEqualTo(text.codePointCount(0, text.length()));
-                  }
-                }));
+            executor.submit(() -> {
+              for (int index = 0; index < 1500; index++) {
+                String text = "文😀" + index;
+                assertThat(cached.text(text)).isEqualTo(text.codePointCount(0, text.length()));
+              }
+            }));
       for (var future : futures) future.get(10, java.util.concurrent.TimeUnit.SECONDS);
     }
   }

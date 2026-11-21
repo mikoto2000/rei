@@ -170,11 +170,10 @@ class EmbeddingRunModelBudgetTest {
                 .inputSchema("{}")
                 .build());
     when(callback.call(anyString(), any(org.springframework.ai.chat.model.ToolContext.class)))
-        .thenAnswer(
-            invocation -> {
-              model.embed("query");
-              return "found";
-            });
+        .thenAnswer(invocation -> {
+          model.embed("query");
+          return "found";
+        });
     var decorated =
         new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
             callback,

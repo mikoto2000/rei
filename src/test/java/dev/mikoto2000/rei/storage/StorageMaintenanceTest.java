@@ -87,25 +87,23 @@ class StorageMaintenanceTest {
   @Test
   void passiveCheckpointReportsAnOngoingReaderAndVacuumCanReclaimFreePagesInExplicitWindow()
       throws Exception {
-    registry.database.transaction(
-        db -> {
-          try (var query = db.createStatement()) {
-            query.execute("CREATE TABLE maintenance_fixture(value BLOB)");
-            query.execute("INSERT INTO maintenance_fixture VALUES(zeroblob(4194304))");
-          }
-          return null;
-        });
+    registry.database.transaction(db -> {
+      try (var query = db.createStatement()) {
+        query.execute("CREATE TABLE maintenance_fixture(value BLOB)");
+        query.execute("INSERT INTO maintenance_fixture VALUES(zeroblob(4194304))");
+      }
+      return null;
+    });
     try (var reader = StorageBackup.readOnly(root.resolve("storage.db"));
         var query = reader.createStatement();
         var rows = query.executeQuery("SELECT value FROM maintenance_fixture")) {
       assertThat(rows.next()).isTrue();
-      registry.database.transaction(
-          db -> {
-            try (var write = db.createStatement()) {
-              write.execute("DELETE FROM maintenance_fixture");
-            }
-            return null;
-          });
+      registry.database.transaction(db -> {
+        try (var write = db.createStatement()) {
+          write.execute("DELETE FROM maintenance_fixture");
+        }
+        return null;
+      });
       var checkpoint = maintenance.checkpoint();
       assertThat(checkpoint.logFrames()).isGreaterThan(checkpoint.checkpointedFrames());
       assertThatThrownBy(() -> maintenance.vacuum(Duration.ofSeconds(30)))
@@ -130,15 +128,14 @@ class StorageMaintenanceTest {
     }
     var objects = new StorageObjectRegistry(separate);
     var maintenance = new StorageMaintenance(objects);
-    objects.database.transaction(
-        db -> {
-          try (var query = db.createStatement()) {
-            query.execute("CREATE TABLE free_fixture(value BLOB)");
-            query.execute("INSERT INTO free_fixture VALUES(zeroblob(4194304))");
-            query.execute("DELETE FROM free_fixture");
-          }
-          return null;
-        });
+    objects.database.transaction(db -> {
+      try (var query = db.createStatement()) {
+        query.execute("CREATE TABLE free_fixture(value BLOB)");
+        query.execute("INSERT INTO free_fixture VALUES(zeroblob(4194304))");
+        query.execute("DELETE FROM free_fixture");
+      }
+      return null;
+    });
     var before = maintenance.status();
     assertThat(before.autoVacuum()).isEqualTo(2);
     assertThat(maintenance.incrementalVacuum(10)).isTrue();

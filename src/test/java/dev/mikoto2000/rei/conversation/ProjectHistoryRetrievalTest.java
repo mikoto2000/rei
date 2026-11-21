@@ -161,15 +161,13 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
   @Test
   void ambiguousAndUnknownExplicitNamesAreRejected() throws Exception {
     registry.resolve(Files.createDirectories(temp.resolve("nested/MaCa Editor")));
-    assertThatThrownBy(
-            () ->
-                service.search(
-                    request("needle", HistorySearchScope.CURRENT_PROJECT_PREFERRED, "MaCa Editor")))
+    assertThatThrownBy(() ->
+            service.search(
+                request("needle", HistorySearchScope.CURRENT_PROJECT_PREFERRED, "MaCa Editor")))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(
-            () ->
-                service.search(
-                    request("needle", HistorySearchScope.CURRENT_PROJECT_PREFERRED, "missing")))
+    assertThatThrownBy(() ->
+            service.search(
+                request("needle", HistorySearchScope.CURRENT_PROJECT_PREFERRED, "missing")))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -413,23 +411,21 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     var mailbox = new UserInterventionQueue();
     try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
       var future =
-          executor.submit(
-              () -> {
-                assertThat(AgentRunScope.current()).isNull();
-                entered.countDown();
-                if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
-                  throw new AssertionError("release timeout");
-                String input =
-                    new ObjectMapper()
-                        .writeValueAsString(Map.of("query", mailbox.drain().getFirst()));
-                String result =
-                    decorated.call(
-                        input,
-                        new org.springframework.ai.chat.model.ToolContext(
-                            Map.of(AgentRunContext.class.getName(), run)));
-                assertThat(AgentRunScope.current()).isNull();
-                return result;
-              });
+          executor.submit(() -> {
+            assertThat(AgentRunScope.current()).isNull();
+            entered.countDown();
+            if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+              throw new AssertionError("release timeout");
+            String input =
+                new ObjectMapper().writeValueAsString(Map.of("query", mailbox.drain().getFirst()));
+            String result =
+                decorated.call(
+                    input,
+                    new org.springframework.ai.chat.model.ToolContext(
+                        Map.of(AgentRunContext.class.getName(), run)));
+            assertThat(AgentRunScope.current()).isNull();
+            return result;
+          });
       try {
         assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
         mailbox.offer("needle");

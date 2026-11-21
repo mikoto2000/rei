@@ -43,11 +43,11 @@ public final class ReminderService {
     return jdbcClient
         .sql(
             """
-        SELECT id, message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at
-        FROM reminders
-        WHERE notified = 0
-        ORDER BY remind_at_epoch ASC, id ASC
-        """)
+            SELECT id, message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at
+            FROM reminders
+            WHERE notified = 0
+            ORDER BY remind_at_epoch ASC, id ASC
+            """)
         .query(this::mapReminder)
         .list();
   }
@@ -57,11 +57,11 @@ public final class ReminderService {
     return jdbcClient
         .sql(
             """
-        SELECT id, message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at
-        FROM reminders
-        WHERE notified = 0 AND remind_at_epoch <= ?
-        ORDER BY remind_at_epoch ASC, id ASC
-        """)
+            SELECT id, message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at
+            FROM reminders
+            WHERE notified = 0 AND remind_at_epoch <= ?
+            ORDER BY remind_at_epoch ASC, id ASC
+            """)
         .param(toEpochMillis(now))
         .query(this::mapReminder)
         .list();
@@ -72,10 +72,10 @@ public final class ReminderService {
     jdbcClient
         .sql(
             """
-        UPDATE reminders
-        SET notified = 1, notified_at = ?
-        WHERE id = ?
-        """)
+            UPDATE reminders
+            SET notified = 1, notified_at = ?
+            WHERE id = ?
+            """)
         .params(notifiedAt.toString(), id)
         .update();
 
@@ -99,10 +99,10 @@ public final class ReminderService {
         jdbcClient
             .sql(
                 """
-        INSERT INTO reminders (message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at)
-        VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
-        RETURNING id
-        """)
+                INSERT INTO reminders (message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at)
+                VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+                RETURNING id
+                """)
             .params(
                 message,
                 type.name(),
@@ -124,10 +124,10 @@ public final class ReminderService {
     return jdbcClient
         .sql(
             """
-        SELECT id, message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at
-        FROM reminders
-        WHERE id = ?
-        """)
+            SELECT id, message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at
+            FROM reminders
+            WHERE id = ?
+            """)
         .param(id)
         .query(this::mapReminder)
         .single();

@@ -73,10 +73,9 @@ public final class LocalDelegationFailure {
     String paths =
         errors.stream()
             .limit(4)
-            .map(
-                e ->
-                    dev.mikoto2000.rei.event.CredentialRedactor.redact(e.path())
-                        .replaceAll("[\\p{Cntrl}]", " "))
+            .map(e ->
+                dev.mikoto2000.rei.event.CredentialRedactor.redact(e.path())
+                    .replaceAll("[\\p{Cntrl}]", " "))
             .map(p -> p.length() > 80 ? p.substring(0, 80) : p)
             .collect(java.util.stream.Collectors.joining(", "));
     return "RESULT_VALIDATION_FAILED: 子の出力が結果スキーマ・検証条件に適合しません。検証箇所: " + paths;

@@ -191,14 +191,13 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
           .setDataStoreFactory(
               new FileDataStoreFactory(Path.of(properties.tokensDirectory()).toFile()))
           .setAccessType("offline")
-          .setRequestInitializer(
-              request -> {
-                request.setLoggingEnabled(false);
-                request.setCurlLoggingEnabled(false);
-                request.setConnectTimeout(10000);
-                request.setReadTimeout(15000);
-                request.setNumberOfRetries(0);
-              })
+          .setRequestInitializer(request -> {
+            request.setLoggingEnabled(false);
+            request.setCurlLoggingEnabled(false);
+            request.setConnectTimeout(10000);
+            request.setReadTimeout(15000);
+            request.setNumberOfRetries(0);
+          })
           .build();
     }
   }

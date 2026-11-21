@@ -40,8 +40,8 @@ class DailySummaryTest {
     var dominant = new ArrayList<>(List.of("review"));
     var bucket =
         new DailySummaryAggregate.Bucket(
-            20, seconds, dominant, List.of(), List.of(), List.of(), List.of(), List.of(),
-            List.of(), List.of());
+            20, seconds, dominant, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+            List.of());
 
     seconds.clear();
     dominant.clear();
@@ -111,17 +111,16 @@ class DailySummaryTest {
           .lines()
           .skip(1)
           .filter(s -> !s.isBlank())
-          .map(
-              line -> {
-                var p = line.split(",", -1);
-                return segment(
-                    Integer.parseInt(p[0]),
-                    Integer.parseInt(p[1]),
-                    p[2],
-                    p[3],
-                    p[4],
-                    EntertainmentDisposition.valueOf(p[5]));
-              })
+          .map(line -> {
+            var p = line.split(",", -1);
+            return segment(
+                Integer.parseInt(p[0]),
+                Integer.parseInt(p[1]),
+                p[2],
+                p[3],
+                p[4],
+                EntertainmentDisposition.valueOf(p[5]));
+          })
           .toList();
     }
   }
@@ -301,15 +300,14 @@ class DailySummaryTest {
   void twoHundredSegmentsStillProduceBoundedInputAndOutput() throws Exception {
     var source =
         java.util.stream.IntStream.range(0, 200)
-            .mapToObj(
-                i ->
-                    segment(
-                        i * 7,
-                        120,
-                        "development",
-                        "project-" + i,
-                        "GitHub",
-                        EntertainmentDisposition.NON_ENTERTAINMENT))
+            .mapToObj(i ->
+                segment(
+                    i * 7,
+                    120,
+                    "development",
+                    "project-" + i,
+                    "GitHub",
+                    EntertainmentDisposition.NON_ENTERTAINMENT))
             .toList();
     var a = aggregate(source);
     assertThat(new DailySummaryFormatter().format(a, DailySummary.fallback(a)).length())

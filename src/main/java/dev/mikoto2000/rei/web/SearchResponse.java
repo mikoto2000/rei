@@ -14,13 +14,9 @@ import java.util.List;
 public record SearchResponse(String query, List<VectorHit> vectorResults, List<WebHit> webResults) {
   public SearchResponse {
     vectorResults =
-        vectorResults == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(vectorResults));
+        vectorResults == null ? null : Collections.unmodifiableList(new ArrayList<>(vectorResults));
     webResults =
-        webResults == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(webResults));
+        webResults == null ? null : Collections.unmodifiableList(new ArrayList<>(webResults));
   }
 
   /**
@@ -61,15 +57,9 @@ public record SearchResponse(String query, List<VectorHit> vectorResults, List<W
             .map(v -> new VectorHit(v.docId(), v.source(), v.chunkIndex(), v.score(), v.snippet()))
             .toList(),
         r.webContext().allResults().stream()
-            .map(
-                w ->
-                    new WebHit(
-                        w.title(),
-                        w.url(),
-                        w.snippet(),
-                        w.publishedAt(),
-                        w.content(),
-                        w.truncated()))
+            .map(w ->
+                new WebHit(
+                    w.title(), w.url(), w.snippet(), w.publishedAt(), w.content(), w.truncated()))
             .toList());
   }
 }

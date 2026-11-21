@@ -76,13 +76,12 @@ public class CheckpointController {
     return new Text(
         String.valueOf(
             listCheckpoints.apply(projectId).stream()
-                .map(
-                    state ->
-                        state.taskId()
-                            + " ["
-                            + state.status()
-                            + "] "
-                            + PersistentCheckpointService.bounded(state.request(), 160))
+                .map(state ->
+                    state.taskId()
+                        + " ["
+                        + state.status()
+                        + "] "
+                        + PersistentCheckpointService.bounded(state.request(), 160))
                 .toList()));
   }
 

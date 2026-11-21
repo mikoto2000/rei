@@ -596,11 +596,10 @@ public final class HttpResponseCache implements AutoCloseable {
 
     /** 指定された値や利用先を使って、LoadTaskを初期化する。 */
     LoadTask(Flight flight) {
-      super(
-          () -> {
-            load(flight);
-            return null;
-          });
+      super(() -> {
+        load(flight);
+        return null;
+      });
     }
 
     /** 取得した情報の再利用の操作を実行する。 */

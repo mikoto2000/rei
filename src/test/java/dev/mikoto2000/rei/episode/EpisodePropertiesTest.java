@@ -23,13 +23,12 @@ class EpisodePropertiesTest {
         .withUserConfiguration(Settings.class)
         .withPropertyValues(
             "rei.memory.episodes.enabled=true", "rei.memory.episodes.dense-enabled=true")
-        .run(
-            context -> {
-              assertNull(context.getStartupFailure());
-              var properties = context.getBean(EpisodeProperties.class);
-              assertTrue(properties.enabled());
-              assertTrue(properties.denseEnabled());
-            });
+        .run(context -> {
+          assertNull(context.getStartupFailure());
+          var properties = context.getBean(EpisodeProperties.class);
+          assertTrue(properties.enabled());
+          assertTrue(properties.denseEnabled());
+        });
   }
 
   /** 過去の経験の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
@@ -37,18 +36,16 @@ class EpisodePropertiesTest {
   void denseConfigurationNeverNeedsAProviderWhenDisabledOrEmbeddingIsDisabled() {
     new ApplicationContextRunner()
         .withUserConfiguration(EpisodeDenseConfiguration.class)
-        .run(
-            context -> {
-              assertNull(context.getStartupFailure());
-              assertFalse(context.containsBean("episodeDenseIndex"));
-            });
+        .run(context -> {
+          assertNull(context.getStartupFailure());
+          assertFalse(context.containsBean("episodeDenseIndex"));
+        });
     new ApplicationContextRunner()
         .withUserConfiguration(EpisodeDenseConfiguration.class)
         .withPropertyValues("rei.memory.episodes.dense-enabled=true", "rei.embedding.enabled=false")
-        .run(
-            context -> {
-              assertNull(context.getStartupFailure());
-              assertFalse(context.containsBean("episodeDenseIndex"));
-            });
+        .run(context -> {
+          assertNull(context.getStartupFailure());
+          assertFalse(context.containsBean("episodeDenseIndex"));
+        });
   }
 }

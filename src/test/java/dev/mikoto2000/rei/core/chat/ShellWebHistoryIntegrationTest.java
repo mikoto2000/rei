@@ -170,7 +170,8 @@ class ShellWebHistoryIntegrationTest {
                 AgentRunContext.RequestSource.SHELL,
                 AgentRunContext.RequestSource.WEB,
                 AgentRunContext.RequestSource.SHELL);
-        assertThat(modelInputs.getLast().toString()).contains("shell-one", "web-two", "shell-three");
+        assertThat(modelInputs.getLast().toString())
+            .contains("shell-one", "web-two", "shell-three");
         mvc.perform(get("/api/v1/sessions/{id}/turns", first.conversationId()))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.items.length()").value(3))

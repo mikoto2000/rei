@@ -63,21 +63,19 @@ class ActivityTimingTest {
       var events = appender.list.stream().map(e -> e.getFormattedMessage()).toList();
       assertTrue(
           events.stream()
-              .anyMatch(
-                  s ->
-                      s.contains("Activity vision timing")
-                          && s.contains("input_prepare_ms=")
-                          && s.contains("llm_roundtrip_ms=")
-                          && s.contains("output_parse_ms=")
-                          && s.contains("png_bytes=")
-                          && s.contains("status=" + (limit ? "output_limit" : "success"))));
+              .anyMatch(s ->
+                  s.contains("Activity vision timing")
+                      && s.contains("input_prepare_ms=")
+                      && s.contains("llm_roundtrip_ms=")
+                      && s.contains("output_parse_ms=")
+                      && s.contains("png_bytes=")
+                      && s.contains("status=" + (limit ? "output_limit" : "success"))));
       assertTrue(
           events.stream()
-              .noneMatch(
-                  s ->
-                      s.contains("PRIVATE_TITLE")
-                          || s.contains("PRIVATE_RESPONSE")
-                          || s.contains(ActivityExtractionTest.VALID)));
+              .noneMatch(s ->
+                  s.contains("PRIVATE_TITLE")
+                      || s.contains("PRIVATE_RESPONSE")
+                      || s.contains(ActivityExtractionTest.VALID)));
     } finally {
       logger.detachAppender(appender);
       appender.stop();
@@ -109,10 +107,9 @@ class ActivityTimingTest {
               .anyMatch(e -> e.getFormattedMessage().contains("status=request_failed")));
       assertTrue(
           appender.list.stream()
-              .noneMatch(
-                  e ->
-                      e.getFormattedMessage().contains("PRIVATE_NETWORK_DATA")
-                          || e.getThrowableProxy() != null));
+              .noneMatch(e ->
+                  e.getFormattedMessage().contains("PRIVATE_NETWORK_DATA")
+                      || e.getThrowableProxy() != null));
     } finally {
       logger.detachAppender(appender);
       appender.stop();

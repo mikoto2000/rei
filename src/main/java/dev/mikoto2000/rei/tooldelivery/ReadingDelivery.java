@@ -249,16 +249,15 @@ public final class ReadingDelivery {
         previous.stream()
             .filter(e -> e.path().equals(path) && e.version().equals(version))
             .filter(e -> e.start() <= end && (long) e.start() + e.hashes().size() > start)
-            .map(
-                e ->
-                    new SourceEvidence(
-                        e.path(),
-                        e.version(),
-                        e.start(),
-                        e.start() + e.hashes().size() - 1,
-                        null,
-                        "file-read",
-                        e.ref()))
+            .map(e ->
+                new SourceEvidence(
+                    e.path(),
+                    e.version(),
+                    e.start(),
+                    e.start() + e.hashes().size() - 1,
+                    null,
+                    "file-read",
+                    e.ref()))
             .limit(2)
             .toList();
     if (suppress) ReadingMetrics.add("suppressedBodyBytes", result.path("returnedBytes").asInt());
@@ -296,13 +295,12 @@ public final class ReadingDelivery {
       int line = result.path("startLine").asInt() + index;
       String hash = hash(result.path("content").get(index).asText());
       if (entries.stream()
-          .noneMatch(
-              e ->
-                  e.path().equals(path)
-                      && e.version().equals(result.path("version").asText())
-                      && line >= e.start()
-                      && line - e.start() < e.hashes().size()
-                      && e.hashes().get(line - e.start()).equals(hash))) return false;
+          .noneMatch(e ->
+              e.path().equals(path)
+                  && e.version().equals(result.path("version").asText())
+                  && line >= e.start()
+                  && line - e.start() < e.hashes().size()
+                  && e.hashes().get(line - e.start()).equals(hash))) return false;
     }
     return true;
   }

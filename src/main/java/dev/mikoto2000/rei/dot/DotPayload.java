@@ -180,7 +180,8 @@ public final class DotPayload {
       String state = text(check, "status", true, 30);
       if (!Set.of("SATISFIED", "UNSATISFIED", "UNKNOWN").contains(state))
         throw new DotException("INVALID_ARGUMENT");
-      Object refs = check.containsKey("evidence_indices") ? check.get("evidence_indices") : List.of();
+      Object refs =
+          check.containsKey("evidence_indices") ? check.get("evidence_indices") : List.of();
       if (!(refs instanceof List<?> indices) || indices.size() > 20)
         throw new DotException("INVALID_ARGUMENT");
       var indicesOut = new ArrayList<Integer>();
@@ -199,7 +200,8 @@ public final class DotPayload {
   /** 利用者の状態表示に関するキー一覧を処理する。 */
   public static void keys(Map<?, ?> a, Set<String> keys) {
     if (a == null
-        || a.keySet().stream().anyMatch(key -> !(key instanceof String name) || !keys.contains(name)))
+        || a.keySet().stream()
+            .anyMatch(key -> !(key instanceof String name) || !keys.contains(name)))
       throw new DotException("INVALID_ARGUMENT");
   }
 }

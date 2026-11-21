@@ -193,12 +193,11 @@ class ToolApprovalRepositoryTest {
                 "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
                 owner("p", "s", "r2")));
     assertEquals("APPROVED", repository.get("p", request.id()).status());
-    assertDoesNotThrow(
-        () ->
-            guard.check(
-                "writeMultiFile",
-                "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
-                owner("p", "s", "r2")));
+    assertDoesNotThrow(() ->
+        guard.check(
+            "writeMultiFile",
+            "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
+            owner("p", "s", "r2")));
     assertThrows(
         ToolPermissionException.class,
         () ->

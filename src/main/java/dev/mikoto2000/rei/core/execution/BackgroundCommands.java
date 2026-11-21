@@ -241,13 +241,12 @@ public class BackgroundCommands {
                 result.source(),
                 result.startedAt());
         try {
-          executeAuxiliary.accept(
-              () -> {
-                var scope = ExecutionScope.open(execution);
-                try (scope) {
-                  summaryNarrator.narrateCompletedRun(text);
-                }
-              });
+          executeAuxiliary.accept(() -> {
+            var scope = ExecutionScope.open(execution);
+            try (scope) {
+              summaryNarrator.narrateCompletedRun(text);
+            }
+          });
         } catch (java.util.concurrent.RejectedExecutionException error) {
           org.slf4j.LoggerFactory.getLogger(getClass())
               .debug("Summary narration could not be scheduled", error);

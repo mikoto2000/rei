@@ -150,11 +150,10 @@ public class ProgressEvaluator {
       scanCoverage = scanCoverage == null ? Map.of() : Map.copyOf(scanCoverage);
       if (scanCoverage.size() > 256
           || scanCoverage.entrySet().stream()
-              .anyMatch(
-                  entry ->
-                      !entry.getKey().matches("[0-9a-f]{64}")
-                          || entry.getValue() < 1
-                          || entry.getValue() > 1000000))
+              .anyMatch(entry ->
+                  !entry.getKey().matches("[0-9a-f]{64}")
+                      || entry.getValue() < 1
+                      || entry.getValue() > 1000000))
         throw new IllegalArgumentException("Invalid scan coverage");
       if (restorationReads < 0
           || restorationReads > 8
@@ -214,12 +213,11 @@ public class ProgressEvaluator {
     if (restorationTargets == null || restorationReads >= 8) return;
     boolean target =
         restorationTargets.files().stream()
-            .anyMatch(
-                f ->
-                    f.normalizedPath().equals(path)
-                        && f.revision().equals(version)
-                        && f.ranges().stream()
-                            .anyMatch(r -> r.startInclusive() <= start && r.endExclusive() >= end));
+            .anyMatch(f ->
+                f.normalizedPath().equals(path)
+                    && f.revision().equals(version)
+                    && f.ranges().stream()
+                        .anyMatch(r -> r.startInclusive() <= start && r.endExclusive() >= end));
     if (target
         && restoredRanges.observeRange(path, version, start, end).status()
             == InformationLedger.Status.NEW) {
@@ -381,21 +379,20 @@ public class ProgressEvaluator {
     List<ProgressEvidence> evidence = new ArrayList<>();
     before
         .files()
-        .forEach(
-            (path, original) -> {
-              String current = fingerprint(path);
-              if (!original.equals("unavailable")
-                  && !current.equals("unavailable")
-                  && !original.equals(current)
-                  && rememberProgress(revisions, path + ":" + current, path.toString(), evidence)) {
-                evidence.add(
-                    new ProgressEvidence(
-                        ProgressEvent.STATE_CHANGED,
-                        "File content/existence changed",
-                        path.toString(),
-                        current));
-              }
-            });
+        .forEach((path, original) -> {
+          String current = fingerprint(path);
+          if (!original.equals("unavailable")
+              && !current.equals("unavailable")
+              && !original.equals(current)
+              && rememberProgress(revisions, path + ":" + current, path.toString(), evidence)) {
+            evidence.add(
+                new ProgressEvidence(
+                    ProgressEvent.STATE_CHANGED,
+                    "File content/existence changed",
+                    path.toString(),
+                    current));
+          }
+        });
     for (String step : doneSteps()) {
       if (!before.completedSteps().contains(step)
           && rememberProgress(completedSteps, step, step, evidence)) {
@@ -408,13 +405,12 @@ public class ProgressEvaluator {
       plan.steps().stream()
           .filter(s -> ActionPlan.STATUS_IN_PROGRESS.equals(s.status()))
           .filter(s -> rememberProgress(startedSteps, s.id(), s.id(), evidence))
-          .forEach(
-              s ->
-                  evidence.add(
-                      new ProgressEvidence(
-                          ProgressEvent.STEP_CHANGED,
-                          "Plan step started (completion still requires verification)",
-                          s.id())));
+          .forEach(s ->
+              evidence.add(
+                  new ProgressEvidence(
+                      ProgressEvent.STEP_CHANGED,
+                      "Plan step started (completion still requires verification)",
+                      s.id())));
     JsonNode output = parse(result);
     if (name.equals("scanReviewSnapshot") && output != null) {
       String task = output.path("id").asText(), snapshot = output.path("snapshot").asText();
@@ -1113,10 +1109,9 @@ public class ProgressEvaluator {
     return plan == null
         ? List.of()
         : plan.steps().stream()
-            .filter(
-                s ->
-                    !ActionPlan.STATUS_DONE.equals(s.status())
-                        && !ActionPlan.STATUS_SKIPPED.equals(s.status()))
+            .filter(s ->
+                !ActionPlan.STATUS_DONE.equals(s.status())
+                    && !ActionPlan.STATUS_SKIPPED.equals(s.status()))
             .limit(100)
             .map(s -> s.id())
             .toList();
@@ -1131,18 +1126,17 @@ public class ProgressEvaluator {
     }
     if (!node.isObject()) return;
     node.properties()
-        .forEach(
-            entry -> {
-              if (Set.of("path", "pathStr", "sourcePath", "destPath").contains(entry.getKey())
-                  && entry.getValue().isTextual()) {
-                try {
-                  Path path = root.resolve(entry.getValue().asText()).normalize();
-                  files.put(path, fingerprint(path));
-                } catch (RuntimeException ignored) {
-                  /* Tool validates invalid paths. */
-                }
-              } else if (entry.getValue().isContainerNode()) collectPaths(entry.getValue(), files);
-            });
+        .forEach(entry -> {
+          if (Set.of("path", "pathStr", "sourcePath", "destPath").contains(entry.getKey())
+              && entry.getValue().isTextual()) {
+            try {
+              Path path = root.resolve(entry.getValue().asText()).normalize();
+              files.put(path, fingerprint(path));
+            } catch (RuntimeException ignored) {
+              /* Tool validates invalid paths. */
+            }
+          } else if (entry.getValue().isContainerNode()) collectPaths(entry.getValue(), files);
+        });
   }
 
   /** 実行の停滞への対処で用いる要求内容の照合値を返す。 */
@@ -1201,16 +1195,15 @@ public class ProgressEvaluator {
         return;
       }
     }
-    changed.forEach(
-        (path, revision) -> {
-          if (rememberProgress(revisions, path + ":" + revision, path.toString(), evidence))
-            evidence.add(
-                new ProgressEvidence(
-                    ProgressEvent.STATE_CHANGED,
-                    "Applied document Change Set revision observed",
-                    path.toString(),
-                    revision));
-        });
+    changed.forEach((path, revision) -> {
+      if (rememberProgress(revisions, path + ":" + revision, path.toString(), evidence))
+        evidence.add(
+            new ProgressEvidence(
+                ProgressEvent.STATE_CHANGED,
+                "Applied document Change Set revision observed",
+                path.toString(),
+                revision));
+    });
   }
 
   /** Missing files use the same revision key as ordinary write snapshots. */

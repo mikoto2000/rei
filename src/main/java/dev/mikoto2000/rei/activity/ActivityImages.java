@@ -123,10 +123,9 @@ final class ActivityImages {
   static CapturedScreen selectDesktop(CapturedScreen screen, ActivityProperties p) {
     var selected =
         screen.displays().stream()
-            .filter(
-                d ->
-                    p.getDesktopContext().getMonitors().isEmpty()
-                        || p.getDesktopContext().getMonitors().contains(d.geometry().id()))
+            .filter(d ->
+                p.getDesktopContext().getMonitors().isEmpty()
+                    || p.getDesktopContext().getMonitors().contains(d.geometry().id()))
             .toList();
     return selected.isEmpty() ? null : new CapturedScreen(selected);
   }

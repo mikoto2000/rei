@@ -70,30 +70,29 @@ class SecretaryFollowupIntegrationTest {
           new SecretaryFollowups.Settings("p", true, true, "", "", "UTC", 86400, 1, "DELIVERY"));
       service.checkNow("p");
       assertEquals("SUPPRESSED", service.history("p", 100).getFirst().status());
-      db.transaction(
-          connection -> {
-            try (var sql = connection.createStatement()) {
-              sql.executeUpdate("UPDATE secretary_notices SET status='SENDING',attempts=5,next=0");
-            }
-            var other =
-                new SecretaryNotifications.Notice(
-                    java.util.UUID.randomUUID().toString(),
-                    "q",
-                    null,
-                    "BRIEFING",
-                    "brief",
-                    3,
-                    "INBOX",
-                    clock.instant());
-            try (var insert =
-                connection.prepareStatement(
-                    "INSERT INTO secretary_notices(id,project,task,kind,status,attempts,next,record,priority,created) VALUES(?,'q',NULL,'BRIEFING','SENDING',5,0,?,3,0)")) {
-              insert.setString(1, other.id());
-              insert.setString(2, SecretaryJson.JSON.writeValueAsString(other));
-              insert.executeUpdate();
-            }
-            return null;
-          });
+      db.transaction(connection -> {
+        try (var sql = connection.createStatement()) {
+          sql.executeUpdate("UPDATE secretary_notices SET status='SENDING',attempts=5,next=0");
+        }
+        var other =
+            new SecretaryNotifications.Notice(
+                java.util.UUID.randomUUID().toString(),
+                "q",
+                null,
+                "BRIEFING",
+                "brief",
+                3,
+                "INBOX",
+                clock.instant());
+        try (var insert =
+            connection.prepareStatement(
+                "INSERT INTO secretary_notices(id,project,task,kind,status,attempts,next,record,priority,created) VALUES(?,'q',NULL,'BRIEFING','SENDING',5,0,?,3,0)")) {
+          insert.setString(1, other.id());
+          insert.setString(2, SecretaryJson.JSON.writeValueAsString(other));
+          insert.executeUpdate();
+        }
+        return null;
+      });
       service.checkNow("p");
       assertEquals("FAILED", service.history("p", 100).getFirst().status());
       assertEquals("delivery_result_unconfirmed", service.history("p", 100).getFirst().error());

@@ -116,12 +116,10 @@ class DependencyObservationServiceTest {
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(probe);
     when(probe.probe(any()))
-        .thenAnswer(
-            invocation -> {
-              repo.cancel(project, parent.id());
-              return new DependencyObservation(
-                  parent.id(), DependencyState.COMPLETED, "file_exists");
-            });
+        .thenAnswer(invocation -> {
+          repo.cancel(project, parent.id());
+          return new DependencyObservation(parent.id(), DependencyState.COMPLETED, "file_exists");
+        });
     assertEquals(DependencyState.CANCELLED, service.inspect(project, parent.id(), false).state());
     var late =
         new DependencyObservationService(

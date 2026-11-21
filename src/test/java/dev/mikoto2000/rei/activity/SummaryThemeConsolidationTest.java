@@ -266,15 +266,14 @@ class SummaryThemeConsolidationTest {
   void failedWriterUsesConsolidatedFallbackAndRejectsChildOutput() throws Exception {
     var a = configured(fixture(), CONFIG);
     var fallback = DailySummary.fallback(a);
-    assertThatThrownBy(
-            () ->
-                new DailySummary(
-                        fallback.overview(),
-                        fallback.timeOfDay(),
-                        List.of("livevingo の翻訳"),
-                        fallback.nonWorkActivities(),
-                        fallback.trend())
-                    .validated(a))
+    assertThatThrownBy(() ->
+            new DailySummary(
+                    fallback.overview(),
+                    fallback.timeOfDay(),
+                    List.of("livevingo の翻訳"),
+                    fallback.nonWorkActivities(),
+                    fallback.trend())
+                .validated(a))
         .isInstanceOf(IllegalArgumentException.class);
     var file = dir.resolve("fallback.yaml");
     Files.writeString(file, CONFIG);

@@ -124,10 +124,9 @@ class ThemeAttributionTest {
             ActivityEvidenceDisplayFormatter.Source.WINDOW_METADATA);
     assertThat(a.provenance())
         .hasSize(20)
-        .allMatch(
-            p ->
-                p.origin() == ProjectThemeAssociation.Origin.SAME_ACTIVITY_TITLE
-                    && p.monitor().equals("m"));
+        .allMatch(p ->
+            p.origin() == ProjectThemeAssociation.Origin.SAME_ACTIVITY_TITLE
+                && p.monitor().equals("m"));
     assertThat(aggregate(source).dominantThemes()).containsExactly("livevingo の翻訳");
   }
 

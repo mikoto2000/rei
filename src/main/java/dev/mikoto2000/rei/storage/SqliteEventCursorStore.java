@@ -52,25 +52,24 @@ public final class SqliteEventCursorStore {
   /** 新たな処理を開始できるよう、SQLiteイベント続きの取得位置保存先を初期状態へ戻す。 */
   public void reset(String project) {
     String scope = scope(project);
-    database.transaction(
-        db -> {
-          long generation;
-          try (var query =
-              db.prepareStatement("SELECT generation FROM event_cursors WHERE project_id=?")) {
-            query.setString(1, scope);
-            try (var rows = query.executeQuery()) {
-              generation = rows.next() ? Math.addExact(rows.getLong(1), 1) : 0;
-            }
-          }
-          try (var update =
-              db.prepareStatement(
-                  "INSERT INTO event_cursors(project_id,sequence,generation,converted) VALUES(?,0,?,1) ON CONFLICT(project_id) DO UPDATE SET sequence=0,generation=excluded.generation,converted=1")) {
-            update.setString(1, scope);
-            update.setLong(2, generation);
-            update.executeUpdate();
-          }
-          return null;
-        });
+    database.transaction(db -> {
+      long generation;
+      try (var query =
+          db.prepareStatement("SELECT generation FROM event_cursors WHERE project_id=?")) {
+        query.setString(1, scope);
+        try (var rows = query.executeQuery()) {
+          generation = rows.next() ? Math.addExact(rows.getLong(1), 1) : 0;
+        }
+      }
+      try (var update =
+          db.prepareStatement(
+              "INSERT INTO event_cursors(project_id,sequence,generation,converted) VALUES(?,0,?,1) ON CONFLICT(project_id) DO UPDATE SET sequence=0,generation=excluded.generation,converted=1")) {
+        update.setString(1, scope);
+        update.setLong(2, generation);
+        update.executeUpdate();
+      }
+      return null;
+    });
   }
 
   /** データ保存の共通処理において、比較および集合に該当するか判定する。 */
@@ -79,37 +78,35 @@ public final class SqliteEventCursorStore {
       throw new IllegalArgumentException("Cursor cannot move backwards without a new generation");
     if (next == expected.sequence()) {
       // 同じ位置でもCASの成立条件はDBで一度に確認する。未作成や世代違いは成功にしない。
-      return database.read(
-          db -> {
-            try (var query =
-                db.prepareStatement(
-                    "SELECT 1 FROM event_cursors WHERE project_id=? AND sequence=? AND generation=? AND converted=1 AND ?<=COALESCE((SELECT sequence FROM event_sequences WHERE project_id=?),0)")) {
-              String scope = scope(project);
-              query.setString(1, scope);
-              query.setLong(2, expected.sequence());
-              query.setLong(3, expected.generation());
-              query.setLong(4, next);
-              query.setString(5, scope);
-              try (var rows = query.executeQuery()) {
-                return rows.next();
-              }
-            }
-          });
-    }
-    return database.transaction(
-        db -> {
-          try (var update =
-              db.prepareStatement(
-                  "UPDATE event_cursors SET sequence=? WHERE project_id=? AND sequence=? AND generation=? AND converted=1 AND ?<=COALESCE((SELECT sequence FROM event_sequences WHERE project_id=?),0)")) {
-            String scope = scope(project);
-            update.setLong(1, next);
-            update.setString(2, scope);
-            update.setLong(3, expected.sequence());
-            update.setLong(4, expected.generation());
-            update.setLong(5, next);
-            update.setString(6, scope);
-            return update.executeUpdate() == 1;
+      return database.read(db -> {
+        try (var query =
+            db.prepareStatement(
+                "SELECT 1 FROM event_cursors WHERE project_id=? AND sequence=? AND generation=? AND converted=1 AND ?<=COALESCE((SELECT sequence FROM event_sequences WHERE project_id=?),0)")) {
+          String scope = scope(project);
+          query.setString(1, scope);
+          query.setLong(2, expected.sequence());
+          query.setLong(3, expected.generation());
+          query.setLong(4, next);
+          query.setString(5, scope);
+          try (var rows = query.executeQuery()) {
+            return rows.next();
           }
-        });
+        }
+      });
+    }
+    return database.transaction(db -> {
+      try (var update =
+          db.prepareStatement(
+              "UPDATE event_cursors SET sequence=? WHERE project_id=? AND sequence=? AND generation=? AND converted=1 AND ?<=COALESCE((SELECT sequence FROM event_sequences WHERE project_id=?),0)")) {
+        String scope = scope(project);
+        update.setLong(1, next);
+        update.setString(2, scope);
+        update.setLong(3, expected.sequence());
+        update.setLong(4, expected.generation());
+        update.setLong(5, next);
+        update.setString(6, scope);
+        return update.executeUpdate() == 1;
+      }
+    });
   }
 }

@@ -160,10 +160,9 @@ class ImageGenerationServiceTest {
   @Test
   void returnsFailureWhenClientFails() {
     ImageGenerationService service =
-        service(
-            request -> {
-              throw new IllegalStateException("api failed");
-            });
+        service(request -> {
+          throw new IllegalStateException("api failed");
+        });
 
     ImageGenerationResult result =
         service.generate(

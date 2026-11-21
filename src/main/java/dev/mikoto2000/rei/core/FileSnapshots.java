@@ -141,12 +141,11 @@ final class FileSnapshots {
 
   /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   FileSnapshots() {
-    this(
-        path -> {
-          try (var in = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
-            return in.readNBytes(MAX_FILE_BYTES + 1);
-          }
-        });
+    this(path -> {
+      try (var in = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
+        return in.readNBytes(MAX_FILE_BYTES + 1);
+      }
+    });
   }
 
   /** 指定された値や利用先を使って、FileSnapshotsを初期化する。 */

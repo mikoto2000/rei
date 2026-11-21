@@ -56,21 +56,20 @@ public record AcceptanceEvaluation(
             "Evaluation must identify a unique saved criterion, exact patch and PARENT_LLM evaluator");
     }
     return unverified(specification, receipt).stream()
-        .map(
-            original -> {
-              var proposed = byId.get(original.criterionId());
-              if (proposed == null) return original;
-              if (!proposed.evidence().contains("receipt:" + receipt.id())
-                  || !proposed.evidence().contains("patch:" + receipt.patchHash()))
-                return new AcceptanceEvaluation(
-                    original.criterionId(),
-                    "NOT_VERIFIED",
-                    List.of(),
-                    "Parent assertion lacks receipt/patch evidence; Codex success is insufficient",
-                    "PARENT_LLM",
-                    receipt.patchHash());
-              return proposed;
-            })
+        .map(original -> {
+          var proposed = byId.get(original.criterionId());
+          if (proposed == null) return original;
+          if (!proposed.evidence().contains("receipt:" + receipt.id())
+              || !proposed.evidence().contains("patch:" + receipt.patchHash()))
+            return new AcceptanceEvaluation(
+                original.criterionId(),
+                "NOT_VERIFIED",
+                List.of(),
+                "Parent assertion lacks receipt/patch evidence; Codex success is insufficient",
+                "PARENT_LLM",
+                receipt.patchHash());
+          return proposed;
+        })
         .toList();
   }
 
@@ -78,17 +77,16 @@ public record AcceptanceEvaluation(
   static List<AcceptanceEvaluation> unverified(
       ImplementationSpecification specification, IsolatedImplementationService.Receipt receipt) {
     return specification.acceptanceCriteria().stream()
-        .map(
-            c ->
-                new AcceptanceEvaluation(
-                    c.id(),
-                    "NOT_VERIFIED",
-                    receipt.patchHash() == null
-                        ? List.of()
-                        : List.of("receipt:" + receipt.id(), "patch:" + receipt.patchHash()),
-                    "Administrator test exit and static review do not establish this business requirement; parent semantic evaluation required",
-                    "SERVER_EVIDENCE_LIMIT",
-                    receipt.patchHash()))
+        .map(c ->
+            new AcceptanceEvaluation(
+                c.id(),
+                "NOT_VERIFIED",
+                receipt.patchHash() == null
+                    ? List.of()
+                    : List.of("receipt:" + receipt.id(), "patch:" + receipt.patchHash()),
+                "Administrator test exit and static review do not establish this business requirement; parent semantic evaluation required",
+                "SERVER_EVIDENCE_LIMIT",
+                receipt.patchHash()))
         .toList();
   }
 }

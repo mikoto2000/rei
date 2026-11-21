@@ -109,6 +109,10 @@ impl Application {
         }
         Ok(task)
     }
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Forwards the task-control command fields"
+    )]
     pub async fn task_control(
         &self,
         server: &str,

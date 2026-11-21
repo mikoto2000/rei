@@ -546,10 +546,9 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
                     "--max-unknown-share",
                     "--cooldown-days")
                 .stream()
-                .anyMatch(
-                    name ->
-                        spec.commandLine().getParseResult() != null
-                            && spec.commandLine().getParseResult().hasMatchedOption(name)))
+                .anyMatch(name ->
+                    spec.commandLine().getParseResult() != null
+                        && spec.commandLine().getParseResult().hasMatchedOption(name)))
           throw new IllegalArgumentException("criteria options require configure");
         var service = parent.coaching;
         String result;

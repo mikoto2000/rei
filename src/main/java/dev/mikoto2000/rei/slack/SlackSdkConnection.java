@@ -163,17 +163,14 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
               router,
               clock);
       connection.runtime = runtime;
-      runtime.onCompletedAnswer(
-          (session, run) ->
-              turns
-                  .findRun(session, run)
-                  .filter(
-                      turn ->
-                          turn.status()
-                              == dev.mikoto2000.rei.conversation.ConversationTurnStore.Status
-                                  .COMPLETED)
-                  .map(dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn::assistantMessage)
-                  .orElse(null));
+      runtime.onCompletedAnswer((session, run) ->
+          turns
+              .findRun(session, run)
+              .filter(turn ->
+                  turn.status()
+                      == dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED)
+              .map(dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn::assistantMessage)
+              .orElse(null));
       connection.transport = new SdkSlackTransport(methods, auth.getTeamId());
       if (collaboration != null) {
         collaboration.verifyIdentities(
@@ -200,34 +197,30 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
       }
       var receiver = new SlackEnvelopeReceiver(runtime, auth.getTeamId(), collaboration);
       connection.subscription =
-          bus.subscribeBoundary(
-              event -> {
-                try {
-                  runtime.onEvent(event);
-                } catch (RuntimeException error) {
-                  org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class)
-                      .warn("Slack reply persistence unavailable (details omitted)");
-                }
-              });
+          bus.subscribeBoundary(event -> {
+            try {
+              runtime.onEvent(event);
+            } catch (RuntimeException error) {
+              org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class)
+                  .warn("Slack reply persistence unavailable (details omitted)");
+            }
+          });
       var socket =
           connection.slack.socketMode(
               System.getenv("SLACK_APP_TOKEN"), SocketModeClient.Backend.JavaWebSocket);
       connection.socket = socket;
-      socket.addWebSocketMessageListener(
-          raw -> {
-            String ack = receiver.receive(raw);
-            if (ack != null) {
-              try {
-                socket.sendSocketModeResponse(
-                    com.slack.api.socket_mode.response.AckResponse.builder()
-                        .envelopeId(ack)
-                        .build());
-              } catch (RuntimeException failed) {
-                org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class)
-                    .warn("Slack ACK delivery unavailable; receipt retained");
-              }
-            }
-          });
+      socket.addWebSocketMessageListener(raw -> {
+        String ack = receiver.receive(raw);
+        if (ack != null) {
+          try {
+            socket.sendSocketModeResponse(
+                com.slack.api.socket_mode.response.AckResponse.builder().envelopeId(ack).build());
+          } catch (RuntimeException failed) {
+            org.slf4j.LoggerFactory.getLogger(SlackSdkConnection.class)
+                .warn("Slack ACK delivery unavailable; receipt retained");
+          }
+        }
+      });
       socket.setAutoReconnectEnabled(true);
       socket.connect();
       if (collaboration != null) collaboration.enableRequests();

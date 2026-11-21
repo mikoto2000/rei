@@ -143,37 +143,36 @@ class GoalWaitIntegrationTest {
             goals,
             files,
             (claim, run, done) ->
-                jobs.add(
-                    () -> {
-                      var current = new AgentRunContext(run, "session", root, project);
-                      checkpointService.start(current, "Goal continuation");
-                      assertTrue(goals.modelBudget(claim, run).tryReserve());
-                      int n = executions.incrementAndGet();
-                      try {
-                        if (n > 1) Files.writeString(root.resolve("out"), "correct");
-                        var eventFactory =
-                            new dev.mikoto2000.rei.event.AgentEventFactory(Clock.systemUTC());
-                        if (n == 1) {
-                          bus.publishBoundary(
-                              eventFactory
-                                  .toolStarted("effect", "writeFile", "saved partial result")
-                                  .withOwnership(current));
-                          bus.publishBoundary(
-                              eventFactory
-                                  .toolCompleted("effect", "writeFile", 1, "saved")
-                                  .withOwnership(current));
-                        }
-                        checkpointService.finish(current, n > 1 ? "COMPLETED" : "FAILED");
-                        done.accept(
-                            n > 1
-                                ? new GoalLoopService.Outcome(
-                                    ChatExecutionResult.success("done", false))
-                                : new GoalLoopService.Outcome(
-                                    ChatExecutionResult.failed("waiting"), "permission_required"));
-                      } catch (Exception e) {
-                        throw new RuntimeException(e);
-                      }
-                    }),
+                jobs.add(() -> {
+                  var current = new AgentRunContext(run, "session", root, project);
+                  checkpointService.start(current, "Goal continuation");
+                  assertTrue(goals.modelBudget(claim, run).tryReserve());
+                  int n = executions.incrementAndGet();
+                  try {
+                    if (n > 1) Files.writeString(root.resolve("out"), "correct");
+                    var eventFactory =
+                        new dev.mikoto2000.rei.event.AgentEventFactory(Clock.systemUTC());
+                    if (n == 1) {
+                      bus.publishBoundary(
+                          eventFactory
+                              .toolStarted("effect", "writeFile", "saved partial result")
+                              .withOwnership(current));
+                      bus.publishBoundary(
+                          eventFactory
+                              .toolCompleted("effect", "writeFile", 1, "saved")
+                              .withOwnership(current));
+                    }
+                    checkpointService.finish(current, n > 1 ? "COMPLETED" : "FAILED");
+                    done.accept(
+                        n > 1
+                            ? new GoalLoopService.Outcome(
+                                ChatExecutionResult.success("done", false))
+                            : new GoalLoopService.Outcome(
+                                ChatExecutionResult.failed("waiting"), "permission_required"));
+                  } catch (Exception e) {
+                    throw new RuntimeException(e);
+                  }
+                }),
             new ToolPermissionProperties(true, null, null, null),
             new GoalEvents(bus, Clock.systemUTC()));
     loop.configureWaitRepository(waits);
@@ -410,31 +409,29 @@ class GoalWaitIntegrationTest {
     var ready = new java.util.concurrent.atomic.AtomicBoolean();
     var git = mock(dev.mikoto2000.rei.workcontext.WorkContextGit.class);
     when(git.capture(any(), any()))
-        .thenAnswer(
-            i ->
-                new dev.mikoto2000.rei.workcontext.WorkContext.GitState(
-                    root.toString(),
-                    "main",
-                    ready.get() ? "b".repeat(40) : "a".repeat(40),
-                    Instant.now()));
+        .thenAnswer(i ->
+            new dev.mikoto2000.rei.workcontext.WorkContext.GitState(
+                root.toString(),
+                "main",
+                ready.get() ? "b".repeat(40) : "a".repeat(40),
+                Instant.now()));
     var processes = mock(dev.mikoto2000.rei.core.process.BackgroundProcessManager.class);
     when(processes.statusOwned(anyString(), eq(project), eq("session"), eq(root)))
-        .thenAnswer(
-            i ->
-                new dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot(
-                    "job",
-                    1,
-                    ready.get()
-                        ? dev.mikoto2000.rei.core.process.BackgroundProcessStatus.EXITED
-                        : dev.mikoto2000.rei.core.process.BackgroundProcessStatus.RUNNING,
-                    ready.get() ? 0 : null,
-                    Instant.now(),
-                    null,
-                    0,
-                    List.of(),
-                    List.of(),
-                    true,
-                    "fixture"));
+        .thenAnswer(i ->
+            new dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot(
+                "job",
+                1,
+                ready.get()
+                    ? dev.mikoto2000.rei.core.process.BackgroundProcessStatus.EXITED
+                    : dev.mikoto2000.rei.core.process.BackgroundProcessStatus.RUNNING,
+                ready.get() ? 0 : null,
+                Instant.now(),
+                null,
+                0,
+                List.of(),
+                List.of(),
+                true,
+                "fixture"));
     DependencyHttpProbe http =
         (id, u, e) ->
             new DependencyObservation(

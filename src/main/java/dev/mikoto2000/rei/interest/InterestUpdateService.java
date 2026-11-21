@@ -40,9 +40,9 @@ public final class InterestUpdateService {
         jdbcClient
             .sql(
                 """
-        SELECT COUNT(*) FROM interest_updates
-        WHERE topic = ? AND created_at >= ?
-        """)
+                SELECT COUNT(*) FROM interest_updates
+                WHERE topic = ? AND created_at >= ?
+                """)
             .params(topic, cutoff.toString())
             .query(Integer.class)
             .single();
@@ -55,10 +55,10 @@ public final class InterestUpdateService {
     return jdbcClient
         .sql(
             """
-        SELECT DISTINCT search_query FROM interest_updates
-        WHERE created_at >= ?
-        ORDER BY created_at DESC
-        """)
+            SELECT DISTINCT search_query FROM interest_updates
+            WHERE created_at >= ?
+            ORDER BY created_at DESC
+            """)
         .param(cutoff.toString())
         .query(String.class)
         .list();
@@ -76,10 +76,10 @@ public final class InterestUpdateService {
         jdbcClient
             .sql(
                 """
-        INSERT INTO interest_updates (topic, reason, search_query, summary, source_urls, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        RETURNING id
-        """)
+                INSERT INTO interest_updates (topic, reason, search_query, summary, source_urls, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                RETURNING id
+                """)
             .params(
                 topic,
                 reason,
@@ -121,7 +121,8 @@ public final class InterestUpdateService {
             searchQuery)
         .query(Long.class)
         .optional()
-        .map(id -> new InterestUpdate(id, topic, reason, searchQuery, summary, sourceUrls, createdAt));
+        .map(id ->
+            new InterestUpdate(id, topic, reason, searchQuery, summary, sourceUrls, createdAt));
   }
 
   /** 利用可能な対象を確認できるよう、直近を一覧にする。 */
@@ -130,22 +131,21 @@ public final class InterestUpdateService {
     return jdbcClient
         .sql(
             """
-        SELECT id, topic, reason, search_query, summary, source_urls, created_at
-        FROM interest_updates
-        WHERE created_at >= ?
-        ORDER BY created_at DESC, id DESC
-        """)
+            SELECT id, topic, reason, search_query, summary, source_urls, created_at
+            FROM interest_updates
+            WHERE created_at >= ?
+            ORDER BY created_at DESC, id DESC
+            """)
         .param(cutoff.toString())
-        .query(
-            (rs, rowNum) ->
-                new InterestUpdate(
-                    rs.getLong("id"),
-                    rs.getString("topic"),
-                    rs.getString("reason"),
-                    rs.getString("search_query"),
-                    rs.getString("summary"),
-                    splitUrls(rs.getString("source_urls")),
-                    OffsetDateTime.parse(rs.getString("created_at"))))
+        .query((rs, rowNum) ->
+            new InterestUpdate(
+                rs.getLong("id"),
+                rs.getString("topic"),
+                rs.getString("reason"),
+                rs.getString("search_query"),
+                rs.getString("summary"),
+                splitUrls(rs.getString("source_urls")),
+                OffsetDateTime.parse(rs.getString("created_at"))))
         .list();
   }
 

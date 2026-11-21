@@ -40,14 +40,16 @@ class InterestUpdateServiceTest {
             new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("test.db")));
     var start = new CyclicBarrier(2);
     try (var workers = Executors.newVirtualThreadPerTaskExecutor()) {
-      var first = workers.submit(() -> {
-        start.await(5, TimeUnit.SECONDS);
-        return service.saveIfNewQuery("first", "reason", "same", "summary", List.of());
-      });
-      var second = workers.submit(() -> {
-        start.await(5, TimeUnit.SECONDS);
-        return other.saveIfNewQuery("second", "reason", "same", "summary", List.of());
-      });
+      var first =
+          workers.submit(() -> {
+            start.await(5, TimeUnit.SECONDS);
+            return service.saveIfNewQuery("first", "reason", "same", "summary", List.of());
+          });
+      var second =
+          workers.submit(() -> {
+            start.await(5, TimeUnit.SECONDS);
+            return other.saveIfNewQuery("second", "reason", "same", "summary", List.of());
+          });
       assertEquals(
           1,
           java.util.stream.Stream.of(

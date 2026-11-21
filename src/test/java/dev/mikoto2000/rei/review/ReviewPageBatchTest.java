@@ -81,15 +81,14 @@ class ReviewPageBatchTest {
       for (var bounds :
           List.of(
               new int[] {0, 1024}, new int[] {5, 1024}, new int[] {1, 511}, new int[] {1, 2049})) {
-        assertThatThrownBy(
-                () ->
-                    tools.readReviewPages(
-                        job.id(),
-                        "source.md",
-                        job.targets().getFirst().version(),
-                        0,
-                        bounds[0],
-                        bounds[1]))
+        assertThatThrownBy(() ->
+                tools.readReviewPages(
+                    job.id(),
+                    "source.md",
+                    job.targets().getFirst().version(),
+                    0,
+                    bounds[0],
+                    bounds[1]))
             .isInstanceOf(dev.mikoto2000.rei.toolcontract.ToolReadRejectedException.class)
             .hasMessageContaining("1..4", "512..2048");
         assertThat(ledger.get(job.id(), job.owner())).isEqualTo(job);
@@ -156,10 +155,9 @@ class ReviewPageBatchTest {
           offset = page.nextOffset();
         }
       }
-      assertThatThrownBy(
-              () ->
-                  tools.readReviewPages(
-                      job.id(), "source.md", job.targets().getFirst().version(), 0, 5, 2048))
+      assertThatThrownBy(() ->
+              tools.readReviewPages(
+                  job.id(), "source.md", job.targets().getFirst().version(), 0, 5, 2048))
           .isInstanceOf(IllegalArgumentException.class);
     }
   }
@@ -203,14 +201,13 @@ class ReviewPageBatchTest {
       assertThat(fetched.ranges()).hasSize(4).noneMatch(ReviewCoverageLedger.Entry::delivered);
       var pages =
           fetched.ranges().stream()
-              .map(
-                  e ->
-                      new ReviewTools.PageAssessment(
-                          "source.md",
-                          e.range().span().start(),
-                          e.range().span().end(),
-                          "reviewed",
-                          List.<ReviewTools.PageFinding>of()))
+              .map(e ->
+                  new ReviewTools.PageAssessment(
+                      "source.md",
+                      e.range().span().start(),
+                      e.range().span().end(),
+                      "reviewed",
+                      List.<ReviewTools.PageFinding>of()))
               .toList();
       assertThatThrownBy(() -> tools.submitReviewPages(job.id(), pages))
           .isInstanceOf(ReviewResultRejectedException.class);
@@ -300,8 +297,7 @@ class ReviewPageBatchTest {
       var pages = read(job, 2048);
       tools.confirmed(owner, pages);
       var inputs = pages.stream().map(p -> assessment(p, "reviewed")).toList();
-      var foreign =
-          AgentRunScope.open(new AgentRunContext("other", "other-chat", root, "project"));
+      var foreign = AgentRunScope.open(new AgentRunContext("other", "other-chat", root, "project"));
       try (foreign) {
         assertThatThrownBy(() -> tools.submitReviewPages(job.id(), inputs))
             .isInstanceOf(dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException.class);

@@ -110,19 +110,18 @@ public class SleepCommand implements Callable<Integer> {
 
   /** 現在 Session の未処理 Turn から長期記憶を整理しますを行う。 */
   int run(boolean preview) {
-    return execute(
-        () -> {
-          support.enabled();
-          String session = currentSessionId.get(), project = currentProjectId.get();
-          Runnable clearCancellation = beginCommand.get();
-          try {
-            out().println(preview ? "Sleep preview started..." : "Sleep started...");
-            out().flush();
-            return support.report(executeSleep.execute(session, project, preview));
-          } finally {
-            clearCancellation.run();
-          }
-        });
+    return execute(() -> {
+      support.enabled();
+      String session = currentSessionId.get(), project = currentProjectId.get();
+      Runnable clearCancellation = beginCommand.get();
+      try {
+        out().println(preview ? "Sleep preview started..." : "Sleep started...");
+        out().flush();
+        return support.report(executeSleep.execute(session, project, preview));
+      } finally {
+        clearCancellation.run();
+      }
+    });
   }
 
   /** 要求された処理を実行する。 */

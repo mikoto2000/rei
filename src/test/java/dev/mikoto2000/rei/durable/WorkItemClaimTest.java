@@ -27,8 +27,11 @@ class WorkItemClaimTest {
     assertThat(claim.item().path()).isEqualTo("a.java");
     assertThat(work.claim(scope, task.id(), "run")).isNull();
     Files.writeString(root.resolve("a.java"), "changed");
-    assertThat(new WorkItemStore(fixture.store()).source(scope, claim.item())).isEqualTo("original🙂");
-    assertThatThrownBy(() -> work.claim(new DurableTaskStore.Scope("other", "session", root.toString()), task.id(), "run"))
+    assertThat(new WorkItemStore(fixture.store()).source(scope, claim.item()))
+        .isEqualTo("original🙂");
+    assertThatThrownBy(() ->
+            work.claim(
+                new DurableTaskStore.Scope("other", "session", root.toString()), task.id(), "run"))
         .hasMessageContaining("TASK_ACCESS_DENIED");
     assertThatThrownBy(() -> work.claim(scope, task.id(), "unbound-run"))
         .hasMessageContaining("TASK_RUN_NOT_BOUND");

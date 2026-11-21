@@ -311,17 +311,16 @@ class HttpBodyDependencyTest {
       String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/slow";
       var worker =
           Thread.ofPlatform()
-              .start(
-                  () -> {
-                    try {
-                      probe.probeBody("id", url, 200, "a".repeat(64));
-                      result.complete(false);
-                    } catch (java.util.concurrent.CancellationException error) {
-                      result.complete(Thread.currentThread().isInterrupted());
-                    } catch (Throwable error) {
-                      result.completeExceptionally(error);
-                    }
-                  });
+              .start(() -> {
+                try {
+                  probe.probeBody("id", url, 200, "a".repeat(64));
+                  result.complete(false);
+                } catch (java.util.concurrent.CancellationException error) {
+                  result.complete(Thread.currentThread().isInterrupted());
+                } catch (Throwable error) {
+                  result.completeExceptionally(error);
+                }
+              });
       try {
         assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
         worker.interrupt();

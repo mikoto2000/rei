@@ -139,15 +139,14 @@ public class BeginnerReviewService {
           .append(" / ")
           .append(scope.mode())
           .append('\n');
-      learningState.forEach(
-          state ->
-              out.append("Knowledge: ")
-                  .append(state.file())
-                  .append(" ")
-                  .append(state.before())
-                  .append(" -> ")
-                  .append(state.after())
-                  .append('\n'));
+      learningState.forEach(state ->
+          out.append("Knowledge: ")
+              .append(state.file())
+              .append(" ")
+              .append(state.before())
+              .append(" -> ")
+              .append(state.after())
+              .append('\n'));
       out.append("Complete: ")
           .append(complete)
           .append("\nReviewed: ")
@@ -157,15 +156,14 @@ public class BeginnerReviewService {
           .append('\n');
       analysis
           .chapters()
-          .forEach(
-              c ->
-                  out.append("- ")
-                      .append(c.file())
-                      .append(": ")
-                      .append(c.state())
-                      .append(" (last line ")
-                      .append(c.lastLine())
-                      .append(")\n"));
+          .forEach(c ->
+              out.append("- ")
+                  .append(c.file())
+                  .append(": ")
+                  .append(c.state())
+                  .append(" (last line ")
+                  .append(c.lastLine())
+                  .append(")\n"));
       for (var finding : findings)
         out.append("\n## ")
             .append(finding.id())
@@ -286,23 +284,21 @@ public class BeginnerReviewService {
                       .toString());
           String[] lines = text.split("\\R", -1);
           chapter.files().stream()
-              .filter(
-                  f ->
-                      f.state() == BeginnerMaterialAnalyzer.ReferenceState.MISSING
-                          && !creationProvided(lines, f.value()))
-              .forEach(
-                  f ->
-                      add(
-                          findings,
-                          chapter.file(),
-                          f.line(),
-                          "必要なファイルが欠落: " + f.value(),
-                          f.value(),
-                          "演習や設定を再現できません",
-                          "HIGH",
-                          1,
-                          "必要なファイルを提供するか、その作成・設定手順または参照先を明記してください",
-                          Verification.STATIC_FACT));
+              .filter(f ->
+                  f.state() == BeginnerMaterialAnalyzer.ReferenceState.MISSING
+                      && !creationProvided(lines, f.value()))
+              .forEach(f ->
+                  add(
+                      findings,
+                      chapter.file(),
+                      f.line(),
+                      "必要なファイルが欠落: " + f.value(),
+                      f.value(),
+                      "演習や設定を再現できません",
+                      "HIGH",
+                      1,
+                      "必要なファイルを提供するか、その作成・設定手順または参照先を明記してください",
+                      Verification.STATIC_FACT));
           if (request.mode() == BeginnerReviewRequest.Mode.STATIC) {
             for (var required :
                 java.util.stream.Stream.concat(
@@ -453,10 +449,9 @@ public class BeginnerReviewService {
   /** 外部エージェントへの委譲において、creation提供されたに該当するか判定する。 */
   private static boolean creationProvided(String[] lines, String file) {
     return Arrays.stream(lines)
-        .anyMatch(
-            line ->
-                line.contains(file)
-                    && line.matches("(?i).*(?:New-Item|touch|cp|Copy-Item|作成|保存|create|write).*"));
+        .anyMatch(line ->
+            line.contains(file)
+                && line.matches("(?i).*(?:New-Item|touch|cp|Copy-Item|作成|保存|create|write).*"));
   }
 
   /** 外部エージェントへの委譲において、groundedに該当するか判定する。 */

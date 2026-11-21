@@ -160,12 +160,14 @@ final class WebResearchPipeline {
           var pending = unread(query, candidates, attempted);
           int remainingReads = maximumReads - attempts;
           boolean canSearchAgain =
-              WebResearchScope.queryCount() < limits.maxQueries() && !SearchRequestBudget.exhausted();
+              WebResearchScope.queryCount() < limits.maxQueries()
+                  && !SearchRequestBudget.exhausted();
           int parallelReads = Math.min(remainingReads, limits.fetchParallelism());
           // 可能なら、並列取得でも不足した場合に追加検索の候補を読む枠を1件残す。
           if (canSearchAgain && remainingReads > 2)
             parallelReads = Math.min(parallelReads, remainingReads - 1);
-          var independent = assessment.independentCandidates(query, evidence, pending, parallelReads);
+          var independent =
+              assessment.independentCandidates(query, evidence, pending, parallelReads);
           var promising =
               first || triedUnreadBeforeSearch || !independent.isEmpty()
                   ? null
@@ -193,10 +195,9 @@ final class WebResearchPipeline {
             pending =
                 unread(query, candidates, attempted).stream()
                     .sorted(
-                        Comparator.comparing(
-                            candidate ->
-                                previousKeys.contains(
-                                    WebSearchSelection.normalizeUrl(candidate.result().url()))))
+                        Comparator.comparing(candidate ->
+                            previousKeys.contains(
+                                WebSearchSelection.normalizeUrl(candidate.result().url()))))
                     .toList();
             independent = assessment.independentCandidates(query, evidence, pending, parallelReads);
           }
@@ -205,7 +206,9 @@ final class WebResearchPipeline {
           var selected =
               !independent.isEmpty()
                   ? independent
-                  : promising == null ? pending.stream().limit(window).toList() : List.of(promising);
+                  : promising == null
+                      ? pending.stream().limit(window).toList()
+                      : List.of(promising);
           triedUnreadBeforeSearch = !supplement && (promising != null || !independent.isEmpty());
           first = false;
           for (var candidate : selected)
@@ -285,9 +288,8 @@ final class WebResearchPipeline {
       String query, Map<String, WebSearchSelection.Candidate> candidates, Set<String> attempted) {
     return WebSearchSelection.choose(query, new ArrayList<>(candidates.values()), candidates.size())
         .stream()
-        .filter(
-            candidate ->
-                !attempted.contains(WebSearchSelection.normalizeUrl(candidate.result().url())))
+        .filter(candidate ->
+            !attempted.contains(WebSearchSelection.normalizeUrl(candidate.result().url())))
         .toList();
   }
 

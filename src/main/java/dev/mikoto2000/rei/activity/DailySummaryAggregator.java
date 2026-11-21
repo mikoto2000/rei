@@ -307,16 +307,14 @@ public final class DailySummaryAggregator {
                     .toList(),
                 secondaryThemes,
                 ranked.stream()
-                    .filter(
-                        s ->
-                            workLabels.contains(s.label())
-                                || consolidated.candidates().stream()
-                                    .anyMatch(
-                                        candidate ->
-                                            candidate.level() == SummaryThemeCandidate.Level.PROJECT
-                                                && candidate
-                                                    .memberProjects()
-                                                    .contains(s.canonicalProject())))
+                    .filter(s ->
+                        workLabels.contains(s.label())
+                            || consolidated.candidates().stream()
+                                .anyMatch(candidate ->
+                                    candidate.level() == SummaryThemeCandidate.Level.PROJECT
+                                        && candidate
+                                            .memberProjects()
+                                            .contains(s.canonicalProject())))
                     .flatMap(v -> v.strongAssociations().stream())
                     .limit(4)
                     .toList(),

@@ -20,44 +20,43 @@ public final class SecretaryGoalContext implements SecretaryContext {
   @Override
   public List<Item> context(String project, LocalDate date, ZoneId zone) {
     return goals.list(project).stream()
-        .map(
-            goal -> {
-              String state =
-                  switch (goal.status()) {
-                    case "COMPLETED" -> "COMPLETED";
-                    case "CANCELLED" -> "CANCELLED";
-                    case "RUNNING" -> "IN_PROGRESS";
-                    case "BLOCKED", "FAILED" -> "BLOCKED";
-                    case "WAITING_APPROVAL" -> "WAITING";
-                    case "READY", "PAUSED" -> "PENDING";
-                    default -> "UNKNOWN";
-                  };
-              var updated =
-                  goals.history(project, goal.id()).stream()
-                      .map(GoalRepository.History::timestamp)
-                      .max(java.util.Comparator.naturalOrder())
-                      .orElse(null);
-              var refs =
-                  goal.currentRunId() == null || goal.currentRunId().isBlank()
-                      ? List.<String>of()
-                      : List.of("run:" + goal.currentRunId());
-              return new Item(
-                  "goal",
-                  goal.id(),
-                  goal.objective(),
+        .map(goal -> {
+          String state =
+              switch (goal.status()) {
+                case "COMPLETED" -> "COMPLETED";
+                case "CANCELLED" -> "CANCELLED";
+                case "RUNNING" -> "IN_PROGRESS";
+                case "BLOCKED", "FAILED" -> "BLOCKED";
+                case "WAITING_APPROVAL" -> "WAITING";
+                case "READY", "PAUSED" -> "PENDING";
+                default -> "UNKNOWN";
+              };
+          var updated =
+              goals.history(project, goal.id()).stream()
+                  .map(GoalRepository.History::timestamp)
+                  .max(java.util.Comparator.naturalOrder())
+                  .orElse(null);
+          var refs =
+              goal.currentRunId() == null || goal.currentRunId().isBlank()
+                  ? List.<String>of()
+                  : List.of("run:" + goal.currentRunId());
+          return new Item(
+              "goal",
+              goal.id(),
+              goal.objective(),
+              state,
+              goal.reason(),
+              Reliability.FACT,
+              refs,
+              new Observation(
+                  "goal:" + goal.id(),
+                  updated,
                   state,
-                  goal.reason(),
-                  Reliability.FACT,
-                  refs,
-                  new Observation(
-                      "goal:" + goal.id(),
-                      updated,
-                      state,
-                      !state.equals("UNKNOWN"),
-                      null,
-                      null,
-                      "GOAL"));
-            })
+                  !state.equals("UNKNOWN"),
+                  null,
+                  null,
+                  "GOAL"));
+        })
         .toList();
   }
 }

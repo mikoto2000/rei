@@ -623,8 +623,12 @@ public final class VoiceInputCoordinator implements AutoCloseable {
       // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       fail(run, VoiceEventPublisher.Type.BACKEND_FAILED);
-    } catch (IOException | ReflectiveOperationException | URISyntaxException
-        | LineUnavailableException | RuntimeException | LinkageError e) {
+    } catch (IOException
+        | ReflectiveOperationException
+        | URISyntaxException
+        | LineUnavailableException
+        | RuntimeException
+        | LinkageError e) {
       fail(
           run,
           run.backend == null

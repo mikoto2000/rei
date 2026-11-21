@@ -66,6 +66,7 @@ class LlmPropertiesTest {
     assertThat(properties.getOutputLimit().getMaxSubgoalsPerReplan()).isEqualTo(8);
     assertThat(properties.getOutputLimit().getMaxLlmCallsPerRun()).isEqualTo(120);
   }
+
   @Test
   void boundFeaturesAndOutputLimitsAreDefensiveCopies() {
     var source =
@@ -88,5 +89,4 @@ class LlmPropertiesTest {
     replacement.setModel("discarded");
     assertThat(properties.feature("chat").getModel()).isEqualTo("replacement");
   }
-
 }

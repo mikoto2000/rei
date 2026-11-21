@@ -152,9 +152,12 @@ class CheckpointHttpSmokeTest {
                       events.toolCompleted("write", "writeMultiFile", 0, "artifact saved"));
                   bus.publishBoundary(
                       events.toolStarted(
-                          "external", "deploy", "simulated in-flight operation; no real deployment"));
+                          "external",
+                          "deploy",
+                          "simulated in-flight operation; no real deployment"));
                   turns.finish(
-                      owner, dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.CANCELLED);
+                      owner,
+                      dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.CANCELLED);
                   checkpoints.finish(owner, "CANCELLED");
                   bus.publish(events.runCancelled(owner.runId(), null));
                 } else {
@@ -163,7 +166,8 @@ class CheckpointHttpSmokeTest {
                   bus.publishBoundary(
                       events.toolCompleted("read", "readMultiFile", 0, "artifact inspected"));
                   turns.finish(
-                      owner, dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED);
+                      owner,
+                      dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED);
                   checkpoints.finish(owner, "COMPLETED");
                   bus.publish(events.runCompleted(owner.runId(), 0));
                 }

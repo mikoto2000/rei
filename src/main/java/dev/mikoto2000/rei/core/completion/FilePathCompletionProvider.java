@@ -55,12 +55,11 @@ public final class FilePathCompletionProvider implements CompletionProvider {
   public static List<Entry> listDirectory(Path parent) throws IOException {
     try (var children = Files.list(parent)) {
       return children
-          .map(
-              path ->
-                  new Entry(
-                      java.util.Objects.requireNonNull(path.getFileName(), "Directory entry name")
-                          .toString(),
-                      Files.isDirectory(path)))
+          .map(path ->
+              new Entry(
+                  java.util.Objects.requireNonNull(path.getFileName(), "Directory entry name")
+                      .toString(),
+                  Files.isDirectory(path)))
           .toList();
     }
   }
@@ -88,15 +87,12 @@ public final class FilePathCompletionProvider implements CompletionProvider {
           .filter(entry -> entry.directory() ? dirs : files)
           .filter(entry -> startsWith(entry.name(), fragment.prefix()))
           .sorted(Comparator.comparing(Entry::name))
-          .map(
-              entry -> {
-                String value =
-                    fragment.parent()
-                        + entry.name()
-                        + (entry.directory() ? fragment.separator() : "");
-                return new CompletionCandidate(
-                    value, value, null, entry.directory() ? DIRECTORY : FILE, !entry.directory());
-              })
+          .map(entry -> {
+            String value =
+                fragment.parent() + entry.name() + (entry.directory() ? fragment.separator() : "");
+            return new CompletionCandidate(
+                value, value, null, entry.directory() ? DIRECTORY : FILE, !entry.directory());
+          })
           .toList();
     } catch (IOException | RuntimeException ignored) {
       return List.of();

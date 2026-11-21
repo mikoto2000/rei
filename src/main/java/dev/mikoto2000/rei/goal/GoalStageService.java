@@ -48,14 +48,13 @@ public class GoalStageService {
             .findFirst()
             .orElse(null),
         current.stream()
-            .map(
-                s ->
-                    new EventStage(
-                        s.definition().id(),
-                        s.state(),
-                        s.reason(),
-                        s.version(),
-                        s.evidence() == null ? null : s.evidence().reference()))
+            .map(s ->
+                new EventStage(
+                    s.definition().id(),
+                    s.state(),
+                    s.reason(),
+                    s.version(),
+                    s.evidence() == null ? null : s.evidence().reference()))
             .toList());
   }
 
@@ -165,13 +164,10 @@ public class GoalStageService {
         if (stage.state().equals("BLOCKED")
             && stage.reason().equals("stage_dependency_unverified")
             && stage.definition().dependsOnStageIds().stream()
-                .allMatch(
-                    id ->
-                        observedStages.stream()
-                            .anyMatch(
-                                s ->
-                                    s.definition().id().equals(id)
-                                        && s.state().equals("VERIFIED")))) {
+                .allMatch(id ->
+                    observedStages.stream()
+                        .anyMatch(
+                            s -> s.definition().id().equals(id) && s.state().equals("VERIFIED")))) {
           stages.compareState(goal, stage, "STALE", "stage_dependency_restored");
           changed = true;
           continue;
@@ -216,11 +212,10 @@ public class GoalStageService {
       if (!Set.of("TODO", "STALE", "REPAIRING", "DECOMPOSED").contains(stage.state())) continue;
       boolean dependencies =
           stage.definition().dependsOnStageIds().stream()
-              .allMatch(
-                  id ->
-                      current.stream()
-                          .anyMatch(
-                              s -> s.definition().id().equals(id) && s.state().equals("VERIFIED")));
+              .allMatch(id ->
+                  current.stream()
+                      .anyMatch(
+                          s -> s.definition().id().equals(id) && s.state().equals("VERIFIED")));
       boolean children =
           current.stream()
               .filter(s -> selectedId.equals(s.definition().parentStageId()))
@@ -257,11 +252,10 @@ public class GoalStageService {
     if (!GoalRepairDiagnosis.of(stage.reason()).repairable()) return "stage_repair_not_allowed";
     var failures =
         stages.attempts(goal).stream()
-            .filter(
-                a ->
-                    a.stageId().equals(stageId(stage))
-                        && a.planVersion() == stage.planVersion()
-                        && a.status().equals("UNSATISFIED"))
+            .filter(a ->
+                a.stageId().equals(stageId(stage))
+                    && a.planVersion() == stage.planVersion()
+                    && a.status().equals("UNSATISFIED"))
             .toList();
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (failures.size() > maxRepairs) return "stage_repair_limit";
@@ -438,21 +432,18 @@ public class GoalStageService {
       long version,
       List<GoalStageDefinition> children) {
     if (!allowSplit) throw new IllegalStateException("Stage splitting is disabled");
-    goals.atomic(
-        () -> {
-          var goal = owningRun(owner, id);
-          var attempt = stages.forRun(goal, owner.runId());
-          if (attempt == null
-              || attempt.planVersion() != version
-              || stages.attempts(goal).stream()
-                  .noneMatch(
-                      a ->
-                          a.stageId().equals(attempt.stageId())
-                              && a.status().equals("UNSATISFIED")))
-            throw new IllegalStateException("Current failed Stage and plan version required");
-          stages.propose(goal, attempt, children);
-          return null;
-        });
+    goals.atomic(() -> {
+      var goal = owningRun(owner, id);
+      var attempt = stages.forRun(goal, owner.runId());
+      if (attempt == null
+          || attempt.planVersion() != version
+          || stages.attempts(goal).stream()
+              .noneMatch(
+                  a -> a.stageId().equals(attempt.stageId()) && a.status().equals("UNSATISFIED")))
+        throw new IllegalStateException("Current failed Stage and plan version required");
+      stages.propose(goal, attempt, children);
+      return null;
+    });
   }
 
   /** 目標の達成管理に関する関連付け実行中を処理する。 */
@@ -460,14 +451,13 @@ public class GoalStageService {
       dev.mikoto2000.rei.core.chat.AgentRunContext owner,
       String id,
       GoalCompletionGate.Proof proof) {
-    goals.atomic(
-        () -> {
-          var goal = owningRun(owner, id);
-          var attempt = stages.forRun(goal, owner.runId());
-          if (attempt == null) throw new IllegalStateException("Current Stage required");
-          stages.attachRunningProof(goal, attempt, proof);
-          return null;
-        });
+    goals.atomic(() -> {
+      var goal = owningRun(owner, id);
+      var attempt = stages.forRun(goal, owner.runId());
+      if (attempt == null) throw new IllegalStateException("Current Stage required");
+      stages.attachRunningProof(goal, attempt, proof);
+      return null;
+    });
   }
 
   /** Observation for the existing proof tool; this does not mark a Stage complete. */

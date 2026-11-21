@@ -48,10 +48,9 @@ public final class ForegroundActivityParser {
         throw new ActivityOutputParser.InvalidOutput(
             errors.stream()
                 .limit(20)
-                .map(
-                    e ->
-                        new ActivityOutputParser.ResultError(
-                            e.getInstanceLocation().toString(), e.getKeyword()))
+                .map(e ->
+                    new ActivityOutputParser.ResultError(
+                        e.getInstanceLocation().toString(), e.getKeyword()))
                 .toList());
       var activity =
           new ActivityRecord.Activity(

@@ -124,35 +124,34 @@ public class VoiceCommand {
   int correction(
       @Option(names = "--enabled", arity = "0..1", fallbackValue = "true") Boolean enabled,
       @Option(names = "--show", description = "発話IDの診断を明示表示（最大8件・2分・永続保存なし）") UUID id) {
-    return attempt(
-        () -> {
-          if (correctionProperties == null || correctionService == null)
-            throw new IllegalStateException("Correction service unavailable");
-          if (enabled != null) {
-            manualChange();
-            correctionProperties.setEnabled(enabled);
-            correctionService.cancelAll();
-          }
-          var out = spec.commandLine().getOut();
-          out.println("voice correction: " + (correctionProperties.isEnabled() ? "ON" : "OFF"));
-          if (id != null) {
-            var trace =
-                correctionService.traces().stream()
-                    .filter(t -> t.inputId().equals(id))
-                    .findFirst()
-                    .orElseThrow(
-                        () -> new IllegalArgumentException("Correction trace expired or missing"));
-            out.println("ASR original: " + correctionDisplay(trace.original()));
-            out.println("correction input: " + correctionDisplay(trace.correctionInput()));
-            out.println("candidate JSON: " + correctionDisplay(trace.candidate()));
-            out.println("adopted: " + correctionDisplay(trace.adopted()));
-            out.println("submitted: " + correctionDisplay(trace.submitted()));
-            out.println("reason: " + trace.reason());
-          } else
-            for (var trace : correctionService.traces())
-              out.println(trace.inputId() + " " + trace.reason());
-          return 0;
-        });
+    return attempt(() -> {
+      if (correctionProperties == null || correctionService == null)
+        throw new IllegalStateException("Correction service unavailable");
+      if (enabled != null) {
+        manualChange();
+        correctionProperties.setEnabled(enabled);
+        correctionService.cancelAll();
+      }
+      var out = spec.commandLine().getOut();
+      out.println("voice correction: " + (correctionProperties.isEnabled() ? "ON" : "OFF"));
+      if (id != null) {
+        var trace =
+            correctionService.traces().stream()
+                .filter(t -> t.inputId().equals(id))
+                .findFirst()
+                .orElseThrow(
+                    () -> new IllegalArgumentException("Correction trace expired or missing"));
+        out.println("ASR original: " + correctionDisplay(trace.original()));
+        out.println("correction input: " + correctionDisplay(trace.correctionInput()));
+        out.println("candidate JSON: " + correctionDisplay(trace.candidate()));
+        out.println("adopted: " + correctionDisplay(trace.adopted()));
+        out.println("submitted: " + correctionDisplay(trace.submitted()));
+        out.println("reason: " + trace.reason());
+      } else
+        for (var trace : correctionService.traces())
+          out.println(trace.inputId() + " " + trace.reason());
+      return 0;
+    });
   }
 
   /** 音声による対話で用いる補正表示を返す。 */
@@ -281,12 +280,11 @@ public class VoiceCommand {
   int confirm(
       @Parameters(paramLabel = "ID") UUID id,
       @Option(names = "--text", paramLabel = "CORRECTION") String correction) {
-    return attempt(
-        () -> {
-          recognitionReviews().confirm().accept(id, correction);
-          spec.commandLine().getOut().println("confirmed: " + id);
-          return 0;
-        });
+    return attempt(() -> {
+      recognitionReviews().confirm().accept(id, correction);
+      spec.commandLine().getOut().println("confirmed: " + id);
+      return 0;
+    });
   }
 
   /** 音声による対話で用いる試行を返す。 */
@@ -363,28 +361,26 @@ public class VoiceCommand {
         autoStartThread =
             Thread.ofVirtual()
                 .name("voice-auto-start")
-                .unstarted(
-                    () -> {
-                      try {
-                        var scope = client.open();
-                        try (scope) {
-                          startInput(
-                              generation, selected, initialTarget, client, false, output, true);
-                        }
-                      } catch (RuntimeException | LinkageError failure) {
-                        synchronized (startGuard) {
-                          if (generation == startGeneration && !shellClosed) {
-                            voice.off();
-                            if (delivery != null) delivery.clear().run();
-                            autoStartFailure(output, failure);
-                          }
-                        }
-                      } finally {
-                        synchronized (startGuard) {
-                          if (autoStartThread == Thread.currentThread()) autoStartThread = null;
-                        }
+                .unstarted(() -> {
+                  try {
+                    var scope = client.open();
+                    try (scope) {
+                      startInput(generation, selected, initialTarget, client, false, output, true);
+                    }
+                  } catch (RuntimeException | LinkageError failure) {
+                    synchronized (startGuard) {
+                      if (generation == startGeneration && !shellClosed) {
+                        voice.off();
+                        if (delivery != null) delivery.clear().run();
+                        autoStartFailure(output, failure);
                       }
-                    });
+                    }
+                  } finally {
+                    synchronized (startGuard) {
+                      if (autoStartThread == Thread.currentThread()) autoStartThread = null;
+                    }
+                  }
+                });
         output.accept("[voice] 自動開始の準備中です。/voice off で取り消せます。");
         autoStartThread.start();
       } catch (RuntimeException | LinkageError failure) {
@@ -442,66 +438,62 @@ public class VoiceCommand {
   /** 通知に応じて状態や表示を更新するため、音声コマンドを受け付ける。 */
   @Command(name = "on", description = "選択マイクで開始。確定した発話は会話入力として送信", mixinStandardHelpOptions = true)
   int on() {
-    return attempt(
-        () -> {
-          startInput(
-              manualChange(),
-              null,
-              null,
-              null,
-              false,
-              line -> {
-                spec.commandLine().getOut().println(line);
-                spec.commandLine().getOut().flush();
-              },
-              false);
-          return 0;
-        });
+    return attempt(() -> {
+      startInput(
+          manualChange(),
+          null,
+          null,
+          null,
+          false,
+          line -> {
+            spec.commandLine().getOut().println(line);
+            spec.commandLine().getOut().flush();
+          },
+          false);
+      return 0;
+    });
   }
 
   /** 音声による対話で用いる無効を返す。 */
   @Command(name = "off", description = "録音を停止し、未確定・未認識発話を破棄", mixinStandardHelpOptions = true)
   int off() {
-    return attempt(
-        () -> {
-          synchronized (startGuard) {
-            cancelAutoStart();
-            voice.off();
-            if (delivery != null) delivery.clear().run();
-          }
-          spec.commandLine().getOut().println("voice: " + voice.state());
-          return 0;
-        });
+    return attempt(() -> {
+      synchronized (startGuard) {
+        cancelAutoStart();
+        voice.off();
+        if (delivery != null) delivery.clear().run();
+      }
+      spec.commandLine().getOut().println("voice: " + voice.state());
+      return 0;
+    });
   }
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
   @Command(name = "status", description = "音声入力と固定した送信先の状態", mixinStandardHelpOptions = true)
   int status() {
-    return attempt(
-        () -> {
-          spec.commandLine()
-              .getOut()
-              .println("voice: " + voice.state() + ", ASR queue=" + voice.queuedSegments() + "/2");
-          if (target != null)
-            spec.commandLine()
-                .getOut()
-                .println("target: " + target.project().id() + " / " + target.sessionId());
-          spec.commandLine().getOut().println("selected device: " + properties.getDeviceId().get());
-          return 0;
-        });
+    return attempt(() -> {
+      spec.commandLine()
+          .getOut()
+          .println("voice: " + voice.state() + ", ASR queue=" + voice.queuedSegments() + "/2");
+      if (target != null)
+        spec.commandLine()
+            .getOut()
+            .println("target: " + target.project().id() + " / " + target.sessionId());
+      spec.commandLine().getOut().println("selected device: " + properties.getDeviceId().get());
+      return 0;
+    });
   }
 
   /** 音声による対話で用いるdevicesを返す。 */
   @Command(name = "devices", description = "入力デバイスと明示選択用IDを表示", mixinStandardHelpOptions = true)
   int devices() {
-    return attempt(
-        () -> {
-          for (var device : devices.devices())
-            spec.commandLine()
-                .getOut()
-                .println(device.id() + "  " + device.name() + " / " + device.description());
-          return 0;
-        });
+    return attempt(() -> {
+      for (var device : devices.devices())
+        spec.commandLine()
+            .getOut()
+            .println(device.id() + "  " + device.name() + " / " + device.description());
+      return 0;
+    });
   }
 
   /** 音声による対話で用いる検証を返す。 */
@@ -510,21 +502,20 @@ public class VoiceCommand {
       description = "20秒間のマイク認識診断。Agentへは送信しません",
       mixinStandardHelpOptions = true)
   int test() {
-    return attempt(
-        () -> {
-          startInput(
-              manualChange(),
-              null,
-              null,
-              null,
-              true,
-              line -> {
-                spec.commandLine().getOut().println(line);
-                spec.commandLine().getOut().flush();
-              },
-              false);
-          return 0;
-        });
+    return attempt(() -> {
+      startInput(
+          manualChange(),
+          null,
+          null,
+          null,
+          true,
+          line -> {
+            spec.commandLine().getOut().println(line);
+            spec.commandLine().getOut().flush();
+          },
+          false);
+      return 0;
+    });
   }
 
   /** 音声による対話で用いる設定を返す。 */
@@ -541,46 +532,45 @@ public class VoiceCommand {
       @Option(names = "--asr-threads", description = "ASR CPU thread数（1..4）") Integer asrThreads,
       @Option(names = "--asr-tail-frames", description = "Whisper末尾補完（250..2000 frames）")
           Integer asrTailFrames) {
-    return attempt(
-        () -> {
-          var s = properties.settings().get();
-          var inference = properties.inference().get();
-          if (threshold != null
-              || preRoll != null
-              || minSpeech != null
-              || silence != null
-              || maxSpeech != null
-              || tail != null
-              || confirmation != null
-              || asrThreads != null
-              || asrTailFrames != null) {
-            manualChange();
-            s =
-                new VoiceSettings(
-                    threshold == null ? s.threshold() : threshold,
-                    preRoll == null ? s.preRollMs() : preRoll,
-                    minSpeech == null ? s.minSpeechMs() : minSpeech,
-                    silence == null ? s.silenceMs() : silence,
-                    maxSpeech == null ? s.maxSpeechMs() : maxSpeech,
-                    tail == null ? s.tailMs() : tail);
-            inference =
-                new VoiceInferenceOptions(
-                    asrThreads == null ? inference.threads() : asrThreads,
-                    asrTailFrames == null ? inference.tailFrames() : asrTailFrames);
-            properties.setSettings().accept(s);
-            properties.setInference().accept(inference);
-            if (confirmation != null) {
-              properties.setConfirmation().accept(confirmation);
-              if (delivery != null) delivery.setConfirmation().accept(confirmation);
-            }
-          }
-          spec.commandLine().getOut().println(s);
-          spec.commandLine().getOut().println(inference);
-          spec.commandLine()
-              .getOut()
-              .println("recognition confirmation: " + properties.isConfirmation().getAsBoolean());
-          return 0;
-        });
+    return attempt(() -> {
+      var s = properties.settings().get();
+      var inference = properties.inference().get();
+      if (threshold != null
+          || preRoll != null
+          || minSpeech != null
+          || silence != null
+          || maxSpeech != null
+          || tail != null
+          || confirmation != null
+          || asrThreads != null
+          || asrTailFrames != null) {
+        manualChange();
+        s =
+            new VoiceSettings(
+                threshold == null ? s.threshold() : threshold,
+                preRoll == null ? s.preRollMs() : preRoll,
+                minSpeech == null ? s.minSpeechMs() : minSpeech,
+                silence == null ? s.silenceMs() : silence,
+                maxSpeech == null ? s.maxSpeechMs() : maxSpeech,
+                tail == null ? s.tailMs() : tail);
+        inference =
+            new VoiceInferenceOptions(
+                asrThreads == null ? inference.threads() : asrThreads,
+                asrTailFrames == null ? inference.tailFrames() : asrTailFrames);
+        properties.setSettings().accept(s);
+        properties.setInference().accept(inference);
+        if (confirmation != null) {
+          properties.setConfirmation().accept(confirmation);
+          if (delivery != null) delivery.setConfirmation().accept(confirmation);
+        }
+      }
+      spec.commandLine().getOut().println(s);
+      spec.commandLine().getOut().println(inference);
+      spec.commandLine()
+          .getOut()
+          .println("recognition confirmation: " + properties.isConfirmation().getAsBoolean());
+      return 0;
+    });
   }
 
   /** 音声による対話で用いるfeaturesを返す。 */
@@ -595,30 +585,29 @@ public class VoiceCommand {
       @Option(names = "--tts", arity = "0..1", fallbackValue = "true") Boolean tts,
       @Option(names = "--tts-voice") String ttsVoice,
       @Option(names = "--echo-tail-ms") Integer tail) {
-    return attempt(
-        () -> {
-          var current = properties.advanced().get();
-          if (wake != null
-              || word != null
-              || interrupt != null
-              || tts != null
-              || ttsVoice != null
-              || tail != null) {
-            manualChange();
-            var changed =
-                new VoiceAdvancedOptions(
-                    wake == null ? current.wakeEnabled() : wake,
-                    word == null ? current.wakeWord() : word,
-                    interrupt == null ? current.interruptEnabled() : interrupt,
-                    tts == null ? current.ttsEnabled() : tts,
-                    ttsVoice == null ? current.ttsVoice() : ttsVoice,
-                    tail == null ? current.echoTailMs() : tail);
-            properties.setAdvanced().accept(changed);
-          }
-          spec.commandLine().getOut().println(properties.advanced().get());
-          spec.commandLine().getOut().println("呼びかけは認識後の受付条件です。本人確認・ツール承認の代わりにはなりません。");
-          return 0;
-        });
+    return attempt(() -> {
+      var current = properties.advanced().get();
+      if (wake != null
+          || word != null
+          || interrupt != null
+          || tts != null
+          || ttsVoice != null
+          || tail != null) {
+        manualChange();
+        var changed =
+            new VoiceAdvancedOptions(
+                wake == null ? current.wakeEnabled() : wake,
+                word == null ? current.wakeWord() : word,
+                interrupt == null ? current.interruptEnabled() : interrupt,
+                tts == null ? current.ttsEnabled() : tts,
+                ttsVoice == null ? current.ttsVoice() : ttsVoice,
+                tail == null ? current.echoTailMs() : tail);
+        properties.setAdvanced().accept(changed);
+      }
+      spec.commandLine().getOut().println(properties.advanced().get());
+      spec.commandLine().getOut().println("呼びかけは認識後の受付条件です。本人確認・ツール承認の代わりにはなりません。");
+      return 0;
+    });
   }
 
   /** 音声による対話で用いるモデル管理を返す。 */
@@ -665,48 +654,45 @@ public class VoiceCommand {
 
     /** 固定モデル一式の案内・明示承認付き取得。 */
     public void run() {
-      parent.attempt(
-          () -> {
-            parent.printModels();
-            return 0;
-          });
+      parent.attempt(() -> {
+        parent.printModels();
+        return 0;
+      });
     }
 
     /** 音声による対話で用いる付随情報を返す。 */
     @Command(name = "info", description = "配布元・ライセンス・サイズ・固定SHAを表示", mixinStandardHelpOptions = true)
     int info() {
-      return parent.attempt(
-          () -> {
-            parent.printModels();
-            return 0;
-          });
+      return parent.attempt(() -> {
+        parent.printModels();
+        return 0;
+      });
     }
 
     /** 対象の現在の状態を、照会用の情報として返す。 */
     @Command(name = "status", description = "非同期取得の状態と進捗", mixinStandardHelpOptions = true)
     int status() {
-      return parent.attempt(
-          () -> {
-            var manager = parent.modelManager();
-            if (!manager.busy().getAsBoolean())
-              try {
-                parent
-                    .spec
-                    .commandLine()
-                    .getOut()
-                    .println("verified ready: " + manager.directory().readyDirectory());
-              } catch (java.io.IOException unavailable) {
-                parent
-                    .spec
-                    .commandLine()
-                    .getOut()
-                    .println(
-                        "bundle: missing or corrupt 原因: "
-                            + dev.mikoto2000.rei.event.FailureMessages.describe(unavailable));
-              }
-            parent.spec.commandLine().getOut().println(manager.status().get());
-            return 0;
-          });
+      return parent.attempt(() -> {
+        var manager = parent.modelManager();
+        if (!manager.busy().getAsBoolean())
+          try {
+            parent
+                .spec
+                .commandLine()
+                .getOut()
+                .println("verified ready: " + manager.directory().readyDirectory());
+          } catch (java.io.IOException unavailable) {
+            parent
+                .spec
+                .commandLine()
+                .getOut()
+                .println(
+                    "bundle: missing or corrupt 原因: "
+                        + dev.mikoto2000.rei.event.FailureMessages.describe(unavailable));
+          }
+        parent.spec.commandLine().getOut().println(manager.status().get());
+        return 0;
+      });
     }
 
     /** 要求された条件を満たすことを確認する。 */
@@ -715,22 +701,20 @@ public class VoiceCommand {
         description = "ローカル固定一式のサイズ・SHAを検証。取得やマイク起動は行いません",
         mixinStandardHelpOptions = true)
     int verify() {
-      return parent.attempt(
-          () -> {
-            var manager = parent.modelManager();
-            if (manager.busy().getAsBoolean())
-              throw new IllegalStateException("モデル取得中です。完了後に検証してください");
-            try {
-              parent
-                  .spec
-                  .commandLine()
-                  .getOut()
-                  .println("verified ready: " + manager.directory().readyDirectory());
-              return 0;
-            } catch (java.io.IOException invalid) {
-              throw new IllegalStateException("モデル一式が未配置または破損しています。models info を確認してください", invalid);
-            }
-          });
+      return parent.attempt(() -> {
+        var manager = parent.modelManager();
+        if (manager.busy().getAsBoolean()) throw new IllegalStateException("モデル取得中です。完了後に検証してください");
+        try {
+          parent
+              .spec
+              .commandLine()
+              .getOut()
+              .println("verified ready: " + manager.directory().readyDirectory());
+          return 0;
+        } catch (java.io.IOException invalid) {
+          throw new IllegalStateException("モデル一式が未配置または破損しています。models info を確認してください", invalid);
+        }
+      });
     }
 
     /** 音声による対話で用いるinstallを返す。 */
@@ -739,37 +723,35 @@ public class VoiceCommand {
         description = "表示したmanifest IDを承認して非同期取得。失敗後は同じコマンドで再試行",
         mixinStandardHelpOptions = true)
     int install(@Option(names = "--approve", paramLabel = "MANIFEST_ID") String approval) {
-      return parent.attempt(
-          () -> {
-            parent.manualChange();
-            boolean started = parent.modelManager().install().test(approval);
-            parent
-                .spec
-                .commandLine()
-                .getOut()
-                .println(
-                    started
-                        ? "モデル取得開始。/voice models status または cancel"
-                        : "検証済み一式を再利用します。ネットワーク取得はありません");
-            return 0;
-          });
+      return parent.attempt(() -> {
+        parent.manualChange();
+        boolean started = parent.modelManager().install().test(approval);
+        parent
+            .spec
+            .commandLine()
+            .getOut()
+            .println(
+                started
+                    ? "モデル取得開始。/voice models status または cancel"
+                    : "検証済み一式を再利用します。ネットワーク取得はありません");
+        return 0;
+      });
     }
 
     /** 対象の実行をキャンセルする。 */
     @Command(name = "cancel", description = "取得を取り消し、不完全な一式を破棄", mixinStandardHelpOptions = true)
     int cancel() {
-      return parent.attempt(
-          () -> {
-            parent
-                .spec
-                .commandLine()
-                .getOut()
-                .println(
-                    parent.modelManager().cancel().getAsBoolean()
-                        ? "取消を受け付けました。終了は models status で確認してください"
-                        : "取得は実行中ではありません");
-            return 0;
-          });
+      return parent.attempt(() -> {
+        parent
+            .spec
+            .commandLine()
+            .getOut()
+            .println(
+                parent.modelManager().cancel().getAsBoolean()
+                    ? "取消を受け付けました。終了は models status で確認してください"
+                    : "取得は実行中ではありません");
+        return 0;
+      });
     }
   }
 
@@ -783,19 +765,14 @@ public class VoiceCommand {
     /** 以後の処理で使う値を、指定された内容へ切り替える。 */
     @Command(name = "set", description = "一覧のIDを選択（OFF時のみ）", mixinStandardHelpOptions = true)
     int set(@Parameters(paramLabel = "ID") String id) {
-      return parent.attempt(
-          () -> {
-            parent.manualChange();
-            parent.devices.select(id);
-            parent.properties.setDeviceId().accept(id);
-            if (parent.monitor != null) parent.monitor.reselect(id);
-            parent
-                .spec
-                .commandLine()
-                .getOut()
-                .println("selected: " + parent.devices.selected().name());
-            return 0;
-          });
+      return parent.attempt(() -> {
+        parent.manualChange();
+        parent.devices.select(id);
+        parent.properties.setDeviceId().accept(id);
+        if (parent.monitor != null) parent.monitor.reselect(id);
+        parent.spec.commandLine().getOut().println("selected: " + parent.devices.selected().name());
+        return 0;
+      });
     }
   }
 
@@ -829,17 +806,16 @@ public class VoiceCommand {
     /** 対象の実行をキャンセルする。 */
     @Command(name = "cancel", description = "未実行のVOICE入力をキャンセル", mixinStandardHelpOptions = true)
     int cancel(@Parameters(paramLabel = "ID") UUID id) {
-      return parent.attempt(
-          () -> {
-            if (!(parent.voice != null && parent.voice.cancelPendingCorrection(id))
-                && !(parent.delivery != null && parent.delivery.cancel().test(id))
-                && (parent.target == null || !parent.cancelPending.test(parent.target, id))) {
-              parent.spec.commandLine().getErr().println("待機中の入力が見つかりません");
-              return 2;
-            }
-            parent.spec.commandLine().getOut().println("cancelled: " + id);
-            return 0;
-          });
+      return parent.attempt(() -> {
+        if (!(parent.voice != null && parent.voice.cancelPendingCorrection(id))
+            && !(parent.delivery != null && parent.delivery.cancel().test(id))
+            && (parent.target == null || !parent.cancelPending.test(parent.target, id))) {
+          parent.spec.commandLine().getErr().println("待機中の入力が見つかりません");
+          return 2;
+        }
+        parent.spec.commandLine().getOut().println("cancelled: " + id);
+        return 0;
+      });
     }
   }
 }

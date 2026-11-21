@@ -140,16 +140,15 @@ class ProjectRunQueueTest {
       for (int i = 0; i < 32; i++) {
         int index = i;
         futures.add(
-            workers.submit(
-                () -> {
-                  ready.await();
-                  try {
-                    queue.enqueue("project-" + index, "run-" + index, () -> {});
-                    accepted.incrementAndGet();
-                  } catch (ProjectRunQueue.CapacityExceededException expected) {
-                  }
-                  return null;
-                }));
+            workers.submit(() -> {
+              ready.await();
+              try {
+                queue.enqueue("project-" + index, "run-" + index, () -> {});
+                accepted.incrementAndGet();
+              } catch (ProjectRunQueue.CapacityExceededException expected) {
+              }
+              return null;
+            }));
       }
       ready.countDown();
       for (var future : futures) future.get(5, TimeUnit.SECONDS);
@@ -167,25 +166,24 @@ class ProjectRunQueueTest {
     var queue = new ProjectRunQueue(Runnable::run);
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
       var future =
-          executor.submit(
-              () ->
-                  queue.enqueue(
-                      "project",
-                      "run",
-                      () -> fail("Cancelled work started"),
-                      () -> {
-                        scheduling.countDown();
-                        try {
-                          release.await();
-                        } catch (InterruptedException error) {
-                          throw new RuntimeException(error);
-                        }
-                        visible.set(true);
-                      },
-                      () -> visible.set(false),
-                      error -> {
-                        throw error;
-                      }));
+          executor.submit(() ->
+              queue.enqueue(
+                  "project",
+                  "run",
+                  () -> fail("Cancelled work started"),
+                  () -> {
+                    scheduling.countDown();
+                    try {
+                      release.await();
+                    } catch (InterruptedException error) {
+                      throw new RuntimeException(error);
+                    }
+                    visible.set(true);
+                  },
+                  () -> visible.set(false),
+                  error -> {
+                    throw error;
+                  }));
       try {
         assertThat(scheduling.await(5, TimeUnit.SECONDS)).isTrue();
         assertThat(queue.cancelQueued("run")).isTrue();
@@ -279,11 +277,10 @@ class ProjectRunQueueTest {
     var reject = new java.util.concurrent.atomic.AtomicBoolean();
     var rejected = new java.util.concurrent.atomic.AtomicInteger();
     var queue =
-        new ProjectRunQueue(
-            task -> {
-              if (reject.get()) throw new RejectedExecutionException("closed");
-              tasks.add(task);
-            });
+        new ProjectRunQueue(task -> {
+          if (reject.get()) throw new RejectedExecutionException("closed");
+          tasks.add(task);
+        });
     queue.enqueue("p", "cancelled", () -> fail("cancelled work ran"));
     queue.enqueue(
         "p",
@@ -307,11 +304,10 @@ class ProjectRunQueueTest {
     var reject = new java.util.concurrent.atomic.AtomicBoolean();
     var failure = new AssertionError("fixture");
     var queue =
-        new ProjectRunQueue(
-            work -> {
-              if (reject.get()) throw failure;
-              scheduled.add(work);
-            });
+        new ProjectRunQueue(work -> {
+          if (reject.get()) throw failure;
+          scheduled.add(work);
+        });
     queue.enqueue("project", "writer", () -> {});
     queue.enqueue("project", "reader-one", ProjectRunQueue.Access.READ_ONLY, () -> {});
     queue.enqueue("project", "reader-two", ProjectRunQueue.Access.READ_ONLY, () -> {});
@@ -332,14 +328,13 @@ class ProjectRunQueueTest {
     var rejection = new RejectedExecutionException("first reader");
     var fatal = new AssertionError("second reader");
     var queue =
-        new ProjectRunQueue(
-            work -> {
-              switch (attempts.getAndIncrement()) {
-                case 1 -> throw rejection;
-                case 2 -> throw fatal;
-                default -> scheduled.add(work);
-              }
-            });
+        new ProjectRunQueue(work -> {
+          switch (attempts.getAndIncrement()) {
+            case 1 -> throw rejection;
+            case 2 -> throw fatal;
+            default -> scheduled.add(work);
+          }
+        });
     queue.enqueue("project", "writer", () -> {});
     queue.enqueue("project", "first", ProjectRunQueue.Access.READ_ONLY, () -> {});
     queue.enqueue("project", "second", ProjectRunQueue.Access.READ_ONLY, () -> {});

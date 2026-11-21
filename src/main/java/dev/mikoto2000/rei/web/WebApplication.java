@@ -33,13 +33,12 @@ public final class WebApplication {
                     .getEnvironment()
                     .getPropertySources()
                     .addFirst(new MapPropertySource("reiApiKeyEnvironment", properties)));
-    application.addInitializers(
-        context -> {
-          context
-              .getEnvironment()
-              .getPropertySources()
-              .addFirst(new MapPropertySource("reiApiKeyEnvironment", properties));
-          context.getBeanFactory().registerSingleton("apiKeyProperties", new ApiKeyProperties(key));
-        });
+    application.addInitializers(context -> {
+      context
+          .getEnvironment()
+          .getPropertySources()
+          .addFirst(new MapPropertySource("reiApiKeyEnvironment", properties));
+      context.getBeanFactory().registerSingleton("apiKeyProperties", new ApiKeyProperties(key));
+    });
   }
 }

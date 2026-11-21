@@ -120,11 +120,10 @@ class SingleProjectDisplayTest {
       assertThat(c.associationConfidence()).isEqualTo(prior.associationConfidence());
     }
     assertThat(after.mainWorkThemeCandidates())
-        .anySatisfy(
-            c -> {
-              assertThat(c.memberProjects()).containsExactly("sensevoice-input");
-              assertThat(c.displayTheme()).isEqualTo("音声入力・文字起こし系");
-            });
+        .anySatisfy(c -> {
+          assertThat(c.memberProjects()).containsExactly("sensevoice-input");
+          assertThat(c.displayTheme()).isEqualTo("音声入力・文字起こし系");
+        });
     assertThat(
             fixture()
                 .getFirst()
@@ -161,20 +160,18 @@ class SingleProjectDisplayTest {
     var a = aggregate(store);
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              String input = ((Prompt) call.getArgument(0)).getUserMessage().getText();
-              assertClean(input);
-              assertThat(input).contains("音声入力・文字起こし系", "音声翻訳系", "DeepSeek / Vision関連");
-              if (mode.equals("failure")) return Flux.error(new IllegalStateException("fixture"));
-              var json = ConsolidationPipelineTest.JSON.valueToTree(DailySummary.fallback(a));
-              return Flux.just(
-                  new ChatResponse(
-                      List.of(
-                          new Generation(
-                              new AssistantMessage(
-                                  mode.equals("invalid") ? "{}" : json.toString())))));
-            });
+        .thenAnswer(call -> {
+          String input = ((Prompt) call.getArgument(0)).getUserMessage().getText();
+          assertClean(input);
+          assertThat(input).contains("音声入力・文字起こし系", "音声翻訳系", "DeepSeek / Vision関連");
+          if (mode.equals("failure")) return Flux.error(new IllegalStateException("fixture"));
+          var json = ConsolidationPipelineTest.JSON.valueToTree(DailySummary.fallback(a));
+          return Flux.just(
+              new ChatResponse(
+                  List.of(
+                      new Generation(
+                          new AssistantMessage(mode.equals("invalid") ? "{}" : json.toString())))));
+        });
     var result =
         new DailySummaryService(
                 store,

@@ -520,11 +520,10 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
                         meetingReview,
                         key,
                         selected.stream()
-                            .map(
-                                v ->
-                                    v.startsWith(project + "::")
-                                        ? v.substring(project.length() + 2)
-                                        : v)
+                            .map(v ->
+                                v.startsWith(project + "::")
+                                    ? v.substring(project.length() + 2)
+                                    : v)
                             .toList());
             case "briefing" -> followups().report(project, reportDate, false);
             case "review" -> followups().report(project, reportDate, true);

@@ -27,14 +27,13 @@ class TimingConfigurationIntegrationTest {
             "rei.timing.max-spans-per-run=3",
             "rei.timing.max-total-spans=6",
             "rei.timing.ttl=2s")
-        .run(
-            context -> {
-              assertNull(context.getStartupFailure());
-              var recorder = context.getBean(TimingRecorder.class);
-              assertTrue(recorder.enabled());
-              assertTrue(recorder.beginRun("run", "project", "session"));
-              assertEquals(1, recorder.statistics().runs());
-            });
+        .run(context -> {
+          assertNull(context.getStartupFailure());
+          var recorder = context.getBean(TimingRecorder.class);
+          assertTrue(recorder.enabled());
+          assertTrue(recorder.beginRun("run", "project", "session"));
+          assertEquals(1, recorder.statistics().runs());
+        });
   }
 
   /** 実行時間の把握の操作が、指定された権限・承認条件に従うことを確認する。 */

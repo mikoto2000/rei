@@ -67,10 +67,9 @@ public class TopicGeneratorService {
     this.markCuriosityTopicUsed =
         (query, topic) ->
             curiosityQueue.findCandidates(query).stream()
-                .filter(
-                    item ->
-                        DeterministicTopicRanker.normalize(item.question())
-                            .equals(DeterministicTopicRanker.normalize(topic)))
+                .filter(item ->
+                    DeterministicTopicRanker.normalize(item.question())
+                        .equals(DeterministicTopicRanker.normalize(topic)))
                 .findFirst()
                 .ifPresent(item -> curiosityQueue.markUsed(item.id()));
     this.settings = () -> TopicSettings.capture(properties);

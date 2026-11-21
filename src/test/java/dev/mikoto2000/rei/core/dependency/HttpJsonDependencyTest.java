@@ -298,18 +298,17 @@ class HttpJsonDependencyTest {
       String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/slow";
       var worker =
           Thread.ofPlatform()
-              .start(
-                  () -> {
-                    try {
-                      probe.probeJson(
-                          "id", url, "{\"status\":200,\"pointer\":\"/ready\",\"value\":true}");
-                      result.complete(false);
-                    } catch (java.util.concurrent.CancellationException error) {
-                      result.complete(Thread.currentThread().isInterrupted());
-                    } catch (Throwable error) {
-                      result.completeExceptionally(error);
-                    }
-                  });
+              .start(() -> {
+                try {
+                  probe.probeJson(
+                      "id", url, "{\"status\":200,\"pointer\":\"/ready\",\"value\":true}");
+                  result.complete(false);
+                } catch (java.util.concurrent.CancellationException error) {
+                  result.complete(Thread.currentThread().isInterrupted());
+                } catch (Throwable error) {
+                  result.completeExceptionally(error);
+                }
+              });
       try {
         assertTrue(entered.await(2, java.util.concurrent.TimeUnit.SECONDS));
         worker.interrupt();

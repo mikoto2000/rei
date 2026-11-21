@@ -211,20 +211,19 @@ class SubAgentConsensusServiceTest {
     run.setRunContext(owner);
     properties.setConsensusJudgeEnabled(true);
     when(runner.run(eq("judge"), anyString(), anyString(), any()))
-        .thenAnswer(
-            call -> {
-              assertTrue(call.getArgument(2, String.class).contains("untrusted"));
-              var reservation = call.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class);
-              assertTrue(reservation.tryReserve());
-              assertEquals(0, run.sharedLlmReservation().remaining());
-              return new SubAgentResult(
-                  "judge",
-                  "judge-run",
-                  SubAgentResult.Status.COMPLETED,
-                  "judge prefers yes",
-                  Instant.now(),
-                  Instant.now());
-            });
+        .thenAnswer(call -> {
+          assertTrue(call.getArgument(2, String.class).contains("untrusted"));
+          var reservation = call.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class);
+          assertTrue(reservation.tryReserve());
+          assertEquals(0, run.sharedLlmReservation().remaining());
+          return new SubAgentResult(
+              "judge",
+              "judge-run",
+              SubAgentResult.Status.COMPLETED,
+              "judge prefers yes",
+              Instant.now(),
+              Instant.now());
+        });
     var judged = service.judge(run, references, "judge");
     assertTrue(judged.comparison().unresolved());
     assertEquals("DISAGREEMENT", judged.comparison().status());

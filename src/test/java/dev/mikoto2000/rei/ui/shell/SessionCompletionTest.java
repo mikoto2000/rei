@@ -56,13 +56,12 @@ class SessionCompletionTest {
   @Test
   void failedAdmissionRollsBackSnapshot() {
     var repository = new FileSessionRepository(root.resolve("sessions.json"));
-    assertThatThrownBy(
-            () ->
-                repository.accept(
-                    row("rejected", "p1"),
-                    () -> {
-                      throw new IllegalStateException();
-                    }))
+    assertThatThrownBy(() ->
+            repository.accept(
+                row("rejected", "p1"),
+                () -> {
+                  throw new IllegalStateException();
+                }))
         .isInstanceOf(IllegalStateException.class);
     assertThat(repository.completionSnapshot()).isEmpty();
   }

@@ -158,12 +158,12 @@ public class FeedSummaryService {
   private String buildItemPrompt(FeedBriefingItem item, ResolvedContent resolved) {
     if ("article".equals(resolved.source())) {
       return """
-        あなたは RSS/Atom フィードの記事要約アシスタントです。
-        次の記事本文を主な根拠に、重要点を日本語で簡潔に要約してください。
-        与えられた情報だけを使い、不足情報を推測で補完しないでください。
+      あなたは RSS/Atom フィードの記事要約アシスタントです。
+      次の記事本文を主な根拠に、重要点を日本語で簡潔に要約してください。
+      与えられた情報だけを使い、不足情報を推測で補完しないでください。
 
-        フィード:\s\
-        """
+      フィード:\s\
+      """
           + item.feedName()
           + "\n公開日時: "
           + item.publishedAt()
@@ -176,12 +176,12 @@ public class FeedSummaryService {
           + "\n";
     }
     return """
-        あなたは RSS/Atom フィードの記事要約アシスタントです。
-        記事本文は取得できませんでした。以下の Feed 提供情報だけを使って要約してください。
-        不足情報を推測で補完せず、本文を読んだかのような詳細を生成しないでください。
+    あなたは RSS/Atom フィードの記事要約アシスタントです。
+    記事本文は取得できませんでした。以下の Feed 提供情報だけを使って要約してください。
+    不足情報を推測で補完せず、本文を読んだかのような詳細を生成しないでください。
 
-        フィード:\s\
-        """
+    フィード:\s\
+    """
         + item.feedName()
         + "\n公開日時: "
         + item.publishedAt()

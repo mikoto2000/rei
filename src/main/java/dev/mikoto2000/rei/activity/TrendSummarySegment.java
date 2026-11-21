@@ -72,11 +72,10 @@ public record TrendSummarySegment(
     var ids = new java.util.HashSet<>(evidence.stream().map(ActivityRecord::id).toList());
     var included =
         sessions.stream()
-            .filter(
-                s ->
-                    s.startedAt().isBefore(endedAt)
-                        && s.endedAt().isAfter(startedAt)
-                        && s.recordIds().stream().anyMatch(ids::contains))
+            .filter(s ->
+                s.startedAt().isBefore(endedAt)
+                    && s.endedAt().isAfter(startedAt)
+                    && s.recordIds().stream().anyMatch(ids::contains))
             .map(ActivitySession::id)
             .toList();
     return new TrendSummarySegment(

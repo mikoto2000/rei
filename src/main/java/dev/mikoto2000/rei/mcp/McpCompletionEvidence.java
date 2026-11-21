@@ -52,23 +52,21 @@ public final class McpCompletionEvidence {
             || goal.completion() == null) continue;
         var saved =
             reflections.list(request.project()).stream()
-                .filter(
-                    r ->
-                        r.goalId().equals(goal.id())
-                            && r.runId().equals(request.run())
-                            && r.sessionId().equals(request.session())
-                            && reflections.matchesCriteria(r, goal))
+                .filter(r ->
+                    r.goalId().equals(goal.id())
+                        && r.runId().equals(request.run())
+                        && r.sessionId().equals(request.session())
+                        && reflections.matchesCriteria(r, goal))
                 .toList();
         if (goal.status().equals("COMPLETED")
             && saved.stream()
                 .anyMatch(r -> r.actual().equals("VERIFIED") && r.goalStatus().equals("COMPLETED")))
           goal.completion()
               .requirements()
-              .forEach(
-                  r -> {
-                    if (r.required() && request.criteria().contains(r.statement()))
-                      verified.add(r.statement());
-                  });
+              .forEach(r -> {
+                if (r.required() && request.criteria().contains(r.statement()))
+                  verified.add(r.statement());
+              });
         failed |= saved.stream().anyMatch(r -> r.actual().equals("REJECTED"));
       }
     return project(succeeded, request.criteria(), verified, failed);
@@ -101,21 +99,20 @@ public final class McpCompletionEvidence {
   public List<Map<String, Object>> artifacts(McpRequestStore.Request request) {
     return runArtifacts.apply(request).stream()
         .filter(a -> request.run().equals(a.runId()) && request.session().equals(a.sessionId()))
-        .map(
-            a ->
-                Map.<String, Object>of(
-                    "artifact_id",
-                    a.artifactId(),
-                    "filename",
-                    CredentialRedactor.redact(a.filename()),
-                    "media_type",
-                    a.mediaType(),
-                    "size",
-                    a.size(),
-                    "sha256",
-                    a.sha256(),
-                    "reference",
-                    a.storageReference()))
+        .map(a ->
+            Map.<String, Object>of(
+                "artifact_id",
+                a.artifactId(),
+                "filename",
+                CredentialRedactor.redact(a.filename()),
+                "media_type",
+                a.mediaType(),
+                "size",
+                a.size(),
+                "sha256",
+                a.sha256(),
+                "reference",
+                a.storageReference()))
         .toList();
   }
 }

@@ -49,18 +49,17 @@ class McpCrashRecoveryTest {
     var process = new ProcessBuilder(executable, "@" + arguments).redirectErrorStream(true).start();
     try {
       var ready =
-          java.util.concurrent.CompletableFuture.supplyAsync(
-              () -> {
-                try (var reader =
-                    new java.io.BufferedReader(
-                        new java.io.InputStreamReader(process.getInputStream()))) {
-                  String line;
-                  while ((line = reader.readLine()) != null) if (line.equals("READY")) return true;
-                  return false;
-                } catch (java.io.IOException e) {
-                  throw new java.io.UncheckedIOException(e);
-                }
-              });
+          java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try (var reader =
+                new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()))) {
+              String line;
+              while ((line = reader.readLine()) != null) if (line.equals("READY")) return true;
+              return false;
+            } catch (java.io.IOException e) {
+              throw new java.io.UncheckedIOException(e);
+            }
+          });
       assertTrue(ready.get(15, TimeUnit.SECONDS));
       process.destroyForcibly();
       assertTrue(process.waitFor(5, TimeUnit.SECONDS));

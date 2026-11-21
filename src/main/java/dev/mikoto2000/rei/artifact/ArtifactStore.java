@@ -165,11 +165,11 @@ public final class ArtifactStore implements dev.mikoto2000.rei.secretary.Secreta
     this.checkpoint = Objects.requireNonNull(checkpoint);
     db.sql(
             """
-        CREATE TABLE IF NOT EXISTS rei_artifacts(id TEXT PRIMARY KEY,owner TEXT NOT NULL,project TEXT NOT NULL,root TEXT NOT NULL,
-        session TEXT NOT NULL,run TEXT NOT NULL,task TEXT NOT NULL,source_key TEXT NOT NULL,media TEXT NOT NULL,filename TEXT NOT NULL,
-        size INTEGER NOT NULL,sha TEXT NOT NULL,created TEXT NOT NULL,expires TEXT NOT NULL,status TEXT NOT NULL,pid INTEGER NOT NULL,process_start TEXT,
-        UNIQUE(project,root,session,run,source_key))
-        """)
+            CREATE TABLE IF NOT EXISTS rei_artifacts(id TEXT PRIMARY KEY,owner TEXT NOT NULL,project TEXT NOT NULL,root TEXT NOT NULL,
+            session TEXT NOT NULL,run TEXT NOT NULL,task TEXT NOT NULL,source_key TEXT NOT NULL,media TEXT NOT NULL,filename TEXT NOT NULL,
+            size INTEGER NOT NULL,sha TEXT NOT NULL,created TEXT NOT NULL,expires TEXT NOT NULL,status TEXT NOT NULL,pid INTEGER NOT NULL,process_start TEXT,
+            UNIQUE(project,root,session,run,source_key))
+            """)
         .update();
   }
 
@@ -234,11 +234,11 @@ public final class ArtifactStore implements dev.mikoto2000.rei.secretary.Secreta
     int inserted =
         db.sql(
                 """
-        INSERT OR IGNORE INTO rei_artifacts SELECT :id,:owner,:project,:root,:session,:run,:task,:key,:media,:filename,:size,:sha,:created,:expires,'PUBLISHING',:pid,:start
-        WHERE (SELECT COUNT(*) FROM rei_artifacts WHERE status<>'DELETED')<:count
-          AND (SELECT COALESCE(SUM(size),0) FROM rei_artifacts WHERE status<>'DELETED')+:size<=:total
-          AND (SELECT COUNT(*) FROM rei_artifacts)<10000
-        """)
+                INSERT OR IGNORE INTO rei_artifacts SELECT :id,:owner,:project,:root,:session,:run,:task,:key,:media,:filename,:size,:sha,:created,:expires,'PUBLISHING',:pid,:start
+                WHERE (SELECT COUNT(*) FROM rei_artifacts WHERE status<>'DELETED')<:count
+                  AND (SELECT COALESCE(SUM(size),0) FROM rei_artifacts WHERE status<>'DELETED')+:size<=:total
+                  AND (SELECT COUNT(*) FROM rei_artifacts)<10000
+                """)
             .param("id", id)
             .param("owner", ownership)
             .param("task", run.isEmpty() ? "" : "run:" + run)
@@ -403,9 +403,9 @@ public final class ArtifactStore implements dev.mikoto2000.rei.secretary.Secreta
       for (var stored :
           db.sql(
                   """
-        SELECT * FROM rei_artifacts WHERE project=:project AND root=:root AND (:session IS NULL OR session=:session)
-        AND (:run IS NULL OR run=:run) AND id>:after ORDER BY id LIMIT :limit
-        """)
+                  SELECT * FROM rei_artifacts WHERE project=:project AND root=:root AND (:session IS NULL OR session=:session)
+                  AND (:run IS NULL OR run=:run) AND id>:after ORDER BY id LIMIT :limit
+                  """)
               .param("project", owner.id())
               .param("root", owner.root().toString())
               .param("session", session)

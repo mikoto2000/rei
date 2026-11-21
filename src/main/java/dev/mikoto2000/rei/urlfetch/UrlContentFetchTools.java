@@ -31,10 +31,10 @@ public class UrlContentFetchTools {
       name = "fetchUrlContent",
       description =
           """
-      Fetch content from one exact URL using the shared http/https fetcher.
-      Use this primitive when the URL is already known.
-      For public-web research, prefer webSearchAndRead over manually chaining webSearch and this tool.
-      """)
+          Fetch content from one exact URL using the shared http/https fetcher.
+          Use this primitive when the URL is already known.
+          For public-web research, prefer webSearchAndRead over manually chaining webSearch and this tool.
+          """)
   public UrlContentFetchResult fetchUrlContent(
       String url,
       @org.springframework.ai.tool.annotation.ToolParam(
@@ -45,8 +45,7 @@ public class UrlContentFetchTools {
     var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
     try (scope) {
       var refresh =
-          dev.mikoto2000.rei.http.FetchScope.withForceRefresh(
-              Boolean.TRUE.equals(forceRefresh));
+          dev.mikoto2000.rei.http.FetchScope.withForceRefresh(Boolean.TRUE.equals(forceRefresh));
       try (refresh) {
         resultBudget.requireAvailable(context);
         return resultBudget.fit(fetchUrlContent(url), context);

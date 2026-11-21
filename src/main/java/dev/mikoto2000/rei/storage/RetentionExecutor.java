@@ -117,17 +117,16 @@ public final class RetentionExecutor {
 
   /** 過去の記録を、条件に従って参照できる形で返す。 */
   public List<Execution> history() {
-    return registry.database.read(
-        db -> {
-          var result = new ArrayList<Execution>();
-          try (var query = db.createStatement();
-              var rows =
-                  query.executeQuery(
-                      "SELECT id FROM retention_executions ORDER BY created DESC,id DESC LIMIT 100")) {
-            while (rows.next()) result.add(get(db, rows.getString(1)));
-          }
-          return List.copyOf(result);
-        });
+    return registry.database.read(db -> {
+      var result = new ArrayList<Execution>();
+      try (var query = db.createStatement();
+          var rows =
+              query.executeQuery(
+                  "SELECT id FROM retention_executions ORDER BY created DESC,id DESC LIMIT 100")) {
+        while (rows.next()) result.add(get(db, rows.getString(1)));
+      }
+      return List.copyOf(result);
+    });
   }
 
   /** データ保存の共通処理で用いる項目一覧を返す。 */
@@ -257,184 +256,166 @@ public final class RetentionExecutor {
 
   /** 指定された内容を、現在の対象へ反映する。 */
   public Execution apply(String planId) {
-    return registry.serialized(
-        () -> {
-          var execution =
-              registry.database.transaction(
-                  db -> {
-                    try (var query =
-                        db.prepareStatement(
-                            "SELECT id FROM retention_executions WHERE plan_id=?")) {
-                      query.setString(1, planId);
-                      try (var rows = query.executeQuery()) {
-                        if (rows.next()) return get(db, rows.getString(1));
-                      }
-                    }
-                    var plan = RetentionPlanner.get(db, planId);
-                    planner.validate(db, plan);
-                    try (var query =
-                        db.prepareStatement(
-                            "SELECT snapshot_hash FROM retention_approvals WHERE plan_id=?")) {
-                      query.setString(1, planId);
-                      try (var rows = query.executeQuery()) {
-                        if (!rows.next()
-                            || !rows.getString(1).equals(plan.snapshotHash())
-                            || plan.candidates().isEmpty())
-                          throw new IllegalStateException("Exact nonempty plan approval required");
-                      }
-                    }
-                    String id = UUID.randomUUID().toString(),
-                        now = registry.clock.instant().toString();
-                    for (var object : plan.candidates()) original(object);
-                    try (var insert =
-                        db.prepareStatement(
-                            "INSERT INTO retention_executions VALUES(?,?,?,'DELETING',?,?)")) {
-                      insert.setString(1, id);
-                      insert.setString(2, planId);
-                      insert.setString(3, plan.snapshotHash());
-                      insert.setString(4, now);
-                      insert.setString(5, now);
-                      insert.executeUpdate();
-                    }
-                    try (var insert =
-                        db.prepareStatement(
-                            "INSERT INTO retention_execution_items VALUES(?,?,?,'DELETING',?,NULL,?)")) {
-                      int ordinal = 0;
-                      for (var object : plan.candidates()) {
-                        insert.setString(1, id);
-                        insert.setString(2, object.id());
-                        insert.setInt(3, ordinal);
-                        insert.setString(4, ".storage/quarantine/" + id + "/" + ordinal + ".body");
-                        insert.setString(5, StorageDatabase.JSON.writeValueAsString(object));
-                        insert.executeUpdate();
-                        ordinal++;
-                        try (var update =
-                            db.prepareStatement(
-                                "UPDATE stored_objects SET status='DELETING',revision=revision+1 WHERE id=?")) {
-                          update.setString(1, object.id());
-                          update.executeUpdate();
-                        }
-                      }
-                    }
-                    return get(db, id);
-                  });
-          if (execution.status().equals("QUARANTINED")) return execution;
-          if (!execution.status().equals("DELETING"))
-            throw new IllegalStateException("Execution cannot be reapplied in this state");
-          registry.database.read(
-              db -> {
-                var plan = RetentionPlanner.get(db, execution.planId());
-                if (!plan.snapshotHash().equals(execution.snapshotHash())
-                    || RetentionPlanner.policy(db, plan.policyId()).version()
-                        != plan.policyVersion())
-                  throw new IllegalStateException(
-                      "Policy changed; restore this interrupted execution instead of applying it");
-                return null;
-              });
-          try {
-            checkpoint.reached("DELETING", execution.id());
-            for (var item : registry.database.read(db -> items(db, execution.id()))) {
-              if (item.state().equals("QUARANTINED")) continue;
-              registry.database.read(
-                  db -> {
-                    protect(db, item);
-                    return null;
-                  });
-              Path source = original(item.original()), target = quarantine(execution.id(), item);
-              boolean sourceExists = Files.exists(source, LinkOption.NOFOLLOW_LINKS),
-                  targetExists = Files.exists(target, LinkOption.NOFOLLOW_LINKS);
-              if (sourceExists && targetExists || !sourceExists && !targetExists)
-                throw new IllegalStateException("Ambiguous quarantine state; both paths retained");
-              if (sourceExists) {
-                verify(source, item.original());
-                move(source, target);
+    return registry.serialized(() -> {
+      var execution =
+          registry.database.transaction(db -> {
+            try (var query =
+                db.prepareStatement("SELECT id FROM retention_executions WHERE plan_id=?")) {
+              query.setString(1, planId);
+              try (var rows = query.executeQuery()) {
+                if (rows.next()) return get(db, rows.getString(1));
               }
-              verify(target, item.original());
-              checkpoint.reached("MOVED", execution.id());
-              registry.database.transaction(
-                  db -> {
-                    protect(db, item);
-                    itemState(
-                        db,
-                        execution.id(),
-                        item,
-                        "QUARANTINED",
-                        "QUARANTINED",
-                        registry.clock.instant());
-                    return null;
-                  });
             }
-            registry.database.transaction(
-                db -> {
-                  executionState(db, execution.id(), "QUARANTINED");
-                  return null;
-                });
-            return get(execution.id());
-          } catch (IOException | NoSuchAlgorithmException | InterruptedException error) {
-            throw new IllegalStateException(
-                "Quarantine interrupted; retry apply or restore this execution", error);
+            var plan = RetentionPlanner.get(db, planId);
+            planner.validate(db, plan);
+            try (var query =
+                db.prepareStatement(
+                    "SELECT snapshot_hash FROM retention_approvals WHERE plan_id=?")) {
+              query.setString(1, planId);
+              try (var rows = query.executeQuery()) {
+                if (!rows.next()
+                    || !rows.getString(1).equals(plan.snapshotHash())
+                    || plan.candidates().isEmpty())
+                  throw new IllegalStateException("Exact nonempty plan approval required");
+              }
+            }
+            String id = UUID.randomUUID().toString(), now = registry.clock.instant().toString();
+            for (var object : plan.candidates()) original(object);
+            try (var insert =
+                db.prepareStatement(
+                    "INSERT INTO retention_executions VALUES(?,?,?,'DELETING',?,?)")) {
+              insert.setString(1, id);
+              insert.setString(2, planId);
+              insert.setString(3, plan.snapshotHash());
+              insert.setString(4, now);
+              insert.setString(5, now);
+              insert.executeUpdate();
+            }
+            try (var insert =
+                db.prepareStatement(
+                    "INSERT INTO retention_execution_items VALUES(?,?,?,'DELETING',?,NULL,?)")) {
+              int ordinal = 0;
+              for (var object : plan.candidates()) {
+                insert.setString(1, id);
+                insert.setString(2, object.id());
+                insert.setInt(3, ordinal);
+                insert.setString(4, ".storage/quarantine/" + id + "/" + ordinal + ".body");
+                insert.setString(5, StorageDatabase.JSON.writeValueAsString(object));
+                insert.executeUpdate();
+                ordinal++;
+                try (var update =
+                    db.prepareStatement(
+                        "UPDATE stored_objects SET status='DELETING',revision=revision+1 WHERE id=?")) {
+                  update.setString(1, object.id());
+                  update.executeUpdate();
+                }
+              }
+            }
+            return get(db, id);
+          });
+      if (execution.status().equals("QUARANTINED")) return execution;
+      if (!execution.status().equals("DELETING"))
+        throw new IllegalStateException("Execution cannot be reapplied in this state");
+      registry.database.read(db -> {
+        var plan = RetentionPlanner.get(db, execution.planId());
+        if (!plan.snapshotHash().equals(execution.snapshotHash())
+            || RetentionPlanner.policy(db, plan.policyId()).version() != plan.policyVersion())
+          throw new IllegalStateException(
+              "Policy changed; restore this interrupted execution instead of applying it");
+        return null;
+      });
+      try {
+        checkpoint.reached("DELETING", execution.id());
+        for (var item : registry.database.read(db -> items(db, execution.id()))) {
+          if (item.state().equals("QUARANTINED")) continue;
+          registry.database.read(db -> {
+            protect(db, item);
+            return null;
+          });
+          Path source = original(item.original()), target = quarantine(execution.id(), item);
+          boolean sourceExists = Files.exists(source, LinkOption.NOFOLLOW_LINKS),
+              targetExists = Files.exists(target, LinkOption.NOFOLLOW_LINKS);
+          if (sourceExists && targetExists || !sourceExists && !targetExists)
+            throw new IllegalStateException("Ambiguous quarantine state; both paths retained");
+          if (sourceExists) {
+            verify(source, item.original());
+            move(source, target);
           }
+          verify(target, item.original());
+          checkpoint.reached("MOVED", execution.id());
+          registry.database.transaction(db -> {
+            protect(db, item);
+            itemState(
+                db, execution.id(), item, "QUARANTINED", "QUARANTINED", registry.clock.instant());
+            return null;
+          });
+        }
+        registry.database.transaction(db -> {
+          executionState(db, execution.id(), "QUARANTINED");
+          return null;
         });
+        return get(execution.id());
+      } catch (IOException | NoSuchAlgorithmException | InterruptedException error) {
+        throw new IllegalStateException(
+            "Quarantine interrupted; retry apply or restore this execution", error);
+      }
+    });
   }
 
   /** 保存済みの記録から、利用する状態を復元する。 */
   public Execution restore(String id) {
-    return registry.serialized(
-        () -> {
-          var execution = get(id);
-          if (execution.status().equals("RESTORED")) return execution;
-          if (!Set.of("DELETING", "QUARANTINED", "RESTORING").contains(execution.status()))
-            throw new IllegalStateException("Execution cannot be restored in this state");
-          try {
-            var entries = registry.database.read(db -> items(db, id));
-            // Preflight every entry before making a restoration request durable.
-            for (var item : entries) {
-              if (item.state().equals("RESTORED")) continue;
-              Path source = original(item.original()), target = quarantine(id, item);
-              boolean atSource = Files.exists(source, LinkOption.NOFOLLOW_LINKS),
-                  atTarget = Files.exists(target, LinkOption.NOFOLLOW_LINKS);
-              if (atSource && atTarget || !atSource && !atTarget)
-                throw new IllegalStateException("Restore collision or missing body; no overwrite");
-              if (atSource && !Set.of("DELETING", "RESTORING").contains(item.state()))
-                throw new IllegalStateException("Original path already exists; no overwrite");
-              verify(atSource ? source : target, item.original());
-            }
-            registry.database.transaction(
-                db -> {
-                  executionState(db, id, "RESTORING");
-                  try (var update =
-                      db.prepareStatement(
-                          "UPDATE retention_execution_items SET state='RESTORING' WHERE execution_id=? AND state<>'RESTORED'")) {
-                    update.setString(1, id);
-                    update.executeUpdate();
-                  }
-                  return null;
-                });
-            for (var item : registry.database.read(db -> items(db, id))) {
-              if (item.state().equals("RESTORED")) continue;
-              Path source = original(item.original()), target = quarantine(id, item);
-              if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
-                verify(target, item.original());
-                move(target, source);
-              }
-              verify(source, item.original());
-              checkpoint.reached("RESTORED_FILE", id);
-              registry.database.transaction(
-                  db -> {
-                    itemState(db, id, item, "RESTORED", "AVAILABLE", null);
-                    return null;
-                  });
-            }
-            registry.database.transaction(
-                db -> {
-                  executionState(db, id, "RESTORED");
-                  return null;
-                });
-            return get(id);
-          } catch (IOException | NoSuchAlgorithmException | InterruptedException error) {
-            throw new IllegalStateException("Restore interrupted; retry this execution", error);
+    return registry.serialized(() -> {
+      var execution = get(id);
+      if (execution.status().equals("RESTORED")) return execution;
+      if (!Set.of("DELETING", "QUARANTINED", "RESTORING").contains(execution.status()))
+        throw new IllegalStateException("Execution cannot be restored in this state");
+      try {
+        var entries = registry.database.read(db -> items(db, id));
+        // Preflight every entry before making a restoration request durable.
+        for (var item : entries) {
+          if (item.state().equals("RESTORED")) continue;
+          Path source = original(item.original()), target = quarantine(id, item);
+          boolean atSource = Files.exists(source, LinkOption.NOFOLLOW_LINKS),
+              atTarget = Files.exists(target, LinkOption.NOFOLLOW_LINKS);
+          if (atSource && atTarget || !atSource && !atTarget)
+            throw new IllegalStateException("Restore collision or missing body; no overwrite");
+          if (atSource && !Set.of("DELETING", "RESTORING").contains(item.state()))
+            throw new IllegalStateException("Original path already exists; no overwrite");
+          verify(atSource ? source : target, item.original());
+        }
+        registry.database.transaction(db -> {
+          executionState(db, id, "RESTORING");
+          try (var update =
+              db.prepareStatement(
+                  "UPDATE retention_execution_items SET state='RESTORING' WHERE execution_id=? AND state<>'RESTORED'")) {
+            update.setString(1, id);
+            update.executeUpdate();
           }
+          return null;
         });
+        for (var item : registry.database.read(db -> items(db, id))) {
+          if (item.state().equals("RESTORED")) continue;
+          Path source = original(item.original()), target = quarantine(id, item);
+          if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+            verify(target, item.original());
+            move(target, source);
+          }
+          verify(source, item.original());
+          checkpoint.reached("RESTORED_FILE", id);
+          registry.database.transaction(db -> {
+            itemState(db, id, item, "RESTORED", "AVAILABLE", null);
+            return null;
+          });
+        }
+        registry.database.transaction(db -> {
+          executionState(db, id, "RESTORED");
+          return null;
+        });
+        return get(id);
+      } catch (IOException | NoSuchAlgorithmException | InterruptedException error) {
+        throw new IllegalStateException("Restore interrupted; retry this execution", error);
+      }
+    });
   }
 
   /** データ保存の共通処理で用いる保持期限を過ぎた情報の削除状態の記録を返す。 */
@@ -484,96 +465,87 @@ public final class RetentionExecutor {
 
   /** データ保存の共通処理に関する承認保持期限を過ぎた情報の削除を処理する。 */
   public void approvePurge(String id) {
-    registry.serialized(
-        () ->
-            registry.database.transaction(
-                db -> {
-                  String state = get(db, id).status();
-                  if (!Set.of("QUARANTINED", "PURGING").contains(state))
-                    throw new IllegalStateException(
-                        "Only quarantined or previously approved interrupted purges can receive approval");
-                  if (state.equals("PURGING"))
-                    try (var query =
-                        db.prepareStatement(
-                            "SELECT 1 FROM retention_purge_approvals WHERE execution_id=?")) {
-                      query.setString(1, id);
-                      try (var rows = query.executeQuery()) {
-                        if (!rows.next())
-                          throw new IllegalStateException(
-                              "Interrupted purge has no prior authorization");
-                      }
-                    }
-                  String hash = purgeSnapshot(db, id, state.equals("QUARANTINED"));
-                  try (var insert =
-                      db.prepareStatement(
-                          "INSERT INTO retention_purge_approvals VALUES(?,?,?) ON CONFLICT(execution_id) DO UPDATE SET snapshot_hash=excluded.snapshot_hash,created=excluded.created")) {
-                    insert.setString(1, id);
-                    insert.setString(2, hash);
-                    insert.setString(3, registry.clock.instant().toString());
-                    insert.executeUpdate();
-                  }
-                  return null;
-                }));
+    registry.serialized(() ->
+        registry.database.transaction(db -> {
+          String state = get(db, id).status();
+          if (!Set.of("QUARANTINED", "PURGING").contains(state))
+            throw new IllegalStateException(
+                "Only quarantined or previously approved interrupted purges can receive approval");
+          if (state.equals("PURGING"))
+            try (var query =
+                db.prepareStatement(
+                    "SELECT 1 FROM retention_purge_approvals WHERE execution_id=?")) {
+              query.setString(1, id);
+              try (var rows = query.executeQuery()) {
+                if (!rows.next())
+                  throw new IllegalStateException("Interrupted purge has no prior authorization");
+              }
+            }
+          String hash = purgeSnapshot(db, id, state.equals("QUARANTINED"));
+          try (var insert =
+              db.prepareStatement(
+                  "INSERT INTO retention_purge_approvals VALUES(?,?,?) ON CONFLICT(execution_id) DO UPDATE SET snapshot_hash=excluded.snapshot_hash,created=excluded.created")) {
+            insert.setString(1, id);
+            insert.setString(2, hash);
+            insert.setString(3, registry.clock.instant().toString());
+            insert.executeUpdate();
+          }
+          return null;
+        }));
   }
 
   /** データ保存の共通処理で用いる保持期限を過ぎた情報の削除を返す。 */
   public Execution purge(String id) {
-    return registry.serialized(
-        () -> {
-          var execution = get(id);
-          if (execution.status().equals("DELETED")) return execution;
-          if (!Set.of("QUARANTINED", "PURGING").contains(execution.status()))
-            throw new IllegalStateException("Execution cannot be purged in this state");
-          registry.database.transaction(
-              db -> {
-                String hash = purgeSnapshot(db, id, !execution.status().equals("PURGING"));
-                try (var query =
-                    db.prepareStatement(
-                        "SELECT snapshot_hash FROM retention_purge_approvals WHERE execution_id=?")) {
-                  query.setString(1, id);
-                  try (var rows = query.executeQuery()) {
-                    if (!rows.next() || !rows.getString(1).equals(hash))
-                      throw new IllegalStateException(
-                          "Separate, unchanged quarantine purge approval required");
-                  }
-                }
-                executionState(db, id, "PURGING");
-                try (var update =
-                    db.prepareStatement(
-                        "UPDATE retention_execution_items SET state='PURGING' WHERE execution_id=?")) {
-                  update.setString(1, id);
-                  update.executeUpdate();
-                }
-                return null;
-              });
-          try {
-            checkpoint.reached("PURGING", id);
-            // Physical removals occur only after the whole approved batch is durable.
-            for (var item : registry.database.read(db -> items(db, id))) {
-              registry.database.read(
-                  db -> {
-                    protect(db, item);
-                    return null;
-                  });
-              Path path = quarantine(id, item);
-              if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
-                verify(path, item.original());
-                Files.delete(path);
-              }
-              checkpoint.reached("PURGED_FILE", id);
-            }
-            registry.database.transaction(
-                db -> {
-                  for (var item : items(db, id))
-                    itemState(db, id, item, "DELETED", "DELETED", null);
-                  executionState(db, id, "DELETED");
-                  return null;
-                });
-            return get(id);
-          } catch (IOException | InterruptedException error) {
-            throw new IllegalStateException(
-                "Purge interrupted; retry the approved execution", error);
+    return registry.serialized(() -> {
+      var execution = get(id);
+      if (execution.status().equals("DELETED")) return execution;
+      if (!Set.of("QUARANTINED", "PURGING").contains(execution.status()))
+        throw new IllegalStateException("Execution cannot be purged in this state");
+      registry.database.transaction(db -> {
+        String hash = purgeSnapshot(db, id, !execution.status().equals("PURGING"));
+        try (var query =
+            db.prepareStatement(
+                "SELECT snapshot_hash FROM retention_purge_approvals WHERE execution_id=?")) {
+          query.setString(1, id);
+          try (var rows = query.executeQuery()) {
+            if (!rows.next() || !rows.getString(1).equals(hash))
+              throw new IllegalStateException(
+                  "Separate, unchanged quarantine purge approval required");
           }
+        }
+        executionState(db, id, "PURGING");
+        try (var update =
+            db.prepareStatement(
+                "UPDATE retention_execution_items SET state='PURGING' WHERE execution_id=?")) {
+          update.setString(1, id);
+          update.executeUpdate();
+        }
+        return null;
+      });
+      try {
+        checkpoint.reached("PURGING", id);
+        // Physical removals occur only after the whole approved batch is durable.
+        for (var item : registry.database.read(db -> items(db, id))) {
+          registry.database.read(db -> {
+            protect(db, item);
+            return null;
+          });
+          Path path = quarantine(id, item);
+          if (Files.exists(path, LinkOption.NOFOLLOW_LINKS)) {
+            verify(path, item.original());
+            Files.delete(path);
+          }
+          checkpoint.reached("PURGED_FILE", id);
+        }
+        registry.database.transaction(db -> {
+          for (var item : items(db, id)) itemState(db, id, item, "DELETED", "DELETED", null);
+          executionState(db, id, "DELETED");
+          return null;
         });
+        return get(id);
+      } catch (IOException | InterruptedException error) {
+        throw new IllegalStateException("Purge interrupted; retry the approved execution", error);
+      }
+    });
   }
 }

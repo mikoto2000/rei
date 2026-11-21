@@ -189,10 +189,8 @@ public final class ActivityWorkContextService {
         throw new ActivityQueryLimitException();
       if (saved.items().stream()
           .flatMap(item -> item.sources().stream())
-          .anyMatch(
-              source ->
-                  source.observedAt() == null
-                      || source.observedAt().isAfter(record.capturedAt()))) {
+          .anyMatch(source ->
+              source.observedAt() == null || source.observedAt().isAfter(record.capturedAt()))) {
         missing++;
         continue;
       }
@@ -228,19 +226,17 @@ public final class ActivityWorkContextService {
                   saved.projectId())
               || git != null && truncatedDisplay(git.branch(), git.commit())
               || saved.items().stream()
-                  .anyMatch(
-                      item ->
-                          truncatedDisplay(item.id(), item.kind(), item.status(), item.certainty())
-                              || item.sources().stream()
-                                  .anyMatch(
-                                      source ->
-                                          truncatedDisplay(
-                                              source.eventId(),
-                                              source.sessionId(),
-                                              source.turnId(),
-                                              source.runId(),
-                                              source.toolCallId(),
-                                              source.file())));
+                  .anyMatch(item ->
+                      truncatedDisplay(item.id(), item.kind(), item.status(), item.certainty())
+                          || item.sources().stream()
+                              .anyMatch(source ->
+                                  truncatedDisplay(
+                                      source.eventId(),
+                                      source.sessionId(),
+                                      source.turnId(),
+                                      source.runId(),
+                                      source.toolCallId(),
+                                      source.file())));
     }
     return new ObservationLinks(date, snapshot.getZone().toString(), links, partial, missing);
   }
@@ -311,16 +307,14 @@ public final class ActivityWorkContextService {
         for (var context : history) {
           var items =
               context.items().stream()
-                  .filter(
-                      item ->
-                          item.evidence().stream()
-                              .anyMatch(
-                                  e ->
-                                      event.eventId().equals(e.id())
-                                          && e.origin() == WorkContext.Origin.TOOL
-                                          && event.at().equals(e.observedAt())
-                                          && event.sessionId().equals(e.sessionId())
-                                          && event.runId().equals(e.runId())))
+                  .filter(item ->
+                      item.evidence().stream()
+                          .anyMatch(e ->
+                              event.eventId().equals(e.id())
+                                  && e.origin() == WorkContext.Origin.TOOL
+                                  && event.at().equals(e.observedAt())
+                                  && event.sessionId().equals(e.sessionId())
+                                  && event.runId().equals(e.runId())))
                   .map(WorkContext.Item::id)
                   .distinct()
                   .limit(20)

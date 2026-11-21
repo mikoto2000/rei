@@ -147,10 +147,9 @@ class DotHttpTest {
           .verify(
               eq("project"),
               eq("id"),
-              argThat(
-                  a ->
-                      Boolean.TRUE.equals(a.get("confirmed"))
-                          && a.get("satisfied").equals(List.of(0))));
+              argThat(a ->
+                  Boolean.TRUE.equals(a.get("confirmed"))
+                      && a.get("satisfied").equals(List.of(0))));
       assertEquals(
           401,
           ReadHttpTest.send(

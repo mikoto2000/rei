@@ -134,17 +134,16 @@ class PersistentCheckpointRepositoryTest {
         String event = "event-" + i;
         var writer = open();
         work.add(
-            pool.submit(
-                () -> {
-                  try {
-                    barrier.await();
-                    writer.save(first, 1, event);
-                    successes.incrementAndGet();
-                  } catch (ConcurrentModificationException expected) {
-                  } catch (Exception error) {
-                    throw new RuntimeException(error);
-                  }
-                }));
+            pool.submit(() -> {
+              try {
+                barrier.await();
+                writer.save(first, 1, event);
+                successes.incrementAndGet();
+              } catch (ConcurrentModificationException expected) {
+              } catch (Exception error) {
+                throw new RuntimeException(error);
+              }
+            }));
       }
       for (var result : work) result.get();
     }

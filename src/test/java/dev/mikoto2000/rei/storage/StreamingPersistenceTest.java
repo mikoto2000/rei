@@ -77,20 +77,18 @@ class StreamingPersistenceTest {
     var displayed = new ArrayList<AgentEvent>();
     var stores =
         new java.util.concurrent.atomic.AtomicReference<AnnotationConfigApplicationContext>();
-    bus.subscribe(
-        event -> {
-          var context = stores.get();
-          var store = context.getBean(ProjectAgentEventStore.class);
-          assertThat(store.findEvent(event.projectId(), event.id())).isPresent();
-          var entries = context.getBean(ManagedActivityLog.class).read(event.projectId());
-          assertThat(entries)
-              .anySatisfy(
-                  entry -> {
-                    assertThat(entry.id()).isEqualTo(event.id());
-                    assertThat(entry.sequence()).isEqualTo(event.sequence());
-                  });
-          displayed.add(event);
-        });
+    bus.subscribe(event -> {
+      var context = stores.get();
+      var store = context.getBean(ProjectAgentEventStore.class);
+      assertThat(store.findEvent(event.projectId(), event.id())).isPresent();
+      var entries = context.getBean(ManagedActivityLog.class).read(event.projectId());
+      assertThat(entries)
+          .anySatisfy(entry -> {
+            assertThat(entry.id()).isEqualTo(event.id());
+            assertThat(entry.sequence()).isEqualTo(event.sequence());
+          });
+      displayed.add(event);
+    });
     Class.forName("org.sqlite.JDBC");
     var original = DriverManager.getDriver("jdbc:sqlite:");
     var probe = new AnswerGenerationIoBenchmarkTest.Probe(original);
@@ -121,14 +119,13 @@ class StreamingPersistenceTest {
         assertThat(context.getBean(ManagedActivityLog.class).read(PROJECT).toString())
             .doesNotContain("private-stream-text");
         new StorageDatabase(root)
-            .transaction(
-                db -> {
-                  try (var sql = db.createStatement();
-                      var rows = sql.executeQuery("PRAGMA synchronous")) {
-                    assertThat(rows.getInt(1)).isEqualTo(2);
-                  }
-                  return null;
-                });
+            .transaction(db -> {
+              try (var sql = db.createStatement();
+                  var rows = sql.executeQuery("PRAGMA synchronous")) {
+                assertThat(rows.getInt(1)).isEqualTo(2);
+              }
+              return null;
+            });
       }
     } finally {
       DriverManager.deregisterDriver(probe);
@@ -154,17 +151,16 @@ class StreamingPersistenceTest {
     try (var context = context(root, bus)) {
       var store = context.getBean(ProjectAgentEventStore.class);
       var activity = context.getBean(ManagedActivityLog.class);
-      bus.subscribe(
-          e -> {
-            assertThat(store.findEvent(PROJECT, e.id())).isPresent();
-            assertThat(activity.read(PROJECT)).anyMatch(row -> row.id().equals(e.id()));
-            displayed.add(e.id());
-            if (e.id().equals("ordinary")) {
-              bus.publishBoundary(checkpoint("boundary"));
-              assertThat(store.findEvent(PROJECT, "boundary")).isPresent();
-              assertThat(activity.read(PROJECT)).anyMatch(row -> row.id().equals("boundary"));
-            }
-          });
+      bus.subscribe(e -> {
+        assertThat(store.findEvent(PROJECT, e.id())).isPresent();
+        assertThat(activity.read(PROJECT)).anyMatch(row -> row.id().equals(e.id()));
+        displayed.add(e.id());
+        if (e.id().equals("ordinary")) {
+          bus.publishBoundary(checkpoint("boundary"));
+          assertThat(store.findEvent(PROJECT, "boundary")).isPresent();
+          assertThat(activity.read(PROJECT)).anyMatch(row -> row.id().equals("boundary"));
+        }
+      });
       probe.active.set(true);
       try {
         bus.publish(checkpoint("ordinary"));
@@ -174,7 +170,9 @@ class StreamingPersistenceTest {
       assertThat(probe.commits.get()).isEqualTo(2);
       assertThat(probe.transactions.get()).isEqualTo(2);
       assertThat(displayed).containsExactly("ordinary", "boundary");
-      assertThat(activity.read(PROJECT)).extracting(row -> row.sequence()).containsExactlyInAnyOrder(1L, 2L);
+      assertThat(activity.read(PROJECT))
+          .extracting(row -> row.sequence())
+          .containsExactlyInAnyOrder(1L, 2L);
     } finally {
       DriverManager.deregisterDriver(probe);
       DriverManager.registerDriver(original);
@@ -204,14 +202,13 @@ class StreamingPersistenceTest {
     bus.subscribe(displayed::add);
     try (var context = context(root, bus)) {
       new StorageDatabase(root)
-          .transaction(
-              db -> {
-                try (var sql = db.createStatement()) {
-                  sql.execute(
-                      "CREATE TRIGGER fail_activity BEFORE UPDATE ON activity_segments BEGIN SELECT RAISE(ABORT,'failure'); END");
-                }
-                return null;
-              });
+          .transaction(db -> {
+            try (var sql = db.createStatement()) {
+              sql.execute(
+                  "CREATE TRIGGER fail_activity BEFORE UPDATE ON activity_segments BEGIN SELECT RAISE(ABORT,'failure'); END");
+            }
+            return null;
+          });
       assertThatThrownBy(() -> bus.publishBoundary(checkpoint("failed")))
           .isInstanceOf(IllegalStateException.class);
       assertThat(context.getBean(ProjectAgentEventStore.class).findEvent(PROJECT, "failed"))
@@ -234,17 +231,15 @@ class StreamingPersistenceTest {
     try (var context = context(root, bus)) {
       bus.publish(event("good", PROJECT, false));
       new StorageDatabase(root)
-          .transaction(
-              db -> {
-                try (var statement =
-                    db.prepareStatement(
-                        "UPDATE event_sequences SET sequence=? WHERE project_id=?")) {
-                  statement.setLong(1, Long.MAX_VALUE);
-                  statement.setString(2, PROJECT);
-                  statement.executeUpdate();
-                }
-                return null;
-              });
+          .transaction(db -> {
+            try (var statement =
+                db.prepareStatement("UPDATE event_sequences SET sequence=? WHERE project_id=?")) {
+              statement.setLong(1, Long.MAX_VALUE);
+              statement.setString(2, PROJECT);
+              statement.executeUpdate();
+            }
+            return null;
+          });
 
       assertThatThrownBy(() -> bus.publish(event("overflow", PROJECT, true)))
           .isInstanceOf(ArithmeticException.class);
@@ -267,11 +262,10 @@ class StreamingPersistenceTest {
         int owner = worker;
         String project = worker % 2 == 0 ? PROJECT : other;
         futures.add(
-            executor.submit(
-                () -> {
-                  for (int index = 0; index < 20; index++)
-                    store.append(event(owner + "-" + index, project, false));
-                }));
+            executor.submit(() -> {
+              for (int index = 0; index < 20; index++)
+                store.append(event(owner + "-" + index, project, false));
+            }));
       }
       for (var future : futures) future.get(20, java.util.concurrent.TimeUnit.SECONDS);
       for (String project : java.util.List.of(PROJECT, other)) {
@@ -299,14 +293,13 @@ class StreamingPersistenceTest {
       }
       byte[] committed = Files.readAllBytes(log);
       new StorageDatabase(root)
-          .transaction(
-              db -> {
-                try (var sql = db.createStatement()) {
-                  sql.execute(
-                      "CREATE TRIGGER fail_diagnostic BEFORE UPDATE ON activity_segments BEGIN SELECT RAISE(ABORT,'diagnostic failed'); END");
-                }
-                return null;
-              });
+          .transaction(db -> {
+            try (var sql = db.createStatement()) {
+              sql.execute(
+                  "CREATE TRIGGER fail_diagnostic BEFORE UPDATE ON activity_segments BEGIN SELECT RAISE(ABORT,'diagnostic failed'); END");
+            }
+            return null;
+          });
       assertThatThrownBy(() -> bus.publish(event("failed", PROJECT, false)))
           .hasRootCauseInstanceOf(java.sql.SQLException.class);
       assertThat(displayed).extracting(AgentEvent::id).containsExactly("good");
@@ -343,25 +336,23 @@ class StreamingPersistenceTest {
     bus.subscribe(displayed::add);
     try (var context = context(root, bus)) {
       var database = new StorageDatabase(root);
-      database.transaction(
-          db -> {
-            try (var sql = db.createStatement()) {
-              sql.execute(
-                  "CREATE TRIGGER fail_event BEFORE INSERT ON agent_events BEGIN SELECT RAISE(ABORT,'event failed'); END");
-            }
-            return null;
-          });
+      database.transaction(db -> {
+        try (var sql = db.createStatement()) {
+          sql.execute(
+              "CREATE TRIGGER fail_event BEFORE INSERT ON agent_events BEGIN SELECT RAISE(ABORT,'event failed'); END");
+        }
+        return null;
+      });
       assertThatThrownBy(() -> bus.publish(event("failed", PROJECT, true)))
           .hasRootCauseInstanceOf(java.sql.SQLException.class);
       assertThat(context.getBean(ManagedActivityLog.class).read(PROJECT)).isEmpty();
       assertThat(displayed).isEmpty();
-      database.transaction(
-          db -> {
-            try (var sql = db.createStatement()) {
-              sql.execute("DROP TRIGGER fail_event");
-            }
-            return null;
-          });
+      database.transaction(db -> {
+        try (var sql = db.createStatement()) {
+          sql.execute("DROP TRIGGER fail_event");
+        }
+        return null;
+      });
       bus.publish(event("next", PROJECT, true));
       assertThat(displayed).extracting(AgentEvent::id).containsExactly("next");
       assertThat(context.getBean(ProjectAgentEventStore.class).readAfter(PROJECT, 0, 100))

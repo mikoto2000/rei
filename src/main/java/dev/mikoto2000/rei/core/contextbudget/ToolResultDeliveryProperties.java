@@ -59,7 +59,8 @@ public class ToolResultDeliveryProperties {
         || pageMaxTokens > 16000
         || bulkMaxTokens < pageMaxTokens
         || bulkMaxTokens > 1_000_000
-        || reviewMaxTokens < 256 || reviewMaxTokens > 100000
+        || reviewMaxTokens < 256
+        || reviewMaxTokens > 100000
         || pageSafetyTokens < 0
         || rawResultMaxBytes < 1
         || rawStoreMaxBytes < 1

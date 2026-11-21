@@ -48,7 +48,10 @@ class TaskSnapshotTest {
       scanner.step(scope, task.id(), 1);
     assertThat(store.status(scope, task.id()).enumeration()).isEqualTo("SEALED");
     Files.writeString(root.resolve("first.java"), "changed");
-    assertThat(new String(store.content(scope, task.id(), "first.java"), java.nio.charset.StandardCharsets.UTF_8))
+    assertThat(
+            new String(
+                store.content(scope, task.id(), "first.java"),
+                java.nio.charset.StandardCharsets.UTF_8))
         .isEqualTo("original");
     assertThat(store.files(scope, task.id(), "", 10).entries()).hasSize(2);
     assertThat(store.verify(scope, task.id()).complete()).isFalse();
@@ -70,7 +73,8 @@ class TaskSnapshotTest {
     scanner.step(scope, task.id(), 1);
     Files.writeString(root.resolve("a.java"), "new file before cursor");
     // Set a distinct timestamp even on filesystems with coarse time resolution.
-    Files.setLastModifiedTime(root, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 10000));
+    Files.setLastModifiedTime(
+        root, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 10000));
     scanner.step(scope, task.id(), 10);
     assertThat(store.status(scope, task.id()).enumeration()).isEqualTo("FAILED");
     assertThat(store.status(scope, task.id()).reason()).isEqualTo("DIRECTORY_CHANGED");

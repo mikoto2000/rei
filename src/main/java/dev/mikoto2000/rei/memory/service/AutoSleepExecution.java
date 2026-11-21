@@ -11,12 +11,11 @@ import java.time.Duration;
 public final class AutoSleepExecution implements ModelCallBudget {
   /** 期限一覧。 */
   private static final java.util.concurrent.ScheduledExecutorService DEADLINES =
-      java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
-          r -> {
-            var t = new Thread(r, "rei-auto-sleep-deadline");
-            t.setDaemon(true);
-            return t;
-          });
+      java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+        var t = new Thread(r, "rei-auto-sleep-deadline");
+        t.setDaemon(true);
+        return t;
+      });
 
   /** タイムアウト／合計。 */
   private final Duration timeout, total;

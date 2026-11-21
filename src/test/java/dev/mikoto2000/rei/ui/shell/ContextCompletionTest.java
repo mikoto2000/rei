@@ -138,8 +138,7 @@ class ContextCompletionTest {
         new CommandLine(CommandSpec.create().name("feed"))
             .addSubcommand(
                 "import-opml", new dev.mikoto2000.rei.feed.command.FeedCommand.ImportOpmlCommand());
-    var cmd =
-        command().addSubcommand("feed", feed).addSubcommand("embed", new EmbedCommand(null));
+    var cmd = command().addSubcommand("feed", feed).addSubcommand("embed", new EmbedCommand(null));
     assertThat(values(cmd, "/feed import-opml rep")).containsExactly("report.opml");
     assertThat(values(cmd, "/embed rep"))
         .containsExactly("report.opml", "reports" + java.io.File.separator);
@@ -240,8 +239,7 @@ class ContextCompletionTest {
     var registered = Files.createDirectory(root.resolve("registered"));
     Files.createFile(root.resolve("ordinary.txt"));
     projects.add(registered.toString());
-    var scope =
-        dev.mikoto2000.rei.core.project.ProjectClientScope.open(projects.newClient());
+    var scope = dev.mikoto2000.rei.core.project.ProjectClientScope.open(projects.newClient());
     try (scope) {
       var result = complete(command(), "/project cd ", 12);
       assertThat(result)

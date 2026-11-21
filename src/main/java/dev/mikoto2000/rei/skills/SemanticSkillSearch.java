@@ -216,19 +216,18 @@ public final class SemanticSkillSearch {
     var fused =
         new ReciprocalRankFusion(60)
             .fuse(List.of(dense, lexical), c -> identity(c.skill()), pool).stream()
-                .map(
-                    rank -> {
-                      var candidate = rank.item();
-                      var keyword = lexicalById.get(identity(candidate.skill()));
-                      var fields = new LinkedHashSet<>(candidate.matchedFields());
-                      if (keyword != null) fields.addAll(keyword.matchedFields());
-                      fields.add("rrf");
-                      return new SkillCandidate(
-                          candidate.skill(),
-                          Math.max(1, (int) Math.round(rank.score() * 1000)),
-                          List.copyOf(fields),
-                          keyword == null ? List.of() : keyword.matchedKeywords());
-                    })
+                .map(rank -> {
+                  var candidate = rank.item();
+                  var keyword = lexicalById.get(identity(candidate.skill()));
+                  var fields = new LinkedHashSet<>(candidate.matchedFields());
+                  if (keyword != null) fields.addAll(keyword.matchedFields());
+                  fields.add("rrf");
+                  return new SkillCandidate(
+                      candidate.skill(),
+                      Math.max(1, (int) Math.round(rank.score() * 1000)),
+                      List.copyOf(fields),
+                      keyword == null ? List.of() : keyword.matchedKeywords());
+                })
                 .toList();
     RunCancellation.propagate(null);
     var ordered = fused;

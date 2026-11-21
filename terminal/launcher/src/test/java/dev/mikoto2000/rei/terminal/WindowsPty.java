@@ -162,13 +162,12 @@ final class WindowsPty implements AutoCloseable {
       drain =
           Thread.ofPlatform()
               .daemon()
-              .start(
-                  () -> {
-                    byte[] bytes = new byte[4096];
-                    var count = new IntByReference();
-                    while (Kernel32.INSTANCE.ReadFile(output, bytes, bytes.length, count, null))
-                      if (count.getValue() > 0) transcript.append(bytes, count.getValue());
-                  });
+              .start(() -> {
+                byte[] bytes = new byte[4096];
+                var count = new IntByReference();
+                while (Kernel32.INSTANCE.ReadFile(output, bytes, bytes.length, count, null))
+                  if (count.getValue() > 0) transcript.append(bytes, count.getValue());
+              });
     } catch (IOException | RuntimeException error) {
       close();
       throw error;

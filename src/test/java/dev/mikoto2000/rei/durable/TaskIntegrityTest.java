@@ -27,16 +27,23 @@ class TaskIntegrityTest {
     var claim = work.claim(scope, task.id(), "run");
     work.delivered(scope, claim, WorkItemStore.hash("a".getBytes(StandardCharsets.UTF_8)));
     work.commit(scope, claim, "checked", List.of());
-    store.write(db -> DurableTaskStore.execute(db, "UPDATE durable_results SET body='corrupt' WHERE work=?", claim.item().id()));
+    store.write(db ->
+        DurableTaskStore.execute(
+            db, "UPDATE durable_results SET body='corrupt' WHERE work=?", claim.item().id()));
     assertThat(store.verify(scope, task.id()).complete()).isFalse();
     assertThat(store.verify(scope, task.id()).reason()).isEqualTo("RESULT_CORRUPT");
-    assertThatThrownBy(() -> work.resume(scope, task.id(), "next-run")).hasMessageContaining("RESULT_CORRUPT");
-    String current = store.read(db -> {
-      try (var query = DurableTaskStore.statement(db, "SELECT current_run FROM durable_tasks WHERE id=?", task.id()); var row = query.executeQuery()) {
-        row.next();
-        return row.getString(1);
-      }
-    });
+    assertThatThrownBy(() -> work.resume(scope, task.id(), "next-run"))
+        .hasMessageContaining("RESULT_CORRUPT");
+    String current =
+        store.read(db -> {
+          try (var query =
+                  DurableTaskStore.statement(
+                      db, "SELECT current_run FROM durable_tasks WHERE id=?", task.id());
+              var row = query.executeQuery()) {
+            row.next();
+            return row.getString(1);
+          }
+        });
     assertThat(current).isEqualTo("run");
   }
 }

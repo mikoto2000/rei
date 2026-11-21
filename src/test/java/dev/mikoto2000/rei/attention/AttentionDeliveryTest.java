@@ -519,18 +519,16 @@ class AttentionDeliveryTest {
     try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
       var tasks =
           List.of(first, second).stream()
-              .map(
-                  item ->
-                      pool.submit(
-                          () -> {
-                            gate.await();
-                            try {
-                              delivery.request("project", item.id());
-                              accepted.incrementAndGet();
-                            } catch (IllegalArgumentException full) {
-                            }
-                            return null;
-                          }))
+              .map(item ->
+                  pool.submit(() -> {
+                    gate.await();
+                    try {
+                      delivery.request("project", item.id());
+                      accepted.incrementAndGet();
+                    } catch (IllegalArgumentException full) {
+                    }
+                    return null;
+                  }))
               .toList();
       gate.countDown();
       for (var task : tasks) task.get();
@@ -546,14 +544,12 @@ class AttentionDeliveryTest {
     try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
       var tasks =
           List.of(queued, next).stream()
-              .map(
-                  item ->
-                      pool.submit(
-                          () -> {
-                            claimGate.await();
-                            if (outbox.claim(item.projectId(), item.id())) wins.incrementAndGet();
-                            return null;
-                          }))
+              .map(item ->
+                  pool.submit(() -> {
+                    claimGate.await();
+                    if (outbox.claim(item.projectId(), item.id())) wins.incrementAndGet();
+                    return null;
+                  }))
               .toList();
       claimGate.countDown();
       for (var task : tasks) task.get();
@@ -643,53 +639,49 @@ class AttentionDeliveryTest {
         .withBean(AttentionRepository.class, () -> inbox)
         .withBean(AttentionDeliveryService.class, () -> delivery)
         .withUserConfiguration(WebConfig.class)
-        .run(
-            context -> {
-              var mvc =
-                  org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup(
-                          context)
-                      .addFilters(
-                          context.getBean(
-                              "springSecurityFilterChain", jakarta.servlet.Filter.class))
-                      .build();
-              String path = "/api/v1/projects/project/attention/" + item.id() + "/delivery";
-              mvc.perform(
-                      org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(path)
-                          .contentType("application/json")
-                          .content("{\"retry\":false,\"acknowledgeDuplicateRisk\":false}"))
-                  .andExpect(
-                      org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
-                          .isUnauthorized());
-              mvc.perform(
-                      org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path)
-                          .header("Authorization", "Bearer secret"))
-                  .andExpect(
-                      org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
-                              "$.status")
-                          .value("NOT_REQUESTED"));
-              mvc.perform(
-                      org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
-                              path.replace("/projects/project/", "/projects/other/"))
-                          .header("Authorization", "Bearer secret")
-                          .contentType("application/json")
-                          .content("{\"retry\":false,\"acknowledgeDuplicateRisk\":false}"))
-                  .andExpect(
-                      org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
-                          .isBadRequest());
-              mvc.perform(
-                      org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(path)
-                          .header("Authorization", "Bearer secret")
-                          .contentType("application/json")
-                          .content("{\"retry\":false,\"acknowledgeDuplicateRisk\":false}"))
-                  .andExpect(
-                      org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
-                          .isOk())
-                  .andExpect(
-                      org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
-                              "$.status")
-                          .value("PENDING"));
-              assertEquals(0, calls.get());
-            });
+        .run(context -> {
+          var mvc =
+              org.springframework.test.web.servlet.setup.MockMvcBuilders.webAppContextSetup(context)
+                  .addFilters(
+                      context.getBean("springSecurityFilterChain", jakarta.servlet.Filter.class))
+                  .build();
+          String path = "/api/v1/projects/project/attention/" + item.id() + "/delivery";
+          mvc.perform(
+                  org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(path)
+                      .contentType("application/json")
+                      .content("{\"retry\":false,\"acknowledgeDuplicateRisk\":false}"))
+              .andExpect(
+                  org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                      .isUnauthorized());
+          mvc.perform(
+                  org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path)
+                      .header("Authorization", "Bearer secret"))
+              .andExpect(
+                  org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                          "$.status")
+                      .value("NOT_REQUESTED"));
+          mvc.perform(
+                  org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                          path.replace("/projects/project/", "/projects/other/"))
+                      .header("Authorization", "Bearer secret")
+                      .contentType("application/json")
+                      .content("{\"retry\":false,\"acknowledgeDuplicateRisk\":false}"))
+              .andExpect(
+                  org.springframework.test.web.servlet.result.MockMvcResultMatchers.status()
+                      .isBadRequest());
+          mvc.perform(
+                  org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(path)
+                      .header("Authorization", "Bearer secret")
+                      .contentType("application/json")
+                      .content("{\"retry\":false,\"acknowledgeDuplicateRisk\":false}"))
+              .andExpect(
+                  org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+              .andExpect(
+                  org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath(
+                          "$.status")
+                      .value("PENDING"));
+          assertEquals(0, calls.get());
+        });
   }
 
   /** 注意の管理で、指定した条件に対する結果と状態の変化を確認する。 */

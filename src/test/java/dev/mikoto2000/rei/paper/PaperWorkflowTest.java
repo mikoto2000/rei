@@ -177,20 +177,23 @@ class PaperWorkflowTest {
   @Test
   void summaryUsesOneSettingsSnapshotAndReadsChangesOnTheNextCall() {
     var delegate = model(summary());
-    var changingModel = new PaperLanguageModel() {
-      public String model() {
-        return delegate.model();
-      }
+    var changingModel =
+        new PaperLanguageModel() {
+          public String model() {
+            return delegate.model();
+          }
 
-      public String generate(String system, String input, PaperOperation operation) {
-        config.setPromptVersion("2");
-        return delegate.generate(system, input, operation);
-      }
-    };
+          public String generate(String system, String input, PaperOperation operation) {
+            config.setPromptVersion("2");
+            return delegate.generate(system, input, operation);
+          }
+        };
     var service =
         new PaperSummaryService(repo, content, changingModel, new PaperSummaryValidator(), config);
-    assertEquals("1", service.summarize(paper, PaperSummary.Mode.STANDARD, false, op).promptVersion());
-    assertEquals("2", service.summarize(paper, PaperSummary.Mode.STANDARD, false, op).promptVersion());
+    assertEquals(
+        "1", service.summarize(paper, PaperSummary.Mode.STANDARD, false, op).promptVersion());
+    assertEquals(
+        "2", service.summarize(paper, PaperSummary.Mode.STANDARD, false, op).promptVersion());
     assertEquals(2, calls.get());
   }
 

@@ -1,8 +1,8 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.json.JsonObjectSnapshot;
-import java.math.BigDecimal;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.NoSuchAlgorithmException;
@@ -97,8 +97,10 @@ public final class OperationalRules {
     /** ルールを読み込んだ時点の条件と分類を保持する。 */
     public Rule {
       match = match == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(match));
-      classify = classify == null ? null : Collections.unmodifiableMap(JsonObjectSnapshot.copy(classify));
-      compiled = compiled == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(compiled));
+      classify =
+          classify == null ? null : Collections.unmodifiableMap(JsonObjectSnapshot.copy(classify));
+      compiled =
+          compiled == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(compiled));
     }
 
     /** 指定された条件と対象が一致するかを判定する。 */
@@ -287,12 +289,11 @@ public final class OperationalRules {
     boolean conflict =
         candidates.stream()
             .skip(1)
-            .anyMatch(
-                other ->
-                    other.priority() == r.priority()
-                        && other.specificity() == r.specificity()
-                        && !string(other.classify(), "category", a.type())
-                            .equals(string(v, "category", a.type())));
+            .anyMatch(other ->
+                other.priority() == r.priority()
+                    && other.specificity() == r.specificity()
+                    && !string(other.classify(), "category", a.type())
+                        .equals(string(v, "category", a.type())));
     if (r.source().equals("built-in")) {
       if (!conflict) return base;
       var fields = base.fieldConfidence();
@@ -369,13 +370,12 @@ public final class OperationalRules {
     boolean conflict =
         hits.stream()
             .skip(1)
-            .anyMatch(
-                h ->
-                    h.priority() == r.priority()
-                        && h.specificity() == r.specificity()
-                        && !h.classify()
-                            .get("entertainmentDisposition")
-                            .equals(r.classify().get("entertainmentDisposition")));
+            .anyMatch(h ->
+                h.priority() == r.priority()
+                    && h.specificity() == r.specificity()
+                    && !h.classify()
+                        .get("entertainmentDisposition")
+                        .equals(r.classify().get("entertainmentDisposition")));
     return new Entertainment(
         conflict || confidence < .8
             ? EntertainmentDisposition.UNCERTAIN
@@ -400,9 +400,8 @@ public final class OperationalRules {
       String content,
       String category) {
     return snapshot.rules().stream()
-        .filter(
-            r ->
-                r.type().equals(type) && r.matches(process, title, service, app, content, category))
+        .filter(r ->
+            r.type().equals(type) && r.matches(process, title, service, app, content, category))
         .sorted(order())
         .toList();
   }
@@ -500,17 +499,15 @@ public final class OperationalRules {
         if (proposal) {
           boolean contextual =
               patterns.entrySet().stream()
-                  .anyMatch(
-                      e ->
-                          Set.of("titleRegex", "contentRegex").contains(e.getKey())
-                              && !broad(e.getValue()));
+                  .anyMatch(e ->
+                      Set.of("titleRegex", "contentRegex").contains(e.getKey())
+                          && !broad(e.getValue()));
           boolean scoped =
               patterns.entrySet().stream()
-                  .anyMatch(
-                      e ->
-                          Set.of("processRegex", "serviceRegex", "applicationRegex")
-                                  .contains(e.getKey())
-                              && !broad(e.getValue()));
+                  .anyMatch(e ->
+                      Set.of("processRegex", "serviceRegex", "applicationRegex")
+                              .contains(e.getKey())
+                          && !broad(e.getValue()));
           for (var e : patterns.entrySet())
             if (broad(e.getValue()))
               throw invalid("BROAD_REGEX: match." + e.getKey() + "が空文字または無関係な文字列にも一致します。");
@@ -638,17 +635,16 @@ public final class OperationalRules {
             new Rule(id, "classification", "built-in", 100, true, Map.of(), Map.of(), Map.of()));
       rules.stream()
           .filter(r -> r.type().equals("entertainment"))
-          .map(
-              r ->
-                  new Rule(
-                      r.id(),
-                      r.type(),
-                      "built-in",
-                      r.priority(),
-                      r.enabled(),
-                      r.match(),
-                      r.classify(),
-                      r.compiled()))
+          .map(r ->
+              new Rule(
+                  r.id(),
+                  r.type(),
+                  "built-in",
+                  r.priority(),
+                  r.enabled(),
+                  r.match(),
+                  r.classify(),
+                  r.compiled()))
           .forEach(result::add);
       return List.copyOf(result);
     } catch (Exception e) {

@@ -306,11 +306,10 @@ public final class ActivityPeriodAnalysis {
             : 100.0 * selectedSeconds / classifiedSeconds;
     var dailyScores = new HashMap<LocalDate, Double>();
     if (!criteria.isEmpty())
-      classifiedDays.forEach(
-          (date, seconds) -> {
-            if (seconds > 0)
-              dailyScores.put(date, 100.0 * selectedDays.getOrDefault(date, 0L) / seconds);
-          });
+      classifiedDays.forEach((date, seconds) -> {
+        if (seconds > 0)
+          dailyScores.put(date, 100.0 * selectedDays.getOrDefault(date, 0L) / seconds);
+      });
     var metrics =
         new Metrics(
             criteria,
@@ -369,22 +368,19 @@ public final class ActivityPeriodAnalysis {
           .append('\n');
     out.append("Project候補（推定、上位10）:\n");
     DailySummaryAggregator.top(current.projectCandidateSeconds(), 10)
-        .forEach(
-            v ->
-                out.append(String.format(Locale.ROOT, "  %s: %.1f分", v.name(), v.seconds() / 60.0))
-                    .append('\n'));
+        .forEach(v ->
+            out.append(String.format(Locale.ROOT, "  %s: %.1f分", v.name(), v.seconds() / 60.0))
+                .append('\n'));
     out.append("時間帯（現地時刻、観測推定分）:\n");
     new TreeMap<>(current.hourSeconds())
-        .forEach(
-            (hour, seconds) ->
-                out.append(String.format(Locale.ROOT, "  %02d時: %.1f分", hour, seconds / 60.0))
-                    .append('\n'));
+        .forEach((hour, seconds) ->
+            out.append(String.format(Locale.ROOT, "  %02d時: %.1f分", hour, seconds / 60.0))
+                .append('\n'));
     out.append("日別観測推定時間:\n");
     new TreeMap<>(current.daySeconds())
-        .forEach(
-            (date, seconds) ->
-                out.append(String.format(Locale.ROOT, "  %s: %.1f分", date, seconds / 60.0))
-                    .append('\n'));
+        .forEach((date, seconds) ->
+            out.append(String.format(Locale.ROOT, "  %s: %.1f分", date, seconds / 60.0))
+                .append('\n'));
     out.append("近接観測間のProject候補切替: ")
         .append(current.observedProjectTransitions())
         .append("回（直前期間 ")
@@ -416,9 +412,8 @@ public final class ActivityPeriodAnalysis {
           .append('\n');
     else out.append("指数の前期間差: 比較可能な分類・基準が不足\n");
     new TreeMap<>(now.dayScores())
-        .forEach(
-            (day, score) ->
-                out.append(String.format(Locale.ROOT, "  日別指数 %s: %.1f", day, score)).append('\n'));
+        .forEach((day, score) ->
+            out.append(String.format(Locale.ROOT, "  日別指数 %s: %.1f", day, score)).append('\n'));
     out.append(
             String.format(
                 Locale.ROOT,

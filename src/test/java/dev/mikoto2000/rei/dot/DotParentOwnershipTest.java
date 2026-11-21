@@ -92,18 +92,17 @@ class DotParentOwnershipTest {
   @Test
   void wrongStoredSessionAndLostRunCannotBeClaimed() {
     new dev.mikoto2000.rei.storage.StorageDatabase(root)
-        .transaction(
-            c -> {
-              try (var q =
-                  c.prepareStatement(
-                      "UPDATE conversation_admissions SET"
-                          + " context=json_set(context,'$.sessionId','different') WHERE"
-                          + " run_id=?")) {
-                q.setString(1, owner.runId());
-                q.executeUpdate();
-              }
-              return null;
-            });
+        .transaction(c -> {
+          try (var q =
+              c.prepareStatement(
+                  "UPDATE conversation_admissions SET"
+                      + " context=json_set(context,'$.sessionId','different') WHERE"
+                      + " run_id=?")) {
+            q.setString(1, owner.runId());
+            q.executeUpdate();
+          }
+          return null;
+        });
     assertThrows(DotException.class, () -> repo.claim(owner.projectId(), id, "claim"));
   }
 

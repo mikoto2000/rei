@@ -44,10 +44,10 @@ class FeedCommandTest {
         Files.writeString(
             tempDir.resolve("購読 feeds.opml"),
             """
-        <opml><body><outline text="日本語" xmlUrl="https://example.com/new"/>
-        <outline xmlUrl="https://example.com/existing"/><outline xmlUrl="not a url"/>
-        </body></opml>
-        """);
+            <opml><body><outline text="日本語" xmlUrl="https://example.com/new"/>
+            <outline xmlUrl="https://example.com/existing"/><outline xmlUrl="not a url"/>
+            </body></opml>
+            """);
     CommandLine root =
         new CommandLine(CommandLine.Model.CommandSpec.create())
             .addSubcommand("feed", newCommand(service));
@@ -264,23 +264,22 @@ class FeedCommandTest {
     FeedUpdateService updateService =
         new FeedUpdateService(
             service,
-            new FeedFetcher(
-                uri ->
-                    new FeedHttpResponse(
-                        200,
-                        """
-        <?xml version="1.0" encoding="UTF-8"?>
-        <rss version="2.0">
-          <channel>
-            <title>Fetched Title</title>
-            <item>
-              <title>First Post</title>
-              <link>https://example.com/posts/1</link>
-              <pubDate>Tue, 21 Apr 2026 09:30:00 GMT</pubDate>
-            </item>
-          </channel>
-        </rss>
-        """)));
+            new FeedFetcher(uri ->
+                new FeedHttpResponse(
+                    200,
+                    """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <rss version="2.0">
+                      <channel>
+                        <title>Fetched Title</title>
+                        <item>
+                          <title>First Post</title>
+                          <link>https://example.com/posts/1</link>
+                          <pubDate>Tue, 21 Apr 2026 09:30:00 GMT</pubDate>
+                        </item>
+                      </channel>
+                    </rss>
+                    """)));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
@@ -442,11 +441,9 @@ class FeedCommandTest {
   private FeedUpdateService defaultUpdateService(FeedService service) {
     return new FeedUpdateService(
         service,
-        new FeedFetcher(
-            uri -> {
-              throw new UnsupportedOperationException(
-                  "updateService is not configured for this test");
-            }));
+        new FeedFetcher(uri -> {
+          throw new UnsupportedOperationException("updateService is not configured for this test");
+        }));
   }
 
   /** {@code defaultSummaryService} の条件を再現するための補助情報を返す。 */

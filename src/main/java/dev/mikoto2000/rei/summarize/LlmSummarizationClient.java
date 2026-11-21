@@ -52,15 +52,15 @@ public class LlmSummarizationClient implements SummarizationClient {
   /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   private String buildPrompt(String content) {
     return """
-        与えられた Web ページ本文を日本語で簡潔に要約してください。
+    与えられた Web ページ本文を日本語で簡潔に要約してください。
 
-        - ページの主要な内容を優先する
-        - 広告、ナビゲーション、フッターなどは無視する
-        - 原文に存在しない情報を追加しない
-        - 重要なポイントを失わない
+    - ページの主要な内容を優先する
+    - 広告、ナビゲーション、フッターなどは無視する
+    - 原文に存在しない情報を追加しない
+    - 重要なポイントを失わない
 
-        Web ページ本文:
-        """
+    Web ページ本文:
+    """
         + content
         + "\n";
   }

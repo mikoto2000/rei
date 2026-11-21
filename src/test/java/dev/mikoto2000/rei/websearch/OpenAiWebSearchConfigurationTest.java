@@ -25,18 +25,17 @@ class OpenAiWebSearchConfigurationTest {
             "rei.web-search.providers[0].search-context-size=low",
             "rei.web-search.providers[0].max-urls=3",
             "rei.web-search.providers[0].allowed-domains[0]=example.com")
-        .run(
-            context -> {
-              var properties = context.getBean(WebSearchProperties.class);
-              assertEquals("search-only-key", properties.getOpenaiApiKey());
-              var p = properties.getProviders().getFirst();
-              assertEquals("openai", p.getName());
-              assertEquals("gpt-4.1", p.getModel());
-              assertEquals(40, p.getTimeoutSeconds());
-              assertEquals("low", p.getSearchContextSize());
-              assertEquals(3, p.getMaxUrls());
-              assertEquals("example.com", p.getAllowedDomains().getFirst());
-            });
+        .run(context -> {
+          var properties = context.getBean(WebSearchProperties.class);
+          assertEquals("search-only-key", properties.getOpenaiApiKey());
+          var p = properties.getProviders().getFirst();
+          assertEquals("openai", p.getName());
+          assertEquals("gpt-4.1", p.getModel());
+          assertEquals(40, p.getTimeoutSeconds());
+          assertEquals("low", p.getSearchContextSize());
+          assertEquals(3, p.getMaxUrls());
+          assertEquals("example.com", p.getAllowedDomains().getFirst());
+        });
   }
 
   @Test

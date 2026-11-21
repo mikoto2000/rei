@@ -31,9 +31,7 @@ public final class SummaryThemeGroups {
       boolean allowSingleProject) {
     public Group {
       projects =
-          projects == null
-              ? null
-              : Collections.unmodifiableSet(new LinkedHashSet<>(projects));
+          projects == null ? null : Collections.unmodifiableSet(new LinkedHashSet<>(projects));
       themes = themes == null ? null : Collections.unmodifiableSet(new LinkedHashSet<>(themes));
     }
   }
@@ -59,11 +57,10 @@ public final class SummaryThemeGroups {
   /** 作業状況の把握で用いる識別子一覧対象を返す。 */
   List<String> idsFor(String project, List<String> topics) {
     return groups.stream()
-        .filter(
-            g ->
-                !project.isBlank()
-                    ? g.projects().contains(project)
-                    : topics.stream().anyMatch(g.themes()::contains))
+        .filter(g ->
+            !project.isBlank()
+                ? g.projects().contains(project)
+                : topics.stream().anyMatch(g.themes()::contains))
         .map(Group::id)
         .sorted()
         .toList();

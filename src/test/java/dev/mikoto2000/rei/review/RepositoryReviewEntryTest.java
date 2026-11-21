@@ -26,19 +26,25 @@ class RepositoryReviewEntryTest {
     Path root = Files.createDirectory(temporary.resolve("repository"));
     Files.writeString(root.resolve("a.java"), "source");
     var data = temporary.resolve("data");
-    try (var gate = new StorageMigrationCoordinator(data)) { gate.prepare(); }
+    try (var gate = new StorageMigrationCoordinator(data)) {
+      gate.prepare();
+    }
     var ledger = new ReviewCoverageLedger(new StorageDatabase(data));
-    var tools = new ReviewTools(ledger, new RawToolResultStore(data), new Tools(), TokenEstimator.conservative());
+    var tools =
+        new ReviewTools(
+            ledger, new RawToolResultStore(data), new Tools(), TokenEstimator.conservative());
     var owner = new AgentRunContext("run", "session", root, "project");
     {
       var active = AgentRunScope.open(owner);
       try (active) {
         var task = tools.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L);
-        assertThatThrownBy(() -> tools.requireComplete(owner)).isInstanceOf(ExecutionStoppedException.class);
+        assertThatThrownBy(() -> tools.requireComplete(owner))
+            .isInstanceOf(ExecutionStoppedException.class);
         tools.scanReviewSnapshot(task.id(), 100);
         assertThat(tools.reviewTaskStatus(task.id()).enumeration()).isEqualTo("SEALED");
         assertThat(tools.listReviewTargets(task.id(), null, 100).entries()).hasSize(1);
-        assertThatThrownBy(() -> tools.requireComplete(owner)).isInstanceOf(ExecutionStoppedException.class);
+        assertThatThrownBy(() -> tools.requireComplete(owner))
+            .isInstanceOf(ExecutionStoppedException.class);
       }
     }
     var unrelated = new AgentRunContext("another-run", "session", root, "project");

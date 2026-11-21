@@ -179,10 +179,8 @@ public class GoalController {
     var request = creation.request();
     int runs = creation.runs(), calls = creation.calls();
     if (request.criteriaJson() == null && request.completionJson() == null)
-      return control(
-          () ->
-              loop.create(
-                  owner, request.objective(), request.file(), request.sha256(), runs, calls));
+      return control(() ->
+          loop.create(owner, request.objective(), request.file(), request.sha256(), runs, calls));
     var criteria =
         request.criteriaJson() == null
             ? List.of(new GoalRepository.FileCriterion(request.file(), request.sha256()))
@@ -263,10 +261,8 @@ public class GoalController {
       @RequestBody StageEvidenceRequest request) {
     if (request == null || request.expectedVersion() < 1 || request.proof() == null)
       throw new IllegalArgumentException("Stage proof and observed version required");
-    return control(
-        () ->
-            attachStageProof.apply(
-                new GoalKey(projectId, id), new StageEvidence(stageId, request)));
+    return control(() ->
+        attachStageProof.apply(new GoalKey(projectId, id), new StageEvidence(stageId, request)));
   }
 
   /**
@@ -354,11 +350,10 @@ public class GoalController {
         || request.expectedRunId().isBlank())
       throw new IllegalArgumentException(
           "Inspect effects and acknowledge the exact saved Run before reconciliation");
-    return control(
-        () ->
-            reconcileGoal.apply(
-                new GoalKey(projectId, id),
-                request.expectedRunId().equals("none") ? null : request.expectedRunId()));
+    return control(() ->
+        reconcileGoal.apply(
+            new GoalKey(projectId, id),
+            request.expectedRunId().equals("none") ? null : request.expectedRunId()));
   }
 
   /** 待機一覧。 */

@@ -173,10 +173,8 @@ final class ProjectHistoryRetrieval {
     if (reference != null && !reference.isBlank()) {
       var matches =
           projects.stream()
-              .filter(
-                  p ->
-                      p.id().equals(reference)
-                          || normalized(p.name()).equals(normalized(reference)))
+              .filter(p ->
+                  p.id().equals(reference) || normalized(p.name()).equals(normalized(reference)))
               .toList();
       if (matches.size() != 1)
         throw new IllegalArgumentException("Unknown or ambiguous project reference: " + reference);

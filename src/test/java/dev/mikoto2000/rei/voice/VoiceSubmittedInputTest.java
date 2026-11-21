@@ -113,12 +113,11 @@ class VoiceSubmittedInputTest {
             StandardCharsets.UTF_8);
     var reader = LineReaderBuilder.builder().terminal(terminal).build();
     var output = new JLineShellEventOutput(reader);
-    delivery.onSubmitted(
-        input -> {
-          submitted.add(input);
-          // The UI uses the display/acceptance time, not the earlier speech timestamp.
-          output.printBlock(UserInputFrame.format(input.text(), LocalTime.of(1, 37, 16)));
-        });
+    delivery.onSubmitted(input -> {
+      submitted.add(input);
+      // The UI uses the display/acceptance time, not the earlier speech timestamp.
+      output.printBlock(UserInputFrame.format(input.text(), LocalTime.of(1, 37, 16)));
+    });
   }
 
   /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
@@ -157,12 +156,11 @@ class VoiceSubmittedInputTest {
     delivery.confirm(input.inputId(), "訂正した文章\n2行目");
     assertThat(submitted)
         .singleElement()
-        .satisfies(
-            accepted -> {
-              assertThat(accepted.inputId()).isEqualTo(input.inputId());
-              assertThat(accepted.createdAt()).isEqualTo(input.createdAt());
-              assertThat(accepted.text()).isEqualTo("訂正した文章\n2行目");
-            });
+        .satisfies(accepted -> {
+          assertThat(accepted.inputId()).isEqualTo(input.inputId());
+          assertThat(accepted.createdAt()).isEqualTo(input.createdAt());
+          assertThat(accepted.text()).isEqualTo("訂正した文章\n2行目");
+        });
     assertThat(display.toString(StandardCharsets.UTF_8))
         .contains("訂正した文章", "2行目")
         .doesNotContain("未確認の認識文");
@@ -226,10 +224,9 @@ class VoiceSubmittedInputTest {
   /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void listenerFailureAndUnsubscriptionCannotResubmitAcceptedVoice() {
-    delivery.onSubmitted(
-        input -> {
-          throw new IllegalStateException("display failed");
-        });
+    delivery.onSubmitted(input -> {
+      throw new IllegalStateException("display failed");
+    });
     var extra = new ArrayList<ConversationInput>();
     var subscription = delivery.onSubmitted(extra::add);
     var first = input("first");

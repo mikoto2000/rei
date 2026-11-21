@@ -177,19 +177,18 @@ class WorkContextServiceTest {
     turns.start(context, "implement");
     turns.finish(context, ConversationTurnStore.Status.COMPLETED, "implemented; tests not run");
     when(extractor.extract(anyList(), anyList(), anyString()))
-        .thenAnswer(
-            call -> {
-              List<Evidence> e = call.getArgument(0);
-              return List.of(
-                  new WorkContextCandidate(
-                      "ADD",
-                      null,
-                      Kind.PENDING,
-                      "test Native",
-                      "not run",
-                      Status.OPEN,
-                      List.of(e.getFirst().id())));
-            });
+        .thenAnswer(call -> {
+          List<Evidence> e = call.getArgument(0);
+          return List.of(
+              new WorkContextCandidate(
+                  "ADD",
+                  null,
+                  Kind.PENDING,
+                  "test Native",
+                  "not run",
+                  Status.OPEN,
+                  List.of(e.getFirst().id())));
+        });
     service =
         new WorkContextService(
             repo,
@@ -213,20 +212,18 @@ class WorkContextServiceTest {
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     when(model.stream(
             org.mockito.ArgumentMatchers.any(org.springframework.ai.chat.prompt.Prompt.class)))
-        .thenAnswer(
-            call -> {
-              assertTrue(
-                  WorkContextExtractionDeadline.remaining(java.time.Duration.ofSeconds(1))
-                          .toMillis()
-                      > 500);
-              if (calls.incrementAndGet() == 1) return reactor.core.publisher.Flux.never();
-              return reactor.core.publisher.Flux.just(
-                  new org.springframework.ai.chat.model.ChatResponse(
-                      List.of(
-                          new org.springframework.ai.chat.model.Generation(
-                              new org.springframework.ai.chat.messages.AssistantMessage(
-                                  "{\"changes\":[]}")))));
-            });
+        .thenAnswer(call -> {
+          assertTrue(
+              WorkContextExtractionDeadline.remaining(java.time.Duration.ofSeconds(1)).toMillis()
+                  > 500);
+          if (calls.incrementAndGet() == 1) return reactor.core.publisher.Flux.never();
+          return reactor.core.publisher.Flux.just(
+              new org.springframework.ai.chat.model.ChatResponse(
+                  List.of(
+                      new org.springframework.ai.chat.model.Generation(
+                          new org.springframework.ai.chat.messages.AssistantMessage(
+                              "{\"changes\":[]}")))));
+        });
     var properties =
         new WorkContextProperties(false, true, 1200, 12000, 5, 20, 4000, 16, "memory", 1, 1, 4096);
     service =
@@ -492,17 +489,16 @@ class WorkContextServiceTest {
                 "explicit correction");
         var edited =
             executor
-                .submit(
-                    () ->
-                        service.edit(
-                            a.id(),
-                            old.revision(),
-                            old.items().getFirst().id(),
-                            "STATUS",
-                            null,
-                            "user verified",
-                            Status.COMPLETED,
-                            evidence))
+                .submit(() ->
+                    service.edit(
+                        a.id(),
+                        old.revision(),
+                        old.items().getFirst().id(),
+                        "STATUS",
+                        null,
+                        "user verified",
+                        Status.COMPLETED,
+                        evidence))
                 .get(2, java.util.concurrent.TimeUnit.SECONDS);
         release.countDown();
         var error =

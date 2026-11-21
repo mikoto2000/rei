@@ -51,12 +51,11 @@ class ApprovalDisplayTest {
       var source = new java.util.concurrent.atomic.AtomicReference<List<String>>(List.of(ID));
       try (var menu =
           new ApprovalActionMenu(reader, () -> new ApprovalActionMenu.Owner("p", "s"))) {
-        menu.follow(
-            owner -> {
-              var ids = source.get();
-              if (ids == null) throw new IOException("fixture offline");
-              return ids;
-            });
+        menu.follow(owner -> {
+          var ids = source.get();
+          if (ids == null) throw new IOException("fixture offline");
+          return ids;
+        });
         awaitCount(menu, 1);
         menu.enabled(false);
         assertTrue(
@@ -94,13 +93,12 @@ class ApprovalDisplayTest {
       var finished = new java.util.concurrent.CountDownLatch(1);
       try (var menu =
           new ApprovalActionMenu(reader, () -> new ApprovalActionMenu.Owner("p", "s"))) {
-        menu.follow(
-            owner -> {
-              reading.countDown();
-              release.await();
-              finished.countDown();
-              return List.of();
-            });
+        menu.follow(owner -> {
+          reading.countDown();
+          release.await();
+          finished.countDown();
+          return List.of();
+        });
         assertTrue(reading.await(2, java.util.concurrent.TimeUnit.SECONDS));
         menu.offer("p", "s", ID);
         release.countDown();
@@ -168,10 +166,9 @@ class ApprovalDisplayTest {
                 menu.enabled(true);
                 menu.offer("p", "s", ID);
                 var result =
-                    executor.submit(
-                        () ->
-                            reader.readLine(
-                                "> ", null, (org.jline.reader.MaskingCallback) null, "draft"));
+                    executor.submit(() ->
+                        reader.readLine(
+                            "> ", null, (org.jline.reader.MaskingCallback) null, "draft"));
                 while (!reader.isReading() || !reader.getBuffer().toString().equals("draft"))
                   Thread.sleep(5);
                 reader

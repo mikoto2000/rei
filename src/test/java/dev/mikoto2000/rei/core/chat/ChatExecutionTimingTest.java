@@ -38,8 +38,7 @@ class ChatExecutionTimingTest {
     var models = mock(ModelHolderService.class);
     when(models.get()).thenReturn("test");
     when(client.prompt(any(Prompt.class))).thenReturn(request);
-    when(request.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
-        .thenReturn(request);
+    when(request.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(request);
     when(request.stream().chatResponse()).thenReturn(stream);
     return new ChatExecutionService(
         client, models, new CommandCancellationService(), Optional.empty());

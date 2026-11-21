@@ -49,16 +49,14 @@ public final class SkillEmbeddingClient implements SkillMetadataEmbedding, AutoC
   public List<float[]> embed(List<String> texts) {
     var budget = dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
     var future =
-        executor.submit(
-            () -> {
-              var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(budget);
-              try (scope) {
-                var model = provider.get();
-                if (model == null)
-                  throw new IllegalStateException("Embedding provider unavailable");
-                return model.embed(texts);
-              }
-            });
+        executor.submit(() -> {
+          var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(budget);
+          try (scope) {
+            var model = provider.get();
+            if (model == null) throw new IllegalStateException("Embedding provider unavailable");
+            return model.embed(texts);
+          }
+        });
     try {
       return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException error) {

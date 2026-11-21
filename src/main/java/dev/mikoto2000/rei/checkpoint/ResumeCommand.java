@@ -75,12 +75,19 @@ public class ResumeCommand implements Callable<Integer> {
   }
 
   /** Present primitive IDs and redacted labels without exposing checkpoint models to wiring. */
-  public void setTaskMenu(java.util.function.BiFunction<java.util.List<String>, java.util.List<String>,
-      java.util.Optional<String>> menu) {
-    setTaskSelection(items -> menu.apply(
-        items.stream().map(PersistentCheckpoint::taskId).toList(),
-        items.stream().map(item -> ResumeOverview.safe(
-            "[" + item.status() + "] " + item.request() + " (" + item.taskId() + ")", 240)).toList()));
+  public void setTaskMenu(
+      java.util.function.BiFunction<
+              java.util.List<String>, java.util.List<String>, java.util.Optional<String>>
+          menu) {
+    setTaskSelection(items ->
+        menu.apply(
+            items.stream().map(PersistentCheckpoint::taskId).toList(),
+            items.stream()
+                .map(item ->
+                    ResumeOverview.safe(
+                        "[" + item.status() + "] " + item.request() + " (" + item.taskId() + ")",
+                        240))
+                .toList()));
   }
 
   /** 作業の中断と再開で使用する概要を設定する。 */
@@ -150,15 +157,14 @@ public class ResumeCommand implements Callable<Integer> {
   /** 保存タスクの一覧・照合・明示再開・除外を行う。 */
   @Override
   public Integer call() {
-    return print(
-        () -> {
-          if (task != null) return resumeTask(task);
-          var candidates = listCheckpoints.apply(project());
-          if (taskSelection == null) return candidates;
-          if (candidates.isEmpty()) return "再開候補はありません。";
-          var selected = taskSelection.apply(candidates);
-          return selected.isPresent() ? resumeTask(selected.get()) : "再開せずに閉じました。";
-        });
+    return print(() -> {
+      if (task != null) return resumeTask(task);
+      var candidates = listCheckpoints.apply(project());
+      if (taskSelection == null) return candidates;
+      if (candidates.isEmpty()) return "再開候補はありません。";
+      var selected = taskSelection.apply(candidates);
+      return selected.isPresent() ? resumeTask(selected.get()) : "再開せずに閉じました。";
+    });
   }
 
   /** 再開した実行の出力と後続の入力を同じ会話へ向ける。 */
@@ -187,17 +193,15 @@ public class ResumeCommand implements Callable<Integer> {
 
     /** 作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return parent.print(
-          () ->
-              parent.listCheckpoints.apply(parent.project()).stream()
-                  .map(
-                      s ->
-                          s.taskId()
-                              + " ["
-                              + s.status()
-                              + "] "
-                              + PersistentCheckpointService.bounded(s.request(), 160))
-                  .toList());
+      return parent.print(() ->
+          parent.listCheckpoints.apply(parent.project()).stream()
+              .map(s ->
+                  s.taskId()
+                      + " ["
+                      + s.status()
+                      + "] "
+                      + PersistentCheckpointService.bounded(s.request(), 160))
+              .toList());
     }
   }
 
@@ -209,12 +213,11 @@ public class ResumeCommand implements Callable<Integer> {
 
     /** 作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return parent.print(
-          () ->
-              parent
-                  .overview
-                  .overview(parent.project())
-                  .detail(parent.overview.zone(java.time.ZoneId.systemDefault())));
+      return parent.print(() ->
+          parent
+              .overview
+              .overview(parent.project())
+              .detail(parent.overview.zone(java.time.ZoneId.systemDefault())));
     }
   }
 
@@ -230,11 +233,10 @@ public class ResumeCommand implements Callable<Integer> {
 
     /** 作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return parent.print(
-          () ->
-              parent.findCheckpoint.apply(parent.project(), task)
-                  + "\n"
-                  + parent.inspectCheckpoint.apply(parent.project(), task));
+      return parent.print(() ->
+          parent.findCheckpoint.apply(parent.project(), task)
+              + "\n"
+              + parent.inspectCheckpoint.apply(parent.project(), task));
     }
   }
 

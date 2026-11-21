@@ -200,15 +200,14 @@ class AutoSleepEndRequestTest {
       for (int i = 0; i < 8; i++) {
         String id = "race" + i;
         jobs.add(
-            pool.submit(
-                () -> {
-                  try {
-                    repository.requestAutoSleep(id, project, "session_end");
-                    return true;
-                  } catch (RuntimeException full) {
-                    return false;
-                  }
-                }));
+            pool.submit(() -> {
+              try {
+                repository.requestAutoSleep(id, project, "session_end");
+                return true;
+              } catch (RuntimeException full) {
+                return false;
+              }
+            }));
       }
       int accepted = 0;
       for (var job : jobs) if (job.get()) accepted++;
@@ -271,10 +270,9 @@ class AutoSleepEndRequestTest {
     var projects = new ProjectService(dir, new ProjectRegistry(dir.resolve("projects.json")));
     var saved = new FileSessionRepository(dir.resolve("sessions.json"));
     var lifecycle = new SessionLifecycle(saved, Clock.fixed(now, ZoneOffset.UTC));
-    lifecycle.onEnded(
-        session -> {
-          throw new IllegalStateException("storage unavailable");
-        });
+    lifecycle.onEnded(session -> {
+      throw new IllegalStateException("storage unavailable");
+    });
     var client = projects.newClient().open();
     try (client) {
       var shell = new ShellConversationService(projects, lifecycle, (owner, prompt) -> {});

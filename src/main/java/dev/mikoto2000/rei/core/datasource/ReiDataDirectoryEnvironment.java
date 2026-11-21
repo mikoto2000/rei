@@ -18,8 +18,10 @@ public final class ReiDataDirectoryEnvironment implements EnvironmentPostProcess
   @Override
   public void postProcessEnvironment(
       ConfigurableEnvironment environment, SpringApplication application) {
-    environment.getPropertySources().addLast(
-        new MapPropertySource("reiDataDirectory", Map.of(
-            "rei.data-dir", ReiDataDirectory.current().toString())));
+    environment
+        .getPropertySources()
+        .addLast(
+            new MapPropertySource(
+                "reiDataDirectory", Map.of("rei.data-dir", ReiDataDirectory.current().toString())));
   }
 }

@@ -37,11 +37,8 @@ class SdkSlackTransportTest {
     assertEquals("SENT", transport.send(row).state());
     verify(methods)
         .chatPostMessage(
-            argThat(
-                (ChatPostMessageRequest r) ->
-                    r.getThreadTs().equals("1.0")
-                        && r.getChannel().equals("D")
-                        && !r.isUnfurlLinks()));
+            argThat((ChatPostMessageRequest r) ->
+                r.getThreadTs().equals("1.0") && r.getChannel().equals("D") && !r.isUnfurlLinks()));
     assertEquals(
         "FAILED",
         transport.send(new SlackStore.Outgoing("bad", "other", "D", "1.0", "answer")).state());

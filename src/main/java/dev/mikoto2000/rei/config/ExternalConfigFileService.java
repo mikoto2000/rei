@@ -63,501 +63,501 @@ public class ExternalConfigFileService {
   /** 設定の管理で用いる追加システムへの指示雛形を返す。 */
   private String additionalSystemPromptTemplate() {
     return """
-        # 既定の system prompt に追記する内容を Markdown で直接記述します。
-        # 空のままなら何も追加されません。
-        """;
+    # 既定の system prompt に追記する内容を Markdown で直接記述します。
+    # 空のままなら何も追加されません。
+    """;
   }
 
   /** 設定の管理で用いる雛形を返す。 */
   private String template() {
     return """
-        spring:
-          ai:
-            openai:
-              base-url: ${REI_OPENAI_BASE_URL:http://127.0.0.1:11434}
-              api-key: ${REI_OPENAI_API_KEY:dummy-key}
-              chat:
-                options:
-                  model: ${REI_OPENAI_CHAT_MODEL:qwen3.5:9b}
-              embedding:
-                base-url: ${REI_OPENAI_EMBEDDING_BASE_URL:}
-                api-key: ${REI_OPENAI_EMBEDDING_API_KEY:}
-                embeddings-path: ${REI_OPENAI_EMBEDDING_PATH:/v1/embeddings}
-                options:
-                  model: ${REI_OPENAI_EMBEDDING_MODEL:qwen3-embedding:8b}
-              image:
-                options:
-                  model: ${REI_OPENAI_IMAGE_MODEL:gpt-image-1}
-            model:
-              chat: openai
-              embedding: openai
-              image: openai
-            mcp:
-              server:
-                enabled: ${rei.mcp-server.enabled:false}
-                protocol: STREAMABLE
-                type: SYNC
-                tool-callback-converter: false
-                annotation-scanner:
-                  enabled: false
-                capabilities:
-                  resource: false
-                  prompt: false
-                  completion: false
-              client:
-                enabled: ${REI_MCP_ENABLED:false}
-                toolcallback:
-                  enabled: true
-          devtools:
-            restart:
-              enabled: false
-
-        rei:
-          resume:
-            overview:
-              enabled: ${REI_RESUME_OVERVIEW_ENABLED:true}
-              failed-max-age-days: ${REI_RESUME_OVERVIEW_FAILED_MAX_AGE_DAYS:30}
-          dot-delegation:
-            enabled: ${REI_DOT_DELEGATION_ENABLED:false}
-            parent-llm-enabled: ${REI_DOT_PARENT_LLM_ENABLED:false}
-            auto-resume: false
-            allowed-projects: ${REI_DOT_ALLOWED_PROJECTS:}
-            allowed-categories: TECH_RESEARCH,COMPARISON,REVIEW
-            active-limit: 2
-            queue-limit: 8
-            default-timeout: 1h
-            claim-lease: 30m
-            result-retention-days: 30
-            request-retention-days: 90
-          mcp-server:
-            enabled: ${REI_MCP_SERVER_ENABLED:false}
-            port: ${REI_MCP_SERVER_PORT:8091}
-            allowed-projects: ${REI_MCP_SERVER_ALLOWED_PROJECTS:}
-            receipt-retention-days: ${REI_MCP_RECEIPT_RETENTION_DAYS:90}
-            result-retention-days: ${REI_MCP_RESULT_RETENTION_DAYS:30}
-            audit-retention-days: ${REI_MCP_AUDIT_RETENTION_DAYS:90}
-          today:
-            enabled: ${REI_TODAY_ENABLED:false}
-            projects: ${REI_TODAY_PROJECTS:}
-            zone: ${REI_TODAY_ZONE:Asia/Tokyo}
-          github:
-            webhook:
-              enabled: ${REI_GITHUB_WEBHOOK_ENABLED:false}
-              secret: ${REI_GITHUB_WEBHOOK_SECRET:}
-              mappings: [] # Explicit repository, project-id, session-id, branch/PR filters.
-          artifacts:
-            enabled: ${REI_ARTIFACTS_ENABLED:false}
-            max-bytes: ${REI_ARTIFACTS_MAX_BYTES:33554432}
-            max-total-bytes: ${REI_ARTIFACTS_MAX_TOTAL_BYTES:536870912}
-            max-artifacts: ${REI_ARTIFACTS_MAX_COUNT:1024}
-            retention: ${REI_ARTIFACTS_RETENTION:30d}
-          paper:
-            enabled: ${REI_PAPER_ENABLED:true}
-            open-alex-api-key: ${REI_PAPER_OPEN_ALEX_API_KEY:}
-          tool-result-delivery:
-            page-target-tokens: ${REI_RESULT_PAGE_TARGET:8000}
-            page-min-tokens: ${REI_RESULT_PAGE_MIN:256}
-            page-max-tokens: ${REI_RESULT_PAGE_MAX:16000}
-            bulk-max-tokens: ${REI_RESULT_BULK_MAX:64000}
-            page-safety-tokens: ${REI_RESULT_PAGE_SAFETY:0}
-            raw-result-max-bytes: ${REI_RAW_RESULT_MAX_BYTES:16777216}
-            raw-store-max-bytes: ${REI_RAW_STORE_MAX_BYTES:268435456}
-            raw-cache-max-bytes: ${REI_RAW_CACHE_MAX_BYTES:8388608}
-            review-ledger:
-              enabled: ${REI_REVIEW_LEDGER_ENABLED:true}
-              require-coverage: ${REI_REVIEW_REQUIRE_COVERAGE:true}
-          chatgpt-plan:
-            execution:
-              timeout: ${REI_CHATGPT_PLAN_EXECUTION_TIMEOUT:10m}
-          context-compression:
-            enabled: ${REI_CONTEXT_COMPRESSION_ENABLED:true}
-            retry-cooldown-seconds: ${REI_CONTEXT_RETRY_COOLDOWN_SECONDS:120}
-            standalone-summary-max-llm-calls: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_LLM_CALLS:0}
-            standalone-summary-max-total-tokens: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_TOTAL_TOKENS:0}
-          computer-use:
-            enabled: false
-            diagnostics:
-              enabled: false
-          sound-notification:
-            enabled: false
-          activity:
-            enabled: false
-            capture-interval-seconds: 60
-            vision-image-scale: 0.5
-            background-analysis-interval-seconds: 300
-            detection:
-              mode: evidence-first
-              evidence-enabled: true
-              vision-enabled: true
-              fallback-enabled: true
-              skip-vision-confidence: 0.8
-              foreground-crop: true
-              background-full-screen-enabled: false
-              max-output-tokens: 2048
-            classification:
-              user-rules-file: activity/classification-rules.yaml
-              hot-reload: true
-              unknown-registry:
-                enabled: true
-                retention-days: 30
-                max-entries: 1000
-              entertainment-registry:
-                enabled: true
-                retention-days: 30
-                max-entries: 1000
-              rule-suggestion:
-                enabled: true
-                minimum-samples: 3
-              diagnostics:
-                enabled: true
-            keep-screenshots: false
-            coaching:
-              automatic-enabled: false
-              weekly-enabled: true
-              monthly-enabled: true
-              check-interval-seconds: 3600
-            behavior:
-              enabled: false
-              check-interval-seconds: 60
-              history-minutes: 1440
-              entertainment-categories: [social, media, shopping, gaming]
-              continuous:
-                notice-minutes: 30
-                warning-minutes: 60
-                strong-warning-minutes: 120
-              windows:
-                short-window:
-                  duration-minutes: 60
-                  minimum-observed-minutes: 30
-                  ratio: 0.50
-                long-window:
-                  duration-minutes: 120
-                  minimum-observed-minutes: 60
-                  ratio: 0.60
-              interruption:
-                reset-after-work-minutes: 5
-                noise-tolerance-seconds: 60
-              cooldown:
-                notice-minutes: 60
-                warning-minutes: 45
-                strong-warning-minutes: 30
-          external-agents:
-            claude:
-              enabled: ${REI_CLAUDE_ENABLED:false}
-              persist-sessions: ${REI_CLAUDE_PERSIST_SESSIONS:false}
-              fix-proposals-enabled: ${REI_CLAUDE_FIX_PROPOSALS_ENABLED:false}
-              implementation-enabled: ${REI_CLAUDE_IMPLEMENTATION_ENABLED:false}
-              implementation-test-command: ${REI_CLAUDE_IMPLEMENTATION_TEST_COMMAND:}
-              implementation-test-timeout-seconds: ${REI_CLAUDE_IMPLEMENTATION_TEST_TIMEOUT_SECONDS:30}
-              parallel-review-enabled: ${REI_CLAUDE_PARALLEL_REVIEW_ENABLED:false}
-              parallel-review-timeout: ${REI_CLAUDE_PARALLEL_REVIEW_TIMEOUT:120s}
-              command: ${REI_CLAUDE_COMMAND:claude}
-              total-timeout: 5m
-              inactivity-timeout: 2m
-              max-output-bytes: 1048576
-            codex:
-              implementation-enabled: ${REI_CODEX_IMPLEMENTATION_ENABLED:false}
-              implementation-test-command: ${REI_CODEX_IMPLEMENTATION_TEST_COMMAND:}
-              implementation-test-timeout-seconds: ${REI_CODEX_IMPLEMENTATION_TEST_TIMEOUT_SECONDS:30}
-              inherit-run-model-budget: ${REI_CODEX_INHERIT_RUN_MODEL_BUDGET:false}
-              parallel-review-enabled: ${REI_CODEX_PARALLEL_REVIEW_ENABLED:false}
-              parallel-review-timeout: ${REI_CODEX_PARALLEL_REVIEW_TIMEOUT:120s}
-              enabled: true
-              command: codex
-              total-timeout: 20m
-              inactivity-timeout: 5m
-              max-output-bytes: 4194304
+    spring:
+      ai:
+        openai:
+          base-url: ${REI_OPENAI_BASE_URL:http://127.0.0.1:11434}
+          api-key: ${REI_OPENAI_API_KEY:dummy-key}
+          chat:
+            options:
+              model: ${REI_OPENAI_CHAT_MODEL:qwen3.5:9b}
           embedding:
-            enabled: ${REI_EMBEDDING_ENABLED:true}
-            inherit-run-model-budget: ${REI_EMBEDDING_INHERIT_RUN_MODEL_BUDGET:false}
-          rerank:
-            enabled: ${REI_RERANK_ENABLED:true}
-            inherit-run-model-budget: ${REI_RERANK_INHERIT_RUN_MODEL_BUDGET:false}
-            base-url: ${REI_RERANK_BASE_URL:}
-            api-key: ${REI_RERANK_API_KEY:}
-            model: ${REI_RERANK_MODEL:}
-            path: ${REI_RERANK_PATH:/v1/rerank}
-          vector-document:
-            retrieval:
-              enabled: ${REI_VECTOR_DOCUMENT_RETRIEVAL_ENABLED:false}
-              candidate-limit: ${REI_VECTOR_DOCUMENT_RETRIEVAL_CANDIDATE_LIMIT:40}
-              rank-constant: ${REI_VECTOR_DOCUMENT_RETRIEVAL_RANK_CONSTANT:60}
-          llm:
-            read-timeout: ${REI_LLM_READ_TIMEOUT:5m}
-            max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
-            output-limit:
-              llm-call-budget-enabled: ${REI_LLM_OUTPUT_LIMIT_LLM_CALL_BUDGET_ENABLED:true}
-              max-replans-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL:2}
-              max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
-              max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:120}
-              max-tool-argument-corrections-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOOL_ARGUMENT_CORRECTIONS_PER_RUN:10}
-              max-total-tokens-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOTAL_TOKENS_PER_RUN:0}
-              max-total-tokens-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_TOTAL_TOKENS_PER_GOAL:0}
-            features:
-              activity-behavior:
-                base-url: ${REI_LLM_ACTIVITY_BEHAVIOR_BASE_URL:}
-                api-key: ${REI_LLM_ACTIVITY_BEHAVIOR_API_KEY:}
-                model: ${REI_LLM_ACTIVITY_BEHAVIOR_MODEL:}
-              chat:
-                base-url: ${REI_LLM_CHAT_BASE_URL:}
-                api-key: ${REI_LLM_CHAT_API_KEY:}
-                model: ${REI_LLM_CHAT_MODEL:}
-              search:
-                base-url: ${REI_LLM_SEARCH_BASE_URL:}
-                api-key: ${REI_LLM_SEARCH_API_KEY:}
-                model: ${REI_LLM_SEARCH_MODEL:}
-              memory:
-                base-url: ${REI_LLM_MEMORY_BASE_URL:}
-                api-key: ${REI_LLM_MEMORY_API_KEY:}
-                model: ${REI_LLM_MEMORY_MODEL:}
-              bluesky-reply:
-                base-url: ${REI_LLM_BLUESKY_REPLY_BASE_URL:}
-                api-key: ${REI_LLM_BLUESKY_REPLY_API_KEY:}
-                model: ${REI_LLM_BLUESKY_REPLY_MODEL:}
-              feed-summary:
-                base-url: ${REI_LLM_FEED_SUMMARY_BASE_URL:}
-                api-key: ${REI_LLM_FEED_SUMMARY_API_KEY:}
-                model: ${REI_LLM_FEED_SUMMARY_MODEL:}
-              briefing:
-                base-url: ${REI_LLM_BRIEFING_BASE_URL:}
-                api-key: ${REI_LLM_BRIEFING_API_KEY:}
-                model: ${REI_LLM_BRIEFING_MODEL:}
-              interest-discovery:
-                base-url: ${REI_LLM_INTEREST_DISCOVERY_BASE_URL:}
-                api-key: ${REI_LLM_INTEREST_DISCOVERY_API_KEY:}
-                model: ${REI_LLM_INTEREST_DISCOVERY_MODEL:}
-              agent-skills:
-                base-url: ${REI_LLM_AGENT_SKILLS_BASE_URL:}
-                api-key: ${REI_LLM_AGENT_SKILLS_API_KEY:}
-                model: ${REI_LLM_AGENT_SKILLS_MODEL:}
-              output-limit-planner:
-                base-url: ${REI_LLM_OUTPUT_LIMIT_PLANNER_BASE_URL:}
-                api-key: ${REI_LLM_OUTPUT_LIMIT_PLANNER_API_KEY:}
-                model: ${REI_LLM_OUTPUT_LIMIT_PLANNER_MODEL:}
-              image-prompt:
-                base-url: ${REI_LLM_IMAGE_PROMPT_BASE_URL:}
-                api-key: ${REI_LLM_IMAGE_PROMPT_API_KEY:}
-                model: ${REI_LLM_IMAGE_PROMPT_MODEL:}
-              image-generation:
-                base-url: ${REI_LLM_IMAGE_GENERATION_BASE_URL:}
-                api-key: ${REI_LLM_IMAGE_GENERATION_API_KEY:}
-                model: ${REI_LLM_IMAGE_GENERATION_MODEL:}
+            base-url: ${REI_OPENAI_EMBEDDING_BASE_URL:}
+            api-key: ${REI_OPENAI_EMBEDDING_API_KEY:}
+            embeddings-path: ${REI_OPENAI_EMBEDDING_PATH:/v1/embeddings}
+            options:
+              model: ${REI_OPENAI_EMBEDDING_MODEL:qwen3-embedding:8b}
           image:
-            output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${rei.data-dir}/images}
-            size: ${REI_IMAGE_SIZE:1024x1024}
-            response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
-            timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
-            prompt-enhancement:
-              enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
-          repository-map:
-            persistent-index-enabled: ${REI_REPOSITORY_MAP_PERSISTENT_INDEX_ENABLED:false}
-          predicates:
-            enabled: ${REI_PREDICATES_ENABLED:false}
-          reflection:
-            lessons-enabled: ${REI_REFLECTION_LESSONS_ENABLED:false}
-          repair:
-            diagnosed-enabled: ${REI_REPAIR_DIAGNOSED_ENABLED:false}
-          patch-review:
-            semantic-enabled: ${REI_PATCH_REVIEW_SEMANTIC_ENABLED:false}
-          document-renderer:
-            enabled: ${REI_DOCUMENT_RENDERER_ENABLED:false}
-            java: ${REI_DOCUMENT_RENDERER_JAVA:}
-            plantuml-jar: ${REI_DOCUMENT_RENDERER_PLANTUML_JAR:}
-          goal:
-            completion-gate:
-              require-all: ${REI_GOAL_COMPLETION_GATE_REQUIRE_ALL:false}
-          subagents:
-            durable-enabled: ${REI_SUBAGENTS_DURABLE_ENABLED:false}
-            dag-enabled: ${REI_SUBAGENTS_DAG_ENABLED:false}
-            consensus-enabled: ${REI_SUBAGENTS_CONSENSUS_ENABLED:false}
-            consensus-judge-enabled: ${REI_SUBAGENTS_CONSENSUS_JUDGE_ENABLED:false}
-            dag-timeout: ${REI_SUBAGENTS_DAG_TIMEOUT:120s}
-            durable-max-total-tokens: ${REI_SUBAGENTS_DURABLE_MAX_TOTAL_TOKENS:0}
-            max-transient-read-tool-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_READ_TOOL_RETRIES:0}
-            max-transient-model-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_MODEL_RETRIES:0}
-            standalone-max-llm-calls: ${REI_SUBAGENTS_STANDALONE_MAX_LLM_CALLS:0}
-            standalone-max-total-tokens: ${REI_SUBAGENTS_STANDALONE_MAX_TOTAL_TOKENS:0}
-          attention:
-            delivery:
-              enabled: ${REI_ATTENTION_DELIVERY_ENABLED:false}
-              automatic: ${REI_ATTENTION_DELIVERY_AUTOMATIC:false}
-              provider: ${REI_ATTENTION_DELIVERY_PROVIDER:WEBHOOK}
-              endpoint: ${REI_ATTENTION_DELIVERY_ENDPOINT:}
-              bearer-token: ${REI_ATTENTION_DELIVERY_BEARER_TOKEN:}
-              projects: ${REI_ATTENTION_DELIVERY_PROJECTS:}
-            slack:
-              enabled: ${REI_ATTENTION_SLACK_ENABLED:false}
-              endpoint: ${REI_ATTENTION_SLACK_ENDPOINT:https://slack.com/api/chat.postMessage}
-              bot-token: ${REI_ATTENTION_SLACK_BOT_TOKEN:}
-              channel: ${REI_ATTENTION_SLACK_CHANNEL:}
-              channels: ${REI_ATTENTION_SLACK_CHANNELS:}
-          skills:
-            enabled: true
-            directories:
-              - ${rei.data-dir}/skills
-            max-selected: 3
-            implicit-with-explicit: ${REI_SKILLS_IMPLICIT_WITH_EXPLICIT:false}
-            selector-timeout: ${REI_SKILLS_SELECTOR_TIMEOUT:30s}
-            semantic:
-              enabled: ${REI_SKILLS_SEMANTIC_ENABLED:false}
-              max-skills: ${REI_SKILLS_SEMANTIC_MAX_SKILLS:64}
-              minimum-similarity: ${REI_SKILLS_SEMANTIC_MINIMUM_SIMILARITY:0.55}
-              failure-backoff-seconds: ${REI_SKILLS_SEMANTIC_FAILURE_BACKOFF_SECONDS:30}
-              persistent-index-enabled: ${REI_SKILLS_SEMANTIC_PERSISTENT_INDEX_ENABLED:false}
-              index-namespace: ${REI_SKILLS_SEMANTIC_INDEX_NAMESPACE:}
-          http-cache:
-            enabled: ${REI_HTTP_CACHE_ENABLED:true}
-            search-ttl-seconds: ${REI_HTTP_CACHE_SEARCH_TTL_SECONDS:30}
-            page-ttl-seconds: ${REI_HTTP_CACHE_PAGE_TTL_SECONDS:60}
-            retention-seconds: ${REI_HTTP_CACHE_RETENTION_SECONDS:300}
-            max-entries: ${REI_HTTP_CACHE_MAX_ENTRIES:128}
-            max-bytes: ${REI_HTTP_CACHE_MAX_BYTES:33554432}
-            load-parallelism: ${REI_HTTP_CACHE_LOAD_PARALLELISM:3}
-            load-queue-capacity: ${REI_HTTP_CACHE_LOAD_QUEUE_CAPACITY:16}
-            max-in-flight: ${REI_HTTP_CACHE_MAX_IN_FLIGHT:32}
-          web-search:
-            enabled: true
-            timeout-seconds: ${REI_WEB_SEARCH_TIMEOUT_SECONDS:10}
-            connect-timeout-seconds: ${REI_WEB_SEARCH_CONNECT_TIMEOUT_SECONDS:5}
-            read-timeout-seconds: ${REI_WEB_SEARCH_READ_TIMEOUT_SECONDS:10}
-            max-wire-bytes: ${REI_WEB_SEARCH_MAX_WIRE_BYTES:2097152}
-            max-decoded-bytes: ${REI_WEB_SEARCH_MAX_DECODED_BYTES:4194304}
-            max-redirects: ${REI_WEB_SEARCH_MAX_REDIRECTS:5}
-            max-results: ${REI_WEB_SEARCH_MAX_RESULTS:8}
-            max-search-queries: ${REI_WEB_SEARCH_MAX_SEARCH_QUERIES:3}
-            max-search-api-calls: ${REI_WEB_SEARCH_MAX_SEARCH_API_CALLS:4}
-            max-page-fetches: ${REI_WEB_SEARCH_MAX_PAGE_FETCHES:5}
-            fetch-parallelism: ${REI_WEB_SEARCH_FETCH_PARALLELISM:3}
-            fetch-per-host: ${REI_WEB_SEARCH_FETCH_PER_HOST:2}
-            fetch-queue-capacity: ${REI_WEB_SEARCH_FETCH_QUEUE_CAPACITY:32}
-            fetch-batch-timeout-seconds: ${REI_WEB_SEARCH_FETCH_BATCH_TIMEOUT_SECONDS:30}
-            page-max-characters: ${REI_WEB_SEARCH_PAGE_MAX_CHARACTERS:2000}
-            page-max-tokens: ${REI_WEB_SEARCH_PAGE_MAX_TOKENS:1500}
-            max-output-characters: ${REI_WEB_SEARCH_MAX_OUTPUT_CHARACTERS:16000}
-            max-output-tokens: ${REI_WEB_SEARCH_MAX_OUTPUT_TOKENS:6000}
-            initial-page-fetches: ${REI_WEB_SEARCH_INITIAL_PAGE_FETCHES:2}
-            research-timeout-seconds: ${REI_WEB_SEARCH_RESEARCH_TIMEOUT_SECONDS:30}
-            total-wire-bytes: ${REI_WEB_SEARCH_TOTAL_WIRE_BYTES:8388608}
-            total-decoded-bytes: ${REI_WEB_SEARCH_TOTAL_DECODED_BYTES:16777216}
-            providers:
-              - name: duckduckgo
-                base-url: ${REI_WEB_SEARCH_DUCKDUCKGO_BASE_URL:https://html.duckduckgo.com/html/}
-              - name: brave
-                base-url: ${REI_WEB_SEARCH_BRAVE_BASE_URL:https://api.search.brave.com/res/v1/web/search}
-                api-key: ${REI_WEB_SEARCH_BRAVE_API_KEY:}
-          interest:
-            enabled: true
-            notification-enabled: false
-            notification-cron: ${REI_INTEREST_NOTIFICATION_CRON:0 0 12 * * *}
-          topic-generator:
-            enabled: ${REI_TOPIC_GENERATOR_ENABLED:false}
-            idle-trigger:
-              enabled: ${REI_TOPIC_GENERATOR_IDLE_TRIGGER_ENABLED:true}
-            discovery:
-              enabled: ${REI_TOPIC_GENERATOR_DISCOVERY_ENABLED:true}
-          memory:
-            episodes:
-              enabled: ${REI_MEMORY_EPISODES_ENABLED:false}
-              dense-enabled: ${REI_MEMORY_EPISODES_DENSE_ENABLED:false}
-            auto-sleep:
-              enabled: ${REI_MEMORY_AUTO_SLEEP_ENABLED:false}
-              minimum-idle: ${REI_MEMORY_AUTO_SLEEP_MINIMUM_IDLE:5m}
-              minimum-turns: ${REI_MEMORY_AUTO_SLEEP_MINIMUM_TURNS:5}
-              retry-interval: ${REI_MEMORY_AUTO_SLEEP_RETRY_INTERVAL:10m}
-              cron: ${REI_MEMORY_AUTO_SLEEP_CRON:}
-              zone: ${REI_MEMORY_AUTO_SLEEP_ZONE:}
-              on-session-end: ${REI_MEMORY_AUTO_SLEEP_ON_SESSION_END:false}
-              on-shutdown: ${REI_MEMORY_AUTO_SLEEP_ON_SHUTDOWN:false}
-            enabled: ${REI_MEMORY_ENABLED:true}
-            consolidation:
-              max-llm-calls: ${REI_MEMORY_CONSOLIDATION_MAX_LLM_CALLS:0}
-              max-total-tokens: ${REI_MEMORY_CONSOLIDATION_MAX_TOTAL_TOKENS:0}
-            sleep:
-              max-llm-calls: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS:0}
-              max-total-tokens: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS:0}
-              max-llm-calls-per-project: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS_PER_PROJECT:0}
-              max-total-tokens-per-project: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS_PER_PROJECT:0}
-          feed:
-            briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
-            cron: ${REI_FEED_CRON:0 0 4 * * *}
-          # Socket Mode is owned only by an explicit --backend process. Tokens are environment-only.
-          slack:
-            enabled: false
-            allowed-workspace-ids: []
-            allowed-user-ids: []
-            allowed-channel-ids: []
-            dm-project-id: ""
-            channel-projects: {}
-            agent-collaboration:
+            options:
+              model: ${REI_OPENAI_IMAGE_MODEL:gpt-image-1}
+        model:
+          chat: openai
+          embedding: openai
+          image: openai
+        mcp:
+          server:
+            enabled: ${rei.mcp-server.enabled:false}
+            protocol: STREAMABLE
+            type: SYNC
+            tool-callback-converter: false
+            annotation-scanner:
               enabled: false
-              allowed-workspace-ids: []
-              allowed-channel-ids: []
-              agents: {}
-              max-requests-per-run: 3
-              max-follow-up-turns: 2
-              max-delegation-depth: 1
-              timeout-seconds: 300
-          bluesky:
-            enabled: false
-            handle: ${REI_BLUESKY_HANDLE:}
-            app-password: ${REI_BLUESKY_APP_PASSWORD:}
-            max-post-length: ${REI_BLUESKY_MAX_POST_LENGTH:300}
-            timeout-seconds: ${REI_BLUESKY_TIMEOUT_SECONDS:30}
-            reply:
-              enabled: false
-              dry-run: true
-              check-interval-seconds: ${REI_BLUESKY_REPLY_CHECK_INTERVAL_SECONDS:300}
-              fetch-limit: ${REI_BLUESKY_REPLY_FETCH_LIMIT:30}
-              exclude-replies: true
-              exclude-reposts: true
-              max-post-age-minutes: ${REI_BLUESKY_REPLY_MAX_POST_AGE_MINUTES:120}
-              generation-timeout-seconds: ${REI_BLUESKY_REPLY_GENERATION_TIMEOUT_SECONDS:1200}
-              users:
-                - handle: "alice.bsky.social"
-                  probability: 0.25
-                  max-replies-per-day: 3
-          # Optional global life overrides. Unspecified fields retain persisted values.
-          # life:
-          #   zone: Asia/Tokyo
-          #   work-days: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY]
-          #   work-start: '09:00'
-          #   work-end: '18:00'
-          secretary:
-            enabled: ${REI_SECRETARY_ENABLED:false}
-            extraction-enabled: ${REI_SECRETARY_EXTRACTION_ENABLED:false}
-            followups-enabled: ${REI_SECRETARY_FOLLOWUPS_ENABLED:false}
-            # All registered projects share a briefing; optionally separate selected projects.
-            briefings:
-              enabled: false
-              morning-time: ''
-              evening-time: ''
-              zone: '' # Inherit rei.life.zone / the effective global life setting.
-              independent-projects: []
-            orchestrator-enabled: ${REI_SECRETARY_ORCHESTRATOR_ENABLED:false}
-            autonomy-enabled: ${REI_SECRETARY_AUTONOMY_ENABLED:false}
-            connections-enabled: ${REI_SECRETARY_CONNECTIONS_ENABLED:false}
-            external-content-to-model: ${REI_SECRETARY_EXTERNAL_CONTENT_TO_MODEL:false}
-            private-model-endpoints: ${REI_SECRETARY_PRIVATE_MODEL_ENDPOINTS:}
-            github:
-              enabled: ${REI_SECRETARY_GITHUB_ENABLED:false}
-            slack:
-              enabled: ${REI_SECRETARY_SLACK_ENABLED:false}
-          google:
-            application-name: Rei
-            credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:${rei.data-dir}/google-calendar-credentials.json}
-            tokens-directory: ${REI_GOOGLE_TOKENS_DIR:${rei.data-dir}/google-calendar-tokens}
-            token-refresh:
-              enabled: ${REI_GOOGLE_TOKEN_REFRESH_ENABLED:true}
-            calendar:
-              enabled: false
-              default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}
-              time-zone: ${REI_GOOGLE_CALENDAR_TIME_ZONE:}
-            gmail:
-              enabled: ${REI_GOOGLE_GMAIL_ENABLED:false}
-              drafts-enabled: ${REI_GOOGLE_GMAIL_DRAFTS_ENABLED:false}
-              send-enabled: ${REI_GOOGLE_GMAIL_SEND_ENABLED:false}
-            task:
+            capabilities:
+              resource: false
+              prompt: false
+              completion: false
+          client:
+            enabled: ${REI_MCP_ENABLED:false}
+            toolcallback:
               enabled: true
-        """;
+      devtools:
+        restart:
+          enabled: false
+
+    rei:
+      resume:
+        overview:
+          enabled: ${REI_RESUME_OVERVIEW_ENABLED:true}
+          failed-max-age-days: ${REI_RESUME_OVERVIEW_FAILED_MAX_AGE_DAYS:30}
+      dot-delegation:
+        enabled: ${REI_DOT_DELEGATION_ENABLED:false}
+        parent-llm-enabled: ${REI_DOT_PARENT_LLM_ENABLED:false}
+        auto-resume: false
+        allowed-projects: ${REI_DOT_ALLOWED_PROJECTS:}
+        allowed-categories: TECH_RESEARCH,COMPARISON,REVIEW
+        active-limit: 2
+        queue-limit: 8
+        default-timeout: 1h
+        claim-lease: 30m
+        result-retention-days: 30
+        request-retention-days: 90
+      mcp-server:
+        enabled: ${REI_MCP_SERVER_ENABLED:false}
+        port: ${REI_MCP_SERVER_PORT:8091}
+        allowed-projects: ${REI_MCP_SERVER_ALLOWED_PROJECTS:}
+        receipt-retention-days: ${REI_MCP_RECEIPT_RETENTION_DAYS:90}
+        result-retention-days: ${REI_MCP_RESULT_RETENTION_DAYS:30}
+        audit-retention-days: ${REI_MCP_AUDIT_RETENTION_DAYS:90}
+      today:
+        enabled: ${REI_TODAY_ENABLED:false}
+        projects: ${REI_TODAY_PROJECTS:}
+        zone: ${REI_TODAY_ZONE:Asia/Tokyo}
+      github:
+        webhook:
+          enabled: ${REI_GITHUB_WEBHOOK_ENABLED:false}
+          secret: ${REI_GITHUB_WEBHOOK_SECRET:}
+          mappings: [] # Explicit repository, project-id, session-id, branch/PR filters.
+      artifacts:
+        enabled: ${REI_ARTIFACTS_ENABLED:false}
+        max-bytes: ${REI_ARTIFACTS_MAX_BYTES:33554432}
+        max-total-bytes: ${REI_ARTIFACTS_MAX_TOTAL_BYTES:536870912}
+        max-artifacts: ${REI_ARTIFACTS_MAX_COUNT:1024}
+        retention: ${REI_ARTIFACTS_RETENTION:30d}
+      paper:
+        enabled: ${REI_PAPER_ENABLED:true}
+        open-alex-api-key: ${REI_PAPER_OPEN_ALEX_API_KEY:}
+      tool-result-delivery:
+        page-target-tokens: ${REI_RESULT_PAGE_TARGET:8000}
+        page-min-tokens: ${REI_RESULT_PAGE_MIN:256}
+        page-max-tokens: ${REI_RESULT_PAGE_MAX:16000}
+        bulk-max-tokens: ${REI_RESULT_BULK_MAX:64000}
+        page-safety-tokens: ${REI_RESULT_PAGE_SAFETY:0}
+        raw-result-max-bytes: ${REI_RAW_RESULT_MAX_BYTES:16777216}
+        raw-store-max-bytes: ${REI_RAW_STORE_MAX_BYTES:268435456}
+        raw-cache-max-bytes: ${REI_RAW_CACHE_MAX_BYTES:8388608}
+        review-ledger:
+          enabled: ${REI_REVIEW_LEDGER_ENABLED:true}
+          require-coverage: ${REI_REVIEW_REQUIRE_COVERAGE:true}
+      chatgpt-plan:
+        execution:
+          timeout: ${REI_CHATGPT_PLAN_EXECUTION_TIMEOUT:10m}
+      context-compression:
+        enabled: ${REI_CONTEXT_COMPRESSION_ENABLED:true}
+        retry-cooldown-seconds: ${REI_CONTEXT_RETRY_COOLDOWN_SECONDS:120}
+        standalone-summary-max-llm-calls: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_LLM_CALLS:0}
+        standalone-summary-max-total-tokens: ${REI_CONTEXT_STANDALONE_SUMMARY_MAX_TOTAL_TOKENS:0}
+      computer-use:
+        enabled: false
+        diagnostics:
+          enabled: false
+      sound-notification:
+        enabled: false
+      activity:
+        enabled: false
+        capture-interval-seconds: 60
+        vision-image-scale: 0.5
+        background-analysis-interval-seconds: 300
+        detection:
+          mode: evidence-first
+          evidence-enabled: true
+          vision-enabled: true
+          fallback-enabled: true
+          skip-vision-confidence: 0.8
+          foreground-crop: true
+          background-full-screen-enabled: false
+          max-output-tokens: 2048
+        classification:
+          user-rules-file: activity/classification-rules.yaml
+          hot-reload: true
+          unknown-registry:
+            enabled: true
+            retention-days: 30
+            max-entries: 1000
+          entertainment-registry:
+            enabled: true
+            retention-days: 30
+            max-entries: 1000
+          rule-suggestion:
+            enabled: true
+            minimum-samples: 3
+          diagnostics:
+            enabled: true
+        keep-screenshots: false
+        coaching:
+          automatic-enabled: false
+          weekly-enabled: true
+          monthly-enabled: true
+          check-interval-seconds: 3600
+        behavior:
+          enabled: false
+          check-interval-seconds: 60
+          history-minutes: 1440
+          entertainment-categories: [social, media, shopping, gaming]
+          continuous:
+            notice-minutes: 30
+            warning-minutes: 60
+            strong-warning-minutes: 120
+          windows:
+            short-window:
+              duration-minutes: 60
+              minimum-observed-minutes: 30
+              ratio: 0.50
+            long-window:
+              duration-minutes: 120
+              minimum-observed-minutes: 60
+              ratio: 0.60
+          interruption:
+            reset-after-work-minutes: 5
+            noise-tolerance-seconds: 60
+          cooldown:
+            notice-minutes: 60
+            warning-minutes: 45
+            strong-warning-minutes: 30
+      external-agents:
+        claude:
+          enabled: ${REI_CLAUDE_ENABLED:false}
+          persist-sessions: ${REI_CLAUDE_PERSIST_SESSIONS:false}
+          fix-proposals-enabled: ${REI_CLAUDE_FIX_PROPOSALS_ENABLED:false}
+          implementation-enabled: ${REI_CLAUDE_IMPLEMENTATION_ENABLED:false}
+          implementation-test-command: ${REI_CLAUDE_IMPLEMENTATION_TEST_COMMAND:}
+          implementation-test-timeout-seconds: ${REI_CLAUDE_IMPLEMENTATION_TEST_TIMEOUT_SECONDS:30}
+          parallel-review-enabled: ${REI_CLAUDE_PARALLEL_REVIEW_ENABLED:false}
+          parallel-review-timeout: ${REI_CLAUDE_PARALLEL_REVIEW_TIMEOUT:120s}
+          command: ${REI_CLAUDE_COMMAND:claude}
+          total-timeout: 5m
+          inactivity-timeout: 2m
+          max-output-bytes: 1048576
+        codex:
+          implementation-enabled: ${REI_CODEX_IMPLEMENTATION_ENABLED:false}
+          implementation-test-command: ${REI_CODEX_IMPLEMENTATION_TEST_COMMAND:}
+          implementation-test-timeout-seconds: ${REI_CODEX_IMPLEMENTATION_TEST_TIMEOUT_SECONDS:30}
+          inherit-run-model-budget: ${REI_CODEX_INHERIT_RUN_MODEL_BUDGET:false}
+          parallel-review-enabled: ${REI_CODEX_PARALLEL_REVIEW_ENABLED:false}
+          parallel-review-timeout: ${REI_CODEX_PARALLEL_REVIEW_TIMEOUT:120s}
+          enabled: true
+          command: codex
+          total-timeout: 20m
+          inactivity-timeout: 5m
+          max-output-bytes: 4194304
+      embedding:
+        enabled: ${REI_EMBEDDING_ENABLED:true}
+        inherit-run-model-budget: ${REI_EMBEDDING_INHERIT_RUN_MODEL_BUDGET:false}
+      rerank:
+        enabled: ${REI_RERANK_ENABLED:true}
+        inherit-run-model-budget: ${REI_RERANK_INHERIT_RUN_MODEL_BUDGET:false}
+        base-url: ${REI_RERANK_BASE_URL:}
+        api-key: ${REI_RERANK_API_KEY:}
+        model: ${REI_RERANK_MODEL:}
+        path: ${REI_RERANK_PATH:/v1/rerank}
+      vector-document:
+        retrieval:
+          enabled: ${REI_VECTOR_DOCUMENT_RETRIEVAL_ENABLED:false}
+          candidate-limit: ${REI_VECTOR_DOCUMENT_RETRIEVAL_CANDIDATE_LIMIT:40}
+          rank-constant: ${REI_VECTOR_DOCUMENT_RETRIEVAL_RANK_CONSTANT:60}
+      llm:
+        read-timeout: ${REI_LLM_READ_TIMEOUT:5m}
+        max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
+        output-limit:
+          llm-call-budget-enabled: ${REI_LLM_OUTPUT_LIMIT_LLM_CALL_BUDGET_ENABLED:true}
+          max-replans-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_REPLANS_PER_GOAL:2}
+          max-subgoals-per-replan: ${REI_LLM_OUTPUT_LIMIT_MAX_SUBGOALS_PER_REPLAN:8}
+          max-llm-calls-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_LLM_CALLS_PER_RUN:120}
+          max-tool-argument-corrections-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOOL_ARGUMENT_CORRECTIONS_PER_RUN:10}
+          max-total-tokens-per-run: ${REI_LLM_OUTPUT_LIMIT_MAX_TOTAL_TOKENS_PER_RUN:0}
+          max-total-tokens-per-goal: ${REI_LLM_OUTPUT_LIMIT_MAX_TOTAL_TOKENS_PER_GOAL:0}
+        features:
+          activity-behavior:
+            base-url: ${REI_LLM_ACTIVITY_BEHAVIOR_BASE_URL:}
+            api-key: ${REI_LLM_ACTIVITY_BEHAVIOR_API_KEY:}
+            model: ${REI_LLM_ACTIVITY_BEHAVIOR_MODEL:}
+          chat:
+            base-url: ${REI_LLM_CHAT_BASE_URL:}
+            api-key: ${REI_LLM_CHAT_API_KEY:}
+            model: ${REI_LLM_CHAT_MODEL:}
+          search:
+            base-url: ${REI_LLM_SEARCH_BASE_URL:}
+            api-key: ${REI_LLM_SEARCH_API_KEY:}
+            model: ${REI_LLM_SEARCH_MODEL:}
+          memory:
+            base-url: ${REI_LLM_MEMORY_BASE_URL:}
+            api-key: ${REI_LLM_MEMORY_API_KEY:}
+            model: ${REI_LLM_MEMORY_MODEL:}
+          bluesky-reply:
+            base-url: ${REI_LLM_BLUESKY_REPLY_BASE_URL:}
+            api-key: ${REI_LLM_BLUESKY_REPLY_API_KEY:}
+            model: ${REI_LLM_BLUESKY_REPLY_MODEL:}
+          feed-summary:
+            base-url: ${REI_LLM_FEED_SUMMARY_BASE_URL:}
+            api-key: ${REI_LLM_FEED_SUMMARY_API_KEY:}
+            model: ${REI_LLM_FEED_SUMMARY_MODEL:}
+          briefing:
+            base-url: ${REI_LLM_BRIEFING_BASE_URL:}
+            api-key: ${REI_LLM_BRIEFING_API_KEY:}
+            model: ${REI_LLM_BRIEFING_MODEL:}
+          interest-discovery:
+            base-url: ${REI_LLM_INTEREST_DISCOVERY_BASE_URL:}
+            api-key: ${REI_LLM_INTEREST_DISCOVERY_API_KEY:}
+            model: ${REI_LLM_INTEREST_DISCOVERY_MODEL:}
+          agent-skills:
+            base-url: ${REI_LLM_AGENT_SKILLS_BASE_URL:}
+            api-key: ${REI_LLM_AGENT_SKILLS_API_KEY:}
+            model: ${REI_LLM_AGENT_SKILLS_MODEL:}
+          output-limit-planner:
+            base-url: ${REI_LLM_OUTPUT_LIMIT_PLANNER_BASE_URL:}
+            api-key: ${REI_LLM_OUTPUT_LIMIT_PLANNER_API_KEY:}
+            model: ${REI_LLM_OUTPUT_LIMIT_PLANNER_MODEL:}
+          image-prompt:
+            base-url: ${REI_LLM_IMAGE_PROMPT_BASE_URL:}
+            api-key: ${REI_LLM_IMAGE_PROMPT_API_KEY:}
+            model: ${REI_LLM_IMAGE_PROMPT_MODEL:}
+          image-generation:
+            base-url: ${REI_LLM_IMAGE_GENERATION_BASE_URL:}
+            api-key: ${REI_LLM_IMAGE_GENERATION_API_KEY:}
+            model: ${REI_LLM_IMAGE_GENERATION_MODEL:}
+      image:
+        output-directory: ${REI_IMAGE_OUTPUT_DIRECTORY:${rei.data-dir}/images}
+        size: ${REI_IMAGE_SIZE:1024x1024}
+        response-format: ${REI_IMAGE_RESPONSE_FORMAT:auto}
+        timeout-seconds: ${REI_IMAGE_TIMEOUT_SECONDS:300}
+        prompt-enhancement:
+          enabled: ${REI_IMAGE_PROMPT_ENHANCEMENT_ENABLED:true}
+      repository-map:
+        persistent-index-enabled: ${REI_REPOSITORY_MAP_PERSISTENT_INDEX_ENABLED:false}
+      predicates:
+        enabled: ${REI_PREDICATES_ENABLED:false}
+      reflection:
+        lessons-enabled: ${REI_REFLECTION_LESSONS_ENABLED:false}
+      repair:
+        diagnosed-enabled: ${REI_REPAIR_DIAGNOSED_ENABLED:false}
+      patch-review:
+        semantic-enabled: ${REI_PATCH_REVIEW_SEMANTIC_ENABLED:false}
+      document-renderer:
+        enabled: ${REI_DOCUMENT_RENDERER_ENABLED:false}
+        java: ${REI_DOCUMENT_RENDERER_JAVA:}
+        plantuml-jar: ${REI_DOCUMENT_RENDERER_PLANTUML_JAR:}
+      goal:
+        completion-gate:
+          require-all: ${REI_GOAL_COMPLETION_GATE_REQUIRE_ALL:false}
+      subagents:
+        durable-enabled: ${REI_SUBAGENTS_DURABLE_ENABLED:false}
+        dag-enabled: ${REI_SUBAGENTS_DAG_ENABLED:false}
+        consensus-enabled: ${REI_SUBAGENTS_CONSENSUS_ENABLED:false}
+        consensus-judge-enabled: ${REI_SUBAGENTS_CONSENSUS_JUDGE_ENABLED:false}
+        dag-timeout: ${REI_SUBAGENTS_DAG_TIMEOUT:120s}
+        durable-max-total-tokens: ${REI_SUBAGENTS_DURABLE_MAX_TOTAL_TOKENS:0}
+        max-transient-read-tool-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_READ_TOOL_RETRIES:0}
+        max-transient-model-retries: ${REI_SUBAGENTS_MAX_TRANSIENT_MODEL_RETRIES:0}
+        standalone-max-llm-calls: ${REI_SUBAGENTS_STANDALONE_MAX_LLM_CALLS:0}
+        standalone-max-total-tokens: ${REI_SUBAGENTS_STANDALONE_MAX_TOTAL_TOKENS:0}
+      attention:
+        delivery:
+          enabled: ${REI_ATTENTION_DELIVERY_ENABLED:false}
+          automatic: ${REI_ATTENTION_DELIVERY_AUTOMATIC:false}
+          provider: ${REI_ATTENTION_DELIVERY_PROVIDER:WEBHOOK}
+          endpoint: ${REI_ATTENTION_DELIVERY_ENDPOINT:}
+          bearer-token: ${REI_ATTENTION_DELIVERY_BEARER_TOKEN:}
+          projects: ${REI_ATTENTION_DELIVERY_PROJECTS:}
+        slack:
+          enabled: ${REI_ATTENTION_SLACK_ENABLED:false}
+          endpoint: ${REI_ATTENTION_SLACK_ENDPOINT:https://slack.com/api/chat.postMessage}
+          bot-token: ${REI_ATTENTION_SLACK_BOT_TOKEN:}
+          channel: ${REI_ATTENTION_SLACK_CHANNEL:}
+          channels: ${REI_ATTENTION_SLACK_CHANNELS:}
+      skills:
+        enabled: true
+        directories:
+          - ${rei.data-dir}/skills
+        max-selected: 3
+        implicit-with-explicit: ${REI_SKILLS_IMPLICIT_WITH_EXPLICIT:false}
+        selector-timeout: ${REI_SKILLS_SELECTOR_TIMEOUT:30s}
+        semantic:
+          enabled: ${REI_SKILLS_SEMANTIC_ENABLED:false}
+          max-skills: ${REI_SKILLS_SEMANTIC_MAX_SKILLS:64}
+          minimum-similarity: ${REI_SKILLS_SEMANTIC_MINIMUM_SIMILARITY:0.55}
+          failure-backoff-seconds: ${REI_SKILLS_SEMANTIC_FAILURE_BACKOFF_SECONDS:30}
+          persistent-index-enabled: ${REI_SKILLS_SEMANTIC_PERSISTENT_INDEX_ENABLED:false}
+          index-namespace: ${REI_SKILLS_SEMANTIC_INDEX_NAMESPACE:}
+      http-cache:
+        enabled: ${REI_HTTP_CACHE_ENABLED:true}
+        search-ttl-seconds: ${REI_HTTP_CACHE_SEARCH_TTL_SECONDS:30}
+        page-ttl-seconds: ${REI_HTTP_CACHE_PAGE_TTL_SECONDS:60}
+        retention-seconds: ${REI_HTTP_CACHE_RETENTION_SECONDS:300}
+        max-entries: ${REI_HTTP_CACHE_MAX_ENTRIES:128}
+        max-bytes: ${REI_HTTP_CACHE_MAX_BYTES:33554432}
+        load-parallelism: ${REI_HTTP_CACHE_LOAD_PARALLELISM:3}
+        load-queue-capacity: ${REI_HTTP_CACHE_LOAD_QUEUE_CAPACITY:16}
+        max-in-flight: ${REI_HTTP_CACHE_MAX_IN_FLIGHT:32}
+      web-search:
+        enabled: true
+        timeout-seconds: ${REI_WEB_SEARCH_TIMEOUT_SECONDS:10}
+        connect-timeout-seconds: ${REI_WEB_SEARCH_CONNECT_TIMEOUT_SECONDS:5}
+        read-timeout-seconds: ${REI_WEB_SEARCH_READ_TIMEOUT_SECONDS:10}
+        max-wire-bytes: ${REI_WEB_SEARCH_MAX_WIRE_BYTES:2097152}
+        max-decoded-bytes: ${REI_WEB_SEARCH_MAX_DECODED_BYTES:4194304}
+        max-redirects: ${REI_WEB_SEARCH_MAX_REDIRECTS:5}
+        max-results: ${REI_WEB_SEARCH_MAX_RESULTS:8}
+        max-search-queries: ${REI_WEB_SEARCH_MAX_SEARCH_QUERIES:3}
+        max-search-api-calls: ${REI_WEB_SEARCH_MAX_SEARCH_API_CALLS:4}
+        max-page-fetches: ${REI_WEB_SEARCH_MAX_PAGE_FETCHES:5}
+        fetch-parallelism: ${REI_WEB_SEARCH_FETCH_PARALLELISM:3}
+        fetch-per-host: ${REI_WEB_SEARCH_FETCH_PER_HOST:2}
+        fetch-queue-capacity: ${REI_WEB_SEARCH_FETCH_QUEUE_CAPACITY:32}
+        fetch-batch-timeout-seconds: ${REI_WEB_SEARCH_FETCH_BATCH_TIMEOUT_SECONDS:30}
+        page-max-characters: ${REI_WEB_SEARCH_PAGE_MAX_CHARACTERS:2000}
+        page-max-tokens: ${REI_WEB_SEARCH_PAGE_MAX_TOKENS:1500}
+        max-output-characters: ${REI_WEB_SEARCH_MAX_OUTPUT_CHARACTERS:16000}
+        max-output-tokens: ${REI_WEB_SEARCH_MAX_OUTPUT_TOKENS:6000}
+        initial-page-fetches: ${REI_WEB_SEARCH_INITIAL_PAGE_FETCHES:2}
+        research-timeout-seconds: ${REI_WEB_SEARCH_RESEARCH_TIMEOUT_SECONDS:30}
+        total-wire-bytes: ${REI_WEB_SEARCH_TOTAL_WIRE_BYTES:8388608}
+        total-decoded-bytes: ${REI_WEB_SEARCH_TOTAL_DECODED_BYTES:16777216}
+        providers:
+          - name: duckduckgo
+            base-url: ${REI_WEB_SEARCH_DUCKDUCKGO_BASE_URL:https://html.duckduckgo.com/html/}
+          - name: brave
+            base-url: ${REI_WEB_SEARCH_BRAVE_BASE_URL:https://api.search.brave.com/res/v1/web/search}
+            api-key: ${REI_WEB_SEARCH_BRAVE_API_KEY:}
+      interest:
+        enabled: true
+        notification-enabled: false
+        notification-cron: ${REI_INTEREST_NOTIFICATION_CRON:0 0 12 * * *}
+      topic-generator:
+        enabled: ${REI_TOPIC_GENERATOR_ENABLED:false}
+        idle-trigger:
+          enabled: ${REI_TOPIC_GENERATOR_IDLE_TRIGGER_ENABLED:true}
+        discovery:
+          enabled: ${REI_TOPIC_GENERATOR_DISCOVERY_ENABLED:true}
+      memory:
+        episodes:
+          enabled: ${REI_MEMORY_EPISODES_ENABLED:false}
+          dense-enabled: ${REI_MEMORY_EPISODES_DENSE_ENABLED:false}
+        auto-sleep:
+          enabled: ${REI_MEMORY_AUTO_SLEEP_ENABLED:false}
+          minimum-idle: ${REI_MEMORY_AUTO_SLEEP_MINIMUM_IDLE:5m}
+          minimum-turns: ${REI_MEMORY_AUTO_SLEEP_MINIMUM_TURNS:5}
+          retry-interval: ${REI_MEMORY_AUTO_SLEEP_RETRY_INTERVAL:10m}
+          cron: ${REI_MEMORY_AUTO_SLEEP_CRON:}
+          zone: ${REI_MEMORY_AUTO_SLEEP_ZONE:}
+          on-session-end: ${REI_MEMORY_AUTO_SLEEP_ON_SESSION_END:false}
+          on-shutdown: ${REI_MEMORY_AUTO_SLEEP_ON_SHUTDOWN:false}
+        enabled: ${REI_MEMORY_ENABLED:true}
+        consolidation:
+          max-llm-calls: ${REI_MEMORY_CONSOLIDATION_MAX_LLM_CALLS:0}
+          max-total-tokens: ${REI_MEMORY_CONSOLIDATION_MAX_TOTAL_TOKENS:0}
+        sleep:
+          max-llm-calls: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS:0}
+          max-total-tokens: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS:0}
+          max-llm-calls-per-project: ${REI_MEMORY_SLEEP_MAX_LLM_CALLS_PER_PROJECT:0}
+          max-total-tokens-per-project: ${REI_MEMORY_SLEEP_MAX_TOTAL_TOKENS_PER_PROJECT:0}
+      feed:
+        briefing-max-items: ${REI_FEED_BRIEFING_MAX_ITEMS:3}
+        cron: ${REI_FEED_CRON:0 0 4 * * *}
+      # Socket Mode is owned only by an explicit --backend process. Tokens are environment-only.
+      slack:
+        enabled: false
+        allowed-workspace-ids: []
+        allowed-user-ids: []
+        allowed-channel-ids: []
+        dm-project-id: ""
+        channel-projects: {}
+        agent-collaboration:
+          enabled: false
+          allowed-workspace-ids: []
+          allowed-channel-ids: []
+          agents: {}
+          max-requests-per-run: 3
+          max-follow-up-turns: 2
+          max-delegation-depth: 1
+          timeout-seconds: 300
+      bluesky:
+        enabled: false
+        handle: ${REI_BLUESKY_HANDLE:}
+        app-password: ${REI_BLUESKY_APP_PASSWORD:}
+        max-post-length: ${REI_BLUESKY_MAX_POST_LENGTH:300}
+        timeout-seconds: ${REI_BLUESKY_TIMEOUT_SECONDS:30}
+        reply:
+          enabled: false
+          dry-run: true
+          check-interval-seconds: ${REI_BLUESKY_REPLY_CHECK_INTERVAL_SECONDS:300}
+          fetch-limit: ${REI_BLUESKY_REPLY_FETCH_LIMIT:30}
+          exclude-replies: true
+          exclude-reposts: true
+          max-post-age-minutes: ${REI_BLUESKY_REPLY_MAX_POST_AGE_MINUTES:120}
+          generation-timeout-seconds: ${REI_BLUESKY_REPLY_GENERATION_TIMEOUT_SECONDS:1200}
+          users:
+            - handle: "alice.bsky.social"
+              probability: 0.25
+              max-replies-per-day: 3
+      # Optional global life overrides. Unspecified fields retain persisted values.
+      # life:
+      #   zone: Asia/Tokyo
+      #   work-days: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY]
+      #   work-start: '09:00'
+      #   work-end: '18:00'
+      secretary:
+        enabled: ${REI_SECRETARY_ENABLED:false}
+        extraction-enabled: ${REI_SECRETARY_EXTRACTION_ENABLED:false}
+        followups-enabled: ${REI_SECRETARY_FOLLOWUPS_ENABLED:false}
+        # All registered projects share a briefing; optionally separate selected projects.
+        briefings:
+          enabled: false
+          morning-time: ''
+          evening-time: ''
+          zone: '' # Inherit rei.life.zone / the effective global life setting.
+          independent-projects: []
+        orchestrator-enabled: ${REI_SECRETARY_ORCHESTRATOR_ENABLED:false}
+        autonomy-enabled: ${REI_SECRETARY_AUTONOMY_ENABLED:false}
+        connections-enabled: ${REI_SECRETARY_CONNECTIONS_ENABLED:false}
+        external-content-to-model: ${REI_SECRETARY_EXTERNAL_CONTENT_TO_MODEL:false}
+        private-model-endpoints: ${REI_SECRETARY_PRIVATE_MODEL_ENDPOINTS:}
+        github:
+          enabled: ${REI_SECRETARY_GITHUB_ENABLED:false}
+        slack:
+          enabled: ${REI_SECRETARY_SLACK_ENABLED:false}
+      google:
+        application-name: Rei
+        credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:${rei.data-dir}/google-calendar-credentials.json}
+        tokens-directory: ${REI_GOOGLE_TOKENS_DIR:${rei.data-dir}/google-calendar-tokens}
+        token-refresh:
+          enabled: ${REI_GOOGLE_TOKEN_REFRESH_ENABLED:true}
+        calendar:
+          enabled: false
+          default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}
+          time-zone: ${REI_GOOGLE_CALENDAR_TIME_ZONE:}
+        gmail:
+          enabled: ${REI_GOOGLE_GMAIL_ENABLED:false}
+          drafts-enabled: ${REI_GOOGLE_GMAIL_DRAFTS_ENABLED:false}
+          send-enabled: ${REI_GOOGLE_GMAIL_SEND_ENABLED:false}
+        task:
+          enabled: true
+    """;
   }
 }

@@ -58,19 +58,18 @@ public class BlueskyReplyConversationRepository {
     return jdbcClient
         .sql(
             """
-        SELECT role, content, created_at
-        FROM bluesky_reply_conversations
-        WHERE handle = ?
-        ORDER BY id DESC
-        LIMIT ?
-        """)
+            SELECT role, content, created_at
+            FROM bluesky_reply_conversations
+            WHERE handle = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """)
         .params(handle, safeLimit)
-        .query(
-            (rs, rowNum) ->
-                new ConversationMessage(
-                    rs.getString("role"),
-                    rs.getString("content"),
-                    OffsetDateTime.parse(rs.getString("created_at"))))
+        .query((rs, rowNum) ->
+            new ConversationMessage(
+                rs.getString("role"),
+                rs.getString("content"),
+                OffsetDateTime.parse(rs.getString("created_at"))))
         .list()
         .reversed();
   }
@@ -80,10 +79,10 @@ public class BlueskyReplyConversationRepository {
     return jdbcClient
         .sql(
             """
-        SELECT DISTINCT handle
-        FROM bluesky_reply_conversations
-        ORDER BY handle
-        """)
+            SELECT DISTINCT handle
+            FROM bluesky_reply_conversations
+            ORDER BY handle
+            """)
         .query(String.class)
         .list();
   }
@@ -93,9 +92,9 @@ public class BlueskyReplyConversationRepository {
     jdbcClient
         .sql(
             """
-        INSERT INTO bluesky_reply_conversations(handle, role, content, created_at)
-        VALUES (?, ?, ?, ?)
-        """)
+            INSERT INTO bluesky_reply_conversations(handle, role, content, created_at)
+            VALUES (?, ?, ?, ?)
+            """)
         .params(handle, role, content, OffsetDateTime.now().toString())
         .update();
     if (replyHistory != null) {
@@ -108,14 +107,14 @@ public class BlueskyReplyConversationRepository {
     jdbcClient
         .sql(
             """
-        CREATE TABLE IF NOT EXISTS bluesky_reply_conversations (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          handle TEXT NOT NULL,
-          role TEXT NOT NULL,
-          content TEXT NOT NULL,
-          created_at TEXT NOT NULL
-        )
-        """)
+            CREATE TABLE IF NOT EXISTS bluesky_reply_conversations (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              handle TEXT NOT NULL,
+              role TEXT NOT NULL,
+              content TEXT NOT NULL,
+              created_at TEXT NOT NULL
+            )
+            """)
         .update();
   }
 

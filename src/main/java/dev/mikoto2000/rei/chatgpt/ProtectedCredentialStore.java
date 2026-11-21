@@ -61,12 +61,11 @@ public final class ProtectedCredentialStore {
       if (Files.isSymbolicLink(directory.resolve("credentials.lock"))
           || Files.isSymbolicLink(directory.resolve("host-id")))
         throw ChatGptException.of(STORE_UNAVAILABLE);
-      try (
-          var channel =
-              FileChannel.open(
-                  directory.resolve("credentials.lock"),
-                  StandardOpenOption.CREATE,
-                  StandardOpenOption.WRITE)) {
+      try (var channel =
+          FileChannel.open(
+              directory.resolve("credentials.lock"),
+              StandardOpenOption.CREATE,
+              StandardOpenOption.WRITE)) {
         var lock = acquire(channel);
         try (lock) {
           return action.apply(new Transaction());
@@ -138,7 +137,9 @@ public final class ProtectedCredentialStore {
             Files.deleteIfExists(temporary);
           } catch (Exception failure) {
             org.slf4j.LoggerFactory.getLogger(ProtectedCredentialStore.class)
-                .warn("Could not remove temporary credential file ({})", failure.getClass().getSimpleName());
+                .warn(
+                    "Could not remove temporary credential file ({})",
+                    failure.getClass().getSimpleName());
           }
       }
     }

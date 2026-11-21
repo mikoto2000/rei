@@ -610,24 +610,21 @@ public final class TextDocumentChangeSetService {
     return db.sql(
             "SELECT * FROM text_document_change_sets WHERE id=? AND project=? AND root=? AND session=?")
         .params(id, project, root, session)
-        .query(
-            (rs, n) -> {
-              String payload = rs.getString("payload"), sha = rs.getString("sha");
-              if (!Objects.equals(TextDocumentTransaction.hash(payload), sha))
-                throw new IllegalStateException("Document proposal payload changed");
-              var saved = decode(payload, Saved.class);
-              if (!saved.id().equals(id)
-                  || !saved.project().equals(project)
-                  || !saved.root().equals(root)
-                  || !saved.session().equals(session))
-                throw new IllegalStateException("Document payload ownership changed");
-              return readState(rs, saved, sha);
-            })
+        .query((rs, n) -> {
+          String payload = rs.getString("payload"), sha = rs.getString("sha");
+          if (!Objects.equals(TextDocumentTransaction.hash(payload), sha))
+            throw new IllegalStateException("Document proposal payload changed");
+          var saved = decode(payload, Saved.class);
+          if (!saved.id().equals(id)
+              || !saved.project().equals(project)
+              || !saved.root().equals(root)
+              || !saved.session().equals(session))
+            throw new IllegalStateException("Document payload ownership changed");
+          return readState(rs, saved, sha);
+        })
         .optional()
-        .orElseThrow(
-            () ->
-                new IllegalArgumentException(
-                    "Document set not found in this Project/root/session"));
+        .orElseThrow(() ->
+            new IllegalArgumentException("Document set not found in this Project/root/session"));
   }
 
   /** Reload mutable state for the same verified proposal without fetching its payload. */
@@ -717,11 +714,10 @@ public final class TextDocumentChangeSetService {
       }
     boolean matching =
         files.stream()
-            .allMatch(
-                file ->
-                    file.currentAvailable()
-                        && file.proposedExists() == file.currentExists()
-                        && Objects.equals(file.proposedSha256(), file.currentSha256()));
+            .allMatch(file ->
+                file.currentAvailable()
+                    && file.proposedExists() == file.currentExists()
+                    && Objects.equals(file.proposedSha256(), file.currentSha256()));
     return new View(
         row.saved().id(),
         row.status(),

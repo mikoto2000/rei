@@ -74,7 +74,8 @@ class ScheduleHttpTest {
         var scope = AgentRunScope.open(new AgentRunContext("source", "session", dir, "p"));
         try (scope) {
           id =
-              repo.scheduleInterval(Duration.ofMinutes(1), 2, "Inspect saved result", "session").id();
+              repo.scheduleInterval(Duration.ofMinutes(1), 2, "Inspect saved result", "session")
+                  .id();
           cancelId = repo.scheduleAfter(Duration.ZERO, "Do not execute", "session").id();
         }
       }

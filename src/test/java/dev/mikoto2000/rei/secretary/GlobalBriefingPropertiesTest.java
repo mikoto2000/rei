@@ -20,16 +20,15 @@ class GlobalBriefingPropertiesTest {
 
   @Test
   void defaultsUseAllRegisteredProjectsWithoutInventingTimesOrIndependentGroups() {
-    runner.run(
-        context -> {
-          assertNull(context.getStartupFailure());
-          var value = context.getBean(GlobalBriefingProperties.class);
-          assertFalse(value.enabled());
-          assertEquals("", value.morningTime());
-          assertEquals("", value.eveningTime());
-          assertEquals(java.util.List.of(), value.projects());
-          assertEquals(java.util.List.of(), value.independentProjects());
-        });
+    runner.run(context -> {
+      assertNull(context.getStartupFailure());
+      var value = context.getBean(GlobalBriefingProperties.class);
+      assertFalse(value.enabled());
+      assertEquals("", value.morningTime());
+      assertEquals("", value.eveningTime());
+      assertEquals(java.util.List.of(), value.projects());
+      assertEquals(java.util.List.of(), value.independentProjects());
+    });
   }
 
   @Test
@@ -58,12 +57,11 @@ class GlobalBriefingPropertiesTest {
         .run(c -> assertNotNull(c.getStartupFailure()));
     runner
         .withPropertyValues("rei.secretary.briefings.independent-projects[0]=p")
-        .run(
-            c -> {
-              assertNull(c.getStartupFailure());
-              assertEquals(
-                  java.util.List.of("p"),
-                  c.getBean(GlobalBriefingProperties.class).independentProjects());
-            });
+        .run(c -> {
+          assertNull(c.getStartupFailure());
+          assertEquals(
+              java.util.List.of("p"),
+              c.getBean(GlobalBriefingProperties.class).independentProjects());
+        });
   }
 }

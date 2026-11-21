@@ -85,17 +85,15 @@ public class WorkContextAdvisor implements BaseAdvisor {
     if (cancelled.runIds().isEmpty()) return saved;
     var items =
         saved.items().stream()
-            .filter(
-                item -> {
-                  if (switch (item.kind()) {
-                    case ARTIFACT, COMPLETED_WORK, VERIFICATION, DECISION -> true;
-                    default -> false;
-                  }) return true;
-                  return !item.evidence().isEmpty()
-                      && item.evidence().stream()
-                          .noneMatch(e -> cancelled.runIds().contains(e.runId()))
-                      && item.evidence().stream().anyMatch(e -> cancelled.allowsState(e.runId()));
-                })
+            .filter(item -> {
+              if (switch (item.kind()) {
+                case ARTIFACT, COMPLETED_WORK, VERIFICATION, DECISION -> true;
+                default -> false;
+              }) return true;
+              return !item.evidence().isEmpty()
+                  && item.evidence().stream().noneMatch(e -> cancelled.runIds().contains(e.runId()))
+                  && item.evidence().stream().anyMatch(e -> cancelled.allowsState(e.runId()));
+            })
             .toList();
     return new WorkContext(
         saved.projectId(),

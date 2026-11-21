@@ -64,16 +64,15 @@ class BoundedTtlCacheTest {
       for (int thread = 0; thread < 6; thread++) {
         int number = thread;
         tasks.add(
-            pool.submit(
-                () -> {
-                  for (int i = 0; i < 100; i++) {
-                    String key = number + ":" + i;
-                    cache.put(key, "data");
-                    cache.get(key);
-                    assertTrue(cache.size() <= 10);
-                    assertTrue(cache.bytes() <= 40);
-                  }
-                }));
+            pool.submit(() -> {
+              for (int i = 0; i < 100; i++) {
+                String key = number + ":" + i;
+                cache.put(key, "data");
+                cache.get(key);
+                assertTrue(cache.size() <= 10);
+                assertTrue(cache.bytes() <= 40);
+              }
+            }));
       }
       for (var task : tasks) task.get();
     }

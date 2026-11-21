@@ -113,13 +113,12 @@ public final class ToolLoopSupport {
   private ChatResponse inheritFileContinuations(Prompt prompt, ChatResponse response) {
     var generations =
         response.getResults().stream()
-            .map(
-                generation -> {
-                  var output = generation.getOutput();
-                  var calls = FileReadContinuation.inherit(prompt, output.getToolCalls());
-                  return new org.springframework.ai.chat.model.Generation(
-                      output.mutate().toolCalls(calls).build(), generation.getMetadata());
-                })
+            .map(generation -> {
+              var output = generation.getOutput();
+              var calls = FileReadContinuation.inherit(prompt, output.getToolCalls());
+              return new org.springframework.ai.chat.model.Generation(
+                  output.mutate().toolCalls(calls).build(), generation.getMetadata());
+            })
             .toList();
     return new ChatResponse(generations, response.getMetadata());
   }
@@ -266,9 +265,8 @@ public final class ToolLoopSupport {
     }
     if (!context.hasApprovalContinuation()
         && output.getToolCalls().stream()
-            .noneMatch(
-                call ->
-                    context.supportsArgumentCorrection(call.name(), schema(prompt, call.name()))))
+            .noneMatch(call ->
+                context.supportsArgumentCorrection(call.name(), schema(prompt, call.name()))))
       return execute(prompt, response);
     if (response.getResults().size() != 1)
       throw new IllegalArgumentException(

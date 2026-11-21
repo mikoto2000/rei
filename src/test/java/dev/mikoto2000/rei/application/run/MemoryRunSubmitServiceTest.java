@@ -64,12 +64,11 @@ class MemoryRunSubmitServiceTest {
             eq("receipt"),
             anyString(),
             any()))
-        .thenAnswer(
-            call -> {
-              java.util.function.Consumer<AgentRunContext> admit = call.getArgument(8);
-              admit.accept(captured);
-              return captured;
-            });
+        .thenAnswer(call -> {
+          java.util.function.Consumer<AgentRunContext> admit = call.getArgument(8);
+          admit.accept(captured);
+          return captured;
+        });
     var summary = mock(dev.mikoto2000.rei.memory.command.MemoryCommand.SummarizeCommand.class);
     var consolidation =
         mock(dev.mikoto2000.rei.memory.command.MemoryCommand.ConsolidateCommand.class);
@@ -162,12 +161,11 @@ class MemoryRunSubmitServiceTest {
             eq("receipt"),
             anyString(),
             any()))
-        .thenAnswer(
-            call -> {
-              java.util.function.Consumer<AgentRunContext> admit = call.getArgument(8);
-              admit.accept(captured);
-              return captured;
-            });
+        .thenAnswer(call -> {
+          java.util.function.Consumer<AgentRunContext> admit = call.getArgument(8);
+          admit.accept(captured);
+          return captured;
+        });
     try (var runs = new RunService(registry, bus, events, cancellation, router::cancelQueued)) {
       var service =
           new MemoryRunSubmitService(

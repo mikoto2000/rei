@@ -66,10 +66,9 @@ public class TaskTools {
       }
       throw failure;
     }
-    publish(
-        () ->
-            events.taskCreated(
-                Long.toString(created.id()), null, created.title(), created.status().name()));
+    publish(() ->
+        events.taskCreated(
+            Long.toString(created.id()), null, created.title(), created.status().name()));
     return created;
   }
 
@@ -101,14 +100,11 @@ public class TaskTools {
         throw new IllegalStateException("Task completion was not confirmed");
     } catch (RuntimeException | Error failure) {
       try {
-        publish(
-            () ->
-                events.taskFailed(
-                    Long.toString(id),
-                    new dev.mikoto2000.rei.event.ErrorInformation(
-                        failure.getClass().getSimpleName(),
-                        "Task completion operation failed",
-                        null)));
+        publish(() ->
+            events.taskFailed(
+                Long.toString(id),
+                new dev.mikoto2000.rei.event.ErrorInformation(
+                    failure.getClass().getSimpleName(), "Task completion operation failed", null)));
       } catch (Error reporting) {
         if (failure != reporting) failure.addSuppressed(reporting);
       }

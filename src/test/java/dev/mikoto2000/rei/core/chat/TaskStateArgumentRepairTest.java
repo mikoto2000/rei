@@ -221,7 +221,8 @@ class TaskStateArgumentRepairTest {
     var update = update();
     var calls =
         List.of(
-            toolCall("read", "readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}"), toolCall("bad", "updateTaskState", invalid));
+            toolCall("read", "readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}"),
+            toolCall("bad", "updateTaskState", invalid));
     var response =
         new ChatResponse(
             List.of(new Generation(AssistantMessage.builder().toolCalls(calls).build())));

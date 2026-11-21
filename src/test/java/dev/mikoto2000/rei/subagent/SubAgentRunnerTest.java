@@ -59,13 +59,12 @@ class SubAgentRunnerTest {
       var result = runner.run("reviewer", "review", null);
       assertThat(result.output()).contains("INTERNAL_ERROR").doesNotContain("secret");
       assertThat(events)
-          .anyMatch(
-              e ->
-                  e.type() == AgentEventType.SUBAGENT_FAILED
-                      && e.runId().equals("parent")
-                      && ((dev.mikoto2000.rei.event.SubAgentLifecyclePayload) e.payload())
-                          .failureReason()
-                          .contains("INTERNAL_ERROR"));
+          .anyMatch(e ->
+              e.type() == AgentEventType.SUBAGENT_FAILED
+                  && e.runId().equals("parent")
+                  && ((dev.mikoto2000.rei.event.SubAgentLifecyclePayload) e.payload())
+                      .failureReason()
+                      .contains("INTERNAL_ERROR"));
     }
   }
 
@@ -110,13 +109,12 @@ class SubAgentRunnerTest {
           }
         };
     var operation =
-        CompletableFuture.supplyAsync(
-            () -> {
-              var scope = AgentRunScope.open(parent);
-              try (scope) {
-                return runner.run("reviewer", "inspect", null, shared);
-              }
-            });
+        CompletableFuture.supplyAsync(() -> {
+          var scope = AgentRunScope.open(parent);
+          try (scope) {
+            return runner.run("reviewer", "inspect", null, shared);
+          }
+        });
     assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
     var child = repository.list(parent, 0, 10).getFirst();
     assertThat(runner.cancel(child.run())).isTrue();
@@ -125,10 +123,9 @@ class SubAgentRunnerTest {
     child = repository.get(parent, child.id());
     assertThat(child.consumedCalls()).isEqualTo(1);
     var checkpoint = child;
-    assertThatThrownBy(
-            () ->
-                runner.resumeDurable(
-                    parent, checkpoint.id(), checkpoint.revision(), "ordinary review", shared))
+    assertThatThrownBy(() ->
+            runner.resumeDurable(
+                parent, checkpoint.id(), checkpoint.revision(), "ordinary review", shared))
         .isInstanceOf(IllegalArgumentException.class);
     var restartedRunner = runner(prompt -> Flux.just(answer(finalOutput)), "120s");
     restartedRunner.configureDurable(
@@ -226,14 +223,13 @@ class SubAgentRunnerTest {
     assertThat(child.operations().getFirst().status()).isEqualTo("UNKNOWN");
     assertThat(runs.get(child.run()).status())
         .isEqualTo(dev.mikoto2000.rei.application.run.RunStatus.UNKNOWN);
-    assertThatThrownBy(
-            () ->
-                runner.resumeDurable(
-                    parent,
-                    child.id(),
-                    child.revision(),
-                    "subagent resume " + child.id() + " " + child.revision(),
-                    shared))
+    assertThatThrownBy(() ->
+            runner.resumeDurable(
+                parent,
+                child.id(),
+                child.revision(),
+                "subagent resume " + child.id() + " " + child.revision(),
+                shared))
         .isInstanceOf(IllegalArgumentException.class);
     assertThat(toolCalls.get()).isEqualTo(1);
     lifecycle.close();
@@ -261,13 +257,12 @@ class SubAgentRunnerTest {
             "120s");
     runner.setTaskTracking(true, runs, service);
     var operation =
-        CompletableFuture.supplyAsync(
-            () -> {
-              var scope = AgentRunScope.open(parent);
-              try (scope) {
-                return runner.run("reviewer", "review", null);
-              }
-            });
+        CompletableFuture.supplyAsync(() -> {
+          var scope = AgentRunScope.open(parent);
+          try (scope) {
+            return runner.run("reviewer", "review", null);
+          }
+        });
     assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
     String child =
         runs.runIds().stream().filter(id -> !id.equals("parent")).findFirst().orElseThrow();
@@ -316,10 +311,9 @@ class SubAgentRunnerTest {
         .isEqualTo(SubAgentResult.Status.FAILED);
     assertThat(toolCalls.get()).isZero();
     assertThat(events)
-        .anyMatch(
-            e ->
-                e.payload() instanceof ToolFailedPayload failed
-                    && "PermissionRequired".equals(failed.error().errorType()));
+        .anyMatch(e ->
+            e.payload() instanceof ToolFailedPayload failed
+                && "PermissionRequired".equals(failed.error().errorType()));
   }
 
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
@@ -780,7 +774,9 @@ class SubAgentRunnerTest {
     maxRepairs = 1;
     maxSteps = 3;
     requiredCallsConfiguration =
-        "requiredToolCalls:\n  - tool: readMultiFile\n    arguments: " + READ_ARGUMENTS + "\n    expectedOutput: {found: true}\n";
+        "requiredToolCalls:\n  - tool: readMultiFile\n    arguments: "
+            + READ_ARGUMENTS
+            + "\n    expectedOutput: {found: true}\n";
     var calls = new AtomicInteger();
     var runner =
         runner(
@@ -1015,10 +1011,9 @@ class SubAgentRunnerTest {
         .hasValue(1); // The application-owned loop executes the single requested tool.
     assertThat(options.getModel()).isEqualTo("inherited-model");
     assertThat(events)
-        .noneMatch(
-            e ->
-                e.type() == AgentEventType.MESSAGE_DELTA
-                    || e.type() == AgentEventType.MESSAGE_COMPLETED);
+        .noneMatch(e ->
+            e.type() == AgentEventType.MESSAGE_DELTA
+                || e.type() == AgentEventType.MESSAGE_COMPLETED);
     var lifecycle =
         events.stream().filter(e -> e.payload() instanceof SubAgentLifecyclePayload).toList();
     assertThat(lifecycle)
@@ -1158,13 +1153,12 @@ class SubAgentRunnerTest {
       cancellation.register(() -> parentDisposed.set(true));
       Thread child =
           Thread.ofVirtual()
-              .start(
-                  () -> {
-                    var childScope = AgentRunScope.open(parent);
-                    try (childScope) {
-                      result.set(runner.run("reviewer", "task", null));
-                    }
-                  });
+              .start(() -> {
+                var childScope = AgentRunScope.open(parent);
+                try (childScope) {
+                  result.set(runner.run("reviewer", "task", null));
+                }
+              });
       assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
       cancellation.cancel();
       child.join(2000);

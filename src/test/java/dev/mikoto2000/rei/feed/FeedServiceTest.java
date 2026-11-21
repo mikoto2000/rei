@@ -102,10 +102,9 @@ class FeedServiceTest {
     var updater =
         new FeedUpdateService(
             service,
-            new FeedFetcher(
-                uri -> {
-                  throw new AssertionError("must not send");
-                }));
+            new FeedFetcher(uri -> {
+              throw new AssertionError("must not send");
+            }));
     assertTrue(!updater.update(feed.id()).toString().contains("legacy-secret"));
   }
 

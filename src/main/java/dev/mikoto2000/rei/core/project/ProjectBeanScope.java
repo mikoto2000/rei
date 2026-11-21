@@ -17,11 +17,10 @@ public final class ProjectBeanScope implements Scope {
 
   /** プロジェクトごとの作業環境を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ProjectBeanScope() {
-    this(
-        () -> {
-          var context = ProjectService.contextForOperation();
-          return context == null ? "global" : context.id();
-        });
+    this(() -> {
+      var context = ProjectService.contextForOperation();
+      return context == null ? "global" : context.id();
+    });
   }
 
   /** 指定された値や利用先を使って、ProjectBeanScopeを初期化する。 */
@@ -73,14 +72,13 @@ public final class ProjectBeanScope implements Scope {
     var callbacks = new ArrayList<Runnable>();
     destruction
         .entrySet()
-        .removeIf(
-            entry -> {
-              if (entry.getKey().startsWith(prefix)) {
-                callbacks.add(entry.getValue());
-                return true;
-              }
-              return false;
-            });
+        .removeIf(entry -> {
+          if (entry.getKey().startsWith(prefix)) {
+            callbacks.add(entry.getValue());
+            return true;
+          }
+          return false;
+        });
     callbacks.forEach(Runnable::run);
   }
 

@@ -108,13 +108,12 @@ public class MemoryCommandSupport {
     var rows =
         pendingSleepRequests.get().stream()
             .filter(r -> r.projectId().equals(project))
-            .map(
-                r ->
-                    format.label(r.sessionId())
-                        + " revision="
-                        + r.revision()
-                        + " cause="
-                        + format.label(r.cause()))
+            .map(r ->
+                format.label(r.sessionId())
+                    + " revision="
+                    + r.revision()
+                    + " cause="
+                    + format.label(r.cause()))
             .toList();
     return rows.isEmpty()
         ? "No pending Auto Sleep requests."
@@ -238,17 +237,16 @@ public class MemoryCommandSupport {
     return String.join(
         "\n\n",
         memories.stream()
-            .map(
-                m ->
-                    m.id()
-                        + " ["
-                        + m.scope()
-                        + "] ["
-                        + m.type()
-                        + "] "
-                        + m.status()
-                        + "\n"
-                        + m.content())
+            .map(m ->
+                m.id()
+                    + " ["
+                    + m.scope()
+                    + "] ["
+                    + m.type()
+                    + "] "
+                    + m.status()
+                    + "\n"
+                    + m.content())
             .toList());
   }
 

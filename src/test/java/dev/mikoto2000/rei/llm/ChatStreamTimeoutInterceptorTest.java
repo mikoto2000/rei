@@ -41,12 +41,11 @@ class ChatStreamTimeoutInterceptorTest {
             .callTimeout(Duration.ofMillis(100))
             .readTimeout(Duration.ofMillis(100))
             .addInterceptor(new ChatStreamTimeoutInterceptor())
-            .addInterceptor(
-                chain -> {
-                  assertThat(chain.call().timeout().timeoutNanos()).isZero();
-                  readTimeout.set(chain.readTimeoutMillis());
-                  return chain.proceed(chain.request());
-                })
+            .addInterceptor(chain -> {
+              assertThat(chain.call().timeout().timeoutNanos()).isZero();
+              readTimeout.set(chain.readTimeoutMillis());
+              return chain.proceed(chain.request());
+            })
             .build();
     try {
       var request =
@@ -118,22 +117,22 @@ class ChatStreamTimeoutInterceptorTest {
             .callTimeout(Duration.ofSeconds(9))
             .readTimeout(Duration.ofSeconds(7))
             .addInterceptor(new ChatStreamTimeoutInterceptor(Duration.ofMinutes(8)))
-            .addInterceptor(
-                chain -> {
-                  assertThat(chain.readTimeoutMillis()).isEqualTo(7_000);
-                  assertThat(chain.call().timeout().timeoutNanos())
-                      .isEqualTo(Duration.ofSeconds(9).toNanos());
-                  return new okhttp3.Response.Builder()
-                      .request(chain.request())
-                      .protocol(okhttp3.Protocol.HTTP_1_1)
-                      .code(200)
-                      .message("OK")
-                      .body(okhttp3.ResponseBody.create("ok", null))
-                      .build();
-                })
+            .addInterceptor(chain -> {
+              assertThat(chain.readTimeoutMillis()).isEqualTo(7_000);
+              assertThat(chain.call().timeout().timeoutNanos())
+                  .isEqualTo(Duration.ofSeconds(9).toNanos());
+              return new okhttp3.Response.Builder()
+                  .request(chain.request())
+                  .protocol(okhttp3.Protocol.HTTP_1_1)
+                  .code(200)
+                  .message("OK")
+                  .body(okhttp3.ResponseBody.create("ok", null))
+                  .build();
+            })
             .build();
     try (var response =
-        client.newCall(new Request.Builder().url("https://provider.invalid/v1/embeddings").build())
+        client
+            .newCall(new Request.Builder().url("https://provider.invalid/v1/embeddings").build())
             .execute()) {
       assertThat(response.body().string()).isEqualTo("ok");
     } finally {

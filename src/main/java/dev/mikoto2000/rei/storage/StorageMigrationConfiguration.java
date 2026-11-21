@@ -115,7 +115,8 @@ public class StorageMigrationConfiguration {
     public void postProcessBeanFactory(ConfigurableListableBeanFactory factory)
         throws BeansException {
       var configuredEnvironment = environment;
-      if (configuredEnvironment == null) throw new IllegalStateException("Storage environment unavailable");
+      if (configuredEnvironment == null)
+        throw new IllegalStateException("Storage environment unavailable");
       Path root =
           Path.of(
                   configuredEnvironment.getProperty(

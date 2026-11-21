@@ -79,11 +79,10 @@ class ForegroundConsoleTest {
         .when(terminal)
         .handle(eq(Terminal.Signal.INT), any());
     when(reader.read(200))
-        .thenAnswer(
-            i -> {
-              handler.get().handle(Terminal.Signal.INT);
-              return -2;
-            });
+        .thenAnswer(i -> {
+          handler.get().handle(Terminal.Signal.INT);
+          return -2;
+        });
     ForegroundConsole.awaitExit(terminal, () -> true);
     verify(reader).read(200);
   }

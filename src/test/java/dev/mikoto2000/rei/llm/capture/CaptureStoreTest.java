@@ -46,17 +46,15 @@ class CaptureStoreTest {
     try (var executor = Executors.newFixedThreadPool(2)) {
       var gate = new CountDownLatch(1);
       var a =
-          executor.submit(
-              () -> {
-                gate.await();
-                return store.accept("client", "conversation", "a", "a");
-              });
+          executor.submit(() -> {
+            gate.await();
+            return store.accept("client", "conversation", "a", "a");
+          });
       var b =
-          executor.submit(
-              () -> {
-                gate.await();
-                return store.accept("client", "conversation", "b", "b");
-              });
+          executor.submit(() -> {
+            gate.await();
+            return store.accept("client", "conversation", "b", "b");
+          });
       gate.countDown();
       assertThat(a.get() ^ b.get()).isTrue();
     }

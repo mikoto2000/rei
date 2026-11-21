@@ -39,11 +39,10 @@ class PagedReadStagnationTest {
     assertThat(context.detector().stagnationCount()).isZero();
     assertThat(context.progressVersion()).isEqualTo(60);
     assertThat(events)
-        .noneMatch(
-            event ->
-                event.payload() instanceof ExecutionProgressPayload payload
-                    && payload.evidence() != null
-                    && payload.evidence().kind() != ProgressEvent.NEW_INFORMATION);
+        .noneMatch(event ->
+            event.payload() instanceof ExecutionProgressPayload payload
+                && payload.evidence() != null
+                && payload.evidence().kind() != ProgressEvent.NEW_INFORMATION);
     assertThat(events).noneMatch(event -> event.type() == AgentEventType.STAGNATION_DETECTED);
     for (int call = 0; call < 4; call++) context.consumeNextLlmCall();
     assertThatThrownBy(context::consumeNextLlmCall)
@@ -134,10 +133,9 @@ class PagedReadStagnationTest {
     assertThat(context.progressSnapshot().acquisitionOnlyIterations()).isEqualTo(32);
     assertThat(context.detector().stagnationCount()).isEqualTo(1);
     assertThat(events)
-        .anyMatch(
-            event ->
-                event.payload() instanceof ExecutionProgressPayload payload
-                    && "WORK_STALLED".equals(payload.reason()));
+        .anyMatch(event ->
+            event.payload() instanceof ExecutionProgressPayload payload
+                && "WORK_STALLED".equals(payload.reason()));
     // Even an already exhausted heuristic cannot label a newly delivered range as WORK_STALLED.
     read(context, 41, List.of("line"));
     assertThat(context.detector().stagnationCount()).isZero();

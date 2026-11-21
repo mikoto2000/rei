@@ -58,25 +58,23 @@ class BehaviorHistoryApiTest {
                     new FileSessionRepository(dir.resolve("sessions.json")),
                     new ConversationTurnStore(dir)))
         .withUserConfiguration(SessionControllerTest.Config.class)
-        .run(
-            context -> {
-              var mvc =
-                  MockMvcBuilders.webAppContextSetup(context)
-                      .addFilters(
-                          context.getBean(
-                              "springSecurityFilterChain", jakarta.servlet.Filter.class))
-                      .build();
-              mvc.perform(
-                      get("/api/v1/sessions/project:550e8400-e29b-41d4-a716-446655440000:chat:main/turns")
-                          .header("Authorization", "Bearer secret"))
-                  .andExpect(status().isOk())
-                  .andExpect(jsonPath("$.items.length()").value(1))
-                  .andExpect(jsonPath("$.items[0].userMessage").value(""))
-                  .andExpect(jsonPath("$.items[0].assistantMessage").value("戻ろう。"))
-                  .andExpect(jsonPath("$.items[0].source").value("BEHAVIOR_NOTIFICATION"))
-                  .andExpect(jsonPath("$.items[0].sourceId").value("b1"))
-                  .andExpect(jsonPath("$.items[0].metadata.severity").value("NOTICE"))
-                  .andExpect(jsonPath("$.items[0].createdAt").value(at.toString()));
-            });
+        .run(context -> {
+          var mvc =
+              MockMvcBuilders.webAppContextSetup(context)
+                  .addFilters(
+                      context.getBean("springSecurityFilterChain", jakarta.servlet.Filter.class))
+                  .build();
+          mvc.perform(
+                  get("/api/v1/sessions/project:550e8400-e29b-41d4-a716-446655440000:chat:main/turns")
+                      .header("Authorization", "Bearer secret"))
+              .andExpect(status().isOk())
+              .andExpect(jsonPath("$.items.length()").value(1))
+              .andExpect(jsonPath("$.items[0].userMessage").value(""))
+              .andExpect(jsonPath("$.items[0].assistantMessage").value("戻ろう。"))
+              .andExpect(jsonPath("$.items[0].source").value("BEHAVIOR_NOTIFICATION"))
+              .andExpect(jsonPath("$.items[0].sourceId").value("b1"))
+              .andExpect(jsonPath("$.items[0].metadata.severity").value("NOTICE"))
+              .andExpect(jsonPath("$.items[0].createdAt").value(at.toString()));
+        });
   }
 }

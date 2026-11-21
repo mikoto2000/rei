@@ -31,11 +31,10 @@ class StorageControllerTest {
     var project = projects.resolve(directory);
     var command = mock(StorageCommand.class);
     when(command.reportPlan("raw-results", "current", 100, 16777216))
-        .thenAnswer(
-            call -> {
-              assertEquals(project.id(), AgentRunScope.current().projectId());
-              return "plan";
-            });
+        .thenAnswer(call -> {
+          assertEquals(project.id(), AgentRunScope.current().projectId());
+          return "plan";
+        });
     var api = new StorageController(command, projects);
     assertEquals(
         "plan", api.plan(new StorageController.Plan(project.id(), true, null, null, null)).text());

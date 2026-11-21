@@ -56,27 +56,24 @@ public class SlackAgentConfiguration {
       dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies,
       dev.mikoto2000.rei.core.dependency.DependencyObservationService observations) {
     var service = new SlackAgentService(p, r, s, registry, runs, router, clock);
-    service.onValidate(
-        owner -> {
-          var project =
-              projects
-                  .resolveById(owner.projectId())
-                  .orElseThrow(() -> new IllegalStateException("External wait Project missing"));
-          if (!project.root().equals(owner.projectRoot())
-              || sessions
-                  .findById(owner.conversationId())
-                  .filter(session -> session.projectId().equals(owner.projectId()))
-                  .isEmpty())
-            throw new IllegalStateException("External wait Session/Project moved");
-        });
-    service.onResume(
-        (owner, saved) ->
-            chat.getObject()
-                .execute(
-                    owner,
-                    saved.request(),
-                    new UserInterventionQueue(),
-                    service.reservation(owner.runId())));
+    service.onValidate(owner -> {
+      var project =
+          projects
+              .resolveById(owner.projectId())
+              .orElseThrow(() -> new IllegalStateException("External wait Project missing"));
+      if (!project.root().equals(owner.projectRoot())
+          || sessions
+              .findById(owner.conversationId())
+              .filter(session -> session.projectId().equals(owner.projectId()))
+              .isEmpty()) throw new IllegalStateException("External wait Session/Project moved");
+    });
+    service.onResume((owner, saved) ->
+        chat.getObject()
+            .execute(
+                owner,
+                saved.request(),
+                new UserInterventionQueue(),
+                service.reservation(owner.runId())));
     service.dependencies(dependencies, observations);
     return service;
   }

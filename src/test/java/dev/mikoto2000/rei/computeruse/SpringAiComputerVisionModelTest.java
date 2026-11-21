@@ -131,11 +131,10 @@ class SpringAiComputerVisionModelTest {
     var model = mock(ChatModel.class);
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
     when(model.call(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              cancelled.set(true);
-              return response("{}");
-            });
+        .thenAnswer(call -> {
+          cancelled.set(true);
+          return response("{}");
+        });
     var vision =
         new SpringAiComputerVisionModel(model, OpenAiChatOptions::builder, cancelled::get, 2);
     assertThrows(

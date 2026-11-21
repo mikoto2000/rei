@@ -21,22 +21,22 @@ class WebPageExtractorTest {
         extractor.extract(
             result,
             """
-        <html>
-          <head>
-            <title>Spring AI Guide</title>
-            <meta property="article:published_time" content="2026-04-01" />
-          </head>
-          <body>
-            <nav>menu</nav>
-            <article>
-              <h1>Spring AI Guide</h1>
-              <p>Spring AI supports tool calling.</p>
-              <p>It also supports vector stores.</p>
-            </article>
-            <script>console.log('ignore');</script>
-          </body>
-        </html>
-        """);
+            <html>
+              <head>
+                <title>Spring AI Guide</title>
+                <meta property="article:published_time" content="2026-04-01" />
+              </head>
+              <body>
+                <nav>menu</nav>
+                <article>
+                  <h1>Spring AI Guide</h1>
+                  <p>Spring AI supports tool calling.</p>
+                  <p>It also supports vector stores.</p>
+                </article>
+                <script>console.log('ignore');</script>
+              </body>
+            </html>
+            """);
 
     assertEquals("Spring AI Guide", page.title());
     assertEquals("2026-04-01", page.publishedAt());

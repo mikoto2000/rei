@@ -25,7 +25,8 @@ public final class GuardedMicrophoneCapture implements MicrophoneCaptureService 
   }
 
   /** 必要な対象を利用できるよう、Guardedマイク取得記録の利用を開始する。 */
-  public FrameSource open(AudioDevice device) throws LineUnavailableException, InterruptedException {
+  public FrameSource open(AudioDevice device)
+      throws LineUnavailableException, InterruptedException {
     var binding = monitor.bind(device);
     var source = capture.open(device);
     boolean verified = false;

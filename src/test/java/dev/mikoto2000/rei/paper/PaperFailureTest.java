@@ -61,10 +61,9 @@ class PaperFailureTest {
     assertThrows(
         PaperException.class,
         () -> PaperTranslationService.verifyTerminology("OSWorld and Qwen2.5-VL", "省略", Map.of()));
-    assertDoesNotThrow(
-        () ->
-            PaperTranslationService.verifyTerminology(
-                "OSWorld grounding", "OSWorld のグラウンディング", Map.of("grounding", "グラウンディング")));
+    assertDoesNotThrow(() ->
+        PaperTranslationService.verifyTerminology(
+            "OSWorld grounding", "OSWorld のグラウンディング", Map.of("grounding", "グラウンディング")));
   }
 
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */

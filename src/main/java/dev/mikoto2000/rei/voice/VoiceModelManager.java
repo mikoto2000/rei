@@ -97,21 +97,19 @@ public final class VoiceModelManager implements AutoCloseable {
 
   /** 実行の担当。 */
   private final ExecutorService worker =
-      Executors.newSingleThreadExecutor(
-          r -> {
-            var t = new Thread(r, "voice-model-download");
-            t.setDaemon(true);
-            return t;
-          });
+      Executors.newSingleThreadExecutor(r -> {
+        var t = new Thread(r, "voice-model-download");
+        t.setDaemon(true);
+        return t;
+      });
 
   /** 期限一覧。 */
   private final ScheduledExecutorService deadlines =
-      Executors.newSingleThreadScheduledExecutor(
-          r -> {
-            var t = new Thread(r, "voice-model-deadline");
-            t.setDaemon(true);
-            return t;
-          });
+      Executors.newSingleThreadScheduledExecutor(r -> {
+        var t = new Thread(r, "voice-model-deadline");
+        t.setDaemon(true);
+        return t;
+      });
 
   /** 状態。 */
   private volatile Status status;

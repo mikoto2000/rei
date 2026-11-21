@@ -241,11 +241,10 @@ class VerifiedReflectionMemoryTest {
           new ArrayList<java.util.concurrent.Future<VerifiedReflectionMemoryService.Promotion>>();
       for (int i = 0; i < 4; i++)
         futures.add(
-            pool.submit(
-                () -> {
-                  gate.await();
-                  return service.promote("project", reflection.id());
-                }));
+            pool.submit(() -> {
+              gate.await();
+              return service.promote("project", reflection.id());
+            }));
       gate.countDown();
       for (var future : futures) ids.add(future.get().memory().id());
     }

@@ -200,12 +200,11 @@ public final class IntegrationRunSubmitService {
         () ->
             java.util.Objects.requireNonNull(work, "Work context unavailable")
                 .update(session, null, true)
-                .map(
-                    context ->
-                        "Work Context saved: project="
-                            + context.projectId()
-                            + " revision="
-                            + context.revision())
+                .map(context ->
+                    "Work Context saved: project="
+                        + context.projectId()
+                        + " revision="
+                        + context.revision())
                 .orElse("保存できる会話はまだありません。"));
   }
 

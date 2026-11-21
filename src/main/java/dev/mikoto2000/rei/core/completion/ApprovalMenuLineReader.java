@@ -36,6 +36,18 @@ public final class ApprovalMenuLineReader extends LineReaderImpl {
    */
   public ApprovalMenuLineReader(Terminal terminal, boolean interactive) throws IOException {
     super(terminal);
+    // JLine 4 can expose the X10 mouse capability as literal terminfo text.
+    // Its backslash prefix consumes the next character of typed Windows paths.
+    var mouse = new org.jline.reader.Reference(MOUSE);
+    for (var keyMap : getKeyMaps().values()) {
+      if (mouse.equals(keyMap.getBound("\\E[M"))) {
+        keyMap.unbind("\\E[M");
+        // Prune the empty prefix nodes as well; unbind only prunes one level.
+        keyMap.unbind("\\E[");
+        keyMap.unbind("\\E");
+        keyMap.bind(mouse, "\033[M");
+      }
+    }
     this.interactive = interactive;
   }
 

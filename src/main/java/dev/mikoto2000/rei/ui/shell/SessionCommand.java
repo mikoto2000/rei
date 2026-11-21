@@ -66,37 +66,35 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
       description = "現在のSessionの利用を終了します。履歴は再開できます",
       mixinStandardHelpOptions = true)
   public int end() {
-    return display(
-        () -> {
-          var session = endSession.get();
-          spec.commandLine()
-              .getOut()
-              .println(
-                  session == null
-                      ? "No active session."
-                      : "Session ended: " + format.label(session.sessionId()));
-        });
+    return display(() -> {
+      var session = endSession.get();
+      spec.commandLine()
+          .getOut()
+          .println(
+              session == null
+                  ? "No active session."
+                  : "Session ended: " + format.label(session.sessionId()));
+    });
   }
 
   /** 利用者が対象の情報を確認できるように表示する。 */
   @Command(name = "show", description = "現在の Session を表示", mixinStandardHelpOptions = true)
   public int show() {
-    return display(
-        () -> {
-          String id = selectedSessionId.get();
-          var out = spec.commandLine().getOut();
-          if (id == null) {
-            out.println("No active session.");
-            return;
-          }
-          var row = sessions.getSession(id);
-          out.println("Session:");
-          out.println("  id: " + format.label(row.sessionId()));
-          out.println("  title: " + format.label(row.title()));
-          out.println("  projectId: " + format.label(row.projectId()));
-          out.println("  createdAt: " + row.createdAt());
-          out.println("  updatedAt: " + row.updatedAt());
-        });
+    return display(() -> {
+      String id = selectedSessionId.get();
+      var out = spec.commandLine().getOut();
+      if (id == null) {
+        out.println("No active session.");
+        return;
+      }
+      var row = sessions.getSession(id);
+      out.println("Session:");
+      out.println("  id: " + format.label(row.sessionId()));
+      out.println("  title: " + format.label(row.title()));
+      out.println("  projectId: " + format.label(row.projectId()));
+      out.println("  createdAt: " + row.createdAt());
+      out.println("  updatedAt: " + row.updatedAt());
+    });
   }
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
@@ -105,28 +103,27 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
       description = "現在の Project の Session を更新日時降順で表示",
       mixinStandardHelpOptions = true)
   public int list() {
-    return display(
-        () -> {
-          var out = spec.commandLine().getOut();
-          String cursor = null;
-          boolean any = false;
-          do {
-            var page = sessions.listSessions(currentProjectId.get(), 100, cursor);
-            for (var row : page.items()) {
-              if (!any) {
-                out.println("Sessions:");
-                any = true;
-              }
-              out.println(
-                  (row.sessionId().equals(selectedSessionId.get()) ? "* " : "  ")
-                      + format.label(row.sessionId())
-                      + "  "
-                      + format.label(row.title()));
-            }
-            cursor = page.nextCursor();
-          } while (cursor != null);
-          if (!any) out.println("No sessions.");
-        });
+    return display(() -> {
+      var out = spec.commandLine().getOut();
+      String cursor = null;
+      boolean any = false;
+      do {
+        var page = sessions.listSessions(currentProjectId.get(), 100, cursor);
+        for (var row : page.items()) {
+          if (!any) {
+            out.println("Sessions:");
+            any = true;
+          }
+          out.println(
+              (row.sessionId().equals(selectedSessionId.get()) ? "* " : "  ")
+                  + format.label(row.sessionId())
+                  + "  "
+                  + format.label(row.title()));
+        }
+        cursor = page.nextCursor();
+      } while (cursor != null);
+      if (!any) out.println("No sessions.");
+    });
   }
 
   /** ターミナルでの対話で用いる表示を返す。 */

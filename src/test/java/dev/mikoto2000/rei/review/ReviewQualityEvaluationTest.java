@@ -230,38 +230,35 @@ class ReviewQualityEvaluationTest {
       String source = Files.readString(root.resolve(item.path()));
       int from = source.indexOf(item.evidence()), to = from + item.evidence().length();
       if (findings.stream()
-          .anyMatch(
-              f ->
-                  f.path().equals(item.path())
-                      && f.location().start() < to
-                      && f.location().end() > from)) detected++;
+          .anyMatch(f ->
+              f.path().equals(item.path())
+                  && f.location().start() < to
+                  && f.location().end() > from)) detected++;
     }
     for (var finding : findings)
       if (gold.stream()
-          .noneMatch(
-              g -> {
-                try {
-                  int start = Files.readString(root.resolve(g.path())).indexOf(g.evidence());
-                  return g.path().equals(finding.path())
-                      && finding.location().start() < start + g.evidence().length()
-                      && finding.location().end() > start;
-                } catch (Exception e) {
-                  throw new IllegalStateException(e);
-                }
-              })) falsePositives++;
+          .noneMatch(g -> {
+            try {
+              int start = Files.readString(root.resolve(g.path())).indexOf(g.evidence());
+              return g.path().equals(finding.path())
+                  && finding.location().start() < start + g.evidence().length()
+                  && finding.location().end() > start;
+            } catch (Exception e) {
+              throw new IllegalStateException(e);
+            }
+          })) falsePositives++;
     long bytes;
     try (var paths = Files.walk(data)) {
       bytes =
           paths
               .filter(Files::isRegularFile)
-              .mapToLong(
-                  p -> {
-                    try {
-                      return Files.size(p);
-                    } catch (Exception e) {
-                      throw new IllegalStateException(e);
-                    }
-                  })
+              .mapToLong(p -> {
+                try {
+                  return Files.size(p);
+                } catch (Exception e) {
+                  throw new IllegalStateException(e);
+                }
+              })
               .sum();
     }
     var metrics =

@@ -33,10 +33,9 @@ class DisabledCompressionSafetyTest {
             },
             null,
             null);
-    assertThatThrownBy(
-            () ->
-                assembler.assemble(
-                    new Prompt(List.of(new UserMessage("日".repeat(100)))), "chat", "run", () -> {}))
+    assertThatThrownBy(() ->
+            assembler.assemble(
+                new Prompt(List.of(new UserMessage("日".repeat(100)))), "chat", "run", () -> {}))
         .hasMessageContaining("CONTEXT_HARD_LIMIT");
   }
 

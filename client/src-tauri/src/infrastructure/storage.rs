@@ -142,9 +142,10 @@ impl EncryptedVault {
         }
         let cipher =
             XChaCha20Poly1305::new_from_slice(self.key.as_ref()).map_err(|_| AppError::Storage)?;
+        let nonce = XNonce::try_from(&bytes[24..48]).map_err(|_| AppError::Storage)?;
         let plain = Zeroizing::new(
             cipher
-                .decrypt(XNonce::from_slice(&bytes[24..48]), &bytes[48..])
+                .decrypt(&nonce, &bytes[48..])
                 .map_err(|_| AppError::VaultLocked)?,
         );
         let decoded: BTreeMap<String, String> =
@@ -168,7 +169,7 @@ impl EncryptedVault {
         let cipher =
             XChaCha20Poly1305::new_from_slice(self.key.as_ref()).map_err(|_| AppError::Storage)?;
         let encrypted = cipher
-            .encrypt(XNonce::from_slice(&nonce), plain.as_slice())
+            .encrypt(&XNonce::from(nonce), plain.as_slice())
             .map_err(|_| AppError::Storage)?;
         let mut bytes = b"REIVAULT".to_vec();
         bytes.extend(self.salt);

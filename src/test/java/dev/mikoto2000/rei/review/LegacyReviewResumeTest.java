@@ -62,10 +62,9 @@ class LegacyReviewResumeTest {
     var resumed = new ReviewCoverageLedger.Scope("project", "session", "new-run");
     ledger.resume(id, fixture.scope(), resumed);
 
-    assertThatThrownBy(
-            () ->
-                ledger.dismissFindingTransition(
-                    id, fixture.scope(), "F1", "fixture.java", null, "counterevidence"))
+    assertThatThrownBy(() ->
+            ledger.dismissFindingTransition(
+                id, fixture.scope(), "F1", "fixture.java", null, "counterevidence"))
         .isInstanceOf(dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException.class)
         .hasMessageContaining("REVIEW_ACCESS_DENIED");
     assertThat(ledger.get(id, fixture.scope()).findings().getFirst().verificationStatus())

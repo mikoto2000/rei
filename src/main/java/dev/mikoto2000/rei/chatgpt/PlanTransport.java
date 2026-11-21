@@ -107,13 +107,12 @@ public interface PlanTransport {
         }
       } catch (ChatGptException e) {
         future.cancel(true);
-        future.thenAccept(
-            r -> {
-              try {
-                r.body().close();
-              } catch (IOException ignored) {
-              }
-            });
+        future.thenAccept(r -> {
+          try {
+            r.body().close();
+          } catch (IOException ignored) {
+          }
+        });
         throw e;
       } catch (InterruptedException e) {
         // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。

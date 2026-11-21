@@ -134,31 +134,28 @@ class SummaryRuntimeTraceTest {
                 ConsolidationPipelineTest.fixture());
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            call -> {
-              var input =
-                  ConsolidationPipelineTest.JSON.readTree(
-                      ((Prompt) call.getArgument(0)).getUserMessage().getText());
-              ConsolidationPipelineTest.assertNoRawAlias(input);
-              assertThat(input.path("mainWorkThemeCandidates").findValuesAsText("label"))
-                  .doesNotContain("livevingo の翻訳");
-              assertThat(input.has("topProjects")).isFalse();
-              if (mode.equals("failure"))
-                return Flux.error(new IllegalStateException("synthetic failure"));
-              var output =
-                  ConsolidationPipelineTest.JSON.valueToTree(DailySummary.fallback(aggregate));
-              var times = (com.fasterxml.jackson.databind.node.ObjectNode) output.path("timeOfDay");
-              DailySummaryAggregate.BUCKET_ORDER.forEach(
-                  key -> {
-                    if (!times.has(key)) times.putNull(key);
-                  });
-              return Flux.just(
-                  new ChatResponse(
-                      List.of(
-                          new Generation(
-                              new AssistantMessage(
-                                  mode.equals("invalid") ? "{}" : output.toString())))));
-            });
+        .thenAnswer(call -> {
+          var input =
+              ConsolidationPipelineTest.JSON.readTree(
+                  ((Prompt) call.getArgument(0)).getUserMessage().getText());
+          ConsolidationPipelineTest.assertNoRawAlias(input);
+          assertThat(input.path("mainWorkThemeCandidates").findValuesAsText("label"))
+              .doesNotContain("livevingo の翻訳");
+          assertThat(input.has("topProjects")).isFalse();
+          if (mode.equals("failure"))
+            return Flux.error(new IllegalStateException("synthetic failure"));
+          var output = ConsolidationPipelineTest.JSON.valueToTree(DailySummary.fallback(aggregate));
+          var times = (com.fasterxml.jackson.databind.node.ObjectNode) output.path("timeOfDay");
+          DailySummaryAggregate.BUCKET_ORDER.forEach(key -> {
+            if (!times.has(key)) times.putNull(key);
+          });
+          return Flux.just(
+              new ChatResponse(
+                  List.of(
+                      new Generation(
+                          new AssistantMessage(
+                              mode.equals("invalid") ? "{}" : output.toString())))));
+        });
     var logger =
         (ch.qos.logback.classic.Logger)
             org.slf4j.LoggerFactory.getLogger("dev.mikoto2000.rei.activity");

@@ -93,6 +93,10 @@ impl HttpReiClient {
         }
         Ok(task)
     }
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Mirrors the task-control wire fields"
+    )]
     pub(super) async fn task_control(
         &self,
         project: &str,

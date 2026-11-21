@@ -146,21 +146,19 @@ public class ApprovalContinuationService implements RunContinuation {
     listApprovals.apply(project).forEach(request -> rows.put(request.id(), request));
     store
         .visible(project)
-        .forEach(
-            id -> {
-              var request = findApproval.apply(project, id);
-              rows.put(id, request);
-            });
+        .forEach(id -> {
+          var request = findApproval.apply(project, id);
+          rows.put(id, request);
+        });
     return rows.values().stream().limit(256).toList();
   }
 
   /** ツール利用の権限制御において、待機中承認に該当するか判定する。 */
   public boolean waitingApproval(AgentRunContext owner) {
     return store.active().stream()
-        .anyMatch(
-            e ->
-                e.runId().equals(owner.runId())
-                    && Set.of("WAITING_APPROVAL", "QUEUED", "DENY_QUEUED").contains(e.state()));
+        .anyMatch(e ->
+            e.runId().equals(owner.runId())
+                && Set.of("WAITING_APPROVAL", "QUEUED", "DENY_QUEUED").contains(e.state()));
   }
 
   /** ツール利用の権限制御に関する中断承認を処理する。 */
@@ -202,11 +200,10 @@ public class ApprovalContinuationService implements RunContinuation {
         pending,
         execution.budgetSnapshot(),
         managed.containsKey(owner.runId()) || execution.hasParentReservation());
-    previous.ifPresent(
-        old -> {
-          retireContinuationGrant.accept(owner.projectId(), old.approvalId());
-          store.state(old.approvalId(), "COMPLETED");
-        });
+    previous.ifPresent(old -> {
+      retireContinuationGrant.accept(owner.projectId(), old.approvalId());
+      store.state(old.approvalId(), "COMPLETED");
+    });
     if (!registry.getObject().transition(owner.runId(), RunStatus.WAITING_APPROVAL, null)) {
       store.state(id, "CANCELLED");
       throw new java.util.concurrent.CancellationException();
@@ -222,44 +219,41 @@ public class ApprovalContinuationService implements RunContinuation {
       String project, String id, boolean approved, boolean continueRun) {
     if (continueRun && !approved)
       throw new IllegalArgumentException("Only approval can continue a Run");
-    return transaction.execute(
-        tx -> {
-          var current = findApproval.apply(project, id);
-          var entry = store.find(id);
-          if (continueRun) {
-            var saved =
-                entry.orElseThrow(
-                    () ->
-                        new IllegalStateException(
-                            "No saved invocation; approve normally and use /resume list for this older request"));
-            var owner = store.document(saved).owner();
-            if (!project.equals(owner.projectId())
-                || !current.runId().equals(owner.runId())
-                || !current.sessionId().equals(owner.conversationId()))
-              throw new IllegalArgumentException("Approval continuation ownership mismatch");
-            if (Set.of("QUEUED", "RESUMING", "COMPLETED").contains(saved.state())) return current;
-            if (!saved.state().equals("WAITING_APPROVAL"))
-              throw new IllegalStateException(
-                  "Continuation is " + saved.state() + "; inspect before retrying");
-            validate(owner);
-            if (!clock.instant().isBefore(current.expiresAt()))
-              throw new IllegalStateException(
-                  "Approval expired; saved invocation was not executed");
-            if (registry.getObject().get(owner.runId()).status() != RunStatus.WAITING_APPROVAL)
-              throw new IllegalStateException("Run no longer waiting for approval");
-          }
-          var decided =
-              current.status().equals("PENDING")
-                  ? decideApproval.apply(new ApprovalDecision(project, id, approved))
-                  : current;
-          if (!decided.status().equals(approved ? "APPROVED" : "DENIED")
-              && !(continueRun && decided.status().equals("CONSUMED")))
-            throw new IllegalStateException("Approval already decided differently");
-          if (continueRun && !store.queue(id))
-            throw new IllegalStateException("Continuation acceptance conflict");
-          if (!approved) entry.ifPresent(saved -> store.deny(id));
-          return decided;
-        });
+    return transaction.execute(tx -> {
+      var current = findApproval.apply(project, id);
+      var entry = store.find(id);
+      if (continueRun) {
+        var saved =
+            entry.orElseThrow(() ->
+                new IllegalStateException(
+                    "No saved invocation; approve normally and use /resume list for this older request"));
+        var owner = store.document(saved).owner();
+        if (!project.equals(owner.projectId())
+            || !current.runId().equals(owner.runId())
+            || !current.sessionId().equals(owner.conversationId()))
+          throw new IllegalArgumentException("Approval continuation ownership mismatch");
+        if (Set.of("QUEUED", "RESUMING", "COMPLETED").contains(saved.state())) return current;
+        if (!saved.state().equals("WAITING_APPROVAL"))
+          throw new IllegalStateException(
+              "Continuation is " + saved.state() + "; inspect before retrying");
+        validate(owner);
+        if (!clock.instant().isBefore(current.expiresAt()))
+          throw new IllegalStateException("Approval expired; saved invocation was not executed");
+        if (registry.getObject().get(owner.runId()).status() != RunStatus.WAITING_APPROVAL)
+          throw new IllegalStateException("Run no longer waiting for approval");
+      }
+      var decided =
+          current.status().equals("PENDING")
+              ? decideApproval.apply(new ApprovalDecision(project, id, approved))
+              : current;
+      if (!decided.status().equals(approved ? "APPROVED" : "DENIED")
+          && !(continueRun && decided.status().equals("CONSUMED")))
+        throw new IllegalStateException("Approval already decided differently");
+      if (continueRun && !store.queue(id))
+        throw new IllegalStateException("Continuation acceptance conflict");
+      if (!approved) entry.ifPresent(saved -> store.deny(id));
+      return decided;
+    });
   }
 
   /** 保存済みの記録から、利用する状態を復元する。 */
@@ -283,12 +277,10 @@ public class ApprovalContinuationService implements RunContinuation {
     if (waiting)
       store
           .resuming(execution.runContext().runId())
-          .ifPresent(
-              entry -> {
-                retireContinuationGrant.accept(
-                    execution.runContext().projectId(), entry.approvalId());
-                store.state(entry.approvalId(), "COMPLETED");
-              });
+          .ifPresent(entry -> {
+            retireContinuationGrant.accept(execution.runContext().projectId(), entry.approvalId());
+            store.state(entry.approvalId(), "COMPLETED");
+          });
     return waiting;
   }
 
@@ -556,21 +548,19 @@ public class ApprovalContinuationService implements RunContinuation {
       String status) {
     repository
         .findByRun(owner.projectId(), owner.runId())
-        .filter(
-            saved ->
-                saved.runId().equals(owner.runId())
-                    && saved.sessionId().equals(owner.conversationId())
-                    && !repository.leased(saved.projectId(), saved.taskId()))
-        .ifPresent(
-            saved -> {
-              var fields = repository.fields(saved);
-              fields.put("status", status);
-              fields.put("interruptionReason", "approval_" + status.toLowerCase(Locale.ROOT));
-              repository.save(
-                  repository.fields(fields),
-                  saved.revision(),
-                  "approval-stop:" + owner.runId() + ":" + status);
-            });
+        .filter(saved ->
+            saved.runId().equals(owner.runId())
+                && saved.sessionId().equals(owner.conversationId())
+                && !repository.leased(saved.projectId(), saved.taskId()))
+        .ifPresent(saved -> {
+          var fields = repository.fields(saved);
+          fields.put("status", status);
+          fields.put("interruptionReason", "approval_" + status.toLowerCase(Locale.ROOT));
+          repository.save(
+              repository.fields(fields),
+              saved.revision(),
+              "approval-stop:" + owner.runId() + ":" + status);
+        });
   }
 
   /** 状態の変化を利用先へ伝えるため、親を通知する。 */

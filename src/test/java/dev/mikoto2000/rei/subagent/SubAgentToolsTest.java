@@ -147,12 +147,11 @@ class SubAgentToolsTest {
         new org.springframework.ai.chat.model.ToolContext(
             java.util.Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, run));
     when(parallel.delegate(anyList(), any()))
-        .thenAnswer(
-            call -> {
-              assertThat(dev.mikoto2000.rei.core.chat.AgentRunScope.current()).isEqualTo(owner);
-              return new ParallelSubAgentDelegator.Batch(
-                  ParallelSubAgentDelegator.Status.FAILED, java.util.List.of());
-            });
+        .thenAnswer(call -> {
+          assertThat(dev.mikoto2000.rei.core.chat.AgentRunScope.current()).isEqualTo(owner);
+          return new ParallelSubAgentDelegator.Batch(
+              ParallelSubAgentDelegator.Status.FAILED, java.util.List.of());
+        });
     tools.delegateTasks(
         java.util.List.of(
             new ParallelSubAgentDelegator.Request(
@@ -197,15 +196,13 @@ class SubAgentToolsTest {
     assertThat(request.getValue().sources()).containsExactly("docs/design.md");
     assertThat(request.getValue().account()).isEqualTo("personal");
     verify(runner, never()).run(anyString(), anyString(), any());
-    assertThatThrownBy(
-            () ->
-                callback.call(
-                    "{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"paid\"}", context))
+    assertThatThrownBy(() ->
+            callback.call(
+                "{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"paid\"}", context))
         .isInstanceOf(RuntimeException.class);
-    assertThatThrownBy(
-            () ->
-                callback.call(
-                    "{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"chatgpt-plan\"}"))
+    assertThatThrownBy(() ->
+            callback.call(
+                "{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"chatgpt-plan\"}"))
         .isInstanceOf(RuntimeException.class);
   }
 

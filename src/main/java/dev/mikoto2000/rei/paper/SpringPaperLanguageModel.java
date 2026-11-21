@@ -45,11 +45,7 @@ public class SpringPaperLanguageModel implements PaperLanguageModel {
   public String generate(String system, String input, PaperOperation op) {
     op.check();
     var options =
-        optionsForModel.apply(model())
-            .mutate()
-            .toolCallbacks(List.of())
-            .toolChoice("none")
-            .build();
+        optionsForModel.apply(model()).mutate().toolCallbacks(List.of()).toolChoice("none").build();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
     var chatModel = subAgentModel.get();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(chatModel);
@@ -57,12 +53,11 @@ public class SpringPaperLanguageModel implements PaperLanguageModel {
     // Streaming allows disposal to reach the HTTP subscription when the owning run is cancelled.
     var future =
         chatModel.stream(prompt)
-            .map(
-                r -> {
-                  var generation = r.getResult();
-                  var output = generation == null ? null : generation.getOutput();
-                  return output == null ? "" : java.util.Objects.toString(output.getText(), "");
-                })
+            .map(r -> {
+              var generation = r.getResult();
+              var output = generation == null ? null : generation.getOutput();
+              return output == null ? "" : java.util.Objects.toString(output.getText(), "");
+            })
             .scan(
                 "",
                 (a, b) -> {

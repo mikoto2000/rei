@@ -170,18 +170,17 @@ public final class ComputerUseService {
                 null,
                 null,
                 screen.displays().stream()
-                    .map(
-                        d ->
-                            "displayId="
-                                + d.geometry().id()
-                                + " image="
-                                + d.imageWidth()
-                                + "x"
-                                + d.imageHeight()
-                                + " scale="
-                                + d.geometry().scaleX()
-                                + ","
-                                + d.geometry().scaleY())
+                    .map(d ->
+                        "displayId="
+                            + d.geometry().id()
+                            + " image="
+                            + d.imageWidth()
+                            + "x"
+                            + d.imageHeight()
+                            + " scale="
+                            + d.geometry().scaleX()
+                            + ","
+                            + d.geometry().scaleY())
                     .collect(java.util.stream.Collectors.joining("; "))));
         final int diagnosticStep = step;
         recordDiagnostics(step, () -> diagnostics.observed(diagnosticRun, diagnosticStep, screen));

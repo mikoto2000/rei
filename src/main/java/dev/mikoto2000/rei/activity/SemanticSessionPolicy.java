@@ -203,8 +203,7 @@ public record SemanticSessionPolicy(
               .filter(e -> ActivityRolePolicy.sameContext(entry.getKey(), e.getKey()))
               .mapToLong(Map.Entry::getValue)
               .sum();
-      if (total > best
-          || (total == best && entry.getValue() > votes.getOrDefault(primary, 0L))) {
+      if (total > best || (total == best && entry.getValue() > votes.getOrDefault(primary, 0L))) {
         best = total;
         primary = entry.getKey();
       }

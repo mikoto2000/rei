@@ -60,8 +60,7 @@ class TaskSourcePaginationTest {
 
   /** Creates the same retained source rows independently of pagination assertions. */
   private TaskFixture retainedGoalSources() {
-    var timing =
-        dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("task-source-fixture");
+    var timing = dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("task-source-fixture");
     try (timing) {
       var projects = new ProjectRegistry(root.resolve("projects.json"));
       var project = projects.resolve(root);
@@ -113,8 +112,7 @@ class TaskSourcePaginationTest {
 
   /** Creates the same retained source rows independently of pagination assertions. */
   private TaskFixture retainedDependencySources() {
-    var timing =
-        dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("task-source-fixture");
+    var timing = dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("task-source-fixture");
     try (timing) {
       var projects = new ProjectRegistry(root.resolve("projects.json"));
       var project = projects.resolve(root);

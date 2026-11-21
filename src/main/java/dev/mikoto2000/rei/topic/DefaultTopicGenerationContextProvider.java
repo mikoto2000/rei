@@ -41,10 +41,9 @@ public class DefaultTopicGenerationContextProvider implements TopicGenerationCon
         entries.stream()
             .filter(entry -> "chat".equals(entry.scope()))
             .skip(Math.max(0, entries.size() - 12))
-            .map(
-                entry ->
-                    new ConversationTopicMessage(
-                        entry.speaker(), entry.content(), entry.timestamp().toInstant()))
+            .map(entry ->
+                new ConversationTopicMessage(
+                    entry.speaker(), entry.content(), entry.timestamp().toInstant()))
             .toList();
     java.util.List<WorkingSetTopicItem> files =
         workingSet.map(WorkingSet::getFiles).orElse(java.util.List.of()).stream()

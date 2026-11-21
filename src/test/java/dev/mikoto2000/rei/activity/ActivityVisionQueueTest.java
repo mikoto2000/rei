@@ -134,17 +134,16 @@ class ActivityVisionQueueTest {
   void inFlightWorkNeverRunsInParallelAndLateResultKeepsOriginalId() throws Exception {
     var f = new Fixture();
     when(f.extractor.extract(any(), any()))
-        .thenAnswer(
-            i -> {
-              if (f.pipeline.queueMetrics().started() == 1) {
-                f.time.advance(15);
-                f.change("B");
-                f.pipeline.tick();
-                assertTrue(f.tasks.isEmpty());
-              }
-              return new ActivityExtractor.Result(
-                  ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .9);
-            });
+        .thenAnswer(i -> {
+          if (f.pipeline.queueMetrics().started() == 1) {
+            f.time.advance(15);
+            f.change("B");
+            f.pipeline.tick();
+            assertTrue(f.tasks.isEmpty());
+          }
+          return new ActivityExtractor.Result(
+              ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .9);
+        });
     f.pipeline.tick();
     f.run();
     verify(f.extractor).extract(any(), any());
@@ -152,11 +151,10 @@ class ActivityVisionQueueTest {
     verify(f.store, times(2)).append(originals.capture());
     verify(f.store)
         .replace(
-            argThat(
-                r ->
-                    r.id().equals(originals.getAllValues().getFirst().id())
-                        && r.detection().visionDiagnostics().foreground().state()
-                            == VisionDiagnostics.State.USED));
+            argThat(r ->
+                r.id().equals(originals.getAllValues().getFirst().id())
+                    && r.detection().visionDiagnostics().foreground().state()
+                        == VisionDiagnostics.State.USED));
     assertEquals(1, f.pipeline.queueMetrics().pending());
     f.time.advance(15);
     f.change("C");
@@ -176,12 +174,11 @@ class ActivityVisionQueueTest {
     var f = new Fixture();
     when(f.extractor.extract(any(), any()))
         .thenThrow(new java.io.IOException())
-        .thenAnswer(
-            i -> {
-              f.time.advance(12);
-              return new ActivityExtractor.Result(
-                  ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .9);
-            });
+        .thenAnswer(i -> {
+          f.time.advance(12);
+          return new ActivityExtractor.Result(
+              ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .9);
+        });
     f.pipeline.tick();
     f.run();
     f.time.advance(30);
@@ -244,17 +241,15 @@ class ActivityVisionQueueTest {
     var f = new Fixture();
     var foregroundReads = new java.util.concurrent.atomic.AtomicInteger();
     when(f.observer.foreground())
-        .thenAnswer(
-            i -> {
-              if (foregroundReads.incrementAndGet() == 3) f.time.advance(5);
-              return f.foreground;
-            });
+        .thenAnswer(i -> {
+          if (foregroundReads.incrementAndGet() == 3) f.time.advance(5);
+          return f.foreground;
+        });
     when(f.observer.capture())
-        .thenAnswer(
-            i -> {
-              f.time.advance(1);
-              return ActivityChangeScopeTest.screen(20, 20);
-            });
+        .thenAnswer(i -> {
+          f.time.advance(1);
+          return ActivityChangeScopeTest.screen(20, 20);
+        });
     f.pipeline.tick();
     f.run();
     var records = org.mockito.ArgumentCaptor.forClass(ActivityRecord.class);
@@ -280,12 +275,11 @@ class ActivityVisionQueueTest {
   void intervalIsMeasuredBetweenStartsRatherThanCompletions() throws Exception {
     var f = new Fixture();
     when(f.extractor.extract(any(), any()))
-        .thenAnswer(
-            i -> {
-              if (f.pipeline.queueMetrics().started() == 1) f.time.advance(25);
-              return new ActivityExtractor.Result(
-                  ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .9);
-            });
+        .thenAnswer(i -> {
+          if (f.pipeline.queueMetrics().started() == 1) f.time.advance(25);
+          return new ActivityExtractor.Result(
+              ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .9);
+        });
     f.pipeline.tick();
     f.run();
     f.time.advance(5);

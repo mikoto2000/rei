@@ -157,36 +157,35 @@ public final class SubAgentDagService {
     String encoded = encode(plan), baseline = baseline(owner, spec);
     long cap = tokens;
     var graph =
-        repository.atomic(
-            () -> {
-              var group =
-                  repository.createPrepared(
-                      owner,
-                      id,
-                      "GRAPH",
-                      null,
-                      "rei-dag",
-                      "Bounded child DAG",
-                      encoded,
-                      calls,
-                      cap,
-                      baseline);
-              for (var node : spec.nodes()) {
-                var definition = definitions.get(node.id());
-                repository.createPrepared(
-                    owner,
-                    children.get(node.id()),
-                    "CHILD",
-                    id,
-                    node.agent(),
-                    node.task(),
-                    node.context(),
-                    Math.min(1000, definition.maxSteps()),
-                    cap,
-                    resolveBaseline.apply(definition, owner));
-              }
-              return group;
-            });
+        repository.atomic(() -> {
+          var group =
+              repository.createPrepared(
+                  owner,
+                  id,
+                  "GRAPH",
+                  null,
+                  "rei-dag",
+                  "Bounded child DAG",
+                  encoded,
+                  calls,
+                  cap,
+                  baseline);
+          for (var node : spec.nodes()) {
+            var definition = definitions.get(node.id());
+            repository.createPrepared(
+                owner,
+                children.get(node.id()),
+                "CHILD",
+                id,
+                node.agent(),
+                node.task(),
+                node.context(),
+                Math.min(1000, definition.maxSteps()),
+                cap,
+                resolveBaseline.apply(definition, owner));
+          }
+          return group;
+        });
     return execute(run, graph, plan, false);
   }
 
@@ -202,14 +201,12 @@ public final class SubAgentDagService {
       if (!saved.graphId().equals(id)
           || saved.nodes().size() != current.size()
           || saved.nodes().stream()
-              .anyMatch(
-                  n ->
-                      current.stream()
-                          .noneMatch(
-                              c ->
-                                  c.id().equals(n.id())
-                                      && c.childId().equals(n.childId())
-                                      && (!n.status().equals("COMPLETED") || c.equals(n)))))
+              .anyMatch(n ->
+                  current.stream()
+                      .noneMatch(c ->
+                          c.id().equals(n.id())
+                              && c.childId().equals(n.childId())
+                              && (!n.status().equals("COMPLETED") || c.equals(n)))))
         throw new IllegalArgumentException("DAG result identity changed");
       return new Outcome(id, saved.status(), current, graph.revision());
     } catch (java.io.IOException error) {
@@ -291,10 +288,9 @@ public final class SubAgentDagService {
             else if (node.status().equals("FAILED")) failed.add(node.id());
           }
           if (inventory.stream()
-              .anyMatch(
-                  node ->
-                      node.status().equals("RUNNING")
-                          || !resuming && node.status().equals("UNKNOWN"))) {
+              .anyMatch(node ->
+                  node.status().equals("RUNNING")
+                      || !resuming && node.status().equals("UNKNOWN"))) {
             forced = "UNKNOWN";
             break;
           }
@@ -357,7 +353,8 @@ public final class SubAgentDagService {
                         : "FAILED";
         var state = repository.get(owner, saved.id());
         if (nodes.stream()
-                .anyMatch(node -> node.status().equals("UNKNOWN") || node.status().equals("RUNNING"))
+                .anyMatch(
+                    node -> node.status().equals("UNKNOWN") || node.status().equals("RUNNING"))
             || state.maxTokens() > 0 && state.usageUnknown()) status = "UNKNOWN";
         var outcome = new Outcome(saved.id(), status, nodes, state.revision());
         repository.complete(

@@ -12,12 +12,10 @@ class SlackConfigurationTest {
   void componentScanningNestedConfigurationDoesNotEnableSlackByDefault() {
     new ApplicationContextRunner()
         .withUserConfiguration(SlackConfiguration.HeadlessRuns.class)
-        .run(
-            context -> {
-              assertThat(context).hasNotFailed();
-              assertThat(context)
-                  .doesNotHaveBean(dev.mikoto2000.rei.application.run.RunRegistry.class);
-            });
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context).doesNotHaveBean(dev.mikoto2000.rei.application.run.RunRegistry.class);
+        });
   }
 
   /** 検証に使うディレクトリ。 */
@@ -28,16 +26,12 @@ class SlackConfigurationTest {
   void configuredSlackInShellCreatesSharedRunBeansWithoutWebApi() {
     shellRunner()
         .withUserConfiguration(SlackConfiguration.HeadlessRuns.class)
-        .run(
-            context -> {
-              assertThat(context).hasNotFailed();
-              assertThat(context)
-                  .hasSingleBean(dev.mikoto2000.rei.application.run.RunRegistry.class);
-              assertThat(context)
-                  .hasSingleBean(dev.mikoto2000.rei.application.run.RunService.class);
-              assertThat(context)
-                  .hasSingleBean(dev.mikoto2000.rei.core.project.ProjectRegistry.class);
-            });
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context).hasSingleBean(dev.mikoto2000.rei.application.run.RunRegistry.class);
+          assertThat(context).hasSingleBean(dev.mikoto2000.rei.application.run.RunService.class);
+          assertThat(context).hasSingleBean(dev.mikoto2000.rei.core.project.ProjectRegistry.class);
+        });
   }
 
   /** 設定済みシェルについて、通信の接続受付から終了までの管理を作成することを確認する。 */
@@ -61,13 +55,11 @@ class SlackConfigurationTest {
             "lifecycleProcessor",
             org.springframework.context.LifecycleProcessor.class,
             () -> org.mockito.Mockito.mock(org.springframework.context.LifecycleProcessor.class))
-        .run(
-            context -> {
-              assertThat(context).hasNotFailed();
-              assertThat(context).hasSingleBean(SlackSocketLifecycle.class);
-              assertThat(context)
-                  .hasSingleBean(dev.mikoto2000.rei.application.run.RunRegistry.class);
-            });
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context).hasSingleBean(SlackSocketLifecycle.class);
+          assertThat(context).hasSingleBean(dev.mikoto2000.rei.application.run.RunRegistry.class);
+        });
   }
 
   /** {@code shellRunner} の条件を再現するための補助情報を返す。 */

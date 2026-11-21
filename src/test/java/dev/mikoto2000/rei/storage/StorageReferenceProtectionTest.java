@@ -270,10 +270,9 @@ class StorageReferenceProtectionTest {
     new RawToolResultStore(root, registry).save("chat", "run", "tool", "call", "旧結果");
     assertThat(registry.rawObject("chat", ref).orElseThrow().originVerified()).isFalse();
     Path external = Files.writeString(root.resolve("export.jsonl"), "export");
-    assertThatThrownBy(
-            () ->
-                registry.registerProducedFile(
-                    external, "ACTIVITY_RAW", null, null, now, true, List.of()))
+    assertThatThrownBy(() ->
+            registry.registerProducedFile(
+                external, "ACTIVITY_RAW", null, null, now, true, List.of()))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

@@ -32,8 +32,7 @@ class WebResearchPipelineTest {
     var second = result("two.com");
     var third = result("three.com");
     when(search.search(query, 5))
-        .thenReturn(
-            List.of(first, result("other.one.com"), second, third, result("four.com")));
+        .thenReturn(List.of(first, result("other.one.com"), second, third, result("four.com")));
     var started = new CountDownLatch(2);
     Set<String> fetched = ConcurrentHashMap.newKeySet();
 
@@ -78,11 +77,10 @@ class WebResearchPipelineTest {
     when(search.search(query, 3))
         .thenReturn(List.of(result("one.example"), result("two.example"), unread));
     when(search.search(supplemental, 3))
-        .thenAnswer(
-            invocation -> {
-              assertEquals(1, unreadReads.get());
-              return List.of(replacement);
-            });
+        .thenAnswer(invocation -> {
+          assertEquals(1, unreadReads.get());
+          return List.of(replacement);
+        });
 
     try (var batch = new WebFetchBatch(2, 2, 4)) {
       var research =

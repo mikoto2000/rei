@@ -70,7 +70,8 @@ class WorkingSetBatchTest {
     var set = new WorkingSet();
     set.enablePersistence(file);
     var batch = set.batchPersistence();
-    try (batch; var pool = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+    try (batch;
+        var pool = java.util.concurrent.Executors.newSingleThreadExecutor()) {
       set.recordRead(root.resolve("one"));
       pool.submit(() -> set.recordRead(root.resolve("two")))
           .get(5, java.util.concurrent.TimeUnit.SECONDS);

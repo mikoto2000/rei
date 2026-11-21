@@ -203,62 +203,57 @@ public final class DiagnosedRepairService {
       throw new IllegalArgumentException("Repair must select a changed patch file");
     final int seconds = request.timeoutSeconds() == null ? 30 : request.timeoutSeconds();
     var saved =
-        transaction.execute(
-            status -> {
-              db.sql("UPDATE diagnosed_repairs SET status=status WHERE id=''").update();
-              if (db.sql("SELECT count(*) FROM diagnosed_repairs WHERE project=?")
-                      .param(owner.projectId())
-                      .query(Integer.class)
-                      .single()
-                  >= 128)
-                throw new IllegalStateException("Diagnosed repair history capacity reached (128)");
-              try {
-                var proposal = proposeProtected.run(project(owner, root), request.change());
-                String hash =
-                    hash(
-                        proposal.id()
-                            + "\u0000"
-                            + owner.projectId()
-                            + "\u0000"
-                            + root
-                            + "\u0000"
-                            + owner.conversationId()
-                            + "\u0000"
-                            + diagnosis.sha256()
-                            + "\u0000"
-                            + snapshot.version()
-                            + "\u0000"
-                            + proposal.proposalSha256()
-                            + "\u0000"
-                            + request.testCommand()
-                            + "\u0000"
-                            + seconds);
-                var record =
-                    new Saved(
-                        proposal.id(),
-                        owner.projectId(),
-                        root.toString(),
-                        owner.conversationId(),
-                        hash,
-                        diagnosis,
-                        snapshot.version(),
-                        proposal.proposalSha256(),
-                        request.testCommand(),
-                        seconds);
-                db.sql(
-                        "INSERT INTO diagnosed_repairs(id,project,root,session,payload,status,result) VALUES(?,?,?,?,?,'PROPOSED',NULL)")
-                    .params(
-                        record.id(),
-                        record.project(),
-                        record.root(),
-                        record.session(),
-                        encode(record))
-                    .update();
-                return record;
-              } catch (IOException error) {
-                throw new java.io.UncheckedIOException(error);
-              }
-            });
+        transaction.execute(status -> {
+          db.sql("UPDATE diagnosed_repairs SET status=status WHERE id=''").update();
+          if (db.sql("SELECT count(*) FROM diagnosed_repairs WHERE project=?")
+                  .param(owner.projectId())
+                  .query(Integer.class)
+                  .single()
+              >= 128)
+            throw new IllegalStateException("Diagnosed repair history capacity reached (128)");
+          try {
+            var proposal = proposeProtected.run(project(owner, root), request.change());
+            String hash =
+                hash(
+                    proposal.id()
+                        + "\u0000"
+                        + owner.projectId()
+                        + "\u0000"
+                        + root
+                        + "\u0000"
+                        + owner.conversationId()
+                        + "\u0000"
+                        + diagnosis.sha256()
+                        + "\u0000"
+                        + snapshot.version()
+                        + "\u0000"
+                        + proposal.proposalSha256()
+                        + "\u0000"
+                        + request.testCommand()
+                        + "\u0000"
+                        + seconds);
+            var record =
+                new Saved(
+                    proposal.id(),
+                    owner.projectId(),
+                    root.toString(),
+                    owner.conversationId(),
+                    hash,
+                    diagnosis,
+                    snapshot.version(),
+                    proposal.proposalSha256(),
+                    request.testCommand(),
+                    seconds);
+            db.sql(
+                    "INSERT INTO diagnosed_repairs(id,project,root,session,payload,status,result) VALUES(?,?,?,?,?,'PROPOSED',NULL)")
+                .params(
+                    record.id(), record.project(), record.root(), record.session(), encode(record))
+                .update();
+            return record;
+          } catch (IOException error) {
+            throw new java.io.UncheckedIOException(error);
+          }
+        });
     return view(owner, new Stored(saved, "PROPOSED", null));
   }
 
@@ -380,18 +375,16 @@ public final class DiagnosedRepairService {
         db.sql(
                 "SELECT payload,status,result FROM diagnosed_repairs WHERE id=? AND project=? AND root=? AND session=?")
             .params(id, owner.projectId(), root.toString(), owner.conversationId())
-            .query(
-                (row, n) ->
-                    new Stored(
-                        decode(row.getString("payload"), Saved.class),
-                        row.getString("status"),
-                        row.getString("result") == null
-                            ? null
-                            : decode(row.getString("result"), SelfPatchRepairService.Result.class)))
+            .query((row, n) ->
+                new Stored(
+                    decode(row.getString("payload"), Saved.class),
+                    row.getString("status"),
+                    row.getString("result") == null
+                        ? null
+                        : decode(row.getString("result"), SelfPatchRepairService.Result.class)))
             .optional()
-            .orElseThrow(
-                () ->
-                    new IllegalArgumentException("Repair not found in this Project/root/session"));
+            .orElseThrow(() ->
+                new IllegalArgumentException("Repair not found in this Project/root/session"));
     if (!id.equals(stored.saved().id())
         || !owner.projectId().equals(stored.saved().project())
         || !root.toString().equals(stored.saved().root())

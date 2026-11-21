@@ -58,12 +58,12 @@ public class StagnationAdvisor implements BaseAdvisor {
    */
   public String replanNotice(String recentActions, String lastError) {
     return """
-        ## Replan Notice
+    ## Replan Notice
 
-        現在の方針では進展していません。
-        同じ操作を繰り返さず、原因を見直し、別の手順へ再計画してください。
-        No-progress iterations:\s\
-        """
+    現在の方針では進展していません。
+    同じ操作を繰り返さず、原因を見直し、別の手順へ再計画してください。
+    No-progress iterations:\s\
+    """
         + String.format("%d", stagnationDetector.stagnationCount())
         + ". Stagnation replan: "
         + String.format("%d", stagnationDetector.replanCount() + 1)

@@ -167,18 +167,15 @@ public final class GitHubWebhookService {
       throw new IllegalArgumentException("GitHub state recheck is required but unavailable");
     owners =
         properties.getMappings().stream()
-            .map(
-                mapping -> {
-                  var project =
-                      findProject
-                          .apply(mapping.projectId())
-                          .orElseThrow(
-                              () ->
-                                  new IllegalArgumentException(
-                                      "GitHub mapping Project not registered"));
-                  validateSession.accept(mapping.sessionId(), project.id());
-                  return new Owner(mapping, project);
-                })
+            .map(mapping -> {
+              var project =
+                  findProject
+                      .apply(mapping.projectId())
+                      .orElseThrow(() ->
+                          new IllegalArgumentException("GitHub mapping Project not registered"));
+              validateSession.accept(mapping.sessionId(), project.id());
+              return new Owner(mapping, project);
+            })
             .toList();
   }
 
@@ -261,11 +258,10 @@ public final class GitHubWebhookService {
             .apply(project)
             .orElseThrow(() -> new ResourceNotFoundException("GitHub mapping"));
     if (owners.stream()
-        .noneMatch(
-            owner ->
-                owner.project().id().equals(project)
-                    && owner.project().root().equals(registered.root())
-                    && owner.mapping().sessionId().equals(session)))
+        .noneMatch(owner ->
+            owner.project().id().equals(project)
+                && owner.project().root().equals(registered.root())
+                && owner.mapping().sessionId().equals(session)))
       throw new ResourceNotFoundException("GitHub mapping");
     try {
       validateSession.accept(session, project);
@@ -281,18 +277,17 @@ public final class GitHubWebhookService {
     return owners.stream()
         .map(Owner::mapping)
         .filter(rule -> rule.projectId().equals(project) && rule.sessionId().equals(session))
-        .map(
-            rule ->
-                new MappingView(
-                    rule.repository(),
-                    project,
-                    session,
-                    rule.branch(),
-                    rule.pullRequest(),
-                    rule.notifyReview(),
-                    rule.pullRequest() != null || rule.branch() != null
-                        ? GitHubFact.sourceId(rule.repository(), rule.pullRequest(), rule.branch())
-                        : null))
+        .map(rule ->
+            new MappingView(
+                rule.repository(),
+                project,
+                session,
+                rule.branch(),
+                rule.pullRequest(),
+                rule.notifyReview(),
+                rule.pullRequest() != null || rule.branch() != null
+                    ? GitHubFact.sourceId(rule.repository(), rule.pullRequest(), rule.branch())
+                    : null))
         .toList();
   }
 

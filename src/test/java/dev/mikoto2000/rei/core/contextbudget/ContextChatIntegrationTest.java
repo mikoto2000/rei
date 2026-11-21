@@ -113,10 +113,9 @@ class ContextChatIntegrationTest {
         OpenAiChatOptions.builder().toolContext(Map.of(RunExecutionContext.KEY, execution)).build();
     client
         .prompt(new Prompt(new UserMessage("current request"), options))
-        .advisors(
-            a ->
-                a.param(AgentRunContext.class.getName(), owner)
-                    .param(ChatMemory.CONVERSATION_ID, "chat"))
+        .advisors(a ->
+            a.param(AgentRunContext.class.getName(), owner)
+                .param(ChatMemory.CONVERSATION_ID, "chat"))
         .stream()
         .chatResponse()
         .blockLast();

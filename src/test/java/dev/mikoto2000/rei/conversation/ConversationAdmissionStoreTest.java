@@ -135,14 +135,11 @@ class ConversationAdmissionStoreTest {
         var barrier = new java.util.concurrent.CyclicBarrier(2);
         var tasks =
             java.util.stream.IntStream.range(0, 2)
-                .mapToObj(
-                    i ->
-                        executor.submit(
-                            () -> {
-                              barrier.await();
-                              return store.accept(
-                                  session("s"), run("r" + i, "s"), "key", "a".repeat(64));
-                            }))
+                .mapToObj(i ->
+                    executor.submit(() -> {
+                      barrier.await();
+                      return store.accept(session("s"), run("r" + i, "s"), "key", "a".repeat(64));
+                    }))
                 .toList();
         var a = tasks.get(0).get(10, java.util.concurrent.TimeUnit.SECONDS);
         var b = tasks.get(1).get(10, java.util.concurrent.TimeUnit.SECONDS);

@@ -27,15 +27,15 @@ class SubAgentConfigurationTest {
   /** {@code yaml} の条件を再現するための補助情報を返す。 */
   static String yaml(String id) {
     return """
-        id: %s
-        name: Reviewer
-        description: Independent review
-        systemPrompt: |
-          Review independently.
-        tools: [readMultiFile]
-        maxSteps: 2
-        timeout: 120s
-        """
+    id: %s
+    name: Reviewer
+    description: Independent review
+    systemPrompt: |
+      Review independently.
+    tools: [readMultiFile]
+    maxSteps: 2
+    timeout: 120s
+    """
         .formatted(id);
   }
 

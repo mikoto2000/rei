@@ -130,23 +130,22 @@ public class ActiveRunDisplay {
   /** ターミナルでの対話で用いる行一覧を返す。 */
   public List<String> rows() {
     return activeExecutions.get().stream()
-        .map(
-            run -> {
-              long seconds =
-                  Math.max(0, Duration.between(run.startedAt(), clock.instant()).toSeconds());
-              return projectName(run.projectId())
-                  + "  "
-                  + run.type()
-                  + "  "
-                  + status(run)
-                  + "  "
-                  + String.format("%02d:%02d", seconds / 60, seconds % 60)
-                  + "  "
-                  + run.summary()
-                  + "  [run="
-                  + run.id()
-                  + "]";
-            })
+        .map(run -> {
+          long seconds =
+              Math.max(0, Duration.between(run.startedAt(), clock.instant()).toSeconds());
+          return projectName(run.projectId())
+              + "  "
+              + run.type()
+              + "  "
+              + status(run)
+              + "  "
+              + String.format("%02d:%02d", seconds / 60, seconds % 60)
+              + "  "
+              + run.summary()
+              + "  [run="
+              + run.id()
+              + "]";
+        })
         .toList();
   }
 }

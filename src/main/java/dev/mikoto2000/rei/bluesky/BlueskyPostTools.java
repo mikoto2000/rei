@@ -21,10 +21,10 @@ public class BlueskyPostTools {
       name = "blueskyPost",
       description =
           """
-    Bluesky にメッセージを投稿する。
-    @param text 投稿するテキスト(必須)
-    @return 投稿の結果。成功した場合は投稿のURLを含むメッセージ、失敗した場合はエラーメッセージ。
-    """)
+          Bluesky にメッセージを投稿する。
+          @param text 投稿するテキスト(必須)
+          @return 投稿の結果。成功した場合は投稿のURLを含むメッセージ、失敗した場合はエラーメッセージ。
+          """)
   public String post(String text) {
     log.debug("blueskyPost tool called. textLength={}", text == null ? null : text.length());
     BlueskyPostResult result = blueskyPostService.post(text);

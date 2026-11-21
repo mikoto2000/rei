@@ -118,6 +118,8 @@ class TerminalCompletionTest {
       assertEquals("/fixture resume keep", tab(reader, withArgument, "/fixture re".length()));
       Path report = Files.createFile(directory.resolve("report.txt"));
       String path = report.toString();
+      reader.runMacro(path + "\r");
+      assertEquals(path, reader.readLine(""), "Typing must preserve Windows path separators");
       String prefix = path.substring(0, path.length() - "port.txt".length());
       assertEquals(
           "/fixture --output " + path + " ", tab(reader, "/fixture --output " + prefix + "XYZ"));

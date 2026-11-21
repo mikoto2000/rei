@@ -22,7 +22,8 @@ class SnapshotScaleTest {
     fixture.temporary = temporary;
     var store = fixture.store();
     var root = Files.createDirectory(temporary.resolve("repository"));
-    for (int i = 0; i < 10001; i++) Files.writeString(root.resolve(String.format("f%05d.java", i)), "class A {}");
+    for (int i = 0; i < 10001; i++)
+      Files.writeString(root.resolve(String.format("f%05d.java", i)), "class A {}");
     var deep = root;
     for (int i = 0; i < 30; i++) deep = Files.createDirectory(deep.resolve("d"));
     Files.writeString(deep.resolve("deep.java"), "deep");
@@ -55,11 +56,16 @@ class SnapshotScaleTest {
     Files.writeString(root.resolve("denied.java"), "denied");
     var scope = new DurableTaskStore.Scope("project", "session", root.toRealPath().toString());
     var task = store.begin(scope, null, "WORKTREE", "", List.of(), 100, 1024);
-    new SnapshotEnumerator(store, path -> { throw new AccessDeniedException(path.toString()); })
+    new SnapshotEnumerator(
+            store,
+            path -> {
+              throw new AccessDeniedException(path.toString());
+            })
         .step(scope, task.id(), 10);
     assertThat(store.status(scope, task.id()).errors()).isEqualTo(1);
     assertThat(store.status(scope, task.id()).excluded()).isZero();
-    assertThat(store.files(scope, task.id(), "", 10).entries().getFirst().error()).isEqualTo("ACCESS_DENIED");
+    assertThat(store.files(scope, task.id(), "", 10).entries().getFirst().error())
+        .isEqualTo("ACCESS_DENIED");
     assertThat(store.verify(scope, task.id()).complete()).isFalse();
   }
 }

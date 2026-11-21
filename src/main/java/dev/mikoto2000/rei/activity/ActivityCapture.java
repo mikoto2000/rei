@@ -481,14 +481,11 @@ public final class ActivityCapture implements AutoCloseable {
     try {
       var observations =
           screen.displays().stream()
-              .map(
-                  d -> {
-                    var b = d.geometry().bounds();
-                    return new ActivityRecord.Observation(
-                        d.geometry().id(),
-                        new ActivityRecord.Bounds(b.x, b.y, b.width, b.height),
-                        at);
-                  })
+              .map(d -> {
+                var b = d.geometry().bounds();
+                return new ActivityRecord.Observation(
+                    d.geometry().id(), new ActivityRecord.Bounds(b.x, b.y, b.width, b.height), at);
+              })
               .toList();
       var front =
           foregroundCrop.getAsBoolean() ? ActivityImages.foreground(screen, foreground) : screen;

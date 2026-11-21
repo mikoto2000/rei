@@ -131,10 +131,9 @@ class ReviewValidationReuseTest {
               }
             };
       if (changed) {
-        assertThatThrownBy(
-                () ->
-                    tools.submitReviewPage(
-                        job.id(), "a.md", page.offset(), page.nextOffset(), "reviewed", List.of()))
+        assertThatThrownBy(() ->
+                tools.submitReviewPage(
+                    job.id(), "a.md", page.offset(), page.nextOffset(), "reviewed", List.of()))
             .isInstanceOfSatisfying(
                 ReviewResultRejectedException.class,
                 rejected -> assertThat(rejected.code()).isEqualTo("STALE_VERSION"))

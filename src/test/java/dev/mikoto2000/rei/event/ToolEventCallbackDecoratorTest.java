@@ -38,7 +38,8 @@ class ToolEventCallbackDecoratorTest {
         new MockLowLevelHttpResponse()
             .setStatusCode(400)
             .setContentType("application/json")
-            .setContent("""
+            .setContent(
+                """
                 {"error":"invalid_grant","error_description":"PRIVATE_PROVIDER_BODY"}
                 """);
     var refresh =
@@ -277,11 +278,10 @@ class ToolEventCallbackDecoratorTest {
     var callback = delegate("webSearch", "unused");
     var failure = new dev.mikoto2000.rei.websearch.WebSearchHttpException(402);
     when(callback.call("input"))
-        .thenAnswer(
-            invocation -> {
-              Thread.currentThread().interrupt();
-              throw failure;
-            });
+        .thenAnswer(invocation -> {
+          Thread.currentThread().interrupt();
+          throw failure;
+        });
     try {
       assertSame(
           failure,
@@ -471,11 +471,10 @@ class ToolEventCallbackDecoratorTest {
     var failure =
         new java.io.UncheckedIOException(new java.nio.file.NoSuchFileException("missing"));
     when(callback.call("input"))
-        .thenAnswer(
-            invocation -> {
-              Thread.currentThread().interrupt();
-              throw failure;
-            });
+        .thenAnswer(invocation -> {
+          Thread.currentThread().interrupt();
+          throw failure;
+        });
     try {
       assertSame(
           failure,

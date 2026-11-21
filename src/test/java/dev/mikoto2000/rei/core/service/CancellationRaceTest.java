@@ -30,18 +30,16 @@ class CancellationRaceTest {
         var owner = owner("start-" + i);
         var barrier = new CyclicBarrier(2);
         var start =
-            executor.submit(
-                () -> {
-                  barrier.await();
-                  service.prepare(owner);
-                  return null;
-                });
+            executor.submit(() -> {
+              barrier.await();
+              service.prepare(owner);
+              return null;
+            });
         var stop =
-            executor.submit(
-                () -> {
-                  barrier.await();
-                  return service.cancelRun(owner.runId());
-                });
+            executor.submit(() -> {
+              barrier.await();
+              return service.cancelRun(owner.runId());
+            });
         start.get(5, TimeUnit.SECONDS);
         assertThat(stop.get(5, TimeUnit.SECONDS)).isTrue();
         var scope = AgentRunScope.open(owner);
@@ -68,35 +66,31 @@ class CancellationRaceTest {
         var calls = new AtomicInteger();
         var barrier = new CyclicBarrier(2);
         var registration =
-            executor.submit(
-                () -> {
-                  barrier.await();
-                  service.onCancel(owner.runId(), calls::incrementAndGet);
-                  return null;
-                });
+            executor.submit(() -> {
+              barrier.await();
+              service.onCancel(owner.runId(), calls::incrementAndGet);
+              return null;
+            });
         var stop =
-            executor.submit(
-                () -> {
-                  barrier.await();
-                  return service.cancelRun(owner.runId());
-                });
+            executor.submit(() -> {
+              barrier.await();
+              return service.cancelRun(owner.runId());
+            });
         registration.get(5, TimeUnit.SECONDS);
         assertThat(stop.get(5, TimeUnit.SECONDS)).isTrue();
         assertThat(calls).hasValue(1);
         var endBarrier = new CyclicBarrier(2);
         var finish =
-            executor.submit(
-                () -> {
-                  endBarrier.await();
-                  service.finish(owner.runId());
-                  return null;
-                });
+            executor.submit(() -> {
+              endBarrier.await();
+              service.finish(owner.runId());
+              return null;
+            });
         var repeat =
-            executor.submit(
-                () -> {
-                  endBarrier.await();
-                  return service.cancelRegisteredRun(owner.runId());
-                });
+            executor.submit(() -> {
+              endBarrier.await();
+              return service.cancelRegisteredRun(owner.runId());
+            });
         finish.get(5, TimeUnit.SECONDS);
         assertThat(repeat.get(5, TimeUnit.SECONDS)).isFalse();
         assertThat(calls).hasValue(1);
@@ -115,18 +109,16 @@ class CancellationRaceTest {
         service.prepare(owner);
         var barrier = new CyclicBarrier(2);
         var end =
-            executor.submit(
-                () -> {
-                  barrier.await();
-                  service.finish(owner.runId());
-                  return null;
-                });
+            executor.submit(() -> {
+              barrier.await();
+              service.finish(owner.runId());
+              return null;
+            });
         var stop =
-            executor.submit(
-                () -> {
-                  barrier.await();
-                  return service.cancelRun(owner.runId());
-                });
+            executor.submit(() -> {
+              barrier.await();
+              return service.cancelRun(owner.runId());
+            });
         end.get(5, TimeUnit.SECONDS);
         boolean accepted = stop.get(5, TimeUnit.SECONDS);
         var diagnostic = service.diagnostic(owner.runId());

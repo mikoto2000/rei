@@ -96,10 +96,9 @@ class ActiveRunsTest {
               (context, prompt, queue) -> {
                 throw failure;
               });
-      router.onChange(
-          () -> {
-            throw new IllegalStateException("UI failed");
-          });
+      router.onChange(() -> {
+        throw new IllegalStateException("UI failed");
+      });
       router.submit(Path.of("a"), conversation(UUID.randomUUID().toString()), "start");
       assertThatThrownBy(() -> tasks.getFirst().run()).isSameAs(failure);
       assertThat(router.activeRuns()).isEmpty();
@@ -147,10 +146,9 @@ class ActiveRunsTest {
       var futures = new ArrayList<Future<?>>();
       for (int i = 0; i < 50; i++)
         futures.add(
-            executor.submit(
-                () ->
-                    router.submit(
-                        Path.of("root"), conversation(UUID.randomUUID().toString()), "work")));
+            executor.submit(() ->
+                router.submit(
+                    Path.of("root"), conversation(UUID.randomUUID().toString()), "work")));
       for (var future : futures) future.get(5, TimeUnit.SECONDS);
       assertThat(router.activeRuns()).hasSize(50);
       futures.clear();

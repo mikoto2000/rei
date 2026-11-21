@@ -199,8 +199,7 @@ class McpToolsTest {
   void contextLookupRejectsFloatingPointRevisionOverflow() {
     error(
         "INVALID_ARGUMENT",
-        tools.call(
-            "rei_context_get", Map.of("project_id", project.id(), "revision", 0x1.0p63)));
+        tools.call("rei_context_get", Map.of("project_id", project.id(), "revision", 0x1.0p63)));
   }
 
   /** MCPによる機能の提供の操作が、指定された権限・承認条件に従うことを確認する。 */
@@ -286,13 +285,12 @@ class McpToolsTest {
   void expiredRequestCannotBeReused() {
     tools.call("rei_task_submit", input("key"));
     new StorageDatabase(root)
-        .transaction(
-            c -> {
-              try (var q = c.createStatement()) {
-                q.executeUpdate("UPDATE mcp_requests SET expires_at='2020-01-01T00:00:00Z'");
-                return null;
-              }
-            });
+        .transaction(c -> {
+          try (var q = c.createStatement()) {
+            q.executeUpdate("UPDATE mcp_requests SET expires_at='2020-01-01T00:00:00Z'");
+            return null;
+          }
+        });
     error("REQUEST_EXPIRED", tools.call("rei_task_submit", input("key")));
   }
 
@@ -314,12 +312,11 @@ class McpToolsTest {
       var futures = new ArrayList<java.util.concurrent.Future<Object>>();
       for (int i = 0; i < 12; i++)
         futures.add(
-            executor.submit(
-                () -> {
-                  var result = tools.call("rei_task_submit", input("parallel"));
-                  assertFalse(result.isError());
-                  return data(result).get("run_id");
-                }));
+            executor.submit(() -> {
+              var result = tools.call("rei_task_submit", input("parallel"));
+              assertFalse(result.isError());
+              return data(result).get("run_id");
+            }));
       var ids = new HashSet<Object>();
       for (var future : futures) ids.add(future.get());
       assertEquals(1, ids.size());
@@ -351,13 +348,12 @@ class McpToolsTest {
     assertFalse(
         tools.call("rei_task_result", Map.of("project_id", project.id(), "run_id", run)).isError());
     new StorageDatabase(root)
-        .transaction(
-            c -> {
-              try (var q = c.createStatement()) {
-                q.executeUpdate("UPDATE mcp_requests SET result_expires_at='2020-01-01T00:00:00Z'");
-                return null;
-              }
-            });
+        .transaction(c -> {
+          try (var q = c.createStatement()) {
+            q.executeUpdate("UPDATE mcp_requests SET result_expires_at='2020-01-01T00:00:00Z'");
+            return null;
+          }
+        });
     store.expire();
     error(
         "RESULT_EXPIRED",
@@ -474,14 +470,13 @@ class McpToolsTest {
     admissions.transition(run, RunStatus.COMPLETED);
     store.snapshot(store.byRun(run).orElseThrow());
     new StorageDatabase(root)
-        .transaction(
-            c -> {
-              try (var q = c.createStatement()) {
-                q.executeUpdate(
-                    "UPDATE mcp_requests SET expires_at='2020-01-01T00:00:00Z',result_expires_at='2020-01-01T00:00:00Z'");
-                return null;
-              }
-            });
+        .transaction(c -> {
+          try (var q = c.createStatement()) {
+            q.executeUpdate(
+                "UPDATE mcp_requests SET expires_at='2020-01-01T00:00:00Z',result_expires_at='2020-01-01T00:00:00Z'");
+            return null;
+          }
+        });
     store.expire();
     assertTrue(store.byRun(run).orElseThrow().criteria().isEmpty());
     assertTrue(store.byRequest(ConversationAdmissionStore.hash("minimal-tombstone")).isPresent());

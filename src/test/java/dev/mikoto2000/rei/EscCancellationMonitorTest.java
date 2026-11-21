@@ -19,16 +19,15 @@ class EscCancellationMonitorTest {
     CompletableFuture<Integer> future = new CompletableFuture<>();
 
     Thread worker =
-        new Thread(
-            () -> {
-              try {
-                while (true) {
-                  Thread.sleep(1000);
-                }
-              } catch (InterruptedException e) {
-                future.complete(130);
-              }
-            });
+        new Thread(() -> {
+          try {
+            while (true) {
+              Thread.sleep(1000);
+            }
+          } catch (InterruptedException e) {
+            future.complete(130);
+          }
+        });
     worker.start();
 
     int exitCode =

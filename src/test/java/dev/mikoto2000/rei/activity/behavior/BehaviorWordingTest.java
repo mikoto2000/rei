@@ -75,16 +75,12 @@ class BehaviorWordingTest {
             a.episodeStartedAt(),
             true);
     when(model.call(any(Prompt.class)))
-        .thenAnswer(
-            inv -> {
-              assertFalse(
-                  ((Prompt) inv.getArgument(0))
-                      .getUserMessage()
-                      .getText()
-                      .contains("secret-service"));
-              return new ChatResponse(
-                  List.of(new Generation(new AssistantMessage("観測できた範囲では、少し長いみたい。"))));
-            });
+        .thenAnswer(inv -> {
+          assertFalse(
+              ((Prompt) inv.getArgument(0)).getUserMessage().getText().contains("secret-service"));
+          return new ChatResponse(
+              List.of(new Generation(new AssistantMessage("観測できた範囲では、少し長いみたい。"))));
+        });
     new LlmBehaviorMessageGenerator(
             () -> model, () -> OpenAiChatOptions.builder().build(), () -> "persona")
         .generate(new BehaviorNotification("e", a));

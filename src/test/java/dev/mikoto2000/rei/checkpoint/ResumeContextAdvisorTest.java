@@ -52,7 +52,9 @@ class ResumeContextAdvisorTest {
             null,
             null);
     ReflectionTestUtils.setField(
-          service, "active", new java.util.concurrent.ConcurrentHashMap<>(Map.of(state.runId(), state)));
+        service,
+        "active",
+        new java.util.concurrent.ConcurrentHashMap<>(Map.of(state.runId(), state)));
     return service;
   }
 
@@ -171,13 +173,7 @@ class ResumeContextAdvisorTest {
       var scope =
           AgentRunScope.open(
               new AgentRunContext(
-                  "current",
-                  "chat",
-                  root,
-                  "A",
-                  AgentRunContext.RequestSource.SHELL,
-                  mode,
-                  false));
+                  "current", "chat", root, "A", AgentRunContext.RequestSource.SHELL, mode, false));
       try (scope) {
         var messages = List.<Message>of(new UserMessage(legacy("task")), new UserMessage("next"));
         var request = ChatClientRequest.builder().prompt(new Prompt(messages)).build();

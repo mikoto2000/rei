@@ -18,16 +18,15 @@ class HolidayRegistrationTest {
             TemporalConfiguration.class, HolidayConfiguration.class, JapaneseHolidayTools.class)
         .withSystemProperties("rei.data-dir=" + directory)
         .withPropertyValues("rei.holidays.complete-years=2026-2027")
-        .run(
-            context -> {
-              assertThat(context)
-                  .hasNotFailed()
-                  .hasSingleBean(JapaneseHolidayService.class)
-                  .hasSingleBean(JapaneseHolidayTools.class);
-              var status = context.getBean(JapaneseHolidayService.class).getHolidayDataStatus();
-              assertThat(status.csvPath()).isEqualTo(directory.resolve("syukujitsu.csv"));
-              assertThat(status.loaded()).isFalse();
-              assertThat(status.completeYears()).isEmpty();
-            });
+        .run(context -> {
+          assertThat(context)
+              .hasNotFailed()
+              .hasSingleBean(JapaneseHolidayService.class)
+              .hasSingleBean(JapaneseHolidayTools.class);
+          var status = context.getBean(JapaneseHolidayService.class).getHolidayDataStatus();
+          assertThat(status.csvPath()).isEqualTo(directory.resolve("syukujitsu.csv"));
+          assertThat(status.loaded()).isFalse();
+          assertThat(status.completeYears()).isEmpty();
+        });
   }
 }

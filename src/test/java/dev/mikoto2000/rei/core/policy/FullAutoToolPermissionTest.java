@@ -39,14 +39,13 @@ class FullAutoToolPermissionTest {
                 org.mockito.Mockito.mock(
                     dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver.class))
         .withPropertyValues("rei.tool-permission.enabled=true")
-        .run(
-            context -> {
-              assertNull(context.getStartupFailure());
-              var policy = context.getBean(ToolPermissionPolicy.class);
-              assertTrue(policy.fullAuto());
-              assertEquals(PermissionDecision.AUTO_APPROVE, policy.evaluate("writeMultiFile"));
-              assertEquals(PermissionDecision.DENY, policy.evaluate("deleteFile"));
-            });
+        .run(context -> {
+          assertNull(context.getStartupFailure());
+          var policy = context.getBean(ToolPermissionPolicy.class);
+          assertTrue(policy.fullAuto());
+          assertEquals(PermissionDecision.AUTO_APPROVE, policy.evaluate("writeMultiFile"));
+          assertEquals(PermissionDecision.DENY, policy.evaluate("deleteFile"));
+        });
   }
 
   /** 検証で使用する判断基準を、指定された条件に合わせて用意する。 */
@@ -102,12 +101,9 @@ class FullAutoToolPermissionTest {
         new ToolPermissionGuard(
             policy, new AgentEventFactory(Clock.systemUTC()), event -> fail("Unexpected approval"));
     var voice = new AgentRunContext("run", "session", Path.of("."), "project").asVoiceInput();
-    assertDoesNotThrow(
-        () ->
-            guard.check(
-                "writeMultiFile",
-                "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
-                voice));
+    assertDoesNotThrow(() ->
+        guard.check(
+            "writeMultiFile", "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}", voice));
   }
 
   /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
@@ -154,6 +150,7 @@ class FullAutoToolPermissionTest {
             AgentRunContext.RequestSource.MCP,
             AgentRunContext.Mode.READ_ONLY);
     assertThrows(ToolPermissionException.class, () -> guard.check("readFile", "{}", mcp));
-    assertDoesNotThrow(() -> guard.check("readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}", mcp));
+    assertDoesNotThrow(
+        () -> guard.check("readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}", mcp));
   }
 }

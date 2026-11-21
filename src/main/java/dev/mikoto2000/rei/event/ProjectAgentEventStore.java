@@ -272,20 +272,19 @@ public class ProjectAgentEventStore implements AgentEventListener {
       return lines
           .map(line -> decode(line, path))
           .filter(java.util.Objects::nonNull)
-          .filter(
-              event ->
-                  switch (event.type()) {
-                    case AGENT_RUN_STARTED,
-                        AGENT_RUN_COMPLETED,
-                        AGENT_RUN_FAILED,
-                        AGENT_RUN_CANCELLED,
-                        EXECUTION_STARTED,
-                        EXECUTION_COMPLETED,
-                        EXECUTION_FAILED,
-                        EXECUTION_CANCELLED ->
-                        true;
-                    default -> false;
-                  })
+          .filter(event ->
+              switch (event.type()) {
+                case AGENT_RUN_STARTED,
+                    AGENT_RUN_COMPLETED,
+                    AGENT_RUN_FAILED,
+                    AGENT_RUN_CANCELLED,
+                    EXECUTION_STARTED,
+                    EXECUTION_COMPLETED,
+                    EXECUTION_FAILED,
+                    EXECUTION_CANCELLED ->
+                    true;
+                default -> false;
+              })
           .toList();
     } catch (IOException error) {
       throw new IllegalStateException("Cannot read persisted run lifecycle", error);

@@ -36,15 +36,14 @@ class TransferBudgetTest {
       var futures = new java.util.ArrayList<Future<?>>();
       for (int i = 0; i < 3; i++)
         futures.add(
-            workers.submit(
-                () -> {
-                  for (int j = 0; j < 100; j++)
-                    try {
-                      budget.wire(1);
-                    } catch (HttpFetchException exhausted) {
-                      break;
-                    }
-                }));
+            workers.submit(() -> {
+              for (int j = 0; j < 100; j++)
+                try {
+                  budget.wire(1);
+                } catch (HttpFetchException exhausted) {
+                  break;
+                }
+            }));
       for (var future : futures) future.get();
     }
     assertEquals(100, budget.wireBytes());
@@ -66,16 +65,16 @@ class TransferBudgetTest {
     var budget = new TransferBudget(10, 20);
     assertNull(TransferScope.current());
     var scope = TransferScope.enter(budget);
-    try (scope; var worker = Executors.newSingleThreadExecutor()) {
+    try (scope;
+        var worker = Executors.newSingleThreadExecutor()) {
       var captured = TransferScope.current();
       worker
-          .submit(
-              () -> {
-                var transferred = TransferScope.enter(captured);
-                try (transferred) {
-                  TransferScope.current().wire(4);
-                }
-              })
+          .submit(() -> {
+            var transferred = TransferScope.enter(captured);
+            try (transferred) {
+              TransferScope.current().wire(4);
+            }
+          })
           .get();
       assertSame(budget, TransferScope.current());
       assertEquals(4, budget.wireBytes());

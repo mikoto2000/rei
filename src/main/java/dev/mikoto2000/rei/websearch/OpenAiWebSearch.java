@@ -139,23 +139,22 @@ final class OpenAiWebSearch {
   private static List<String> domains(List<String> values) {
     if (values == null || values.size() > 100) throw failure("DOMAIN_CONFIGURATION");
     return values.stream()
-        .map(
-            value -> {
-              try {
-                String domain =
-                    java.net
-                        .IDN
-                        .toASCII(value, java.net.IDN.USE_STD3_ASCII_RULES)
-                        .toLowerCase(Locale.ROOT);
-                if (domain.isBlank()
-                    || domain.length() > 253
-                    || domain.startsWith(".")
-                    || domain.endsWith(".")) throw failure("DOMAIN_CONFIGURATION");
-                return domain;
-              } catch (RuntimeException invalid) {
-                throw failure("DOMAIN_CONFIGURATION");
-              }
-            })
+        .map(value -> {
+          try {
+            String domain =
+                java.net
+                    .IDN
+                    .toASCII(value, java.net.IDN.USE_STD3_ASCII_RULES)
+                    .toLowerCase(Locale.ROOT);
+            if (domain.isBlank()
+                || domain.length() > 253
+                || domain.startsWith(".")
+                || domain.endsWith(".")) throw failure("DOMAIN_CONFIGURATION");
+            return domain;
+          } catch (RuntimeException invalid) {
+            throw failure("DOMAIN_CONFIGURATION");
+          }
+        })
         .distinct()
         .sorted()
         .toList();

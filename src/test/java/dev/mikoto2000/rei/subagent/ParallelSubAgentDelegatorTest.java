@@ -114,10 +114,9 @@ class ParallelSubAgentDelegatorTest {
   void blankOptionalFieldsDispatchLocally() throws Exception {
     var runner = mock(SubAgentRunner.class);
     when(runner.run("reviewer", "review", null)).thenReturn(completed());
-    try (
-        var delegator =
-            new ParallelSubAgentDelegator(
-                runner, registry(), new CommandCancellationService(), Duration.ofSeconds(1))) {
+    try (var delegator =
+        new ParallelSubAgentDelegator(
+            runner, registry(), new CommandCancellationService(), Duration.ofSeconds(1))) {
       var scope =
           AgentRunScope.open(new AgentRunContext("parent", "session", directory, "project"));
       try (scope) {
@@ -161,18 +160,17 @@ class ParallelSubAgentDelegatorTest {
   /** {@code externalRequests} の条件を再現するための補助情報を返す。 */
   List<ParallelSubAgentDelegator.Request> externalRequests(int count) {
     return java.util.stream.IntStream.range(0, count)
-        .mapToObj(
-            i ->
-                new ParallelSubAgentDelegator.Request(
-                    "item-" + i,
-                    "reviewer",
-                    "task-" + i,
-                    null,
-                    "chatgpt-plan",
-                    "default",
-                    "allowed-model",
-                    List.of("docs/source.md"),
-                    "{\"findings\":[]}"))
+        .mapToObj(i ->
+            new ParallelSubAgentDelegator.Request(
+                "item-" + i,
+                "reviewer",
+                "task-" + i,
+                null,
+                "chatgpt-plan",
+                "default",
+                "allowed-model",
+                List.of("docs/source.md"),
+                "{\"findings\":[]}"))
         .toList();
   }
 
@@ -208,18 +206,15 @@ class ParallelSubAgentDelegatorTest {
     var receipt = mock(ChatGptSubAgentBackend.Receipt.class);
     when(receipt.result()).thenReturn(completed());
     when(runner.runAutomaticBackend(any(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              Thread.sleep(300);
-              return receipt;
-            });
+        .thenAnswer(invocation -> {
+          Thread.sleep(300);
+          return receipt;
+        });
     var budget = mock(dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation.class);
-    try (
-        var delegator =
-            new ParallelSubAgentDelegator(
-                runner, registry(), new CommandCancellationService(), Duration.ofMillis(100))) {
-      var scope =
-          AgentRunScope.open(new AgentRunContext("parent", "chat", directory, "project"));
+    try (var delegator =
+        new ParallelSubAgentDelegator(
+            runner, registry(), new CommandCancellationService(), Duration.ofMillis(100))) {
+      var scope = AgentRunScope.open(new AgentRunContext("parent", "chat", directory, "project"));
       try (scope) {
         delegator.setPlanExecutionProperties(externalSettings(Duration.ofSeconds(2)));
         assertEquals(
@@ -237,25 +232,22 @@ class ParallelSubAgentDelegatorTest {
     var interrupted = new CountDownLatch(2);
     var calls = new AtomicInteger();
     when(runner.runAutomaticBackend(any(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              calls.incrementAndGet();
-              try {
-                new CountDownLatch(1).await();
-              } catch (InterruptedException e) {
-                interrupted.countDown();
-              }
-              var receipt = mock(ChatGptSubAgentBackend.Receipt.class);
-              when(receipt.result()).thenReturn(completed());
-              return receipt;
-            });
+        .thenAnswer(invocation -> {
+          calls.incrementAndGet();
+          try {
+            new CountDownLatch(1).await();
+          } catch (InterruptedException e) {
+            interrupted.countDown();
+          }
+          var receipt = mock(ChatGptSubAgentBackend.Receipt.class);
+          when(receipt.result()).thenReturn(completed());
+          return receipt;
+        });
     var budget = mock(dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation.class);
-    try (
-        var delegator =
-            new ParallelSubAgentDelegator(
-                runner, registry(), new CommandCancellationService(), Duration.ofMillis(100))) {
-      var scope =
-          AgentRunScope.open(new AgentRunContext("parent", "chat", directory, "project"));
+    try (var delegator =
+        new ParallelSubAgentDelegator(
+            runner, registry(), new CommandCancellationService(), Duration.ofMillis(100))) {
+      var scope = AgentRunScope.open(new AgentRunContext("parent", "chat", directory, "project"));
       try (scope) {
         delegator.setPlanExecutionProperties(externalSettings(Duration.ofMillis(300)));
         var result = delegator.delegate(externalRequests(4), budget);
@@ -279,32 +271,30 @@ class ParallelSubAgentDelegatorTest {
         new AgentRunContext(
             "parent", "chat", directory, "project", AgentRunContext.RequestSource.WEB);
     when(runner.run(anyString(), anyString(), isNull()))
-        .thenAnswer(
-            invocation -> {
-              assertEquals(parent, AgentRunScope.current());
-              int active = running.incrementAndGet();
-              peak.accumulateAndGet(active, Math::max);
-              started.countDown();
-              try {
-                assertTrue(release.await(2, TimeUnit.SECONDS));
-                return completed();
-              } finally {
-                running.decrementAndGet();
-              }
-            });
+        .thenAnswer(invocation -> {
+          assertEquals(parent, AgentRunScope.current());
+          int active = running.incrementAndGet();
+          peak.accumulateAndGet(active, Math::max);
+          started.countDown();
+          try {
+            assertTrue(release.await(2, TimeUnit.SECONDS));
+            return completed();
+          } finally {
+            running.decrementAndGet();
+          }
+        });
     try (var delegator =
         new ParallelSubAgentDelegator(
             runner, registry(), new CommandCancellationService(), Duration.ofSeconds(3))) {
       var result = new AtomicReference<ParallelSubAgentDelegator.Batch>();
       var thread =
           Thread.ofVirtual()
-              .start(
-                  () -> {
-                    var scope = AgentRunScope.open(parent);
-                    try (scope) {
-                      result.set(delegator.delegate(requests(4)));
-                    }
-                  });
+              .start(() -> {
+                var scope = AgentRunScope.open(parent);
+                try (scope) {
+                  result.set(delegator.delegate(requests(4)));
+                }
+              });
       assertTrue(started.await(2, TimeUnit.SECONDS));
       assertEquals(2, peak.get());
       release.countDown();
@@ -353,16 +343,15 @@ class ParallelSubAgentDelegatorTest {
     var interrupted = new CountDownLatch(2);
     var calls = new AtomicInteger();
     when(runner.run(anyString(), anyString(), isNull()))
-        .thenAnswer(
-            invocation -> {
-              calls.incrementAndGet();
-              try {
-                new CountDownLatch(1).await();
-              } catch (InterruptedException e) {
-                interrupted.countDown();
-              }
-              return completed();
-            });
+        .thenAnswer(invocation -> {
+          calls.incrementAndGet();
+          try {
+            new CountDownLatch(1).await();
+          } catch (InterruptedException e) {
+            interrupted.countDown();
+          }
+          return completed();
+        });
     try (var delegator =
         new ParallelSubAgentDelegator(
             runner, registry(), new CommandCancellationService(), Duration.ofMillis(200))) {
@@ -401,34 +390,31 @@ class ParallelSubAgentDelegatorTest {
     var interrupted = new CountDownLatch(2);
     var calls = new AtomicInteger();
     when(runner.run(anyString(), anyString(), isNull()))
-        .thenAnswer(
-            invocation -> {
-              calls.incrementAndGet();
-              started.countDown();
-              try {
-                new CountDownLatch(1).await();
-              } catch (InterruptedException e) {
-                interrupted.countDown();
-              }
-              return completed();
-            });
+        .thenAnswer(invocation -> {
+          calls.incrementAndGet();
+          started.countDown();
+          try {
+            new CountDownLatch(1).await();
+          } catch (InterruptedException e) {
+            interrupted.countDown();
+          }
+          return completed();
+        });
     var parent = new AgentRunContext("parent", "chat", directory);
-    try (
-        var delegator =
-            new ParallelSubAgentDelegator(runner, registry(), cancellation, Duration.ofSeconds(3))) {
+    try (var delegator =
+        new ParallelSubAgentDelegator(runner, registry(), cancellation, Duration.ofSeconds(3))) {
       var scope = AgentRunScope.open(parent);
       try (scope) {
         cancellation.begin(null);
         var result = new AtomicReference<ParallelSubAgentDelegator.Batch>();
         var thread =
             Thread.ofVirtual()
-                .start(
-                    () -> {
-                      var child = AgentRunScope.open(parent);
-                      try (child) {
-                        result.set(delegator.delegate(requests(4)));
-                      }
-                    });
+                .start(() -> {
+                  var child = AgentRunScope.open(parent);
+                  try (child) {
+                    result.set(delegator.delegate(requests(4)));
+                  }
+                });
         try {
           assertTrue(started.await(2, TimeUnit.SECONDS));
           assertEquals(

@@ -73,22 +73,19 @@ class ChatExecutionArgumentCorrectionLimitTest {
                 .filter(ToolResponseMessage.class::isInstance)
                 .map(ToolResponseMessage.class::cast)
                 .reduce((first, last) -> last)
-                .ifPresent(
-                    message -> {
-                      var correction =
-                          tools.jackson.databind.json.JsonMapper.builder()
-                              .build()
-                              .readTree(message.getResponses().getFirst().responseData());
-                      assertThat(correction.path("maxCorrections").asInt()).isEqualTo(limit);
-                      var issues = correction.path("errors");
-                      assertThat(issues.size()).isEqualTo(2);
-                      assertThat(issues.get(0).path("path").asString())
-                          .isEqualTo("arguments.agent");
-                      assertThat(issues.get(1).path("path").asString()).isEqualTo("arguments.task");
-                      assertThat(issues.get(1).path("requirement").asString())
-                          .isEqualTo("required");
-                      remaining.add(correction.path("correctionsRemaining").asInt());
-                    });
+                .ifPresent(message -> {
+                  var correction =
+                      tools.jackson.databind.json.JsonMapper.builder()
+                          .build()
+                          .readTree(message.getResponses().getFirst().responseData());
+                  assertThat(correction.path("maxCorrections").asInt()).isEqualTo(limit);
+                  var issues = correction.path("errors");
+                  assertThat(issues.size()).isEqualTo(2);
+                  assertThat(issues.get(0).path("path").asString()).isEqualTo("arguments.agent");
+                  assertThat(issues.get(1).path("path").asString()).isEqualTo("arguments.task");
+                  assertThat(issues.get(1).path("requirement").asString()).isEqualTo("required");
+                  remaining.add(correction.path("correctionsRemaining").asInt());
+                });
             return Flux.just(
                 new ChatResponse(
                     List.of(
@@ -164,8 +161,7 @@ class ChatExecutionArgumentCorrectionLimitTest {
             "ChatGPT にレビューして",
             new UserInterventionQueue());
     assertThat(result.stopCode()).isEqualTo("tool_argument_repair_exhausted");
-    assertThat(result.errorMessage())
-        .contains(limit + "回", "/resume <taskId>", "同じタスク", "累積使用量");
+    assertThat(result.errorMessage()).contains(limit + "回", "/resume <taskId>", "同じタスク", "累積使用量");
     assertThat(calls).hasValue(limit + 1);
     assertThat(effects).hasValue(0);
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。

@@ -996,11 +996,11 @@ public class Tools {
       name = "executeExternalProgram",
       description =
           """
-  外部プログラムを実行します。コマンドと引数を指定して実行します。
-  @param command 実行するコマンド
-  @param args コマンドに渡す引数のリスト。null の場合は空のリストとして扱います。
-  @return コマンドの標準出力の内容
-  """)
+          外部プログラムを実行します。コマンドと引数を指定して実行します。
+          @param command 実行するコマンド
+          @param args コマンドに渡す引数のリスト。null の場合は空のリストとして扱います。
+          @return コマンドの標準出力の内容
+          """)
   String executeExternalProgram(String command, List<String> args)
       throws IOException, InterruptedException {
     if (command == null || command.isBlank()) {
@@ -1118,15 +1118,14 @@ public class Tools {
 
   /** 必要な内容を参照できるよう、逐次データ非同期を読み取る。 */
   private CompletableFuture<String> readStreamAsync(java.io.InputStream stream) {
-    return CompletableFuture.supplyAsync(
-        () -> {
-          try (BufferedReader reader =
-              new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-            return reader.lines().collect(Collectors.joining(System.lineSeparator()));
-          } catch (IOException e) {
-            throw new IllegalStateException("シェルコマンド出力の読み込みに失敗しました", e);
-          }
-        });
+    return CompletableFuture.supplyAsync(() -> {
+      try (BufferedReader reader =
+          new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+        return reader.lines().collect(Collectors.joining(System.lineSeparator()));
+      } catch (IOException e) {
+        throw new IllegalStateException("シェルコマンド出力の読み込みに失敗しました", e);
+      }
+    });
   }
 
   /**
@@ -1144,21 +1143,21 @@ public class Tools {
       name = "runCommand",
       description =
           """
-  Run a shell command. Use this as the default and primary tool for shell command execution.
-  For REST APIs prefer service-specific tools, then httpRequestRead/httpRequestWrite.
-  Never use shell HTTP commands to bypass permissions, destination or output limits of another tool.
-  File content reads (Get-Content/gc/cat/type/head/tail with file operands) are rejected before execution.
-  Use readMultiFile even for one file. For truncated results, pass each returned nextRead unchanged in files;
-  never switch to shell to bypass paging or output limits. Use shell for builds, tests, Git and other development commands.
-  Arguments require an outer request object: {"request":{"command":"...","executionMode":"auto","timeoutSeconds":30}}.
-  Do not place command or executionMode at the top level.
-  In auto mode, short-lived commands return normally while long-running commands continue as managed background processes.
-  Use executionMode=auto for normal commands.
-  Use executionMode=foreground when you explicitly need to wait for completion.
-  Use executionMode=background when you explicitly want a managed background process.
-  @param request command, optional executionMode (auto/foreground/background), and optional foreground timeoutSeconds
-  @return normalized completion or managed-process result, with bounded diagnosis (reported tests/causes/evidence/nextActions). Diagnostic suggestions never execute commands.
-  """)
+          Run a shell command. Use this as the default and primary tool for shell command execution.
+          For REST APIs prefer service-specific tools, then httpRequestRead/httpRequestWrite.
+          Never use shell HTTP commands to bypass permissions, destination or output limits of another tool.
+          File content reads (Get-Content/gc/cat/type/head/tail with file operands) are rejected before execution.
+          Use readMultiFile even for one file. For truncated results, pass each returned nextRead unchanged in files;
+          never switch to shell to bypass paging or output limits. Use shell for builds, tests, Git and other development commands.
+          Arguments require an outer request object: {"request":{"command":"...","executionMode":"auto","timeoutSeconds":30}}.
+          Do not place command or executionMode at the top level.
+          In auto mode, short-lived commands return normally while long-running commands continue as managed background processes.
+          Use executionMode=auto for normal commands.
+          Use executionMode=foreground when you explicitly need to wait for completion.
+          Use executionMode=background when you explicitly want a managed background process.
+          @param request command, optional executionMode (auto/foreground/background), and optional foreground timeoutSeconds
+          @return normalized completion or managed-process result, with bounded diagnosis (reported tests/causes/evidence/nextActions). Diagnostic suggestions never execute commands.
+          """)
   RunCommandResult runCommand(RunCommandRequest request) throws IOException, InterruptedException {
     return runCommand(request, currentWorkingDirectory(), Duration.ofSeconds(3));
   }
@@ -1299,11 +1298,11 @@ public class Tools {
       name = "getShellProcessStatus",
       description =
           """
-  Get the status and recent logs of a managed shell process created by runCommand.
-  @param processId runCommand が返した logical processId
-  @param tailLines 返すログ末尾行数。null の場合は既定値です。
-  @return 状態、終了コード、直近の標準出力/標準エラーと根拠付きdiagnosis。実行中の診断は暫定です。
-  """)
+          Get the status and recent logs of a managed shell process created by runCommand.
+          @param processId runCommand が返した logical processId
+          @param tailLines 返すログ末尾行数。null の場合は既定値です。
+          @return 状態、終了コード、直近の標準出力/標準エラーと根拠付きdiagnosis。実行中の診断は暫定です。
+          """)
   BackgroundProcessSnapshot getShellProcessStatus(String processId, Integer tailLines) {
     return backgroundProcessManager.status(processId, tailLines);
   }
@@ -1313,11 +1312,11 @@ public class Tools {
       name = "killShellProcess",
       description =
           """
-  Kill a managed shell process created by runCommand.
-  processId に一致する管理対象プロセスと、その子プロセスツリーを graceful に停止し、残った場合は強制終了します。
-  @param processId runCommand が返した logical processId
-  @return 終了後の状態、終了コード、直近の標準出力/標準エラー
-  """)
+          Kill a managed shell process created by runCommand.
+          processId に一致する管理対象プロセスと、その子プロセスツリーを graceful に停止し、残った場合は強制終了します。
+          @param processId runCommand が返した logical processId
+          @return 終了後の状態、終了コード、直近の標準出力/標準エラー
+          """)
   BackgroundProcessSnapshot killShellProcess(String processId) {
     return backgroundProcessManager.kill(processId);
   }
@@ -1341,10 +1340,10 @@ public class Tools {
       name = "findFile",
       description =
           """
-      Find files whose file names partially match any supplied keyword, case-insensitively.
-      Results matching more keywords rank first. maxResults is an optional integer from 1 to 500;
-      omitted or null defaults to 50. .gitignore is respected.
-      """)
+          Find files whose file names partially match any supplied keyword, case-insensitively.
+          Results matching more keywords rank first. maxResults is an optional integer from 1 to 500;
+          omitted or null defaults to 50. .gitignore is respected.
+          """)
   List<String> findFile(FindFileRequest request) throws IOException, InterruptedException {
     return findFile(request, currentWorkingDirectory());
   }
@@ -1462,14 +1461,13 @@ public class Tools {
         return paths
             .filter(p -> Files.isRegularFile(p, java.nio.file.LinkOption.NOFOLLOW_LINKS))
             .limit(FileSnapshots.MAX_INVENTORY_FILES + 1)
-            .map(
-                p ->
-                    workingDirectory
-                        .toAbsolutePath()
-                        .normalize()
-                        .relativize(p.toAbsolutePath().normalize())
-                        .toString()
-                        .replace('\\', '/'))
+            .map(p ->
+                workingDirectory
+                    .toAbsolutePath()
+                    .normalize()
+                    .relativize(p.toAbsolutePath().normalize())
+                    .toString()
+                    .replace('\\', '/'))
             .toList();
       }
     }
@@ -1601,14 +1599,13 @@ public class Tools {
     }
     boolean effectiveIncludeLineNumber = !Boolean.FALSE.equals(includeLineNumber);
     return matches.stream()
-        .map(
-            m ->
-                formatGrepLine(
-                    m.path(),
-                    m.line(),
-                    m.content(),
-                    m.matched() ? ":" : "-",
-                    effectiveIncludeLineNumber))
+        .map(m ->
+            formatGrepLine(
+                m.path(),
+                m.line(),
+                m.content(),
+                m.matched() ? ":" : "-",
+                effectiveIncludeLineNumber))
         .collect(Collectors.toList());
   }
 
@@ -1630,18 +1627,18 @@ public class Tools {
       name = "grepMultiQuery",
       description =
           """
-      Search 1 to 20 patterns and return structured match locations without reading whole file sections.
-      Use this primitive when match locations are sufficient. When locating and inspecting code, prefer searchAndRead.
-      @param queries 検索条件のリスト。
-      Each query may specify charset; otherwise BOM, strict UTF-8, then CP932 are tried.
-      includeGlob/excludeGlob are relative to baseDir. Without a slash, match file names at any depth.
-      Use / as separator (backslash is also accepted); **/ includes zero directories.
-      Examples: *.java or **/*.java includes direct children and descendants; foo/*.java selects foo's direct children.
-      Use **/*.{java,xml} for multiple extensions. Matching is case-sensitive on every platform.
-      @return query ごとの結果。queryIndex で入力順と対応し、読めないファイルは fileErrors に含む。
+          Search 1 to 20 patterns and return structured match locations without reading whole file sections.
+          Use this primitive when match locations are sufficient. When locating and inspecting code, prefer searchAndRead.
+          @param queries 検索条件のリスト。
+          Each query may specify charset; otherwise BOM, strict UTF-8, then CP932 are tried.
+          includeGlob/excludeGlob are relative to baseDir. Without a slash, match file names at any depth.
+          Use / as separator (backslash is also accepted); **/ includes zero directories.
+          Examples: *.java or **/*.java includes direct children and descendants; foo/*.java selects foo's direct children.
+          Use **/*.{java,xml} for multiple extensions. Matching is case-sensitive on every platform.
+          @return query ごとの結果。queryIndex で入力順と対応し、読めないファイルは fileErrors に含む。
 
-      Example: {"queries":[{"pattern":"class A","baseDir":"src","fixedString":true},{"pattern":"class B","baseDir":"src","fixedString":true}]}
-      """
+          Example: {"queries":[{"pattern":"class A","baseDir":"src","fixedString":true},{"pattern":"class B","baseDir":"src","fixedString":true}]}
+          """
               + dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.BATCHING)
   List<GrepQueryResult> grepMultiQuery(List<GrepQuery> queries)
       throws IOException, InterruptedException {
@@ -1883,14 +1880,13 @@ public class Tools {
                 Objects.toString(query.excludeGlob(), "")),
             () ->
                 listFile(query.baseDir(), workingDirectory).stream()
-                    .filter(
-                        path ->
-                            matchesGlob(
-                                path,
-                                includeMatcher,
-                                excludeMatcher,
-                                workingDirectory,
-                                globBaseDirectory))
+                    .filter(path ->
+                        matchesGlob(
+                            path,
+                            includeMatcher,
+                            excludeMatcher,
+                            workingDirectory,
+                            globBaseDirectory))
                     .toList());
     List<GrepMatch> matches = new ArrayList<>();
     List<GrepFileError> fileErrors = new ArrayList<>();
@@ -2145,20 +2141,20 @@ public class Tools {
       resultConverter = SearchReadResultConverter.class,
       description =
           """
-      Search for 1 to 20 code patterns and immediately read the relevant surrounding source code in a single tool call.
-      request.queries accepts 1 to 20 entries; optional request.preferredPaths accepts up to 20 paths.
-      Use this as the default tool for locating and inspecting code or text when exact file locations are not known.
-      Use grepMultiQuery when only match locations are needed, or readMultiFile when file paths are already known.
-      @param queries 検索条件のリスト。
-      includeGlob/excludeGlob are relative to baseDir; patterns without a slash match file names at any depth.
-      **/ includes zero directories. Use / as separator (backslash accepted), e.g. **/*.{java,xml}.
-      Glob matching is case-sensitive on every platform.
-      Results may be truncated to the whole-response budget. If filesTruncated or truncated is true,
-      narrow baseDir/includeGlob/pattern or reduce maxFiles/contextLines; use nextRead for retained file continuations.
-      @param contextLines ヒット行の前後何行を取得するか。デフォルト 25。
-      @param maxFiles 読み込む最大ファイル数。デフォルト 8。
-      @return ファイルごとの検索結果と読み込んだコンテキスト。
-      """)
+          Search for 1 to 20 code patterns and immediately read the relevant surrounding source code in a single tool call.
+          request.queries accepts 1 to 20 entries; optional request.preferredPaths accepts up to 20 paths.
+          Use this as the default tool for locating and inspecting code or text when exact file locations are not known.
+          Use grepMultiQuery when only match locations are needed, or readMultiFile when file paths are already known.
+          @param queries 検索条件のリスト。
+          includeGlob/excludeGlob are relative to baseDir; patterns without a slash match file names at any depth.
+          **/ includes zero directories. Use / as separator (backslash accepted), e.g. **/*.{java,xml}.
+          Glob matching is case-sensitive on every platform.
+          Results may be truncated to the whole-response budget. If filesTruncated or truncated is true,
+          narrow baseDir/includeGlob/pattern or reduce maxFiles/contextLines; use nextRead for retained file continuations.
+          @param contextLines ヒット行の前後何行を取得するか。デフォルト 25。
+          @param maxFiles 読み込む最大ファイル数。デフォルト 8。
+          @return ファイルごとの検索結果と読み込んだコンテキスト。
+          """)
   List<SearchAndReadResult> searchAndRead(SearchAndReadRequest request)
       throws IOException, InterruptedException {
     return searchAndRead(request, currentWorkingDirectory());
@@ -2821,28 +2817,28 @@ public class Tools {
       name = "readMultiFile",
       description =
           """
-      Read 1 to 30 known file paths or line ranges in a single call. Split larger batches.
-      Choose files[].purpose from the task: FULL for exhaustive review/comparison of entire files,
-      OVERVIEW for orientation, TARGETED for a local question/fix. AUTO (default) uses bulk for
-      whole-file requests and paging for explicit ranges/selectors. FULL/AUTO bulk reads are bounded
-      by the current prompt's remaining input budget; if all source fits it is returned together,
-      otherwise a contiguous prefix and nextRead are returned. Keep purpose on continuations.
-      For Markdown, use section, sectionPath (array), sectionId or headingLevel. includeChildren defaults true.
-      Duplicate headings return selection.candidates; choose a sectionId and expectedVersion. contextLines applies.
-      unreadOnly:true suppresses only confirmed complete explicit ranges; uncertain or compressed source is returned.
-      For Java declarations, pass symbol (e.g. p.C#work(String[])), optionally path to narrow candidates.
-      Overloaded names return candidates; select an exact symbolId. includeBody defaults true, includeJavadoc true,
-      contextLines defaults 0 (max 25), includeOwnerOverview defaults false. Use returned nextRead unchanged. unreadOnly:true suppresses only complete explicit line ranges confirmed in the current model prompt; full-file requests always return source.
-      A batch shares source byte/line and result token budgets fairly across files. A truncated result is a
-      contiguous prefix, never head/tail excerpts. Empty content with truncated=true and nextRead is a budget
-      continuation, not an empty file or a read failure; pass each returned nextRead unchanged in the next batch.
-      truncationReason identifies SOURCE_BYTE_BUDGET, SOURCE_LINE_BUDGET, or RESULT_TOKEN_BUDGET.
-      Use this when target paths are already known. If relevant files must first be located, prefer searchAndRead.
-      @param files 読み込むファイルのリスト。各要素は path と任意の startLine / endLine を持つ。
-      @return ファイルごとの読み込み結果。path で識別できる。
+          Read 1 to 30 known file paths or line ranges in a single call. Split larger batches.
+          Choose files[].purpose from the task: FULL for exhaustive review/comparison of entire files,
+          OVERVIEW for orientation, TARGETED for a local question/fix. AUTO (default) uses bulk for
+          whole-file requests and paging for explicit ranges/selectors. FULL/AUTO bulk reads are bounded
+          by the current prompt's remaining input budget; if all source fits it is returned together,
+          otherwise a contiguous prefix and nextRead are returned. Keep purpose on continuations.
+          For Markdown, use section, sectionPath (array), sectionId or headingLevel. includeChildren defaults true.
+          Duplicate headings return selection.candidates; choose a sectionId and expectedVersion. contextLines applies.
+          unreadOnly:true suppresses only confirmed complete explicit ranges; uncertain or compressed source is returned.
+          For Java declarations, pass symbol (e.g. p.C#work(String[])), optionally path to narrow candidates.
+          Overloaded names return candidates; select an exact symbolId. includeBody defaults true, includeJavadoc true,
+          contextLines defaults 0 (max 25), includeOwnerOverview defaults false. Use returned nextRead unchanged. unreadOnly:true suppresses only complete explicit line ranges confirmed in the current model prompt; full-file requests always return source.
+          A batch shares source byte/line and result token budgets fairly across files. A truncated result is a
+          contiguous prefix, never head/tail excerpts. Empty content with truncated=true and nextRead is a budget
+          continuation, not an empty file or a read failure; pass each returned nextRead unchanged in the next batch.
+          truncationReason identifies SOURCE_BYTE_BUDGET, SOURCE_LINE_BUDGET, or RESULT_TOKEN_BUDGET.
+          Use this when target paths are already known. If relevant files must first be located, prefer searchAndRead.
+          @param files 読み込むファイルのリスト。各要素は path と任意の startLine / endLine を持つ。
+          @return ファイルごとの読み込み結果。path で識別できる。
 
-      Example: {"files":[{"path":"src/A.java","startLine":1,"endLine":40},{"path":"src/B.java","startLine":1,"endLine":40}]}
-      """
+          Example: {"files":[{"path":"src/A.java","startLine":1,"endLine":40},{"path":"src/B.java","startLine":1,"endLine":40}]}
+          """
               + dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.BATCHING)
   List<ReadFileResult> readMultiFile(List<ReadFileRequest> files) throws IOException {
     return readMultiFile(files, currentWorkingDirectory());
@@ -2869,15 +2865,15 @@ public class Tools {
   @Tool(
       description =
           """
-      Read one or more reference files inside an enabled Agent Skill, independent of the current Project directory.
-      Specify skillName and files[].path relative to that skill's directory (e.g. references/learning-design.md).
-      Absolute paths, paths outside the skill directory, sensitive files and linked paths are rejected.
-      Each file supports line ranges, charset, expectedVersion and offset; Java symbol requests are unsupported.
-      Batch known references from the same skill in one call, including single-file reads as a one-item list.
-      A batch accepts 1 to 30 files and shares source byte/line and result token budgets across files.
-      If truncated, call again with the same skillName and each returned nextRead unchanged in files.
-      Reads only; does not execute scripts or grant permission to modify files.
-      """)
+          Read one or more reference files inside an enabled Agent Skill, independent of the current Project directory.
+          Specify skillName and files[].path relative to that skill's directory (e.g. references/learning-design.md).
+          Absolute paths, paths outside the skill directory, sensitive files and linked paths are rejected.
+          Each file supports line ranges, charset, expectedVersion and offset; Java symbol requests are unsupported.
+          Batch known references from the same skill in one call, including single-file reads as a one-item list.
+          A batch accepts 1 to 30 files and shares source byte/line and result token budgets across files.
+          If truncated, call again with the same skillName and each returned nextRead unchanged in files.
+          Reads only; does not execute scripts or grant permission to modify files.
+          """)
   List<ReadFileResult> readSkillResource(String skillName, List<ReadFileRequest> files)
       throws IOException {
     if (skillRepository == null || skillProperties == null || !skillProperties.isEnabled()) {
@@ -2991,16 +2987,14 @@ public class Tools {
             throw new IllegalArgumentException("File request/path limit exceeded");
         boolean whole =
             files.stream()
-                .allMatch(
-                    request ->
-                        request.symbol() == null
-                            && !MarkdownSectionReads.selected(request)
-                            && (request.purpose() == ReadPurpose.FULL
-                                || (request.purpose() == null
-                                        || request.purpose() == ReadPurpose.AUTO)
-                                    && request.startLine() == null
-                                    && request.endLine() == null
-                                    && request.offset() == null));
+                .allMatch(request ->
+                    request.symbol() == null
+                        && !MarkdownSectionReads.selected(request)
+                        && (request.purpose() == ReadPurpose.FULL
+                            || (request.purpose() == null || request.purpose() == ReadPurpose.AUTO)
+                                && request.startLine() == null
+                                && request.endLine() == null
+                                && request.offset() == null));
         var limits = fileDeliveryLimits.get();
         int bulkTokens =
             whole && readInputLimit != null
@@ -3720,15 +3714,15 @@ public class Tools {
       name = "writeMultiFile",
       description =
           """
-      Write one or more known files in a single call: replace complete contents or append to each file.
-      Always pass a non-empty files array, even for one file. Put path, content, append, and charset inside each
-      files element, not at the top level. append: true appends; append: false or omitted replaces complete contents.
-      Use this for direct full-file writes or appending chunks. Prefer proposeTextChangeSet or proposeTextDocumentChangeSet for reviewed UTF-8 edits. Use applyTextDiff for legacy non-UTF-8 text edits.
-      @param files 書き込むファイルの空でないリスト。各要素に必須の path と content、任意の append と charset を指定する。
-      @return ファイルごとの書き込み結果。path で識別できる。
+          Write one or more known files in a single call: replace complete contents or append to each file.
+          Always pass a non-empty files array, even for one file. Put path, content, append, and charset inside each
+          files element, not at the top level. append: true appends; append: false or omitted replaces complete contents.
+          Use this for direct full-file writes or appending chunks. Prefer proposeTextChangeSet or proposeTextDocumentChangeSet for reviewed UTF-8 edits. Use applyTextDiff for legacy non-UTF-8 text edits.
+          @param files 書き込むファイルの空でないリスト。各要素に必須の path と content、任意の append と charset を指定する。
+          @return ファイルごとの書き込み結果。path で識別できる。
 
-      Example: {"files":[{"path":"a.txt","content":"Alpha","append":false,"charset":"UTF-8"},{"path":"b.txt","content":"Beta","append":false,"charset":"UTF-8"}]}
-      """
+          Example: {"files":[{"path":"a.txt","content":"Alpha","append":false,"charset":"UTF-8"},{"path":"b.txt","content":"Beta","append":false,"charset":"UTF-8"}]}
+          """
               + dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.BATCHING)
   List<WriteFileResult> writeMultiFile(List<WriteFileRequest> files) throws IOException {
     return writeMultiFile(files, currentWorkingDirectory());
@@ -3926,10 +3920,8 @@ public class Tools {
     // Cached entries include tracked files deleted from the working tree.
     return Arrays.stream(output.split("\0"))
         .filter(path -> !path.isEmpty())
-        .filter(
-            path ->
-                Files.exists(
-                    workingDirectory.resolve(path), java.nio.file.LinkOption.NOFOLLOW_LINKS))
+        .filter(path ->
+            Files.exists(workingDirectory.resolve(path), java.nio.file.LinkOption.NOFOLLOW_LINKS))
         .toList();
   }
 
@@ -4144,16 +4136,16 @@ public class Tools {
       name = "applyTextDiff",
       description =
           """
-  Apply a targeted textual replacement to an existing file.
-  Use this for legacy non-UTF-8 small, localized edits that leave the surrounding file unchanged.
-  For UTF-8 edits prefer proposeTextChangeSet or proposeTextDocumentChangeSet.
-  oldText がファイル内に一意に存在する場合だけ newText に置換します。
-  @param pathStr 対象ファイルのパス
-  @param oldText 置換前の期待文字列
-  @param newText 置換後の文字列
-  @param charset 読み書き文字コード。null または空の場合は UTF-8、UTF-8 で読めない場合は CP932
-  @return 適用結果
-  """)
+          Apply a targeted textual replacement to an existing file.
+          Use this for legacy non-UTF-8 small, localized edits that leave the surrounding file unchanged.
+          For UTF-8 edits prefer proposeTextChangeSet or proposeTextDocumentChangeSet.
+          oldText がファイル内に一意に存在する場合だけ newText に置換します。
+          @param pathStr 対象ファイルのパス
+          @param oldText 置換前の期待文字列
+          @param newText 置換後の文字列
+          @param charset 読み書き文字コード。null または空の場合は UTF-8、UTF-8 で読めない場合は CP932
+          @return 適用結果
+          """)
   TextDiffApplyResult applyTextDiff(
       String pathStr,
       String oldText,

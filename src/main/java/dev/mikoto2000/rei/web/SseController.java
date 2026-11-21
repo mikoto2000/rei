@@ -58,11 +58,10 @@ public class SseController {
               }
             });
     emitter.onCompletion(connection::close);
-    emitter.onTimeout(
-        () -> {
-          connection.close();
-          emitter.complete();
-        });
+    emitter.onTimeout(() -> {
+      connection.close();
+      emitter.complete();
+    });
     emitter.onError(error -> connection.close());
     return emitter;
   }

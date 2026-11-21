@@ -45,10 +45,9 @@ class ProjectEventBoundaryTest {
     try (subscriber) {
       var first = event(project);
       var second = event(project);
-      bus.subscribe(
-          e -> {
-            if (e.id().equals(first.id())) bus.publishBoundary(second);
-          });
+      bus.subscribe(e -> {
+        if (e.id().equals(first.id())) bus.publishBoundary(second);
+      });
       bus.publishBoundary(first);
       assertEquals(
           List.of(first.id(), second.id()),

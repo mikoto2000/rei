@@ -29,9 +29,8 @@ class WebRelevantExcerptTest {
     assertTrue(page.content().contains("  client.createResponse();"));
     assertTrue(
         page.excerpts().stream()
-            .anyMatch(
-                section ->
-                    section.kind().equals("code") && section.headings().contains("Client 2.0.1")));
+            .anyMatch(section ->
+                section.kind().equals("code") && section.headings().contains("Client 2.0.1")));
     assertTrue(
         page.excerpts().stream()
             .allMatch(section -> section.contentEnd() <= page.content().length()));

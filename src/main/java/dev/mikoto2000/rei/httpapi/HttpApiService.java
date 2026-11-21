@@ -99,22 +99,21 @@ public class HttpApiService {
       if (request.headers() != null)
         request
             .headers()
-            .forEach(
-                (name, value) -> {
-                  if (name == null
-                      || !Set.of(
-                              "accept",
-                              "accept-language",
-                              "if-none-match",
-                              "if-modified-since",
-                              "idempotency-key")
-                          .contains(name.toLowerCase(Locale.ROOT))
-                      || value == null
-                      || value.length() > 4096
-                      || value.chars().anyMatch(c -> c < 32 || c == 127))
-                    throw new IllegalArgumentException();
-                  headers.put(name, value);
-                });
+            .forEach((name, value) -> {
+              if (name == null
+                  || !Set.of(
+                          "accept",
+                          "accept-language",
+                          "if-none-match",
+                          "if-modified-since",
+                          "idempotency-key")
+                      .contains(name.toLowerCase(Locale.ROOT))
+                  || value == null
+                  || value.length() > 4096
+                  || value.chars().anyMatch(c -> c < 32 || c == 127))
+                throw new IllegalArgumentException();
+              headers.put(name, value);
+            });
       String secret = null;
       if (request.authProfile() != null) {
         var profile = properties.authProfiles().get(request.authProfile());
@@ -146,11 +145,10 @@ public class HttpApiService {
         URI current = uri;
         if (!write
             && properties.unsafeReadPrefixes().stream()
-                .anyMatch(
-                    prefix ->
-                        sameOrigin(prefix, current)
-                            && (current.getPath().contains("%")
-                                || decodedPath(current).startsWith(decodedPath(prefix)))))
+                .anyMatch(prefix ->
+                    sameOrigin(prefix, current)
+                        && (current.getPath().contains("%")
+                            || decodedPath(current).startsWith(decodedPath(prefix)))))
           throw new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED);
         var observer = metrics.observer(() -> sent.set(true));
         SafeHttpFetcher.Response response;
@@ -254,13 +252,12 @@ public class HttpApiService {
     if (request.query() != null)
       request
           .query()
-          .forEach(
-              (key, value) -> {
-                url.append(url.indexOf("?") < 0 ? '?' : '&')
-                    .append(encode(key))
-                    .append('=')
-                    .append(encode(value));
-              });
+          .forEach((key, value) -> {
+            url.append(url.indexOf("?") < 0 ? '?' : '&')
+                .append(encode(key))
+                .append('=')
+                .append(encode(value));
+          });
     return URI.create(url.toString());
   }
 

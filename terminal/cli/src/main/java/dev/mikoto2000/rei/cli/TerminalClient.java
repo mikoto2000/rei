@@ -1317,101 +1317,97 @@ public final class TerminalClient implements AutoCloseable {
     if (watching != null) watching.cancel(true);
     attached = true;
     watching =
-        streams.submit(
-            () -> {
-              var sequence = new AtomicLong();
-              var eventOutput = new RunEventOutput(this::out, this::approvalNotice);
-              int reconnects = 0;
+        streams.submit(() -> {
+          var sequence = new AtomicLong();
+          var eventOutput = new RunEventOutput(this::out, this::approvalNotice);
+          int reconnects = 0;
+          try {
+            while (attached
+                && generation == subscriptionGeneration.get()
+                && !Thread.currentThread().isInterrupted()) {
               try {
-                while (attached
-                    && generation == subscriptionGeneration.get()
-                    && !Thread.currentThread().isInterrupted()) {
-                  try {
-                    backend.events(
-                        id,
-                        sequence.get(),
-                        event -> {
-                          if (!attached || generation != subscriptionGeneration.get()) return;
-                          try {
-                            var value = BackendClient.JSON.readTree(event.data());
-                            boolean shutdown =
-                                event.type().equals("application.shutdown.started")
-                                    && value.path("runId").isNull();
-                            if (!id.equals(value.path("runId").asText()) && !shutdown)
-                              throw new IllegalArgumentException("Event Run identity mismatch");
-                            sequence.set(event.sequence());
-                            eventOutput.acceptEvent(event.type(), value);
-                            if (event.type().equals("attention.required")
-                                && value
-                                    .path("payload")
-                                    .path("kind")
-                                    .asText()
-                                    .equals("APPROVAL_REQUIRED")) {
-                              var match =
-                                  java.util.regex.Pattern.compile(
-                                          "(?m)^/approval approve ([0-9a-fA-F-]{36}) --continue$")
-                                      .matcher(value.path("payload").path("message").asText());
-                              if (match.find())
-                                approvalMenu.offer(
-                                    value.path("projectId").asText(),
-                                    value.path("sessionId").asText(),
-                                    match.group(1));
-                            }
-                            if (Set.of(
-                                        "agent.run.completed",
-                                        "agent.run.failed",
-                                        "agent.run.cancelled")
-                                    .contains(event.type())
-                                || shutdown) attached = false;
-                          } catch (IOException invalid) {
-                            throw new IllegalArgumentException("Malformed Run event");
-                          }
-                        });
-                    if (!attached) return;
-                  } catch (BackendClient.ApiException error) {
-                    if (error.status() == 409) {
-                      out(
-                          "Event history has a gap; output is incomplete. Fetching Run status and saved Session turns.");
-                      poll(id, generation);
-                      return;
-                    }
-                    if (error.status() == 401 || error.status() == 403) {
-                      out(
-                          "Backend authentication failed: "
-                              + dev.mikoto2000.rei.event.FailureMessages.describe(error));
-                      return;
-                    }
-                    out(
-                        "Run event stream rejected: "
-                            + dev.mikoto2000.rei.event.FailureMessages.describe(error));
-                  } catch (InterruptedException interrupt) {
-                    // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
-                    Thread.currentThread().interrupt();
-                    return;
-                  } catch (IOException | IllegalArgumentException error) {
-                    if (!attached) return;
-                    out(
-                        "Run event stream interrupted: "
-                            + dev.mikoto2000.rei.event.FailureMessages.describe(error));
-                  }
-                  if (++reconnects > 3) {
-                    out(
-                        "Stream disconnected. /watch "
-                            + id
-                            + " reconnects; the Run continues on Backend.");
-                    return;
-                  }
-                  try {
-                    Thread.sleep(250L * reconnects);
-                  } catch (InterruptedException interrupt) {
-                    Thread.currentThread().interrupt();
-                    return;
-                  }
+                backend.events(
+                    id,
+                    sequence.get(),
+                    event -> {
+                      if (!attached || generation != subscriptionGeneration.get()) return;
+                      try {
+                        var value = BackendClient.JSON.readTree(event.data());
+                        boolean shutdown =
+                            event.type().equals("application.shutdown.started")
+                                && value.path("runId").isNull();
+                        if (!id.equals(value.path("runId").asText()) && !shutdown)
+                          throw new IllegalArgumentException("Event Run identity mismatch");
+                        sequence.set(event.sequence());
+                        eventOutput.acceptEvent(event.type(), value);
+                        if (event.type().equals("attention.required")
+                            && value
+                                .path("payload")
+                                .path("kind")
+                                .asText()
+                                .equals("APPROVAL_REQUIRED")) {
+                          var match =
+                              java.util.regex.Pattern.compile(
+                                      "(?m)^/approval approve ([0-9a-fA-F-]{36}) --continue$")
+                                  .matcher(value.path("payload").path("message").asText());
+                          if (match.find())
+                            approvalMenu.offer(
+                                value.path("projectId").asText(),
+                                value.path("sessionId").asText(),
+                                match.group(1));
+                        }
+                        if (Set.of("agent.run.completed", "agent.run.failed", "agent.run.cancelled")
+                                .contains(event.type())
+                            || shutdown) attached = false;
+                      } catch (IOException invalid) {
+                        throw new IllegalArgumentException("Malformed Run event");
+                      }
+                    });
+                if (!attached) return;
+              } catch (BackendClient.ApiException error) {
+                if (error.status() == 409) {
+                  out(
+                      "Event history has a gap; output is incomplete. Fetching Run status and saved Session turns.");
+                  poll(id, generation);
+                  return;
                 }
-              } finally {
-                if (generation == subscriptionGeneration.get()) eventOutput.flush();
+                if (error.status() == 401 || error.status() == 403) {
+                  out(
+                      "Backend authentication failed: "
+                          + dev.mikoto2000.rei.event.FailureMessages.describe(error));
+                  return;
+                }
+                out(
+                    "Run event stream rejected: "
+                        + dev.mikoto2000.rei.event.FailureMessages.describe(error));
+              } catch (InterruptedException interrupt) {
+                // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
+                Thread.currentThread().interrupt();
+                return;
+              } catch (IOException | IllegalArgumentException error) {
+                if (!attached) return;
+                out(
+                    "Run event stream interrupted: "
+                        + dev.mikoto2000.rei.event.FailureMessages.describe(error));
               }
-            });
+              if (++reconnects > 3) {
+                out(
+                    "Stream disconnected. /watch "
+                        + id
+                        + " reconnects; the Run continues on Backend.");
+                return;
+              }
+              try {
+                Thread.sleep(250L * reconnects);
+              } catch (InterruptedException interrupt) {
+                Thread.currentThread().interrupt();
+                return;
+              }
+            }
+          } finally {
+            if (generation == subscriptionGeneration.get()) eventOutput.flush();
+          }
+        });
   }
 
   /** 軽量CLIでの対話に関する状態確認を処理する。 */

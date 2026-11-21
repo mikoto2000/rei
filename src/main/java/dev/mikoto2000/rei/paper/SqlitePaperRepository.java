@@ -89,95 +89,88 @@ public class SqlitePaperRepository implements PaperRepository {
   /** 後から参照できるよう、指定された情報を保存する。 */
   public synchronized Paper save(Paper incoming, PaperOperation op) {
     try {
-      return tx.execute(
-          status -> {
-            op.check();
-            String d = doi(incoming.doi()),
-                a = arxiv(incoming.arxivId()),
-                f = fingerprint(incoming);
-            List<Paper> matches =
-                jdbc.query(
-                    "SELECT payload FROM papers WHERE (doi IS NOT NULL AND doi=?) OR (arxiv IS NOT"
-                        + " NULL AND arxiv=?) OR (fingerprint IS NOT NULL AND fingerprint=?)",
-                    (r, n) -> PaperJson.read(r.getString(1), Paper.class),
-                    d,
-                    a,
-                    f);
-            Paper old =
-                matches.stream()
-                    .filter(
-                        p ->
-                            Objects.equals(d, doi(p.doi())) && d != null
-                                || Objects.equals(a, arxiv(p.arxivId())) && a != null)
-                    .findFirst()
-                    .orElseGet(
-                        () ->
-                            matches.stream()
-                                .filter(
-                                    p ->
-                                        (d == null || p.doi() == null || d.equals(doi(p.doi())))
-                                            && (a == null
-                                                || p.arxivId() == null
-                                                || a.equals(arxiv(p.arxivId()))))
-                                .findFirst()
-                                .orElse(null));
-            if (old != null) {
-              for (Paper duplicate : matches) {
-                if (duplicate.id().equals(old.id())) continue;
-                boolean identified =
-                    d != null && d.equals(doi(duplicate.doi()))
-                        || a != null && a.equals(arxiv(duplicate.arxivId()));
-                if (!identified) continue;
-                old = merge(old, duplicate, doi(duplicate.doi()), arxiv(duplicate.arxivId()));
-                jdbc.update(
-                    "UPDATE paper_artifacts SET paper_id=? WHERE paper_id=?",
-                    old.id(),
-                    duplicate.id());
-                jdbc.update(
-                    "UPDATE paper_aliases SET canonical_id=? WHERE canonical_id=?",
-                    old.id(),
-                    duplicate.id());
-                jdbc.update(
-                    "INSERT OR REPLACE INTO paper_aliases VALUES(?,?)", duplicate.id(), old.id());
-                jdbc.update("DELETE FROM papers WHERE id=?", duplicate.id());
-              }
-            }
-            Paper p = merge(old, incoming, d, a);
-            Integer pendingDeletion = jdbc.queryForObject(
-                "SELECT count(*) FROM papers WHERE id=? AND removed=2", Integer.class, p.id());
-            if (pendingDeletion == null)
-              throw new IllegalStateException("Missing paper deletion count");
-            if (pendingDeletion > 0)
-              throw new PaperException(
-                  PaperException.Code.LIBRARY_STORAGE_FAILED, "完全削除が保留中です。先に purge を再実行してください");
-            String search =
-                norm(
-                    p.title()
-                        + " "
-                        + String.join(" ", p.authors())
-                        + " "
-                        + p.abstractText()
-                        + " "
-                        + p.venue()
-                        + " "
-                        + p.doi()
-                        + " "
-                        + p.publicationYear()
-                        + " "
-                        + String.join(" ", p.tags()));
+      return tx.execute(status -> {
+        op.check();
+        String d = doi(incoming.doi()), a = arxiv(incoming.arxivId()), f = fingerprint(incoming);
+        List<Paper> matches =
+            jdbc.query(
+                "SELECT payload FROM papers WHERE (doi IS NOT NULL AND doi=?) OR (arxiv IS NOT"
+                    + " NULL AND arxiv=?) OR (fingerprint IS NOT NULL AND fingerprint=?)",
+                (r, n) -> PaperJson.read(r.getString(1), Paper.class),
+                d,
+                a,
+                f);
+        Paper old =
+            matches.stream()
+                .filter(p ->
+                    Objects.equals(d, doi(p.doi())) && d != null
+                        || Objects.equals(a, arxiv(p.arxivId())) && a != null)
+                .findFirst()
+                .orElseGet(() ->
+                    matches.stream()
+                        .filter(p ->
+                            (d == null || p.doi() == null || d.equals(doi(p.doi())))
+                                && (a == null
+                                    || p.arxivId() == null
+                                    || a.equals(arxiv(p.arxivId()))))
+                        .findFirst()
+                        .orElse(null));
+        if (old != null) {
+          for (Paper duplicate : matches) {
+            if (duplicate.id().equals(old.id())) continue;
+            boolean identified =
+                d != null && d.equals(doi(duplicate.doi()))
+                    || a != null && a.equals(arxiv(duplicate.arxivId()));
+            if (!identified) continue;
+            old = merge(old, duplicate, doi(duplicate.doi()), arxiv(duplicate.arxivId()));
             jdbc.update(
-                "INSERT INTO papers(id,payload,doi,arxiv,fingerprint,search_text,removed)"
-                    + " VALUES(?,?,?,?,?,?,0) ON CONFLICT(id) DO UPDATE SET"
-                    + " payload=excluded.payload,doi=excluded.doi,arxiv=excluded.arxiv,fingerprint=excluded.fingerprint,search_text=excluded.search_text,removed=0",
-                p.id(),
-                PaperJson.write(p),
-                p.doi(),
-                p.arxivId(),
-                fingerprint(p),
-                search);
-            op.check();
-            return p;
-          });
+                "UPDATE paper_artifacts SET paper_id=? WHERE paper_id=?", old.id(), duplicate.id());
+            jdbc.update(
+                "UPDATE paper_aliases SET canonical_id=? WHERE canonical_id=?",
+                old.id(),
+                duplicate.id());
+            jdbc.update(
+                "INSERT OR REPLACE INTO paper_aliases VALUES(?,?)", duplicate.id(), old.id());
+            jdbc.update("DELETE FROM papers WHERE id=?", duplicate.id());
+          }
+        }
+        Paper p = merge(old, incoming, d, a);
+        Integer pendingDeletion =
+            jdbc.queryForObject(
+                "SELECT count(*) FROM papers WHERE id=? AND removed=2", Integer.class, p.id());
+        if (pendingDeletion == null)
+          throw new IllegalStateException("Missing paper deletion count");
+        if (pendingDeletion > 0)
+          throw new PaperException(
+              PaperException.Code.LIBRARY_STORAGE_FAILED, "完全削除が保留中です。先に purge を再実行してください");
+        String search =
+            norm(
+                p.title()
+                    + " "
+                    + String.join(" ", p.authors())
+                    + " "
+                    + p.abstractText()
+                    + " "
+                    + p.venue()
+                    + " "
+                    + p.doi()
+                    + " "
+                    + p.publicationYear()
+                    + " "
+                    + String.join(" ", p.tags()));
+        jdbc.update(
+            "INSERT INTO papers(id,payload,doi,arxiv,fingerprint,search_text,removed)"
+                + " VALUES(?,?,?,?,?,?,0) ON CONFLICT(id) DO UPDATE SET"
+                + " payload=excluded.payload,doi=excluded.doi,arxiv=excluded.arxiv,fingerprint=excluded.fingerprint,search_text=excluded.search_text,removed=0",
+            p.id(),
+            PaperJson.write(p),
+            p.doi(),
+            p.arxivId(),
+            fingerprint(p),
+            search);
+        op.check();
+        return p;
+      });
     } catch (PaperException e) {
       throw e;
     } catch (java.util.concurrent.CancellationException e) {
@@ -323,12 +316,11 @@ public class SqlitePaperRepository implements PaperRepository {
   /** 論文の調査と整理に関するmutationを処理する。 */
   private void mutation(Runnable action, PaperOperation op) {
     try {
-      tx.executeWithoutResult(
-          s -> {
-            op.check();
-            action.run();
-            op.check();
-          });
+      tx.executeWithoutResult(s -> {
+        op.check();
+        action.run();
+        op.check();
+      });
     } catch (PaperException e) {
       throw e;
     } catch (java.util.concurrent.CancellationException e) {
@@ -363,18 +355,17 @@ public class SqlitePaperRepository implements PaperRepository {
 
   /** 後から参照できるよう、成果物を保存する。 */
   public void saveArtifact(String id, String kind, String key, String content, PaperOperation op) {
-    tx.executeWithoutResult(
-        s -> {
-          op.check();
-          jdbc.update(
-              "INSERT INTO paper_artifacts VALUES(?,?,?,?,?,?)",
-              UUID.randomUUID().toString(),
-              id,
-              kind,
-              key,
-              java.time.Instant.now().toString(),
-              content);
-          op.check();
-        });
+    tx.executeWithoutResult(s -> {
+      op.check();
+      jdbc.update(
+          "INSERT INTO paper_artifacts VALUES(?,?,?,?,?,?)",
+          UUID.randomUUID().toString(),
+          id,
+          kind,
+          key,
+          java.time.Instant.now().toString(),
+          content);
+      op.check();
+    });
   }
 }

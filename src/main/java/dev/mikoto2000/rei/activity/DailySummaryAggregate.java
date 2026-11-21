@@ -66,14 +66,10 @@ public record DailySummaryAggregate(
             ? null
             : Collections.unmodifiableMap(new LinkedHashMap<>(entertainmentSeconds));
     topProjects =
-        topProjects == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(topProjects));
+        topProjects == null ? null : Collections.unmodifiableList(new ArrayList<>(topProjects));
     services = services == null ? null : Collections.unmodifiableList(new ArrayList<>(services));
     timeOfDay =
-        timeOfDay == null
-            ? null
-            : Collections.unmodifiableMap(new LinkedHashMap<>(timeOfDay));
+        timeOfDay == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(timeOfDay));
     projectThemeStats =
         projectThemeStats == null
             ? null
@@ -137,9 +133,7 @@ public record DailySummaryAggregate(
       @com.fasterxml.jackson.annotation.JsonIgnore Map<String, Long> categorySeconds) {
     public ProjectThemeStat {
       categories =
-          categories == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(categories));
+          categories == null ? null : Collections.unmodifiableList(new ArrayList<>(categories));
       themeCandidates =
           themeCandidates == null
               ? null
@@ -187,17 +181,11 @@ public record DailySummaryAggregate(
               : Collections.unmodifiableMap(new LinkedHashMap<>(categorySeconds));
       dominant = dominant == null ? null : Collections.unmodifiableList(new ArrayList<>(dominant));
       secondary =
-          secondary == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(secondary));
+          secondary == null ? null : Collections.unmodifiableList(new ArrayList<>(secondary));
       background =
-          background == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(background));
+          background == null ? null : Collections.unmodifiableList(new ArrayList<>(background));
       workThemes =
-          workThemes == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(workThemes));
+          workThemes == null ? null : Collections.unmodifiableList(new ArrayList<>(workThemes));
       dominantProjects =
           dominantProjects == null
               ? null

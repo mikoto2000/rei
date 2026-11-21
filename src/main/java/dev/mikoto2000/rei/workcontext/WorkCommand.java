@@ -85,56 +85,46 @@ public class WorkCommand implements Callable<Integer> {
 
   /** 利用者が対象の情報を確認できるように表示する。 */
   int show() {
-    return execute(
-        () -> {
-          var p = selectedProject.get();
-          return new WorkContextFormatter()
-              .details(
-                  service.current(p.id()).orElse(null),
-                  git.capture(p.root(), java.time.Instant.now()));
-        });
+    return execute(() -> {
+      var p = selectedProject.get();
+      return new WorkContextFormatter()
+          .details(
+              service.current(p.id()).orElse(null), git.capture(p.root(), java.time.Instant.now()));
+    });
   }
 
   /** 指定された変更を、管理中の情報へ反映する。 */
   int update() {
-    return execute(
-        () -> {
-          // Capture session first; the application service resolves the immutable session owner.
-          String session = currentSessionId.get();
-          Runnable clearCancellation = beginCommand.get();
-          try {
-            return service
-                .update(session, null, true)
-                .map(
-                    c ->
-                        "Work Context saved: project="
-                            + c.projectId()
-                            + " revision="
-                            + c.revision())
-                .orElse("保存できる会話はまだありません。");
-          } finally {
-            clearCancellation.run();
-          }
-        });
+    return execute(() -> {
+      // Capture session first; the application service resolves the immutable session owner.
+      String session = currentSessionId.get();
+      Runnable clearCancellation = beginCommand.get();
+      try {
+        return service
+            .update(session, null, true)
+            .map(c -> "Work Context saved: project=" + c.projectId() + " revision=" + c.revision())
+            .orElse("保存できる会話はまだありません。");
+      } finally {
+        clearCancellation.run();
+      }
+    });
   }
 
   /** 過去の記録を、条件に従って参照できる形で返す。 */
   int history() {
-    return execute(
-        () -> {
-          var rows = service.history(selectedProject.get().id(), 100);
-          if (rows.isEmpty()) return "Work Context: 履歴はまだありません。";
-          return rows.stream()
-              .map(
-                  c ->
-                      "revision="
-                          + c.revision()
-                          + " updated="
-                          + c.updatedAt()
-                          + " items="
-                          + c.items().size())
-              .collect(java.util.stream.Collectors.joining("\n"));
-        });
+    return execute(() -> {
+      var rows = service.history(selectedProject.get().id(), 100);
+      if (rows.isEmpty()) return "Work Context: 履歴はまだありません。";
+      return rows.stream()
+          .map(c ->
+              "revision="
+                  + c.revision()
+                  + " updated="
+                  + c.updatedAt()
+                  + " items="
+                  + c.items().size())
+          .collect(java.util.stream.Collectors.joining("\n"));
+    });
   }
 
   /** 要求された処理を実行する。 */

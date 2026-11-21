@@ -124,18 +124,17 @@ public final class BackgroundRunSubmitService {
       throw new IllegalStateException("Background runtime unavailable");
     var active =
         activeSummaries.entrySet().stream()
-            .map(
-                item -> {
-                  var run = registeredRun.apply(item.getKey());
-                  return new dev.mikoto2000.rei.core.execution.ActiveExecution(
-                      item.getKey(),
-                      projectId,
-                      "",
-                      project.root(),
-                      dev.mikoto2000.rei.core.execution.ExecutionType.SUMMARIZE,
-                      item.getValue(),
-                      run.startedAt());
-                })
+            .map(item -> {
+              var run = registeredRun.apply(item.getKey());
+              return new dev.mikoto2000.rei.core.execution.ActiveExecution(
+                  item.getKey(),
+                  projectId,
+                  "",
+                  project.root(),
+                  dev.mikoto2000.rei.core.execution.ExecutionType.SUMMARIZE,
+                  item.getValue(),
+                  run.startedAt());
+            })
             .filter(item -> registeredRun.apply(item.id()).context().projectId().equals(projectId))
             .toList();
     return renderLatestSummary.apply(project, active);

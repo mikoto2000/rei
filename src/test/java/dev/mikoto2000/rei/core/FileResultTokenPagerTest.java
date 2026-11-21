@@ -84,12 +84,8 @@ class FileResultTokenPagerTest {
     }
     var sizes =
         results.stream()
-            .mapToInt(
-                result ->
-                    result
-                        .content()
-                        .getFirst()
-                        .codePointCount(0, result.content().getFirst().length()))
+            .mapToInt(result ->
+                result.content().getFirst().codePointCount(0, result.content().getFirst().length()))
             .summaryStatistics();
     assertThat(sizes.getMax() - sizes.getMin()).isLessThanOrEqualTo(1);
     assertThat(
@@ -128,10 +124,9 @@ class FileResultTokenPagerTest {
     var result =
         new Tools.ReadFileResult(
             request.path(), 1, 1, List.of("body"), false, null, "sha", null, 5);
-    assertThatThrownBy(
-            () ->
-                new FileResultTokenPager(TokenEstimator.conservative())
-                    .page(List.of(result), List.of(request), 32))
+    assertThatThrownBy(() ->
+            new FileResultTokenPager(TokenEstimator.conservative())
+                .page(List.of(result), List.of(request), 32))
         .isInstanceOf(dev.mikoto2000.rei.toolcontract.ToolReadRejectedException.class)
         .hasMessageContaining("CONTEXT_BUDGET_INSUFFICIENT")
         .hasMessageContaining("narrow the file batch");

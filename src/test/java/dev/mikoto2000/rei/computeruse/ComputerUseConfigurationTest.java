@@ -25,10 +25,9 @@ class ComputerUseConfigurationTest {
             context -> assertThat(context).hasNotFailed().hasSingleBean(ComputerVisionModel.class));
     runner
         .withPropertyValues("rei.computer-use.enabled=true", "rei.computer-use.grounding=showui")
-        .run(
-            context ->
-                assertThat(context.getBean(ComputerVisionModel.class))
-                    .isInstanceOf(ShowUiComputerVisionModel.class));
+        .run(context ->
+            assertThat(context.getBean(ComputerVisionModel.class))
+                .isInstanceOf(ShowUiComputerVisionModel.class));
     runner
         .withPropertyValues("rei.computer-use.enabled=true", "rei.computer-use.grounding=typo")
         .run(context -> assertThat(context).hasFailed());
@@ -48,10 +47,9 @@ class ComputerUseConfigurationTest {
             "rei.computer-use.enabled=true",
             "rei.computer-use.diagnostics.enabled=true",
             "rei.computer-use.diagnostics.directory=" + diagnosticsDirectory)
-        .run(
-            context ->
-                assertThat(context.getBean(ComputerDiagnostics.class).begin().getParent())
-                    .isEqualTo(diagnosticsDirectory));
+        .run(context ->
+            assertThat(context.getBean(ComputerDiagnostics.class).begin().getParent())
+                .isEqualTo(diagnosticsDirectory));
   }
 
   /** 検証に使う実行の担当。 */
@@ -76,16 +74,15 @@ class ComputerUseConfigurationTest {
     runner.run(context -> assertThat(context).doesNotHaveBean(ComputerUseTools.class));
     runner
         .withPropertyValues("rei.computer-use.enabled=true")
-        .run(
-            context -> {
-              assertThat(context)
-                  .hasNotFailed()
-                  .hasSingleBean(ComputerUseTools.class)
-                  .hasSingleBean(ScreenCapture.class)
-                  .hasSingleBean(ComputerInput.class)
-                  .hasSingleBean(ComputerVisionModel.class);
-              assertThat(context.getBean(ComputerUseProperties.class).maxSteps()).isEqualTo(20);
-            });
+        .run(context -> {
+          assertThat(context)
+              .hasNotFailed()
+              .hasSingleBean(ComputerUseTools.class)
+              .hasSingleBean(ScreenCapture.class)
+              .hasSingleBean(ComputerInput.class)
+              .hasSingleBean(ComputerVisionModel.class);
+          assertThat(context.getBean(ComputerUseProperties.class).maxSteps()).isEqualTo(20);
+        });
   }
 
   /** 上限のない設定を受け付けないことを確認する。 */

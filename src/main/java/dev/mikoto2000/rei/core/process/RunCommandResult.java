@@ -30,6 +30,7 @@ public record RunCommandResult(
   /** 終了状態と出力から診断を組み立てる。 */
   @JsonProperty(value = "diagnosis", access = JsonProperty.Access.READ_ONLY)
   public BuildTestFailureDiagnosis diagnosis() {
-    return BuildTestFailureDiagnosis.command(status, exitCode, timedOut, stdout, stderr, errorMessage);
+    return BuildTestFailureDiagnosis.command(
+        status, exitCode, timedOut, stdout, stderr, errorMessage);
   }
 }

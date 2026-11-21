@@ -24,7 +24,8 @@ public final class ActivityTimelinePresentationService {
   private final BiFunction<Instant, Instant, List<BehaviorTimelineEvent>> behaviorEvents;
 
   /** 時系列と作業習慣の読み取り先を受け取る。 */
-  public ActivityTimelinePresentationService(ActivityTimeline timeline, BehaviorStateStore behavior) {
+  public ActivityTimelinePresentationService(
+      ActivityTimeline timeline, BehaviorStateStore behavior) {
     this.timeline = timeline;
     behaviorEvents = behavior == null ? (from, to) -> List.of() : behavior::findEventsBetween;
   }
@@ -41,13 +42,11 @@ public final class ActivityTimelinePresentationService {
         .workInferences(day, null)
         .forEach(r -> entries.add(new ActivityTimelineEntry.WorkInferenceEntry(r)));
     behaviorEvents
-        .apply(
-            date.atStartOfDay(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant())
+        .apply(date.atStartOfDay(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant())
         .stream()
-        .filter(
-            e ->
-                e.severity() != BehaviorSeverity.NONE
-                    && (verbose || e.outcome() == BehaviorTimelineEvent.Outcome.EMITTED))
+        .filter(e ->
+            e.severity() != BehaviorSeverity.NONE
+                && (verbose || e.outcome() == BehaviorTimelineEvent.Outcome.EMITTED))
         .forEach(e -> entries.add(new ActivityTimelineEntry.BehaviorEntry(e)));
     entries.sort(Comparator.comparing(ActivityTimelineEntry::timestamp));
     return List.copyOf(entries);

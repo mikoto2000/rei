@@ -151,10 +151,9 @@ class PersistentCheckpointServiceTest {
   void unchangedAutomaticSnapshotsDoNotCreateRevisionsOrSaveNotifications() {
     var before = state();
     var saves = new ArrayList<AgentEvent>();
-    bus.subscribe(
-        event -> {
-          if (event.type() == AgentEventType.CHECKPOINT_REVISION_SAVED) saves.add(event);
-        });
+    bus.subscribe(event -> {
+      if (event.type() == AgentEventType.CHECKPOINT_REVISION_SAVED) saves.add(event);
+    });
     var events = new AgentEventFactory(Clock.systemUTC());
 
     for (int index = 0; index < 3; index++)
@@ -333,7 +332,8 @@ class PersistentCheckpointServiceTest {
             tools.beginReview(
                 List.of("assessed.md", "pending.md", "remaining.md"), "correctness", "v1");
         var first =
-            tools.readReviewFile(job.id(), "assessed.md", job.targets().getFirst().version(), 0, 512);
+            tools.readReviewFile(
+                job.id(), "assessed.md", job.targets().getFirst().version(), 0, 512);
         tools.confirmed(owner, List.of(first));
         tools.submitReviewPage(
             job.id(),
@@ -1047,10 +1047,9 @@ class PersistentCheckpointServiceTest {
     service.preserveResults(owner, List.of(), progress);
     var savedEvents = new ArrayList<AgentEvent>();
     var listener =
-        bus.subscribe(
-            event -> {
-              if (event.type() == AgentEventType.CHECKPOINT_REVISION_SAVED) savedEvents.add(event);
-            });
+        bus.subscribe(event -> {
+          if (event.type() == AgentEventType.CHECKPOINT_REVISION_SAVED) savedEvents.add(event);
+        });
     try {
       service.cleanupHistory(true, true);
       var events = new AgentEventFactory(java.time.Clock.systemUTC());
@@ -1151,21 +1150,19 @@ class PersistentCheckpointServiceTest {
     var barrier = new java.util.concurrent.CyclicBarrier(2);
     try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
       var clear =
-          pool.submit(
-              () -> {
-                barrier.await();
-                return service.cleanupHistory(true, true);
-              });
+          pool.submit(() -> {
+            barrier.await();
+            return service.cleanupHistory(true, true);
+          });
       var event =
-          pool.submit(
-              () -> {
-                barrier.await();
-                bus.publishBoundary(
-                    new AgentEventFactory(java.time.Clock.systemUTC())
-                        .toolStarted("read", "readFile", "read")
-                        .withOwnership(owner));
-                return null;
-              });
+          pool.submit(() -> {
+            barrier.await();
+            bus.publishBoundary(
+                new AgentEventFactory(java.time.Clock.systemUTC())
+                    .toolStarted("read", "readFile", "read")
+                    .withOwnership(owner));
+            return null;
+          });
       clear.get();
       event.get();
     }
@@ -1324,17 +1321,15 @@ class PersistentCheckpointServiceTest {
     try (scope) {
       assertEquals("after", new ToolEventCallbackDecorator(callback, events, bus).call("{}"));
     }
-    assertDoesNotThrow(
-        () ->
-            bus.publishBoundary(
-                events.toolStarted("review", "reviewStatus", "review").withOwnership(context)));
+    assertDoesNotThrow(() ->
+        bus.publishBoundary(
+            events.toolStarted("review", "reviewStatus", "review").withOwnership(context)));
     assertTrue(
         repository.get("A", saved.taskId()).operations().stream()
-            .anyMatch(
-                o ->
-                    o.runId().equals(resumed.runId())
-                        && o.toolName().equals("readMultiFile")
-                        && o.status() == PersistentCheckpoint.OperationStatus.SUCCEEDED));
+            .anyMatch(o ->
+                o.runId().equals(resumed.runId())
+                    && o.toolName().equals("readMultiFile")
+                    && o.status() == PersistentCheckpoint.OperationStatus.SUCCEEDED));
   }
 
   /** 旧 UNKNOWN と所有権喪失時の STARTED を、永続化・再開の両経路で救済する。 */
@@ -1374,12 +1369,11 @@ class PersistentCheckpointServiceTest {
     assertEquals(
         PersistentCheckpoint.OperationStatus.RETRYABLE, persisted.operations().getFirst().status());
     assertTrue(repository.diagnostics("A", saved.taskId()).isEmpty());
-    assertDoesNotThrow(
-        () ->
-            bus.publishBoundary(
-                new AgentEventFactory(Clock.systemUTC())
-                    .toolStarted("review", "reviewStatus", "review")
-                    .withOwnership(new AgentRunContext(resumed.runId(), "session", root, "A"))));
+    assertDoesNotThrow(() ->
+        bus.publishBoundary(
+            new AgentEventFactory(Clock.systemUTC())
+                .toolStarted("review", "reviewStatus", "review")
+                .withOwnership(new AgentRunContext(resumed.runId(), "session", root, "A"))));
   }
 
   /** 読み取りと変更が混在する中断でも、変更操作の結果不明は解消しない。 */
@@ -1404,10 +1398,9 @@ class PersistentCheckpointServiceTest {
         () ->
             bus.publishBoundary(
                 events.toolStarted("write-again", "deploy", "write").withOwnership(context)));
-    assertDoesNotThrow(
-        () ->
-            bus.publishBoundary(
-                events.toolStarted("read-again", "readMultiFile", "read").withOwnership(context)));
+    assertDoesNotThrow(() ->
+        bus.publishBoundary(
+            events.toolStarted("read-again", "readMultiFile", "read").withOwnership(context)));
   }
 
   /** 重複の有無イベント一覧および結果変更前計画更新について、確認済み根拠を保持することを確認する。 */
@@ -1646,10 +1639,9 @@ class PersistentCheckpointServiceTest {
             bus);
     execution.setRunContext(owner);
     var cancellation =
-        bus.subscribe(
-            event -> {
-              if (event.type() == AgentEventType.TOOL_STARTED) execution.cancel();
-            });
+        bus.subscribe(event -> {
+          if (event.type() == AgentEventType.TOOL_STARTED) execution.cancel();
+        });
     var callback =
         new org.springframework.ai.tool.ToolCallback() {
           /** 検証用に、作業の中断と再開で参照するツール定義を返す。 */
@@ -1735,16 +1727,15 @@ class PersistentCheckpointServiceTest {
     org.mockito.Mockito.when(
             model.stream(
                 org.mockito.ArgumentMatchers.any(org.springframework.ai.chat.prompt.Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              assertEquals(0, service.progress(next).continuity().detector().stagnationCount());
-              String prompt = invocation.getArgument(0).toString();
-              assertTrue(prompt.contains("replansUsed"));
-              assertTrue(prompt.contains("restorationUsed"));
-              assertTrue(prompt.contains("intermediate findings"));
-              return reactor.core.publisher.Flux.error(
-                  new java.util.concurrent.CancellationException());
-            });
+        .thenAnswer(invocation -> {
+          assertEquals(0, service.progress(next).continuity().detector().stagnationCount());
+          String prompt = invocation.getArgument(0).toString();
+          assertTrue(prompt.contains("replansUsed"));
+          assertTrue(prompt.contains("restorationUsed"));
+          assertTrue(prompt.contains("intermediate findings"));
+          return reactor.core.publisher.Flux.error(
+              new java.util.concurrent.CancellationException());
+        });
     var holder = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
     org.mockito.Mockito.when(holder.get()).thenReturn("test");
     var llmSettings = new dev.mikoto2000.rei.llm.LlmProperties();
@@ -1951,10 +1942,9 @@ class PersistentCheckpointServiceTest {
     fields.put(
         "evidence",
         java.util.stream.IntStream.range(0, 100)
-            .mapToObj(
-                i ->
-                    new PersistentCheckpoint.Evidence(
-                        "TOOL_CONFIRMED", "old output ".repeat(100), null, "run", "tool-" + i))
+            .mapToObj(i ->
+                new PersistentCheckpoint.Evidence(
+                    "TOOL_CONFIRMED", "old output ".repeat(100), null, "run", "tool-" + i))
             .toList());
     repository.save(repository.fields(fields), state().revision(), "large-history");
     service.finish(owner, "INTERRUPTED");

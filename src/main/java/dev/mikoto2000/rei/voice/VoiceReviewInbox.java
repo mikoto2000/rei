@@ -126,10 +126,9 @@ public final class VoiceReviewInbox {
         correction == null
             ? input.text()
             : SpeechResultFilter.filter(correction)
-                .orElseThrow(
-                    () ->
-                        new IllegalArgumentException(
-                            "Invalid voice correction; commands are not allowed"));
+                .orElseThrow(() ->
+                    new IllegalArgumentException(
+                        "Invalid voice correction; commands are not allowed"));
     var corrected =
         new ConversationInput(
             input.inputId(), InputSource.VOICE, input.target(), text, input.createdAt());

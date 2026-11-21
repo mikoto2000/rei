@@ -41,30 +41,28 @@ class InstanceControllerTest {
         .withPropertyValues("rei.web.enabled=true")
         .withBean(BackendInstance.class, () -> instance)
         .withUserConfiguration(Config.class)
-        .run(
-            context -> {
-              var mvc =
-                  MockMvcBuilders.webAppContextSetup(context)
-                      .addFilters(
-                          context.getBean(
-                              "springSecurityFilterChain", jakarta.servlet.Filter.class))
-                      .build();
-              mvc.perform(get("/api/v1/instance")).andExpect(status().isUnauthorized());
-              mvc.perform(get("/api/v1/instance").header("Authorization", "Bearer wrong"))
-                  .andExpect(status().isUnauthorized());
-              mvc.perform(get("/api/v1/instance").header("Authorization", "Bearer test-secret"))
-                  .andExpect(status().isServiceUnavailable());
-              instance.ready(8123);
-              mvc.perform(get("/api/v1/instance").header("Authorization", "Bearer test-secret"))
-                  .andExpect(status().isOk())
-                  .andExpect(jsonPath("$.instanceId").value(instance.get().instanceId()))
-                  .andExpect(jsonPath("$.storageId").value(instance.get().storageId()))
-                  .andExpect(jsonPath("$.apiKey").doesNotExist())
-                  .andExpect(
-                      content()
-                          .string(
-                              org.hamcrest.Matchers.not(
-                                  org.hamcrest.Matchers.containsString("test-secret"))));
-            });
+        .run(context -> {
+          var mvc =
+              MockMvcBuilders.webAppContextSetup(context)
+                  .addFilters(
+                      context.getBean("springSecurityFilterChain", jakarta.servlet.Filter.class))
+                  .build();
+          mvc.perform(get("/api/v1/instance")).andExpect(status().isUnauthorized());
+          mvc.perform(get("/api/v1/instance").header("Authorization", "Bearer wrong"))
+              .andExpect(status().isUnauthorized());
+          mvc.perform(get("/api/v1/instance").header("Authorization", "Bearer test-secret"))
+              .andExpect(status().isServiceUnavailable());
+          instance.ready(8123);
+          mvc.perform(get("/api/v1/instance").header("Authorization", "Bearer test-secret"))
+              .andExpect(status().isOk())
+              .andExpect(jsonPath("$.instanceId").value(instance.get().instanceId()))
+              .andExpect(jsonPath("$.storageId").value(instance.get().storageId()))
+              .andExpect(jsonPath("$.apiKey").doesNotExist())
+              .andExpect(
+                  content()
+                      .string(
+                          org.hamcrest.Matchers.not(
+                              org.hamcrest.Matchers.containsString("test-secret"))));
+        });
   }
 }

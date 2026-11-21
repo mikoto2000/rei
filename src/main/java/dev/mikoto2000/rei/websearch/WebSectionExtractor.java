@@ -90,11 +90,10 @@ final class WebSectionExtractor {
         } else if (tag.equals("table")) {
           text =
               element.select("tr").stream()
-                  .map(
-                      row ->
-                          row.select("th,td").stream()
-                              .map(cell -> normalize(cell.text()))
-                              .collect(java.util.stream.Collectors.joining(" | ")))
+                  .map(row ->
+                      row.select("th,td").stream()
+                          .map(cell -> normalize(cell.text()))
+                          .collect(java.util.stream.Collectors.joining(" | ")))
                   .collect(java.util.stream.Collectors.joining("\n"));
           kind = "table";
         } else if (tag.equals("li")) {

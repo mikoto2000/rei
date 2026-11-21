@@ -11,7 +11,7 @@ final class SemanticReviewSplitter {
     char fence = 0;
     int fenceLength = 0;
     // Start at zero so a resumed chunk inside a long fenced block retains fence state.
-    for (int position = 0; position < maximum;) {
+    for (int position = 0; position < maximum; ) {
       int newline = source.indexOf('\n', position);
       int next = newline < 0 ? source.length() : newline + 1;
       String text = source.substring(position, Math.min(next, source.length())).strip();
@@ -26,9 +26,13 @@ final class SemanticReviewSplitter {
         if (fence == 0) {
           fence = marker;
           fenceLength = run;
-        } else if (marker == fence && run >= fenceLength && text.substring(run).isBlank()) fence = 0;
+        } else if (marker == fence && run >= fenceLength && text.substring(run).isBlank())
+          fence = 0;
       }
-      if (!wasFenced && fence == 0 && position >= floor && position > start
+      if (!wasFenced
+          && fence == 0
+          && position >= floor
+          && position > start
           && text.matches("#{1,6}\\s+.*")) heading = position;
       if (next <= maximum && next > start) {
         if (fence == 0 && next >= floor) {
@@ -43,7 +47,8 @@ final class SemanticReviewSplitter {
     if (line > start) return line;
     if (safe > start) return safe;
     // An individual block/line larger than the hard budget must still make progress.
-    if (maximum > start && maximum < source.length()
+    if (maximum > start
+        && maximum < source.length()
         && Character.isHighSurrogate(source.charAt(maximum - 1))
         && Character.isLowSurrogate(source.charAt(maximum))) maximum--;
     return maximum;

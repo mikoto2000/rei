@@ -72,11 +72,10 @@ class PlanHttpIntegrationTest {
                   t,
                   c);
       var store = new ProtectedCredentialStore(root, ProtectedCredentialStoreTest.TEST_PROTECTION);
-      store.locked(
-          s -> {
-            s.save("default", ProtectedCredentialStoreTest.tokens("mock-access", "mock-refresh"));
-            return null;
-          });
+      store.locked(s -> {
+        s.save("default", ProtectedCredentialStoreTest.tokens("mock-access", "mock-refresh"));
+        return null;
+      });
       var oauth = new PlanOAuth(store, local, (i, c, n) -> null, Clock.systemUTC());
       var client = new PlanClient(oauth, local, Clock.systemUTC());
       var result =
@@ -147,28 +146,26 @@ class PlanHttpIntegrationTest {
                   t,
                   c);
       var store = new ProtectedCredentialStore(root, ProtectedCredentialStoreTest.TEST_PROTECTION);
-      store.locked(
-          s -> {
-            s.save("default", ProtectedCredentialStoreTest.tokens("mock-access", "mock-refresh"));
-            return null;
-          });
+      store.locked(s -> {
+        s.save("default", ProtectedCredentialStoreTest.tokens("mock-access", "mock-refresh"));
+        return null;
+      });
       var client =
           new PlanClient(
               new PlanOAuth(store, local, (i, c, n) -> null, Clock.systemUTC()),
               local,
               Clock.systemUTC());
       var task =
-          executor.submit(
-              () ->
-                  client.infer(
-                      "default",
-                      "allowed",
-                      "No tools",
-                      "Hello",
-                      Duration.ofSeconds(5),
-                      262144,
-                      1048576,
-                      () -> false));
+          executor.submit(() ->
+              client.infer(
+                  "default",
+                  "allowed",
+                  "No tools",
+                  "Hello",
+                  Duration.ofSeconds(5),
+                  262144,
+                  1048576,
+                  () -> false));
       assertTrue(opened.await(5, TimeUnit.SECONDS));
       client.stop("default");
       var error = assertThrows(ExecutionException.class, () -> task.get(3, TimeUnit.SECONDS));
@@ -217,11 +214,10 @@ class PlanHttpIntegrationTest {
                   t,
                   c);
       var store = new ProtectedCredentialStore(root, ProtectedCredentialStoreTest.TEST_PROTECTION);
-      store.locked(
-          s -> {
-            s.save("default", ProtectedCredentialStoreTest.tokens("mock-access", "mock-refresh"));
-            return null;
-          });
+      store.locked(s -> {
+        s.save("default", ProtectedCredentialStoreTest.tokens("mock-access", "mock-refresh"));
+        return null;
+      });
       var client =
           new PlanClient(
               new PlanOAuth(store, local, (i, c, n) -> null, Clock.systemUTC()),

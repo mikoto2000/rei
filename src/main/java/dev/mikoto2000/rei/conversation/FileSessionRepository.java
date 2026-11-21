@@ -60,12 +60,11 @@ public final class FileSessionRepository implements SessionRepository {
       throw new IllegalArgumentException("Invalid fetch limit");
     return read().stream()
         .filter(row -> projectId == null || row.projectId().equals(projectId))
-        .filter(
-            row ->
-                after == null
-                    || row.updatedAt().isBefore(after.time())
-                    || row.updatedAt().equals(after.time())
-                        && row.sessionId().compareTo(after.id()) > 0)
+        .filter(row ->
+            after == null
+                || row.updatedAt().isBefore(after.time())
+                || row.updatedAt().equals(after.time())
+                    && row.sessionId().compareTo(after.id()) > 0)
         .sorted(
             Comparator.comparing(SessionMetadata::updatedAt)
                 .reversed()

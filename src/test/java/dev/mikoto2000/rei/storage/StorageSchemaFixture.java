@@ -11,7 +11,9 @@ final class StorageSchemaFixture {
   static void removeDurableSchema(Statement sql) throws SQLException {
     var names = new ArrayList<String>();
     try (var query = sql.getConnection().createStatement();
-        var rows = query.executeQuery("SELECT name FROM sqlite_schema WHERE type='table' AND name GLOB 'durable_*'")) {
+        var rows =
+            query.executeQuery(
+                "SELECT name FROM sqlite_schema WHERE type='table' AND name GLOB 'durable_*'")) {
       while (rows.next()) names.add(rows.getString(1));
     }
     for (var name : names) sql.execute("DROP TABLE \"" + name.replace("\"", "\"\"") + "\"");

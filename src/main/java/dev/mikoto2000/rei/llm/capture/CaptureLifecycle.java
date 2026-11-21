@@ -17,23 +17,22 @@ public final class CaptureLifecycle implements AutoCloseable {
   /** 指定された値や利用先を使って、CaptureLifecycleを初期化する。 */
   public CaptureLifecycle(CaptureStore store, AgentEventBus bus) {
     subscription =
-        bus.subscribe(
-            event -> {
-              if (event.runId() == null) return;
-              switch (event.type()) {
-                case AGENT_RUN_COMPLETED -> store.finish(event.runId(), "COMPLETED");
-                case AGENT_RUN_FAILED ->
-                    store.finish(
-                        event.runId(),
-                        event.payload() instanceof AgentRunFailedPayload failed
-                                && failed.error() != null
-                                && "cancelled".equals(failed.error().code())
-                            ? "CANCELLED"
-                            : "FAILED");
-                case AGENT_RUN_CANCELLED -> store.finish(event.runId(), "CANCELLED");
-                default -> {}
-              }
-            });
+        bus.subscribe(event -> {
+          if (event.runId() == null) return;
+          switch (event.type()) {
+            case AGENT_RUN_COMPLETED -> store.finish(event.runId(), "COMPLETED");
+            case AGENT_RUN_FAILED ->
+                store.finish(
+                    event.runId(),
+                    event.payload() instanceof AgentRunFailedPayload failed
+                            && failed.error() != null
+                            && "cancelled".equals(failed.error().code())
+                        ? "CANCELLED"
+                        : "FAILED");
+            case AGENT_RUN_CANCELLED -> store.finish(event.runId(), "CANCELLED");
+            default -> {}
+          }
+        });
   }
 
   /** モデル応答の記録で利用した資源や登録を解放し、利用を終了する。 */

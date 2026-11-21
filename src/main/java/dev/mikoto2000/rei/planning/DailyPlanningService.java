@@ -44,26 +44,25 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
     return today(List.of(project)).projects().stream()
         .flatMap(p -> p.items().stream())
         .limit(256)
-        .map(
-            item ->
-                new dev.mikoto2000.rei.secretary.SecretaryContext.Item(
-                    item.source(),
-                    item.id(),
-                    item.title(),
-                    item.status(),
-                    item.reason(),
-                    switch (item.certainty()) {
-                      case "SAVED_EXECUTION_STATE", "TOOL" ->
-                          dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.FACT;
-                      case "USER" ->
-                          dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.USER_REGISTERED;
-                      case "ASSISTANT" ->
-                          dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.PROPOSAL;
-                      case "INFERENCE" ->
-                          dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.INFERENCE;
-                      default -> dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.UNKNOWN;
-                    },
-                    item.references().stream().map(r -> r.kind() + ":" + r.id()).toList()))
+        .map(item ->
+            new dev.mikoto2000.rei.secretary.SecretaryContext.Item(
+                item.source(),
+                item.id(),
+                item.title(),
+                item.status(),
+                item.reason(),
+                switch (item.certainty()) {
+                  case "SAVED_EXECUTION_STATE", "TOOL" ->
+                      dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.FACT;
+                  case "USER" ->
+                      dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.USER_REGISTERED;
+                  case "ASSISTANT" ->
+                      dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.PROPOSAL;
+                  case "INFERENCE" ->
+                      dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.INFERENCE;
+                  default -> dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.UNKNOWN;
+                },
+                item.references().stream().map(r -> r.kind() + ":" + r.id()).toList()))
         .toList();
   }
 
@@ -280,12 +279,11 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
     allowed =
         properties.getProjects().stream()
             .sorted()
-            .map(
-                id ->
-                    findProject
-                        .apply(id)
-                        .orElseThrow(
-                            () -> new IllegalArgumentException("Today Project not registered")))
+            .map(id ->
+                findProject
+                    .apply(id)
+                    .orElseThrow(
+                        () -> new IllegalArgumentException("Today Project not registered")))
             .toList();
   }
 
@@ -337,73 +335,71 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
       else
         contexts
             .current(owner.id())
-            .ifPresent(
-                saved -> {
-                  if (!owner.id().equals(saved.projectId())
-                      || saved.git() == null
-                      || !sameRoot(owner, saved.git().directory())) {
-                    warnings.add("work_context_root_unverified");
-                    return;
-                  }
-                  for (var item : saved.items()) {
-                    if (Set.of(
-                                WorkContext.Status.COMPLETED,
-                                WorkContext.Status.WITHDRAWN,
-                                WorkContext.Status.SUPERSEDED)
-                            .contains(item.status())
-                        || !Set.of(
-                                WorkContext.Kind.PURPOSE,
-                                WorkContext.Kind.CURRENT_WORK,
-                                WorkContext.Kind.PENDING,
-                                WorkContext.Kind.BLOCKER,
-                                WorkContext.Kind.NEXT_ACTION,
-                                WorkContext.Kind.VERIFICATION)
-                            .contains(item.kind())) continue;
-                    if (items.size() == itemLimit) {
-                      warnings.add("item_limit_reached");
-                      break;
-                    }
-                    var categories = new LinkedHashSet<String>();
-                    var tags = new ArrayList<String>();
-                    tags.add(item.kind().name());
-                    if (item.kind() == WorkContext.Kind.BLOCKER) categories.add("Blocked");
-                    else if (item.kind() == WorkContext.Kind.NEXT_ACTION
-                        || item.kind() == WorkContext.Kind.VERIFICATION)
-                      categories.add("Suggested Next");
-                    else categories.add("Today");
-                    if (item.updatedAt() != null
-                        && item.updatedAt().isBefore(now.minus(staleAfter))) tags.add("STALE");
-                    items.add(
-                        new Item(
-                            "work-context:" + item.id(),
-                            "WORK_CONTEXT",
-                            safe(item.text(), 512),
-                            safe(item.reason(), 512),
-                            item.status().name(),
-                            null,
-                            item.updatedAt(),
-                            null,
-                            List.copyOf(categories),
-                            tags,
-                            item.certainty().name(),
-                            List.of(
-                                new TaskView.Reference(
-                                    "WORK_CONTEXT_REVISION", Long.toString(saved.revision())))));
-                  }
-                });
+            .ifPresent(saved -> {
+              if (!owner.id().equals(saved.projectId())
+                  || saved.git() == null
+                  || !sameRoot(owner, saved.git().directory())) {
+                warnings.add("work_context_root_unverified");
+                return;
+              }
+              for (var item : saved.items()) {
+                if (Set.of(
+                            WorkContext.Status.COMPLETED,
+                            WorkContext.Status.WITHDRAWN,
+                            WorkContext.Status.SUPERSEDED)
+                        .contains(item.status())
+                    || !Set.of(
+                            WorkContext.Kind.PURPOSE,
+                            WorkContext.Kind.CURRENT_WORK,
+                            WorkContext.Kind.PENDING,
+                            WorkContext.Kind.BLOCKER,
+                            WorkContext.Kind.NEXT_ACTION,
+                            WorkContext.Kind.VERIFICATION)
+                        .contains(item.kind())) continue;
+                if (items.size() == itemLimit) {
+                  warnings.add("item_limit_reached");
+                  break;
+                }
+                var categories = new LinkedHashSet<String>();
+                var tags = new ArrayList<String>();
+                tags.add(item.kind().name());
+                if (item.kind() == WorkContext.Kind.BLOCKER) categories.add("Blocked");
+                else if (item.kind() == WorkContext.Kind.NEXT_ACTION
+                    || item.kind() == WorkContext.Kind.VERIFICATION)
+                  categories.add("Suggested Next");
+                else categories.add("Today");
+                if (item.updatedAt() != null && item.updatedAt().isBefore(now.minus(staleAfter)))
+                  tags.add("STALE");
+                items.add(
+                    new Item(
+                        "work-context:" + item.id(),
+                        "WORK_CONTEXT",
+                        safe(item.text(), 512),
+                        safe(item.reason(), 512),
+                        item.status().name(),
+                        null,
+                        item.updatedAt(),
+                        null,
+                        List.copyOf(categories),
+                        tags,
+                        item.certainty().name(),
+                        List.of(
+                            new TaskView.Reference(
+                                "WORK_CONTEXT_REVISION", Long.toString(saved.revision())))));
+              }
+            });
       ActivitySummary observation = null;
       if (activity != null && !expired(deadline)) {
         try {
           var saved = activity.observationLinksBounded(owner.id(), "today");
           var refs =
               saved.links().stream()
-                  .map(
-                      link ->
-                          new Observation(
-                              safe(link.recordId(), 128),
-                              link.capturedAt(),
-                              link.itemIds().stream().limit(20).map(id -> safe(id, 128)).toList(),
-                              "OBSERVATION_CONTEXT"))
+                  .map(link ->
+                      new Observation(
+                          safe(link.recordId(), 128),
+                          link.capturedAt(),
+                          link.itemIds().stream().limit(20).map(id -> safe(id, 128)).toList(),
+                          "OBSERVATION_CONTEXT"))
                   .toList();
           observation =
               new ActivitySummary(
@@ -536,12 +532,11 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
       throw new IllegalArgumentException("Invalid Today selection");
     return requested.stream()
         .sorted()
-        .map(
-            id ->
-                allowed.stream()
-                    .filter(project -> project.id().equals(id))
-                    .findFirst()
-                    .orElseThrow(() -> new ResourceNotFoundException("Today Project")))
+        .map(id ->
+            allowed.stream()
+                .filter(project -> project.id().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Today Project")))
         .toList();
   }
 

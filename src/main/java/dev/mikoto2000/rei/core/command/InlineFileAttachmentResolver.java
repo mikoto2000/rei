@@ -127,14 +127,16 @@ public class InlineFileAttachmentResolver {
   /** クリップボードメディアを用途や設定に応じて提供する窓口。 */
   interface ClipboardMediaProvider {
     /** 共通の実行基盤で参照するクリップボードメディアを返す。 */
-    Media getClipboardMedia() throws java.awt.datatransfer.UnsupportedFlavorException, java.io.IOException;
+    Media getClipboardMedia()
+        throws java.awt.datatransfer.UnsupportedFlavorException, java.io.IOException;
   }
 
   /** Awtクリップボードメディアを用途や設定に応じて提供する窓口。 */
   static class AwtClipboardMediaProvider implements ClipboardMediaProvider {
     /** 共通の実行基盤で参照するクリップボードメディアを返す。 */
     @Override
-    public Media getClipboardMedia() throws java.awt.datatransfer.UnsupportedFlavorException, java.io.IOException {
+    public Media getClipboardMedia()
+        throws java.awt.datatransfer.UnsupportedFlavorException, java.io.IOException {
       try {
         Transferable transferable =
             Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);

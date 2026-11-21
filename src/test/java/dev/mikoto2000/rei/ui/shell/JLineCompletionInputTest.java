@@ -9,7 +9,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import org.jline.reader.LineReaderBuilder;
 import org.jline.terminal.Size;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -49,13 +48,10 @@ class JLineCompletionInputTest {
             java.nio.charset.StandardCharsets.UTF_8)) {
       terminal.setSize(new Size(100, 30));
       var reader =
-          LineReaderBuilder.builder()
-              .terminal(terminal)
-              .parser(ReiLineReaderFactory.parser())
-              .completer(
-                  new JLineCompletionAdapter(
-                      command, ReiLineReaderFactory.completionEngine(), () -> root))
-              .build();
+          ReiLineReaderFactory.create(
+              terminal,
+              new JLineCompletionAdapter(
+                  command, ReiLineReaderFactory.completionEngine(), () -> root));
       reader.runMacro(input + "\n");
       return reader.readLine("");
     }
@@ -165,14 +161,10 @@ class JLineCompletionInputTest {
             new ByteArrayOutputStream(),
             java.nio.charset.StandardCharsets.UTF_8)) {
       terminal.setSize(new Size(100, 30));
-      var reader =
-          LineReaderBuilder.builder()
-              .terminal(terminal)
-              .parser(new ShellCompletionParser(root))
-              .completer(
-                  new JLineCompletionAdapter(
-                      command, ReiLineReaderFactory.completionEngine(), () -> root))
-              .build();
+      var reader = new dev.mikoto2000.rei.core.completion.ApprovalMenuLineReader(terminal);
+      reader.setParser(new ShellCompletionParser(root));
+      reader.setCompleter(
+          new JLineCompletionAdapter(command, ReiLineReaderFactory.completionEngine(), () -> root));
       reader.runMacro("/project add ~/rep\t\n");
       assertThat(new UserInputParser().split(reader.readLine("")))
           .endsWith(root.resolve("reports").toString().replace('\\', '/') + "/");

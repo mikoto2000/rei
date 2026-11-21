@@ -48,10 +48,9 @@ class FileBatchArgumentsTest {
     assertThatThrownBy(() -> FileBatchArguments.validate(tool, "{}"))
         .isInstanceOf(InvalidToolArgumentsException.class);
     for (int count : new int[] {1, maximum})
-      assertThatCode(
-              () ->
-                  FileBatchArguments.validate(
-                      tool, input(tool, field, Collections.nCopies(count, Map.of()))))
+      assertThatCode(() ->
+              FileBatchArguments.validate(
+                  tool, input(tool, field, Collections.nCopies(count, Map.of()))))
           .doesNotThrowAnyException();
   }
 

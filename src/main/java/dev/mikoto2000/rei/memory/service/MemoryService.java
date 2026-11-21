@@ -60,20 +60,20 @@ public final class MemoryService {
           jdbcClient
               .sql(
                   """
-          CREATE TABLE IF NOT EXISTS memories (
-            id TEXT PRIMARY KEY,
-            content TEXT NOT NULL,
-            type TEXT NOT NULL,
-            scope TEXT NOT NULL,
-            status TEXT NOT NULL,
-            confidence REAL NOT NULL,
-            expires_at TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            observed_at TEXT,
-            valid_until TEXT
-          )
-          """)
+                  CREATE TABLE IF NOT EXISTS memories (
+                    id TEXT PRIMARY KEY,
+                    content TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    scope TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    confidence REAL NOT NULL,
+                    expires_at TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    observed_at TEXT,
+                    valid_until TEXT
+                  )
+                  """)
               .update();
           addColumnIfMissing("memories", "observed_at", "TEXT");
           addColumnIfMissing("memories", "valid_until", "TEXT");
@@ -133,9 +133,9 @@ public final class MemoryService {
           jdbcClient
               .sql(
                   """
-          INSERT INTO memories(id, content, type, scope, status, confidence, expires_at, created_at, updated_at, observed_at, valid_until)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          """)
+                  INSERT INTO memories(id, content, type, scope, status, confidence, expires_at, created_at, updated_at, observed_at, valid_until)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  """)
               .params(
                   saved.id(),
                   saved.content(),
@@ -188,10 +188,10 @@ public final class MemoryService {
             jdbcClient
                 .sql(
                     """
-        UPDATE memories
-        SET status = 'DEPRECATED', updated_at = ?
-        WHERE status = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at < ?
-        """)
+                    UPDATE memories
+                    SET status = 'DEPRECATED', updated_at = ?
+                    WHERE status = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at < ?
+                    """)
                 .params(toDbTime(OffsetDateTime.now(clock)), toDbTime(OffsetDateTime.now(clock)))
                 .update(),
         "有効期限チェックに失敗しました");
@@ -206,13 +206,13 @@ public final class MemoryService {
             jdbcClient
                 .sql(
                     """
-        SELECT m.*
-        FROM memory_fts f
-        JOIN memories m ON m.id = f.memory_id
-        WHERE memory_fts MATCH ? AND m.status = 'ACTIVE'
-        ORDER BY rank
-        LIMIT ?
-        """)
+                    SELECT m.*
+                    FROM memory_fts f
+                    JOIN memories m ON m.id = f.memory_id
+                    WHERE memory_fts MATCH ? AND m.status = 'ACTIVE'
+                    ORDER BY rank
+                    LIMIT ?
+                    """)
                 .params(query, safeLimit)
                 .query(this::mapMemory)
                 .list(),

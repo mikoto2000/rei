@@ -53,9 +53,7 @@ public record ProjectThemeAssociation(
             ? null
             : Collections.unmodifiableSet(new LinkedHashSet<>(evidenceSources));
     provenance =
-        provenance == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(provenance));
+        provenance == null ? null : Collections.unmodifiableList(new ArrayList<>(provenance));
   }
 
   /** 作業状況の把握における起点の選択肢。 */

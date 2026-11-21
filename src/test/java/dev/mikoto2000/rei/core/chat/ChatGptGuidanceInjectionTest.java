@@ -37,8 +37,7 @@ class ChatGptGuidanceInjectionTest {
     var holder = mock(ModelHolderService.class);
     when(holder.get()).thenReturn("test");
     when(client.prompt(any(Prompt.class))).thenReturn(request);
-    when(request.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull()))
-        .thenReturn(request);
+    when(request.advisors(ArgumentMatchers.<Consumer<AdvisorSpec>>notNull())).thenReturn(request);
     when(request.stream().chatResponse())
         .thenReturn(
             Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("answer"))))));

@@ -26,36 +26,52 @@ import reactor.core.publisher.Flux;
 class AgentEventChatModelTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
-    "invocation,true", "invocation,false", "subscription,true", "subscription,false",
-    "prompt,true", "prompt,false"
+    "invocation,true",
+    "invocation,false",
+    "subscription,true",
+    "subscription,false",
+    "prompt,true",
+    "prompt,false"
   })
   void asyncSignalsKeepTheCallingRunEvenOnAnotherClientsThread(String binding, boolean failing) {
-    var caller = new dev.mikoto2000.rei.core.chat.AgentRunContext(
-        "cli-run", "cli-session", java.nio.file.Path.of(".").toAbsolutePath(), "project");
-    var other = new dev.mikoto2000.rei.core.chat.AgentRunContext(
-        "other-run", "other-session", caller.projectRoot(), "other-project");
-    var prompt = binding.equals("prompt")
-        ? new Prompt("request", org.springframework.ai.openai.OpenAiChatOptions.builder()
-            .toolContext(java.util.Map.of(
-                dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName(), caller)).build())
-        : new Prompt("request");
+    var caller =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "cli-run", "cli-session", java.nio.file.Path.of(".").toAbsolutePath(), "project");
+    var other =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "other-run", "other-session", caller.projectRoot(), "other-project");
+    var prompt =
+        binding.equals("prompt")
+            ? new Prompt(
+                "request",
+                org.springframework.ai.openai.OpenAiChatOptions.builder()
+                    .toolContext(
+                        java.util.Map.of(
+                            dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName(), caller))
+                    .build())
+            : new Prompt("request");
     var delegate = mock(ChatModel.class);
     var response = mock(ChatResponse.class);
-    when(delegate.stream(prompt)).thenReturn(Flux.<ChatResponse>create(sink -> {
-      var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(other);
-      try (scope) {
-        if (failing) sink.error(new java.net.ConnectException("PRIVATE_HOST"));
-        else {
-          sink.next(response);
-          sink.complete();
-        }
-      }
-    }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic()));
+    when(delegate.stream(prompt))
+        .thenReturn(
+            Flux.<ChatResponse>create(
+                    sink -> {
+                      var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(other);
+                      try (scope) {
+                        if (failing) sink.error(new java.net.ConnectException("PRIVATE_HOST"));
+                        else {
+                          sink.next(response);
+                          sink.complete();
+                        }
+                      }
+                    })
+                .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic()));
     var events = new java.util.concurrent.CopyOnWriteArrayList<AgentEvent>();
     var bus = new InMemoryAgentEventBus();
     bus.subscribe(events::add);
-    var model = new AgentEventChatModel(LlmFeature.CHAT, delegate,
-        new AgentEventFactory(Clock.systemUTC()), bus);
+    var model =
+        new AgentEventChatModel(
+            LlmFeature.CHAT, delegate, new AgentEventFactory(Clock.systemUTC()), bus);
     Flux<ChatResponse> stream;
     if (binding.equals("subscription")) {
       stream = model.stream(prompt);
@@ -64,21 +80,27 @@ class AgentEventChatModelTest {
         stream.onErrorComplete().blockLast(java.time.Duration.ofSeconds(5));
       }
     } else {
-      var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(
-          binding.equals("prompt") ? other : caller);
+      var scope =
+          dev.mikoto2000.rei.core.chat.AgentRunScope.open(
+              binding.equals("prompt") ? other : caller);
       try (scope) {
         stream = model.stream(prompt);
       }
-      stream.subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
-          .onErrorComplete().blockLast(java.time.Duration.ofSeconds(5));
+      stream
+          .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
+          .onErrorComplete()
+          .blockLast(java.time.Duration.ofSeconds(5));
     }
-    assertThat(events).hasSize(failing ? 2 : 3).allSatisfy(event -> {
-      assertThat(event.runId()).isEqualTo(caller.runId());
-      assertThat(event.sessionId()).isEqualTo(caller.conversationId());
-      assertThat(event.projectId()).isEqualTo(caller.projectId());
-    });
-    assertThat(events.getLast().type()).isEqualTo(failing
-        ? AgentEventType.LLM_REQUEST_FAILED : AgentEventType.LLM_RESPONSE_COMPLETED);
+    assertThat(events)
+        .hasSize(failing ? 2 : 3)
+        .allSatisfy(event -> {
+          assertThat(event.runId()).isEqualTo(caller.runId());
+          assertThat(event.sessionId()).isEqualTo(caller.conversationId());
+          assertThat(event.projectId()).isEqualTo(caller.projectId());
+        });
+    assertThat(events.getLast().type())
+        .isEqualTo(
+            failing ? AgentEventType.LLM_REQUEST_FAILED : AgentEventType.LLM_RESPONSE_COMPLETED);
     assertThat(dev.mikoto2000.rei.core.chat.AgentRunScope.current()).isNull();
   }
 
@@ -86,22 +108,32 @@ class AgentEventChatModelTest {
   void completionMetricsKeepCumulativeUsageAndDistinguishMissingUsage() {
     var delegate = mock(ChatModel.class);
     var prompt = new Prompt("review");
-    var usage = org.springframework.ai.chat.model.ChatResponse.builder()
-        .metadata(org.springframework.ai.chat.metadata.ChatResponseMetadata.builder()
-            .usage(new org.springframework.ai.chat.metadata.DefaultUsage(123, 45)).build())
-        .generations(List.of()).build();
-    var empty = org.springframework.ai.chat.model.ChatResponse.builder().generations(List.of()).build();
+    var usage =
+        org.springframework.ai.chat.model.ChatResponse.builder()
+            .metadata(
+                org.springframework.ai.chat.metadata.ChatResponseMetadata.builder()
+                    .usage(new org.springframework.ai.chat.metadata.DefaultUsage(123, 45))
+                    .build())
+            .generations(List.of())
+            .build();
+    var empty =
+        org.springframework.ai.chat.model.ChatResponse.builder().generations(List.of()).build();
     when(delegate.stream(prompt)).thenReturn(Flux.just(usage, usage, empty));
     when(delegate.call(prompt)).thenReturn(empty);
     List<AgentEvent> events = new ArrayList<>();
     var bus = new InMemoryAgentEventBus();
     bus.subscribe(events::add);
-    var model = new AgentEventChatModel(LlmFeature.CHAT, delegate, new AgentEventFactory(Clock.systemUTC()), bus);
+    var model =
+        new AgentEventChatModel(
+            LlmFeature.CHAT, delegate, new AgentEventFactory(Clock.systemUTC()), bus);
     model.stream(prompt).blockLast();
-    var completed = (dev.mikoto2000.rei.event.LlmResponseCompletedPayload) events.getLast().payload();
+    var completed =
+        (dev.mikoto2000.rei.event.LlmResponseCompletedPayload) events.getLast().payload();
     assertThat(completed.promptTokens()).isEqualTo(123);
     assertThat(completed.completionTokens()).isEqualTo(45);
-    assertThat(completed.firstResponseMillis()).isNotNull().isLessThanOrEqualTo(completed.durationMs());
+    assertThat(completed.firstResponseMillis())
+        .isNotNull()
+        .isLessThanOrEqualTo(completed.durationMs());
     model.call(prompt);
     completed = (dev.mikoto2000.rei.event.LlmResponseCompletedPayload) events.getLast().payload();
     assertThat(completed.promptTokens()).isNull();

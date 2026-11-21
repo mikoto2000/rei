@@ -116,11 +116,10 @@ class ConcurrentAgentRunsIntegrationTest
 
           /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
-            return Flux.create(
-                sink -> {
-                  streams.put(p.getUserMessage().getText(), sink);
-                  entered.countDown();
-                });
+            return Flux.create(sink -> {
+              streams.put(p.getUserMessage().getText(), sink);
+              entered.countDown();
+            });
           }
         };
     var cancellation = new CommandCancellationService();
@@ -143,12 +142,11 @@ class ConcurrentAgentRunsIntegrationTest
       router.submit(b.root(), b.conversationId("chat:main"), "B");
       try {
         assertThat(entered.await(10, TimeUnit.SECONDS)).isTrue();
-        router.onChange(
-            () -> {
-              var runs = router.activeRuns();
-              if (runs.size() == 1 && runs.getFirst().projectId().equals(a.id())) onlyA.countDown();
-              if (runs.isEmpty()) empty.countDown();
-            });
+        router.onChange(() -> {
+          var runs = router.activeRuns();
+          if (runs.size() == 1 && runs.getFirst().projectId().equals(a.id())) onlyA.countDown();
+          if (runs.isEmpty()) empty.countDown();
+        });
         assertThat(router.activeRuns()).hasSize(2);
         assertThat(cancellation.cancelCurrentProject()).isTrue();
         assertThat(onlyA.await(10, TimeUnit.SECONDS)).isTrue();

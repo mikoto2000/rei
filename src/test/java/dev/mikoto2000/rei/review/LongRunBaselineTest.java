@@ -33,11 +33,11 @@ class LongRunBaselineTest {
     var job = fixture.create(6);
     fixture.review(job, 0, 3);
     fixture.reopen().stop(job, fixture.scope(), true);
-    assertThatThrownBy(() -> fixture.review(job, 3, 6)).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> fixture.review(job, 3, 6))
+        .isInstanceOf(IllegalArgumentException.class);
     var changed = fixture.create(6);
     fixture.review(changed, 0, 3);
     fixture.reopen().invalidate(changed, fixture.scope(), "fixture.java", "changed");
-    assertThatThrownBy(() -> fixture.review(changed, 3, 6))
-        .hasMessageContaining("STALE_VERSION");
+    assertThatThrownBy(() -> fixture.review(changed, 3, 6)).hasMessageContaining("STALE_VERSION");
   }
 }

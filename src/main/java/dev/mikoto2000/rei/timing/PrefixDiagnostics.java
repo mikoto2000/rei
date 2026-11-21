@@ -105,7 +105,8 @@ public final class PrefixDiagnostics {
   public static List<Source> sources(org.springframework.ai.chat.prompt.Prompt prompt) {
     var sources = new ArrayList<Source>();
     var callbacks =
-        prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+        prompt.getOptions()
+                instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
             ? options.getToolCallbacks()
             : null;
     if (callbacks != null) {
@@ -128,10 +129,8 @@ public final class PrefixDiagnostics {
       String id = message.getMessageType().name();
       String text = message.getText();
       if (Boolean.TRUE.equals(message.getMetadata().get("rei.workingSet"))) id = "WORKING_SET";
-      else if (text != null && text.startsWith("Run observations ("))
-        id = "RUN_OBSERVATIONS";
-      else if (text != null && text.startsWith("Conversation Summary ("))
-        id = "CONTEXT_SUMMARY";
+      else if (text != null && text.startsWith("Run observations (")) id = "RUN_OBSERVATIONS";
+      else if (text != null && text.startsWith("Conversation Summary (")) id = "CONTEXT_SUMMARY";
       if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant)
         text = String.valueOf(text) + assistant.getToolCalls();
       if (message instanceof org.springframework.ai.chat.messages.ToolResponseMessage tools)

@@ -46,9 +46,8 @@ public record AttentionDeliveryProperties(
     projects = projects == null ? Set.of() : Set.copyOf(projects);
     if (projects.size() > 64
         || projects.stream()
-            .anyMatch(
-                p ->
-                    p.isBlank() || p.length() > 128 || p.chars().anyMatch(Character::isISOControl)))
+            .anyMatch(p ->
+                p.isBlank() || p.length() > 128 || p.chars().anyMatch(Character::isISOControl)))
       throw new IllegalArgumentException("Invalid attention delivery projects");
     if (bearerToken != null
         && (bearerToken.length() > 4096 || bearerToken.chars().anyMatch(c -> c <= 32 || c >= 127)))

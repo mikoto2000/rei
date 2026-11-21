@@ -156,9 +156,7 @@ public final class ActivityQualityEvaluation {
     public Row {
       facts = facts == null ? null : Collections.unmodifiableList(new ArrayList<>(facts));
       violations =
-          violations == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(violations));
+          violations == null ? null : Collections.unmodifiableList(new ArrayList<>(violations));
     }
   }
 

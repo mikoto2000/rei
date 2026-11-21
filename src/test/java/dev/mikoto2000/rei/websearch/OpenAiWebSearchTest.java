@@ -47,17 +47,17 @@ class OpenAiWebSearchTest {
             .parse(
                 provider,
                 """
-        {"status":"completed","output":[
-          {"type":"web_search_call","status":"completed","action":{"type":"search","sources":[
-            {"type":"url","url":"https://EXAMPLE.com:443/a?utm_source=x#fragment"},
-            {"type":"url","url":"https://bad.example.com/a"},
-            {"type":"url","url":"https://other.org/a"},
-            {"type":"url","url":"http://127.0.0.1/private"}]}},
-          {"type":"message","content":[{"type":"output_text","text":"https://invented.example.com/",
-            "annotations":[{"type":"url_citation","url":"https://example.com/a","title":"Source title"},
-            {"type":"url_citation","url":"https://docs.example.com/b","title":"Second"}]}]}],
-          "usage":{"input_tokens":11,"output_tokens":7,"total_tokens":18}}
-        """,
+                {"status":"completed","output":[
+                  {"type":"web_search_call","status":"completed","action":{"type":"search","sources":[
+                    {"type":"url","url":"https://EXAMPLE.com:443/a?utm_source=x#fragment"},
+                    {"type":"url","url":"https://bad.example.com/a"},
+                    {"type":"url","url":"https://other.org/a"},
+                    {"type":"url","url":"http://127.0.0.1/private"}]}},
+                  {"type":"message","content":[{"type":"output_text","text":"https://invented.example.com/",
+                    "annotations":[{"type":"url_citation","url":"https://example.com/a","title":"Source title"},
+                    {"type":"url_citation","url":"https://docs.example.com/b","title":"Second"}]}]}],
+                  "usage":{"input_tokens":11,"output_tokens":7,"total_tokens":18}}
+                """,
                 5);
     assertEquals(2, results.size());
     assertEquals("https://example.com/a", results.getFirst().url());

@@ -39,7 +39,8 @@ public record WebApiEventDto(
     Map<String, Object> payload) {
   /** 通知や要求の内容を、受け取った時点の状態で保持する。 */
   public WebApiEventDto {
-    payload = payload == null ? null : Collections.unmodifiableMap(JsonObjectSnapshot.copy(payload));
+    payload =
+        payload == null ? null : Collections.unmodifiableMap(JsonObjectSnapshot.copy(payload));
   }
 
   /** Web APIによる操作で利用する情報を、受け取った形式から変換する。 */

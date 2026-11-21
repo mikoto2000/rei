@@ -36,10 +36,9 @@ class WorkContextQueueTest {
     var release = new CountDownLatch(1);
     var other = new CountDownLatch(1);
     var completed = new CountDownLatch(4);
-    bus.subscribe(
-        e -> {
-          if (e.type() == AgentEventType.WORK_CONTEXT_UPDATED) completed.countDown();
-        });
+    bus.subscribe(e -> {
+      if (e.type() == AgentEventType.WORK_CONTEXT_UPDATED) completed.countDown();
+    });
     doAnswer(
             call -> {
               entered.countDown();

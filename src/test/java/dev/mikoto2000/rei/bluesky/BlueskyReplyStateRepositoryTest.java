@@ -73,17 +73,15 @@ class BlueskyReplyStateRepositoryTest {
     var start = new java.util.concurrent.CountDownLatch(1);
     try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
       var first =
-          executor.submit(
-              () -> {
-                start.await();
-                return repository.tryClaimReply("at://post/claim");
-              });
+          executor.submit(() -> {
+            start.await();
+            return repository.tryClaimReply("at://post/claim");
+          });
       var second =
-          executor.submit(
-              () -> {
-                start.await();
-                return other.tryClaimReply("at://post/claim");
-              });
+          executor.submit(() -> {
+            start.await();
+            return other.tryClaimReply("at://post/claim");
+          });
       start.countDown();
       assertTrue(
           first.get(5, java.util.concurrent.TimeUnit.SECONDS)

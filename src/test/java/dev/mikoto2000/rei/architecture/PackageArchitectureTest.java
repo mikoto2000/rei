@@ -25,14 +25,12 @@ class PackageArchitectureTest {
     var edges = ArchitectureModel.edges(classes);
     var bootstrapReferences =
         edges.stream()
-            .filter(
-                e ->
-                    e.targetPackage().equals(ArchitectureModel.ROOT + "bootstrap")
-                        || e.targetPackage().startsWith(ArchitectureModel.ROOT + "bootstrap."))
-            .filter(
-                e ->
-                    !e.sourcePackage().equals(ArchitectureModel.ROOT + "bootstrap")
-                        && !e.sourcePackage().startsWith(ArchitectureModel.ROOT + "bootstrap."))
+            .filter(e ->
+                e.targetPackage().equals(ArchitectureModel.ROOT + "bootstrap")
+                    || e.targetPackage().startsWith(ArchitectureModel.ROOT + "bootstrap."))
+            .filter(e ->
+                !e.sourcePackage().equals(ArchitectureModel.ROOT + "bootstrap")
+                    && !e.sourcePackage().startsWith(ArchitectureModel.ROOT + "bootstrap."))
             .map(ArchitectureModel.Edge::pair)
             .distinct()
             .sorted()
@@ -49,19 +47,18 @@ class PackageArchitectureTest {
     List<String> dependencies = new ArrayList<>();
     dependencies.add("source\ttarget\tsourcePackage\ttargetPackage\tkind\tevidence");
     edges.stream()
-        .map(
-            e ->
-                e.source()
-                    + "\t"
-                    + e.target()
-                    + "\t"
-                    + e.sourcePackage()
-                    + "\t"
-                    + e.targetPackage()
-                    + "\t"
-                    + (e.wiring() ? "wiring" : "business")
-                    + "\t"
-                    + e.evidence().replace('\t', ' ').replace('\n', ' '))
+        .map(e ->
+            e.source()
+                + "\t"
+                + e.target()
+                + "\t"
+                + e.sourcePackage()
+                + "\t"
+                + e.targetPackage()
+                + "\t"
+                + (e.wiring() ? "wiring" : "business")
+                + "\t"
+                + e.evidence().replace('\t', ' ').replace('\n', ' '))
         .sorted()
         .distinct()
         .forEach(dependencies::add);
@@ -87,10 +84,9 @@ class PackageArchitectureTest {
     }
     if (shrink
         && failures.stream()
-            .noneMatch(
-                f ->
-                    f.getMessage().contains("NEW dependencies")
-                        || f.getMessage().contains("Missing baseline"))) {
+            .noneMatch(f ->
+                f.getMessage().contains("NEW dependencies")
+                    || f.getMessage().contains("Missing baseline"))) {
       for (var entry : violations.entrySet())
         ArchitectureBaseline.check(
             Path.of("config/architecture", entry.getKey() + ".txt"), entry.getValue(), true);

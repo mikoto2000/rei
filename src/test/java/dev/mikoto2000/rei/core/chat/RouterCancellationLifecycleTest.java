@@ -23,10 +23,9 @@ class RouterCancellationLifecycleTest {
     var router = new ConversationInputRouter(tasks::add, (c, p, q) -> called.set(true));
     router.setCancellation(cancellation);
     var accepted = new AtomicBoolean();
-    router.onChange(
-        () -> {
-          if (!router.activeRuns().isEmpty()) accepted.set(cancellation.cancelProject("a"));
-        });
+    router.onChange(() -> {
+      if (!router.activeRuns().isEmpty()) accepted.set(cancellation.cancelProject("a"));
+    });
     router.submit(owner("run", "a"), "hello");
     assertThat(accepted).isTrue();
     try {
@@ -59,11 +58,10 @@ class RouterCancellationLifecycleTest {
               }
             });
     router.setCancellation(cancellation);
-    router.onCleanup(
-        c -> {
-          if (c.projectId().equals("a")) finishedA.countDown();
-          else cleanupB.countDown();
-        });
+    router.onCleanup(c -> {
+      if (c.projectId().equals("a")) finishedA.countDown();
+      else cleanupB.countDown();
+    });
     router.submit(owner("a1", "a"), "A");
     router.submit(owner("b1", "b"), "B");
     try {

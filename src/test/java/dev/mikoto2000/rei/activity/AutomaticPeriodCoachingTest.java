@@ -51,22 +51,21 @@ class AutomaticPeriodCoachingTest {
   ActivityTimeline timeline() {
     var timeline = mock(ActivityTimeline.class);
     when(timeline.periodComparison(any(), isNull()))
-        .thenAnswer(
-            invocation -> {
-              ActivityPeriodAnalysis.Period period = invocation.getArgument(0);
-              var first =
-                  period == ActivityPeriodAnalysis.Period.WEEK
-                      ? LocalDate.of(2026, 9, 28)
-                      : LocalDate.of(2026, 9, 1);
-              var previous =
-                  period == ActivityPeriodAnalysis.Period.WEEK
-                      ? first.minusWeeks(1)
-                      : first.minusMonths(1);
-              return new ActivityTimeline.PeriodComparison(
-                  aggregate(period, first, 1200, 6000),
-                  aggregate(period, previous, 6000, 1200),
-                  ZoneOffset.UTC);
-            });
+        .thenAnswer(invocation -> {
+          ActivityPeriodAnalysis.Period period = invocation.getArgument(0);
+          var first =
+              period == ActivityPeriodAnalysis.Period.WEEK
+                  ? LocalDate.of(2026, 9, 28)
+                  : LocalDate.of(2026, 9, 1);
+          var previous =
+              period == ActivityPeriodAnalysis.Period.WEEK
+                  ? first.minusWeeks(1)
+                  : first.minusMonths(1);
+          return new ActivityTimeline.PeriodComparison(
+              aggregate(period, first, 1200, 6000),
+              aggregate(period, previous, 6000, 1200),
+              ZoneOffset.UTC);
+        });
     return timeline;
   }
 
@@ -179,16 +178,13 @@ class AutomaticPeriodCoachingTest {
     verifyNoInteractions(timeline);
     when(tracker.isAgentBusy()).thenReturn(false);
     when(timeline.periodComparison(any(), isNull()))
-        .thenAnswer(
-            i -> {
-              store.setEnabled(false);
-              return new ActivityTimeline.PeriodComparison(
-                  aggregate(
-                      ActivityPeriodAnalysis.Period.WEEK, LocalDate.of(2026, 9, 28), 1200, 6000),
-                  aggregate(
-                      ActivityPeriodAnalysis.Period.WEEK, LocalDate.of(2026, 9, 21), 6000, 1200),
-                  ZoneOffset.UTC);
-            });
+        .thenAnswer(i -> {
+          store.setEnabled(false);
+          return new ActivityTimeline.PeriodComparison(
+              aggregate(ActivityPeriodAnalysis.Period.WEEK, LocalDate.of(2026, 9, 28), 1200, 6000),
+              aggregate(ActivityPeriodAnalysis.Period.WEEK, LocalDate.of(2026, 9, 21), 6000, 1200),
+              ZoneOffset.UTC);
+        });
     job.tick();
     assertTrue(messages.isEmpty());
     assertEquals("SETTINGS_CHANGED", job.status());

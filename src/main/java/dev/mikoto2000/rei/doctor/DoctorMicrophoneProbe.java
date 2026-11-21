@@ -89,23 +89,20 @@ public class DoctorMicrophoneProbe implements AutoCloseable {
     Future<Result> pending;
     try {
       pending =
-          worker.submit(
-              () -> {
-                started.set(true);
-                try {
-                  if (stop.get() || Thread.currentThread().isInterrupted())
-                    return Result.UNAVAILABLE;
-                  var matches =
-                      devices.devices().stream().filter(d -> d.id().equals(deviceId)).toList();
-                  if (matches.size() != 1) return Result.UNAVAILABLE;
-                  if (stop.get() || Thread.currentThread().isInterrupted())
-                    return Result.UNAVAILABLE;
-                  acquisition.acquire(matches.getFirst());
-                  return Result.AVAILABLE;
-                } finally {
-                  release.run();
-                }
-              });
+          worker.submit(() -> {
+            started.set(true);
+            try {
+              if (stop.get() || Thread.currentThread().isInterrupted()) return Result.UNAVAILABLE;
+              var matches =
+                  devices.devices().stream().filter(d -> d.id().equals(deviceId)).toList();
+              if (matches.size() != 1) return Result.UNAVAILABLE;
+              if (stop.get() || Thread.currentThread().isInterrupted()) return Result.UNAVAILABLE;
+              acquisition.acquire(matches.getFirst());
+              return Result.AVAILABLE;
+            } finally {
+              release.run();
+            }
+          });
     } catch (RuntimeException rejected) {
       release.run();
       return Result.UNAVAILABLE;

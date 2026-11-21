@@ -21,13 +21,12 @@ public class StorageWalCrashWorker {
     context.register(StorageMigrationConfiguration.class);
     context.refresh();
     new StorageDatabase(Path.of(args[0]))
-        .transaction(
-            db -> {
-              try (var sql = db.createStatement()) {
-                sql.executeUpdate("INSERT INTO event_sequences VALUES('crash-committed',42)");
-              }
-              return null;
-            });
+        .transaction(db -> {
+          try (var sql = db.createStatement()) {
+            sql.executeUpdate("INSERT INTO event_sequences VALUES('crash-committed',42)");
+          }
+          return null;
+        });
     Runtime.getRuntime().halt(0);
   }
 }

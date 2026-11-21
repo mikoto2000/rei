@@ -69,28 +69,25 @@ public class RunReflectionService {
           "History window is full; inspect the persisted event log instead of inferring a complete reflection");
     var owned =
         saved.stream()
-            .filter(
-                e ->
-                    project.equals(e.projectId())
-                        && session.equals(e.sessionId())
-                        && run.equals(e.runId()))
+            .filter(e ->
+                project.equals(e.projectId())
+                    && session.equals(e.sessionId())
+                    && run.equals(e.runId()))
             .toList();
     var terminal =
         owned.stream()
-            .filter(
-                e ->
-                    e.type() == AgentEventType.AGENT_RUN_COMPLETED
-                            && e.payload() instanceof AgentRunCompletedPayload p
-                            && matches(e, p.runId())
-                        || (e.type() == AgentEventType.AGENT_RUN_FAILED
-                                || e.type() == AgentEventType.AGENT_RUN_CANCELLED)
-                            && e.payload() instanceof AgentRunFailedPayload failed
-                            && matches(e, failed.runId()))
+            .filter(e ->
+                e.type() == AgentEventType.AGENT_RUN_COMPLETED
+                        && e.payload() instanceof AgentRunCompletedPayload p
+                        && matches(e, p.runId())
+                    || (e.type() == AgentEventType.AGENT_RUN_FAILED
+                            || e.type() == AgentEventType.AGENT_RUN_CANCELLED)
+                        && e.payload() instanceof AgentRunFailedPayload failed
+                        && matches(e, failed.runId()))
             .reduce((a, b) -> b)
-            .orElseThrow(
-                () ->
-                    new IllegalArgumentException(
-                        "No owned terminal Run fact in the bounded history window"));
+            .orElseThrow(() ->
+                new IllegalArgumentException(
+                    "No owned terminal Run fact in the bounded history window"));
     for (var event : owned) {
       if (event.type() == AgentEventType.TOOL_COMPLETED
           || event.type() == AgentEventType.TOOL_FAILED) observe(event);

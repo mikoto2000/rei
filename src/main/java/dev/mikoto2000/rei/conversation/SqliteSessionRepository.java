@@ -74,44 +74,41 @@ public final class SqliteSessionRepository implements SessionRepository {
   /** 対象を特定できるよう、別識別子を探す。 */
   @Override
   public Optional<SessionMetadata> findById(String id) {
-    return database.read(
-        connection -> {
-          var row = previous(connection, id);
-          return row == null ? Optional.empty() : Optional.of(row.metadata());
-        });
+    return database.read(connection -> {
+      var row = previous(connection, id);
+      return row == null ? Optional.empty() : Optional.of(row.metadata());
+    });
   }
 
   /** 対象を特定できるよう、ページを探す。 */
   @Override
   public List<SessionMetadata> findPage(String project, CursorKey after, int limit) {
     if (limit < 1 || limit > 101) throw new IllegalArgumentException("Invalid fetch limit");
-    return database.read(
-        connection -> {
-          String sql =
-              "SELECT record FROM sessions WHERE 1=1"
-                  + (project == null ? "" : " AND project_id=?")
-                  + (after == null
-                      ? ""
-                      : " AND (updated_sort_seconds,updated_sort_nanos,id_order)>(?,?,?)")
-                  + " ORDER BY updated_sort_seconds,updated_sort_nanos,id_order LIMIT ?";
-          try (var query = connection.prepareStatement(sql)) {
-            int index = 1;
-            if (project != null) query.setString(index++, project);
-            if (after != null) {
-              query.setLong(index++, -after.time().getEpochSecond());
-              query.setInt(index++, -after.time().getNano());
-              query.setBytes(index++, StorageDatabase.orderKey(after.id()));
-            }
-            query.setInt(index, limit);
-            var result = new ArrayList<SessionMetadata>();
-            try (var rows = query.executeQuery()) {
-              while (rows.next())
-                result.add(
-                    StorageDatabase.JSON.readValue(rows.getString(1), SessionMetadata.class));
-            }
-            return List.copyOf(result);
-          }
-        });
+    return database.read(connection -> {
+      String sql =
+          "SELECT record FROM sessions WHERE 1=1"
+              + (project == null ? "" : " AND project_id=?")
+              + (after == null
+                  ? ""
+                  : " AND (updated_sort_seconds,updated_sort_nanos,id_order)>(?,?,?)")
+              + " ORDER BY updated_sort_seconds,updated_sort_nanos,id_order LIMIT ?";
+      try (var query = connection.prepareStatement(sql)) {
+        int index = 1;
+        if (project != null) query.setString(index++, project);
+        if (after != null) {
+          query.setLong(index++, -after.time().getEpochSecond());
+          query.setInt(index++, -after.time().getNano());
+          query.setBytes(index++, StorageDatabase.orderKey(after.id()));
+        }
+        query.setInt(index, limit);
+        var result = new ArrayList<SessionMetadata>();
+        try (var rows = query.executeQuery()) {
+          while (rows.next())
+            result.add(StorageDatabase.JSON.readValue(rows.getString(1), SessionMetadata.class));
+        }
+        return List.copyOf(result);
+      }
+    });
   }
 
   /** 会話履歴と受付記録の管理に関する登録を処理する。 */
@@ -138,56 +135,53 @@ public final class SqliteSessionRepository implements SessionRepository {
   /** 要求を後続の処理へ引き渡すため、SQLite会話保存と検索の窓口を受け付ける。 */
   @Override
   public void accept(SessionMetadata metadata, Runnable enqueue) {
-    database.withWriterLock(
-        () -> {
-          Previous old =
-              database.transaction(
-                  connection -> {
-                    var previous = previous(connection, metadata.sessionId());
-                    SessionMetadata next = metadata;
-                    if (previous != null) {
-                      var row = previous.metadata();
-                      // 別のプロジェクトの情報を、この作業の対象として扱わせない。
-                      if (!row.projectId().equals(metadata.projectId())
-                          || !row.title().equals(metadata.title())
-                          || !row.createdAt().equals(metadata.createdAt()))
-                        throw new IllegalArgumentException("Immutable session metadata");
-                      next = metadata.touched(row.updatedAt());
-                    }
-                    put(
-                        connection,
-                        next,
-                        previous == null ? 1 : Math.addExact(previous.revision(), 1),
-                        null);
-                    return previous;
-                  });
-          try {
-            refreshCompletion();
-            enqueue.run();
-          } catch (RuntimeException | Error error) {
-            try {
-              database.transaction(
-                  connection -> {
-                    var current = previous(connection, metadata.sessionId());
-                    long expected = old == null ? 1 : old.revision() + 1;
-                    if (current == null || current.revision() != expected)
-                      throw new IllegalStateException(
-                          "Session changed during failed admission; refusing to overwrite newer metadata");
-                    if (old == null)
-                      try (var delete =
-                          connection.prepareStatement("DELETE FROM sessions WHERE session_id=?")) {
-                        delete.setString(1, metadata.sessionId());
-                        delete.executeUpdate();
-                      }
-                    else put(connection, old.metadata(), old.revision(), null);
-                    return null;
-                  });
-              refreshCompletion();
-            } catch (RuntimeException rollback) {
-              error.addSuppressed(rollback);
+    database.withWriterLock(() -> {
+      Previous old =
+          database.transaction(connection -> {
+            var previous = previous(connection, metadata.sessionId());
+            SessionMetadata next = metadata;
+            if (previous != null) {
+              var row = previous.metadata();
+              // 別のプロジェクトの情報を、この作業の対象として扱わせない。
+              if (!row.projectId().equals(metadata.projectId())
+                  || !row.title().equals(metadata.title())
+                  || !row.createdAt().equals(metadata.createdAt()))
+                throw new IllegalArgumentException("Immutable session metadata");
+              next = metadata.touched(row.updatedAt());
             }
-            throw error;
-          }
-        });
+            put(
+                connection,
+                next,
+                previous == null ? 1 : Math.addExact(previous.revision(), 1),
+                null);
+            return previous;
+          });
+      try {
+        refreshCompletion();
+        enqueue.run();
+      } catch (RuntimeException | Error error) {
+        try {
+          database.transaction(connection -> {
+            var current = previous(connection, metadata.sessionId());
+            long expected = old == null ? 1 : old.revision() + 1;
+            if (current == null || current.revision() != expected)
+              throw new IllegalStateException(
+                  "Session changed during failed admission; refusing to overwrite newer metadata");
+            if (old == null)
+              try (var delete =
+                  connection.prepareStatement("DELETE FROM sessions WHERE session_id=?")) {
+                delete.setString(1, metadata.sessionId());
+                delete.executeUpdate();
+              }
+            else put(connection, old.metadata(), old.revision(), null);
+            return null;
+          });
+          refreshCompletion();
+        } catch (RuntimeException rollback) {
+          error.addSuppressed(rollback);
+        }
+        throw error;
+      }
+    });
   }
 }

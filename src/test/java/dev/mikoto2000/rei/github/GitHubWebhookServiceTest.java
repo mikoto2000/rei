@@ -176,8 +176,7 @@ class GitHubWebhookServiceTest {
     var scheduler = new PersistentAgentScheduler(ds, CLOCK);
     var inbox = org.mockito.Mockito.spy(new AttentionRepository(ds, CLOCK));
     String schedule;
-    var scope =
-        AgentRunScope.open(new AgentRunContext("owner", session, root, project.id()));
+    var scope = AgentRunScope.open(new AgentRunContext("owner", session, root, project.id()));
     try (scope) {
       schedule =
           scheduler
@@ -291,10 +290,9 @@ class GitHubWebhookServiceTest {
             new GitHubWebhookProperties.Mapping(
                 "owner/repo", project.id(), session, "main", 17, true)));
     var facts = new GitHubFactRepository(ds, CLOCK);
-    assertThatThrownBy(
-            () ->
-                new GitHubWebhookService(
-                    props, CLOCK, projects, sessions, facts, scheduler, inbox, null))
+    assertThatThrownBy(() ->
+            new GitHubWebhookService(
+                props, CLOCK, projects, sessions, facts, scheduler, inbox, null))
         .isInstanceOf(IllegalArgumentException.class);
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     var verdict =
@@ -329,19 +327,17 @@ class GitHubWebhookServiceTest {
         .isTrue();
     assertThat(calls.get()).isEqualTo(2);
     var changed = workflow("success", 17);
-    assertThatThrownBy(
-            () ->
-                receiver.receive(
-                    delivery, "workflow_run", GitHubWebhookDecoderTest.signature(changed), changed))
+    assertThatThrownBy(() ->
+            receiver.receive(
+                delivery, "workflow_run", GitHubWebhookDecoderTest.signature(changed), changed))
         .isInstanceOf(dev.mikoto2000.rei.application.state.OperationConflictException.class);
     verdict.set(GitHubStateVerifier.Verdict.CONFIRMED);
-    assertThatThrownBy(
-            () ->
-                receiver.receive(
-                    UUID.randomUUID().toString(),
-                    "workflow_run",
-                    GitHubWebhookDecoderTest.signature(changed),
-                    changed))
+    assertThatThrownBy(() ->
+            receiver.receive(
+                UUID.randomUUID().toString(),
+                "workflow_run",
+                GitHubWebhookDecoderTest.signature(changed),
+                changed))
         .isInstanceOf(GitHubFactRepository.CapacityExceeded.class);
     assertThat(inbox.list(project.id())).hasSize(1);
     assertThat(facts.pendingNotifications()).hasSize(1);

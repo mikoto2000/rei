@@ -42,13 +42,12 @@ class ActivityPipelineTest {
             ActivityCaptureTest.screen(100),
             ActivityCaptureTest.screen(200));
     when(extractor.extract(any(), any()))
-        .thenAnswer(
-            i -> {
-              entered.countDown();
-              assertTrue(release.await(5, TimeUnit.SECONDS));
-              return new ActivityExtractor.Result(
-                  ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .8);
-            });
+        .thenAnswer(i -> {
+          entered.countDown();
+          assertTrue(release.await(5, TimeUnit.SECONDS));
+          return new ActivityExtractor.Result(
+              ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .8);
+        });
     doAnswer(
             i -> {
               written.countDown();

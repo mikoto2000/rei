@@ -40,22 +40,20 @@ class VoiceToolPermissionTest {
     assertThatCode(() -> guard.check("webSearch", voice)).doesNotThrowAnyException();
     for (String tool :
         List.of("writeMultiFile", "deleteFile", "executeShellCommand", "sendMessage", "unknownMcp"))
-      assertThatThrownBy(
-              () ->
-                  guard.check(
-                      tool,
-                      tool.equals("writeMultiFile")
-                          ? "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}"
-                          : tool.equals("deleteFile") ? "{\"pathStr\":\"a.txt\"}" : "{}",
-                      voice))
+      assertThatThrownBy(() ->
+              guard.check(
+                  tool,
+                  tool.equals("writeMultiFile")
+                      ? "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}"
+                      : tool.equals("deleteFile") ? "{\"pathStr\":\"a.txt\"}" : "{}",
+                  voice))
           .isInstanceOf(ToolPermissionException.class);
     assertThat(events).hasSize(5);
-    assertThatCode(
-            () ->
-                guard.check(
-                    "writeMultiFile",
-                    "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
-                    text()))
+    assertThatCode(() ->
+            guard.check(
+                "writeMultiFile",
+                "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
+                text()))
         .doesNotThrowAnyException();
     assertThat(voice.requestSource()).isEqualTo(AgentRunContext.RequestSource.SHELL);
     assertThat(voice.mode()).isEqualTo(AgentRunContext.Mode.EXCLUSIVE);

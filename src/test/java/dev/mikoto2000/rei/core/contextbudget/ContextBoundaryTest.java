@@ -43,18 +43,15 @@ class ContextBoundaryTest {
     context.setRunContext(new AgentRunContext("run", "chat", Path.of(".")));
     var assembler = mock(ContextAssembler.class);
     when(assembler.assemble(any(), any(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              order.add("assemble");
-              Prompt raw = invocation.getArgument(0);
-              if (raw.getInstructions().getLast() instanceof ToolResponseMessage tool) {
-                assertThat(tool.getResponses().getFirst().responseData())
-                    .isEqualTo("full raw result");
-                return new Prompt(
-                    List.of(new UserMessage("compact representation")), raw.getOptions());
-              }
-              return raw;
-            });
+        .thenAnswer(invocation -> {
+          order.add("assemble");
+          Prompt raw = invocation.getArgument(0);
+          if (raw.getInstructions().getLast() instanceof ToolResponseMessage tool) {
+            assertThat(tool.getResponses().getFirst().responseData()).isEqualTo("full raw result");
+            return new Prompt(List.of(new UserMessage("compact representation")), raw.getOptions());
+          }
+          return raw;
+        });
     var tool =
         new ToolCallback() {
           /** 検証用に、モデルへ渡す文脈の管理で参照するツール定義を返す。 */

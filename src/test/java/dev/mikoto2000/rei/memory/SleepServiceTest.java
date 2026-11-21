@@ -92,13 +92,12 @@ class SleepServiceTest {
     assertEquals(original, turns.read("s"));
     turn("turn2", ConversationTurnStore.Status.COMPLETED);
     when(extractor.extract(anyList()))
-        .thenAnswer(
-            a -> {
-              List<ConversationTurnStore.Turn> input = a.getArgument(0);
-              assertEquals(
-                  List.of("turn2"), input.stream().map(ConversationTurnStore.Turn::runId).toList());
-              return List.of();
-            });
+        .thenAnswer(a -> {
+          List<ConversationTurnStore.Turn> input = a.getArgument(0);
+          assertEquals(
+              List.of("turn2"), input.stream().map(ConversationTurnStore.Turn::runId).toList());
+          return List.of();
+        });
     service.sleep("s", "p", false);
     assertEquals(2, repository.lastProcessed("s"));
   }
@@ -149,11 +148,10 @@ class SleepServiceTest {
     turn("turn1", ConversationTurnStore.Status.COMPLETED);
     var active = new java.util.concurrent.atomic.AtomicBoolean();
     when(extractor.extract(anyList()))
-        .thenAnswer(
-            a -> {
-              active.set(true);
-              return List.of(LongTermMemoryTest.candidate("Vision first", MemoryScope.PROJECT));
-            });
+        .thenAnswer(a -> {
+          active.set(true);
+          return List.of(LongTermMemoryTest.candidate("Vision first", MemoryScope.PROJECT));
+        });
     assertThrows(
         java.util.concurrent.CancellationException.class,
         () -> service.sleep("s", "p", false, active::get));

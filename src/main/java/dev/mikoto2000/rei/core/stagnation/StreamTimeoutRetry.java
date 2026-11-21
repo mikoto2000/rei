@@ -38,49 +38,44 @@ final class StreamTimeoutRetry {
       int maximum,
       int attempt,
       Consumer<ChatResponse> completed) {
-    return Flux.defer(
-        () -> {
-          context.checkActive();
-          context.checkModelTokenBudget();
-          var characters = new java.util.concurrent.atomic.AtomicInteger();
-          return new MessageAggregator()
-              .aggregate(
-                  Flux.defer(() -> model.stream(prompt))
-                      .doOnNext(
-                          response -> {
-                            var generation = response.getResult();
-                            String text =
-                                generation == null ? null : generation.getOutput().getText();
-                            if (text != null) characters.addAndGet(text.length());
-                          }),
-                  completed)
-              .onErrorResume(
-                  error -> {
-                    if (attempt >= maximum || !isReadTimeout(error)) return Flux.error(error);
-                    // Charge the failed invocation before admitting another one. Unknown usage with
-                    // a
-                    // token ceiling stops here, preserving the existing Run/Goal accounting rules.
-                    context.recordTotalTokens(null);
-                    context.checkActive();
-                    return Mono.delay(Duration.ofMillis(100L << attempt))
-                        .flatMapMany(
-                            ignored -> {
-                              context.checkActive();
-                              context.checkModelTokenBudget();
-                              context.consumeNextLlmCall();
-                              var marker =
-                                  new ChatResponse(
-                                      List.of(),
-                                      ChatResponseMetadata.builder()
-                                          .keyValue(RETRY, attempt + 1)
-                                          .keyValue(DISCARDED, characters.get())
-                                          .build());
-                              return Flux.concat(
-                                  Flux.just(marker),
-                                  attempt(model, prompt, context, maximum, attempt + 1, completed));
-                            });
-                  });
-        });
+    return Flux.defer(() -> {
+      context.checkActive();
+      context.checkModelTokenBudget();
+      var characters = new java.util.concurrent.atomic.AtomicInteger();
+      return new MessageAggregator()
+          .aggregate(
+              Flux.defer(() -> model.stream(prompt))
+                  .doOnNext(response -> {
+                    var generation = response.getResult();
+                    String text = generation == null ? null : generation.getOutput().getText();
+                    if (text != null) characters.addAndGet(text.length());
+                  }),
+              completed)
+          .onErrorResume(error -> {
+            if (attempt >= maximum || !isReadTimeout(error)) return Flux.error(error);
+            // Charge the failed invocation before admitting another one. Unknown usage with
+            // a
+            // token ceiling stops here, preserving the existing Run/Goal accounting rules.
+            context.recordTotalTokens(null);
+            context.checkActive();
+            return Mono.delay(Duration.ofMillis(100L << attempt))
+                .flatMapMany(ignored -> {
+                  context.checkActive();
+                  context.checkModelTokenBudget();
+                  context.consumeNextLlmCall();
+                  var marker =
+                      new ChatResponse(
+                          List.of(),
+                          ChatResponseMetadata.builder()
+                              .keyValue(RETRY, attempt + 1)
+                              .keyValue(DISCARDED, characters.get())
+                              .build());
+                  return Flux.concat(
+                      Flux.just(marker),
+                      attempt(model, prompt, context, maximum, attempt + 1, completed));
+                });
+          });
+    });
   }
 
   static boolean isReadTimeout(Throwable error) {

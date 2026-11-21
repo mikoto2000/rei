@@ -314,13 +314,19 @@ public class AgentEventFactory {
     return llmResponseCompleted(runId, requestId, durationMs, null, null, null);
   }
 
-  public AgentEvent llmResponseCompleted(String runId, String requestId, long durationMs,
-      Long firstResponseMillis, Integer promptTokens, Integer completionTokens) {
+  public AgentEvent llmResponseCompleted(
+      String runId,
+      String requestId,
+      long durationMs,
+      Long firstResponseMillis,
+      Integer promptTokens,
+      Integer completionTokens) {
     return newEvent(
         AgentEventType.LLM_RESPONSE_COMPLETED,
         runId,
         requestId,
-        new LlmResponseCompletedPayload(requestId, durationMs, firstResponseMillis, promptTokens, completionTokens));
+        new LlmResponseCompletedPayload(
+            requestId, durationMs, firstResponseMillis, promptTokens, completionTokens));
   }
 
   // ---- Message ----

@@ -359,71 +359,69 @@ public class GoogleCalendarService {
     var zone = ZoneId.of(connection.config().zone());
     if (operation.equals("DETAIL")) {
       secretaryFields(args, "id");
-      return readPage.apply(
-          () ->
-              new Page(
-                  List.of(
-                      secretaryItem(
-                          secretaryCalendarClient()
-                              .events()
-                              .get(connection.config().resource(), secretaryId(args.get("id")))
-                              .execute(),
-                          connection,
-                          true)),
-                  "",
-                  false));
+      return readPage.apply(() ->
+          new Page(
+              List.of(
+                  secretaryItem(
+                      secretaryCalendarClient()
+                          .events()
+                          .get(connection.config().resource(), secretaryId(args.get("id")))
+                          .execute(),
+                      connection,
+                      true)),
+              "",
+              false));
     }
     if (operation.equals("FREEBUSY")) {
       secretaryFields(args, "from", "to");
       var from = secretaryDate(args.get("from"), zone).toInstant();
       var to = secretaryDate(args.get("to"), zone).toInstant();
       secretaryRange(from, to);
-      return readPage.apply(
-          () -> {
-            var request =
-                new com.google.api.services.calendar.model.FreeBusyRequest()
-                    .setTimeMin(new com.google.api.client.util.DateTime(from.toEpochMilli()))
-                    .setTimeMax(new com.google.api.client.util.DateTime(to.toEpochMilli()))
-                    .setTimeZone(zone.getId())
-                    .setItems(
-                        List.of(
-                            new com.google.api.services.calendar.model.FreeBusyRequestItem()
-                                .setId(connection.config().resource())));
-            var response = secretaryCalendarClient().freebusy().query(request).execute();
-            var calendar =
-                response.getCalendars() == null
-                    ? null
-                    : response.getCalendars().get(connection.config().resource());
-            if (calendar == null || calendar.getErrors() != null && !calendar.getErrors().isEmpty())
-              throw new Failure("FREEBUSY_UNAVAILABLE", 0, false);
-            var busy =
-                calendar.getBusy() == null
-                    ? List.<com.google.api.services.calendar.model.TimePeriod>of()
-                    : calendar.getBusy();
-            if (busy.size() > 1000) throw new Failure("FREEBUSY_CAPACITY", 0, false);
-            var periods = new java.util.ArrayList<Instant[]>();
-            for (var period : busy) {
-              if (period.getStart() == null || period.getEnd() == null)
-                throw new Failure("INVALID_RESPONSE", 0, false);
-              periods.add(
-                  new Instant[] {
-                    Instant.ofEpochMilli(period.getStart().getValue()),
-                    Instant.ofEpochMilli(period.getEnd().getValue())
-                  });
-            }
-            periods.sort(java.util.Comparator.comparing(p -> p[0]));
-            var items = new java.util.ArrayList<Item>();
-            Instant position = from;
-            for (var period : periods) {
-              Instant start = period[0].isBefore(from) ? from : period[0];
-              Instant end = period[1].isAfter(to) ? to : period[1];
-              if (!end.isAfter(start) || !start.isBefore(to) || !end.isAfter(from)) continue;
-              if (start.isAfter(position)) items.add(secretarySlot(position, start, zone));
-              if (end.isAfter(position)) position = end;
-            }
-            if (position.isBefore(to)) items.add(secretarySlot(position, to, zone));
-            return new Page(items, "", false);
-          });
+      return readPage.apply(() -> {
+        var request =
+            new com.google.api.services.calendar.model.FreeBusyRequest()
+                .setTimeMin(new com.google.api.client.util.DateTime(from.toEpochMilli()))
+                .setTimeMax(new com.google.api.client.util.DateTime(to.toEpochMilli()))
+                .setTimeZone(zone.getId())
+                .setItems(
+                    List.of(
+                        new com.google.api.services.calendar.model.FreeBusyRequestItem()
+                            .setId(connection.config().resource())));
+        var response = secretaryCalendarClient().freebusy().query(request).execute();
+        var calendar =
+            response.getCalendars() == null
+                ? null
+                : response.getCalendars().get(connection.config().resource());
+        if (calendar == null || calendar.getErrors() != null && !calendar.getErrors().isEmpty())
+          throw new Failure("FREEBUSY_UNAVAILABLE", 0, false);
+        var busy =
+            calendar.getBusy() == null
+                ? List.<com.google.api.services.calendar.model.TimePeriod>of()
+                : calendar.getBusy();
+        if (busy.size() > 1000) throw new Failure("FREEBUSY_CAPACITY", 0, false);
+        var periods = new java.util.ArrayList<Instant[]>();
+        for (var period : busy) {
+          if (period.getStart() == null || period.getEnd() == null)
+            throw new Failure("INVALID_RESPONSE", 0, false);
+          periods.add(
+              new Instant[] {
+                Instant.ofEpochMilli(period.getStart().getValue()),
+                Instant.ofEpochMilli(period.getEnd().getValue())
+              });
+        }
+        periods.sort(java.util.Comparator.comparing(p -> p[0]));
+        var items = new java.util.ArrayList<Item>();
+        Instant position = from;
+        for (var period : periods) {
+          Instant start = period[0].isBefore(from) ? from : period[0];
+          Instant end = period[1].isAfter(to) ? to : period[1];
+          if (!end.isAfter(start) || !start.isBefore(to) || !end.isAfter(from)) continue;
+          if (start.isAfter(position)) items.add(secretarySlot(position, start, zone));
+          if (end.isAfter(position)) position = end;
+        }
+        if (position.isBefore(to)) items.add(secretarySlot(position, to, zone));
+        return new Page(items, "", false);
+      });
     }
     if (!java.util.Set.of("LIST", "TODAY").contains(operation))
       throw new IllegalArgumentException("Unknown Calendar read operation");
@@ -439,31 +437,28 @@ public class GoogleCalendarService {
             ? date.plusDays(1).atStartOfDay(zone).toInstant()
             : secretaryDate(args.get("to"), zone).toInstant();
     secretaryRange(from, to);
-    return readPage.apply(
-        () -> {
-          var request =
-              secretaryCalendarClient()
-                  .events()
-                  .list(connection.config().resource())
-                  .setTimeMin(new com.google.api.client.util.DateTime(from.toEpochMilli()))
-                  .setTimeMax(new com.google.api.client.util.DateTime(to.toEpochMilli()))
-                  .setSingleEvents(true)
-                  .setShowDeleted(true)
-                  .setOrderBy("startTime")
-                  .setMaxResults(50)
-                  .setPageToken(args.get("page"));
-          var response = request.execute();
-          var items =
-              response.getItems() == null
-                  ? List.<Item>of()
-                  : response.getItems().stream()
-                      .map(e -> secretaryItem(e, connection, false))
-                      .toList();
-          return new Page(
-              items,
-              Objects.toString(response.getNextPageToken(), ""),
-              response.getNextPageToken() != null);
-        });
+    return readPage.apply(() -> {
+      var request =
+          secretaryCalendarClient()
+              .events()
+              .list(connection.config().resource())
+              .setTimeMin(new com.google.api.client.util.DateTime(from.toEpochMilli()))
+              .setTimeMax(new com.google.api.client.util.DateTime(to.toEpochMilli()))
+              .setSingleEvents(true)
+              .setShowDeleted(true)
+              .setOrderBy("startTime")
+              .setMaxResults(50)
+              .setPageToken(args.get("page"));
+      var response = request.execute();
+      var items =
+          response.getItems() == null
+              ? List.<Item>of()
+              : response.getItems().stream().map(e -> secretaryItem(e, connection, false)).toList();
+      return new Page(
+          items,
+          Objects.toString(response.getNextPageToken(), ""),
+          response.getNextPageToken() != null);
+    });
   }
 
   private static Item secretarySlot(Instant from, Instant to, ZoneId zone) {
@@ -551,12 +546,11 @@ public class GoogleCalendarService {
     var desired =
         operation.equals("CALENDAR_CREATE")
             ? new Event().setId(eventId)
-            : readEvent.apply(
-                () ->
-                    secretaryCalendarClient()
-                        .events()
-                        .get(connection.config().resource(), eventId)
-                        .execute());
+            : readEvent.apply(() ->
+                secretaryCalendarClient()
+                    .events()
+                    .get(connection.config().resource(), eventId)
+                    .execute());
     if (!operation.equals("CALENDAR_CREATE") && !etag.equals(desired.getEtag()))
       throw new Failure("PRECONDITION_FAILED", 0, false);
     if (!operation.equals("CALENDAR_CANCEL")) {
@@ -575,42 +569,40 @@ public class GoogleCalendarService {
       if (desired.getSummary() == null || from == null || to == null || !to.isAfter(from))
         throw new IllegalArgumentException("Calendar title/start/end required");
     }
-    writeEvent.accept(
-        () -> {
-          if (operation.equals("CALENDAR_CREATE")) {
-            try {
-              secretaryCalendarClient()
-                  .events()
-                  .insert(connection.config().resource(), desired)
-                  .execute();
-            } catch (com.google.api.client.http.HttpResponseException conflict) {
-              if (conflict.getStatusCode() != 409) throw conflict;
-            }
-          } else if (operation.equals("CALENDAR_UPDATE")) {
-            var request =
-                secretaryCalendarClient()
-                    .events()
-                    .patch(connection.config().resource(), eventId, desired);
-            request.getRequestHeaders().setIfMatch(etag);
-            request.execute();
-          } else {
-            var request =
-                secretaryCalendarClient().events().delete(connection.config().resource(), eventId);
-            request.getRequestHeaders().setIfMatch(etag);
-            request.execute();
-          }
-          return null;
-        });
+    writeEvent.accept(() -> {
+      if (operation.equals("CALENDAR_CREATE")) {
+        try {
+          secretaryCalendarClient()
+              .events()
+              .insert(connection.config().resource(), desired)
+              .execute();
+        } catch (com.google.api.client.http.HttpResponseException conflict) {
+          if (conflict.getStatusCode() != 409) throw conflict;
+        }
+      } else if (operation.equals("CALENDAR_UPDATE")) {
+        var request =
+            secretaryCalendarClient()
+                .events()
+                .patch(connection.config().resource(), eventId, desired);
+        request.getRequestHeaders().setIfMatch(etag);
+        request.execute();
+      } else {
+        var request =
+            secretaryCalendarClient().events().delete(connection.config().resource(), eventId);
+        request.getRequestHeaders().setIfMatch(etag);
+        request.execute();
+      }
+      return null;
+    });
     try {
       Event actual;
       try {
         actual =
-            readEvent.apply(
-                () ->
-                    secretaryCalendarClient()
-                        .events()
-                        .get(connection.config().resource(), eventId)
-                        .execute());
+            readEvent.apply(() ->
+                secretaryCalendarClient()
+                    .events()
+                    .get(connection.config().resource(), eventId)
+                    .execute());
       } catch (Failure missing) {
         if (operation.equals("CALENDAR_CANCEL")
             && java.util.Set.of("NOT_FOUND", "GONE").contains(missing.code()))

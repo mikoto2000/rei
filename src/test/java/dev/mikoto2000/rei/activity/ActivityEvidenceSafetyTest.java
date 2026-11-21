@@ -64,11 +64,10 @@ class ActivityEvidenceSafetyTest {
     verify(f.store, times(2)).append(records.capture());
     verify(f.store)
         .replace(
-            argThat(
-                r ->
-                    r.id().equals(records.getAllValues().getFirst().id())
-                        && r.detection().visionDiagnostics().background().state()
-                            == VisionDiagnostics.State.USED));
+            argThat(r ->
+                r.id().equals(records.getAllValues().getFirst().id())
+                    && r.detection().visionDiagnostics().background().state()
+                        == VisionDiagnostics.State.USED));
   }
 
   /** 無効状態代替手段または画像認識引き続きについて、不明観測内容を保存することを確認する。 */
@@ -171,13 +170,12 @@ class ActivityEvidenceSafetyTest {
     var entered = new CountDownLatch(1);
     var release = new CountDownLatch(1);
     when(extractor.extract(any(), any()))
-        .thenAnswer(
-            i -> {
-              entered.countDown();
-              assertTrue(release.await(5, TimeUnit.SECONDS));
-              return new ActivityExtractor.Result(
-                  ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .9);
-            });
+        .thenAnswer(i -> {
+          entered.countDown();
+          assertTrue(release.await(5, TimeUnit.SECONDS));
+          return new ActivityExtractor.Result(
+              ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .9);
+        });
     var time = new ActivityChangeScopeTest.Time();
     try (var worker = Executors.newSingleThreadExecutor()) {
       var capture =
@@ -200,10 +198,9 @@ class ActivityEvidenceSafetyTest {
         verify(store, times(4)).append(any());
         verify(store)
             .replace(
-                argThat(
-                    r ->
-                        r.detection().visionDiagnostics().foreground().state()
-                            == VisionDiagnostics.State.ATTEMPTED));
+                argThat(r ->
+                    r.detection().visionDiagnostics().foreground().state()
+                        == VisionDiagnostics.State.ATTEMPTED));
         clearInvocations(store);
         capture.pause();
         release.countDown();

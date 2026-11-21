@@ -26,9 +26,7 @@ public record BriefingContext(
     events = events == null ? null : Collections.unmodifiableList(new ArrayList<>(events));
     openTasks = openTasks == null ? null : Collections.unmodifiableList(new ArrayList<>(openTasks));
     overdueTasks =
-        overdueTasks == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(overdueTasks));
+        overdueTasks == null ? null : Collections.unmodifiableList(new ArrayList<>(overdueTasks));
     relatedDocuments =
         relatedDocuments == null
             ? null

@@ -684,11 +684,10 @@ final class HeuristicSourceIndex {
                 .replaceFirst("^test_", "");
         var matches =
             files.stream()
-                .filter(
-                    candidate ->
-                        !test(candidate.path())
-                            && candidate.module().equals(file.module())
-                            && fileName(candidate.path()).equals(base))
+                .filter(candidate ->
+                    !test(candidate.path())
+                        && candidate.module().equals(file.module())
+                        && fileName(candidate.path()).equals(base))
                 .toList();
         if (matches.size() == 1)
           result.add(
@@ -715,8 +714,7 @@ final class HeuristicSourceIndex {
             .replaceFirst("(?:^|/)(lib|main|mod)$", "");
     if (imported.startsWith("mod:")) {
       String folder =
-          Set.of("lib.rs", "main.rs", "mod.rs")
-                  .contains(fileName(file.path()))
+          Set.of("lib.rs", "main.rs", "mod.rs").contains(fileName(file.path()))
               ? parent(file.path())
               : file.path().replaceFirst("\\.rs$", "");
       base = join(folder, imported.substring(4));

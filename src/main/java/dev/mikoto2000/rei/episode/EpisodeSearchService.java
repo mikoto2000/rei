@@ -148,10 +148,9 @@ public class EpisodeSearchService {
         long count = turnCount.applyAsLong(run.conversationId());
         String recent =
             readRange.apply(new TurnRange(run.conversationId(), Math.max(0, count - 3), 3)).stream()
-                .filter(
-                    t ->
-                        t.status() != ConversationTurnStore.Status.RUNNING
-                            && !t.runId().equals(run.runId()))
+                .filter(t ->
+                    t.status() != ConversationTurnStore.Status.RUNNING
+                        && !t.runId().equals(run.runId()))
                 .limit(2)
                 .map(t -> clip(t.request(), 100))
                 .collect(java.util.stream.Collectors.joining(" "));
@@ -163,13 +162,10 @@ public class EpisodeSearchService {
       if (state.isPresent()) {
         String topics =
             state.get().items().stream()
-                .filter(
-                    i ->
-                        i.status() == dev.mikoto2000.rei.workcontext.WorkContext.Status.OPEN
-                            && (i.kind()
-                                    == dev.mikoto2000.rei.workcontext.WorkContext.Kind.CURRENT_WORK
-                                || i.kind()
-                                    == dev.mikoto2000.rei.workcontext.WorkContext.Kind.PURPOSE))
+                .filter(i ->
+                    i.status() == dev.mikoto2000.rei.workcontext.WorkContext.Status.OPEN
+                        && (i.kind() == dev.mikoto2000.rei.workcontext.WorkContext.Kind.CURRENT_WORK
+                            || i.kind() == dev.mikoto2000.rei.workcontext.WorkContext.Kind.PURPOSE))
                 .limit(2)
                 .map(i -> clip(i.text(), 100))
                 .collect(java.util.stream.Collectors.joining(" "));
@@ -249,53 +245,47 @@ public class EpisodeSearchService {
         memoryEnabled
             ? searchMemories.apply(query, request.preferredProjectId()).stream()
                 .filter(m -> range.includes(m.updatedAt().toInstant()))
-                .map(
-                    m ->
-                        new Hit(
-                            "memory",
-                            m.id(),
-                            Objects.toString(m.projectId(), "GLOBAL"),
-                            clip(m.summary(), 500),
-                            m.status().name(),
-                            0))
+                .map(m ->
+                    new Hit(
+                        "memory",
+                        m.id(),
+                        Objects.toString(m.projectId(), "GLOBAL"),
+                        clip(m.summary(), 500),
+                        m.status().name(),
+                        0))
                 .toList()
             : List.of();
     var historyHits =
         histories.stream()
-            .map(
-                h ->
-                    new Hit(
-                        "conversation",
-                        h.conversationId() + "/" + h.timestamp() + "/" + h.speaker(),
-                        h.sourceProjectId(),
-                        clip(h.content(), 500),
-                        h.speaker()
-                            + " "
-                            + Objects.toString(
-                                h.contextBoundary(), HistoryRetrievalPolicy.LOCAL_BOUNDARY),
-                        0))
+            .map(h ->
+                new Hit(
+                    "conversation",
+                    h.conversationId() + "/" + h.timestamp() + "/" + h.speaker(),
+                    h.sourceProjectId(),
+                    clip(h.content(), 500),
+                    h.speaker()
+                        + " "
+                        + Objects.toString(
+                            h.contextBoundary(), HistoryRetrievalPolicy.LOCAL_BOUNDARY),
+                    0))
             .toList();
     var workHits = new ArrayList<Hit>();
     if (request.preferredProjectId() != null)
       work.current(request.preferredProjectId())
-          .ifPresent(
-              w ->
-                  w.items().stream()
-                      .filter(
-                          i ->
-                              range.includes(i.updatedAt())
-                                  && queryMatches(request.query(), i.text()))
-                      .limit(8)
-                      .forEach(
-                          i ->
-                              workHits.add(
-                                  new Hit(
-                                      "workContext",
-                                      i.id(),
-                                      w.projectId(),
-                                      clip(i.text(), 500),
-                                      i.certainty().name(),
-                                      0))));
+          .ifPresent(w ->
+              w.items().stream()
+                  .filter(
+                      i -> range.includes(i.updatedAt()) && queryMatches(request.query(), i.text()))
+                  .limit(8)
+                  .forEach(i ->
+                      workHits.add(
+                          new Hit(
+                              "workContext",
+                              i.id(),
+                              w.projectId(),
+                              clip(i.text(), 500),
+                              i.certainty().name(),
+                              0))));
     var fused =
         fuse(
             List.of(episodeHits.stream().limit(24).toList(), memoryHits, historyHits, workHits),
@@ -388,40 +378,35 @@ public class EpisodeSearchService {
         Objects.requireNonNullElse(episodes.relations(id, project), List.of()),
         "revisions",
         revisions.subList(start, revisions.size()).stream()
-            .map(
-                e ->
-                    available(e)
-                        ? Map.of(
-                            "revision",
-                            e.revision(),
-                            "status",
-                            e.status(),
-                            "title",
-                            clip(e.title(), 120),
-                            "summary",
-                            clip(e.summary(), foreign ? 200 : 500),
-                            "claims",
-                            e.claims().stream()
-                                .limit(foreign ? 3 : 8)
-                                .map(
-                                    c ->
-                                        Map.of(
-                                            "kind",
-                                            c.kind(),
-                                            "text",
-                                            clip(c.text(), 200),
-                                            "evidence",
-                                            c.evidence(),
-                                            "runId",
-                                            c.runId()))
-                                .toList(),
-                            "sourceStatus",
-                            "AVAILABLE")
-                        : Map.of(
-                            "revision",
-                            e.revision(),
-                            "sourceStatus",
-                            "UNAVAILABLE_DELETED_OR_EXPIRED"))
+            .map(e ->
+                available(e)
+                    ? Map.of(
+                        "revision",
+                        e.revision(),
+                        "status",
+                        e.status(),
+                        "title",
+                        clip(e.title(), 120),
+                        "summary",
+                        clip(e.summary(), foreign ? 200 : 500),
+                        "claims",
+                        e.claims().stream()
+                            .limit(foreign ? 3 : 8)
+                            .map(c ->
+                                Map.of(
+                                    "kind",
+                                    c.kind(),
+                                    "text",
+                                    clip(c.text(), 200),
+                                    "evidence",
+                                    c.evidence(),
+                                    "runId",
+                                    c.runId()))
+                            .toList(),
+                        "sourceStatus",
+                        "AVAILABLE")
+                    : Map.of(
+                        "revision", e.revision(), "sourceStatus", "UNAVAILABLE_DELETED_OR_EXPIRED"))
             .toList());
   }
 
@@ -437,9 +422,8 @@ public class EpisodeSearchService {
         var text =
             c.speaker().equals("tool")
                 ? source.flatMap(t -> toolSource(e, c)).map(t -> clip(t.resultSummary(), 500))
-                : source.map(
-                    t ->
-                        clip(c.speaker().equals("user") ? t.request() : t.assistantMessage(), 500));
+                : source.map(t ->
+                    clip(c.speaker().equals("user") ? t.request() : t.assistantMessage(), 500));
         result.add(
             Map.of(
                 "sessionId",
@@ -479,40 +463,35 @@ public class EpisodeSearchService {
     result.put(
         "revisions",
         page.items().stream()
-            .map(
-                e ->
-                    available(e)
-                        ? Map.of(
-                            "revision",
-                            e.revision(),
-                            "status",
-                            e.status(),
-                            "title",
-                            clip(e.title(), 120),
-                            "summary",
-                            clip(e.summary(), foreign ? 200 : 500),
-                            "claims",
-                            e.claims().stream()
-                                .limit(foreign ? 3 : 8)
-                                .map(
-                                    c ->
-                                        Map.of(
-                                            "kind",
-                                            c.kind(),
-                                            "text",
-                                            clip(c.text(), 200),
-                                            "evidence",
-                                            c.evidence(),
-                                            "runId",
-                                            c.runId()))
-                                .toList(),
-                            "sourceStatus",
-                            "AVAILABLE")
-                        : Map.of(
-                            "revision",
-                            e.revision(),
-                            "sourceStatus",
-                            "UNAVAILABLE_DELETED_OR_EXPIRED"))
+            .map(e ->
+                available(e)
+                    ? Map.of(
+                        "revision",
+                        e.revision(),
+                        "status",
+                        e.status(),
+                        "title",
+                        clip(e.title(), 120),
+                        "summary",
+                        clip(e.summary(), foreign ? 200 : 500),
+                        "claims",
+                        e.claims().stream()
+                            .limit(foreign ? 3 : 8)
+                            .map(c ->
+                                Map.of(
+                                    "kind",
+                                    c.kind(),
+                                    "text",
+                                    clip(c.text(), 200),
+                                    "evidence",
+                                    c.evidence(),
+                                    "runId",
+                                    c.runId()))
+                            .toList(),
+                        "sourceStatus",
+                        "AVAILABLE")
+                    : Map.of(
+                        "revision", e.revision(), "sourceStatus", "UNAVAILABLE_DELETED_OR_EXPIRED"))
             .toList());
     return result;
   }

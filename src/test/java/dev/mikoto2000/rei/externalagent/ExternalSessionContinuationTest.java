@@ -292,18 +292,17 @@ class ExternalSessionContinuationTest {
       for (int i = 0; i < 2; i++) {
         final int index = i;
         outcomes.add(
-            pool.submit(
-                () -> {
-                  gate.await();
-                  try {
-                    (index == 0 ? history : second)
-                        .startContinuation(
-                            fixture.owner(), "child-" + index, root.toRealPath(), null, "parent");
-                    return true;
-                  } catch (RuntimeException rejected) {
-                    return false;
-                  }
-                }));
+            pool.submit(() -> {
+              gate.await();
+              try {
+                (index == 0 ? history : second)
+                    .startContinuation(
+                        fixture.owner(), "child-" + index, root.toRealPath(), null, "parent");
+                return true;
+              } catch (RuntimeException rejected) {
+                return false;
+              }
+            }));
       }
       gate.countDown();
       int claimed = 0;

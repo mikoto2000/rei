@@ -138,11 +138,10 @@ class ReiApplicationCommandNotificationTest {
 
     // EscCancellationMonitor.await() should just return the future result
     when(escCancellationMonitor.await(Mockito.any(), Mockito.any(), Mockito.any()))
-        .thenAnswer(
-            invocation -> {
-              var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
-              return future.get();
-            });
+        .thenAnswer(invocation -> {
+          var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
+          return future.get();
+        });
 
     ReiApplication app = newApp();
 
@@ -213,11 +212,10 @@ class ReiApplicationCommandNotificationTest {
     CommandLine cmd = new CommandLine(new StubCommand());
 
     when(escCancellationMonitor.await(Mockito.any(), Mockito.any(), Mockito.any()))
-        .thenAnswer(
-            invocation -> {
-              var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
-              return future.get();
-            });
+        .thenAnswer(invocation -> {
+          var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
+          return future.get();
+        });
 
     // wasNarrated() returns true → notification should be skipped
     when(chatResponseNarrator.wasNarrated()).thenReturn(true);
@@ -253,11 +251,10 @@ class ReiApplicationCommandNotificationTest {
     CommandLine cmd = new CommandLine(new StubCommand());
 
     when(escCancellationMonitor.await(Mockito.any(), Mockito.any(), Mockito.any()))
-        .thenAnswer(
-            invocation -> {
-              var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
-              return future.get();
-            });
+        .thenAnswer(invocation -> {
+          var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
+          return future.get();
+        });
 
     // wasNarrated() returns false → notification should be executed
     when(chatResponseNarrator.wasNarrated()).thenReturn(false);
@@ -284,11 +281,10 @@ class ReiApplicationCommandNotificationTest {
 
     CommandLine cmd = new CommandLine(new StubCommand());
     when(escCancellationMonitor.await(Mockito.any(), Mockito.any(), Mockito.any()))
-        .thenAnswer(
-            invocation -> {
-              var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
-              return future.get();
-            });
+        .thenAnswer(invocation -> {
+          var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
+          return future.get();
+        });
     when(chatResponseNarrator.wasNarrated()).thenReturn(false);
     ReiApplication app = newApp();
 
@@ -310,11 +306,10 @@ class ReiApplicationCommandNotificationTest {
 
     CommandLine cmd = new CommandLine(new StubCommand());
     when(escCancellationMonitor.await(Mockito.any(), Mockito.any(), Mockito.any()))
-        .thenAnswer(
-            invocation -> {
-              var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
-              return future.get();
-            });
+        .thenAnswer(invocation -> {
+          var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
+          return future.get();
+        });
     when(chatResponseNarrator.wasNarrated()).thenReturn(false);
     ReiApplication app = newApp();
 
@@ -336,11 +331,10 @@ class ReiApplicationCommandNotificationTest {
 
     CommandLine cmd = new CommandLine(new StubCommand());
     when(escCancellationMonitor.await(Mockito.any(), Mockito.any(), Mockito.any()))
-        .thenAnswer(
-            invocation -> {
-              var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
-              return future.get();
-            });
+        .thenAnswer(invocation -> {
+          var future = invocation.<java.util.concurrent.Future<Integer>>getArgument(0);
+          return future.get();
+        });
     when(chatResponseNarrator.wasNarrated()).thenReturn(false);
     ReiApplication app = newApp();
 

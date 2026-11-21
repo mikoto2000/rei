@@ -101,12 +101,11 @@ public final class ReplayBuffer {
   /** 実行状況の通知に関する保持期限を過ぎた情報の削除期限切れを処理する。 */
   public void purgeExpired(Set<String> protectedRuns) {
     runs.entrySet()
-        .removeIf(
-            entry ->
-                !protectedRuns.contains(entry.getKey())
-                    && entry.getValue().completedAt != null
-                    && !clock
-                        .instant()
-                        .isBefore(entry.getValue().completedAt.plus(Duration.ofMinutes(30))));
+        .removeIf(entry ->
+            !protectedRuns.contains(entry.getKey())
+                && entry.getValue().completedAt != null
+                && !clock
+                    .instant()
+                    .isBefore(entry.getValue().completedAt.plus(Duration.ofMinutes(30))));
   }
 }

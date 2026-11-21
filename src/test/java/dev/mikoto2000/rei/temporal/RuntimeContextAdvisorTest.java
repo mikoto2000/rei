@@ -1,8 +1,8 @@
 package dev.mikoto2000.rei.temporal;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -42,8 +42,8 @@ class RuntimeContextAdvisorTest {
   void requestTimestampStaysFixedWhileTimeToolReadsFreshTime() {
     Clock clock = Mockito.mock(Clock.class);
     Mockito.when(clock.getZone()).thenReturn(ZoneId.of("Asia/Tokyo"));
-    Mockito.when(clock.instant()).thenReturn(
-        Instant.parse("2026-11-03T14:59:00Z"), Instant.parse("2026-11-03T15:01:00Z"));
+    Mockito.when(clock.instant())
+        .thenReturn(Instant.parse("2026-11-03T14:59:00Z"), Instant.parse("2026-11-03T15:01:00Z"));
     var advisor = new RuntimeContextAdvisor(clock);
     var request = ChatClientRequest.builder().prompt(new Prompt(new UserMessage("today"))).build();
     var initial = advisor.before(request, Mockito.mock(AdvisorChain.class));
@@ -52,7 +52,11 @@ class RuntimeContextAdvisorTest {
     assertEquals("2026-11-04T00:01+09:00", new ClockTools(clock).getCurrentTime().timestamp());
     assertEquals(startContext, initial.prompt().getUserMessage().getText());
     var nextRequest = advisor.before(request, Mockito.mock(AdvisorChain.class));
-    assertTrue(nextRequest.prompt().getUserMessage().getText()
-        .contains("Request start time: 2026-11-04T00:01+09:00"));
+    assertTrue(
+        nextRequest
+            .prompt()
+            .getUserMessage()
+            .getText()
+            .contains("Request start time: 2026-11-04T00:01+09:00"));
   }
 }

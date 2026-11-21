@@ -3,9 +3,7 @@ package dev.mikoto2000.rei.activity.behavior;
 import java.time.Instant;
 import java.util.function.ToLongFunction;
 
-/**
- * 作業習慣の支援で受け渡す作業習慣通知判断基準を表す。
- */
+/** 作業習慣の支援で受け渡す作業習慣通知判断基準を表す。 */
 public final class BehaviorNotificationPolicy {
   /** 通知の重要度に応じた待機時間を読む操作。 */
   private final ToLongFunction<BehaviorSeverity> cooldownSeconds;

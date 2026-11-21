@@ -172,20 +172,18 @@ class BehaviorConversationIntegrationTest {
         }
         assertThat(events)
             .hasSize(3)
-            .allSatisfy(
-                e -> {
-                  assertThat(e.sessionId()).isEqualTo(active.conversationId());
-                  assertThat(e.projectId()).isEqualTo(project.id());
-                });
+            .allSatisfy(e -> {
+              assertThat(e.sessionId()).isEqualTo(active.conversationId());
+              assertThat(e.projectId()).isEqualTo(project.id());
+            });
         assertThat(tracker.lastUserActivityAt()).isEqualTo(userActivity);
         assertThat(logs.readConversation(active.conversationId()))
             .singleElement()
-            .satisfies(
-                e -> {
-                  assertThat(e.source()).isEqualTo("BEHAVIOR_NOTIFICATION");
-                  assertThat(e.sourceId()).isEqualTo("b-1");
-                  assertThat(e.metadata()).containsOnlyKeys("severity", "triggerType");
-                });
+            .satisfies(e -> {
+              assertThat(e.source()).isEqualTo("BEHAVIOR_NOTIFICATION");
+              assertThat(e.sourceId()).isEqualTo("b-1");
+              assertThat(e.metadata()).containsOnlyKeys("severity", "triggerType");
+            });
         projects.cd(Files.createDirectory(dir.resolve("other")).toString());
         var restarted =
             publisher(
@@ -196,13 +194,12 @@ class BehaviorConversationIntegrationTest {
         assertThat(events).hasSize(3);
         assertThat(new ConversationTurnStore(dir).findTurns(active.conversationId(), null, 10))
             .singleElement()
-            .satisfies(
-                t -> {
-                  assertThat(t.userMessage()).isEmpty();
-                  assertThat(t.sourceId()).isEqualTo("b-1");
-                  assertThat(t.assistantMessage()).isEqualTo(notice("b-1").content());
-                  assertThat(t.createdAt()).isEqualTo(clock.instant());
-                });
+            .satisfies(t -> {
+              assertThat(t.userMessage()).isEmpty();
+              assertThat(t.sourceId()).isEqualTo("b-1");
+              assertThat(t.assistantMessage()).isEqualTo(notice("b-1").content());
+              assertThat(t.createdAt()).isEqualTo(clock.instant());
+            });
         projects.cd(dir.toString());
         assertThat(projects.currentSessionId()).isEqualTo(active.conversationId());
         var output = new java.io.StringWriter();
@@ -365,11 +362,10 @@ class BehaviorConversationIntegrationTest {
     publisher.publish(message);
     assertThat(logs.readConversation(project.conversationId("chat:main")))
         .singleElement()
-        .satisfies(
-            e -> {
-              assertThat(e.speaker()).isEqualTo("assistant");
-              assertThat(e.metadata()).containsEntry("severity", severity);
-            });
+        .satisfies(e -> {
+          assertThat(e.speaker()).isEqualTo("assistant");
+          assertThat(e.metadata()).containsEntry("severity", severity);
+        });
   }
 
   /** 話題の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */

@@ -189,11 +189,10 @@ class ConversationInputGatewayTest {
     }
     var input = voice(target, "first");
     shell.submit(input);
-    assertThatThrownBy(
-            () ->
-                shell.submit(
-                    new ConversationInput(
-                        input.inputId(), InputSource.VOICE, target, "changed", input.createdAt())))
+    assertThatThrownBy(() ->
+            shell.submit(
+                new ConversationInput(
+                    input.inputId(), InputSource.VOICE, target, "changed", input.createdAt())))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -334,12 +333,11 @@ class ConversationInputGatewayTest {
             new dev.mikoto2000.rei.event.AgentEventFactory(clock),
             event -> {});
     for (var owner : owners)
-      assertThatThrownBy(
-              () ->
-                  guard.check(
-                      "writeMultiFile",
-                      "{\"files\":[{\"path\":\"approval-test.txt\",\"content\":\"test\"}]}",
-                      owner))
+      assertThatThrownBy(() ->
+              guard.check(
+                  "writeMultiFile",
+                  "{\"files\":[{\"path\":\"approval-test.txt\",\"content\":\"test\"}]}",
+                  owner))
           .isInstanceOf(dev.mikoto2000.rei.core.policy.ToolPermissionException.class);
     assertThat(voiceOwner.requestSource()).isEqualTo(owners.getFirst().requestSource());
   }
@@ -511,34 +509,31 @@ class ConversationInputGatewayTest {
     var input = voice(target, "voice");
     try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
       var submitting =
-          executor.submit(
-              () ->
-                  gateway.submit(
-                      input,
-                      AgentRunContext.Mode.EXCLUSIVE,
-                      () -> {
-                        rendering.countDown();
-                        try {
-                          assertThat(
-                                  finishRendering.await(3, java.util.concurrent.TimeUnit.SECONDS))
-                              .isTrue();
-                        } catch (InterruptedException interrupted) {
-                          Thread.currentThread().interrupt();
-                          throw new IllegalStateException(interrupted);
-                        }
-                        order.add("user");
-                      }));
+          executor.submit(() ->
+              gateway.submit(
+                  input,
+                  AgentRunContext.Mode.EXCLUSIVE,
+                  () -> {
+                    rendering.countDown();
+                    try {
+                      assertThat(finishRendering.await(3, java.util.concurrent.TimeUnit.SECONDS))
+                          .isTrue();
+                    } catch (InterruptedException interrupted) {
+                      Thread.currentThread().interrupt();
+                      throw new IllegalStateException(interrupted);
+                    }
+                    order.add("user");
+                  }));
       java.util.concurrent.Future<?> working;
       try {
         assertThat(rendering.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
         var job = jobs.poll(3, java.util.concurrent.TimeUnit.SECONDS);
         assertThat(job).isNotNull();
         working =
-            executor.submit(
-                () -> {
-                  workerStarted.countDown();
-                  job.run();
-                });
+            executor.submit(() -> {
+              workerStarted.countDown();
+              job.run();
+            });
         assertThat(workerStarted.await(3, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
         assertThat(answered.await(100, java.util.concurrent.TimeUnit.MILLISECONDS)).isFalse();
       } finally {

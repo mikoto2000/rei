@@ -85,14 +85,13 @@ class RawArgumentCorrectionCheckpointTest {
             .isEqualTo(ResultDelivery.Kind.GENERAL);
         assertThat(execution.returnDirect()).isFalse();
         assertThat(fixture.store().bodyReadCount()).isZero();
-        assertThatCode(
-                () ->
-                    fixture
-                        .checkpoints()
-                        .preserveResults(
-                            fixture.owner(),
-                            execution.conversationHistory(),
-                            fixture.execution().progressSnapshot()))
+        assertThatCode(() ->
+                fixture
+                    .checkpoints()
+                    .preserveResults(
+                        fixture.owner(),
+                        execution.conversationHistory(),
+                        fixture.execution().progressSnapshot()))
             .doesNotThrowAnyException();
         assertThat(
                 fixture
@@ -154,11 +153,10 @@ class RawArgumentCorrectionCheckpointTest {
         assertThat(page.content()).isEqualTo(raw.substring(0, page.nextOffset()));
         assertThat(fixture.execution().progressSnapshot().budget().argumentCorrections())
             .isEqualTo(1);
-        assertThatCode(
-                () ->
-                    fixture
-                        .checkpoints()
-                        .preserveResults(fixture.owner(), resumed.conversationHistory()))
+        assertThatCode(() ->
+                fixture
+                    .checkpoints()
+                    .preserveResults(fixture.owner(), resumed.conversationHistory()))
             .doesNotThrowAnyException();
       }
     }
@@ -199,10 +197,9 @@ class RawArgumentCorrectionCheckpointTest {
         var pending =
             new RunContinuation.PendingTools(
                 "", List.of(validCall(ref)), List.of(), Set.of("valid-page"));
-        assertThatThrownBy(
-                () ->
-                    new ToolLoopSupport()
-                        .executePending(fixture.prompt(), pending, fixture.execution()))
+        assertThatThrownBy(() ->
+                new ToolLoopSupport()
+                    .executePending(fixture.prompt(), pending, fixture.execution()))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("completed Tool");
         assertThat(fixture.store().bodyReadCount()).isZero();
@@ -234,10 +231,8 @@ class RawArgumentCorrectionCheckpointTest {
             .isEqualTo(ResultDelivery.Kind.RAW_RESULT_PAGE);
         fixture.checkpoints().preserveResults(fixture.owner(), execution.conversationHistory());
         assertThat(fixture.repository().findByRun("project", "run").orElseThrow().evidence())
-            .anyMatch(
-                evidence ->
-                    evidence.origin().equals("RAW_RESULT_REFERENCE")
-                        && evidence.summary().equals(ref));
+            .anyMatch(evidence ->
+                evidence.origin().equals("RAW_RESULT_REFERENCE") && evidence.summary().equals(ref));
 
         var fitted = compressor(fixture.store()).fit(new Prompt(message), "chat", "run", 450);
         var delivered = (ToolResponseMessage) fitted.getInstructions().getLast();

@@ -14,6 +14,7 @@ business: dev.mikoto2000.rei.application.task.TaskControlService -> dev.mikoto20
 business: dev.mikoto2000.rei.application.task.TaskControlService -> dev.mikoto2000.rei.temporal.PersistentAgentScheduler
 business: dev.mikoto2000.rei.application.task.TaskManagerService -> dev.mikoto2000.rei.application.run.ResourceNotFoundException
 business: dev.mikoto2000.rei.application.task.TaskManagerService -> dev.mikoto2000.rei.application.run.RunFailure
+business: dev.mikoto2000.rei.application.task.TaskManagerService -> dev.mikoto2000.rei.application.run.RunNotFoundException
 business: dev.mikoto2000.rei.application.task.TaskManagerService -> dev.mikoto2000.rei.application.run.RunRegistry
 business: dev.mikoto2000.rei.application.task.TaskManagerService -> dev.mikoto2000.rei.application.run.RunSnapshot
 business: dev.mikoto2000.rei.application.task.TaskManagerService -> dev.mikoto2000.rei.application.run.RunSnapshot$ChildOrigin
@@ -50,6 +51,7 @@ business: dev.mikoto2000.rei.feed.LlmFeedSummaryGenerator -> dev.mikoto2000.rei.
 business: dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.core.configuration.CoreProperties
 business: dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.core.configuration.SystemPromptService
 business: dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.core.configuration.ToolUsagePolicy
+business: dev.mikoto2000.rei.planning.DailyPlanningService -> dev.mikoto2000.rei.activity.ActivityQueryLimitException
 business: dev.mikoto2000.rei.planning.DailyPlanningService -> dev.mikoto2000.rei.activity.ActivityWorkContextService
 business: dev.mikoto2000.rei.planning.DailyPlanningService -> dev.mikoto2000.rei.activity.ActivityWorkContextService$Link
 business: dev.mikoto2000.rei.planning.DailyPlanningService -> dev.mikoto2000.rei.activity.ActivityWorkContextService$ObservationLinks
@@ -444,6 +446,7 @@ business: dev.mikoto2000.rei.web.WorkContextController -> dev.mikoto2000.rei.wor
 business: dev.mikoto2000.rei.web.WorkContextController -> dev.mikoto2000.rei.workcontext.WorkContextProperties
 business: dev.mikoto2000.rei.web.WorkContextController -> dev.mikoto2000.rei.workcontext.WorkContextService
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.application.input.ConversationInput
+wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.application.run.RunNotFoundException
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.application.run.RunRegistry
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.application.run.RunSnapshot
 wiring: dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.application.run.RunStatus
@@ -756,6 +759,7 @@ wiring: dev.mikoto2000.rei.topic.TopicGeneratorConfiguration -> dev.mikoto2000.r
 wiring: dev.mikoto2000.rei.ui.shell.ShellUiConfiguration -> dev.mikoto2000.rei.core.command.ReiLineReaderFactory
 wiring: dev.mikoto2000.rei.ui.shell.ShellUiConfiguration -> dev.mikoto2000.rei.core.completion.CompletionEngine
 wiring: dev.mikoto2000.rei.ui.shell.ShellUiConfiguration -> dev.mikoto2000.rei.core.completion.CompletionProvider
+wiring: dev.mikoto2000.rei.voice.VoiceConfiguration -> dev.mikoto2000.rei.application.run.RunNotFoundException
 wiring: dev.mikoto2000.rei.voice.VoiceConfiguration -> dev.mikoto2000.rei.application.run.RunService
 wiring: dev.mikoto2000.rei.voice.VoiceConfiguration -> dev.mikoto2000.rei.application.run.RunService$CancellationResult
 wiring: dev.mikoto2000.rei.voice.VoiceConfiguration -> dev.mikoto2000.rei.application.session.ShellConversationService

@@ -58,15 +58,14 @@ class CaptureInterceptorTest {
     var client =
         new OkHttpClient.Builder()
             .addInterceptor(new CaptureInterceptor(store, logical))
-            .addInterceptor(
-                chain ->
-                    new Response.Builder()
-                        .request(chain.request())
-                        .protocol(Protocol.HTTP_1_1)
-                        .code(200)
-                        .message("OK")
-                        .body(ResponseBody.create("", null))
-                        .build())
+            .addInterceptor(chain ->
+                new Response.Builder()
+                    .request(chain.request())
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(200)
+                    .message("OK")
+                    .body(ResponseBody.create("", null))
+                    .build())
             .build();
     try {
       var request =
@@ -170,15 +169,14 @@ class CaptureInterceptorTest {
       var client =
           new OkHttpClient.Builder()
               .addInterceptor(new CaptureInterceptor(store, store.logicalCall("r", null)))
-              .addInterceptor(
-                  chain ->
-                      new Response.Builder()
-                          .request(chain.request())
-                          .protocol(Protocol.HTTP_1_1)
-                          .code(200)
-                          .message("OK")
-                          .body(ResponseBody.create("", null))
-                          .build())
+              .addInterceptor(chain ->
+                  new Response.Builder()
+                      .request(chain.request())
+                      .protocol(Protocol.HTTP_1_1)
+                      .code(200)
+                      .message("OK")
+                      .body(ResponseBody.create("", null))
+                      .build())
               .build();
       var response =
           client

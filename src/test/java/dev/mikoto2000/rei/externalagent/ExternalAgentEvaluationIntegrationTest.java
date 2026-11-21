@@ -156,10 +156,9 @@ class ExternalAgentEvaluationIntegrationTest {
       var response =
           client
               .prompt(new Prompt(new UserMessage(user), options))
-              .advisors(
-                  a ->
-                      a.param(ChatMemory.CONVERSATION_ID, owner.conversationId())
-                          .param(AgentRunContext.class.getName(), owner))
+              .advisors(a ->
+                  a.param(ChatMemory.CONVERSATION_ID, owner.conversationId())
+                      .param(AgentRunContext.class.getName(), owner))
               .stream()
               .content()
               .collectList()

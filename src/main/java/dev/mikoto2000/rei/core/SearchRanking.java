@@ -46,16 +46,15 @@ final class SearchRanking {
             .toList();
     var preliminary =
         files.entrySet().stream()
-            .map(
-                entry ->
-                    score(
-                        entry.getKey(),
-                        entry.getValue(),
-                        words,
-                        preferred,
-                        inWorkingSet.test(root.resolve(entry.getKey())),
-                        null,
-                        false))
+            .map(entry ->
+                score(
+                    entry.getKey(),
+                    entry.getValue(),
+                    words,
+                    preferred,
+                    inWorkingSet.test(root.resolve(entry.getKey())),
+                    null,
+                    false))
             .sorted(order())
             .toList();
     Set<String> enriched = new HashSet<>();
@@ -122,13 +121,11 @@ final class SearchRanking {
     }
     if (metadata != null
         && metadata.symbols().stream()
-            .anyMatch(
-                symbol -> {
-                  String qualified = symbol.name().toLowerCase(Locale.ROOT),
-                      simple = qualified.substring(qualified.lastIndexOf('.') + 1);
-                  return words.stream()
-                      .anyMatch(word -> word.equals(qualified) || word.equals(simple));
-                })) {
+            .anyMatch(symbol -> {
+              String qualified = symbol.name().toLowerCase(Locale.ROOT),
+                  simple = qualified.substring(qualified.lastIndexOf('.') + 1);
+              return words.stream().anyMatch(word -> word.equals(qualified) || word.equals(simple));
+            })) {
       points += 800;
       reasons.add("symbol-exact");
     }

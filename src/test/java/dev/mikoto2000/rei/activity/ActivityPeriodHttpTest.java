@@ -66,45 +66,43 @@ class ActivityPeriodHttpTest {
         .withPropertyValues("rei.web.enabled=true")
         .withBean(ActivityTimeline.class, () -> timeline)
         .withUserConfiguration(Config.class)
-        .run(
-            context -> {
-              var mvc =
-                  MockMvcBuilders.webAppContextSetup(context)
-                      .addFilters(
-                          context.getBean(
-                              "springSecurityFilterChain", jakarta.servlet.Filter.class))
-                      .build();
-              mvc.perform(get("/api/v1/activity/period?period=WEEK&date=2026-09-23"))
-                  .andExpect(status().isUnauthorized());
-              var json =
-                  mvc.perform(
-                          get("/api/v1/activity/period?period=WEEK&date=2026-09-23")
-                              .header("Authorization", "Bearer secret"))
-                      .andExpect(status().isOk())
-                      .andExpect(jsonPath("$.scope").value("LOCAL_DEVICE_OBSERVATIONS"))
-                      .andExpect(jsonPath("$.anchorDate").value("2026-09-21"))
-                      .andExpect(jsonPath("$.zone").value("Z"))
-                      .andExpect(jsonPath("$.partial").value(false))
-                      .andReturn()
-                      .getResponse()
-                      .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
-              assertTrue(json.contains("観測"));
-              assertFalse(json.contains("rei.log"));
-              assertFalse(json.contains("evidence-0"));
+        .run(context -> {
+          var mvc =
+              MockMvcBuilders.webAppContextSetup(context)
+                  .addFilters(
+                      context.getBean("springSecurityFilterChain", jakarta.servlet.Filter.class))
+                  .build();
+          mvc.perform(get("/api/v1/activity/period?period=WEEK&date=2026-09-23"))
+              .andExpect(status().isUnauthorized());
+          var json =
               mvc.perform(
-                      get("/api/v1/activity/period?period=MONTH")
+                      get("/api/v1/activity/period?period=WEEK&date=2026-09-23")
                           .header("Authorization", "Bearer secret"))
                   .andExpect(status().isOk())
-                  .andExpect(jsonPath("$.anchorDate").value("2026-09-01"));
-              for (String query :
-                  new String[] {
-                    "period=DAY", "period=WEEK&date=2026-10-07", "period=WEEK&date=not-date"
-                  })
-                mvc.perform(
-                        get("/api/v1/activity/period?" + query)
-                            .header("Authorization", "Bearer secret"))
-                    .andExpect(status().isBadRequest());
-            });
+                  .andExpect(jsonPath("$.scope").value("LOCAL_DEVICE_OBSERVATIONS"))
+                  .andExpect(jsonPath("$.anchorDate").value("2026-09-21"))
+                  .andExpect(jsonPath("$.zone").value("Z"))
+                  .andExpect(jsonPath("$.partial").value(false))
+                  .andReturn()
+                  .getResponse()
+                  .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+          assertTrue(json.contains("観測"));
+          assertFalse(json.contains("rei.log"));
+          assertFalse(json.contains("evidence-0"));
+          mvc.perform(
+                  get("/api/v1/activity/period?period=MONTH")
+                      .header("Authorization", "Bearer secret"))
+              .andExpect(status().isOk())
+              .andExpect(jsonPath("$.anchorDate").value("2026-09-01"));
+          for (String query :
+              new String[] {
+                "period=DAY", "period=WEEK&date=2026-10-07", "period=WEEK&date=not-date"
+              })
+            mvc.perform(
+                    get("/api/v1/activity/period?" + query)
+                        .header("Authorization", "Bearer secret"))
+                .andExpect(status().isBadRequest());
+        });
     assertEquals(
         2,
         store
@@ -181,32 +179,28 @@ class ActivityPeriodHttpTest {
         .withPropertyValues("rei.web.enabled=true")
         .withBean(ActivityTimeline.class, () -> timeline)
         .withUserConfiguration(Config.class)
-        .run(
-            context -> {
-              var mvc =
-                  MockMvcBuilders.webAppContextSetup(context)
-                      .addFilters(
-                          context.getBean(
-                              "springSecurityFilterChain", jakarta.servlet.Filter.class))
-                      .build();
-              mvc.perform(get("/api/v1/activity/period").header("Authorization", "Bearer secret"))
-                  .andExpect(status().isUnprocessableContent())
-                  .andExpect(jsonPath("$.report").doesNotExist());
-            });
+        .run(context -> {
+          var mvc =
+              MockMvcBuilders.webAppContextSetup(context)
+                  .addFilters(
+                      context.getBean("springSecurityFilterChain", jakarta.servlet.Filter.class))
+                  .build();
+          mvc.perform(get("/api/v1/activity/period").header("Authorization", "Bearer secret"))
+              .andExpect(status().isUnprocessableContent())
+              .andExpect(jsonPath("$.report").doesNotExist());
+        });
     new WebApplicationContextRunner()
         .withPropertyValues("rei.web.enabled=true")
         .withUserConfiguration(Config.class)
-        .run(
-            context -> {
-              var mvc =
-                  MockMvcBuilders.webAppContextSetup(context)
-                      .addFilters(
-                          context.getBean(
-                              "springSecurityFilterChain", jakarta.servlet.Filter.class))
-                      .build();
-              mvc.perform(get("/api/v1/activity/period").header("Authorization", "Bearer secret"))
-                  .andExpect(status().isServiceUnavailable());
-            });
+        .run(context -> {
+          var mvc =
+              MockMvcBuilders.webAppContextSetup(context)
+                  .addFilters(
+                      context.getBean("springSecurityFilterChain", jakarta.servlet.Filter.class))
+                  .build();
+          mvc.perform(get("/api/v1/activity/period").header("Authorization", "Bearer secret"))
+              .andExpect(status().isServiceUnavailable());
+        });
     org.mockito.Mockito.verify(store, org.mockito.Mockito.never())
         .append(org.mockito.ArgumentMatchers.any());
     org.mockito.Mockito.verify(store, org.mockito.Mockito.never())

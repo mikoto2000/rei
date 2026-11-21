@@ -158,13 +158,12 @@ class ConversationStyleSessionTest {
     assertThat(text.responseStyle()).isEqualTo(ResponseStyle.NORMAL);
     assertThat(voice.responseStyle()).isEqualTo(ResponseStyle.CONVERSATION);
     assertThat(voice.asVoiceInput().responseStyle()).isEqualTo(ResponseStyle.CONVERSATION);
-    assertThatThrownBy(
-            () ->
-                lifecycle.responseStyle(
-                    new ProjectContext("550e8400-e29b-41d4-a716-446655440001", "other", root),
-                    session.sessionId(),
-                    ResponseStyle.NORMAL,
-                    false))
+    assertThatThrownBy(() ->
+            lifecycle.responseStyle(
+                new ProjectContext("550e8400-e29b-41d4-a716-446655440001", "other", root),
+                session.sessionId(),
+                ResponseStyle.NORMAL,
+                false))
         .isInstanceOf(dev.mikoto2000.rei.application.run.SessionConflictException.class);
   }
 
@@ -177,13 +176,12 @@ class ConversationStyleSessionTest {
     var original =
         new SessionMetadata("s", "p", "title", now, now, ResponseStyle.CONVERSATION, true);
     repository.accept(original, () -> {});
-    assertThatThrownBy(
-            () ->
-                repository.accept(
-                    original.withResponseStyle(ResponseStyle.NORMAL, false, now.plusSeconds(2)),
-                    () -> {
-                      throw new IllegalStateException("rejected");
-                    }))
+    assertThatThrownBy(() ->
+            repository.accept(
+                original.withResponseStyle(ResponseStyle.NORMAL, false, now.plusSeconds(2)),
+                () -> {
+                  throw new IllegalStateException("rejected");
+                }))
         .hasMessage("rejected");
     assertThat(new FileSessionRepository(file).findById("s")).contains(original);
   }

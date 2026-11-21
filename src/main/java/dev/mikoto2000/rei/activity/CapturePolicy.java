@@ -5,9 +5,7 @@ import java.util.Locale;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
-/**
- * 作業状況の把握で受け渡す取得記録判断基準を表す。
- */
+/** 作業状況の把握で受け渡す取得記録判断基準を表す。 */
 public final class CapturePolicy {
   /** 取得対象から除外するプロセス名を読む操作。 */
   private final Supplier<List<String>> excludedProcesses;

@@ -38,13 +38,12 @@ public final class RobotComputerInput implements ComputerInput {
     for (var captured : screen.displays()) {
       var observed = captured.geometry();
       if (current.stream()
-          .noneMatch(
-              g ->
-                  g.id().equals(observed.id())
-                      && g.bounds().equals(observed.bounds())
-                      && Double.compare(g.scaleX(), observed.scaleX()) == 0
-                      && Double.compare(g.scaleY(), observed.scaleY()) == 0
-                      && g.primary() == observed.primary()))
+          .noneMatch(g ->
+              g.id().equals(observed.id())
+                  && g.bounds().equals(observed.bounds())
+                  && Double.compare(g.scaleX(), observed.scaleX()) == 0
+                  && Double.compare(g.scaleY(), observed.scaleY()) == 0
+                  && g.primary() == observed.primary()))
         throw new IllegalArgumentException("Display changed since observation");
     }
     if (current.size() != screen.displays().size())

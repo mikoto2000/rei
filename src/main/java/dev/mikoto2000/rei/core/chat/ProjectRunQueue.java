@@ -294,12 +294,11 @@ public final class ProjectRunQueue {
       if (candidate.access == Access.EXCLUSIVE || earlier.access == Access.EXCLUSIVE) return false;
     }
     return queue.stream()
-        .noneMatch(
-            other ->
-                other != candidate
-                    && other.dispatched
-                    && other.access != Access.CONVERSATION
-                    && (candidate.access == Access.EXCLUSIVE || other.access == Access.EXCLUSIVE));
+        .noneMatch(other ->
+            other != candidate
+                && other.dispatched
+                && other.access != Access.CONVERSATION
+                && (candidate.access == Access.EXCLUSIVE || other.access == Access.EXCLUSIVE));
   }
 
   /** 予約した作業を実行先へ渡し、今回の受付に関係する拒否を呼び出し元へ伝える。 */
@@ -365,25 +364,24 @@ public final class ProjectRunQueue {
         job.discarded.run();
         return;
       }
-      executor.execute(
-          () -> {
-            boolean start;
-            synchronized (this) {
-              var queue = projects.get(job.projectId);
-              start = queue != null && queue.contains(job) && job.dispatched && !job.running;
-              if (start) job.running = true;
-            }
-            if (!start) {
-              job.discarded.run();
-              return;
-            }
-            try {
-              job.work.run();
-            } finally {
-              // 作業本体の終了後に枠を解放し、次の書き込みが早過ぎる時点で始まることを防ぐ。
-              complete(job);
-            }
-          });
+      executor.execute(() -> {
+        boolean start;
+        synchronized (this) {
+          var queue = projects.get(job.projectId);
+          start = queue != null && queue.contains(job) && job.dispatched && !job.running;
+          if (start) job.running = true;
+        }
+        if (!start) {
+          job.discarded.run();
+          return;
+        }
+        try {
+          job.work.run();
+        } finally {
+          // 作業本体の終了後に枠を解放し、次の書き込みが早過ぎる時点で始まることを防ぐ。
+          complete(job);
+        }
+      });
     } catch (RuntimeException | Error error) {
       try {
         if (!job.running)

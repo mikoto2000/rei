@@ -64,16 +64,15 @@ class ComputerUseApplicationTest {
         new java.util.concurrent.atomic.AtomicReference<
             org.springframework.ai.chat.prompt.Prompt>();
     when(chatModel.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              captured.set(invocation.getArgument(0));
-              return reactor.core.publisher.Flux.just(
-                  new org.springframework.ai.chat.model.ChatResponse(
-                      java.util.List.of(
-                          new org.springframework.ai.chat.model.Generation(
-                              new org.springframework.ai.chat.messages.AssistantMessage(
-                                  "Observed tool definitions")))));
-            });
+        .thenAnswer(invocation -> {
+          captured.set(invocation.getArgument(0));
+          return reactor.core.publisher.Flux.just(
+              new org.springframework.ai.chat.model.ChatResponse(
+                  java.util.List.of(
+                      new org.springframework.ai.chat.model.Generation(
+                          new org.springframework.ai.chat.messages.AssistantMessage(
+                              "Observed tool definitions")))));
+        });
     for (String feature :
         java.util.List.of(
             dev.mikoto2000.rei.llm.LlmFeature.CHAT,
@@ -89,11 +88,9 @@ class ComputerUseApplicationTest {
                     org.springframework.ai.openai.OpenAiChatOptions.builder()
                         .model("test-model")
                         .build()))
-            .advisors(
-                a ->
-                    a.param(
-                        org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID,
-                        conversation))
+            .advisors(a ->
+                a.param(
+                    org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, conversation))
             .stream()
             .chatResponse()
             .collectList()

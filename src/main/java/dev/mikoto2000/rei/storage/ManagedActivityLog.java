@@ -191,12 +191,11 @@ public final class ManagedActivityLog {
   /** 使い終わった資源や状態を解放するため、区間の利用を終える。 */
   public void closeSegment(String supplied) {
     String scope = scope(supplied);
-    registry.database.transaction(
-        db -> {
-          var segment = open(db, scope);
-          if (segment != null) close(db, segment);
-          return null;
-        });
+    registry.database.transaction(db -> {
+      var segment = open(db, scope);
+      if (segment != null) close(db, segment);
+      return null;
+    });
   }
 
   /** 既存の記録へ経緯を残すため、管理対象作業状況ログを追記する。 */
@@ -214,12 +213,11 @@ public final class ManagedActivityLog {
     if (!registry.root.equals(expectedRoot.toAbsolutePath().normalize()))
       throw new IllegalArgumentException("Activity and event storage roots must match");
     String scope = scope(supplied);
-    return registry.database.activityTransaction(
-        db -> {
-          T result = work.apply(db);
-          append(db, scope, entry);
-          return result;
-        });
+    return registry.database.activityTransaction(db -> {
+      T result = work.apply(db);
+      append(db, scope, entry);
+      return result;
+    });
   }
 
   /** JSONL本文を同期してから、同じトランザクションの管理情報を更新する。 */
@@ -281,87 +279,79 @@ public final class ManagedActivityLog {
    */
   public List<ProfileEventLogEntry> read(String supplied) {
     String scope = scope(supplied);
-    return registry.serialized(
-        () ->
-            registry.database.read(
-                db -> {
-                  var result = new ArrayList<ProfileEventLogEntry>();
-                  long[] bytes = {0};
-                  Path parent = directory(scope),
-                      legacy = logsDirectory(scope).resolve("activity.jsonl");
-                  java.util.function.Consumer<Path> add =
-                      file -> {
-                        try {
-                          StorageBackup.requireSafePath(file);
-                          if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS))
-                            throw new IllegalStateException("Unsupported Activity body");
-                          bytes[0] = Math.addExact(bytes[0], Files.size(file));
-                          if (bytes[0] > 32L * 1024 * 1024)
+    return registry.serialized(() ->
+        registry.database.read(db -> {
+          var result = new ArrayList<ProfileEventLogEntry>();
+          long[] bytes = {0};
+          Path parent = directory(scope), legacy = logsDirectory(scope).resolve("activity.jsonl");
+          java.util.function.Consumer<Path> add =
+              file -> {
+                try {
+                  StorageBackup.requireSafePath(file);
+                  if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS))
+                    throw new IllegalStateException("Unsupported Activity body");
+                  bytes[0] = Math.addExact(bytes[0], Files.size(file));
+                  if (bytes[0] > 32L * 1024 * 1024)
+                    throw new IllegalStateException(
+                        "Activity read exceeds 32 MiB; use a narrower retained history");
+                  if (parent.equals(file.getParent())) {
+                    var object =
+                        StorageObjectRegistry.find(
+                            db, StorageObjectRegistry.id(registry.root, file));
+                    if (object.isPresent()) {
+                      if (!object.get().originVerified() || !registry.unchanged(object.get()))
+                        throw new IllegalStateException(
+                            "Activity archive is changed or unverified");
+                    } else
+                      try (var query =
+                          db.prepareStatement(
+                              "SELECT * FROM activity_segments WHERE path=? AND scope=? AND state='OPEN'")) {
+                        query.setString(
+                            1, registry.root.relativize(file).toString().replace('\\', '/'));
+                        query.setString(2, scope);
+                        try (var rows = query.executeQuery()) {
+                          if (!rows.next()
+                              || Files.size(file) != rows.getLong("bytes")
+                              || !verifyChain(file).equals(rows.getString("sha256")))
                             throw new IllegalStateException(
-                                "Activity read exceeds 32 MiB; use a narrower retained history");
-                          if (parent.equals(file.getParent())) {
-                            var object =
-                                StorageObjectRegistry.find(
-                                    db, StorageObjectRegistry.id(registry.root, file));
-                            if (object.isPresent()) {
-                              if (!object.get().originVerified()
-                                  || !registry.unchanged(object.get()))
-                                throw new IllegalStateException(
-                                    "Activity archive is changed or unverified");
-                            } else
-                              try (var query =
-                                  db.prepareStatement(
-                                      "SELECT * FROM activity_segments WHERE path=? AND scope=? AND state='OPEN'")) {
-                                query.setString(
-                                    1,
-                                    registry.root.relativize(file).toString().replace('\\', '/'));
-                                query.setString(2, scope);
-                                try (var rows = query.executeQuery()) {
-                                  if (!rows.next()
-                                      || Files.size(file) != rows.getLong("bytes")
-                                      || !verifyChain(file).equals(rows.getString("sha256")))
-                                    throw new IllegalStateException(
-                                        "Activity archive is unmanaged or interrupted; retained for inspection");
-                                }
-                              }
-                          }
-                          forEachFile(
-                              file,
-                              entry -> {
-                                if (result.size() >= 100000)
-                                  throw new IllegalStateException(
-                                      "Activity read exceeds 100,000 rows");
-                                result.add(entry);
-                              });
-                        } catch (IOException | NoSuchAlgorithmException | SQLException error) {
-                          throw new IllegalStateException("Cannot read Activity body", error);
+                                "Activity archive is unmanaged or interrupted; retained for inspection");
                         }
-                      };
-                  if (Files.exists(legacy, LinkOption.NOFOLLOW_LINKS)) add.accept(legacy);
-                  StorageBackup.requireSafePath(parent);
-                  if (Files.exists(parent, LinkOption.NOFOLLOW_LINKS))
-                    try (var files = Files.newDirectoryStream(parent)) {
-                      int count = 0;
-                      for (Path file : files) {
-                        if (++count > 10000)
-                          throw new IllegalStateException("Activity file scan budget exceeded");
-                        String name = StorageBackup.fileName(file);
-                        if (!name.endsWith(".jsonl"))
-                          throw new IllegalStateException("Unknown Activity archive");
-                        UUID.fromString(name.replaceFirst("\\.jsonl$", ""));
-                        var object =
-                            StorageObjectRegistry.find(
-                                db, StorageObjectRegistry.id(registry.root, file));
-                        if (object.isPresent() && !object.get().status().equals("AVAILABLE"))
-                          continue;
-                        add.accept(file);
                       }
-                    }
-                  result.sort(
-                      Comparator.comparing(ProfileEventLogEntry::timestamp)
-                          .thenComparing(ProfileEventLogEntry::id));
-                  return List.copyOf(result);
-                }));
+                  }
+                  forEachFile(
+                      file,
+                      entry -> {
+                        if (result.size() >= 100000)
+                          throw new IllegalStateException("Activity read exceeds 100,000 rows");
+                        result.add(entry);
+                      });
+                } catch (IOException | NoSuchAlgorithmException | SQLException error) {
+                  throw new IllegalStateException("Cannot read Activity body", error);
+                }
+              };
+          if (Files.exists(legacy, LinkOption.NOFOLLOW_LINKS)) add.accept(legacy);
+          StorageBackup.requireSafePath(parent);
+          if (Files.exists(parent, LinkOption.NOFOLLOW_LINKS))
+            try (var files = Files.newDirectoryStream(parent)) {
+              int count = 0;
+              for (Path file : files) {
+                if (++count > 10000)
+                  throw new IllegalStateException("Activity file scan budget exceeded");
+                String name = StorageBackup.fileName(file);
+                if (!name.endsWith(".jsonl"))
+                  throw new IllegalStateException("Unknown Activity archive");
+                UUID.fromString(name.replaceFirst("\\.jsonl$", ""));
+                var object =
+                    StorageObjectRegistry.find(db, StorageObjectRegistry.id(registry.root, file));
+                if (object.isPresent() && !object.get().status().equals("AVAILABLE")) continue;
+                add.accept(file);
+              }
+            }
+          result.sort(
+              Comparator.comparing(ProfileEventLogEntry::timestamp)
+                  .thenComparing(ProfileEventLogEntry::id));
+          return List.copyOf(result);
+        }));
   }
 
   /** データ保存の共通処理に関する対象各対象ファイルを処理する。 */

@@ -490,12 +490,9 @@ public final class RunRegistry implements AutoCloseable {
   public synchronized List<String> purgeExpired() {
     var expired =
         runs.entrySet().stream()
-            .filter(
-                entry ->
-                    entry.getValue().completedAt() != null
-                        && !clock
-                            .instant()
-                            .isBefore(entry.getValue().completedAt().plus(RETENTION)))
+            .filter(entry ->
+                entry.getValue().completedAt() != null
+                    && !clock.instant().isBefore(entry.getValue().completedAt().plus(RETENTION)))
             .map(Map.Entry::getKey)
             .toList();
     expired.forEach(this::forget);

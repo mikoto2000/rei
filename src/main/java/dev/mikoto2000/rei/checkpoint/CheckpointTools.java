@@ -94,17 +94,16 @@ public class CheckpointTools {
           "List interrupted/resumable tasks in the captured project. Reference only; listing never runs them.")
   public List<Map<String, Object>> checkpointList() {
     return listCheckpoints.apply(project()).stream()
-        .map(
-            s ->
-                Map.<String, Object>of(
-                    "taskId",
-                    s.taskId(),
-                    "status",
-                    s.status(),
-                    "request",
-                    PersistentCheckpointService.bounded(s.request(), 500),
-                    "revision",
-                    s.revision()))
+        .map(s ->
+            Map.<String, Object>of(
+                "taskId",
+                s.taskId(),
+                "status",
+                s.status(),
+                "request",
+                PersistentCheckpointService.bounded(s.request(), 500),
+                "revision",
+                s.revision()))
         .toList();
   }
 

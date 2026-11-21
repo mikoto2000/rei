@@ -14,14 +14,13 @@ public final class StorageEventImportWorker {
     }
     long count =
         new StorageDatabase(root)
-            .read(
-                db -> {
-                  try (var query = db.createStatement();
-                      var rows = query.executeQuery("SELECT count(*) FROM agent_events")) {
-                    rows.next();
-                    return rows.getLong(1);
-                  }
-                });
+            .read(db -> {
+              try (var query = db.createStatement();
+                  var rows = query.executeQuery("SELECT count(*) FROM agent_events")) {
+                rows.next();
+                return rows.getLong(1);
+              }
+            });
     var store = new dev.mikoto2000.rei.event.SqliteProjectAgentEventStore(root);
     if (store.readPage(arguments[1], 0, false).events().size() != 128)
       throw new AssertionError("Bounded page missing");

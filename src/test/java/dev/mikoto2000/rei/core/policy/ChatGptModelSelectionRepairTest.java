@@ -169,17 +169,16 @@ class ChatGptModelSelectionRepairTest {
       context.setRunContext(owner);
       context.setToolPermissionGuard(guard);
       when(approvals.request(anyString(), anyString(), eq(owner)))
-          .thenAnswer(
-              invocation ->
-                  new ToolApprovalRepository.Request(
-                      "fresh-approval",
-                      "project",
-                      "session",
-                      "run",
-                      invocation.getArgument(0),
-                      invocation.getArgument(1),
-                      "PENDING",
-                      Instant.now().plusSeconds(60)));
+          .thenAnswer(invocation ->
+              new ToolApprovalRepository.Request(
+                  "fresh-approval",
+                  "project",
+                  "session",
+                  "run",
+                  invocation.getArgument(0),
+                  invocation.getArgument(1),
+                  "PENDING",
+                  Instant.now().plusSeconds(60)));
     }
 
     /** 検証条件に必要な値を受け取り、Fixtureを用意する。 */
@@ -355,10 +354,9 @@ class ChatGptModelSelectionRepairTest {
     assertTrue(error.getMessage().contains("request.modelId"));
     assertTrue(
         error.issues().stream()
-            .anyMatch(
-                issue ->
-                    issue.path().equals("arguments.modelId")
-                        && issue.requirement().contains("gpt-6.1-sol")));
+            .anyMatch(issue ->
+                issue.path().equals("arguments.modelId")
+                    && issue.requirement().contains("gpt-6.1-sol")));
     assertEquals(0, fixture.budget.snapshot().argumentCorrections());
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(fixture.approvals);
@@ -519,9 +517,8 @@ class ChatGptModelSelectionRepairTest {
     verifyNoInteractions(fixture.approvals);
     assertTrue(
         fixture.events.stream()
-            .anyMatch(
-                event ->
-                    event.payload() instanceof ToolFailedPayload failed
-                        && "chatgpt_permission_denied".equals(failed.error().code())));
+            .anyMatch(event ->
+                event.payload() instanceof ToolFailedPayload failed
+                    && "chatgpt_permission_denied".equals(failed.error().code())));
   }
 }

@@ -42,6 +42,7 @@ import reactor.core.publisher.Flux;
 
 class ExhaustedResumeRecoveryTest {
   private static final String READ_ARGUMENTS = "{\"files\":[{\"path\":\"docs/intro.md\"}]}";
+
   @ParameterizedTest
   @ValueSource(strings = {"readReviewWorkItem", "readNextReviewWorkItem"})
   void durableReviewRecoveryRequiresCommitForTheExactPendingWorkId(String reader) throws Exception {
@@ -53,7 +54,9 @@ class ExhaustedResumeRecoveryTest {
       var node = (ObjectNode) new ObjectMapper().readTree(page);
       node.put("reviewJobId", "durable:work:attempt");
       page = node.toString();
-    } catch (Exception invalid) { throw new AssertionError(invalid); }
+    } catch (Exception invalid) {
+      throw new AssertionError(invalid);
+    }
     c.beginIteration();
     c.recordTool(reader, "{}", page, c.evaluator().beforeTool(reader, "{}"));
     c.endIteration();
@@ -66,16 +69,28 @@ class ExhaustedResumeRecoveryTest {
     assertThat(c.hasPendingResumeContentWork()).isTrue();
     assertThat(c.resumeAcquisitionBlocked(reader, "{}")).isFalse();
     assertThat(c.resumeAcquisitionBlocked(reader, "{\"taskId\":\"another\"}")).isTrue();
-    String receipt = "{\"body\":{\"work\":\"wrong\",\"path\":\"docs/intro.md\"},\"sha256\":\"" + "a".repeat(64) + "\"}";
+    String receipt =
+        "{\"body\":{\"work\":\"wrong\",\"path\":\"docs/intro.md\"},\"sha256\":\""
+            + "a".repeat(64)
+            + "\"}";
     c.beginIteration();
-    c.recordTool("submitReviewWorkItem", "{}", receipt, c.evaluator().beforeTool("submitReviewWorkItem", "{}"));
+    c.recordTool(
+        "submitReviewWorkItem",
+        "{}",
+        receipt,
+        c.evaluator().beforeTool("submitReviewWorkItem", "{}"));
     c.endIteration();
     assertThat(c.hasPendingResumeContentWork()).isTrue();
     c.beginIteration();
-    c.recordTool("submitReviewWorkItem", "{}", receipt.replace("wrong", "work"), c.evaluator().beforeTool("submitReviewWorkItem", "{}"));
+    c.recordTool(
+        "submitReviewWorkItem",
+        "{}",
+        receipt.replace("wrong", "work"),
+        c.evaluator().beforeTool("submitReviewWorkItem", "{}"));
     c.endIteration();
     assertThat(c.hasPendingResumeContentWork()).isFalse();
   }
+
   @TempDir Path root;
   private static final String PAGE =
       "[{\"path\":\"docs/intro.md\",\"version\":\"v1\",\"startLine\":1,\"content\":[\"known\"],\"error\":null}]";
@@ -131,7 +146,11 @@ class ExhaustedResumeRecoveryTest {
   private void readPage(RunExecutionContext c, int line) {
     String page = PAGE.replace("\"startLine\":1", "\"startLine\":" + line);
     c.beginIteration();
-    c.recordTool("readMultiFile", READ_ARGUMENTS, page, c.evaluator().beforeTool("readMultiFile", READ_ARGUMENTS));
+    c.recordTool(
+        "readMultiFile",
+        READ_ARGUMENTS,
+        page,
+        c.evaluator().beforeTool("readMultiFile", READ_ARGUMENTS));
     c.endIteration();
   }
 
@@ -197,19 +216,18 @@ class ExhaustedResumeRecoveryTest {
     var calls = new AtomicInteger();
     var completed =
         new StagnationChatModel(
-                model(
-                    p -> {
-                      int n = calls.incrementAndGet();
-                      if (n == 1) return call(n, "submitReviewWorkItem", "{}");
-                      if (n == 2) {
-                        assertThat(p.getInstructions().toString())
-                            .contains("STALE_CLAIM", "\"accepted\":false", "readNextReviewWorkItem");
-                        return call(n, "submitReviewWorkItem", "{\"attempt\":\"current\"}");
-                      }
-                      return new AssistantMessage("Assessment saved.");
-                    }))
+                model(p -> {
+                  int n = calls.incrementAndGet();
+                  if (n == 1) return call(n, "submitReviewWorkItem", "{}");
+                  if (n == 2) {
+                    assertThat(p.getInstructions().toString())
+                        .contains("STALE_CLAIM", "\"accepted\":false", "readNextReviewWorkItem");
+                    return call(n, "submitReviewWorkItem", "{\"attempt\":\"current\"}");
+                  }
+                  return new AssistantMessage("Assessment saved.");
+                }))
             .stream(new Prompt(List.of(new UserMessage("Save the assessment")), options))
-            .blockLast();
+                .blockLast();
     assertThat(completed.getResult().getOutput().getText()).isEqualTo("Assessment saved.");
     assertThat(submissions).hasValue(2);
     assertThat(c.progressSnapshot().budget().argumentCorrections()).isEqualTo(1);
@@ -248,23 +266,22 @@ class ExhaustedResumeRecoveryTest {
     Runnable run =
         () ->
             new StagnationChatModel(
-                    model(
-                        p -> {
-                          int n = calls.incrementAndGet();
-                          if (n == 1) return call(n, "readReviewFile", "{}");
-                          if (n == 2 || !corrected) return call(n, "submitReviewPage", "{}");
-                          if (n == 3) {
-                            assertThat(p.getInstructions().toString())
-                                .contains(
-                                    "REVIEW_RESULT_INVALID",
-                                    "accepted",
-                                    "false",
-                                    "Use the delivered page endpoints");
-                            assertThat(c.hasPendingResumeContentWork()).isTrue();
-                            return call(n, "submitReviewPage", "{}");
-                          }
-                          return new AssistantMessage("Assessment saved.");
-                        }))
+                    model(p -> {
+                      int n = calls.incrementAndGet();
+                      if (n == 1) return call(n, "readReviewFile", "{}");
+                      if (n == 2 || !corrected) return call(n, "submitReviewPage", "{}");
+                      if (n == 3) {
+                        assertThat(p.getInstructions().toString())
+                            .contains(
+                                "REVIEW_RESULT_INVALID",
+                                "accepted",
+                                "false",
+                                "Use the delivered page endpoints");
+                        assertThat(c.hasPendingResumeContentWork()).isTrue();
+                        return call(n, "submitReviewPage", "{}");
+                      }
+                      return new AssistantMessage("Assessment saved.");
+                    }))
                 .stream(
                         new Prompt(
                             initial.getInstructions(),
@@ -357,29 +374,28 @@ class ExhaustedResumeRecoveryTest {
     callbacks.add(tool("submitReviewResult", this::reviewedPage));
     var calls = new AtomicInteger();
     new StagnationChatModel(
-            model(
-                p -> {
-                  int n = calls.incrementAndGet();
-                  if (n == 1) return call(n, "readReviewFile", "{}");
-                  if (n == 2) {
-                    assertThat(names(p)).contains("readReviewFile");
-                    return AssistantMessage.builder()
-                        .toolCalls(
-                            List.of(
-                                new AssistantMessage.ToolCall(
-                                    "new", "function", "readReviewFile", "{\"offset\":5}"),
-                                new AssistantMessage.ToolCall(
-                                    "redeliver", "function", "readReviewFile", "{ }")))
-                        .build();
-                  }
-                  if (n == 3) {
-                    assertThat(reads).hasValue(2);
-                    assertThat(p.getInstructions().toString())
-                        .contains("Resume work unit requires a consolidated outcome");
-                    return call(n, "submitReviewResult", "{}");
-                  }
-                  return new AssistantMessage("Range assessed.");
-                }))
+            model(p -> {
+              int n = calls.incrementAndGet();
+              if (n == 1) return call(n, "readReviewFile", "{}");
+              if (n == 2) {
+                assertThat(names(p)).contains("readReviewFile");
+                return AssistantMessage.builder()
+                    .toolCalls(
+                        List.of(
+                            new AssistantMessage.ToolCall(
+                                "new", "function", "readReviewFile", "{\"offset\":5}"),
+                            new AssistantMessage.ToolCall(
+                                "redeliver", "function", "readReviewFile", "{ }")))
+                    .build();
+              }
+              if (n == 3) {
+                assertThat(reads).hasValue(2);
+                assertThat(p.getInstructions().toString())
+                    .contains("Resume work unit requires a consolidated outcome");
+                return call(n, "submitReviewResult", "{}");
+              }
+              return new AssistantMessage("Range assessed.");
+            }))
         .stream(
                 new Prompt(
                     initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
@@ -413,28 +429,26 @@ class ExhaustedResumeRecoveryTest {
                     : reviewedPage().replace("\"start\":0,\"end\":5", "\"start\":5,\"end\":10")));
     var calls = new AtomicInteger();
     new StagnationChatModel(
-            model(
-                p -> {
-                  int n = calls.incrementAndGet();
-                  if (n == 1) return call(n, "readReviewFile", "{}");
-                  if (n == 2) {
-                    assertThat(c.resumeAcquisitionBlocked("readReviewFile", "{\"offset\":5}"))
-                        .isTrue();
-                    return AssistantMessage.builder()
-                        .toolCalls(
-                            List.of(
-                                new AssistantMessage.ToolCall(
-                                    "assess", "function", "submitReviewPage", "{}"),
-                                new AssistantMessage.ToolCall(
-                                    "next", "function", "readReviewFile", "{\"offset\":5}")))
-                        .build();
-                  }
-                  if (n == 3) {
-                    assertThat(reads).hasValue(2);
-                    return call(n, "submitReviewPage", "{}");
-                  }
-                  return new AssistantMessage("Unit assessed.");
-                }))
+            model(p -> {
+              int n = calls.incrementAndGet();
+              if (n == 1) return call(n, "readReviewFile", "{}");
+              if (n == 2) {
+                assertThat(c.resumeAcquisitionBlocked("readReviewFile", "{\"offset\":5}")).isTrue();
+                return AssistantMessage.builder()
+                    .toolCalls(
+                        List.of(
+                            new AssistantMessage.ToolCall(
+                                "assess", "function", "submitReviewPage", "{}"),
+                            new AssistantMessage.ToolCall(
+                                "next", "function", "readReviewFile", "{\"offset\":5}")))
+                    .build();
+              }
+              if (n == 3) {
+                assertThat(reads).hasValue(2);
+                return call(n, "submitReviewPage", "{}");
+              }
+              return new AssistantMessage("Unit assessed.");
+            }))
         .stream(
                 new Prompt(
                     initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
@@ -506,22 +520,21 @@ class ExhaustedResumeRecoveryTest {
     Runnable run =
         () ->
             new StagnationChatModel(
-                    model(
-                        p -> {
-                          int n = invocations.incrementAndGet();
-                          String messages = p.getInstructions().toString();
-                          assertThat(messages)
-                              .contains("If no reviewJobId exists", "beginReview", "job: pending");
-                          if (!makesProgress || n == 1)
-                            return emptyReply ? null : new AssistantMessage("Review complete.");
-                          if (n == 2) {
-                            assertThat(messages)
-                                .contains("persisted review ledger still has unfinished");
-                            return call(n, "readReviewFile", "{}");
-                          }
-                          if (n == 3) return call(n, "submitReviewResult", "{}");
-                          return new AssistantMessage("All registered ranges assessed.");
-                        }),
+                    model(p -> {
+                      int n = invocations.incrementAndGet();
+                      String messages = p.getInstructions().toString();
+                      assertThat(messages)
+                          .contains("If no reviewJobId exists", "beginReview", "job: pending");
+                      if (!makesProgress || n == 1)
+                        return emptyReply ? null : new AssistantMessage("Review complete.");
+                      if (n == 2) {
+                        assertThat(messages)
+                            .contains("persisted review ledger still has unfinished");
+                        return call(n, "readReviewFile", "{}");
+                      }
+                      if (n == 3) return call(n, "submitReviewResult", "{}");
+                      return new AssistantMessage("All registered ranges assessed.");
+                    }),
                     assembler)
                 .stream(
                         new Prompt(
@@ -577,19 +590,17 @@ class ExhaustedResumeRecoveryTest {
     var c = context(0, 2, 8, true);
     fillResumeBatch(c);
     var calls = new AtomicInteger();
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(
-                        model(
-                            p -> {
-                              assertThat(c.hasPendingResumeContentWork()).isTrue();
-                              assertThat(names(p)).doesNotContain("readMultiFile");
-                              return call(
-                                  calls.incrementAndGet(),
-                                  "writeMultiFile",
-                                  "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
-                            }))
-                    .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(
+                    model(p -> {
+                      assertThat(c.hasPendingResumeContentWork()).isTrue();
+                      assertThat(names(p)).doesNotContain("readMultiFile");
+                      return call(
+                          calls.incrementAndGet(),
+                          "writeMultiFile",
+                          "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
+                    }))
+                .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
         .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED");
     assertThat(calls).hasValue(4);
@@ -604,11 +615,10 @@ class ExhaustedResumeRecoveryTest {
     ((ObjectNode) saved.path("budget")).put("llmCalls", 1000);
     c.restoreProgress(json.treeToValue(saved, RunExecutionContext.ProgressState.class));
     var calls = new AtomicInteger();
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(
-                        model(p -> call(calls.incrementAndGet(), "readMultiFile", READ_ARGUMENTS)))
-                    .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(
+                    model(p -> call(calls.incrementAndGet(), "readMultiFile", READ_ARGUMENTS)))
+                .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
         .hasMessageContaining("LLM_CALL_BUDGET_EXCEEDED");
     assertThat(calls).hasValue(1);
@@ -671,8 +681,7 @@ class ExhaustedResumeRecoveryTest {
     c.restoreProgress(saved);
     c.beginContextRestoration();
     assertThat(c.needsResumeContentWork()).isTrue();
-    assertThat(c.progressSnapshot().continuity().resumeBatch().commitAttempted())
-        .isFalse();
+    assertThat(c.progressSnapshot().continuity().resumeBatch().commitAttempted()).isFalse();
 
     var old = (ObjectNode) json.valueToTree(saved);
     ((ObjectNode) old.path("continuity")).remove("resumeBatch");
@@ -702,7 +711,10 @@ class ExhaustedResumeRecoveryTest {
         String historical = PAGE.replace("\"startLine\":1", "\"startLine\":" + (i + 2));
         c.evaluator()
             .afterTool(
-                "readMultiFile", READ_ARGUMENTS, historical, c.evaluator().beforeTool("readMultiFile", READ_ARGUMENTS));
+                "readMultiFile",
+                READ_ARGUMENTS,
+                historical,
+                c.evaluator().beforeTool("readMultiFile", READ_ARGUMENTS));
       }
     }
     callbacks.removeIf(
@@ -731,26 +743,25 @@ class ExhaustedResumeRecoveryTest {
             }));
     var invocations = new AtomicInteger();
     var delegate =
-        model(
-            p -> {
-              int n = invocations.incrementAndGet();
-              assertThat(n).isLessThanOrEqualTo(28);
-              if (commits.get() == 3) {
-                assertThat(reads).hasValue(totalPages);
-                assertThat(c.hasPendingResumeContentWork()).isFalse();
-                return new AssistantMessage("All 24 pages assessed; consolidated result saved.");
-              }
-              if (names(p).contains("readMultiFile")) {
-                assertThat(reads.get()).isLessThan((commits.get() + 1) * 8);
-                return call(n, "readMultiFile", READ_ARGUMENTS);
-              }
-              assertThat(reads.get()).isEqualTo((commits.get() + 1) * 8);
-              assertThat(p.getContents()).contains("consolidated partial assessment");
-              return call(
-                  n,
-                  "writeMultiFile",
-                  "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
-            });
+        model(p -> {
+          int n = invocations.incrementAndGet();
+          assertThat(n).isLessThanOrEqualTo(28);
+          if (commits.get() == 3) {
+            assertThat(reads).hasValue(totalPages);
+            assertThat(c.hasPendingResumeContentWork()).isFalse();
+            return new AssistantMessage("All 24 pages assessed; consolidated result saved.");
+          }
+          if (names(p).contains("readMultiFile")) {
+            assertThat(reads.get()).isLessThan((commits.get() + 1) * 8);
+            return call(n, "readMultiFile", READ_ARGUMENTS);
+          }
+          assertThat(reads.get()).isEqualTo((commits.get() + 1) * 8);
+          assertThat(p.getContents()).contains("consolidated partial assessment");
+          return call(
+              n,
+              "writeMultiFile",
+              "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
+        });
     new StagnationChatModel(delegate)
         .stream(
                 new Prompt(
@@ -774,7 +785,10 @@ class ExhaustedResumeRecoveryTest {
         String historical = PAGE.replace("\"startLine\":1", "\"startLine\":" + (i + 2));
         c.evaluator()
             .afterTool(
-                "readMultiFile", READ_ARGUMENTS, historical, c.evaluator().beforeTool("readMultiFile", READ_ARGUMENTS));
+                "readMultiFile",
+                READ_ARGUMENTS,
+                historical,
+                c.evaluator().beforeTool("readMultiFile", READ_ARGUMENTS));
       }
     }
     var initial = prompt(c, true, "resume", new AtomicInteger());
@@ -789,40 +803,37 @@ class ExhaustedResumeRecoveryTest {
                 PAGE.replace("\"startLine\":1", "\"startLine\":" + (reads.incrementAndGet() + 1))));
     var calls = new AtomicInteger();
     new StagnationChatModel(
-            model(
-                p -> {
-                  int n = calls.incrementAndGet();
-                  if (n == 1) {
-                    var queued = new ArrayList<AssistantMessage.ToolCall>();
-                    for (int i = 0; i < 9; i++)
-                      queued.add(
-                          new AssistantMessage.ToolCall(
-                              "read-" + i, "function", "readMultiFile", READ_ARGUMENTS));
-                    return AssistantMessage.builder().toolCalls(queued).build();
-                  }
-                  if (n == 2) {
-                    assertThat(reads).hasValue(8);
-                    assertThat(names(p)).doesNotContain("readMultiFile");
-                    var response =
-                        p.getInstructions().stream()
-                            .filter(
-                                org.springframework.ai.chat.messages.ToolResponseMessage.class
-                                    ::isInstance)
-                            .map(
-                                org.springframework.ai.chat.messages.ToolResponseMessage.class
-                                    ::cast)
-                            .findFirst()
-                            .orElseThrow();
-                    assertThat(response.getResponses().getLast().responseData())
-                        .contains("Resume work unit requires a consolidated outcome");
-                    return call(
-                        n,
-                        "writeMultiFile",
-                        "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
-                  }
-                  assertThat(names(p)).contains("readMultiFile");
-                  return new AssistantMessage("Unit result saved.");
-                }))
+            model(p -> {
+              int n = calls.incrementAndGet();
+              if (n == 1) {
+                var queued = new ArrayList<AssistantMessage.ToolCall>();
+                for (int i = 0; i < 9; i++)
+                  queued.add(
+                      new AssistantMessage.ToolCall(
+                          "read-" + i, "function", "readMultiFile", READ_ARGUMENTS));
+                return AssistantMessage.builder().toolCalls(queued).build();
+              }
+              if (n == 2) {
+                assertThat(reads).hasValue(8);
+                assertThat(names(p)).doesNotContain("readMultiFile");
+                var response =
+                    p.getInstructions().stream()
+                        .filter(
+                            org.springframework.ai.chat.messages.ToolResponseMessage.class
+                                ::isInstance)
+                        .map(org.springframework.ai.chat.messages.ToolResponseMessage.class::cast)
+                        .findFirst()
+                        .orElseThrow();
+                assertThat(response.getResponses().getLast().responseData())
+                    .contains("Resume work unit requires a consolidated outcome");
+                return call(
+                    n,
+                    "writeMultiFile",
+                    "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
+              }
+              assertThat(names(p)).contains("readMultiFile");
+              return new AssistantMessage("Unit result saved.");
+            }))
         .stream(
                 new Prompt(
                     initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
@@ -938,33 +949,32 @@ class ExhaustedResumeRecoveryTest {
             .build();
     var calls = new AtomicInteger();
     new StagnationChatModel(
-            model(
-                p -> {
-                  int n = calls.incrementAndGet();
-                  String choice =
-                      ((org.springframework.ai.openai.OpenAiChatOptions) p.getOptions())
-                          .getToolChoice()
-                          .toString();
-                  if (n == 1) {
-                    assertThat(choice).isEqualTo("auto");
-                    return call(n, "readMultiFile", READ_ARGUMENTS);
-                  }
-                  if (n == 2) {
-                    assertThat(choice).isEqualTo("auto");
-                    return new AssistantMessage("I will save the consolidated assessment now.");
-                  }
-                  if (n == 3) {
-                    assertThat(choice).isEqualTo("required");
-                    assertThat(names(p)).doesNotContain("readMultiFile").contains("writeMultiFile");
-                    return call(
-                        n,
-                        "writeMultiFile",
-                        "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
-                  }
-                  assertThat(choice).isEqualTo("auto");
-                  assertThat(c.hasPendingResumeContentWork()).isFalse();
-                  return new AssistantMessage("Assessment saved.");
-                }))
+            model(p -> {
+              int n = calls.incrementAndGet();
+              String choice =
+                  ((org.springframework.ai.openai.OpenAiChatOptions) p.getOptions())
+                      .getToolChoice()
+                      .toString();
+              if (n == 1) {
+                assertThat(choice).isEqualTo("auto");
+                return call(n, "readMultiFile", READ_ARGUMENTS);
+              }
+              if (n == 2) {
+                assertThat(choice).isEqualTo("auto");
+                return new AssistantMessage("I will save the consolidated assessment now.");
+              }
+              if (n == 3) {
+                assertThat(choice).isEqualTo("required");
+                assertThat(names(p)).doesNotContain("readMultiFile").contains("writeMultiFile");
+                return call(
+                    n,
+                    "writeMultiFile",
+                    "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
+              }
+              assertThat(choice).isEqualTo("auto");
+              assertThat(c.hasPendingResumeContentWork()).isFalse();
+              return new AssistantMessage("Assessment saved.");
+            }))
         .stream(new Prompt(original.getInstructions(), openAi)).blockLast();
     assertThat(calls).hasValue(4);
     assertThat(root.resolve("review.md")).exists();
@@ -994,28 +1004,26 @@ class ExhaustedResumeRecoveryTest {
             .build();
     var calls = new AtomicInteger();
     new StagnationChatModel(
-            model(
-                p -> {
-                  int n = calls.incrementAndGet();
-                  if (n <= textReplies + 1) {
-                    assertThat(saved.get().continuity().resumeBatch().commitAttempts())
-                        .isEqualTo(n);
-                    assertThat(saved.get().continuity().detector().stagnationCount())
-                        .isEqualTo(3 + n - 1);
-                    assertThat(
-                            ((org.springframework.ai.openai.OpenAiChatOptions) p.getOptions())
-                                .getToolChoice())
-                        .isEqualTo("required");
-                  }
-                  if (n <= textReplies) return new AssistantMessage("I will save the assessment.");
-                  if (n == textReplies + 1)
-                    return call(
-                        n,
-                        "writeMultiFile",
-                        "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
-                  assertThat(c.hasPendingResumeContentWork()).isFalse();
-                  return new AssistantMessage("Assessment saved.");
-                }))
+            model(p -> {
+              int n = calls.incrementAndGet();
+              if (n <= textReplies + 1) {
+                assertThat(saved.get().continuity().resumeBatch().commitAttempts()).isEqualTo(n);
+                assertThat(saved.get().continuity().detector().stagnationCount())
+                    .isEqualTo(3 + n - 1);
+                assertThat(
+                        ((org.springframework.ai.openai.OpenAiChatOptions) p.getOptions())
+                            .getToolChoice())
+                    .isEqualTo("required");
+              }
+              if (n <= textReplies) return new AssistantMessage("I will save the assessment.");
+              if (n == textReplies + 1)
+                return call(
+                    n,
+                    "writeMultiFile",
+                    "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
+              assertThat(c.hasPendingResumeContentWork()).isFalse();
+              return new AssistantMessage("Assessment saved.");
+            }))
         .stream(new Prompt(initial.getInstructions(), options)).blockLast();
     assertThat(calls).hasValue(textReplies + 2);
     assertThat(root.resolve("review.md")).exists();
@@ -1024,23 +1032,20 @@ class ExhaustedResumeRecoveryTest {
   }
 
   @Test
-  void spentCommitAttemptsSurviveAutomaticResume()
-      throws Exception {
+  void spentCommitAttemptsSurviveAutomaticResume() throws Exception {
     var c = context(0, 2, 8, true);
     fillResumeBatch(c);
     var saved =
         new java.util.concurrent.atomic.AtomicReference<RunExecutionContext.ProgressState>();
     c.setToolResultsCheckpoint(messages -> saved.set(c.progressSnapshot()));
     var calls = new AtomicInteger();
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(
-                        model(
-                            p -> {
-                              calls.incrementAndGet();
-                              return new AssistantMessage("I will save it.");
-                            }))
-                    .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(
+                    model(p -> {
+                      calls.incrementAndGet();
+                      return new AssistantMessage("I will save it.");
+                    }))
+                .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
         .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED")
         .hasMessageContaining("/resume")
@@ -1050,20 +1055,18 @@ class ExhaustedResumeRecoveryTest {
     var json = new ObjectMapper();
     var restored =
         json.readValue(
-                json.writeValueAsString(saved.get()), RunExecutionContext.ProgressState.class);
+            json.writeValueAsString(saved.get()), RunExecutionContext.ProgressState.class);
     var next = context(0, 2, 8, false);
     next.restoreProgress(restored);
     next.beginContextRestoration();
     var retried = new AtomicInteger();
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(
-                        model(
-                            p -> {
-                              retried.incrementAndGet();
-                              return new AssistantMessage("No new call should be sent");
-                            }))
-                    .stream(prompt(next, true, "resume", new AtomicInteger())).blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(
+                    model(p -> {
+                      retried.incrementAndGet();
+                      return new AssistantMessage("No new call should be sent");
+                    }))
+                .stream(prompt(next, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
         .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED")
         .hasMessageContaining("/resume")
@@ -1100,32 +1103,35 @@ class ExhaustedResumeRecoveryTest {
     callbacks.add(
         tool(
             "readReviewFile",
-            () -> reads.incrementAndGet() == 1
-                ? registeredPage()
-                : registeredPage().replace("\"start\":0,\"end\":5", "\"start\":5,\"end\":10")));
+            () ->
+                reads.incrementAndGet() == 1
+                    ? registeredPage()
+                    : registeredPage().replace("\"start\":0,\"end\":5", "\"start\":5,\"end\":10")));
     callbacks.add(
         tool(
             "submitReviewPage",
-            () -> submissions.incrementAndGet() == 1
-                ? reviewedPage()
-                : reviewedPage().replace("\"start\":0,\"end\":5", "\"start\":5,\"end\":10")));
+            () ->
+                submissions.incrementAndGet() == 1
+                    ? reviewedPage()
+                    : reviewedPage().replace("\"start\":0,\"end\":5", "\"start\":5,\"end\":10")));
     var calls = new AtomicInteger();
     new StagnationChatModel(
-            model(
-                p -> {
-                  int n = calls.incrementAndGet();
-                  if (n == 1) return call(n, "readReviewFile", "{}");
-                  if (n == 2) return call(n, "submitReviewPage", "{}");
-                  if (n == 3) {
-                    assertThat(resumed.hasPendingResumeContentWork()).isFalse();
-                    assertThat(names(p)).contains("readMultiFile");
-                    return call(n, "readReviewFile", "{\"offset\":5}");
-                  }
-                  if (n == 4) return call(n, "submitReviewPage", "{}");
-                  return new AssistantMessage("Both units assessed.");
-                }))
-        .stream(new Prompt(initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
-        .blockLast();
+            model(p -> {
+              int n = calls.incrementAndGet();
+              if (n == 1) return call(n, "readReviewFile", "{}");
+              if (n == 2) return call(n, "submitReviewPage", "{}");
+              if (n == 3) {
+                assertThat(resumed.hasPendingResumeContentWork()).isFalse();
+                assertThat(names(p)).contains("readMultiFile");
+                return call(n, "readReviewFile", "{\"offset\":5}");
+              }
+              if (n == 4) return call(n, "submitReviewPage", "{}");
+              return new AssistantMessage("Both units assessed.");
+            }))
+        .stream(
+                new Prompt(
+                    initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
+            .blockLast();
     assertThat(calls).hasValue(5);
     assertThat(reads).hasValue(2);
     assertThat(submissions).hasValue(2);
@@ -1135,8 +1141,13 @@ class ExhaustedResumeRecoveryTest {
   }
 
   @ParameterizedTest
-  @CsvSource({"submitReviewPage,false", "submitReviewPage,true",
-      "submitReviewPages,false", "submitReviewPages,true", "submitReviewResult,true"})
+  @CsvSource({
+    "submitReviewPage,false",
+    "submitReviewPage,true",
+    "submitReviewPages,false",
+    "submitReviewPages,true",
+    "submitReviewResult,true"
+  })
   void anAlreadyAssessedPageReleasesItsObligationWithoutClaimingNewProgress(
       String submission, boolean restart) throws Exception {
     var c = context(0, 2, 8, true);
@@ -1144,8 +1155,8 @@ class ExhaustedResumeRecoveryTest {
     String receipt = acceptedReceipt();
     c.beginIteration();
     c.recordTool("readReviewFile", "{}", page, c.evaluator().beforeTool("readReviewFile", "{}"));
-    c.recordTool("submitReviewPage", "{}", receipt,
-        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.recordTool(
+        "submitReviewPage", "{}", receipt, c.evaluator().beforeTool("submitReviewPage", "{}"));
     c.endIteration();
     fillResumeBatch(c);
     c.beginIteration();
@@ -1154,8 +1165,10 @@ class ExhaustedResumeRecoveryTest {
     assertThat(c.needsResumeContentWork()).isTrue();
     if (restart) {
       var json = new ObjectMapper();
-      var saved = json.readValue(json.writeValueAsString(c.progressSnapshot()),
-          RunExecutionContext.ProgressState.class);
+      var saved =
+          json.readValue(
+              json.writeValueAsString(c.progressSnapshot()),
+              RunExecutionContext.ProgressState.class);
       c = context(0, 2, 8, false);
       c.restoreProgress(saved);
       c.beginContextRestoration();
@@ -1164,7 +1177,10 @@ class ExhaustedResumeRecoveryTest {
     long progress = c.progressVersion();
     int stagnant = c.detector().stagnationCount();
     c.beginIteration();
-    c.recordTool(submission, "{}", submission.equals("submitReviewPages") ? "[" + receipt + "]" : receipt,
+    c.recordTool(
+        submission,
+        "{}",
+        submission.equals("submitReviewPages") ? "[" + receipt + "]" : receipt,
         c.evaluator().beforeTool(submission, "{}"));
     c.endIteration();
     assertThat(c.hasPendingResumeContentWork()).isFalse();
@@ -1179,7 +1195,18 @@ class ExhaustedResumeRecoveryTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"rejected", "stale", "undelivered", "unreviewed", "job", "path", "version", "hash", "span"})
+  @ValueSource(
+      strings = {
+        "rejected",
+        "stale",
+        "undelivered",
+        "unreviewed",
+        "job",
+        "path",
+        "version",
+        "hash",
+        "span"
+      })
   void unrelatedOrUnconfirmedReceiptsCannotReleaseThePendingPage(String change) throws Exception {
     var c = context(0, 2, 8, true);
     String page = identifiedPage();
@@ -1201,16 +1228,24 @@ class ExhaustedResumeRecoveryTest {
       default -> throw new AssertionError(change);
     }
     // Seed both receipts to isolate obligation matching from new-work detection.
-    c.evaluator().afterTool("submitReviewPage", "{}", receipt,
-        c.evaluator().beforeTool("submitReviewPage", "{}"));
-    c.evaluator().afterTool("submitReviewPage", "{}", altered.toString(),
-        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.evaluator()
+        .afterTool(
+            "submitReviewPage", "{}", receipt, c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.evaluator()
+        .afterTool(
+            "submitReviewPage",
+            "{}",
+            altered.toString(),
+            c.evaluator().beforeTool("submitReviewPage", "{}"));
     fillResumeBatch(c);
     c.beginIteration();
     c.recordTool("readReviewFile", "{}", page, c.evaluator().beforeTool("readReviewFile", "{}"));
     c.endIteration();
     c.beginIteration();
-    c.recordTool("submitReviewPage", "{}", altered.toString(),
+    c.recordTool(
+        "submitReviewPage",
+        "{}",
+        altered.toString(),
         c.evaluator().beforeTool("submitReviewPage", "{}"));
     c.endIteration();
     assertThat(c.hasPendingResumeContentWork()).isTrue();
@@ -1236,8 +1271,11 @@ class ExhaustedResumeRecoveryTest {
         json.treeToValue(saved, RunExecutionContext.ProgressState.class).forExplicitResume();
     var next =
         new RunExecutionContext(
-            "resume", new OutputLimitRunBudget(2, 1000, null, 1000), new ProgressEvaluator(root),
-            new AgentEventFactory(Clock.systemUTC()), event -> {});
+            "resume",
+            new OutputLimitRunBudget(2, 1000, null, 1000),
+            new ProgressEvaluator(root),
+            new AgentEventFactory(Clock.systemUTC()),
+            event -> {});
     next.restoreProgress(restored);
     assertThat(next.progressSnapshot().continuity().resumeBatch().commitAttempts()).isZero();
     assertThatThrownBy(next::consumeNextLlmCall)
@@ -1249,19 +1287,29 @@ class ExhaustedResumeRecoveryTest {
   @Test
   void replayedAssessmentAllowsTheNextReadInTheSameToolResponse() throws Exception {
     var c = context(0, 2, 8, true);
-    c.evaluator().afterTool("readReviewFile", "{}", identifiedPage(),
-        c.evaluator().beforeTool("readReviewFile", "{}"));
-    c.evaluator().afterTool("submitReviewPage", "{}", acceptedReceipt(),
-        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.evaluator()
+        .afterTool(
+            "readReviewFile",
+            "{}",
+            identifiedPage(),
+            c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.evaluator()
+        .afterTool(
+            "submitReviewPage",
+            "{}",
+            acceptedReceipt(),
+            c.evaluator().beforeTool("submitReviewPage", "{}"));
     fillResumeBatch(c);
     var json = new ObjectMapper();
     var legacy = (ObjectNode) json.valueToTree(c.progressSnapshot());
     var batch = (ObjectNode) legacy.path("continuity").path("resumeBatch");
-    batch.put("reviewPagePending", true)
+    batch
+        .put("reviewPagePending", true)
         .put("reviewPageReadKey", ProgressEvaluator.actionKey("readReviewFile", "{}"))
         .put("reviewPageReadArguments", "{}");
     batch.remove("reviewPageKeys");
-    c.restoreProgress(json.treeToValue(legacy, RunExecutionContext.ProgressState.class).forExplicitResume());
+    c.restoreProgress(
+        json.treeToValue(legacy, RunExecutionContext.ProgressState.class).forExplicitResume());
     c.beginContextRestoration();
     long progress = c.progressVersion();
     var initial = prompt(c, true, "resume", new AtomicInteger());
@@ -1270,34 +1318,49 @@ class ExhaustedResumeRecoveryTest {
     var reads = new AtomicInteger();
     callbacks.add(tool("readReviewFile", this::identifiedPage));
     callbacks.add(tool("submitReviewPage", this::acceptedReceipt));
-    callbacks.add(tool("readReviewPages", () -> {
-      assertThat(c.hasPendingResumeContentWork()).isFalse();
-      assertThat(c.progressVersion()).isEqualTo(progress);
-      reads.incrementAndGet();
-      return "[" + identifiedPage().replace("docs/intro.md", "docs/next.md") + "]";
-    }));
-    callbacks.add(tool("submitReviewPages", () ->
-        "[" + acceptedReceipt().replace("docs/intro.md", "docs/next.md") + "]"));
+    callbacks.add(
+        tool(
+            "readReviewPages",
+            () -> {
+              assertThat(c.hasPendingResumeContentWork()).isFalse();
+              assertThat(c.progressVersion()).isEqualTo(progress);
+              reads.incrementAndGet();
+              return "[" + identifiedPage().replace("docs/intro.md", "docs/next.md") + "]";
+            }));
+    callbacks.add(
+        tool(
+            "submitReviewPages",
+            () -> "[" + acceptedReceipt().replace("docs/intro.md", "docs/next.md") + "]"));
     var calls = new AtomicInteger();
-    new StagnationChatModel(model(p -> {
-      int n = calls.incrementAndGet();
-      if (n == 1) {
-        assertThat(p.getContents()).contains("even if the page text is visible");
-        return call(n, "readReviewFile", "{}");
-      }
-      if (n == 2) {
-        assertThat(p.getContents()).doesNotContain("exact delivered-page identity is missing");
-        return AssistantMessage.builder().toolCalls(List.of(
-          new AssistantMessage.ToolCall("save", "function", "submitReviewPage", "{}"),
-          new AssistantMessage.ToolCall("next", "function", "readReviewPages", "{}"))).build();
-      }
-      if (n == 3) {
-        assertThat(reads).hasValue(1);
-        return call(n, "submitReviewPages", "{}");
-      }
-      return new AssistantMessage("Continued the next unit.");
-    })).stream(new Prompt(initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
-        .blockLast();
+    new StagnationChatModel(
+            model(p -> {
+              int n = calls.incrementAndGet();
+              if (n == 1) {
+                assertThat(p.getContents()).contains("even if the page text is visible");
+                return call(n, "readReviewFile", "{}");
+              }
+              if (n == 2) {
+                assertThat(p.getContents())
+                    .doesNotContain("exact delivered-page identity is missing");
+                return AssistantMessage.builder()
+                    .toolCalls(
+                        List.of(
+                            new AssistantMessage.ToolCall(
+                                "save", "function", "submitReviewPage", "{}"),
+                            new AssistantMessage.ToolCall(
+                                "next", "function", "readReviewPages", "{}")))
+                    .build();
+              }
+              if (n == 3) {
+                assertThat(reads).hasValue(1);
+                return call(n, "submitReviewPages", "{}");
+              }
+              return new AssistantMessage("Continued the next unit.");
+            }))
+        .stream(
+                new Prompt(
+                    initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
+            .blockLast();
     assertThat(calls).hasValue(4);
     assertThat(c.hasPendingResumeContentWork()).isFalse();
     assertThat(c.progressVersion()).isEqualTo(progress + 2);
@@ -1306,27 +1369,47 @@ class ExhaustedResumeRecoveryTest {
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
-  void repeatedSavedPagesStillStopWithoutNewProgressOrRefundedBudgets(boolean serverReviewed) throws Exception {
+  void repeatedSavedPagesStillStopWithoutNewProgressOrRefundedBudgets(boolean serverReviewed)
+      throws Exception {
     var c = context(0, 2, 8, true);
-    c.evaluator().afterTool("readReviewFile", "{}", identifiedPage(),
-        c.evaluator().beforeTool("readReviewFile", "{}"));
-    c.evaluator().afterTool("submitReviewPage", "{}", acceptedReceipt(),
-        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.evaluator()
+        .afterTool(
+            "readReviewFile",
+            "{}",
+            identifiedPage(),
+            c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.evaluator()
+        .afterTool(
+            "submitReviewPage",
+            "{}",
+            acceptedReceipt(),
+            c.evaluator().beforeTool("submitReviewPage", "{}"));
     fillResumeBatch(c);
     long progress = c.progressVersion();
     var initial = prompt(c, true, "resume", new AtomicInteger());
     var options = (ToolCallingChatOptions) initial.getOptions();
     var callbacks = new ArrayList<>(options.getToolCallbacks());
-    callbacks.add(tool("readReviewFile", () -> serverReviewed
-        ? identifiedPage().replace("\"reviewJobId\":", "\"reviewed\":true,\"reviewJobId\":")
-        : identifiedPage()));
+    callbacks.add(
+        tool(
+            "readReviewFile",
+            () ->
+                serverReviewed
+                    ? identifiedPage()
+                        .replace("\"reviewJobId\":", "\"reviewed\":true,\"reviewJobId\":")
+                    : identifiedPage()));
     callbacks.add(tool("submitReviewPage", this::acceptedReceipt));
     var calls = new AtomicInteger();
-    assertThatThrownBy(() -> new StagnationChatModel(model(p -> {
-      int n = calls.incrementAndGet();
-      return call(n, n % 2 == 1 ? "readReviewFile" : "submitReviewPage", "{}");
-    })).stream(new Prompt(initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
-        .blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(
+                    model(p -> {
+                      int n = calls.incrementAndGet();
+                      return call(n, n % 2 == 1 ? "readReviewFile" : "submitReviewPage", "{}");
+                    }))
+                .stream(
+                        new Prompt(
+                            initial.getInstructions(),
+                            options.mutate().toolCallbacks(callbacks).build()))
+                    .blockLast())
         .isInstanceOf(ExecutionStoppedException.class);
     assertThat(calls).hasValue(serverReviewed ? 4 : 6);
     assertThat(c.detector().stagnationCount()).isEqualTo(serverReviewed ? 4 : 6);
@@ -1337,13 +1420,22 @@ class ExhaustedResumeRecoveryTest {
   @Test
   void aReceiptOnTheLastAttemptCanReachTheNextBudgetedAction() throws Exception {
     var c = context(0, 2, 8, true);
-    c.evaluator().afterTool("readReviewFile", "{}", identifiedPage(),
-        c.evaluator().beforeTool("readReviewFile", "{}"));
-    c.evaluator().afterTool("submitReviewPage", "{}", acceptedReceipt(),
-        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.evaluator()
+        .afterTool(
+            "readReviewFile",
+            "{}",
+            identifiedPage(),
+            c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.evaluator()
+        .afterTool(
+            "submitReviewPage",
+            "{}",
+            acceptedReceipt(),
+            c.evaluator().beforeTool("submitReviewPage", "{}"));
     fillResumeBatch(c);
     long progress = c.progressVersion();
-    var checkpoint = new java.util.concurrent.atomic.AtomicReference<RunExecutionContext.ProgressState>();
+    var checkpoint =
+        new java.util.concurrent.atomic.AtomicReference<RunExecutionContext.ProgressState>();
     c.setToolResultsCheckpoint(messages -> checkpoint.set(c.progressSnapshot()));
     var initial = prompt(c, true, "resume", new AtomicInteger());
     var options = (ToolCallingChatOptions) initial.getOptions();
@@ -1352,69 +1444,98 @@ class ExhaustedResumeRecoveryTest {
     callbacks.add(tool("readReviewFile", this::identifiedPage));
     callbacks.add(tool("submitReviewPage", this::acceptedReceipt));
     callbacks.add(tool("checkpointAnnotate", () -> "{\"recorded\":true}"));
-    callbacks.add(tool("readReviewPages", () -> {
-      assertThat(c.detector().stagnationCount()).isEqualTo(4);
-      assertThat(checkpoint.get().continuity().resumeBatch().reconciliationHandoffUsed()).isTrue();
-      assertThat(c.progressVersion()).isEqualTo(progress);
-      reads.incrementAndGet();
-      return "[" + identifiedPage().replace("docs/intro.md", "docs/next.md") + "]";
-    }));
-    callbacks.add(tool("submitReviewPages", () ->
-        "[" + acceptedReceipt().replace("docs/intro.md", "docs/next.md") + "]"));
+    callbacks.add(
+        tool(
+            "readReviewPages",
+            () -> {
+              assertThat(c.detector().stagnationCount()).isEqualTo(4);
+              assertThat(checkpoint.get().continuity().resumeBatch().reconciliationHandoffUsed())
+                  .isTrue();
+              assertThat(c.progressVersion()).isEqualTo(progress);
+              reads.incrementAndGet();
+              return "[" + identifiedPage().replace("docs/intro.md", "docs/next.md") + "]";
+            }));
+    callbacks.add(
+        tool(
+            "submitReviewPages",
+            () -> "[" + acceptedReceipt().replace("docs/intro.md", "docs/next.md") + "]"));
     var calls = new AtomicInteger();
-    new StagnationChatModel(model(p -> {
-      int n = calls.incrementAndGet();
-      if (n == 1) return call(n, "readReviewFile", "{}");
-      if (n == 2) return call(n, "readReviewPages", "{}"); // blocked before assessment
-      if (n == 3) return call(n, "checkpointAnnotate", "{}");
-      if (n == 4) return call(n, "submitReviewPage", "{}");
-      if (n == 5) return call(n, "readReviewPages", "{}");
-      if (n == 6) return call(n, "submitReviewPages", "{}");
-      return new AssistantMessage("The next unfinished range was assessed.");
-    })).stream(new Prompt(initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
-        .blockLast();
+    new StagnationChatModel(
+            model(p -> {
+              int n = calls.incrementAndGet();
+              if (n == 1) return call(n, "readReviewFile", "{}");
+              if (n == 2) return call(n, "readReviewPages", "{}"); // blocked before assessment
+              if (n == 3) return call(n, "checkpointAnnotate", "{}");
+              if (n == 4) return call(n, "submitReviewPage", "{}");
+              if (n == 5) return call(n, "readReviewPages", "{}");
+              if (n == 6) return call(n, "submitReviewPages", "{}");
+              return new AssistantMessage("The next unfinished range was assessed.");
+            }))
+        .stream(
+                new Prompt(
+                    initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
+            .blockLast();
     assertThat(calls).hasValue(7);
     assertThat(reads).hasValue(1);
     assertThat(c.progressVersion()).isEqualTo(progress + 2);
     assertThat(c.hasPendingResumeContentWork()).isFalse();
-    assertThat(c.progressSnapshot().continuity().resumeBatch().reconciliationHandoffUsed()).isFalse();
+    assertThat(c.progressSnapshot().continuity().resumeBatch().reconciliationHandoffUsed())
+        .isFalse();
     assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
   }
 
   @ParameterizedTest
   @ValueSource(strings = {"readReviewFile", "readReviewPages"})
-  void freshServerCoverageClearsTheOldPendingUnitWithoutResubmission(String reader) throws Exception {
+  void freshServerCoverageClearsTheOldPendingUnitWithoutResubmission(String reader)
+      throws Exception {
     var c = context(0, 2, 8, true);
-    c.evaluator().afterTool("readReviewFile", "{}", identifiedPage(),
-        c.evaluator().beforeTool("readReviewFile", "{}"));
-    c.evaluator().afterTool("submitReviewPage", "{}", acceptedReceipt(),
-        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.evaluator()
+        .afterTool(
+            "readReviewFile",
+            "{}",
+            identifiedPage(),
+            c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.evaluator()
+        .afterTool(
+            "submitReviewPage",
+            "{}",
+            acceptedReceipt(),
+            c.evaluator().beforeTool("submitReviewPage", "{}"));
     fillResumeBatch(c);
     long progress = c.progressVersion();
     var initial = prompt(c, true, "resume", new AtomicInteger());
     var options = (ToolCallingChatOptions) initial.getOptions();
     var callbacks = new ArrayList<>(options.getToolCallbacks());
-    String covered = identifiedPage().replace("\"reviewJobId\":", "\"reviewed\":true,\"reviewJobId\":");
+    String covered =
+        identifiedPage().replace("\"reviewJobId\":", "\"reviewed\":true,\"reviewJobId\":");
     var reads = new AtomicInteger();
-    callbacks.add(tool(reader, () -> {
-      String page = covered;
-      if (reads.incrementAndGet() == 2) {
-        assertThat(c.hasPendingResumeContentWork()).isFalse();
-        assertThat(c.progressVersion()).isEqualTo(progress);
-        page = identifiedPage().replace("docs/intro.md", "docs/next.md");
-      }
-      return reader.equals("readReviewPages") ? "[" + page + "]" : page;
-    }));
-    callbacks.add(tool("submitReviewPage", () -> acceptedReceipt().replace("docs/intro.md", "docs/next.md")));
+    callbacks.add(
+        tool(
+            reader,
+            () -> {
+              String page = covered;
+              if (reads.incrementAndGet() == 2) {
+                assertThat(c.hasPendingResumeContentWork()).isFalse();
+                assertThat(c.progressVersion()).isEqualTo(progress);
+                page = identifiedPage().replace("docs/intro.md", "docs/next.md");
+              }
+              return reader.equals("readReviewPages") ? "[" + page + "]" : page;
+            }));
+    callbacks.add(
+        tool("submitReviewPage", () -> acceptedReceipt().replace("docs/intro.md", "docs/next.md")));
     var calls = new AtomicInteger();
-    new StagnationChatModel(model(p -> {
-      int n = calls.incrementAndGet();
-      if (n == 1) return call(n, reader, "{}");
-      if (n == 2) return call(n, reader, "{}");
-      if (n == 3) return call(n, "submitReviewPage", "{}");
-      return new AssistantMessage("Continued without re-assessing saved coverage.");
-    })).stream(new Prompt(initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
-        .blockLast();
+    new StagnationChatModel(
+            model(p -> {
+              int n = calls.incrementAndGet();
+              if (n == 1) return call(n, reader, "{}");
+              if (n == 2) return call(n, reader, "{}");
+              if (n == 3) return call(n, "submitReviewPage", "{}");
+              return new AssistantMessage("Continued without re-assessing saved coverage.");
+            }))
+        .stream(
+                new Prompt(
+                    initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
+            .blockLast();
     assertThat(calls).hasValue(4);
     assertThat(c.progressVersion()).isEqualTo(progress + 2);
     assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
@@ -1424,10 +1545,18 @@ class ExhaustedResumeRecoveryTest {
   @ValueSource(strings = {"none", "LLM_CALL_BUDGET_EXCEEDED", "TOKEN_BUDGET_EXCEEDED"})
   void aSpentReconciliationHandoffSurvivesRestartAndKeepsHardLimits(String limit) throws Exception {
     var c = context(0, 2, 8, true);
-    c.evaluator().afterTool("readReviewFile", "{}", identifiedPage(),
-        c.evaluator().beforeTool("readReviewFile", "{}"));
-    c.evaluator().afterTool("submitReviewPage", "{}", acceptedReceipt(),
-        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.evaluator()
+        .afterTool(
+            "readReviewFile",
+            "{}",
+            identifiedPage(),
+            c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.evaluator()
+        .afterTool(
+            "submitReviewPage",
+            "{}",
+            acceptedReceipt(),
+            c.evaluator().beforeTool("submitReviewPage", "{}"));
     fillResumeBatch(c);
     for (int i = 1; i <= 4; i++) {
       c.beginIteration();
@@ -1438,31 +1567,46 @@ class ExhaustedResumeRecoveryTest {
       assertThat(c.requestReplan()).isNull();
     }
     assertThat(c.detector().stagnationCount()).isEqualTo(4);
-    assertThat(c.progressSnapshot().continuity().resumeBatch().reconciliationHandoffUsed()).isTrue();
+    assertThat(c.progressSnapshot().continuity().resumeBatch().reconciliationHandoffUsed())
+        .isTrue();
     var json = new ObjectMapper();
     var saved = (ObjectNode) json.valueToTree(c.progressSnapshot());
     ((ObjectNode) saved.path("budget"))
         .put("llmCalls", limit.startsWith("LLM") ? 1000 : 20)
         .put("totalTokens", limit.startsWith("TOKEN") ? 1000 : 200);
     var state = json.treeToValue(saved, RunExecutionContext.ProgressState.class);
-    var next = new RunExecutionContext("resume", new OutputLimitRunBudget(2, 1000, null, 1000),
-        new ProgressEvaluator(root), new AgentEventFactory(Clock.systemUTC()), event -> {});
+    var next =
+        new RunExecutionContext(
+            "resume",
+            new OutputLimitRunBudget(2, 1000, null, 1000),
+            new ProgressEvaluator(root),
+            new AgentEventFactory(Clock.systemUTC()),
+            event -> {});
     next.setRunContext(new AgentRunContext("resume", "conversation", root, "project"));
     next.restoreProgress(state);
     next.beginContextRestoration();
     if (!limit.equals("none")) {
       assertThatThrownBy(next::consumeNextLlmCall)
-          .isInstanceOf(ExecutionStoppedException.class).hasMessageContaining(limit);
+          .isInstanceOf(ExecutionStoppedException.class)
+          .hasMessageContaining(limit);
       assertThat(next.budgetSnapshot()).isEqualTo(state.budget());
       return;
     }
     next.consumeNextLlmCall();
     next.beginIteration();
-    next.recordTool("readReviewFile", "{}", identifiedPage(), next.evaluator().beforeTool("readReviewFile", "{}"));
+    next.recordTool(
+        "readReviewFile",
+        "{}",
+        identifiedPage(),
+        next.evaluator().beforeTool("readReviewFile", "{}"));
     next.endIteration();
     assertThat(next.requestReplan()).isNull();
     next.beginIteration();
-    next.recordTool("submitReviewPage", "{}", acceptedReceipt(), next.evaluator().beforeTool("submitReviewPage", "{}"));
+    next.recordTool(
+        "submitReviewPage",
+        "{}",
+        acceptedReceipt(),
+        next.evaluator().beforeTool("submitReviewPage", "{}"));
     next.endIteration();
     assertThatThrownBy(next::requestReplan).isInstanceOf(ExecutionStoppedException.class);
     assertThat(next.detector().stagnationCount()).isEqualTo(6);
@@ -1475,24 +1619,33 @@ class ExhaustedResumeRecoveryTest {
     String page2 = identifiedPage().replace("docs/intro.md", "docs/next.md");
     String receipt2 = acceptedReceipt().replace("docs/intro.md", "docs/next.md");
     String pages = "[" + identifiedPage() + "," + page2 + "]";
-    c.evaluator().afterTool("submitReviewPages", "{}", "[" + acceptedReceipt() + "," + receipt2 + "]",
-        c.evaluator().beforeTool("submitReviewPages", "{}"));
+    c.evaluator()
+        .afterTool(
+            "submitReviewPages",
+            "{}",
+            "[" + acceptedReceipt() + "," + receipt2 + "]",
+            c.evaluator().beforeTool("submitReviewPages", "{}"));
     fillResumeBatch(c);
     c.beginIteration();
     c.recordTool("readReviewPages", "{}", pages, c.evaluator().beforeTool("readReviewPages", "{}"));
     c.endIteration();
     c.beginIteration();
-    c.recordTool("submitReviewPage", "{}", acceptedReceipt(),
+    c.recordTool(
+        "submitReviewPage",
+        "{}",
+        acceptedReceipt(),
         c.evaluator().beforeTool("submitReviewPage", "{}"));
     c.endIteration();
     assertThat(c.hasPendingResumeContentWork()).isTrue();
     assertThat(c.progressSnapshot().continuity().resumeBatch().reviewPageKeys()).hasSize(1);
     var json = new ObjectMapper();
-    var saved = json.readValue(json.writeValueAsString(c.progressSnapshot()),
-        RunExecutionContext.ProgressState.class);
+    var saved =
+        json.readValue(
+            json.writeValueAsString(c.progressSnapshot()), RunExecutionContext.ProgressState.class);
     c.restoreProgress(saved);
     c.beginIteration();
-    c.recordTool("submitReviewPage", "{}", receipt2, c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.recordTool(
+        "submitReviewPage", "{}", receipt2, c.evaluator().beforeTool("submitReviewPage", "{}"));
     c.endIteration();
     assertThat(c.hasPendingResumeContentWork()).isFalse();
     assertThat(c.budgetSnapshot()).isEqualTo(saved.budget());
@@ -1616,36 +1769,27 @@ class ExhaustedResumeRecoveryTest {
             null,
             null);
     var delegate =
-        model(
-            p -> {
-              int n = calls.incrementAndGet();
-              if (n == 1) {
-                // Reproduce the previous model choice if broad discovery is still advertised.
-                if (names(p).contains("listFile")) return call(n, "listFile", "{}");
-                assertThat(names(p))
-                    .doesNotContain(
-                        "listFile",
-                        "findFile",
-                        "countFileLines",
-                        "checkpointShow",
-                        "checkpointInspect")
-                    .contains("readMultiFile", "writeMultiFile");
-                assertThat(p.getContents()).contains("Known inventory");
-                return call(
-                    n,
-                    "writeMultiFile",
-                    "{\"files\":[{\"path\":\"review.md\",\"content\":\"Known coverage recorded; review remains incomplete\"}]}");
-              }
-              assertThat(c.detector().stagnationCount()).isZero();
-              assertThat(names(p))
-                  .contains(
-                      "listFile",
-                      "findFile",
-                      "countFileLines",
-                      "checkpointShow",
-                      "checkpointInspect");
-              return new AssistantMessage("Intermediate coverage recorded; not a completed review");
-            });
+        model(p -> {
+          int n = calls.incrementAndGet();
+          if (n == 1) {
+            // Reproduce the previous model choice if broad discovery is still advertised.
+            if (names(p).contains("listFile")) return call(n, "listFile", "{}");
+            assertThat(names(p))
+                .doesNotContain(
+                    "listFile", "findFile", "countFileLines", "checkpointShow", "checkpointInspect")
+                .contains("readMultiFile", "writeMultiFile");
+            assertThat(p.getContents()).contains("Known inventory");
+            return call(
+                n,
+                "writeMultiFile",
+                "{\"files\":[{\"path\":\"review.md\",\"content\":\"Known coverage recorded; review remains incomplete\"}]}");
+          }
+          assertThat(c.detector().stagnationCount()).isZero();
+          assertThat(names(p))
+              .contains(
+                  "listFile", "findFile", "countFileLines", "checkpointShow", "checkpointInspect");
+          return new AssistantMessage("Intermediate coverage recorded; not a completed review");
+        });
     new StagnationChatModel(delegate, assembler)
         .stream(advised(prompt(c, true, "resume", broad))).blockLast();
     assertThat(root.resolve("review.md")).exists();
@@ -1688,27 +1832,21 @@ class ExhaustedResumeRecoveryTest {
                   : AgentRunContext.Mode.CONVERSATION,
               false));
     var delegate =
-        model(
-            p -> {
-              assertThat(names(p))
-                  .contains(
-                      "listFile",
-                      "findFile",
-                      "countFileLines",
-                      "checkpointShow",
-                      "checkpointInspect");
-              throw new java.util.concurrent.CancellationException();
-            });
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(delegate)
-                    .stream(
-                            prompt(
-                                c,
-                                !condition.equals("noInventory"),
-                                condition.equals("wrongOwner") ? "different" : "resume",
-                                new AtomicInteger()))
-                        .blockLast())
+        model(p -> {
+          assertThat(names(p))
+              .contains(
+                  "listFile", "findFile", "countFileLines", "checkpointShow", "checkpointInspect");
+          throw new java.util.concurrent.CancellationException();
+        });
+    assertThatThrownBy(() ->
+            new StagnationChatModel(delegate)
+                .stream(
+                        prompt(
+                            c,
+                            !condition.equals("noInventory"),
+                            condition.equals("wrongOwner") ? "different" : "resume",
+                            new AtomicInteger()))
+                    .blockLast())
         .isInstanceOf(java.util.concurrent.CancellationException.class);
   }
 
@@ -1722,30 +1860,28 @@ class ExhaustedResumeRecoveryTest {
     callbacks.add(tool("readMultiFile", () -> PAGE.replace("docs/intro.md", "docs/unseen.md")));
     var calls = new AtomicInteger();
     var delegate =
-        model(
-            p -> {
-              int n = calls.incrementAndGet();
-              if (n == 1) {
-                assertThat(names(p))
-                    .doesNotContain("listFile", "countFileLines")
-                    .contains("readMultiFile");
-                return call(n, "readMultiFile", READ_ARGUMENTS);
-              }
-              if (n == 2) {
-                assertThat(c.detector().stagnationCount()).isZero();
-                assertThat(c.needsResumeWorkRecovery()).isTrue();
-                assertThat(names(p)).doesNotContain("listFile", "countFileLines");
-                assertThat(p.getContents()).contains("partial assessment", "Do not invent");
-                return call(
-                    n,
-                    "writeMultiFile",
-                    "{\"files\":[{\"path\":\"review.md\",\"content\":\"Partial verified coverage; assessment remains incomplete\"}]}");
-              }
-              assertThat(c.needsResumeWorkRecovery()).isFalse();
-              assertThat(names(p)).contains("listFile", "countFileLines");
-              return new AssistantMessage(
-                  "Intermediate evidence recorded; review remains incomplete");
-            });
+        model(p -> {
+          int n = calls.incrementAndGet();
+          if (n == 1) {
+            assertThat(names(p))
+                .doesNotContain("listFile", "countFileLines")
+                .contains("readMultiFile");
+            return call(n, "readMultiFile", READ_ARGUMENTS);
+          }
+          if (n == 2) {
+            assertThat(c.detector().stagnationCount()).isZero();
+            assertThat(c.needsResumeWorkRecovery()).isTrue();
+            assertThat(names(p)).doesNotContain("listFile", "countFileLines");
+            assertThat(p.getContents()).contains("partial assessment", "Do not invent");
+            return call(
+                n,
+                "writeMultiFile",
+                "{\"files\":[{\"path\":\"review.md\",\"content\":\"Partial verified coverage; assessment remains incomplete\"}]}");
+          }
+          assertThat(c.needsResumeWorkRecovery()).isFalse();
+          assertThat(names(p)).contains("listFile", "countFileLines");
+          return new AssistantMessage("Intermediate evidence recorded; review remains incomplete");
+        });
     new StagnationChatModel(delegate)
         .stream(
                 new Prompt(
@@ -1762,26 +1898,23 @@ class ExhaustedResumeRecoveryTest {
     var c = context(0, 2, 8, true);
     var calls = new AtomicInteger();
     var delegate =
-        model(
-            p -> {
-              int n = calls.incrementAndGet();
-              if (n == 1) return call(n, "readMultiFile", READ_ARGUMENTS);
-              if (n == 2)
-                return new AssistantMessage("I will continue reading the unfinished page.");
-              if (n == 3) {
-                assertThat(names(p)).doesNotContain("readMultiFile").contains("writeMultiFile");
-                assertThat(p.getContents())
-                    .contains("No verified work followed the delivered content");
-                return call(
-                    n,
-                    "writeMultiFile",
-                    "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
-              }
-              assertThat(p.getContents())
-                  .doesNotContain("No verified work followed the delivered content");
-              assertThat(names(p)).contains("readMultiFile", "listFile");
-              return new AssistantMessage("Partial assessment saved with unresolved gaps.");
-            });
+        model(p -> {
+          int n = calls.incrementAndGet();
+          if (n == 1) return call(n, "readMultiFile", READ_ARGUMENTS);
+          if (n == 2) return new AssistantMessage("I will continue reading the unfinished page.");
+          if (n == 3) {
+            assertThat(names(p)).doesNotContain("readMultiFile").contains("writeMultiFile");
+            assertThat(p.getContents()).contains("No verified work followed the delivered content");
+            return call(
+                n,
+                "writeMultiFile",
+                "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
+          }
+          assertThat(p.getContents())
+              .doesNotContain("No verified work followed the delivered content");
+          assertThat(names(p)).contains("readMultiFile", "listFile");
+          return new AssistantMessage("Partial assessment saved with unresolved gaps.");
+        });
     new StagnationChatModel(delegate)
         .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast();
     assertThat(calls).hasValue(4);
@@ -1796,18 +1929,16 @@ class ExhaustedResumeRecoveryTest {
   void repeatedTextWithoutWorkStopsWithinTheExistingBudget(String text) throws Exception {
     var c = context(0, 2, 8, true);
     var calls = new AtomicInteger();
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(
-                        model(
-                            p -> {
-                              int n = calls.incrementAndGet();
-                              assertThat(n).isLessThanOrEqualTo(6);
-                              return n == 1
-                                  ? call(n, "readMultiFile", READ_ARGUMENTS)
-                                  : new AssistantMessage(text);
-                            }))
-                    .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(
+                    model(p -> {
+                      int n = calls.incrementAndGet();
+                      assertThat(n).isLessThanOrEqualTo(6);
+                      return n == 1
+                          ? call(n, "readMultiFile", READ_ARGUMENTS)
+                          : new AssistantMessage(text);
+                    }))
+                .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
         .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED");
     assertThat(calls).hasValue(6);
@@ -1828,11 +1959,10 @@ class ExhaustedResumeRecoveryTest {
             .metadata(Map.of(key, true))
             .build());
     new StagnationChatModel(
-            model(
-                p -> {
-                  assertThat(p.getContents()).doesNotContain("Stale saved host restriction");
-                  return new AssistantMessage("Current state observed");
-                }))
+            model(p -> {
+              assertThat(p.getContents()).doesNotContain("Stale saved host restriction");
+              return new AssistantMessage("Current state observed");
+            }))
         .stream(new Prompt(messages, original.getOptions())).blockLast();
   }
 
@@ -1854,14 +1984,14 @@ class ExhaustedResumeRecoveryTest {
                     new ChatResponse(
                         List.of(
                             new Generation(
-                                ExhaustedResumeRecoveryTest.this.call(n, "readMultiFile", READ_ARGUMENTS)))))
+                                ExhaustedResumeRecoveryTest.this.call(
+                                    n, "readMultiFile", READ_ARGUMENTS)))))
                 : Flux.empty();
           }
         };
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(delegate)
-                    .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(delegate)
+                .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
         .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED");
     assertThat(calls).hasValue(6);
@@ -1883,7 +2013,11 @@ class ExhaustedResumeRecoveryTest {
     var c = context(0, 2, 8, true);
     String seed = PAGE.replace("[\"known\"]", "[\"one\",\"two\",\"three\"]");
     c.evaluator()
-        .afterTool("readMultiFile", READ_ARGUMENTS, seed, c.evaluator().beforeTool("readMultiFile", READ_ARGUMENTS));
+        .afterTool(
+            "readMultiFile",
+            READ_ARGUMENTS,
+            seed,
+            c.evaluator().beforeTool("readMultiFile", READ_ARGUMENTS));
     var initial =
         prompt(
             c,
@@ -1927,31 +2061,30 @@ class ExhaustedResumeRecoveryTest {
             }));
     var invocations = new AtomicInteger();
     var delegate =
-        model(
-            p -> {
-              int n = invocations.incrementAndGet();
-              assertThat(n).isLessThanOrEqualTo(13);
-              if (writes.get() == 3) {
-                assertThat(names(p)).contains("readMultiFile", "listFile");
-                assertThat(c.detector().stagnationCount()).isZero();
-                return new AssistantMessage(
-                    "Three partial assessments saved; remaining review is incomplete");
-              }
-              // Reading a page must not force a report append. Finish the three-page unit
-              // before recording one consolidated assessment, then continue the next unit.
-              assertThat(names(p)).contains("readMultiFile");
-              if (reads.get() < (writes.get() + 1) * 3) {
-                return call(n, "readMultiFile", READ_ARGUMENTS);
-              }
-              assertThat(names(p)).contains("writeMultiFile");
-              assertThat(p.getContents())
-                  .contains("partial assessment", "Do not invent")
-                  .doesNotContain("This boundary applies again after each subsequent content read");
-              return call(
-                  n,
-                  "writeMultiFile",
-                  "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
-            });
+        model(p -> {
+          int n = invocations.incrementAndGet();
+          assertThat(n).isLessThanOrEqualTo(13);
+          if (writes.get() == 3) {
+            assertThat(names(p)).contains("readMultiFile", "listFile");
+            assertThat(c.detector().stagnationCount()).isZero();
+            return new AssistantMessage(
+                "Three partial assessments saved; remaining review is incomplete");
+          }
+          // Reading a page must not force a report append. Finish the three-page unit
+          // before recording one consolidated assessment, then continue the next unit.
+          assertThat(names(p)).contains("readMultiFile");
+          if (reads.get() < (writes.get() + 1) * 3) {
+            return call(n, "readMultiFile", READ_ARGUMENTS);
+          }
+          assertThat(names(p)).contains("writeMultiFile");
+          assertThat(p.getContents())
+              .contains("partial assessment", "Do not invent")
+              .doesNotContain("This boundary applies again after each subsequent content read");
+          return call(
+              n,
+              "writeMultiFile",
+              "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
+        });
     new StagnationChatModel(delegate)
         .stream(
                 advised(
@@ -1982,12 +2115,11 @@ class ExhaustedResumeRecoveryTest {
     callbacks.add(tool("readMultiFile", () -> result));
     var calls = new AtomicInteger();
     new StagnationChatModel(
-            model(
-                p -> {
-                  assertThat(names(p)).contains("readMultiFile");
-                  if (calls.incrementAndGet() == 1) return call(1, "readMultiFile", READ_ARGUMENTS);
-                  return new AssistantMessage("Missing evidence remains unresolved");
-                }))
+            model(p -> {
+              assertThat(names(p)).contains("readMultiFile");
+              if (calls.incrementAndGet() == 1) return call(1, "readMultiFile", READ_ARGUMENTS);
+              return new AssistantMessage("Missing evidence remains unresolved");
+            }))
         .stream(
                 new Prompt(
                     initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
@@ -2005,25 +2137,23 @@ class ExhaustedResumeRecoveryTest {
     callbacks.add(tool("writeMultiFile", () -> "{\"success\":false}"));
     callbacks.add(tool("checkpointAnnotate", () -> "{\"success\":true}"));
     var calls = new AtomicInteger();
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(
-                        model(
-                            p -> {
-                              int n = calls.incrementAndGet();
-                              assertThat(names(p)).doesNotContain("readMultiFile");
-                              return call(
-                                  n,
-                                  n == 1 ? "writeMultiFile" : "checkpointAnnotate",
-                                  n == 1
-                                      ? "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}"
-                                      : "{}");
-                            }))
-                    .stream(
-                            new Prompt(
-                                initial.getInstructions(),
-                                options.mutate().toolCallbacks(callbacks).build()))
-                        .blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(
+                    model(p -> {
+                      int n = calls.incrementAndGet();
+                      assertThat(names(p)).doesNotContain("readMultiFile");
+                      return call(
+                          n,
+                          n == 1 ? "writeMultiFile" : "checkpointAnnotate",
+                          n == 1
+                              ? "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}"
+                              : "{}");
+                    }))
+                .stream(
+                        new Prompt(
+                            initial.getInstructions(),
+                            options.mutate().toolCallbacks(callbacks).build()))
+                    .blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
         .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED");
     assertThat(c.detector().stagnationCount()).isEqualTo(4);
@@ -2035,31 +2165,28 @@ class ExhaustedResumeRecoveryTest {
   void aReadAfterWorkInTheSameBatchStillNeedsAssessment() throws Exception {
     var c = context(0, 2, 8, true);
     var calls = new AtomicInteger();
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(
-                        model(
-                            p -> {
-                              if (calls.incrementAndGet() == 1)
-                                return AssistantMessage.builder()
-                                    .toolCalls(
-                                        List.of(
-                                            new AssistantMessage.ToolCall(
-                                                "write",
-                                                "function",
-                                                "writeMultiFile",
-                                                "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}"),
-                                            new AssistantMessage.ToolCall(
-                                                "read", "function", "readMultiFile", READ_ARGUMENTS)))
-                                    .build();
-                              assertThat(c.hasPendingResumeContentWork()).isTrue();
-                              if (calls.get() == 2) assertThat(names(p)).contains("readMultiFile");
-                              else assertThat(names(p)).doesNotContain("readMultiFile");
-                              assertThat(names(p)).contains("writeMultiFile");
-                              return new AssistantMessage(
-                                  "The newly read range still needs assessment");
-                            }))
-                    .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(
+                    model(p -> {
+                      if (calls.incrementAndGet() == 1)
+                        return AssistantMessage.builder()
+                            .toolCalls(
+                                List.of(
+                                    new AssistantMessage.ToolCall(
+                                        "write",
+                                        "function",
+                                        "writeMultiFile",
+                                        "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}"),
+                                    new AssistantMessage.ToolCall(
+                                        "read", "function", "readMultiFile", READ_ARGUMENTS)))
+                            .build();
+                      assertThat(c.hasPendingResumeContentWork()).isTrue();
+                      if (calls.get() == 2) assertThat(names(p)).contains("readMultiFile");
+                      else assertThat(names(p)).doesNotContain("readMultiFile");
+                      assertThat(names(p)).contains("writeMultiFile");
+                      return new AssistantMessage("The newly read range still needs assessment");
+                    }))
+                .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
         .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED");
     assertThat(c.detector().stagnationCount()).isEqualTo(5);
@@ -2083,15 +2210,14 @@ class ExhaustedResumeRecoveryTest {
               return PAGE;
             }));
     var calls = new AtomicInteger();
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(
-                        model(p -> call(calls.incrementAndGet(), "readMultiFile", READ_ARGUMENTS)))
-                    .stream(
-                            new Prompt(
-                                initial.getInstructions(),
-                                options.mutate().toolCallbacks(callbacks).build()))
-                        .blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(
+                    model(p -> call(calls.incrementAndGet(), "readMultiFile", READ_ARGUMENTS)))
+                .stream(
+                        new Prompt(
+                            initial.getInstructions(),
+                            options.mutate().toolCallbacks(callbacks).build()))
+                    .blockLast())
         .isInstanceOf(RuntimeException.class);
     assertThat(reads).hasValue(0);
     assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
@@ -2121,12 +2247,11 @@ class ExhaustedResumeRecoveryTest {
               false));
     var calls = new AtomicInteger();
     new StagnationChatModel(
-            model(
-                p -> {
-                  assertThat(names(p)).contains("readMultiFile");
-                  if (calls.incrementAndGet() == 1) return call(1, "readMultiFile", READ_ARGUMENTS);
-                  return new AssistantMessage("Ordinary content use");
-                }))
+            model(p -> {
+              assertThat(names(p)).contains("readMultiFile");
+              if (calls.incrementAndGet() == 1) return call(1, "readMultiFile", READ_ARGUMENTS);
+              return new AssistantMessage("Ordinary content use");
+            }))
         .stream(
                 prompt(
                     c,
@@ -2150,26 +2275,25 @@ class ExhaustedResumeRecoveryTest {
     callbacks.add(tool(reader, () -> result));
     var calls = new AtomicInteger();
     new StagnationChatModel(
-            model(
-                p -> {
-                  int n = calls.incrementAndGet();
-                  if (n == 1)
-                    return call(
-                        n,
-                        reader,
-                        reader.equals("readRawToolResult")
-                            ? "{\"rawResultRef\":\"00000000-0000-0000-0000-000000000001\",\"offset\":0,\"limit\":5}"
-                            : "{}");
-                  if (n == 2) {
-                    assertThat(names(p)).contains(reader, "readMultiFile");
-                    return call(
-                        n,
-                        "writeMultiFile",
-                        "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
-                  }
-                  assertThat(names(p)).contains(reader, "readMultiFile");
-                  return new AssistantMessage("Partial evidence used");
-                }))
+            model(p -> {
+              int n = calls.incrementAndGet();
+              if (n == 1)
+                return call(
+                    n,
+                    reader,
+                    reader.equals("readRawToolResult")
+                        ? "{\"rawResultRef\":\"00000000-0000-0000-0000-000000000001\",\"offset\":0,\"limit\":5}"
+                        : "{}");
+              if (n == 2) {
+                assertThat(names(p)).contains(reader, "readMultiFile");
+                return call(
+                    n,
+                    "writeMultiFile",
+                    "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
+              }
+              assertThat(names(p)).contains(reader, "readMultiFile");
+              return new AssistantMessage("Partial evidence used");
+            }))
         .stream(
                 new Prompt(
                     initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
@@ -2195,36 +2319,28 @@ class ExhaustedResumeRecoveryTest {
                     true))
             .build());
     var delegate =
-        model(
-            p -> {
-              assertThat(names(p))
-                  .contains(
-                      "listFile",
-                      "findFile",
-                      "countFileLines",
-                      "checkpointShow",
-                      "checkpointInspect");
-              throw new java.util.concurrent.CancellationException();
-            });
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(delegate)
-                    .stream(new Prompt(messages, current.getOptions())).blockLast())
+        model(p -> {
+          assertThat(names(p))
+              .contains(
+                  "listFile", "findFile", "countFileLines", "checkpointShow", "checkpointInspect");
+          throw new java.util.concurrent.CancellationException();
+        });
+    assertThatThrownBy(() ->
+            new StagnationChatModel(delegate)
+                .stream(new Prompt(messages, current.getOptions())).blockLast())
         .isInstanceOf(java.util.concurrent.CancellationException.class);
   }
 
   @Test
   void duplicateBodyReadsStopAtTheUnitBoundaryWithoutRefundingAnyBudget() throws Exception {
     var c = context(7, 2, 8, true);
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(
-                        model(
-                            p ->
-                                names(p).contains("readMultiFile")
-                                    ? call(1, "readMultiFile", READ_ARGUMENTS)
-                                    : new AssistantMessage("No outcome can be confirmed")))
-                    .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(
+                    model(p ->
+                        names(p).contains("readMultiFile")
+                            ? call(1, "readMultiFile", READ_ARGUMENTS)
+                            : new AssistantMessage("No outcome can be confirmed")))
+                .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
         .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED");
     assertThat(c.detector().stagnationCount()).isEqualTo(19);
@@ -2236,10 +2352,9 @@ class ExhaustedResumeRecoveryTest {
   void modelCannotExecuteAHiddenDiscoveryCallback() throws Exception {
     var c = context(7, 2, 8, true);
     var executed = new AtomicInteger();
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(model(p -> call(1, "listFile", "{}")))
-                    .stream(prompt(c, true, "resume", executed)).blockLast())
+    assertThatThrownBy(() ->
+            new StagnationChatModel(model(p -> call(1, "listFile", "{}")))
+                .stream(prompt(c, true, "resume", executed)).blockLast())
         .isInstanceOf(RuntimeException.class);
     assertThat(executed).hasValue(0);
   }

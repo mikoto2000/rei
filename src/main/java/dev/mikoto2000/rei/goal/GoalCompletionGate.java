@@ -433,12 +433,11 @@ public final class GoalCompletionGate {
       for (var expected : definition.requiredArtifacts())
         if (expected.deliveryRequired()
             && available.stream()
-                .noneMatch(
-                    item ->
-                        matchesArtifact(expected, item)
-                            && proof
-                                .deliveredArtifacts()
-                                .contains(new Reference(item.artifactId(), item.sha256()))))
+                .noneMatch(item ->
+                    matchesArtifact(expected, item)
+                        && proof
+                            .deliveredArtifacts()
+                            .contains(new Reference(item.artifactId(), item.sha256()))))
           return failed("completion_delivery_pending");
       if (receipt != null) {
         var current = capture.capture(root, deadline);
@@ -567,13 +566,12 @@ public final class GoalCompletionGate {
             || tests.tests().size() > 64
             || new HashSet<>(tests.tests()).size() != tests.tests().size()
             || tests.tests().stream()
-                .anyMatch(
-                    test ->
-                        test == null
-                            || test.isBlank()
-                            || test.length() > 256
-                            || test.codePoints().anyMatch(Character::isISOControl)
-                            || !CredentialRedactor.redact(test).equals(test))))
+                .anyMatch(test ->
+                    test == null
+                        || test.isBlank()
+                        || test.length() > 256
+                        || test.codePoints().anyMatch(Character::isISOControl)
+                        || !CredentialRedactor.redact(test).equals(test))))
       throw new IllegalArgumentException(
           "Required command SHA and bounded unique testcase IDs required");
     if (tests != null

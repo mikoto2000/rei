@@ -361,12 +361,11 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
       throw new IllegalStateException(
           "Goal Run is queued or executing; stop it through the normal Run controls");
     var result =
-        goals.atomic(
-            () -> {
-              var reconciled = goals.reconcile(project, id, expectedRunId);
-              if (stages != null) stages.reconcile(reconciled, expectedRunId);
-              return reconciled;
-            });
+        goals.atomic(() -> {
+          var reconciled = goals.reconcile(project, id, expectedRunId);
+          if (stages != null) stages.reconcile(reconciled, expectedRunId);
+          return reconciled;
+        });
     events.publish(result);
     return result;
   }
@@ -375,12 +374,11 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
   public GoalRepository.Goal cancel(String project, String id) {
     var before = goals.get(project, id);
     var goal =
-        goals.atomic(
-            () -> {
-              var cancelled = goals.cancel(project, id);
-              if (stages != null) stages.cancelled(cancelled);
-              return cancelled;
-            });
+        goals.atomic(() -> {
+          var cancelled = goals.cancel(project, id);
+          if (stages != null) stages.cancelled(cancelled);
+          return cancelled;
+        });
     if (before.status().equals("RUNNING")) gateway.cancel(goal);
     events.publish(goal);
     return goal;
@@ -391,12 +389,11 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
       String project, String id, String expectedRun, long expectedAttempts) {
     var before = goals.get(project, id);
     var goal =
-        goals.atomic(
-            () -> {
-              var cancelled = goals.cancel(project, id, expectedRun, expectedAttempts);
-              if (stages != null) stages.cancelled(cancelled);
-              return cancelled;
-            });
+        goals.atomic(() -> {
+          var cancelled = goals.cancel(project, id, expectedRun, expectedAttempts);
+          if (stages != null) stages.cancelled(cancelled);
+          return cancelled;
+        });
     if (before.status().equals("RUNNING")) gateway.cancel(goal);
     events.publish(goal);
     return goal;
@@ -448,13 +445,12 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
             .orElse(false);
     if (!goals.completionPhase(claim, repairing ? "REPAIRING" : "RUNNING")) return;
     String run =
-        goals.atomic(
-            () -> {
-              String admitted = goals.beginAttempt(claim);
-              if (stageManagement != null && selection != null && selection.stage() != null)
-                stageManagement.begin(claim, admitted, selection.stage());
-              return admitted;
-            });
+        goals.atomic(() -> {
+          String admitted = goals.beginAttempt(claim);
+          if (stageManagement != null && selection != null && selection.stage() != null)
+            stageManagement.begin(claim, admitted, selection.stage());
+          return admitted;
+        });
     events.publish(
         goals.get(goal.projectId(), goal.id()), goals.completionPhase(goal.projectId(), goal.id()));
     try {
@@ -535,18 +531,17 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
       var stageVerification = stageManagement.verifyRun(current, run);
       if (stageVerification != null) {
         boolean recorded =
-            goals.atomic(
-                () -> {
-                  if (!stageManagement.finish(claim, run, stageVerification)) return false;
-                  goals.recordAttempt(
-                      claim,
-                      run,
-                      stageVerification.result() == GoalStageVerifier.Result.VERIFIED
-                          ? "VERIFIED"
-                          : "UNVERIFIED",
-                      stageVerification.reason());
-                  return true;
-                });
+            goals.atomic(() -> {
+              if (!stageManagement.finish(claim, run, stageVerification)) return false;
+              goals.recordAttempt(
+                  claim,
+                  run,
+                  stageVerification.result() == GoalStageVerifier.Result.VERIFIED
+                      ? "VERIFIED"
+                      : "UNVERIFIED",
+                  stageVerification.reason());
+              return true;
+            });
         if (!recorded) return;
         if (stageVerification.result() == GoalStageVerifier.Result.UNSATISFIED) {
           try {
@@ -597,12 +592,11 @@ public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGo
 
   /** 後から経緯や使用量を確認できるよう、試行を記録する。 */
   private void recordAttempt(GoalRepository.Claim claim, String run, String state, String reason) {
-    goals.atomic(
-        () -> {
-          if (stages != null) stages.interrupted(claim, run, reason);
-          goals.recordAttempt(claim, run, state, reason);
-          return null;
-        });
+    goals.atomic(() -> {
+      if (stages != null) stages.interrupted(claim, run, reason);
+      goals.recordAttempt(claim, run, state, reason);
+      return null;
+    });
   }
 
   @Override

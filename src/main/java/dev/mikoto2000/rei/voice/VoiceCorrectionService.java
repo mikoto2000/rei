@@ -35,7 +35,8 @@ public final class VoiceCorrectionService implements AutoCloseable {
   @FunctionalInterface
   public interface Llm {
     /** 音声による対話の要求を実行し、呼び出し元へ結果を返す。 */
-    String call(String raw, VoiceCorrectionContext.Snapshot context) throws IOException, InterruptedException;
+    String call(String raw, VoiceCorrectionContext.Snapshot context)
+        throws IOException, InterruptedException;
   }
 
   /** この機能の動作設定。 */
@@ -336,42 +337,41 @@ public final class VoiceCorrectionService implements AutoCloseable {
       var context = contexts.apply(input);
       job.enqueuedAt = ticks.getAsLong();
       job.task =
-          new FutureTask<>(
-              () -> {
-                if (job.result.isDone()) return null;
-                if (!current.getAsBoolean()) {
-                  job.cancel();
-                  return null;
-                }
-                long started = ticks.getAsLong();
-                events.publish(
-                    VoiceEventPublisher.Type.CORRECTION_TIMING,
-                    "queue_ms="
-                        + elapsed(job.enqueuedAt)
-                        + " context_ms="
-                        + Math.max(0, (job.enqueuedAt - job.queuedAt) / 1_000_000));
-                try {
-                  String candidate = llm.call(raw, context);
-                  if (!job.finished.get()
-                      && candidate != null
-                      && candidate.length()
-                          <= Math.min(65536, properties.getMaxInputChars() * 16 + 2048))
-                    job.candidate = candidate;
-                  long validation = ticks.getAsLong();
-                  var decision = validator.validate(raw, candidate, properties.getMaxInputChars());
-                  events.publish(
-                      VoiceEventPublisher.Type.CORRECTION_TIMING,
-                      "llm_ms="
-                          + Math.max(0, (validation - started) / 1_000_000)
-                          + " validation_ms="
-                          + elapsed(validation));
-                  if (current.getAsBoolean()) job.finish(decision);
-                  else job.cancel();
-                } catch (IOException | InterruptedException | RuntimeException failure) {
-                  job.finish(validator.fallback(raw, "llm_failure"));
-                } // Never publish exception text.
-                return null;
-              });
+          new FutureTask<>(() -> {
+            if (job.result.isDone()) return null;
+            if (!current.getAsBoolean()) {
+              job.cancel();
+              return null;
+            }
+            long started = ticks.getAsLong();
+            events.publish(
+                VoiceEventPublisher.Type.CORRECTION_TIMING,
+                "queue_ms="
+                    + elapsed(job.enqueuedAt)
+                    + " context_ms="
+                    + Math.max(0, (job.enqueuedAt - job.queuedAt) / 1_000_000));
+            try {
+              String candidate = llm.call(raw, context);
+              if (!job.finished.get()
+                  && candidate != null
+                  && candidate.length()
+                      <= Math.min(65536, properties.getMaxInputChars() * 16 + 2048))
+                job.candidate = candidate;
+              long validation = ticks.getAsLong();
+              var decision = validator.validate(raw, candidate, properties.getMaxInputChars());
+              events.publish(
+                  VoiceEventPublisher.Type.CORRECTION_TIMING,
+                  "llm_ms="
+                      + Math.max(0, (validation - started) / 1_000_000)
+                      + " validation_ms="
+                      + elapsed(validation));
+              if (current.getAsBoolean()) job.finish(decision);
+              else job.cancel();
+            } catch (IOException | InterruptedException | RuntimeException failure) {
+              job.finish(validator.fallback(raw, "llm_failure"));
+            } // Never publish exception text.
+            return null;
+          });
       if (!job.result.isDone()) workers.execute(job.task);
     } catch (RejectedExecutionException full) {
       job.finish(validator.fallback(raw, "queue_full"));

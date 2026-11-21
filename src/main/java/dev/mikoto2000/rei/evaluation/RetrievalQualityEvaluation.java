@@ -129,9 +129,7 @@ public final class RetrievalQualityEvaluation {
     public Comparison {
       runs = runs == null ? null : Collections.unmodifiableList(new ArrayList<>(runs));
       aggregate =
-          aggregate == null
-              ? null
-              : Collections.unmodifiableMap(new LinkedHashMap<>(aggregate));
+          aggregate == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(aggregate));
     }
   }
 

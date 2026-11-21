@@ -45,11 +45,10 @@ public final class McpIngressFilter extends OncePerRequestFilter {
     }
     boolean forwarded =
         Collections.list(request.getHeaderNames()).stream()
-            .anyMatch(
-                name ->
-                    !name.equalsIgnoreCase(TUNNEL_CERTIFICATE_HEADER)
-                        && (name.equalsIgnoreCase("Forwarded")
-                            || name.toLowerCase(java.util.Locale.ROOT).startsWith("x-forwarded-")));
+            .anyMatch(name ->
+                !name.equalsIgnoreCase(TUNNEL_CERTIFICATE_HEADER)
+                    && (name.equalsIgnoreCase("Forwarded")
+                        || name.toLowerCase(java.util.Locale.ROOT).startsWith("x-forwarded-")));
     if (forwarded
         || Collections.list(request.getHeaders("Host")).size() != 1
         || Collections.list(request.getHeaders("Origin")).size() > 1

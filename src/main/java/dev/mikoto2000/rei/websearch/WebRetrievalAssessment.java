@@ -62,10 +62,9 @@ public record WebRetrievalAssessment(
         && readable.stream().noneMatch(page -> WebSearchSelection.official(query, actualUrl(page))))
       reasons.add("official_source_missing");
     if (readable.stream()
-        .noneMatch(
-            page ->
-                WebSearchSelection.matchesVersion(
-                    query, new WebSearchResult("", "", page.content(), null))))
+        .noneMatch(page ->
+            WebSearchSelection.matchesVersion(
+                query, new WebSearchResult("", "", page.content(), null))))
       reasons.add("version_mismatch");
     if (WebSearchSelection.needsFreshness(query)) {
       reasons.add("latest_claim_unverified");
@@ -78,10 +77,9 @@ public record WebRetrievalAssessment(
     if (lower.matches("(?s).*(\\bvs\\b|compar|比較|複数|sources).*") && independent < 2)
       reasons.add("independent_sources_missing");
     if (readable.stream()
-        .anyMatch(
-            page ->
-                !page.omissions().isEmpty()
-                    || page.excerpts().stream().anyMatch(WebExcerpt::truncated))) {
+        .anyMatch(page ->
+            !page.omissions().isEmpty()
+                || page.excerpts().stream().anyMatch(WebExcerpt::truncated))) {
       reasons.add("extraction_or_output_omitted");
       unknown = true;
     }
@@ -117,10 +115,9 @@ public record WebRetrievalAssessment(
           || reasons.contains("no_readable_verified_body")
               && WebSearchSelection.relevance(query, result) >= 0.5
           || missingTopics.stream()
-              .anyMatch(
-                  term ->
-                      WebQueryTerms.frequency(result.title(), term) > 0
-                          || WebQueryTerms.frequency(result.snippet(), term) > 0)) return candidate;
+              .anyMatch(term ->
+                  WebQueryTerms.frequency(result.title(), term) > 0
+                      || WebQueryTerms.frequency(result.snippet(), term) > 0)) return candidate;
     }
     return null;
   }
@@ -161,10 +158,8 @@ public record WebRetrievalAssessment(
 
   private static List<String> missingTerms(List<String> terms, List<WebSearchPage> readable) {
     return terms.stream()
-        .filter(
-            term ->
-                readable.stream()
-                    .noneMatch(page -> WebQueryTerms.frequency(page.content(), term) > 0))
+        .filter(term ->
+            readable.stream().noneMatch(page -> WebQueryTerms.frequency(page.content(), term) > 0))
         .toList();
   }
 

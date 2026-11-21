@@ -54,30 +54,27 @@ class RepositoryMapCompilerIsolationTest {
   /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void repositoryScanDoesNotDiscoverOrRunHostCompilerPlugins() throws Exception {
-    withPluginClasspath(
-        () -> {
-          var view = new RepositoryMapService(path -> List.of("App.java")).map(root, "", 10);
-          assertEquals("PARSED", view.items().getFirst().status());
-          assertEquals(List.of("missing.External"), view.items().getFirst().imports());
-          assertNull(
-              System.getProperty(STARTED),
-              "Source indexing must not execute host compiler plugins");
-        });
+    withPluginClasspath(() -> {
+      var view = new RepositoryMapService(path -> List.of("App.java")).map(root, "", 10);
+      assertEquals("PARSED", view.items().getFirst().status());
+      assertEquals(List.of("missing.External"), view.items().getFirst().imports());
+      assertNull(
+          System.getProperty(STARTED), "Source indexing must not execute host compiler plugins");
+    });
   }
 
   /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void singleFileSnapshotDoesNotDiscoverOrRunHostCompilerPlugins() throws Exception {
-    withPluginClasspath(
-        () -> {
-          var snapshots = new FileSnapshots();
-          var source = snapshots.get(root, Path.of("App.java"));
-          var file =
-              new RepositoryMapService(path -> List.of("App.java")).describeSnapshot(root, source);
-          assertEquals("PARSED", file.status());
-          assertNull(
-              System.getProperty(STARTED), "Symbol reads must not execute host compiler plugins");
-        });
+    withPluginClasspath(() -> {
+      var snapshots = new FileSnapshots();
+      var source = snapshots.get(root, Path.of("App.java"));
+      var file =
+          new RepositoryMapService(path -> List.of("App.java")).describeSnapshot(root, source);
+      assertEquals("PARSED", file.status());
+      assertNull(
+          System.getProperty(STARTED), "Symbol reads must not execute host compiler plugins");
+    });
   }
 
   /** 検証条件を再現するための確認。 */

@@ -67,12 +67,11 @@ class RetrievalQualityPipelineTest {
             candidates.stream().map(text).noneMatch(s -> s.contains("PRIVATE_INSTRUCTIONS")));
         var result = new ArrayList<>(candidates);
         result.sort(
-            Comparator.comparingInt(
-                c ->
-                    text.apply(c).contains("Technical narrative")
-                            || text.apply(c).contains("Durable receipts")
-                        ? 0
-                        : 1));
+            Comparator.comparingInt(c ->
+                text.apply(c).contains("Technical narrative")
+                        || text.apply(c).contains("Durable receipts")
+                    ? 0
+                    : 1));
         return result;
       }
     };
@@ -83,16 +82,15 @@ class RetrievalQualityPipelineTest {
       Example fixture, SkillMetadataEmbedding embedding, CandidateReranker reranker) {
     var catalog =
         fixture.corpus().stream()
-            .map(
-                item ->
-                    new AgentSkill(
-                        item.id(),
-                        item.text(),
-                        List.of(),
-                        true,
-                        Path.of(item.id()),
-                        Path.of(item.id(), "SKILL.md"),
-                        "PRIVATE_INSTRUCTIONS"))
+            .map(item ->
+                new AgentSkill(
+                    item.id(),
+                    item.text(),
+                    List.of(),
+                    true,
+                    Path.of(item.id()),
+                    Path.of(item.id(), "SKILL.md"),
+                    "PRIVATE_INSTRUCTIONS"))
             .toList();
     return new SkillRetrievalEvaluationAdapter(
         catalog, new SemanticSkillProperties(true, 64, .55, 30), embedding, reranker);
@@ -106,9 +104,8 @@ class RetrievalQualityPipelineTest {
     var corpus = new HashMap<String, Document>();
     example
         .corpus()
-        .forEach(
-            item ->
-                corpus.put(item.id(), Document.builder().id(item.id()).text(item.text()).build()));
+        .forEach(item ->
+            corpus.put(item.id(), Document.builder().id(item.id()).text(item.text()).build()));
     var backend =
         new RetrievalCandidates() {
           /** {@code lexicalSearch} の条件を再現するための補助情報を返す。 */
@@ -148,11 +145,10 @@ class RetrievalQualityPipelineTest {
     SkillMetadataEmbedding embedding =
         input ->
             input.stream()
-                .map(
-                    text ->
-                        !text.startsWith("name: ") || text.contains("technical narrative")
-                            ? new float[] {1, 0}
-                            : new float[] {0, 1})
+                .map(text ->
+                    !text.startsWith("name: ") || text.contains("technical narrative")
+                        ? new float[] {1, 0}
+                        : new float[] {0, 1})
                 .toList();
     var result =
         new RetrievalQualityEvaluation()

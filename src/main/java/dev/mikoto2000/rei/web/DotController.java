@@ -60,9 +60,7 @@ public final class DotController {
       implements StrictApiRequest {
     public CreateRequest {
       constraints =
-          constraints == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(constraints));
+          constraints == null ? null : Collections.unmodifiableList(new ArrayList<>(constraints));
       acceptance_criteria =
           acceptance_criteria == null
               ? null

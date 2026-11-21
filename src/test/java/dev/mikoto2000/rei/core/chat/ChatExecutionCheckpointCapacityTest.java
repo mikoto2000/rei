@@ -93,10 +93,9 @@ class ChatExecutionCheckpointCapacityTest {
   /** {@code terminals} の条件を再現するための補助情報を返す。 */
   private List<AgentEvent> terminals() {
     return events.stream()
-        .filter(
-            e ->
-                Set.of(AgentEventType.AGENT_RUN_FAILED, AgentEventType.AGENT_RUN_COMPLETED)
-                    .contains(e.type()))
+        .filter(e ->
+            Set.of(AgentEventType.AGENT_RUN_FAILED, AgentEventType.AGENT_RUN_COMPLETED)
+                .contains(e.type()))
         .toList();
   }
 

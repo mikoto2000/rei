@@ -10,14 +10,13 @@ public final class StorageSessionImportWorker {
     }
     long count =
         new StorageDatabase(root)
-            .read(
-                connection -> {
-                  try (var query = connection.createStatement();
-                      var rows = query.executeQuery("SELECT count(*) FROM sessions")) {
-                    rows.next();
-                    return rows.getLong(1);
-                  }
-                });
+            .read(connection -> {
+              try (var query = connection.createStatement();
+                  var rows = query.executeQuery("SELECT count(*) FROM sessions")) {
+                rows.next();
+                return rows.getLong(1);
+              }
+            });
     if (new dev.mikoto2000.rei.conversation.SqliteSessionRepository(root)
             .findPage(null, null, 101)
             .size()

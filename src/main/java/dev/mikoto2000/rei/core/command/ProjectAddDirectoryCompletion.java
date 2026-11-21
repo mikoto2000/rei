@@ -41,13 +41,12 @@ public final class ProjectAddDirectoryCompletion {
             currentProject);
     return new FilePathCompletionProvider()
         .complete(context).stream()
-            .map(
-                candidate -> {
-                  Path path = Path.of(candidate.value());
-                  return quote
-                      + (path.isAbsolute() ? path : currentProject.resolve(path)).normalize()
-                      + quote;
-                })
+            .map(candidate -> {
+              Path path = Path.of(candidate.value());
+              return quote
+                  + (path.isAbsolute() ? path : currentProject.resolve(path)).normalize()
+                  + quote;
+            })
             .toList();
   }
 }

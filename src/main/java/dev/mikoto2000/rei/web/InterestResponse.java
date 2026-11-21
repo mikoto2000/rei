@@ -25,9 +25,7 @@ public record InterestResponse(
     String createdAt) {
   public InterestResponse {
     sourceUrls =
-        sourceUrls == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(sourceUrls));
+        sourceUrls == null ? null : Collections.unmodifiableList(new ArrayList<>(sourceUrls));
   }
 
   /** Web APIによる操作で利用する情報を、受け取った形式から変換する。 */

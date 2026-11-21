@@ -349,11 +349,10 @@ public class SubAgentTools {
     if (parallel == null) throw new IllegalStateException("Parallel delegation unavailable");
     if (requests != null
         && requests.stream()
-            .anyMatch(
-                r ->
-                    r != null
-                        && ("chatgpt-plan".equals(r.backendId())
-                            || "codex-app-server".equals(r.backendId())))) {
+            .anyMatch(r ->
+                r != null
+                    && ("chatgpt-plan".equals(r.backendId())
+                        || "codex-app-server".equals(r.backendId())))) {
       var run = execution(toolContext);
       var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(run.runContext());
       try (scope) {

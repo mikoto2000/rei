@@ -23,8 +23,8 @@ class EpisodeOutputTest {
             new EpisodeOutput()
                 .parse(
                     """
-        {"episodes":[{"id":"invented","occurredAt":"2026-10-11T00:00:00Z","status":"UNVERIFIED","title":"CLI","summary":"proposal","claims":[{"kind":"reason","text":"isolation","evidence":"MODEL_PROPOSAL","runId":"r","speaker":"assistant"}],"confidence":0.8}]}
-        """,
+                    {"episodes":[{"id":"invented","occurredAt":"2026-10-11T00:00:00Z","status":"UNVERIFIED","title":"CLI","summary":"proposal","claims":[{"kind":"reason","text":"isolation","evidence":"MODEL_PROPOSAL","runId":"r","speaker":"assistant"}],"confidence":0.8}]}
+                    """,
                     "s",
                     "p",
                     List.of()));

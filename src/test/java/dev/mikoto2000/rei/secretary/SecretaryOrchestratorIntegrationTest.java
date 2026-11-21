@@ -159,14 +159,13 @@ class SecretaryOrchestratorIntegrationTest {
       assertEquals(
           1,
           admissions.stream()
-              .map(
-                  f -> {
-                    try {
-                      return f.get(5, TimeUnit.SECONDS);
-                    } catch (Exception e) {
-                      throw new AssertionError(e);
-                    }
-                  })
+              .map(f -> {
+                try {
+                  return f.get(5, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                  throw new AssertionError(e);
+                }
+              })
               .filter(d -> d == SecretaryInterruptions.Decision.ALLOW)
               .count());
     }

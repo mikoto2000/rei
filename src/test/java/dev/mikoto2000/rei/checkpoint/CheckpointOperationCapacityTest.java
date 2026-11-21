@@ -141,10 +141,9 @@ class CheckpointOperationCapacityTest {
         1, new Operation("shared", "readMultiFile", OperationStatus.SUCCEEDED, "second", "run"));
     var evidence = new Evidence("RAW_RESULT_REFERENCE", "raw-ref", "first", "old", "shared");
     install(original, List.of(evidence));
-    assertThatCode(
-            () ->
-                bus.publishBoundary(
-                    events.toolStarted("next", "readMultiFile", "range").withOwnership(owner)))
+    assertThatCode(() ->
+            bus.publishBoundary(
+                events.toolStarted("next", "readMultiFile", "range").withOwnership(owner)))
         .doesNotThrowAnyException();
     assertThat(state().operations()).contains(original.getFirst()).doesNotContain(original.get(1));
     assertThat(state().evidence()).contains(evidence);
@@ -166,10 +165,9 @@ class CheckpointOperationCapacityTest {
           new Operation(
               "pending-" + i, "writeMultiFile", statuses.get(i), "pending-event-" + i, "run"));
     install(original, List.of());
-    assertThatCode(
-            () ->
-                bus.publishBoundary(
-                    events.toolStarted("next", "readMultiFile", "range").withOwnership(owner)))
+    assertThatCode(() ->
+            bus.publishBoundary(
+                events.toolStarted("next", "readMultiFile", "range").withOwnership(owner)))
         .doesNotThrowAnyException();
     assertThat(state().operations())
         .containsAll(original.subList(0, 4))
@@ -186,10 +184,9 @@ class CheckpointOperationCapacityTest {
           new Operation(
               "pending-" + i, "writeMultiFile", OperationStatus.UNKNOWN, "event-" + i, "run"));
     install(operations, List.of());
-    assertThatThrownBy(
-            () ->
-                bus.publishBoundary(
-                    events.toolStarted("next", "readMultiFile", "range").withOwnership(owner)))
+    assertThatThrownBy(() ->
+            bus.publishBoundary(
+                events.toolStarted("next", "readMultiFile", "range").withOwnership(owner)))
         .hasMessageContaining("operation capacity");
     assertThat(state().operations()).isEqualTo(operations);
     assertThat(state().progress()).isEqualTo(progress);

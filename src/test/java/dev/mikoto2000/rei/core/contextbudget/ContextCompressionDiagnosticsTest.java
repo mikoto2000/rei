@@ -121,11 +121,10 @@ class ContextCompressionDiagnosticsTest {
   void timeoutIsNotRetriedOnEveryLoopAndNextAttemptUsesSmallerCompletePrefix() {
     List<Integer> sizes = new ArrayList<>();
     var a =
-        assembler(
-            (previous, messages, budget, owner) -> {
-              sizes.add(messages.size());
-              throw new ContextCompressionException(ContextCompressionException.Reason.TIMEOUT);
-            });
+        assembler((previous, messages, budget, owner) -> {
+          sizes.add(messages.size());
+          throw new ContextCompressionException(ContextCompressionException.Reason.TIMEOUT);
+        });
     var original = history();
     for (int i = 0; i < 5; i++)
       assertThat(a.assemble(original, "chat", "run", () -> {}).getUserMessage().getText())
@@ -133,11 +132,10 @@ class ContextCompressionDiagnosticsTest {
     assertThat(sizes).containsExactly(2);
     assertThat(payloads(AgentEventType.CONTEXT_COMPRESSION_FAILED))
         .singleElement()
-        .satisfies(
-            p -> {
-              assertThat(p.reason()).isEqualTo("summary_timeout");
-              assertThat(p.details()).contains("summary-timeout-seconds", "120", "小さく");
-            });
+        .satisfies(p -> {
+          assertThat(p.reason()).isEqualTo("summary_timeout");
+          assertThat(p.details()).contains("summary-timeout-seconds", "120", "小さく");
+        });
     assertThat(payloads(AgentEventType.CONTEXT_COMPRESSION_SKIPPED)).hasSize(1);
     assertThat(new ConversationSummaryRepository(dir).read("chat").throughSequence()).isZero();
     millis.set(120000);
@@ -155,11 +153,10 @@ class ContextCompressionDiagnosticsTest {
   void newRunOrModelOrChangedSettingsCanRetryWithoutWaiting() {
     var calls = new AtomicInteger();
     var a =
-        assembler(
-            (previous, messages, budget, owner) -> {
-              calls.incrementAndGet();
-              throw new IllegalStateException("raw-secret");
-            });
+        assembler((previous, messages, budget, owner) -> {
+          calls.incrementAndGet();
+          throw new IllegalStateException("raw-secret");
+        });
     a.assemble(history(), "chat", "run", () -> {});
     a.assemble(history(), "chat", "other-run", () -> {});
     var changed =
@@ -257,11 +254,10 @@ class ContextCompressionDiagnosticsTest {
       assembler(c).assemble(history(), "chat", String.valueOf(usage), () -> {});
       assertThat(payloads(AgentEventType.CONTEXT_COMPRESSION_FAILED))
           .singleElement()
-          .satisfies(
-              p -> {
-                assertThat(p.reason()).isEqualTo("summary_too_long");
-                assertThat(p.details()).contains("120", "100");
-              });
+          .satisfies(p -> {
+            assertThat(p.reason()).isEqualTo("summary_too_long");
+            assertThat(p.details()).contains("120", "100");
+          });
     }
   }
 
@@ -280,13 +276,12 @@ class ContextCompressionDiagnosticsTest {
     assembler((p, m, b, o) -> "compact", summaries).assemble(history(), "chat", "run", () -> {});
     assertThat(payloads(AgentEventType.CONTEXT_COMPRESSION_FAILED))
         .singleElement()
-        .satisfies(
-            p -> {
-              assertThat(p.reason()).isEqualTo("summary_storage");
-              assertThat(p.details())
-                  .contains("storage_access_denied")
-                  .doesNotContain("storage secret", "private-storage-path");
-            });
+        .satisfies(p -> {
+          assertThat(p.reason()).isEqualTo("summary_storage");
+          assertThat(p.details())
+              .contains("storage_access_denied")
+              .doesNotContain("storage secret", "private-storage-path");
+        });
     events.clear();
     properties.setModelContextLimit(5000);
     properties.setCompletionReserve(0);
@@ -342,13 +337,12 @@ class ContextCompressionDiagnosticsTest {
         .assemble(history(), "chat", "run", () -> {});
     assertThat(payloads(AgentEventType.CONTEXT_COMPRESSION_FAILED))
         .singleElement()
-        .satisfies(
-            p -> {
-              assertThat(p.reason()).isEqualTo("summary_authentication");
-              assertThat(p.details())
-                  .contains("authentication_failed", "HTTP 401")
-                  .doesNotContain("secret-status", "secret-body", "secret-wrapper");
-            });
+        .satisfies(p -> {
+          assertThat(p.reason()).isEqualTo("summary_authentication");
+          assertThat(p.details())
+              .contains("authentication_failed", "HTTP 401")
+              .doesNotContain("secret-status", "secret-body", "secret-wrapper");
+        });
   }
 
   /** モデルへ渡す文脈の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
@@ -358,36 +352,32 @@ class ContextCompressionDiagnosticsTest {
         new ExecutionStoppedException(ExecutionStoppedException.Reason.TOKEN_USAGE_UNKNOWN);
     stopped.addSuppressed(
         new ContextCompressionException(ContextCompressionException.Reason.TIMEOUT));
-    assertThatThrownBy(
-            () ->
-                assembler(
-                        (p, m, b, o) -> {
-                          throw new RuntimeException("secret", stopped);
-                        })
-                    .assemble(history(), "chat", "run", () -> {}))
+    assertThatThrownBy(() ->
+            assembler(
+                    (p, m, b, o) -> {
+                      throw new RuntimeException("secret", stopped);
+                    })
+                .assemble(history(), "chat", "run", () -> {}))
         .isSameAs(stopped);
     assertThat(payloads(AgentEventType.CONTEXT_COMPRESSION_FAILED))
         .singleElement()
-        .satisfies(
-            p -> {
-              assertThat(p.reason()).isEqualTo("token_usage_unknown");
-              assertThat(p.details()).contains("summary_timeout").doesNotContain("secret");
-            });
+        .satisfies(p -> {
+          assertThat(p.reason()).isEqualTo("token_usage_unknown");
+          assertThat(p.details()).contains("summary_timeout").doesNotContain("secret");
+        });
     events.clear();
-    assertThatThrownBy(
-            () ->
-                assembler(
-                        (p, m, b, o) -> {
-                          throw new java.util.concurrent.CancellationException("secret");
-                        })
-                    .assemble(history(), "chat", "cancelled", () -> {}))
+    assertThatThrownBy(() ->
+            assembler(
+                    (p, m, b, o) -> {
+                      throw new java.util.concurrent.CancellationException("secret");
+                    })
+                .assemble(history(), "chat", "cancelled", () -> {}))
         .isInstanceOf(java.util.concurrent.CancellationException.class);
     assertThat(payloads(AgentEventType.CONTEXT_COMPRESSION_FAILED))
         .singleElement()
-        .satisfies(
-            p -> {
-              assertThat(p.reason()).isEqualTo("cancelled");
-              assertThat(p.details()).doesNotContain("secret");
-            });
+        .satisfies(p -> {
+          assertThat(p.reason()).isEqualTo("cancelled");
+          assertThat(p.details()).doesNotContain("secret");
+        });
   }
 }

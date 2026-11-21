@@ -63,12 +63,12 @@ class WorkContextSmokeTest {
         .thenAnswer(c -> OpenAiChatOptions.builder().build());
     String fixture =
         """
-      {"changes":[
-        {"action":"ADD","targetId":null,"kind":"COMPLETED_WORK","text":"キャンセル伝播を実装したとの報告","reason":"assistant report","status":"COMPLETED","sourceIds":["run-1:assistant"],"certainty":"ASSISTANT"},
-        {"action":"ADD","targetId":null,"kind":"PENDING","text":"Native確認は未実施","reason":"not tested","status":"OPEN","sourceIds":["run-1:assistant"],"certainty":"ASSISTANT"},
-        {"action":"ADD","targetId":null,"kind":"NEXT_ACTION","text":"Nativeでキャンセル操作を確認する","reason":"user request","status":"OPEN","sourceIds":["run-1:user"],"certainty":"USER"}
-      ]}
-      """;
+        {"changes":[
+          {"action":"ADD","targetId":null,"kind":"COMPLETED_WORK","text":"キャンセル伝播を実装したとの報告","reason":"assistant report","status":"COMPLETED","sourceIds":["run-1:assistant"],"certainty":"ASSISTANT"},
+          {"action":"ADD","targetId":null,"kind":"PENDING","text":"Native確認は未実施","reason":"not tested","status":"OPEN","sourceIds":["run-1:assistant"],"certainty":"ASSISTANT"},
+          {"action":"ADD","targetId":null,"kind":"NEXT_ACTION","text":"Nativeでキャンセル操作を確認する","reason":"user request","status":"OPEN","sourceIds":["run-1:user"],"certainty":"USER"}
+        ]}
+        """;
     when(model.stream(any(Prompt.class)))
         .thenReturn(
             Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage(fixture))))));

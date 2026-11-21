@@ -37,13 +37,13 @@ class TerminalClientTest {
             String body =
                 requestPath.equals(path)
                     ? """
-              [{"projectId":"p","projectName":"rei","runId":"r","request":"Request",
-                "status":"FAILED","startedAt":"2026-11-16T00:00:00Z","failure":"reason"}]
-              """
+                    [{"projectId":"p","projectName":"rei","runId":"r","request":"Request",
+                      "status":"FAILED","startedAt":"2026-11-16T00:00:00Z","failure":"reason"}]
+                    """
                     : """
-              [{"taskId":"task","runId":"r","originalRunId":"r","savedAt":"2026-11-16T00:00:00Z",
-                "status":"FAILED","revision":7,"request":"Request","discardable":true}]
-              """;
+                    [{"taskId":"task","runId":"r","originalRunId":"r","savedAt":"2026-11-16T00:00:00Z",
+                      "status":"FAILED","revision":7,"request":"Request","discardable":true}]
+                    """;
             var bytes = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, bytes.length);
             exchange.getResponseBody().write(bytes);

@@ -143,22 +143,21 @@ class GoalRepairTest {
     var goal = create(4);
     var calls = new AtomicInteger();
     var loop =
-        loop(
-            (claim, run, done) -> {
-              assertTrue(goals.reserveLlm(claim));
-              int n = calls.incrementAndGet();
-              try {
-                Files.writeString(root.resolve("out.txt"), n == 1 ? "wrong" : "correct");
-              } catch (Exception e) {
-                throw new RuntimeException(e);
-              }
-              done.accept(
-                  n == 1
-                      ? new GoalLoopService.Outcome(
-                          ChatExecutionResult.failed("bounded", "llm_call_budget_exceeded"),
-                          "repair_reserve_reached")
-                      : new GoalLoopService.Outcome(ChatExecutionResult.success("done", false)));
-            });
+        loop((claim, run, done) -> {
+          assertTrue(goals.reserveLlm(claim));
+          int n = calls.incrementAndGet();
+          try {
+            Files.writeString(root.resolve("out.txt"), n == 1 ? "wrong" : "correct");
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+          done.accept(
+              n == 1
+                  ? new GoalLoopService.Outcome(
+                      ChatExecutionResult.failed("bounded", "llm_call_budget_exceeded"),
+                      "repair_reserve_reached")
+                  : new GoalLoopService.Outcome(ChatExecutionResult.success("done", false)));
+        });
     assertEquals("COMPLETED", loop.run("project", goal.id()).status());
     assertEquals(2, calls.get());
     assertEquals(2, goals.get("project", goal.id()).llmCallsUsed());
@@ -169,19 +168,18 @@ class GoalRepairTest {
   void controlledBudgetEndCanCompleteOnlyWithIndependentGateEvidence() throws Exception {
     var goal = create(1);
     var loop =
-        loop(
-            (claim, run, done) -> {
-              assertTrue(goals.reserveLlm(claim));
-              try {
-                Files.writeString(root.resolve("out.txt"), "correct");
-              } catch (Exception e) {
-                throw new RuntimeException(e);
-              }
-              done.accept(
-                  new GoalLoopService.Outcome(
-                      ChatExecutionResult.failed("bounded", "llm_call_budget_exceeded"),
-                      "llm_call_budget_exceeded"));
-            });
+        loop((claim, run, done) -> {
+          assertTrue(goals.reserveLlm(claim));
+          try {
+            Files.writeString(root.resolve("out.txt"), "correct");
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+          done.accept(
+              new GoalLoopService.Outcome(
+                  ChatExecutionResult.failed("bounded", "llm_call_budget_exceeded"),
+                  "llm_call_budget_exceeded"));
+        });
     assertEquals("COMPLETED", loop.run("project", goal.id()).status());
     assertEquals(1, goals.get("project", goal.id()).llmCallsUsed());
   }
@@ -193,13 +191,11 @@ class GoalRepairTest {
       var goal = create(4);
       var calls = new AtomicInteger();
       var loop =
-          loop(
-              (claim, run, done) -> {
-                assertTrue(goals.reserveLlm(claim));
-                calls.incrementAndGet();
-                done.accept(
-                    new GoalLoopService.Outcome(ChatExecutionResult.failed("stopped"), reason));
-              });
+          loop((claim, run, done) -> {
+            assertTrue(goals.reserveLlm(claim));
+            calls.incrementAndGet();
+            done.accept(new GoalLoopService.Outcome(ChatExecutionResult.failed("stopped"), reason));
+          });
       assertEquals(
           reason.equals("permission_required") ? "WAITING_APPROVAL" : "FAILED",
           loop.run("project", goal.id()).status());
@@ -219,16 +215,15 @@ class GoalRepairTest {
             properties);
     var goal = create(4);
     var loop =
-        loop(
-            (claim, run, done) -> {
-              assertTrue(goals.reserveLlm(claim));
-              try {
-                Files.writeString(root.resolve("out.txt"), "correct");
-              } catch (Exception e) {
-                throw new RuntimeException(e);
-              }
-              done.accept(new GoalLoopService.Outcome(ChatExecutionResult.success("done", false)));
-            });
+        loop((claim, run, done) -> {
+          assertTrue(goals.reserveLlm(claim));
+          try {
+            Files.writeString(root.resolve("out.txt"), "correct");
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+          done.accept(new GoalLoopService.Outcome(ChatExecutionResult.success("done", false)));
+        });
     assertEquals("BLOCKED", loop.run("project", goal.id()).status());
     assertEquals("token_usage_unknown", goals.get("project", goal.id()).reason());
   }
@@ -238,11 +233,10 @@ class GoalRepairTest {
   void progressKeepsUnknownExecutionSeparateFromRepairableFileMismatch() throws Exception {
     var goal = create(4);
     var loop =
-        loop(
-            (claim, run, done) ->
-                done.accept(
-                    new GoalLoopService.Outcome(
-                        ChatExecutionResult.failed("unknown"), "execution_failed")));
+        loop((claim, run, done) ->
+            done.accept(
+                new GoalLoopService.Outcome(
+                    ChatExecutionResult.failed("unknown"), "execution_failed")));
     loop.run("project", goal.id());
     var progress = loop.progress("project", goal.id());
     assertEquals(GoalRepairDiagnosis.Kind.UNKNOWN_RESULT, progress.diagnosis().kind());
@@ -264,25 +258,23 @@ class GoalRepairTest {
     var goal = create(4);
     var calls = new AtomicInteger();
     var loop =
-        loop(
-            (claim, run, done) -> {
-              var slice = new GoalRepairBudget(goals.modelBudget(claim, run), 2);
-              assertTrue(slice.tryReserve());
-              assertTrue(slice.tryReserve());
-              assertTrue(slice.boundaryReached());
-              calls.incrementAndGet();
-              done.accept(new GoalLoopService.Outcome(ChatExecutionResult.failed("unknown")));
-            });
+        loop((claim, run, done) -> {
+          var slice = new GoalRepairBudget(goals.modelBudget(claim, run), 2);
+          assertTrue(slice.tryReserve());
+          assertTrue(slice.tryReserve());
+          assertTrue(slice.boundaryReached());
+          calls.incrementAndGet();
+          done.accept(new GoalLoopService.Outcome(ChatExecutionResult.failed("unknown")));
+        });
     assertEquals("FAILED", loop.run("project", goal.id()).status());
     assertEquals(1, calls.get());
     assertEquals(2, goals.get("project", goal.id()).llmCallsUsed());
     var cancelled = create(4);
     var cancelLoop =
-        loop(
-            (claim, run, done) ->
-                done.accept(
-                    new GoalLoopService.Outcome(
-                        ChatExecutionResult.cancelled(), "repair_reserve_reached")));
+        loop((claim, run, done) ->
+            done.accept(
+                new GoalLoopService.Outcome(
+                    ChatExecutionResult.cancelled(), "repair_reserve_reached")));
     assertEquals("PAUSED", cancelLoop.run("project", cancelled.id()).status());
     assertEquals("run_cancelled", goals.get("project", cancelled.id()).reason());
   }

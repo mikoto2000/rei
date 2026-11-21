@@ -56,23 +56,22 @@ public class OpenAiSdkConfiguration {
       if (embeddingPath != null
           && !embeddingPath.isBlank()
           && !embeddingPath.equals("/v1/embeddings")) {
-        builder.interceptor(
-            chain -> {
-              var request = chain.request();
-              String path = request.url().encodedPath();
-              String suffix = "/v1/embeddings";
-              if (path.endsWith(suffix)) {
-                String prefix = path.substring(0, path.length() - suffix.length());
-                String replacement =
-                    embeddingPath.startsWith("/") ? embeddingPath : "/" + embeddingPath;
-                request =
-                    request
-                        .newBuilder()
-                        .url(request.url().newBuilder().encodedPath(prefix + replacement).build())
-                        .build();
-              }
-              return chain.proceed(request);
-            });
+        builder.interceptor(chain -> {
+          var request = chain.request();
+          String path = request.url().encodedPath();
+          String suffix = "/v1/embeddings";
+          if (path.endsWith(suffix)) {
+            String prefix = path.substring(0, path.length() - suffix.length());
+            String replacement =
+                embeddingPath.startsWith("/") ? embeddingPath : "/" + embeddingPath;
+            request =
+                request
+                    .newBuilder()
+                    .url(request.url().newBuilder().encodedPath(prefix + replacement).build())
+                    .build();
+          }
+          return chain.proceed(request);
+        });
       }
     };
   }

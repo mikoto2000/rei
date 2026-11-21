@@ -145,7 +145,8 @@ class ProjectCommandHistoryTest {
         assertThat(entries()).containsExactly("persist on close");
         assertThat(
                 read(
-                    org.jline.keymap.KeyMap.key(terminal, org.jline.utils.InfoCmp.Capability.key_up)))
+                    org.jline.keymap.KeyMap.key(
+                        terminal, org.jline.utils.InfoCmp.Capability.key_up)))
             .isEqualTo("persist on close");
       }
     }
@@ -218,8 +219,7 @@ class ProjectCommandHistoryTest {
             .addSubcommand("remove", new ProjectCommand.RemoveCommand(projects));
     ShellProjectCommands.configure(command, projects, client, null);
     var scope = client.open();
-    try (
-        scope;
+    try (scope;
         var history = new ProjectCommandHistory(() -> reader, projects::currentContext, root)) {
       read("startup command");
       assertThat(command.execute("cd", other.toString())).isZero();

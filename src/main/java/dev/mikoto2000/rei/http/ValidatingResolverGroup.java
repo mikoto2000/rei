@@ -36,9 +36,7 @@ public class ValidatingResolverGroup extends AddressResolverGroup<InetSocketAddr
 
   /** 指定された値や利用先を使って、ValidatingResolverGroupを初期化する。 */
   public ValidatingResolverGroup(
-      Predicate<InetAddress> allowed,
-      Set<InetAddress> approved,
-      AddressResolverGroup<?> delegate) {
+      Predicate<InetAddress> allowed, Set<InetAddress> approved, AddressResolverGroup<?> delegate) {
     this.allowed = allowed;
     recordApprovedAddress = address -> approved.add(address);
     this.delegate = delegate;
@@ -69,16 +67,14 @@ public class ValidatingResolverGroup extends AddressResolverGroup<InetSocketAddr
       /** 外部情報の取得に関するdo対象の解決を処理する。 */
       protected void doResolve(InetSocketAddress address, Promise<InetSocketAddress> result) {
         Promise<List<InetSocketAddress>> all = executor.newPromise();
-        all.addListener(
-            done -> {
-              if (done.isSuccess()) result.trySuccess(all.getNow().getFirst());
-              else if (done.isCancelled()) result.cancel(false);
-              else result.tryFailure(done.cause());
-            });
-        result.addListener(
-            done -> {
-              if (done.isCancelled()) all.cancel(false);
-            });
+        all.addListener(done -> {
+          if (done.isSuccess()) result.trySuccess(all.getNow().getFirst());
+          else if (done.isCancelled()) result.cancel(false);
+          else result.tryFailure(done.cause());
+        });
+        result.addListener(done -> {
+          if (done.isCancelled()) all.cancel(false);
+        });
         doResolveAll(address, all);
       }
 
@@ -96,22 +92,19 @@ public class ValidatingResolverGroup extends AddressResolverGroup<InetSocketAddr
         var lookup = delegate.getResolver(executor).resolveAll(address);
         pending.add(lookup);
         if (closed.get()) lookup.cancel(false);
-        result.addListener(
-            done -> {
-              if (done.isCancelled()) lookup.cancel(false);
-            });
-        lookup.addListener(
-            done -> {
-              pending.remove(lookup);
-              if (done.isSuccess()) validate(lookup.getNow(), result);
-              else if (done.isCancelled()) result.cancel(false);
-              else result.tryFailure(done.cause());
-            });
+        result.addListener(done -> {
+          if (done.isCancelled()) lookup.cancel(false);
+        });
+        lookup.addListener(done -> {
+          pending.remove(lookup);
+          if (done.isSuccess()) validate(lookup.getNow(), result);
+          else if (done.isCancelled()) result.cancel(false);
+          else result.tryFailure(done.cause());
+        });
       }
 
       /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
-      private void validate(
-          List<?> answers, Promise<List<InetSocketAddress>> result) {
+      private void validate(List<?> answers, Promise<List<InetSocketAddress>> result) {
         if (answers == null || answers.isEmpty()) {
           result.tryFailure(new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED));
           return;

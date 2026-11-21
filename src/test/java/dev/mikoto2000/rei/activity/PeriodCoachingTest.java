@@ -163,19 +163,15 @@ class PeriodCoachingTest {
     try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
       var latch = new java.util.concurrent.CountDownLatch(1);
       var first =
-          executor.submit(
-              () -> {
-                latch.await();
-                return a.reserve(
-                    configured, "week:2026-09-21:UTC", "BELOW_TARGET", clock.instant());
-              });
+          executor.submit(() -> {
+            latch.await();
+            return a.reserve(configured, "week:2026-09-21:UTC", "BELOW_TARGET", clock.instant());
+          });
       var second =
-          executor.submit(
-              () -> {
-                latch.await();
-                return b.reserve(
-                    configured, "month:2026-09-01:UTC", "BELOW_TARGET", clock.instant());
-              });
+          executor.submit(() -> {
+            latch.await();
+            return b.reserve(configured, "month:2026-09-01:UTC", "BELOW_TARGET", clock.instant());
+          });
       latch.countDown();
       assertEquals(Set.of("RESERVED", "COOLDOWN"), Set.of(first.get(), second.get()));
     }

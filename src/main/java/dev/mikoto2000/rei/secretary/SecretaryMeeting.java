@@ -88,11 +88,10 @@ public final class SecretaryMeeting {
 
   static boolean scheduled(Work w) {
     return w.evidence().stream()
-        .anyMatch(
-            i ->
-                "scheduler".equals(i.source())
-                    || i.observation() != null
-                        && Set.of("SCHEDULE", "CALENDAR").contains(i.observation().kind()));
+        .anyMatch(i ->
+            "scheduler".equals(i.source())
+                || i.observation() != null
+                    && Set.of("SCHEDULE", "CALENDAR").contains(i.observation().kind()));
   }
 
   static boolean selectable(Work w) {
@@ -138,35 +137,34 @@ public final class SecretaryMeeting {
     // The ledger is current authoritative intention state, independent of tool executions.
     sections.values().stream()
         .flatMap(List::stream)
-        .forEach(
-            t -> {
-              String state =
-                  switch (t.status()) {
-                    case DONE -> "COMPLETED";
-                    case CANCELLED -> "CANCELLED";
-                    case WAITING -> "WAITING";
-                    case OPEN -> "PENDING";
-                    default -> "UNKNOWN";
-                  };
-              work.put(
+        .forEach(t -> {
+          String state =
+              switch (t.status()) {
+                case DONE -> "COMPLETED";
+                case CANCELLED -> "CANCELLED";
+                case WAITING -> "WAITING";
+                case OPEN -> "PENDING";
+                default -> "UNKNOWN";
+              };
+          work.put(
+              "secretary-task:" + t.id(),
+              new Work(
                   "secretary-task:" + t.id(),
-                  new Work(
-                      "secretary-task:" + t.id(),
-                      project,
-                      t.title(),
-                      state,
-                      t.updated(),
-                      t.due(),
-                      t.priority(),
-                      null,
-                      t.status() != SecretaryTask.Status.CANDIDATE,
-                      t.status() == SecretaryTask.Status.CANDIDATE
-                          ? t.origin().equals("EXTERNAL")
-                              ? SecretaryContext.Reliability.UNKNOWN
-                              : SecretaryContext.Reliability.INFERENCE
-                          : SecretaryContext.Reliability.USER_REGISTERED,
-                      List.of()));
-            });
+                  project,
+                  t.title(),
+                  state,
+                  t.updated(),
+                  t.due(),
+                  t.priority(),
+                  null,
+                  t.status() != SecretaryTask.Status.CANDIDATE,
+                  t.status() == SecretaryTask.Status.CANDIDATE
+                      ? t.origin().equals("EXTERNAL")
+                          ? SecretaryContext.Reliability.UNKNOWN
+                          : SecretaryContext.Reliability.INFERENCE
+                      : SecretaryContext.Reliability.USER_REGISTERED,
+                  List.of()));
+        });
     var aliases = new HashMap<String, String>();
     var ambiguous = new HashSet<String>();
     for (var item : context)
@@ -267,18 +265,15 @@ public final class SecretaryMeeting {
         all.stream()
             .filter(SecretaryMeeting::ongoing)
             .filter(w -> !scheduled(w))
-            .filter(
-                w ->
-                    w.evidence().isEmpty()
-                        || w.evidence().stream()
-                            .anyMatch(
-                                i -> {
-                                  String k =
-                                      i.observation() == null ? i.status() : i.observation().kind();
-                                  return !Set.of("COMPLETED", "COMPLETED_WORK").contains(k)
-                                      && actionable(i);
-                                })
-                        || w.verified())
+            .filter(w ->
+                w.evidence().isEmpty()
+                    || w.evidence().stream()
+                        .anyMatch(i -> {
+                          String k = i.observation() == null ? i.status() : i.observation().kind();
+                          return !Set.of("COMPLETED", "COMPLETED_WORK").contains(k)
+                              && actionable(i);
+                        })
+                    || w.verified())
             .toList();
     var result = new LinkedHashMap<String, List<Work>>();
     result.put(
@@ -286,15 +281,12 @@ public final class SecretaryMeeting {
         all.stream()
             .filter(SecretaryMeeting::scheduled)
             .filter(SecretaryMeeting::ongoing)
-            .filter(
-                w ->
-                    w.evidence().stream()
-                        .noneMatch(
-                            i ->
-                                Set.of("CANCELLED", "CANCELED")
-                                    .contains(
-                                        String.valueOf(i.status())
-                                            .toUpperCase(java.util.Locale.ROOT))))
+            .filter(w ->
+                w.evidence().stream()
+                    .noneMatch(i ->
+                        Set.of("CANCELLED", "CANCELED")
+                            .contains(
+                                String.valueOf(i.status()).toUpperCase(java.util.Locale.ROOT))))
             .limit(3)
             .toList());
     result.put("today", active.stream().filter(w -> date.equals(w.due())).limit(3).toList());
@@ -324,11 +316,10 @@ public final class SecretaryMeeting {
         active.stream()
             .filter(w -> !notice(w))
             .sorted(
-                Comparator.<Work>comparingInt(
-                        w ->
-                            w.due() != null && !w.due().isAfter(date)
-                                ? 0
-                                : carried.contains(w.id()) ? 1 : 2)
+                Comparator.<Work>comparingInt(w ->
+                        w.due() != null && !w.due().isAfter(date)
+                            ? 0
+                            : carried.contains(w.id()) ? 1 : 2)
                     .thenComparing(order()))
             .toList();
     result.put("priorities", ranked.stream().limit(3).toList());
@@ -355,21 +346,19 @@ public final class SecretaryMeeting {
       view.sections()
           .forEach((k, v) -> sections.computeIfAbsent(k, x -> new ArrayList<>()).addAll(v));
     var handoffs = sections.getOrDefault("handoff", List.of());
-    sections.replaceAll(
-        (k, v) ->
-            v.stream()
-                .distinct()
-                .sorted(
-                    Set.of("priorities", "carryover").contains(k)
-                        ? Comparator.<Work>comparingInt(
-                                w ->
-                                    w.due() != null && !w.due().isAfter(date)
-                                        ? 0
-                                        : handoffs.contains(w) ? 1 : 2)
-                            .thenComparing(order())
-                        : order())
-                .limit(3)
-                .toList());
+    sections.replaceAll((k, v) ->
+        v.stream()
+            .distinct()
+            .sorted(
+                Set.of("priorities", "carryover").contains(k)
+                    ? Comparator.<Work>comparingInt(w ->
+                            w.due() != null && !w.due().isAfter(date)
+                                ? 0
+                                : handoffs.contains(w) ? 1 : 2)
+                        .thenComparing(order())
+                    : order())
+            .limit(3)
+            .toList());
     String schedule =
         partial
             ? "PARTIAL"

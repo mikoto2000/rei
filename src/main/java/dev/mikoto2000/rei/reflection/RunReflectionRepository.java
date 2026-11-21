@@ -141,13 +141,12 @@ public class RunReflectionRepository {
             : db.sql(
                     "SELECT * FROM run_reflection_actions WHERE project=? AND session=? AND run=? ORDER BY rowid LIMIT 257")
                 .params(event.projectId(), event.sessionId(), event.runId())
-                .query(
-                    (rs, n) ->
-                        new Action(
-                            rs.getString("call_id"),
-                            rs.getString("tool"),
-                            rs.getString("status"),
-                            rs.getString("error_type")))
+                .query((rs, n) ->
+                    new Action(
+                        rs.getString("call_id"),
+                        rs.getString("tool"),
+                        rs.getString("status"),
+                        rs.getString("error_type")))
                 .list();
     boolean truncated = observed.size() > 256;
     List<Action> actions = observed.stream().limit(256).toList();
@@ -187,16 +186,15 @@ public class RunReflectionRepository {
     actions.stream()
         .filter(a -> a.status().equals("FAILED"))
         .limit(8)
-        .forEach(
-            a ->
-                knowledge.add(
-                    "Recorded failed Tool "
-                        + safe(a.tool(), 128)
-                        + " (call "
-                        + safe(a.callId(), 128)
-                        + ", error type "
-                        + safe(a.errorType(), 128)
-                        + "). Inspect this specific operation before selecting a future retry."));
+        .forEach(a ->
+            knowledge.add(
+                "Recorded failed Tool "
+                    + safe(a.tool(), 128)
+                    + " (call "
+                    + safe(a.callId(), 128)
+                    + ", error type "
+                    + safe(a.errorType(), 128)
+                    + "). Inspect this specific operation before selecting a future retry."));
     if (!status.equals("COMPLETED"))
       knowledge.add(
           "Recorded "

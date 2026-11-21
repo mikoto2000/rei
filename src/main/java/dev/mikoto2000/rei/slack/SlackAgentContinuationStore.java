@@ -44,9 +44,7 @@ public final class SlackAgentContinuationStore {
     public StoredMessage {
       calls = calls == null ? null : Collections.unmodifiableList(new ArrayList<>(calls));
       responses =
-          responses == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(responses));
+          responses == null ? null : Collections.unmodifiableList(new ArrayList<>(responses));
     }
   }
 
@@ -103,30 +101,28 @@ public final class SlackAgentContinuationStore {
     var messages =
         history.stream()
             .filter(m -> !(m instanceof SystemMessage))
-            .map(
-                m -> {
-                  if (m instanceof AssistantMessage a)
-                    return new StoredMessage(
-                        "ASSISTANT",
-                        SlackReplies.safe(Objects.toString(a.getText(), "")),
-                        a.getToolCalls(),
-                        List.of());
-                  if (m instanceof ToolResponseMessage t)
-                    return new StoredMessage(
-                        "TOOL",
-                        "",
-                        List.of(),
-                        t.getResponses().stream()
-                            .map(
-                                r ->
-                                    new ToolResponseMessage.ToolResponse(
-                                        r.id(), r.name(), SlackReplies.safe(r.responseData())))
-                            .toList());
-                  if (m instanceof UserMessage)
-                    return new StoredMessage(
-                        "USER", SlackReplies.safe(m.getText()), List.of(), List.of());
-                  throw new IllegalArgumentException("Unsupported continuation message");
-                })
+            .map(m -> {
+              if (m instanceof AssistantMessage a)
+                return new StoredMessage(
+                    "ASSISTANT",
+                    SlackReplies.safe(Objects.toString(a.getText(), "")),
+                    a.getToolCalls(),
+                    List.of());
+              if (m instanceof ToolResponseMessage t)
+                return new StoredMessage(
+                    "TOOL",
+                    "",
+                    List.of(),
+                    t.getResponses().stream()
+                        .map(r ->
+                            new ToolResponseMessage.ToolResponse(
+                                r.id(), r.name(), SlackReplies.safe(r.responseData())))
+                        .toList());
+              if (m instanceof UserMessage)
+                return new StoredMessage(
+                    "USER", SlackReplies.safe(m.getText()), List.of(), List.of());
+              throw new IllegalArgumentException("Unsupported continuation message");
+            })
             .toList();
     try {
       String document =
@@ -176,20 +172,15 @@ public final class SlackAgentContinuationStore {
       throw new IllegalArgumentException("Continuation ownership mismatch");
     var messages =
         d.messages().stream()
-            .map(
-                m ->
-                    (Message)
-                        switch (m.kind()) {
-                          case "USER" -> new UserMessage(m.text());
-                          case "ASSISTANT" ->
-                              AssistantMessage.builder()
-                                  .content(m.text())
-                                  .toolCalls(m.calls())
-                                  .build();
-                          case "TOOL" ->
-                              ToolResponseMessage.builder().responses(m.responses()).build();
-                          default -> throw new IllegalStateException("Invalid saved message kind");
-                        })
+            .map(m ->
+                (Message)
+                    switch (m.kind()) {
+                      case "USER" -> new UserMessage(m.text());
+                      case "ASSISTANT" ->
+                          AssistantMessage.builder().content(m.text()).toolCalls(m.calls()).build();
+                      case "TOOL" -> ToolResponseMessage.builder().responses(m.responses()).build();
+                      default -> throw new IllegalStateException("Invalid saved message kind");
+                    })
             .toList();
     return new RunContinuation.Saved(d.request(), messages, d.budget());
   }

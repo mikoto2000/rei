@@ -39,8 +39,7 @@ class ProgressFeedbackTest {
   void changingFeedbackPreservesSystemAndToolHistoryPrefix(boolean compressionEnabled) {
     var context = context();
     var owner =
-        new dev.mikoto2000.rei.core.chat.AgentRunContext(
-            "test", "conversation", root, "project");
+        new dev.mikoto2000.rei.core.chat.AgentRunContext("test", "conversation", root, "project");
     context.setRunContext(owner);
     var properties = new dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties();
     properties.setEnabled(compressionEnabled);
@@ -94,41 +93,40 @@ class ProgressFeedbackTest {
     var previousPrefix = new java.util.concurrent.atomic.AtomicReference<List<Message>>(List.of());
     var calls = new AtomicInteger();
     ChatModel delegate =
-        model(
-            sent -> {
-              int n = calls.incrementAndGet();
-              var messages = sent.getInstructions();
-              assertThat(messages.get(0).getText()).isEqualTo("Fixed system policy");
-              assertThat(messages.get(1).getText()).isEqualTo("Fixed project policy");
-              assertThat(messages.get(2).getMetadata()).containsEntry("rei.reviewGuidance", true);
-              assertThat(messages.get(2).getText()).contains("beginRepositoryReview");
-              assertThat(messages.getLast().getMetadata()).containsEntry("rei.workingSet", true);
-              var feedback = messages.get(messages.size() - 2);
-              assertThat(feedback).isInstanceOf(SystemMessage.class);
-              assertThat(feedback.getMetadata()).containsEntry("rei.progressFeedback", true);
-              assertThat(feedback.getText())
-                  .contains("reviewedRanges=" + n)
-                  .doesNotContain("For a new whole-repository review");
-              if (n == 2) assertThat(feedback.getText()).contains("no-progress iterations=1/4");
-              if (n == 3) assertThat(feedback.getText()).doesNotContain("Progress feedback");
-              var prefix = messages.subList(0, messages.size() - 2);
-              assertThat(prefix.subList(0, previousPrefix.get().size()))
-                  .containsExactlyElementsOf(previousPrefix.get());
-              assertThat(prefix).hasSize(6 + 2 * (n - 1));
-              for (int i = 6; i < prefix.size(); i += 2) {
-                var assistant = (AssistantMessage) prefix.get(i);
-                var result = (ToolResponseMessage) prefix.get(i + 1);
-                assertThat(result.getResponses().getFirst().id())
-                    .isEqualTo(assistant.getToolCalls().getFirst().id());
-              }
-              previousPrefix.set(List.copyOf(prefix));
-              return n == 3
-                  ? new AssistantMessage("Intermediate findings saved")
-                  : call(
-                      n,
-                      n == 1 ? "readMultiFile" : "writeTextFile",
-                      n == 1 ? READ_ARGUMENTS : "{\"path\":\"review.md\"}");
-            });
+        model(sent -> {
+          int n = calls.incrementAndGet();
+          var messages = sent.getInstructions();
+          assertThat(messages.get(0).getText()).isEqualTo("Fixed system policy");
+          assertThat(messages.get(1).getText()).isEqualTo("Fixed project policy");
+          assertThat(messages.get(2).getMetadata()).containsEntry("rei.reviewGuidance", true);
+          assertThat(messages.get(2).getText()).contains("beginRepositoryReview");
+          assertThat(messages.getLast().getMetadata()).containsEntry("rei.workingSet", true);
+          var feedback = messages.get(messages.size() - 2);
+          assertThat(feedback).isInstanceOf(SystemMessage.class);
+          assertThat(feedback.getMetadata()).containsEntry("rei.progressFeedback", true);
+          assertThat(feedback.getText())
+              .contains("reviewedRanges=" + n)
+              .doesNotContain("For a new whole-repository review");
+          if (n == 2) assertThat(feedback.getText()).contains("no-progress iterations=1/4");
+          if (n == 3) assertThat(feedback.getText()).doesNotContain("Progress feedback");
+          var prefix = messages.subList(0, messages.size() - 2);
+          assertThat(prefix.subList(0, previousPrefix.get().size()))
+              .containsExactlyElementsOf(previousPrefix.get());
+          assertThat(prefix).hasSize(6 + 2 * (n - 1));
+          for (int i = 6; i < prefix.size(); i += 2) {
+            var assistant = (AssistantMessage) prefix.get(i);
+            var result = (ToolResponseMessage) prefix.get(i + 1);
+            assertThat(result.getResponses().getFirst().id())
+                .isEqualTo(assistant.getToolCalls().getFirst().id());
+          }
+          previousPrefix.set(List.copyOf(prefix));
+          return n == 3
+              ? new AssistantMessage("Intermediate findings saved")
+              : call(
+                  n,
+                  n == 1 ? "readMultiFile" : "writeTextFile",
+                  n == 1 ? READ_ARGUMENTS : "{\"path\":\"review.md\"}");
+        });
     new StagnationChatModel(delegate, assembler).stream(input).blockLast();
     assertThat(calls.get()).isEqualTo(3);
     assertThat(context.progressSnapshot().budget().stagnationReplans()).isEqualTo(2);
@@ -142,35 +140,32 @@ class ProgressFeedbackTest {
     var context = context();
     var calls = new AtomicInteger();
     ChatModel delegate =
-        model(
-            prompt -> {
-              int n = calls.incrementAndGet();
-              if (n == 2) {
-                assertThat(prompt.getInstructions().getFirst().getText()).isEqualTo("Fixed policy");
-                assertThat(prompt.getInstructions().getLast().getMetadata())
-                    .containsEntry("rei.progressFeedback", true);
-                assertThat(prompt.getContents())
-                    .contains("Progress feedback", "1/4", "DUPLICATE", "intermediate findings");
-                assertThat(
-                        prompt.getInstructions().stream()
-                            .filter(
-                                m ->
-                                    Boolean.TRUE.equals(
-                                        m.getMetadata().get("rei.progressFeedback")))
-                            .count())
-                    .isEqualTo(1);
-              }
-              if (n == 3) {
-                assertThat(context.detector().stagnationCount()).isZero();
-                assertThat(prompt.getContents()).doesNotContain("Progress feedback");
-              }
-              return n == 3
-                  ? new AssistantMessage("Intermediate findings saved")
-                  : call(
-                      n,
-                      n == 1 ? "readMultiFile" : "writeTextFile",
-                      n == 1 ? READ_ARGUMENTS : "{\"path\":\"review.md\"}");
-            });
+        model(prompt -> {
+          int n = calls.incrementAndGet();
+          if (n == 2) {
+            assertThat(prompt.getInstructions().getFirst().getText()).isEqualTo("Fixed policy");
+            assertThat(prompt.getInstructions().getLast().getMetadata())
+                .containsEntry("rei.progressFeedback", true);
+            assertThat(prompt.getContents())
+                .contains("Progress feedback", "1/4", "DUPLICATE", "intermediate findings");
+            assertThat(
+                    prompt.getInstructions().stream()
+                        .filter(
+                            m -> Boolean.TRUE.equals(m.getMetadata().get("rei.progressFeedback")))
+                        .count())
+                .isEqualTo(1);
+          }
+          if (n == 3) {
+            assertThat(context.detector().stagnationCount()).isZero();
+            assertThat(prompt.getContents()).doesNotContain("Progress feedback");
+          }
+          return n == 3
+              ? new AssistantMessage("Intermediate findings saved")
+              : call(
+                  n,
+                  n == 1 ? "readMultiFile" : "writeTextFile",
+                  n == 1 ? READ_ARGUMENTS : "{\"path\":\"review.md\"}");
+        });
     dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler = null;
     if (assembled) {
       context.setRunContext(
@@ -198,14 +193,13 @@ class ProgressFeedbackTest {
     var context = context();
     var calls = new AtomicInteger();
     ChatModel delegate =
-        model(
-            prompt -> {
-              int n = calls.incrementAndGet();
-              if (n > 1)
-                assertThat(prompt.getContents())
-                    .contains("Progress feedback", (n - 1) + "/4", "DUPLICATE");
-              return call(n, "readMultiFile", READ_ARGUMENTS);
-            });
+        model(prompt -> {
+          int n = calls.incrementAndGet();
+          if (n > 1)
+            assertThat(prompt.getContents())
+                .contains("Progress feedback", (n - 1) + "/4", "DUPLICATE");
+          return call(n, "readMultiFile", READ_ARGUMENTS);
+        });
     assertThatThrownBy(() -> new StagnationChatModel(delegate).stream(prompt(context)).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
         .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
@@ -224,17 +218,16 @@ class ProgressFeedbackTest {
               .readValue(input, RunExecutionContext.ProgressState.class));
     }
     ChatModel delegate =
-        model(
-            prompt -> {
-              assertThat(prompt.getContents())
-                  .contains(
-                      "Progress feedback",
-                      "5/4",
-                      "restorationReads=8",
-                      "replansUsed=2",
-                      "coverage is not proof");
-              throw new java.util.concurrent.CancellationException();
-            });
+        model(prompt -> {
+          assertThat(prompt.getContents())
+              .contains(
+                  "Progress feedback",
+                  "5/4",
+                  "restorationReads=8",
+                  "replansUsed=2",
+                  "coverage is not proof");
+          throw new java.util.concurrent.CancellationException();
+        });
     assertThatThrownBy(() -> new StagnationChatModel(delegate).stream(prompt(context)).blockLast())
         .isInstanceOf(java.util.concurrent.CancellationException.class);
     assertThat(context.progressSnapshot().budget().stagnationReplans()).isEqualTo(2);
@@ -255,15 +248,14 @@ class ProgressFeedbackTest {
                 .toolContext(Map.of(RunExecutionContext.KEY, context))
                 .build());
     ChatModel delegate =
-        model(
-            prompt -> {
-              int n = calls.incrementAndGet();
-              if (n == 2) assertThat(prompt.getContents()).contains("Progress feedback");
-              if (n == 3) assertThat(prompt.getContents()).doesNotContain("Progress feedback");
-              return n == 3
-                  ? new AssistantMessage("partial report")
-                  : call(n, "readMultiFile", READ_ARGUMENTS);
-            });
+        model(prompt -> {
+          int n = calls.incrementAndGet();
+          if (n == 2) assertThat(prompt.getContents()).contains("Progress feedback");
+          if (n == 3) assertThat(prompt.getContents()).doesNotContain("Progress feedback");
+          return n == 3
+              ? new AssistantMessage("partial report")
+              : call(n, "readMultiFile", READ_ARGUMENTS);
+        });
     new StagnationChatModel(delegate).stream(input).blockLast();
     assertThat(context.progressSnapshot().budget().stagnationReplans()).isEqualTo(2);
   }
@@ -274,7 +266,11 @@ class ProgressFeedbackTest {
     budget.tryConsumeStagnationReplan();
     budget.tryConsumeLlmCall();
     var evaluator = new ProgressEvaluator(root);
-    evaluator.afterTool("readMultiFile", READ_ARGUMENTS, PAGE, evaluator.beforeTool("readMultiFile", READ_ARGUMENTS));
+    evaluator.afterTool(
+        "readMultiFile",
+        READ_ARGUMENTS,
+        PAGE,
+        evaluator.beforeTool("readMultiFile", READ_ARGUMENTS));
     return new RunExecutionContext(
         "test", budget, evaluator, new AgentEventFactory(Clock.systemUTC()), e -> {});
   }

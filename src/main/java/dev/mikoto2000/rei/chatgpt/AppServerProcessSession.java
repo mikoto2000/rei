@@ -46,46 +46,44 @@ final class AppServerProcessSession implements PlanAppServerRpc.Session {
         new BufferedWriter(
             new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8));
     Thread.ofVirtual()
-        .start(
-            () -> {
-              try (var in = new BufferedInputStream(process.getInputStream())) {
-                var line = new ByteArrayOutputStream();
-                int total = 0, value;
-                while ((value = in.read()) != -1) {
-                  if (++total > 2 * 1024 * 1024 || line.size() >= 65536) throw new IOException();
-                  if (value == '\n') {
-                    if (!lines.offer(line.toString(StandardCharsets.UTF_8), 1, TimeUnit.SECONDS))
-                      throw new IOException();
-                    line.reset();
-                  } else line.write(value);
-                }
-                if (line.size() > 0
-                    && !lines.offer(line.toString(StandardCharsets.UTF_8), 1, TimeUnit.SECONDS))
+        .start(() -> {
+          try (var in = new BufferedInputStream(process.getInputStream())) {
+            var line = new ByteArrayOutputStream();
+            int total = 0, value;
+            while ((value = in.read()) != -1) {
+              if (++total > 2 * 1024 * 1024 || line.size() >= 65536) throw new IOException();
+              if (value == '\n') {
+                if (!lines.offer(line.toString(StandardCharsets.UTF_8), 1, TimeUnit.SECONDS))
                   throw new IOException();
-              } catch (IOException | InterruptedException | RuntimeException ignored) {
-                process.destroyForcibly();
-              } finally {
-                while (!lines.offer(EOF)) {
-                  lines.poll();
-                }
-              }
-            });
+                line.reset();
+              } else line.write(value);
+            }
+            if (line.size() > 0
+                && !lines.offer(line.toString(StandardCharsets.UTF_8), 1, TimeUnit.SECONDS))
+              throw new IOException();
+          } catch (IOException | InterruptedException | RuntimeException ignored) {
+            process.destroyForcibly();
+          } finally {
+            while (!lines.offer(EOF)) {
+              lines.poll();
+            }
+          }
+        });
     Thread.ofVirtual()
-        .start(
-            () -> {
-              try (var in = process.getErrorStream()) {
-                byte[] bytes = new byte[4096];
-                int total = 0, n;
-                while ((n = in.read(bytes)) != -1) {
-                  total += n;
-                  if (total > 1048576) {
-                    process.destroyForcibly();
-                    break;
-                  }
-                }
-              } catch (IOException ignored) {
+        .start(() -> {
+          try (var in = process.getErrorStream()) {
+            byte[] bytes = new byte[4096];
+            int total = 0, n;
+            while ((n = in.read(bytes)) != -1) {
+              total += n;
+              if (total > 1048576) {
+                process.destroyForcibly();
+                break;
               }
-            });
+            }
+          } catch (IOException ignored) {
+          }
+        });
   }
 
   /** ChatGPTとの連携に関する送信を処理する。 */
@@ -141,11 +139,10 @@ final class AppServerProcessSession implements PlanAppServerRpc.Session {
       kill.run();
       process.destroyForcibly();
     } finally {
-      owned.forEach(
-          (p, started) -> {
-            if (p.isAlive() && started.isPresent() && started.equals(p.info().startInstant()))
-              p.destroyForcibly();
-          });
+      owned.forEach((p, started) -> {
+        if (p.isAlive() && started.isPresent() && started.equals(p.info().startInstant()))
+          p.destroyForcibly();
+      });
       try {
         CompletableFuture.allOf(
                 owned.keySet().stream()

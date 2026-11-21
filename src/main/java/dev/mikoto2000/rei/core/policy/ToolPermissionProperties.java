@@ -25,13 +25,11 @@ public record ToolPermissionProperties(
     denied = denied == null ? Set.of(ActionCapability.DESTRUCTIVE) : Set.copyOf(denied);
     var copy = new HashMap<String, Set<ActionCapability>>();
     if (capabilities != null)
-      capabilities.forEach(
-          (name, values) -> {
-            if (name == null || name.isBlank() || values == null || values.isEmpty())
-              throw new IllegalArgumentException(
-                  "Tool capability classification must not be empty");
-            copy.put(name, Set.copyOf(values));
-          });
+      capabilities.forEach((name, values) -> {
+        if (name == null || name.isBlank() || values == null || values.isEmpty())
+          throw new IllegalArgumentException("Tool capability classification must not be empty");
+        copy.put(name, Set.copyOf(values));
+      });
     capabilities = Map.copyOf(copy);
   }
 }

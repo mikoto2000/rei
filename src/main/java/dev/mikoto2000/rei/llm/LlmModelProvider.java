@@ -350,11 +350,10 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
             .build();
     return OpenAiChatModel.builder()
         .options(options)
-        .httpClientBuilderCustomizer(
-            builder ->
-                builder
-                    .interceptor(new ChatStreamTimeoutInterceptor(readTimeout.get()))
-                    .interceptor(new ShowUiSdkRequestInterceptor()))
+        .httpClientBuilderCustomizer(builder ->
+            builder
+                .interceptor(new ChatStreamTimeoutInterceptor(readTimeout.get()))
+                .interceptor(new ShowUiSdkRequestInterceptor()))
         .observationRegistry(ObservationRegistry.NOOP)
         .build();
   }

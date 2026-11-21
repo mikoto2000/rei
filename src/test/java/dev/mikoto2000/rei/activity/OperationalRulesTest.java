@@ -124,10 +124,10 @@ class OperationalRulesTest {
     Files.writeString(
         f,
         """
-      classificationRules:
-        - {id: z-rule, priority: 400, match: {processRegex: firefox, titleRegex: ChatGPT}, classify: {category: social, categoryConfidence: 0.9}}
-        - {id: a-rule, priority: 400, match: {processRegex: firefox, titleRegex: ChatGPT}, classify: {category: research, categoryConfidence: 0.9}}
-      """);
+        classificationRules:
+          - {id: z-rule, priority: 400, match: {processRegex: firefox, titleRegex: ChatGPT}, classify: {category: social, categoryConfidence: 0.9}}
+          - {id: a-rule, priority: 400, match: {processRegex: firefox, titleRegex: ChatGPT}, classify: {category: research, categoryConfidence: 0.9}}
+        """);
     var c =
         new OperationalRules(f)
             .classify(ActivityEvidenceClassifierTest.evidence("firefox", "ChatGPT"));
@@ -161,9 +161,9 @@ class OperationalRulesTest {
     Files.writeString(
         f,
         """
-      entertainmentRules:
-        - {id: my-tech, priority: 400, match: {serviceRegex: YouTube, titleRegex: Spring}, classify: {entertainmentDisposition: ENTERTAINMENT, confidence: 0.9}}
-      """);
+        entertainmentRules:
+          - {id: my-tech, priority: 400, match: {serviceRegex: YouTube, titleRegex: Spring}, classify: {entertainmentDisposition: ENTERTAINMENT, confidence: 0.9}}
+        """);
     var rules = new OperationalRules(f);
     assertEquals(
         EntertainmentDisposition.ENTERTAINMENT,

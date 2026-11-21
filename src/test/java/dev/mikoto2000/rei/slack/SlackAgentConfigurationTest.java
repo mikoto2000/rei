@@ -30,22 +30,20 @@ class SlackAgentConfigurationTest {
   void defaultsAndDisabledSlackNeverExposeExternalWriteTools() {
     new ApplicationContextRunner()
         .withUserConfiguration(SlackAgentConfiguration.class)
-        .run(
-            c -> {
-              assertThat(c).hasNotFailed();
-              assertThat(c).doesNotHaveBean(SlackAgentTools.class);
-            });
+        .run(c -> {
+          assertThat(c).hasNotFailed();
+          assertThat(c).doesNotHaveBean(SlackAgentTools.class);
+        });
     new ApplicationContextRunner()
         .withUserConfiguration(SlackAgentConfiguration.class)
         .withPropertyValues(
             "rei.slack.enabled=false",
             "rei.slack.agent-collaboration.enabled=true",
             "rei.backend-mode=false")
-        .run(
-            c -> {
-              assertThat(c).hasNotFailed();
-              assertThat(c).doesNotHaveBean(SlackAgentTools.class);
-            });
+        .run(c -> {
+          assertThat(c).hasNotFailed();
+          assertThat(c).doesNotHaveBean(SlackAgentTools.class);
+        });
   }
 
   /** Slackとの連携の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
@@ -101,16 +99,14 @@ class SlackAgentConfigurationTest {
         .withBean(
             dev.mikoto2000.rei.core.dependency.DependencyObservationService.class,
             () -> mock(dev.mikoto2000.rei.core.dependency.DependencyObservationService.class))
-        .run(
-            c -> {
-              assertThat(c).hasNotFailed();
-              var p = c.getBean(SlackAgentProperties.class);
-              assertThat(p.agent("tenten").botId()).isEqualTo("B2");
-              var repo = c.getBean(SlackAgentRepository.class);
-              var q = repo.create(owner, "call", "tenten", "question", "", 300, null, p);
-              bus.publish(
-                  new AgentEventFactory(clock).runCancelled("run", null).withOwnership(owner));
-              assertThat(repo.get(q.id()).state()).isEqualTo("CANCELLED");
-            });
+        .run(c -> {
+          assertThat(c).hasNotFailed();
+          var p = c.getBean(SlackAgentProperties.class);
+          assertThat(p.agent("tenten").botId()).isEqualTo("B2");
+          var repo = c.getBean(SlackAgentRepository.class);
+          var q = repo.create(owner, "call", "tenten", "question", "", 300, null, p);
+          bus.publish(new AgentEventFactory(clock).runCancelled("run", null).withOwnership(owner));
+          assertThat(repo.get(q.id()).state()).isEqualTo("CANCELLED");
+        });
   }
 }

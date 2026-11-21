@@ -128,8 +128,8 @@ class WebSearchAndReadServiceTest {
         .thenReturn(
             UrlContentFetchResult.success(
                 """
-        <html><body><nav>menu</nav><article><p>Readable content.</p></article><script>ignore()</script></body></html>
-        """,
+                <html><body><nav>menu</nav><article><p>Readable content.</p></article><script>ignore()</script></body></html>
+                """,
                 "text/html"));
 
     WebSearchAndReadResponse response =
@@ -261,10 +261,8 @@ class WebSearchAndReadServiceTest {
   void defaultsToConfiguredMaxResultsAndThreePageReads() throws Exception {
     List<WebSearchResult> results =
         java.util.stream.IntStream.rangeClosed(1, 5)
-            .mapToObj(
-                index ->
-                    new WebSearchResult(
-                        "T" + index, "https://example.com/" + index, "S" + index, null))
+            .mapToObj(index ->
+                new WebSearchResult("T" + index, "https://example.com/" + index, "S" + index, null))
             .toList();
     org.mockito.Mockito.when(webSearchService.search("query", 5)).thenReturn(results);
     org.mockito.Mockito.when(

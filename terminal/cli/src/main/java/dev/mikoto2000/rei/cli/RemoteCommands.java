@@ -1581,11 +1581,10 @@ public final class RemoteCommands {
                 ? ""
                 : "?"
                     + parameters.entrySet().stream()
-                        .map(
-                            entry ->
-                                BackendClient.segment(entry.getKey())
-                                    + "="
-                                    + BackendClient.segment(entry.getValue().toString()))
+                        .map(entry ->
+                            BackendClient.segment(entry.getKey())
+                                + "="
+                                + BackendClient.segment(entry.getValue().toString()))
                         .collect(java.util.stream.Collectors.joining("&"))));
   }
 
@@ -1595,152 +1594,317 @@ public final class RemoteCommands {
     return String.join(" ", words.subList(start, words.size()));
   }
 
-  private static Request secretaryConnection(List<String> words,String selectedProject,String selectedSession) {
-    String action=words.get(1);
-    boolean identified=!Set.of("connection-list","connection-configure","external-list","external-prepare").contains(action);
-    if(identified && words.size()<3)throw invalid();
-    var allowed=new HashSet<String>(Set.of("--project"));
-    switch(action) {
-      case "connection-list","connection-show","connection-auth","connection-poll","external-show" -> {}
-      case "connection-items","connection-history","external-list","external-history" -> allowed.add("--limit");
+  private static Request secretaryConnection(
+      List<String> words, String selectedProject, String selectedSession) {
+    String action = words.get(1);
+    boolean identified =
+        !Set.of("connection-list", "connection-configure", "external-list", "external-prepare")
+            .contains(action);
+    if (identified && words.size() < 3) throw invalid();
+    var allowed = new HashSet<String>(Set.of("--project"));
+    switch (action) {
+      case "connection-list",
+          "connection-show",
+          "connection-auth",
+          "connection-poll",
+          "external-show" -> {}
+      case "connection-items", "connection-history", "external-list", "external-history" ->
+          allowed.add("--limit");
       case "connection-disconnect" -> allowed.add("--connection-version");
-      case "connection-configure" -> allowed.addAll(Set.of("--session","--name","--service","--resource","--zone","--connection-version","--poll-seconds"));
-      case "connection-read" -> allowed.addAll(Set.of("--operation","--arguments"));
+      case "connection-configure" ->
+          allowed.addAll(
+              Set.of(
+                  "--session",
+                  "--name",
+                  "--service",
+                  "--resource",
+                  "--zone",
+                  "--connection-version",
+                  "--poll-seconds"));
+      case "connection-read" -> allowed.addAll(Set.of("--operation", "--arguments"));
       case "connection-task" -> allowed.add("--key");
       case "connection-authorize" -> allowed.add("--session");
-      case "external-prepare" -> allowed.addAll(Set.of("--connection","--key","--operation","--arguments"));
-      case "external-execute","external-cancel","external-verify" -> allowed.add("--revision");
+      case "external-prepare" ->
+          allowed.addAll(Set.of("--connection", "--key", "--operation", "--arguments"));
+      case "external-execute", "external-cancel", "external-verify" -> allowed.add("--revision");
       default -> throw invalid();
     }
-    var flags=action.equals("connection-configure")?Set.of("--connection-enabled","--import-candidates","--allow-model-content"):action.equals("connection-authorize")?Set.of("--force-auth"):Set.<String>of();
-    var opts=options(words,identified?3:2,allowed,flags);
-    String project=opts.getOrDefault("--project",selectedProject);if(project==null || project.isBlank())throw invalid();
-    String base="/api/v1/secretary/";
-    String path=base+(action.startsWith("connection-")?"connections":"external-actions")+(identified?"/"+id(words.get(2)):"");
-    var body=new LinkedHashMap<String,Object>();body.put("projectId",project);
-    if(action.equals("connection-configure")) {
-      var config=new LinkedHashMap<String,Object>();config.put("projectId",project);config.put("sessionId",opts.getOrDefault("--session",selectedSession));
-      config.put("name",opts.get("--name"));config.put("service",opts.get("--service"));config.put("resource",opts.get("--resource"));
-      config.put("enabled",Boolean.parseBoolean(opts.getOrDefault("--connection-enabled","false")));
-      config.put("importCandidates",Boolean.parseBoolean(opts.getOrDefault("--import-candidates","false")));
-      config.put("allowModelContent",Boolean.parseBoolean(opts.getOrDefault("--allow-model-content","false")));
-      config.put("pollSeconds",Integer.parseInt(opts.getOrDefault("--poll-seconds","300")));config.put("zone",opts.getOrDefault("--zone","Asia/Tokyo"));
-      return new Request("PUT",path,Map.of("config",config,"version",Long.parseLong(opts.getOrDefault("--connection-version","-1"))));
+    var flags =
+        action.equals("connection-configure")
+            ? Set.of("--connection-enabled", "--import-candidates", "--allow-model-content")
+            : action.equals("connection-authorize") ? Set.of("--force-auth") : Set.<String>of();
+    var opts = options(words, identified ? 3 : 2, allowed, flags);
+    String project = opts.getOrDefault("--project", selectedProject);
+    if (project == null || project.isBlank()) throw invalid();
+    String base = "/api/v1/secretary/";
+    String path =
+        base
+            + (action.startsWith("connection-") ? "connections" : "external-actions")
+            + (identified ? "/" + id(words.get(2)) : "");
+    var body = new LinkedHashMap<String, Object>();
+    body.put("projectId", project);
+    if (action.equals("connection-configure")) {
+      var config = new LinkedHashMap<String, Object>();
+      config.put("projectId", project);
+      config.put("sessionId", opts.getOrDefault("--session", selectedSession));
+      config.put("name", opts.get("--name"));
+      config.put("service", opts.get("--service"));
+      config.put("resource", opts.get("--resource"));
+      config.put(
+          "enabled", Boolean.parseBoolean(opts.getOrDefault("--connection-enabled", "false")));
+      config.put(
+          "importCandidates",
+          Boolean.parseBoolean(opts.getOrDefault("--import-candidates", "false")));
+      config.put(
+          "allowModelContent",
+          Boolean.parseBoolean(opts.getOrDefault("--allow-model-content", "false")));
+      config.put("pollSeconds", Integer.parseInt(opts.getOrDefault("--poll-seconds", "300")));
+      config.put("zone", opts.getOrDefault("--zone", "Asia/Tokyo"));
+      return new Request(
+          "PUT",
+          path,
+          Map.of(
+              "config",
+              config,
+              "version",
+              Long.parseLong(opts.getOrDefault("--connection-version", "-1"))));
     }
-    if(Set.of("connection-list","connection-show","external-list","external-show","connection-auth","connection-items","connection-history","external-history").contains(action)) {
-      if(action.equals("connection-auth"))path+="/auth";
-      if(action.endsWith("-items"))path+="/items";
-      if(action.endsWith("-history"))path+="/history";
-      var query=new LinkedHashMap<String,Object>();query.put("projectId",project);
-      if(opts.containsKey("--limit"))query.put("limit",Integer.parseInt(opts.get("--limit")));
-      return query(path,query);
+    if (Set.of(
+            "connection-list",
+            "connection-show",
+            "external-list",
+            "external-show",
+            "connection-auth",
+            "connection-items",
+            "connection-history",
+            "external-history")
+        .contains(action)) {
+      if (action.equals("connection-auth")) path += "/auth";
+      if (action.endsWith("-items")) path += "/items";
+      if (action.endsWith("-history")) path += "/history";
+      var query = new LinkedHashMap<String, Object>();
+      query.put("projectId", project);
+      if (opts.containsKey("--limit")) query.put("limit", Integer.parseInt(opts.get("--limit")));
+      return query(path, query);
     }
-    if(action.equals("connection-authorize")) {
-      body.put("sessionId",opts.getOrDefault("--session",selectedSession));body.put("force",Boolean.parseBoolean(opts.getOrDefault("--force-auth","false")));
-      body.put("connectionId",words.get(2));return post("/api/v1/google-operations/secretary/authorize",body);
+    if (action.equals("connection-authorize")) {
+      body.put("sessionId", opts.getOrDefault("--session", selectedSession));
+      body.put("force", Boolean.parseBoolean(opts.getOrDefault("--force-auth", "false")));
+      body.put("connectionId", words.get(2));
+      return post("/api/v1/google-operations/secretary/authorize", body);
     }
-    if(action.equals("connection-read") || action.equals("external-prepare")) {
-      body.put("operation",opts.get("--operation"));
+    if (action.equals("connection-read") || action.equals("external-prepare")) {
+      body.put("operation", opts.get("--operation"));
       try {
-        var node=COMMAND_JSON.readTree(opts.getOrDefault("--arguments","{}"));
-        if(!node.isObject() || node.size()>32)throw invalid();
-        for(var e:node.properties())if(!e.getValue().isTextual())throw invalid();
-        body.put("arguments",COMMAND_JSON.convertValue(node,Map.class));
-      } catch(java.io.IOException invalidJson) { throw invalid(); }
-      if(action.equals("external-prepare")) {body.put("connectionId",opts.get("--connection"));body.put("key",opts.get("--key"));return post(path,body);}
-      return post(path+"/read",body);
+        var node = COMMAND_JSON.readTree(opts.getOrDefault("--arguments", "{}"));
+        if (!node.isObject() || node.size() > 32) throw invalid();
+        for (var e : node.properties()) if (!e.getValue().isTextual()) throw invalid();
+        body.put("arguments", COMMAND_JSON.convertValue(node, Map.class));
+      } catch (java.io.IOException invalidJson) {
+        throw invalid();
+      }
+      if (action.equals("external-prepare")) {
+        body.put("connectionId", opts.get("--connection"));
+        body.put("key", opts.get("--key"));
+        return post(path, body);
+      }
+      return post(path + "/read", body);
     }
-    if(action.equals("connection-task")) { body.put("externalId",opts.get("--key"));return post(path+"/tasks",body); }
-    if(action.equals("connection-disconnect")) {
-      if(!opts.containsKey("--connection-version"))throw invalid();
-      body.put("revision",Long.parseLong(opts.get("--connection-version")));return post(path+"/disconnect",body);
+    if (action.equals("connection-task")) {
+      body.put("externalId", opts.get("--key"));
+      return post(path + "/tasks", body);
     }
-    if(action.startsWith("external-")) {
-      if(!opts.containsKey("--revision"))throw invalid();body.put("revision",Long.parseLong(opts.get("--revision")));
-      return post(path+"/"+action.substring(9),body);
+    if (action.equals("connection-disconnect")) {
+      if (!opts.containsKey("--connection-version")) throw invalid();
+      body.put("revision", Long.parseLong(opts.get("--connection-version")));
+      return post(path + "/disconnect", body);
     }
-    return post(path+"/poll",body);
+    if (action.startsWith("external-")) {
+      if (!opts.containsKey("--revision")) throw invalid();
+      body.put("revision", Long.parseLong(opts.get("--revision")));
+      return post(path + "/" + action.substring(9), body);
+    }
+    return post(path + "/poll", body);
   }
 
-  private static Request secretaryExecution(List<String> words,String selectedProject,String selectedSession) {
-    String action=words.get(1);
-    boolean identified=Set.of("work-add","work-show","work-mode","work-history","work-start","work-cancel","work-suspend","work-resume","work-verify").contains(action);
-    if(identified && words.size()<3)throw invalid();
-    var allowed=new HashSet<String>(Set.of("--project"));
-    switch(action) {
-      case "autonomy-settings","autonomy-status","autonomy-check","work-show","work-mode" -> {}
-      case "autonomy-configure" -> allowed.addAll(Set.of("--session","--max-level","--auto-kind","--max-concurrent","--max-seconds","--max-llm-calls","--max-daily-calls","--max-retries"));
-      case "work-list","work-history" -> allowed.add("--limit");
-      case "work-add" -> allowed.addAll(Set.of("--revision","--key","--kind","--status","--goal"));
-      case "work-start","work-cancel","work-suspend","work-resume","work-verify" -> allowed.add("--revision");
+  private static Request secretaryExecution(
+      List<String> words, String selectedProject, String selectedSession) {
+    String action = words.get(1);
+    boolean identified =
+        Set.of(
+                "work-add",
+                "work-show",
+                "work-mode",
+                "work-history",
+                "work-start",
+                "work-cancel",
+                "work-suspend",
+                "work-resume",
+                "work-verify")
+            .contains(action);
+    if (identified && words.size() < 3) throw invalid();
+    var allowed = new HashSet<String>(Set.of("--project"));
+    switch (action) {
+      case "autonomy-settings", "autonomy-status", "autonomy-check", "work-show", "work-mode" -> {}
+      case "autonomy-configure" ->
+          allowed.addAll(
+              Set.of(
+                  "--session",
+                  "--max-level",
+                  "--auto-kind",
+                  "--max-concurrent",
+                  "--max-seconds",
+                  "--max-llm-calls",
+                  "--max-daily-calls",
+                  "--max-retries"));
+      case "work-list", "work-history" -> allowed.add("--limit");
+      case "work-add" ->
+          allowed.addAll(Set.of("--revision", "--key", "--kind", "--status", "--goal"));
+      case "work-start", "work-cancel", "work-suspend", "work-resume", "work-verify" ->
+          allowed.add("--revision");
       default -> throw invalid();
     }
-    var options=options(words,identified?3:2,allowed,action.equals("autonomy-configure")?Set.of("--autonomy-enabled","--auto-prepare"):Set.of());
-    String project=options.getOrDefault("--project",selectedProject);
-    if(project==null || project.isBlank())throw invalid();
-    String base="/api/v1/secretary/";
-    if(action.equals("autonomy-settings") || action.equals("autonomy-status"))return query(base+"autonomy/"+action.substring(9),Map.of("projectId",project));
-    if(action.equals("autonomy-check"))return post(base+"autonomy/check",Map.of());
-    if(action.equals("autonomy-configure")) {
-      var body=new LinkedHashMap<String,Object>();body.put("projectId",project);
-      body.put("enabled",Boolean.parseBoolean(options.getOrDefault("--autonomy-enabled","false")));
-      body.put("sessionId",options.getOrDefault("--session",selectedSession));
-      body.put("autoPrepare",Boolean.parseBoolean(options.getOrDefault("--auto-prepare","false")));
-      body.put("autoKind",options.getOrDefault("--auto-kind","PREPARE"));
-      String[][] fields={{"maxLevel","--max-level","1"},{"maxConcurrent","--max-concurrent","1"},{"maxSeconds","--max-seconds","300"},{"maxLlmCalls","--max-llm-calls","8"},{"maxDailyCalls","--max-daily-calls","32"},{"maxRetries","--max-retries","1"}};
-      for(var field:fields)body.put(field[0],Integer.parseInt(options.getOrDefault(field[1],field[2])));
-      return new Request("PUT",base+"autonomy/settings",body);
+    var options =
+        options(
+            words,
+            identified ? 3 : 2,
+            allowed,
+            action.equals("autonomy-configure")
+                ? Set.of("--autonomy-enabled", "--auto-prepare")
+                : Set.of());
+    String project = options.getOrDefault("--project", selectedProject);
+    if (project == null || project.isBlank()) throw invalid();
+    String base = "/api/v1/secretary/";
+    if (action.equals("autonomy-settings") || action.equals("autonomy-status"))
+      return query(base + "autonomy/" + action.substring(9), Map.of("projectId", project));
+    if (action.equals("autonomy-check")) return post(base + "autonomy/check", Map.of());
+    if (action.equals("autonomy-configure")) {
+      var body = new LinkedHashMap<String, Object>();
+      body.put("projectId", project);
+      body.put(
+          "enabled", Boolean.parseBoolean(options.getOrDefault("--autonomy-enabled", "false")));
+      body.put("sessionId", options.getOrDefault("--session", selectedSession));
+      body.put(
+          "autoPrepare", Boolean.parseBoolean(options.getOrDefault("--auto-prepare", "false")));
+      body.put("autoKind", options.getOrDefault("--auto-kind", "PREPARE"));
+      String[][] fields = {
+        {"maxLevel", "--max-level", "1"},
+        {"maxConcurrent", "--max-concurrent", "1"},
+        {"maxSeconds", "--max-seconds", "300"},
+        {"maxLlmCalls", "--max-llm-calls", "8"},
+        {"maxDailyCalls", "--max-daily-calls", "32"},
+        {"maxRetries", "--max-retries", "1"}
+      };
+      for (var field : fields)
+        body.put(field[0], Integer.parseInt(options.getOrDefault(field[1], field[2])));
+      return new Request("PUT", base + "autonomy/settings", body);
     }
-    if(action.equals("work-show"))return query(base+"executions/"+id(words.get(2)),Map.of("projectId",project));
-    if(action.equals("work-mode"))return query(base+"executions/"+id(words.get(2))+"/mode",Map.of("projectId",project));
-    if(action.equals("work-list") || action.equals("work-history")) {
-      int limit=Integer.parseInt(options.getOrDefault("--limit","100"));if(limit<1 || limit>1000)throw invalid();
-      return query(base+"executions"+(identified?"/"+id(words.get(2))+"/history":""),Map.of("projectId",project,"limit",limit));
+    if (action.equals("work-show"))
+      return query(base + "executions/" + id(words.get(2)), Map.of("projectId", project));
+    if (action.equals("work-mode"))
+      return query(base + "executions/" + id(words.get(2)) + "/mode", Map.of("projectId", project));
+    if (action.equals("work-list") || action.equals("work-history")) {
+      int limit = Integer.parseInt(options.getOrDefault("--limit", "100"));
+      if (limit < 1 || limit > 1000) throw invalid();
+      return query(
+          base + "executions" + (identified ? "/" + id(words.get(2)) + "/history" : ""),
+          Map.of("projectId", project, "limit", limit));
     }
-    if(!options.containsKey("--revision"))throw invalid();long revision=Long.parseLong(options.get("--revision"));if(revision<0)throw invalid();
-    var body=new LinkedHashMap<String,Object>();body.put("projectId",project);
-    if(action.equals("work-add")) {
-      if(!options.containsKey("--key"))throw invalid();
-      String kind=options.getOrDefault("--kind","PREPARE");
-      if(!Set.of("RESEARCH","ORGANIZE","SUMMARY","PREPARE","STATUS","DRAFT","UPDATE_TASK","GOAL","ROUTINE").contains(kind))throw invalid();
-      body.put("taskId",words.get(2));body.put("taskRevision",revision);body.put("key",options.get("--key"));body.put("kind",kind);
-      body.put("targetStatus",kind.equals("UPDATE_TASK")?options.getOrDefault("--status","OPEN"):null);body.put("goalId",options.get("--goal"));
-      return post(base+"executions",body);
+    if (!options.containsKey("--revision")) throw invalid();
+    long revision = Long.parseLong(options.get("--revision"));
+    if (revision < 0) throw invalid();
+    var body = new LinkedHashMap<String, Object>();
+    body.put("projectId", project);
+    if (action.equals("work-add")) {
+      if (!options.containsKey("--key")) throw invalid();
+      String kind = options.getOrDefault("--kind", "PREPARE");
+      if (!Set.of(
+              "RESEARCH",
+              "ORGANIZE",
+              "SUMMARY",
+              "PREPARE",
+              "STATUS",
+              "DRAFT",
+              "UPDATE_TASK",
+              "GOAL",
+              "ROUTINE")
+          .contains(kind)) throw invalid();
+      body.put("taskId", words.get(2));
+      body.put("taskRevision", revision);
+      body.put("key", options.get("--key"));
+      body.put("kind", kind);
+      body.put(
+          "targetStatus",
+          kind.equals("UPDATE_TASK") ? options.getOrDefault("--status", "OPEN") : null);
+      body.put("goalId", options.get("--goal"));
+      return post(base + "executions", body);
     }
-    body.put("revision",revision);return post(base+"executions/"+id(words.get(2))+"/"+action.substring(5),body);
+    body.put("revision", revision);
+    return post(base + "executions/" + id(words.get(2)) + "/" + action.substring(5), body);
   }
 
   /** 軽量CLIでの対話で用いる選択可能な設定を返す。 */
-  private static Request secretary(List<String> words, String selectedProject, String selectedSession) {
-    if(words.size()>1 && words.get(1).startsWith("life-")) {
-      String action=words.get(1);
-      var opts=options(words,2,action.equals("life-configure")?Set.of("--settings-json"):Set.of(),Set.of());
-      if(action.equals("life-settings")) return query("/api/v1/life/settings",Map.of());
-      if(action.equals("life-status")) return query("/api/v1/life/status",Map.of());
-      if(action.equals("life-configure")) {
+  private static Request secretary(
+      List<String> words, String selectedProject, String selectedSession) {
+    if (words.size() > 1 && words.get(1).startsWith("life-")) {
+      String action = words.get(1);
+      var opts =
+          options(
+              words,
+              2,
+              action.equals("life-configure") ? Set.of("--settings-json") : Set.of(),
+              Set.of());
+      if (action.equals("life-settings")) return query("/api/v1/life/settings", Map.of());
+      if (action.equals("life-status")) return query("/api/v1/life/status", Map.of());
+      if (action.equals("life-configure")) {
         try {
-          var node=COMMAND_JSON.readTree(opts.getOrDefault("--settings-json",""));
-          if(node==null || !node.isObject()) throw invalid();
-          return new Request("PUT","/api/v1/life/settings",Map.of("settings",COMMAND_JSON.convertValue(node,Map.class)));
-        } catch(java.io.IOException error) { throw invalid(); }
+          var node = COMMAND_JSON.readTree(opts.getOrDefault("--settings-json", ""));
+          if (node == null || !node.isObject()) throw invalid();
+          return new Request(
+              "PUT",
+              "/api/v1/life/settings",
+              Map.of("settings", COMMAND_JSON.convertValue(node, Map.class)));
+        } catch (java.io.IOException error) {
+          throw invalid();
+        }
       }
       throw invalid();
     }
 
-    if(words.size()>1 && (words.get(1).startsWith("connection-") || words.get(1).startsWith("external-"))) return secretaryConnection(words,selectedProject,selectedSession);
-    if(words.size()>1 && (words.get(1).startsWith("autonomy-") || words.get(1).startsWith("work-")))
-      return secretaryExecution(words,selectedProject,selectedSession);
+    if (words.size() > 1
+        && (words.get(1).startsWith("connection-") || words.get(1).startsWith("external-")))
+      return secretaryConnection(words, selectedProject, selectedSession);
+    if (words.size() > 1
+        && (words.get(1).startsWith("autonomy-") || words.get(1).startsWith("work-")))
+      return secretaryExecution(words, selectedProject, selectedSession);
     String action = words.size() > 1 ? words.get(1) : "list";
     boolean identified =
         Set.of(
-                "show", "sources", "history", "related", "update", "approve", "done", "cancel",
-                "suggestion", "suggestion-history", "feedback", "briefing-show")
+                "show",
+                "sources",
+                "history",
+                "related",
+                "update",
+                "approve",
+                "done",
+                "cancel",
+                "suggestion",
+                "suggestion-history",
+                "feedback",
+                "briefing-show")
             .contains(action);
     if (identified && words.size() < 3) throw invalid();
     Set<String> allowed = new HashSet<>(Set.of("--project"));
     switch (action) {
-      case "settings", "followup-status", "check", "orchestrator-settings", "orchestrator-status",
-          "suggest", "release", "suggestion", "preparation" -> {}
+      case "settings",
+          "followup-status",
+          "check",
+          "orchestrator-settings",
+          "orchestrator-status",
+          "suggest",
+          "release",
+          "suggestion",
+          "preparation" -> {}
       case "suggestions", "suggestion-history" -> allowed.add("--limit");
       case "feedback" -> allowed.addAll(Set.of("--revision", "--reaction", "--delay-seconds"));
       case "orchestrator-configure" ->
@@ -1778,38 +1942,79 @@ public final class RemoteCommands {
             allowed,
             action.equals("configure")
                 ? Set.of("--watch-enabled", "--notifications")
-                : action.equals("meeting-confirm") ? Set.of("--review")
-                : Set.of("briefing", "review", "briefing-generate", "review-generate", "briefing-show").contains(action) ? Set.of("--json")
-                : action.equals("orchestrator-configure")
-                    ? Set.of("--proposals-enabled", "--stopped")
-                    : Set.of());
-    if (options.containsKey("--project") && Set.of("briefing-settings", "briefing-check", "briefing-notifications").contains(action)) throw invalid();
-    if (!options.containsKey("--project") && Set.of("briefing", "review", "briefing-generate", "review-generate", "briefing-history", "briefing-show", "briefing-clear", "briefing-settings", "briefing-check", "briefing-notifications").contains(action)) {
+                : action.equals("meeting-confirm")
+                    ? Set.of("--review")
+                    : Set.of(
+                                "briefing",
+                                "review",
+                                "briefing-generate",
+                                "review-generate",
+                                "briefing-show")
+                            .contains(action)
+                        ? Set.of("--json")
+                        : action.equals("orchestrator-configure")
+                            ? Set.of("--proposals-enabled", "--stopped")
+                            : Set.of());
+    if (options.containsKey("--project")
+        && Set.of("briefing-settings", "briefing-check", "briefing-notifications").contains(action))
+      throw invalid();
+    if (!options.containsKey("--project")
+        && Set.of(
+                "briefing",
+                "review",
+                "briefing-generate",
+                "review-generate",
+                "briefing-history",
+                "briefing-show",
+                "briefing-clear",
+                "briefing-settings",
+                "briefing-check",
+                "briefing-notifications")
+            .contains(action)) {
       var parameters = new LinkedHashMap<String, Object>();
-      if (options.containsKey("--date")) parameters.put("date", java.time.LocalDate.parse(options.get("--date")).toString());
-      if (action.equals("briefing") || action.equals("review")) return query("/api/v1/secretary/" + action, parameters);
+      if (options.containsKey("--date"))
+        parameters.put("date", java.time.LocalDate.parse(options.get("--date")).toString());
+      if (action.equals("briefing") || action.equals("review"))
+        return query("/api/v1/secretary/" + action, parameters);
       if (action.endsWith("-generate")) {
-        String key = options.get("--key"); if (key == null || key.isBlank() || key.length() > 128) throw invalid();
-        parameters.put("key", key); parameters.put("review", action.equals("review-generate"));
+        String key = options.get("--key");
+        if (key == null || key.isBlank() || key.length() > 128) throw invalid();
+        parameters.put("key", key);
+        parameters.put("review", action.equals("review-generate"));
         return post("/api/v1/secretary/briefings/generate", parameters);
       }
-      if (action.equals("briefing-show")) return query("/api/v1/secretary/briefings/" + id(words.get(2)), Map.of());
-      if (action.equals("briefing-clear")) return post("/api/v1/secretary/briefings/delete", Map.of());
-      if (action.equals("briefing-settings")) return query("/api/v1/secretary/briefings/settings", Map.of());
-      if (action.equals("briefing-check")) return post("/api/v1/secretary/briefings/check", Map.of());
-      int limit = Integer.parseInt(options.getOrDefault("--limit", "20")); if (limit < 1 || limit > 100) throw invalid();
-      return query("/api/v1/secretary/briefings" + (action.equals("briefing-notifications") ? "/notifications" : ""), Map.of("limit", limit));
+      if (action.equals("briefing-show"))
+        return query("/api/v1/secretary/briefings/" + id(words.get(2)), Map.of());
+      if (action.equals("briefing-clear"))
+        return post("/api/v1/secretary/briefings/delete", Map.of());
+      if (action.equals("briefing-settings"))
+        return query("/api/v1/secretary/briefings/settings", Map.of());
+      if (action.equals("briefing-check"))
+        return post("/api/v1/secretary/briefings/check", Map.of());
+      int limit = Integer.parseInt(options.getOrDefault("--limit", "20"));
+      if (limit < 1 || limit > 100) throw invalid();
+      return query(
+          "/api/v1/secretary/briefings"
+              + (action.equals("briefing-notifications") ? "/notifications" : ""),
+          Map.of("limit", limit));
     }
     if (action.equals("meeting-confirm")) {
       String key = options.get("--key");
       if (key == null || key.isBlank() || key.length() > 128) throw invalid();
-      var selected = options.containsKey("--select") ? List.of(options.get("--select").split(",", -1)) : List.<String>of();
-      if (selected.size() > 3 || selected.stream().anyMatch(String::isBlank) || new HashSet<>(selected).size() != selected.size()) throw invalid();
+      var selected =
+          options.containsKey("--select")
+              ? List.of(options.get("--select").split(",", -1))
+              : List.<String>of();
+      if (selected.size() > 3
+          || selected.stream().anyMatch(String::isBlank)
+          || new HashSet<>(selected).size() != selected.size()) throw invalid();
       var body = new LinkedHashMap<String, Object>();
       if (options.containsKey("--project")) body.put("projectId", options.get("--project"));
       body.put("review", options.containsKey("--review"));
-      body.put("key", key); body.put("selected", selected);
-      if (options.containsKey("--date")) body.put("date", java.time.LocalDate.parse(options.get("--date")).toString());
+      body.put("key", key);
+      body.put("selected", selected);
+      if (options.containsKey("--date"))
+        body.put("date", java.time.LocalDate.parse(options.get("--date")).toString());
       return post("/api/v1/secretary/meetings/confirm", body);
     }
     String project = options.getOrDefault("--project", selectedProject);
@@ -1818,7 +2023,8 @@ public final class RemoteCommands {
     String base = "/api/v1/secretary/tasks";
     String orchestration = "/api/v1/secretary/orchestrator";
     String proposals = "/api/v1/secretary/suggestions";
-    if (action.equals("preparation")) return query("/api/v1/secretary/preparation", Map.of("projectId", project));
+    if (action.equals("preparation"))
+      return query("/api/v1/secretary/preparation", Map.of("projectId", project));
     if (action.equals("orchestrator-settings") || action.equals("orchestrator-status"))
       return query(
           orchestration + (action.endsWith("settings") ? "/settings" : "/status"),
@@ -1885,12 +2091,17 @@ public final class RemoteCommands {
       String key = options.get("--key");
       if (key == null || key.isBlank() || key.length() > 128) throw invalid();
       var body = new LinkedHashMap<String, Object>();
-      body.put("projectId", project); body.put("review", action.equals("review-generate")); body.put("key", key);
-      if (options.containsKey("--date")) body.put("date", java.time.LocalDate.parse(options.get("--date")).toString());
+      body.put("projectId", project);
+      body.put("review", action.equals("review-generate"));
+      body.put("key", key);
+      if (options.containsKey("--date"))
+        body.put("date", java.time.LocalDate.parse(options.get("--date")).toString());
       return post("/api/v1/secretary/briefings/generate", body);
     }
-    if (action.equals("briefing-show")) return query("/api/v1/secretary/briefings/" + id(words.get(2)), Map.of("projectId", project));
-    if (action.equals("briefing-clear")) return post("/api/v1/secretary/briefings/delete", Map.of("projectId", project));
+    if (action.equals("briefing-show"))
+      return query("/api/v1/secretary/briefings/" + id(words.get(2)), Map.of("projectId", project));
+    if (action.equals("briefing-clear"))
+      return post("/api/v1/secretary/briefings/delete", Map.of("projectId", project));
     if (action.equals("briefing-history")) {
       int limit = Integer.parseInt(options.getOrDefault("--limit", "20"));
       if (limit < 1 || limit > 100) throw invalid();

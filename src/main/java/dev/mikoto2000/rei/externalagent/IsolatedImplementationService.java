@@ -262,7 +262,8 @@ public final class IsolatedImplementationService {
     String baseline = clean(root, deadline, cancelled);
     Files.createDirectories(storage);
     try (var files = Files.list(storage)) {
-      if (files.map(Path::getFileName)
+      if (files
+              .map(Path::getFileName)
               .filter(name -> name != null && name.toString().endsWith(".json"))
               .limit(17)
               .count()
@@ -348,11 +349,10 @@ public final class IsolatedImplementationService {
           allowed.add(ExternalAgentRequest.resolveTarget(worktree, name));
         manifest
             .entrySet()
-            .removeIf(
-                entry -> {
-                  Path file = worktree.resolve(entry.getKey());
-                  return allowed.stream().noneMatch(file::startsWith);
-                });
+            .removeIf(entry -> {
+              Path file = worktree.resolve(entry.getKey());
+              return allowed.stream().noneMatch(file::startsWith);
+            });
         if (manifest.isEmpty())
           throw new IllegalArgumentException("No existing snapshot files in allowedPaths");
       }

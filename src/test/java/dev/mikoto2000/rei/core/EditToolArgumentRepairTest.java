@@ -77,13 +77,12 @@ class EditToolArgumentRepairTest {
 
   static Stream<Arguments> invalidProposals() {
     return Stream.of(false, true)
-        .flatMap(
-            guarded ->
-                Stream.of(
-                    Arguments.of(guarded, false, "missing"), Arguments.of(guarded, false, "null"),
-                    Arguments.of(guarded, false, "blank"), Arguments.of(guarded, false, "type"),
-                    Arguments.of(guarded, true, "missing"), Arguments.of(guarded, true, "null"),
-                    Arguments.of(guarded, true, "blank"), Arguments.of(guarded, true, "kind")));
+        .flatMap(guarded ->
+            Stream.of(
+                Arguments.of(guarded, false, "missing"), Arguments.of(guarded, false, "null"),
+                Arguments.of(guarded, false, "blank"), Arguments.of(guarded, false, "type"),
+                Arguments.of(guarded, true, "missing"), Arguments.of(guarded, true, "null"),
+                Arguments.of(guarded, true, "blank"), Arguments.of(guarded, true, "kind")));
   }
 
   @ParameterizedTest
@@ -248,20 +247,15 @@ class EditToolArgumentRepairTest {
     var schemas = tools.jackson.databind.json.JsonMapper.builder().build();
     var required =
         Arrays.stream(DeliveryToolRegistration.provider(new Tools()).getToolCallbacks())
-            .filter(
-                c ->
-                    !schemas
-                        .readTree(c.getToolDefinition().inputSchema())
-                        .path("required")
-                        .isEmpty())
+            .filter(c ->
+                !schemas.readTree(c.getToolDefinition().inputSchema()).path("required").isEmpty())
             .toList();
     assertThat(required.size()).isGreaterThan(15);
     for (var callback : required) {
       var definition = callback.getToolDefinition();
-      org.assertj.core.api.Assertions.assertThatThrownBy(
-              () ->
-                  dev.mikoto2000.rei.core.policy.ToolSchemaArguments.validate(
-                      definition.name(), definition.inputSchema(), "{}"))
+      org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+              dev.mikoto2000.rei.core.policy.ToolSchemaArguments.validate(
+                  definition.name(), definition.inputSchema(), "{}"))
           .as(definition.name())
           .isInstanceOf(dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException.class);
     }
@@ -342,10 +336,9 @@ class EditToolArgumentRepairTest {
     var events = new ArrayList<AgentEvent>();
     var callbacks =
         Arrays.stream(DeliveryToolRegistration.provider(setup.tools()).getToolCallbacks())
-            .filter(
-                c ->
-                    Set.of("proposeTextChangeSet", "proposeTextDocumentChangeSet", "countFileLines")
-                        .contains(c.getToolDefinition().name()))
+            .filter(c ->
+                Set.of("proposeTextChangeSet", "proposeTextDocumentChangeSet", "countFileLines")
+                    .contains(c.getToolDefinition().name()))
             .<ToolCallback>map(c -> new ToolEventCallbackDecorator(c, factory, events::add))
             .toList();
     var client =
@@ -409,20 +402,18 @@ class EditToolArgumentRepairTest {
 
   private long started(Fixture fixture, String name) {
     return fixture.events().stream()
-        .filter(
-            e ->
-                e.payload() instanceof ToolStartedPayload p
-                    && e.type() == AgentEventType.TOOL_STARTED
-                    && p.toolName().equals(name))
+        .filter(e ->
+            e.payload() instanceof ToolStartedPayload p
+                && e.type() == AgentEventType.TOOL_STARTED
+                && p.toolName().equals(name))
         .count();
   }
 
   private long invalidEvents(Fixture fixture) {
     return fixture.events().stream()
-        .filter(
-            e ->
-                e.payload() instanceof ToolFailedPayload p
-                    && "invalid_tool_arguments".equals(p.error().code()))
+        .filter(e ->
+            e.payload() instanceof ToolFailedPayload p
+                && "invalid_tool_arguments".equals(p.error().code()))
         .count();
   }
 

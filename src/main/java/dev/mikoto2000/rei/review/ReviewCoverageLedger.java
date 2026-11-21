@@ -309,23 +309,22 @@ public final class ReviewCoverageLedger {
             0,
             now,
             now);
-    return database.transaction(
-        db -> {
-          try (var query =
-              db.prepareStatement(
-                  "SELECT COUNT(*) FROM review_jobs WHERE project=? AND conversation=?")) {
-            query.setString(1, scope.project());
-            query.setString(2, scope.conversation());
-            try (var rows = query.executeQuery()) {
-              rows.next();
-              if (rows.getInt(1) >= 128)
-                throw new IllegalStateException("Review job capacity exceeded");
-            }
-          }
-          write(db, job, true);
-          writeParticipants(db, job);
-          return job;
-        });
+    return database.transaction(db -> {
+      try (var query =
+          db.prepareStatement(
+              "SELECT COUNT(*) FROM review_jobs WHERE project=? AND conversation=?")) {
+        query.setString(1, scope.project());
+        query.setString(2, scope.conversation());
+        try (var rows = query.executeQuery()) {
+          rows.next();
+          if (rows.getInt(1) >= 128)
+            throw new IllegalStateException("Review job capacity exceeded");
+        }
+      }
+      write(db, job, true);
+      writeParticipants(db, job);
+      return job;
+    });
   }
 
   /**
@@ -356,23 +355,22 @@ public final class ReviewCoverageLedger {
             0,
             now,
             now);
-    return database.transaction(
-        db -> {
-          try (var query =
-              db.prepareStatement(
-                  "SELECT COUNT(*) FROM review_jobs WHERE project=? AND conversation=?")) {
-            query.setString(1, scope.project());
-            query.setString(2, scope.conversation());
-            try (var rows = query.executeQuery()) {
-              rows.next();
-              if (rows.getInt(1) >= 128)
-                throw new IllegalStateException("Review job capacity exceeded");
-            }
-          }
-          write(db, job, true);
-          writeParticipants(db, job);
-          return job;
-        });
+    return database.transaction(db -> {
+      try (var query =
+          db.prepareStatement(
+              "SELECT COUNT(*) FROM review_jobs WHERE project=? AND conversation=?")) {
+        query.setString(1, scope.project());
+        query.setString(2, scope.conversation());
+        try (var rows = query.executeQuery()) {
+          rows.next();
+          if (rows.getInt(1) >= 128)
+            throw new IllegalStateException("Review job capacity exceeded");
+        }
+      }
+      write(db, job, true);
+      writeParticipants(db, job);
+      return job;
+    });
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
@@ -387,24 +385,22 @@ public final class ReviewCoverageLedger {
 
   /** 変更内容のレビューで用いる実行する作業一覧を返す。 */
   public List<String> jobs(Scope scope) {
-    return database.read(
-        db -> {
-          var ids = new ArrayList<String>();
-          try (var query =
-              db.prepareStatement(
-                  "SELECT j.id FROM review_participants p JOIN review_jobs j ON j.id=p.job WHERE p.project=? AND p.conversation=? AND p.run=? ORDER BY j.updated,j.id LIMIT 129")) {
-            query.setString(1, scope.project());
-            query.setString(2, scope.conversation());
-            query.setString(3, scope.run());
-            try (var rows = query.executeQuery()) {
-              while (rows.next()) ids.add(rows.getString(1));
-            }
-          }
-          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-          if (ids.size() > 128)
-            throw new IllegalStateException("Review job display capacity exceeded");
-          return List.copyOf(ids);
-        });
+    return database.read(db -> {
+      var ids = new ArrayList<String>();
+      try (var query =
+          db.prepareStatement(
+              "SELECT j.id FROM review_participants p JOIN review_jobs j ON j.id=p.job WHERE p.project=? AND p.conversation=? AND p.run=? ORDER BY j.updated,j.id LIMIT 129")) {
+        query.setString(1, scope.project());
+        query.setString(2, scope.conversation());
+        query.setString(3, scope.run());
+        try (var rows = query.executeQuery()) {
+          while (rows.next()) ids.add(rows.getString(1));
+        }
+      }
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
+      if (ids.size() > 128) throw new IllegalStateException("Review job display capacity exceeded");
+      return List.copyOf(ids);
+    });
   }
 
   /** 指定された内容を保存先へ反映するため、参加者一覧を書き込む。 */
@@ -503,33 +499,31 @@ public final class ReviewCoverageLedger {
           targets.forEach(target -> versions.put(target.path(), target.version()));
           var entries =
               job.ranges().stream()
-                  .map(
-                      entry ->
-                          versions.get(entry.range().path()).equals(entry.range().version())
-                              ? entry
-                              : new Entry(
-                                  entry.range(),
-                                  entry.delivered(),
-                                  entry.reviewed(),
-                                  true,
-                                  entry.assessment()))
+                  .map(entry ->
+                      versions.get(entry.range().path()).equals(entry.range().version())
+                          ? entry
+                          : new Entry(
+                              entry.range(),
+                              entry.delivered(),
+                              entry.reviewed(),
+                              true,
+                              entry.assessment()))
                   .toList();
           var findings =
               job.findings().stream()
-                  .map(
-                      finding ->
-                          finding.verificationStatus().equals("DISMISSED")
-                                  || versions.get(finding.path()).equals(finding.version())
-                              ? finding
-                              : new Finding(
-                                  finding.id(),
-                                  finding.severity(),
-                                  finding.path(),
-                                  finding.version(),
-                                  finding.location(),
-                                  finding.evidence(),
-                                  finding.assessment(),
-                                  "STALE"))
+                  .map(finding ->
+                      finding.verificationStatus().equals("DISMISSED")
+                              || versions.get(finding.path()).equals(finding.version())
+                          ? finding
+                          : new Finding(
+                              finding.id(),
+                              finding.severity(),
+                              finding.path(),
+                              finding.version(),
+                              finding.location(),
+                              finding.evidence(),
+                              finding.assessment(),
+                              "STALE"))
                   .toList();
           return new Job(
               job.id(),
@@ -646,13 +640,12 @@ public final class ReviewCoverageLedger {
           || !contains(range.span(), finding.location())
           || !"VERIFIED".equals(finding.verificationStatus())) throw invalid();
       if (saved.stream()
-          .noneMatch(
-              old ->
-                  old.path().equals(finding.path())
-                      && old.version().equals(finding.version())
-                      && old.location().equals(finding.location())
-                      && old.evidence().equals(finding.evidence())
-                      && old.assessment().equals(finding.assessment()))) saved.add(finding);
+          .noneMatch(old ->
+              old.path().equals(finding.path())
+                  && old.version().equals(finding.version())
+                  && old.location().equals(finding.location())
+                  && old.evidence().equals(finding.evidence())
+                  && old.assessment().equals(finding.assessment()))) saved.add(finding);
     }
     if (saved.size() > 2000) throw new IllegalStateException("Review finding capacity exceeded");
     var old = entries.get(index);
@@ -684,11 +677,10 @@ public final class ReviewCoverageLedger {
               transitioned.set(false);
               var matches =
                   job.findings().stream()
-                      .filter(
-                          f ->
-                              f.id().equals(findingId)
-                                  && f.path().equals(path)
-                                  && (evidence == null || f.evidence().equals(evidence)))
+                      .filter(f ->
+                          f.id().equals(findingId)
+                              && f.path().equals(path)
+                              && (evidence == null || f.evidence().equals(evidence)))
                       .toList();
               if (matches.size() != 1) throw invalid();
               var old = matches.getFirst();
@@ -723,33 +715,31 @@ public final class ReviewCoverageLedger {
             return job;
           var entries =
               job.ranges().stream()
-                  .map(
-                      entry ->
-                          entry.range().path().equals(path)
-                              ? new Entry(
-                                  entry.range(),
-                                  entry.delivered(),
-                                  entry.reviewed(),
-                                  true,
-                                  entry.assessment())
-                              : entry)
+                  .map(entry ->
+                      entry.range().path().equals(path)
+                          ? new Entry(
+                              entry.range(),
+                              entry.delivered(),
+                              entry.reviewed(),
+                              true,
+                              entry.assessment())
+                          : entry)
                   .toList();
           var findings =
               job.findings().stream()
-                  .map(
-                      finding ->
-                          finding.path().equals(path)
-                                  && !finding.verificationStatus().equals("DISMISSED")
-                              ? new Finding(
-                                  finding.id(),
-                                  finding.severity(),
-                                  finding.path(),
-                                  finding.version(),
-                                  finding.location(),
-                                  finding.evidence(),
-                                  finding.assessment(),
-                                  "STALE")
-                              : finding)
+                  .map(finding ->
+                      finding.path().equals(path)
+                              && !finding.verificationStatus().equals("DISMISSED")
+                          ? new Finding(
+                              finding.id(),
+                              finding.severity(),
+                              finding.path(),
+                              finding.version(),
+                              finding.location(),
+                              finding.evidence(),
+                              finding.assessment(),
+                              "STALE")
+                          : finding)
                   .toList();
           return copy(job, entries, findings, "STALE_VERSION");
         });
@@ -777,30 +767,29 @@ public final class ReviewCoverageLedger {
 
   /** 指定された変更を、管理中の情報へ反映する。 */
   private Job update(String id, Scope scope, UnaryOperator<Job> operation) {
-    return database.transaction(
-        db -> {
-          var old = read(db, id, scope);
-          var changed = operation.apply(old);
-          if (changed.equals(old)) return old;
-          if (!old.participants().contains(scope)) throw accessDenied();
-          var next =
-              new Job(
-                  old.id(),
-                  changed.owner(),
-                  changed.participants(),
-                  old.criteria(),
-                  old.criteriaVersion(),
-                  changed.targets(),
-                  changed.ranges(),
-                  changed.findings(),
-                  changed.status(),
-                  old.revision() + 1,
-                  old.createdAt(),
-                  Instant.now());
-          write(db, next, false);
-          if (!old.participants().equals(next.participants())) writeParticipants(db, next);
-          return next;
-        });
+    return database.transaction(db -> {
+      var old = read(db, id, scope);
+      var changed = operation.apply(old);
+      if (changed.equals(old)) return old;
+      if (!old.participants().contains(scope)) throw accessDenied();
+      var next =
+          new Job(
+              old.id(),
+              changed.owner(),
+              changed.participants(),
+              old.criteria(),
+              old.criteriaVersion(),
+              changed.targets(),
+              changed.ranges(),
+              changed.findings(),
+              changed.status(),
+              old.revision() + 1,
+              old.createdAt(),
+              Instant.now());
+      write(db, next, false);
+      if (!old.participants().equals(next.participants())) writeParticipants(db, next);
+      return next;
+    });
   }
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
@@ -927,13 +916,12 @@ public final class ReviewCoverageLedger {
         int cursor = required.start();
         var ranges =
             entries.stream()
-                .filter(
-                    e ->
-                        e.reviewed()
-                            && e.delivered()
-                            && !e.stale()
-                            && e.range().path().equals(target.path())
-                            && e.range().version().equals(target.version()))
+                .filter(e ->
+                    e.reviewed()
+                        && e.delivered()
+                        && !e.stale()
+                        && e.range().path().equals(target.path())
+                        && e.range().version().equals(target.version()))
                 .map(e -> e.range().span())
                 .sorted(Comparator.comparingInt(Span::start))
                 .toList();

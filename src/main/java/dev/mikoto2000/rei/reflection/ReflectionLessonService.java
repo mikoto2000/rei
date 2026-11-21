@@ -183,21 +183,19 @@ public class ReflectionLessonService {
   public Observation observe(AgentRunContext context, String kind, String id) {
     String scope = owner(context);
     Observation current = source(context, kind, id);
-    return tx.execute(
-        status -> {
-          var previous =
-              db.sql(
-                      "SELECT document FROM reflection_lesson_observations WHERE owner=? AND source=?")
-                  .params(scope, kind + ":" + id)
-                  .query(String.class)
-                  .optional();
-          if (previous.isPresent()) return decode(previous.get(), Observation.class);
-          quota("reflection_lesson_observations", 4096);
-          db.sql("INSERT INTO reflection_lesson_observations VALUES(?,?,?,?)")
-              .params(current.id(), scope, kind + ":" + id, encode(current))
-              .update();
-          return current;
-        });
+    return tx.execute(status -> {
+      var previous =
+          db.sql("SELECT document FROM reflection_lesson_observations WHERE owner=? AND source=?")
+              .params(scope, kind + ":" + id)
+              .query(String.class)
+              .optional();
+      if (previous.isPresent()) return decode(previous.get(), Observation.class);
+      quota("reflection_lesson_observations", 4096);
+      db.sql("INSERT INTO reflection_lesson_observations VALUES(?,?,?,?)")
+          .params(current.id(), scope, kind + ":" + id, encode(current))
+          .update();
+      return current;
+    });
   }
 
   /** 作業の振り返りで用いる取得元を返す。 */
@@ -274,41 +272,39 @@ public class ReflectionLessonService {
     var base = observation(scope, observationId);
     String text = note(correction);
     String documentHash = hash(encode(List.of(base.id(), base.sourceHash(), text)));
-    return tx.execute(
-        status -> {
-          String source = "USER_CORRECTION:" + correctionId;
-          var previous =
-              db.sql(
-                      "SELECT document FROM reflection_lesson_observations WHERE owner=? AND source=?")
-                  .params(scope, source)
-                  .query(String.class)
-                  .optional();
-          if (previous.isPresent()) {
-            var saved = decode(previous.get(), Observation.class);
-            if (!saved.sourceHash().equals(documentHash))
-              throw new IllegalArgumentException("Correction source cannot be replaced");
-            return saved;
-          }
-          quota("reflection_lesson_observations", 4096);
-          String id = "correction-" + hash(scope + ":" + correctionId);
-          var saved =
-              new Observation(
-                  id,
-                  "OBSERVATION",
-                  "USER_CORRECTION",
-                  id,
-                  base.origin(),
-                  base.actual(),
-                  text,
-                  documentHash,
-                  clock.instant(),
-                  base.complete(),
-                  false);
-          db.sql("INSERT INTO reflection_lesson_observations VALUES(?,?,?,?)")
-              .params(id, scope, source, encode(saved))
-              .update();
-          return saved;
-        });
+    return tx.execute(status -> {
+      String source = "USER_CORRECTION:" + correctionId;
+      var previous =
+          db.sql("SELECT document FROM reflection_lesson_observations WHERE owner=? AND source=?")
+              .params(scope, source)
+              .query(String.class)
+              .optional();
+      if (previous.isPresent()) {
+        var saved = decode(previous.get(), Observation.class);
+        if (!saved.sourceHash().equals(documentHash))
+          throw new IllegalArgumentException("Correction source cannot be replaced");
+        return saved;
+      }
+      quota("reflection_lesson_observations", 4096);
+      String id = "correction-" + hash(scope + ":" + correctionId);
+      var saved =
+          new Observation(
+              id,
+              "OBSERVATION",
+              "USER_CORRECTION",
+              id,
+              base.origin(),
+              base.actual(),
+              text,
+              documentHash,
+              clock.instant(),
+              base.complete(),
+              false);
+      db.sql("INSERT INTO reflection_lesson_observations VALUES(?,?,?,?)")
+          .params(id, scope, source, encode(saved))
+          .update();
+      return saved;
+    });
   }
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
@@ -333,33 +329,32 @@ public class ReflectionLessonService {
     if (ids == null || ids.isEmpty() || ids.size() > 16 || new HashSet<>(ids).size() != ids.size())
       throw new IllegalArgumentException("One to sixteen distinct observations required");
     var facts = ids.stream().map(id -> observation(scope, id)).toList();
-    return tx.execute(
-        status -> {
-          if (db.sql(
-                      "SELECT COUNT(*) FROM reflection_lesson_forgotten WHERE owner=? AND statement_hash=?")
-                  .params(scope, statementHash(text))
-                  .query(Integer.class)
-                  .single()
-              > 0) throw new IllegalArgumentException("Forgotten lesson cannot be regenerated");
-          quota("reflection_lessons", 1024);
-          var lesson =
-              new Lesson(
-                  "lesson-" + UUID.randomUUID(),
-                  "CANDIDATE_LESSON",
-                  kind,
-                  text,
-                  0,
-                  (int) facts.stream().map(Observation::origin).distinct().count(),
-                  ids,
-                  hash(encode(facts)),
-                  List.of(),
-                  List.of(),
-                  "");
-          db.sql("INSERT INTO reflection_lessons VALUES(?,?,?,?)")
-              .params(lesson.id(), scope, 0, encode(lesson))
-              .update();
-          return lesson;
-        });
+    return tx.execute(status -> {
+      if (db.sql(
+                  "SELECT COUNT(*) FROM reflection_lesson_forgotten WHERE owner=? AND statement_hash=?")
+              .params(scope, statementHash(text))
+              .query(Integer.class)
+              .single()
+          > 0) throw new IllegalArgumentException("Forgotten lesson cannot be regenerated");
+      quota("reflection_lessons", 1024);
+      var lesson =
+          new Lesson(
+              "lesson-" + UUID.randomUUID(),
+              "CANDIDATE_LESSON",
+              kind,
+              text,
+              0,
+              (int) facts.stream().map(Observation::origin).distinct().count(),
+              ids,
+              hash(encode(facts)),
+              List.of(),
+              List.of(),
+              "");
+      db.sql("INSERT INTO reflection_lessons VALUES(?,?,?,?)")
+          .params(lesson.id(), scope, 0, encode(lesson))
+          .update();
+      return lesson;
+    });
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
@@ -405,31 +400,30 @@ public class ReflectionLessonService {
               && !current.sourceKind().equals("USER_CORRECTION"))
         throw new IllegalArgumentException("Evidence does not support this lesson kind");
     }
-    return tx.execute(
-        status -> {
-          owner(context);
-          if (db.sql(
-                      "SELECT COUNT(*) FROM reflection_lesson_forgotten WHERE owner=? AND statement_hash=?")
-                  .params(scope, statementHash(lesson.statement()))
-                  .query(Integer.class)
-                  .single()
-              > 0) throw new IllegalArgumentException("Forgotten lesson cannot be validated");
-          return update(
-              scope,
-              lesson,
-              new Lesson(
-                  id,
-                  "VALIDATED_LESSON",
-                  lesson.kind(),
-                  lesson.statement(),
-                  revision + 1,
-                  lesson.occurrenceCount(),
-                  lesson.evidence(),
-                  lesson.evidenceHash(),
-                  lesson.counterexamples(),
-                  lesson.corrections(),
-                  reviewed));
-        });
+    return tx.execute(status -> {
+      owner(context);
+      if (db.sql(
+                  "SELECT COUNT(*) FROM reflection_lesson_forgotten WHERE owner=? AND statement_hash=?")
+              .params(scope, statementHash(lesson.statement()))
+              .query(Integer.class)
+              .single()
+          > 0) throw new IllegalArgumentException("Forgotten lesson cannot be validated");
+      return update(
+          scope,
+          lesson,
+          new Lesson(
+              id,
+              "VALIDATED_LESSON",
+              lesson.kind(),
+              lesson.statement(),
+              revision + 1,
+              lesson.occurrenceCount(),
+              lesson.evidence(),
+              lesson.evidenceHash(),
+              lesson.counterexamples(),
+              lesson.corrections(),
+              reviewed));
+    });
   }
 
   /** 作業の振り返りで用いるcounterexampleを返す。 */
@@ -487,29 +481,28 @@ public class ReflectionLessonService {
   /** 作業の振り返りで用いる記憶の削除を返す。 */
   public Lesson forget(AgentRunContext context, String id, long revision) {
     String scope = owner(context);
-    return tx.execute(
-        status -> {
-          var lesson = read(scope, id);
-          check(lesson, revision);
-          db.sql("INSERT OR IGNORE INTO reflection_lesson_forgotten VALUES(?,?)")
-              .params(scope, statementHash(lesson.statement()))
-              .update();
-          return update(
-              scope,
-              lesson,
-              new Lesson(
-                  id,
-                  "REJECTED",
-                  lesson.kind(),
-                  lesson.statement(),
-                  revision + 1,
-                  lesson.occurrenceCount(),
-                  lesson.evidence(),
-                  lesson.evidenceHash(),
-                  lesson.counterexamples(),
-                  lesson.corrections(),
-                  "FORGOTTEN"));
-        });
+    return tx.execute(status -> {
+      var lesson = read(scope, id);
+      check(lesson, revision);
+      db.sql("INSERT OR IGNORE INTO reflection_lesson_forgotten VALUES(?,?)")
+          .params(scope, statementHash(lesson.statement()))
+          .update();
+      return update(
+          scope,
+          lesson,
+          new Lesson(
+              id,
+              "REJECTED",
+              lesson.kind(),
+              lesson.statement(),
+              revision + 1,
+              lesson.occurrenceCount(),
+              lesson.evidence(),
+              lesson.evidenceHash(),
+              lesson.counterexamples(),
+              lesson.corrections(),
+              "FORGOTTEN"));
+    });
   }
 
   /** 指定された変更を、管理中の情報へ反映する。 */

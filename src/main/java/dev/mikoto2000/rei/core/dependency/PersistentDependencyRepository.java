@@ -180,48 +180,47 @@ public class PersistentDependencyRepository
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (deps.size() > 16 || new HashSet<>(deps).size() != deps.size())
       throw new IllegalArgumentException("At most 16 unique prerequisites");
-    return transaction.execute(
-        status -> {
-          for (String id : deps) {
-            var parent = get(owner.projectId(), id);
-            if (!parent.sessionId().equals(owner.conversationId())
-                || !parent.projectRoot().equals(owner.projectRoot().toString()))
-              throw new IllegalArgumentException("Prerequisites must share Project/root/Session");
-          }
-          String id = "dep-" + UUID.randomUUID();
-          Instant now = clock.instant();
-          String state = deps.isEmpty() ? "WAITING" : "BLOCKED";
-          String reason = deps.isEmpty() ? "watch_pending" : "dependency_waiting";
-          int inserted =
-              db.sql(
-                      "INSERT INTO agent_dependencies(id,project,root,session,kind,target,expected,created,deadline,state,reason,version) SELECT ?,?,?,?,?,?,?,?,?,?,?,0 WHERE (SELECT COUNT(*) FROM agent_dependencies WHERE project=? AND state IN ('RUNNING','WAITING','BLOCKED'))<256")
-                  .params(
-                      id,
-                      owner.projectId(),
-                      owner.projectRoot().toString(),
-                      owner.conversationId(),
-                      spec.kind().name(),
-                      spec.target(),
-                      spec.expected(),
-                      now.toEpochMilli(),
-                      now.plus(lifetime).toEpochMilli(),
-                      state,
-                      reason,
-                      owner.projectId())
-                  .update();
-          if (inserted != 1)
-            throw new IllegalStateException("Project active dependency limit reached (256)");
-          db.sql("UPDATE agent_dependencies SET creator_run=? WHERE project=? AND id=?")
-              .params(owner.runId(), owner.projectId(), id)
+    return transaction.execute(status -> {
+      for (String id : deps) {
+        var parent = get(owner.projectId(), id);
+        if (!parent.sessionId().equals(owner.conversationId())
+            || !parent.projectRoot().equals(owner.projectRoot().toString()))
+          throw new IllegalArgumentException("Prerequisites must share Project/root/Session");
+      }
+      String id = "dep-" + UUID.randomUUID();
+      Instant now = clock.instant();
+      String state = deps.isEmpty() ? "WAITING" : "BLOCKED";
+      String reason = deps.isEmpty() ? "watch_pending" : "dependency_waiting";
+      int inserted =
+          db.sql(
+                  "INSERT INTO agent_dependencies(id,project,root,session,kind,target,expected,created,deadline,state,reason,version) SELECT ?,?,?,?,?,?,?,?,?,?,?,0 WHERE (SELECT COUNT(*) FROM agent_dependencies WHERE project=? AND state IN ('RUNNING','WAITING','BLOCKED'))<256")
+              .params(
+                  id,
+                  owner.projectId(),
+                  owner.projectRoot().toString(),
+                  owner.conversationId(),
+                  spec.kind().name(),
+                  spec.target(),
+                  spec.expected(),
+                  now.toEpochMilli(),
+                  now.plus(lifetime).toEpochMilli(),
+                  state,
+                  reason,
+                  owner.projectId())
               .update();
-          for (int i = 0; i < deps.size(); i++)
-            db.sql("INSERT INTO agent_dependency_edges(child,parent,ordinal) VALUES(?,?,?)")
-                .params(id, deps.get(i), i)
-                .update();
-          var entry = get(owner.projectId(), id);
-          fact(entry);
-          return entry;
-        });
+      if (inserted != 1)
+        throw new IllegalStateException("Project active dependency limit reached (256)");
+      db.sql("UPDATE agent_dependencies SET creator_run=? WHERE project=? AND id=?")
+          .params(owner.runId(), owner.projectId(), id)
+          .update();
+      for (int i = 0; i < deps.size(); i++)
+        db.sql("INSERT INTO agent_dependency_edges(child,parent,ordinal) VALUES(?,?,?)")
+            .params(id, deps.get(i), i)
+            .update();
+      var entry = get(owner.projectId(), id);
+      fact(entry);
+      return entry;
+    });
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
@@ -326,22 +325,20 @@ public class PersistentDependencyRepository
   private Entry observe(Entry expected, DependencyState state, String reason, boolean strict) {
     if (state == null || reason == null || !reason.matches("[a-z_]{1,80}"))
       throw new IllegalArgumentException("Structured observation required");
-    return transaction.execute(
-        status -> {
-          if (expected.state() == state && expected.reason().equals(reason))
-            return get(expected.projectId(), expected.id());
-          int changed =
-              db.sql(
-                      "UPDATE agent_dependencies SET state=?,reason=?,version=version+1 WHERE project=? AND id=? AND version=? AND state IN ('RUNNING','WAITING','BLOCKED')")
-                  .params(
-                      state.name(), reason, expected.projectId(), expected.id(), expected.version())
-                  .update();
-          if (changed == 0 && strict)
-            throw new dev.mikoto2000.rei.application.state.OperationConflictException();
-          var current = get(expected.projectId(), expected.id());
-          if (changed == 1) fact(current);
-          return current;
-        });
+    return transaction.execute(status -> {
+      if (expected.state() == state && expected.reason().equals(reason))
+        return get(expected.projectId(), expected.id());
+      int changed =
+          db.sql(
+                  "UPDATE agent_dependencies SET state=?,reason=?,version=version+1 WHERE project=? AND id=? AND version=? AND state IN ('RUNNING','WAITING','BLOCKED')")
+              .params(state.name(), reason, expected.projectId(), expected.id(), expected.version())
+              .update();
+      if (changed == 0 && strict)
+        throw new dev.mikoto2000.rei.application.state.OperationConflictException();
+      var current = get(expected.projectId(), expected.id());
+      if (changed == 1) fact(current);
+      return current;
+    });
   }
 
   /** 対象の実行をキャンセルする。 */
@@ -375,21 +372,20 @@ public class PersistentDependencyRepository
         || text.length() > 4096)
       throw new IllegalArgumentException(
           "User-answer dependency and 1..4096 character answer required");
-    return transaction.execute(
-        status -> {
-          if (db.sql(
-                      "UPDATE agent_dependencies SET answer=?,version=version+1 WHERE project=? AND id=? AND version=? AND state IN ('RUNNING','WAITING','BLOCKED')")
-                  .params(CredentialRedactor.redact(text), project, id, entry.version())
-                  .update()
-              != 1) {
-            if (expectedVersion != null)
-              throw new dev.mikoto2000.rei.application.state.OperationConflictException();
-            throw new IllegalStateException("Dependency is terminal or changed");
-          }
-          var current = get(project, id);
-          fact(current);
-          return current;
-        });
+    return transaction.execute(status -> {
+      if (db.sql(
+                  "UPDATE agent_dependencies SET answer=?,version=version+1 WHERE project=? AND id=? AND version=? AND state IN ('RUNNING','WAITING','BLOCKED')")
+              .params(CredentialRedactor.redact(text), project, id, entry.version())
+              .update()
+          != 1) {
+        if (expectedVersion != null)
+          throw new dev.mikoto2000.rei.application.state.OperationConflictException();
+        throw new IllegalStateException("Dependency is terminal or changed");
+      }
+      var current = get(project, id);
+      fact(current);
+      return current;
+    });
   }
 
   /** 外部条件の待機に関する事実を処理する。 */
@@ -412,18 +408,17 @@ public class PersistentDependencyRepository
   /** 外部条件の待機で用いる待機中事実一覧を返す。 */
   public List<Fact> pendingFacts() {
     return db.sql("SELECT * FROM agent_dependency_facts WHERE sent=0 ORDER BY sequence LIMIT 16")
-        .query(
-            (rs, n) ->
-                new Fact(
-                    rs.getString("event"),
-                    rs.getString("dependency"),
-                    rs.getString("project"),
-                    rs.getString("session"),
-                    rs.getString("kind"),
-                    DependencyState.valueOf(rs.getString("state")),
-                    rs.getString("reason"),
-                    rs.getLong("version"),
-                    Instant.ofEpochMilli(rs.getLong("timestamp"))))
+        .query((rs, n) ->
+            new Fact(
+                rs.getString("event"),
+                rs.getString("dependency"),
+                rs.getString("project"),
+                rs.getString("session"),
+                rs.getString("kind"),
+                DependencyState.valueOf(rs.getString("state")),
+                rs.getString("reason"),
+                rs.getLong("version"),
+                Instant.ofEpochMilli(rs.getLong("timestamp"))))
         .list();
   }
 
@@ -438,18 +433,17 @@ public class PersistentDependencyRepository
     return db.sql(
             "SELECT * FROM agent_dependency_facts WHERE dependency=? ORDER BY sequence DESC LIMIT 256")
         .param(id)
-        .query(
-            (rs, n) ->
-                new Fact(
-                    rs.getString("event"),
-                    id,
-                    project,
-                    rs.getString("session"),
-                    rs.getString("kind"),
-                    DependencyState.valueOf(rs.getString("state")),
-                    rs.getString("reason"),
-                    rs.getLong("version"),
-                    Instant.ofEpochMilli(rs.getLong("timestamp"))))
+        .query((rs, n) ->
+            new Fact(
+                rs.getString("event"),
+                id,
+                project,
+                rs.getString("session"),
+                rs.getString("kind"),
+                DependencyState.valueOf(rs.getString("state")),
+                rs.getString("reason"),
+                rs.getLong("version"),
+                Instant.ofEpochMilli(rs.getLong("timestamp"))))
         .list();
   }
 }

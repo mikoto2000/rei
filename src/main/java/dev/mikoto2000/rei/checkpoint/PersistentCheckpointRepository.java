@@ -93,32 +93,31 @@ public class PersistentCheckpointRepository {
             "INSERT OR IGNORE INTO checkpoint_event_keys(project,task,event) SELECT project,task,event FROM checkpoint_revisions")
         .update();
     // Bootstrap once; triggers account atomically for every writer.
-    transaction.executeWithoutResult(
-        tx -> {
-          // Reserve the writer before a no-op schema check can establish a read transaction.
-          db.sql("UPDATE checkpoint_heads SET revision=revision WHERE 0").update();
-          db.sql(
-                  "CREATE TABLE IF NOT EXISTS checkpoint_history_usage(id INTEGER PRIMARY KEY CHECK(id=1),revisions INTEGER NOT NULL,bytes INTEGER NOT NULL,keys INTEGER NOT NULL)")
-              .update();
-          db.sql(
-                  "INSERT INTO checkpoint_history_usage SELECT 1,(SELECT COUNT(*) FROM checkpoint_revisions),(SELECT COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) FROM checkpoint_revisions),(SELECT COUNT(*) FROM checkpoint_event_keys) WHERE NOT EXISTS(SELECT 1 FROM checkpoint_history_usage WHERE id=1)")
-              .update();
-          db.sql(
-                  "CREATE TRIGGER IF NOT EXISTS checkpoint_usage_insert AFTER INSERT ON checkpoint_revisions BEGIN UPDATE checkpoint_history_usage SET revisions=revisions+1,bytes=bytes+length(CAST(NEW.snapshot AS BLOB)) WHERE id=1; END")
-              .update();
-          db.sql(
-                  "CREATE TRIGGER IF NOT EXISTS checkpoint_usage_delete AFTER DELETE ON checkpoint_revisions BEGIN UPDATE checkpoint_history_usage SET revisions=revisions-1,bytes=bytes-length(CAST(OLD.snapshot AS BLOB)) WHERE id=1; END")
-              .update();
-          db.sql(
-                  "CREATE TRIGGER IF NOT EXISTS checkpoint_usage_update AFTER UPDATE OF snapshot ON checkpoint_revisions BEGIN UPDATE checkpoint_history_usage SET bytes=bytes+length(CAST(NEW.snapshot AS BLOB))-length(CAST(OLD.snapshot AS BLOB)) WHERE id=1; END")
-              .update();
-          db.sql(
-                  "CREATE TRIGGER IF NOT EXISTS checkpoint_keys_insert AFTER INSERT ON checkpoint_event_keys BEGIN UPDATE checkpoint_history_usage SET keys=keys+1 WHERE id=1; END")
-              .update();
-          db.sql(
-                  "CREATE TRIGGER IF NOT EXISTS checkpoint_keys_delete AFTER DELETE ON checkpoint_event_keys BEGIN UPDATE checkpoint_history_usage SET keys=keys-1 WHERE id=1; END")
-              .update();
-        });
+    transaction.executeWithoutResult(tx -> {
+      // Reserve the writer before a no-op schema check can establish a read transaction.
+      db.sql("UPDATE checkpoint_heads SET revision=revision WHERE 0").update();
+      db.sql(
+              "CREATE TABLE IF NOT EXISTS checkpoint_history_usage(id INTEGER PRIMARY KEY CHECK(id=1),revisions INTEGER NOT NULL,bytes INTEGER NOT NULL,keys INTEGER NOT NULL)")
+          .update();
+      db.sql(
+              "INSERT INTO checkpoint_history_usage SELECT 1,(SELECT COUNT(*) FROM checkpoint_revisions),(SELECT COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) FROM checkpoint_revisions),(SELECT COUNT(*) FROM checkpoint_event_keys) WHERE NOT EXISTS(SELECT 1 FROM checkpoint_history_usage WHERE id=1)")
+          .update();
+      db.sql(
+              "CREATE TRIGGER IF NOT EXISTS checkpoint_usage_insert AFTER INSERT ON checkpoint_revisions BEGIN UPDATE checkpoint_history_usage SET revisions=revisions+1,bytes=bytes+length(CAST(NEW.snapshot AS BLOB)) WHERE id=1; END")
+          .update();
+      db.sql(
+              "CREATE TRIGGER IF NOT EXISTS checkpoint_usage_delete AFTER DELETE ON checkpoint_revisions BEGIN UPDATE checkpoint_history_usage SET revisions=revisions-1,bytes=bytes-length(CAST(OLD.snapshot AS BLOB)) WHERE id=1; END")
+          .update();
+      db.sql(
+              "CREATE TRIGGER IF NOT EXISTS checkpoint_usage_update AFTER UPDATE OF snapshot ON checkpoint_revisions BEGIN UPDATE checkpoint_history_usage SET bytes=bytes+length(CAST(NEW.snapshot AS BLOB))-length(CAST(OLD.snapshot AS BLOB)) WHERE id=1; END")
+          .update();
+      db.sql(
+              "CREATE TRIGGER IF NOT EXISTS checkpoint_keys_insert AFTER INSERT ON checkpoint_event_keys BEGIN UPDATE checkpoint_history_usage SET keys=keys+1 WHERE id=1; END")
+          .update();
+      db.sql(
+              "CREATE TRIGGER IF NOT EXISTS checkpoint_keys_delete AFTER DELETE ON checkpoint_event_keys BEGIN UPDATE checkpoint_history_usage SET keys=keys-1 WHERE id=1; END")
+          .update();
+    });
     return db;
   }
 
@@ -331,38 +330,38 @@ public class PersistentCheckpointRepository {
     String sql =
         OVERVIEW_HEADS
             + """
-        , restored AS MATERIALIZED (
-          SELECT *,COALESCE((SELECT value FROM json_each(:fallbacks) WHERE key=task),snapshot) AS state,
-            EXISTS(SELECT 1 FROM json_each(:fallbacks) WHERE key=task) AS fallback
-          FROM heads
-        ), projected AS MATERIALIZED (
-          SELECT task,head_revision,owner,created,fallback,
-            json_extract(state,'$.revision') AS revision,
-            CASE WHEN fallback THEN COALESCE(json_extract(state,'$.createdAt'),created) ELSE created END AS saved_at,
-            substr(created,1,19)||substr(CASE WHEN substr(created,20,1)='.' THEN substr(created,21,length(created)-21) ELSE '' END||'000000000',1,9) AS saved_sort,
-            json_extract(state,'$.status') AS status,
-            EXISTS(SELECT 1 FROM json_each(state,'$.operations') WHERE
-              (json_extract(value,'$.status')='UNKNOWN'
-                OR (json_extract(state,'$.status')='RUNNING' AND json_extract(value,'$.status')='STARTED'))
-              AND COALESCE(json_extract(value,'$.toolName'),'') NOT IN (SELECT value FROM json_each(:retryableReads))) AS unknown,
-            state
-          FROM restored
-        ), candidates AS MATERIALIZED (
-          SELECT * FROM projected WHERE status NOT IN ('ABANDONED','CANCELLED')
-            AND (status IN ('INTERRUPTED','WAITING','WAITING_APPROVAL','UNAVAILABLE') OR unknown OR fallback
-              OR (status='FAILED' AND saved_sort>=:cutoff)
-              OR (status='RUNNING' AND NOT EXISTS(SELECT 1 FROM json_each(:live) WHERE value=owner)))
-            AND NOT (status='RUNNING' AND EXISTS(SELECT 1 FROM json_each(:live) WHERE value=owner))
-        )
-        SELECT task,revision,head_revision,saved_at,status,fallback,unknown,
-          json_extract(state,'$.request') AS request,json_extract(state,'$.nextAction') AS remaining,
-          COALESCE((SELECT json_extract(value,'$.description') FROM json_each(state,'$.plan')
-            WHERE json_extract(value,'$.status')='DONE' ORDER BY key DESC LIMIT 1),
-            (SELECT json_extract(value,'$.summary')||'（保存された申告）' FROM json_each(state,'$.evidence')
-              WHERE json_extract(value,'$.origin')='ASSISTANT_CLAIM' ORDER BY key DESC LIMIT 1)) AS completed,
-          COUNT(*) OVER () AS total
-        FROM candidates ORDER BY saved_sort DESC,task
-        """
+            , restored AS MATERIALIZED (
+              SELECT *,COALESCE((SELECT value FROM json_each(:fallbacks) WHERE key=task),snapshot) AS state,
+                EXISTS(SELECT 1 FROM json_each(:fallbacks) WHERE key=task) AS fallback
+              FROM heads
+            ), projected AS MATERIALIZED (
+              SELECT task,head_revision,owner,created,fallback,
+                json_extract(state,'$.revision') AS revision,
+                CASE WHEN fallback THEN COALESCE(json_extract(state,'$.createdAt'),created) ELSE created END AS saved_at,
+                substr(created,1,19)||substr(CASE WHEN substr(created,20,1)='.' THEN substr(created,21,length(created)-21) ELSE '' END||'000000000',1,9) AS saved_sort,
+                json_extract(state,'$.status') AS status,
+                EXISTS(SELECT 1 FROM json_each(state,'$.operations') WHERE
+                  (json_extract(value,'$.status')='UNKNOWN'
+                    OR (json_extract(state,'$.status')='RUNNING' AND json_extract(value,'$.status')='STARTED'))
+                  AND COALESCE(json_extract(value,'$.toolName'),'') NOT IN (SELECT value FROM json_each(:retryableReads))) AS unknown,
+                state
+              FROM restored
+            ), candidates AS MATERIALIZED (
+              SELECT * FROM projected WHERE status NOT IN ('ABANDONED','CANCELLED')
+                AND (status IN ('INTERRUPTED','WAITING','WAITING_APPROVAL','UNAVAILABLE') OR unknown OR fallback
+                  OR (status='FAILED' AND saved_sort>=:cutoff)
+                  OR (status='RUNNING' AND NOT EXISTS(SELECT 1 FROM json_each(:live) WHERE value=owner)))
+                AND NOT (status='RUNNING' AND EXISTS(SELECT 1 FROM json_each(:live) WHERE value=owner))
+            )
+            SELECT task,revision,head_revision,saved_at,status,fallback,unknown,
+              json_extract(state,'$.request') AS request,json_extract(state,'$.nextAction') AS remaining,
+              COALESCE((SELECT json_extract(value,'$.description') FROM json_each(state,'$.plan')
+                WHERE json_extract(value,'$.status')='DONE' ORDER BY key DESC LIMIT 1),
+                (SELECT json_extract(value,'$.summary')||'（保存された申告）' FROM json_each(state,'$.evidence')
+                  WHERE json_extract(value,'$.origin')='ASSISTANT_CLAIM' ORDER BY key DESC LIMIT 1)) AS completed,
+              COUNT(*) OVER () AS total
+            FROM candidates ORDER BY saved_sort DESC,task
+            """
             + (latestOnly ? " LIMIT 1" : "");
     String cutoff =
         java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd'T'HH:mm:ss")
@@ -424,22 +423,19 @@ public class PersistentCheckpointRepository {
   /** 作業の中断と再開で用いる概要選択内容を返す。 */
   public OverviewSelection overviewSelection(String project, Instant cutoff) {
     // A deferred read transaction keeps damage, lease and candidate reads on one SQLite snapshot.
-    return transaction.execute(
-        tx ->
-            overviewQuery(project, cutoff, true, false)
-                .query(
-                    (row, n) -> new OverviewSelection(row.getLong("total"), overviewCandidate(row)))
-                .optional()
-                .orElse(new OverviewSelection(0, null)));
+    return transaction.execute(tx ->
+        overviewQuery(project, cutoff, true, false)
+            .query((row, n) -> new OverviewSelection(row.getLong("total"), overviewCandidate(row)))
+            .optional()
+            .orElse(new OverviewSelection(0, null)));
   }
 
   /** 作業の中断と再開で用いる概要候補一覧を返す。 */
   List<ResumeOverview.Candidate> overviewCandidates(String project, Instant cutoff) {
-    return transaction.execute(
-        tx ->
-            overviewQuery(project, cutoff, false, false)
-                .query((row, n) -> overviewCandidate(row))
-                .list());
+    return transaction.execute(tx ->
+        overviewQuery(project, cutoff, false, false)
+            .query((row, n) -> overviewCandidate(row))
+            .list());
   }
 
   /** 作業の中断と再開で用いる概要検索条件計画を返す。 */
@@ -461,12 +457,12 @@ public class PersistentCheckpointRepository {
     return db
         .sql(
             """
-        WITH valid AS (SELECT task,CASE WHEN json_valid(snapshot) THEN snapshot END AS snapshot
-          FROM checkpoint_revisions WHERE project=:project)
-        SELECT task,MIN(json_extract(snapshot,'$.originalRunId')) AS original FROM valid
-        WHERE json_extract(snapshot,'$.projectRoot')=:root AND (:session IS NULL OR json_extract(snapshot,'$.sessionId')=:session)
-        GROUP BY task HAVING original>:after ORDER BY original,task LIMIT :limit
-        """)
+            WITH valid AS (SELECT task,CASE WHEN json_valid(snapshot) THEN snapshot END AS snapshot
+              FROM checkpoint_revisions WHERE project=:project)
+            SELECT task,MIN(json_extract(snapshot,'$.originalRunId')) AS original FROM valid
+            WHERE json_extract(snapshot,'$.projectRoot')=:root AND (:session IS NULL OR json_extract(snapshot,'$.sessionId')=:session)
+            GROUP BY task HAVING original>:after ORDER BY original,task LIMIT :limit
+            """)
         .param("project", project)
         .param("root", root)
         .param("session", session)
@@ -505,11 +501,11 @@ public class PersistentCheckpointRepository {
   public Optional<PersistentCheckpoint> findByRun(String project, String run) {
     return db.sql(
             """
-        WITH valid AS (SELECT task,revision,CASE WHEN json_valid(snapshot) THEN snapshot END AS snapshot
-          FROM checkpoint_revisions WHERE project=:project)
-        SELECT task FROM valid WHERE json_extract(snapshot,'$.runId')=:run OR json_extract(snapshot,'$.originalRunId')=:run
-        ORDER BY revision DESC LIMIT 1
-        """)
+            WITH valid AS (SELECT task,revision,CASE WHEN json_valid(snapshot) THEN snapshot END AS snapshot
+              FROM checkpoint_revisions WHERE project=:project)
+            SELECT task FROM valid WHERE json_extract(snapshot,'$.runId')=:run OR json_extract(snapshot,'$.originalRunId')=:run
+            ORDER BY revision DESC LIMIT 1
+            """)
         .param("project", project)
         .param("run", run)
         .query(String.class)
@@ -528,81 +524,79 @@ public class PersistentCheckpointRepository {
     if (checkpointReferences != null) checkpointReferences.protect().accept(next);
     var removed = new ArrayList<HistoricalRow>();
     var saved =
-        transaction.execute(
-            tx -> {
-              db.sql("INSERT OR IGNORE INTO checkpoint_heads(project,task,revision) VALUES(?,?,0)")
-                  .params(state.projectId(), state.taskId())
-                  .update();
-              db.sql("UPDATE checkpoint_heads SET revision=revision WHERE project=? AND task=?")
-                  .params(state.projectId(), state.taskId())
-                  .update();
-              if (db.sql(
-                          "SELECT COUNT(*) FROM checkpoint_event_keys WHERE project=? AND task=? AND event=?")
-                      .params(state.projectId(), state.taskId(), event)
-                      .query(Long.class)
-                      .single()
-                  > 0) return get(state.projectId(), state.taskId());
-              if (db.sql("SELECT revision FROM checkpoint_heads WHERE project=? AND task=?")
-                      .params(state.projectId(), state.taskId())
-                      .query(Long.class)
-                      .single()
-                  != expected)
-                throw new ConcurrentModificationException("Checkpoint revision changed");
-              var usage = historyUsage();
-              var originalUsage = usage;
-              Instant cutoff = Instant.now().minus(Duration.ofDays(settings.getRetentionDays()));
-              // Ordinary tool boundaries need not decode every task or inspect approval snapshots.
-              boolean expiredHistory =
-                  db.sql(
-                              "SELECT EXISTS(SELECT 1 FROM checkpoint_revisions WHERE julianday(created)<julianday(?))")
-                          .param(cutoff.toString())
-                          .query(Integer.class)
-                          .single()
-                      != 0;
-              var history =
-                  exceeds(usage, incomingBytes) || expiredHistory ? historyCandidates(next) : null;
-              for (var candidate : history == null ? List.<HistoricalRow>of() : history.rows()) {
-                boolean expired;
-                try {
-                  expired = Instant.parse(candidate.created()).isBefore(cutoff);
-                } catch (RuntimeException invalid) {
-                  expired = false;
-                }
-                if (!expired && !exceeds(usage, incomingBytes)) continue;
-                remove(candidate);
-                removed.add(candidate);
-                usage = afterRemoval(usage, 1, candidate.bytes());
-              }
-              // Throwing rolls back all tentative deletions, so report the actually retained usage.
-              if (exceeds(usage, incomingBytes))
-                throw CheckpointException.storageCapacity(
-                    originalUsage.revisions(),
-                    originalUsage.maxRevisions(),
-                    originalUsage.snapshotBytes(),
-                    incomingBytes,
-                    originalUsage.maxBytes(),
-                    history.protectedRevisions(),
-                    history.protectedBytes());
-              if (db.sql(
-                          "UPDATE checkpoint_heads SET revision=? WHERE project=? AND task=? AND revision=?")
-                      .params(next.revision(), state.projectId(), state.taskId(), expected)
-                      .update()
-                  != 1) throw new ConcurrentModificationException("Checkpoint revision changed");
-              db.sql(
-                      "INSERT INTO checkpoint_revisions(project,task,revision,event,snapshot,created) VALUES(?,?,?,?,?,?)")
-                  .params(
-                      state.projectId(),
-                      state.taskId(),
-                      next.revision(),
-                      event,
-                      encoded,
-                      next.createdAt().toString())
-                  .update();
-              db.sql("INSERT INTO checkpoint_event_keys(project,task,event) VALUES(?,?,?)")
+        transaction.execute(tx -> {
+          db.sql("INSERT OR IGNORE INTO checkpoint_heads(project,task,revision) VALUES(?,?,0)")
+              .params(state.projectId(), state.taskId())
+              .update();
+          db.sql("UPDATE checkpoint_heads SET revision=revision WHERE project=? AND task=?")
+              .params(state.projectId(), state.taskId())
+              .update();
+          if (db.sql(
+                      "SELECT COUNT(*) FROM checkpoint_event_keys WHERE project=? AND task=? AND event=?")
                   .params(state.projectId(), state.taskId(), event)
-                  .update();
-              return next;
-            });
+                  .query(Long.class)
+                  .single()
+              > 0) return get(state.projectId(), state.taskId());
+          if (db.sql("SELECT revision FROM checkpoint_heads WHERE project=? AND task=?")
+                  .params(state.projectId(), state.taskId())
+                  .query(Long.class)
+                  .single()
+              != expected) throw new ConcurrentModificationException("Checkpoint revision changed");
+          var usage = historyUsage();
+          var originalUsage = usage;
+          Instant cutoff = Instant.now().minus(Duration.ofDays(settings.getRetentionDays()));
+          // Ordinary tool boundaries need not decode every task or inspect approval snapshots.
+          boolean expiredHistory =
+              db.sql(
+                          "SELECT EXISTS(SELECT 1 FROM checkpoint_revisions WHERE julianday(created)<julianday(?))")
+                      .param(cutoff.toString())
+                      .query(Integer.class)
+                      .single()
+                  != 0;
+          var history =
+              exceeds(usage, incomingBytes) || expiredHistory ? historyCandidates(next) : null;
+          for (var candidate : history == null ? List.<HistoricalRow>of() : history.rows()) {
+            boolean expired;
+            try {
+              expired = Instant.parse(candidate.created()).isBefore(cutoff);
+            } catch (RuntimeException invalid) {
+              expired = false;
+            }
+            if (!expired && !exceeds(usage, incomingBytes)) continue;
+            remove(candidate);
+            removed.add(candidate);
+            usage = afterRemoval(usage, 1, candidate.bytes());
+          }
+          // Throwing rolls back all tentative deletions, so report the actually retained usage.
+          if (exceeds(usage, incomingBytes))
+            throw CheckpointException.storageCapacity(
+                originalUsage.revisions(),
+                originalUsage.maxRevisions(),
+                originalUsage.snapshotBytes(),
+                incomingBytes,
+                originalUsage.maxBytes(),
+                history.protectedRevisions(),
+                history.protectedBytes());
+          if (db.sql(
+                      "UPDATE checkpoint_heads SET revision=? WHERE project=? AND task=? AND revision=?")
+                  .params(next.revision(), state.projectId(), state.taskId(), expected)
+                  .update()
+              != 1) throw new ConcurrentModificationException("Checkpoint revision changed");
+          db.sql(
+                  "INSERT INTO checkpoint_revisions(project,task,revision,event,snapshot,created) VALUES(?,?,?,?,?,?)")
+              .params(
+                  state.projectId(),
+                  state.taskId(),
+                  next.revision(),
+                  event,
+                  encoded,
+                  next.createdAt().toString())
+              .update();
+          db.sql("INSERT INTO checkpoint_event_keys(project,task,event) VALUES(?,?,?)")
+              .params(state.projectId(), state.taskId(), event)
+              .update();
+          return next;
+        });
     releaseReferences(removed);
     return saved;
   }
@@ -610,14 +604,13 @@ public class PersistentCheckpointRepository {
   /** 作業の中断と再開で用いる履歴使用状況を返す。 */
   public CheckpointHistory.Usage historyUsage() {
     return db.sql("SELECT revisions,bytes,keys FROM checkpoint_history_usage WHERE id=1")
-        .query(
-            (row, index) ->
-                new CheckpointHistory.Usage(
-                    row.getLong("revisions"),
-                    row.getLong("keys"),
-                    row.getLong("bytes"),
-                    settings.getMaxRevisions(),
-                    settings.getMaxBytes()))
+        .query((row, index) ->
+            new CheckpointHistory.Usage(
+                row.getLong("revisions"),
+                row.getLong("keys"),
+                row.getLong("bytes"),
+                settings.getMaxRevisions(),
+                settings.getMaxBytes()))
         .single();
   }
 
@@ -636,29 +629,28 @@ public class PersistentCheckpointRepository {
     if (force) return clearHistory(apply);
     var removed = new ArrayList<HistoricalRow>();
     var result =
-        transaction.execute(
-            tx -> {
-              if (apply) db.sql("UPDATE checkpoint_heads SET revision=revision").update();
-              var before = historyUsage();
-              var history = historyCandidates(null);
-              long bytes = 0;
-              for (var row : history.rows()) {
-                bytes += row.bytes();
-                if (apply) {
-                  remove(row);
-                  removed.add(row);
-                }
-              }
-              return new CheckpointHistory.Cleanup(
-                  history.rows().size(),
-                  bytes,
-                  history.protectedTasks(),
-                  before,
-                  afterRemoval(before, history.rows().size(), bytes),
-                  apply,
-                  history.protectedRevisions(),
-                  history.protectedBytes());
-            });
+        transaction.execute(tx -> {
+          if (apply) db.sql("UPDATE checkpoint_heads SET revision=revision").update();
+          var before = historyUsage();
+          var history = historyCandidates(null);
+          long bytes = 0;
+          for (var row : history.rows()) {
+            bytes += row.bytes();
+            if (apply) {
+              remove(row);
+              removed.add(row);
+            }
+          }
+          return new CheckpointHistory.Cleanup(
+              history.rows().size(),
+              bytes,
+              history.protectedTasks(),
+              before,
+              afterRemoval(before, history.rows().size(), bytes),
+              apply,
+              history.protectedRevisions(),
+              history.protectedBytes());
+        });
     releaseReferences(removed);
     return result;
   }
@@ -672,38 +664,36 @@ public class PersistentCheckpointRepository {
   private CheckpointHistory.Cleanup clearHistory(boolean apply) {
     var removed = new ArrayList<HistoricalRow>();
     var result =
-        transaction.execute(
-            tx -> {
-              if (apply) db.sql("UPDATE checkpoint_heads SET revision=revision").update();
-              var before = historyUsage();
-              if (apply) {
-                removed.addAll(
-                    db.sql(
-                            "SELECT project,task,revision,length(CAST(snapshot AS BLOB)) AS bytes,created FROM checkpoint_revisions")
-                        .query(
-                            (row, index) ->
-                                new HistoricalRow(
-                                    row.getString("project"),
-                                    row.getString("task"),
-                                    row.getLong("revision"),
-                                    row.getLong("bytes"),
-                                    row.getString("created")))
-                        .list());
-                db.sql("DELETE FROM checkpoint_revisions").update();
-                db.sql("DELETE FROM checkpoint_heads").update();
-              }
-              return new CheckpointHistory.Cleanup(
-                  before.revisions(),
-                  before.snapshotBytes(),
-                  0,
-                  before,
-                  new CheckpointHistory.Usage(
-                      0, before.eventKeys(), 0, before.maxRevisions(), before.maxBytes()),
-                  apply,
-                  0,
-                  0,
-                  true);
-            });
+        transaction.execute(tx -> {
+          if (apply) db.sql("UPDATE checkpoint_heads SET revision=revision").update();
+          var before = historyUsage();
+          if (apply) {
+            removed.addAll(
+                db.sql(
+                        "SELECT project,task,revision,length(CAST(snapshot AS BLOB)) AS bytes,created FROM checkpoint_revisions")
+                    .query((row, index) ->
+                        new HistoricalRow(
+                            row.getString("project"),
+                            row.getString("task"),
+                            row.getLong("revision"),
+                            row.getLong("bytes"),
+                            row.getString("created")))
+                    .list());
+            db.sql("DELETE FROM checkpoint_revisions").update();
+            db.sql("DELETE FROM checkpoint_heads").update();
+          }
+          return new CheckpointHistory.Cleanup(
+              before.revisions(),
+              before.snapshotBytes(),
+              0,
+              before,
+              new CheckpointHistory.Usage(
+                  0, before.eventKeys(), 0, before.maxRevisions(), before.maxBytes()),
+              apply,
+              0,
+              0,
+              true);
+        });
     releaseReferences(removed);
     return result;
   }
@@ -784,33 +774,32 @@ public class PersistentCheckpointRepository {
     // Snapshots are self-contained. A live lease or WAITING_APPROVAL never pins an entire task.
     db.sql(
             "SELECT h.project,h.task,h.revision,r.snapshot FROM checkpoint_heads h LEFT JOIN checkpoint_revisions r ON r.project=h.project AND r.task=h.task AND r.revision=h.revision WHERE h.revision>0")
-        .query(
-            (row, index) -> {
-              var key = new TaskKey(row.getString("project"), row.getString("task"));
-              long revision = row.getLong("revision");
-              heads.put(key, revision);
-              try {
-                var head =
-                    decode(new Row(revision, row.getString("snapshot")), key.project(), key.task());
-                if (!replaces(incoming, key)) protectState(protectedRevisions, head);
-              } catch (RuntimeException damaged) {
-                // Keep the actual damaged head and the newest usable fallback, not all damaged
-                // history.
-                protectedRevisions.add(new RevisionKey(key.project(), key.task(), revision));
-                try (var history = rows(key.project(), key.task())) {
-                  var iterator = history.iterator();
-                  while (iterator.hasNext())
-                    try {
-                      protectState(
-                          protectedRevisions, decode(iterator.next(), key.project(), key.task()));
-                      break;
-                    } catch (RuntimeException invalid) {
-                      /* Continue to the newest usable fallback. */
-                    }
+        .query((row, index) -> {
+          var key = new TaskKey(row.getString("project"), row.getString("task"));
+          long revision = row.getLong("revision");
+          heads.put(key, revision);
+          try {
+            var head =
+                decode(new Row(revision, row.getString("snapshot")), key.project(), key.task());
+            if (!replaces(incoming, key)) protectState(protectedRevisions, head);
+          } catch (RuntimeException damaged) {
+            // Keep the actual damaged head and the newest usable fallback, not all damaged
+            // history.
+            protectedRevisions.add(new RevisionKey(key.project(), key.task(), revision));
+            try (var history = rows(key.project(), key.task())) {
+              var iterator = history.iterator();
+              while (iterator.hasNext())
+                try {
+                  protectState(
+                      protectedRevisions, decode(iterator.next(), key.project(), key.task()));
+                  break;
+                } catch (RuntimeException invalid) {
+                  /* Continue to the newest usable fallback. */
                 }
-              }
-              return key;
-            })
+            }
+          }
+          return key;
+        })
         .list();
     if (incoming != null) protectResumeSource(protectedRevisions, incoming);
     if (db.sql(
@@ -844,29 +833,28 @@ public class PersistentCheckpointRepository {
       var references =
           db.sql(
                   """
-          WITH snapshots AS MATERIALIZED (
-            SELECT project,task,CASE WHEN json_valid(snapshot) THEN snapshot END AS snapshot
-            FROM checkpoint_revisions), approvals AS MATERIALIZED (
-          """
+                  WITH snapshots AS MATERIALIZED (
+                    SELECT project,task,CASE WHEN json_valid(snapshot) THEN snapshot END AS snapshot
+                    FROM checkpoint_revisions), approvals AS MATERIALIZED (
+                  """
                       + approvalRows
                       + """
-          )
-          SELECT DISTINCT r.project,r.task,a.run,json_extract(a.document,'$.owner.conversationId') AS session,
-            json_extract(a.document,'$.owner.projectRoot') AS root FROM snapshots r
-          JOIN approvals a ON a.run=json_extract(CASE WHEN json_valid(r.snapshot) THEN r.snapshot END,'$.runId')
-            OR a.run=json_extract(CASE WHEN json_valid(r.snapshot) THEN r.snapshot END,'$.originalRunId')
-            OR a.run=json_extract(CASE WHEN json_valid(r.snapshot) THEN r.snapshot END,'$.resumedFromRunId')
-          WHERE a.state NOT IN ('COMPLETED','CANCELLED','DENIED')
-          """
+                      )
+                      SELECT DISTINCT r.project,r.task,a.run,json_extract(a.document,'$.owner.conversationId') AS session,
+                        json_extract(a.document,'$.owner.projectRoot') AS root FROM snapshots r
+                      JOIN approvals a ON a.run=json_extract(CASE WHEN json_valid(r.snapshot) THEN r.snapshot END,'$.runId')
+                        OR a.run=json_extract(CASE WHEN json_valid(r.snapshot) THEN r.snapshot END,'$.originalRunId')
+                        OR a.run=json_extract(CASE WHEN json_valid(r.snapshot) THEN r.snapshot END,'$.resumedFromRunId')
+                      WHERE a.state NOT IN ('COMPLETED','CANCELLED','DENIED')
+                      """
                       + ownerScope)
-              .query(
-                  (row, index) ->
-                      new ApprovalReference(
-                          row.getString(1),
-                          row.getString(2),
-                          row.getString(3),
-                          row.getString(4),
-                          row.getString(5)))
+              .query((row, index) ->
+                  new ApprovalReference(
+                      row.getString(1),
+                      row.getString(2),
+                      row.getString(3),
+                      row.getString(4),
+                      row.getString(5)))
               .list();
       for (var reference : references) {
         // The new snapshot can replace this Run's old anchor in the very same transaction.
@@ -882,14 +870,13 @@ public class PersistentCheckpointRepository {
     var all =
         db.sql(
                 "SELECT project,task,revision,length(CAST(snapshot AS BLOB)) AS bytes,created FROM checkpoint_revisions")
-            .query(
-                (row, index) ->
-                    new HistoricalRow(
-                        row.getString("project"),
-                        row.getString("task"),
-                        row.getLong("revision"),
-                        row.getLong("bytes"),
-                        row.getString("created")))
+            .query((row, index) ->
+                new HistoricalRow(
+                    row.getString("project"),
+                    row.getString("task"),
+                    row.getLong("revision"),
+                    row.getLong("bytes"),
+                    row.getString("created")))
             .list();
     for (var row : all) {
       var task = new TaskKey(row.project(), row.task());
@@ -1034,23 +1021,22 @@ public class PersistentCheckpointRepository {
   /** 作業の中断と再開において、確保に該当するか判定する。 */
   public boolean acquire(String project, String task, String run) {
     return Boolean.TRUE.equals(
-        transaction.execute(
-            tx -> {
-              db.sql("UPDATE checkpoint_heads SET revision=revision WHERE project=? AND task=?")
+        transaction.execute(tx -> {
+          db.sql("UPDATE checkpoint_heads SET revision=revision WHERE project=? AND task=?")
+              .params(project, task)
+              .update();
+          var owner =
+              db.sql("SELECT owner FROM checkpoint_heads WHERE project=? AND task=?")
                   .params(project, task)
-                  .update();
-              var owner =
-                  db.sql("SELECT owner FROM checkpoint_heads WHERE project=? AND task=?")
-                      .params(project, task)
-                      .query(String.class)
-                      .optional();
-              if (owner.isPresent() && alive(owner.get())) return false;
-              return db.sql(
-                          "UPDATE checkpoint_heads SET owner=?,lease_run=? WHERE project=? AND task=?")
-                      .params(OWNER, run, project, task)
-                      .update()
-                  == 1;
-            }));
+                  .query(String.class)
+                  .optional();
+          if (owner.isPresent() && alive(owner.get())) return false;
+          return db.sql(
+                      "UPDATE checkpoint_heads SET owner=?,lease_run=? WHERE project=? AND task=?")
+                  .params(OWNER, run, project, task)
+                  .update()
+              == 1;
+        }));
   }
 
   /** 作業の中断と再開において、leasedに該当するか判定する。 */

@@ -10,8 +10,7 @@ public final class StorageMigrationCrashWorker {
   public static void main(String[] arguments) throws Exception {
     if (arguments.length > 1 && arguments[1].equals("hot-journal")) {
       var lease = new StorageMigrationCoordinator(java.nio.file.Path.of(arguments[0]));
-      try (
-          lease;
+      try (lease;
           var db =
               java.sql.DriverManager.getConnection(
                   "jdbc:sqlite:" + java.nio.file.Path.of(arguments[0]).resolve("storage.db"));

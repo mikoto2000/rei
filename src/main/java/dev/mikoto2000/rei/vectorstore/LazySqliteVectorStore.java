@@ -34,7 +34,8 @@ public class LazySqliteVectorStore
       EmbeddingModel embeddingModel,
       JsonMapper objectMapper,
       boolean bm25Enabled) {
-    createDelegate = () -> new SqliteVectorStore(dataSource, embeddingModel, objectMapper, bm25Enabled);
+    createDelegate =
+        () -> new SqliteVectorStore(dataSource, embeddingModel, objectMapper, bm25Enabled);
   }
 
   /** 新たな対象を登録し、後から利用できるようにする。 */

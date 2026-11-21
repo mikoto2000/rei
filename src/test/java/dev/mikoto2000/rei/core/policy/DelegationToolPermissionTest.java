@@ -104,9 +104,8 @@ class DelegationToolPermissionTest {
     String input =
         "{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"  \",\"accountRef\":\"\",\"modelId\":\"\",\"context\":\"\",\"sourceRefs\":[],\"expectedOutput\":\"\"}";
     assertEquals(Set.of(ActionCapability.READ), policy.capabilities("delegateTask", input));
-    assertDoesNotThrow(
-        () ->
-            guard().check("delegateTask", input, owner(AgentRunContext.Mode.EXCLUSIVE, "session")));
+    assertDoesNotThrow(() ->
+        guard().check("delegateTask", input, owner(AgentRunContext.Mode.EXCLUSIVE, "session")));
   }
 
   /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
@@ -182,20 +181,18 @@ class DelegationToolPermissionTest {
   @Test
   void localSingleAndParallelReviewsPassTheRealGuardWithDefaultPolicy() {
     var owner = owner(AgentRunContext.Mode.READ_ONLY, "session");
-    assertDoesNotThrow(
-        () ->
-            guard()
-                .check(
-                    "delegateTask",
-                    "{\"agent\":\"reviewer\",\"task\":\"review\",\"id\":\"review\"}",
-                    owner));
-    assertDoesNotThrow(
-        () ->
-            guard()
-                .check(
-                    "delegateTasks",
-                    "{\"requests\":[{\"agent\":\"reviewer\",\"task\":\"review\",\"id\":\"review\"},{\"agent\":\"judge\",\"task\":\"judge\",\"id\":\"judge\",\"backendId\":\"local\"}]}",
-                    owner));
+    assertDoesNotThrow(() ->
+        guard()
+            .check(
+                "delegateTask",
+                "{\"agent\":\"reviewer\",\"task\":\"review\",\"id\":\"review\"}",
+                owner));
+    assertDoesNotThrow(() ->
+        guard()
+            .check(
+                "delegateTasks",
+                "{\"requests\":[{\"agent\":\"reviewer\",\"task\":\"review\",\"id\":\"review\"},{\"agent\":\"judge\",\"task\":\"judge\",\"id\":\"judge\",\"backendId\":\"local\"}]}",
+                owner));
   }
 
   /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */

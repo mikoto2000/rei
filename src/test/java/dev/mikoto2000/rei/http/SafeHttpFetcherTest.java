@@ -176,10 +176,9 @@ class SafeHttpFetcherTest {
     var policy = HttpFetchPolicy.html(Duration.ofSeconds(1));
     var publicIp = InetAddress.getByName("1.1.1.1");
     var privateIp = InetAddress.getByName("127.0.0.1");
-    assertDoesNotThrow(
-        () ->
-            SafeHttpFetcher.validatePeer(
-                new InetSocketAddress(publicIp, 443), Set.of(publicIp), policy));
+    assertDoesNotThrow(() ->
+        SafeHttpFetcher.validatePeer(
+            new InetSocketAddress(publicIp, 443), Set.of(publicIp), policy));
     assertThrows(
         HttpFetchException.class,
         () -> SafeHttpFetcher.validatePeer(new InetSocketAddress(publicIp, 443), Set.of(), policy));
@@ -425,19 +424,18 @@ class SafeHttpFetcherTest {
         });
     try (var waiter = Executors.newSingleThreadExecutor()) {
       var future =
-          waiter.submit(
-              () ->
-                  new SafeHttpFetcher()
-                      .fetch(
-                          origin.resolve("/stream"),
-                          Map.of(),
-                          policy(1_000_000, 1_000_000, 2, 5000, 1000),
-                          new FetchOperation(
-                              () -> {
-                                if (cancelled.get()) throw new CancellationException();
-                              },
-                              Long.MAX_VALUE),
-                          HttpFetchObserver.NONE));
+          waiter.submit(() ->
+              new SafeHttpFetcher()
+                  .fetch(
+                      origin.resolve("/stream"),
+                      Map.of(),
+                      policy(1_000_000, 1_000_000, 2, 5000, 1000),
+                      new FetchOperation(
+                          () -> {
+                            if (cancelled.get()) throw new CancellationException();
+                          },
+                          Long.MAX_VALUE),
+                      HttpFetchObserver.NONE));
       assertTrue(started.await(2, TimeUnit.SECONDS));
       cancelled.set(true);
       assertInstanceOf(
@@ -453,25 +451,24 @@ class SafeHttpFetcherTest {
     try (var socket = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
         var writer = Executors.newSingleThreadExecutor()) {
       var served =
-          writer.submit(
-              () -> {
-                try (var peer = socket.accept()) {
-                  var input =
-                      new BufferedReader(
-                          new InputStreamReader(
-                              peer.getInputStream(), java.nio.charset.StandardCharsets.US_ASCII));
-                  while (!input.readLine().isEmpty()) {}
-                  peer.getOutputStream()
-                      .write(
-                          ("HTTP/1.1 200 OK\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n41\r\n"
-                                  + "x".repeat(65)
-                                  + "\r\n0\r\n\r\n")
-                              .getBytes(java.nio.charset.StandardCharsets.US_ASCII));
-                  peer.getOutputStream().flush();
-                } catch (IOException failed) {
-                  throw new UncheckedIOException(failed);
-                }
-              });
+          writer.submit(() -> {
+            try (var peer = socket.accept()) {
+              var input =
+                  new BufferedReader(
+                      new InputStreamReader(
+                          peer.getInputStream(), java.nio.charset.StandardCharsets.US_ASCII));
+              while (!input.readLine().isEmpty()) {}
+              peer.getOutputStream()
+                  .write(
+                      ("HTTP/1.1 200 OK\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n41\r\n"
+                              + "x".repeat(65)
+                              + "\r\n0\r\n\r\n")
+                          .getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+              peer.getOutputStream().flush();
+            } catch (IOException failed) {
+              throw new UncheckedIOException(failed);
+            }
+          });
       URI fixture = URI.create("http://127.0.0.1:" + socket.getLocalPort());
       var policy =
           new HttpFetchPolicy(

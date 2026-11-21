@@ -473,8 +473,7 @@ class ReadingEfficiencyBenchmarkTest {
       gate.prepare();
     }
     var query = query("hit", "gap.txt");
-    var scope =
-        AgentRunScope.open(new AgentRunContext("gap-benchmark", "chat", root, "project"));
+    var scope = AgentRunScope.open(new AgentRunContext("gap-benchmark", "chat", root, "project"));
     try (scope) {
       var initial =
           reader

@@ -38,7 +38,8 @@ class ConcurrentRunPermissionTest {
             "p",
             AgentRunContext.RequestSource.WEB,
             AgentRunContext.Mode.READ_ONLY);
-    assertThatCode(() -> guard.check("readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}", owner)).doesNotThrowAnyException();
+    assertThatCode(() -> guard.check("readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}", owner))
+        .doesNotThrowAnyException();
     for (String tool : List.of("runCommand", "applyTextDiff", "unknownMcpTool", "delegateTasks"))
       assertThatThrownBy(() -> guard.check(tool, "{}", owner))
           .isInstanceOf(ToolPermissionException.class);
@@ -62,12 +63,11 @@ class ConcurrentRunPermissionTest {
             AgentRunContext.Mode.CONVERSATION);
     assertThatThrownBy(() -> guard.check("readFile", "{}", conversation))
         .isInstanceOf(ToolPermissionException.class);
-    assertThatCode(
-            () ->
-                guard.check(
-                    "applyTextDiff",
-                    "{\"pathStr\":\"a.txt\",\"oldText\":\"old\",\"newText\":\"new\"}",
-                    new AgentRunContext("r", "s", Path.of("."), "p")))
+    assertThatCode(() ->
+            guard.check(
+                "applyTextDiff",
+                "{\"pathStr\":\"a.txt\",\"oldText\":\"old\",\"newText\":\"new\"}",
+                new AgentRunContext("r", "s", Path.of("."), "p")))
         .doesNotThrowAnyException();
   }
 }

@@ -238,10 +238,9 @@ public class AgentSkillAdvisor implements BaseAdvisor {
     if (candidateStatistics != null) candidateStatistics.record(evaluation);
     List<SkillCandidatesEvaluatedPayload.CandidateScore> topCandidates =
         selection.candidates().stream()
-            .map(
-                candidate ->
-                    new SkillCandidatesEvaluatedPayload.CandidateScore(
-                        candidate.skill().name(), candidate.score()))
+            .map(candidate ->
+                new SkillCandidatesEvaluatedPayload.CandidateScore(
+                    candidate.skill().name(), candidate.score()))
             .toList();
     eventPublisher.publish(
         eventFactory.skillCandidatesEvaluated(

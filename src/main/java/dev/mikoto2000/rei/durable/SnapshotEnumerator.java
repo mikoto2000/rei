@@ -48,7 +48,9 @@ public final class SnapshotEnumerator {
     try {
       var source = store.source(scope, task);
       if (source.mode().equals("COMMIT")) {
-        var page = GitSnapshotSource.page(root, source.reference(), directory.cursor(), limit, store.exclusions(scope, task));
+        var page =
+            GitSnapshotSource.page(
+                root, source.reference(), directory.cursor(), limit, store.exclusions(scope, task));
         store.captured(scope, task, directory, page.entries(), page.finished(), "");
         return store.status(scope, task);
       }
@@ -82,7 +84,16 @@ public final class SnapshotEnumerator {
         try {
           entry = capture(root, relative, exclusions);
         } catch (IOException denied) {
-          entry = entry(relative, null, null, "", denied instanceof java.nio.file.AccessDeniedException ? "ACCESS_DENIED" : "SOURCE_UNAVAILABLE", false);
+          entry =
+              entry(
+                  relative,
+                  null,
+                  null,
+                  "",
+                  denied instanceof java.nio.file.AccessDeniedException
+                      ? "ACCESS_DENIED"
+                      : "SOURCE_UNAVAILABLE",
+                  false);
         }
         captured.add(entry);
         batchBytes += entry.size();
@@ -90,9 +101,18 @@ public final class SnapshotEnumerator {
       }
       if (!stamp.equals(stamp(current))) throw new DirectoryChanged();
       store.captured(scope, task, directory, captured, remaining == captured.size(), stamp);
-      if (store.status(scope, task).enumeration().equals("VALIDATING")) validateDirectories(scope, task);
+      if (store.status(scope, task).enumeration().equals("VALIDATING"))
+        validateDirectories(scope, task);
     } catch (IOException error) {
-      store.scanFailed(scope, task, directory.path(), error instanceof DirectoryChanged ? "DIRECTORY_CHANGED" : error instanceof java.nio.file.AccessDeniedException ? "ACCESS_DENIED" : "SOURCE_UNAVAILABLE");
+      store.scanFailed(
+          scope,
+          task,
+          directory.path(),
+          error instanceof DirectoryChanged
+              ? "DIRECTORY_CHANGED"
+              : error instanceof java.nio.file.AccessDeniedException
+                  ? "ACCESS_DENIED"
+                  : "SOURCE_UNAVAILABLE");
     }
     return store.status(scope, task);
   }
@@ -102,7 +122,8 @@ public final class SnapshotEnumerator {
   }
 
   private static String stamp(Path directory) throws IOException {
-    var attributes = Files.readAttributes(directory, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+    var attributes =
+        Files.readAttributes(directory, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
     if (!attributes.isDirectory() || attributes.isSymbolicLink()) throw new DirectoryChanged();
     return attributes.lastModifiedTime() + "|" + attributes.fileKey();
   }
@@ -119,7 +140,11 @@ public final class SnapshotEnumerator {
       } while (cursor != null);
       store.seal(scope, task);
     } catch (IOException error) {
-      store.scanFailed(scope, task, "", error instanceof DirectoryChanged ? "DIRECTORY_CHANGED" : "SOURCE_UNAVAILABLE");
+      store.scanFailed(
+          scope,
+          task,
+          "",
+          error instanceof DirectoryChanged ? "DIRECTORY_CHANGED" : "SOURCE_UNAVAILABLE");
     }
   }
 
@@ -141,11 +166,14 @@ public final class SnapshotEnumerator {
     if (!reason.isEmpty()) return entry(relative, null, null, reason, "", false);
     var before = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
     if (before.isDirectory()) return entry(relative, null, null, "", "", true);
-    if (!before.isRegularFile()) return entry(relative, null, null, "UNSUPPORTED_FILE_TYPE", "", false);
-    if (before.size() > MAX_FILE_BYTES) return entry(relative, null, null, "", "FILE_BYTE_LIMIT", false);
+    if (!before.isRegularFile())
+      return entry(relative, null, null, "UNSUPPORTED_FILE_TYPE", "", false);
+    if (before.size() > MAX_FILE_BYTES)
+      return entry(relative, null, null, "", "FILE_BYTE_LIMIT", false);
     byte[] bytes = reader.read(path);
     var after = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-    if (bytes.length > MAX_FILE_BYTES || before.size() != after.size()
+    if (bytes.length > MAX_FILE_BYTES
+        || before.size() != after.size()
         || !before.lastModifiedTime().equals(after.lastModifiedTime())
         || !java.util.Objects.equals(before.fileKey(), after.fileKey()))
       return entry(relative, null, null, "", "SOURCE_CHANGED_DURING_CAPTURE", false);
@@ -155,8 +183,13 @@ public final class SnapshotEnumerator {
   static DurableTaskStore.Captured capturedBytes(String relative, byte[] bytes) {
     String text;
     try {
-      text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
-          .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString();
+      text =
+          StandardCharsets.UTF_8
+              .newDecoder()
+              .onMalformedInput(CodingErrorAction.REPORT)
+              .onUnmappableCharacter(CodingErrorAction.REPORT)
+              .decode(ByteBuffer.wrap(bytes))
+              .toString();
     } catch (java.nio.charset.CharacterCodingException invalid) {
       return entry(relative, null, null, "UNSUPPORTED_ENCODING", "", false);
     }
@@ -170,8 +203,8 @@ public final class SnapshotEnumerator {
     }
   }
 
-  static DurableTaskStore.Captured entry(String path, byte[] bytes, String text,
-      String reason, String error, boolean directory) {
+  static DurableTaskStore.Captured entry(
+      String path, byte[] bytes, String text, String reason, String error, boolean directory) {
     String version = "";
     if (bytes != null) {
       try {

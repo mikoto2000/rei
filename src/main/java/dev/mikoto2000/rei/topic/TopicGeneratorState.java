@@ -32,9 +32,7 @@ public record TopicGeneratorState(
     long lastSequence) {
   public TopicGeneratorState {
     candidates =
-        candidates == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(candidates));
+        candidates == null ? null : Collections.unmodifiableList(new ArrayList<>(candidates));
   }
 
   /** 話題の管理で用いる操作がない状態を返す。 */

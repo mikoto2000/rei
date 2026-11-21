@@ -46,11 +46,10 @@ class TemporalActivityInferenceTest {
     var life = mock(dev.mikoto2000.rei.life.LifeContext.class);
     when(life.valid(any())).thenReturn(true);
     when(model.infer(any(), anyInt(), anyInt(), anyLong()))
-        .thenAnswer(
-            call -> {
-              when(life.valid(any())).thenReturn(false);
-              return new TemporalActivityInferenceService.Outcome("テスト修正の可能性があります", .6, 100);
-            });
+        .thenAnswer(call -> {
+          when(life.valid(any())).thenReturn(false);
+          return new TemporalActivityInferenceService.Outcome("テスト修正の可能性があります", .6, 100);
+        });
     var service =
         new TemporalActivityInferenceService(
             p, records, supplements, model, Clock.fixed(AT, ZoneOffset.UTC), List::of, () -> false);

@@ -366,10 +366,8 @@ public class SecretaryGitHubProvider implements SecretaryProvider, AutoCloseable
     var items = new ArrayList<>(result.items());
     var prs =
         result.items().stream()
-            .filter(
-                i ->
-                    i.kind().equals("PULL_REQUEST")
-                        && !Set.of("CLOSED", "MERGED").contains(i.status()))
+            .filter(i ->
+                i.kind().equals("PULL_REQUEST") && !Set.of("CLOSED", "MERGED").contains(i.status()))
             .toList();
     if (!prs.isEmpty()) {
       int number = Integer.parseInt(prs.get(Math.floorMod(slot, prs.size())).data().get("number"));

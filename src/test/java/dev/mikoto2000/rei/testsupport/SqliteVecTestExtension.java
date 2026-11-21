@@ -19,8 +19,7 @@ public final class SqliteVecTestExtension {
   public static synchronized Path resolve() {
     var properties = new SqliteVecProperties();
     properties.setCacheDir(Path.of("target", "sqlite-vec-test-cache").toAbsolutePath().toString());
-    return new SqliteVecInstaller(
-            properties, new PlatformDetector(), new SqliteVecAssetResolver())
+    return new SqliteVecInstaller(properties, new PlatformDetector(), new SqliteVecAssetResolver())
         .resolveExtensionPath();
   }
 }

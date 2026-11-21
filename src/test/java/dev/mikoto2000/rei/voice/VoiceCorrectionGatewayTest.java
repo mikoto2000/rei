@@ -59,12 +59,11 @@ class VoiceCorrectionGatewayTest {
             (owner, prompt, mailbox) -> {
               owners.add(owner);
               turns.start(owner, prompt);
-              assertThatThrownBy(
-                      () ->
-                          guard.check(
-                              "writeMultiFile",
-                              "{\"files\":[{\"path\":\"target.txt\",\"content\":\"test\"}]}",
-                              owner))
+              assertThatThrownBy(() ->
+                      guard.check(
+                          "writeMultiFile",
+                          "{\"files\":[{\"path\":\"target.txt\",\"content\":\"test\"}]}",
+                          owner))
                   .isInstanceOf(ToolPermissionException.class);
               turns.finish(owner, ConversationTurnStore.Status.COMPLETED, "answer");
             });
@@ -126,14 +125,13 @@ class VoiceCorrectionGatewayTest {
                 delivery::targetIsCurrent,
                 System::nanoTime)) {
       voice.configureCorrection(correction, delivery::requireReview);
-      delivery.onSubmitted(
-          input -> {
-            correction.submitted(input);
-            frames.add(
-                dev.mikoto2000.rei.ui.shell.UserInputFrame.format(input.text(), LocalTime.NOON)
-                    .toString());
-            accepted.add(input);
-          });
+      delivery.onSubmitted(input -> {
+        correction.submitted(input);
+        frames.add(
+            dev.mikoto2000.rei.ui.shell.UserInputFrame.format(input.text(), LocalTime.NOON)
+                .toString());
+        accepted.add(input);
+      });
       voice.start(
           target,
           new AudioDevice("device", "fake", "fake", "vendor", "1"),

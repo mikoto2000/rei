@@ -158,8 +158,7 @@ class RerankServiceTest {
         new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
             "run", new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0, 10), null, null, null);
     cancelled.cancel();
-    var scope =
-        dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(cancelled.modelCallBudget());
+    var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(cancelled.modelCallBudget());
     try (scope) {
       assertThrows(
           java.util.concurrent.CancellationException.class,

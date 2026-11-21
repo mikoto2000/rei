@@ -34,34 +34,30 @@ class RawResultCapacityMigrationTest {
   void capacityAndIndexFollowStatusesUpdatesDeletionAndRollback() throws Exception {
     prepare();
     var registry = new StorageObjectRegistry(root);
-    registry.database.transaction(
-        db -> {
-          try (var sql = db.createStatement()) {
-            sql.execute(
-                "INSERT INTO stored_objects(id,kind,scope,relative_path,size,sha256,origin_verified,status) VALUES('a','RAW_RESULT','','a',10,'hash',1,'AVAILABLE'),('b','RAW_RESULT','','b',20,'hash',1,'QUARANTINED'),('c','RAW_RESULT','','c',40,'hash',1,'PURGED'),('e','EVENT','','e',999999,'hash',1,'AVAILABLE')");
-          }
-          return null;
-        });
+    registry.database.transaction(db -> {
+      try (var sql = db.createStatement()) {
+        sql.execute(
+            "INSERT INTO stored_objects(id,kind,scope,relative_path,size,sha256,origin_verified,status) VALUES('a','RAW_RESULT','','a',10,'hash',1,'AVAILABLE'),('b','RAW_RESULT','','b',20,'hash',1,'QUARANTINED'),('c','RAW_RESULT','','c',40,'hash',1,'PURGED'),('e','EVENT','','e',999999,'hash',1,'AVAILABLE')");
+      }
+      return null;
+    });
     assertThat(registry.rawStoredBytes()).isEqualTo(30);
     indexedPlan();
-    registry.database.transaction(
-        db -> {
-          try (var sql = db.createStatement()) {
-            sql.execute("UPDATE stored_objects SET status='PURGED' WHERE id='b'");
-            sql.execute("UPDATE stored_objects SET size=12 WHERE id='a'");
-          }
-          return null;
-        });
+    registry.database.transaction(db -> {
+      try (var sql = db.createStatement()) {
+        sql.execute("UPDATE stored_objects SET status='PURGED' WHERE id='b'");
+        sql.execute("UPDATE stored_objects SET size=12 WHERE id='a'");
+      }
+      return null;
+    });
     assertThat(registry.rawStoredBytes()).isEqualTo(12);
-    assertThatThrownBy(
-            () ->
-                registry.database.transaction(
-                    db -> {
-                      try (var sql = db.createStatement()) {
-                        sql.execute("DELETE FROM stored_objects");
-                      }
-                      throw new IllegalStateException("rollback");
-                    }))
+    assertThatThrownBy(() ->
+            registry.database.transaction(db -> {
+              try (var sql = db.createStatement()) {
+                sql.execute("DELETE FROM stored_objects");
+              }
+              throw new IllegalStateException("rollback");
+            }))
         .isInstanceOf(IllegalStateException.class);
     assertThat(registry.rawStoredBytes()).isEqualTo(12);
   }

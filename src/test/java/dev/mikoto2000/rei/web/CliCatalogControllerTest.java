@@ -179,9 +179,7 @@ class CliCatalogControllerTest {
     var generate = image.commands().getFirst();
     assertTrue(
         generate.options().stream()
-            .anyMatch(
-                option ->
-                    option.names().contains("--output")
-                        && option.candidateType().endsWith("$Any")));
+            .anyMatch(option ->
+                option.names().contains("--output") && option.candidateType().endsWith("$Any")));
   }
 }

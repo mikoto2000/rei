@@ -114,18 +114,16 @@ class GoalStageEvaluationTest {
             .allMatch(r -> r.duplicateOperations() == 0));
     assertTrue(
         results.stream()
-            .anyMatch(
-                r ->
-                    r.mode() == Mode.SPLIT
-                        && r.scenario().equals("decomposition-recovery")
-                        && r.independentlyVerified()));
+            .anyMatch(r ->
+                r.mode() == Mode.SPLIT
+                    && r.scenario().equals("decomposition-recovery")
+                    && r.independentlyVerified()));
     assertFalse(
         results.stream()
-            .anyMatch(
-                r ->
-                    r.mode() == Mode.REPAIR
-                        && r.scenario().equals("decomposition-recovery")
-                        && r.independentlyVerified()));
+            .anyMatch(r ->
+                r.mode() == Mode.REPAIR
+                    && r.scenario().equals("decomposition-recovery")
+                    && r.independentlyVerified()));
     var aggregates = new LinkedHashMap<String, Object>();
     for (var mode : Mode.values()) {
       var selected = results.stream().filter(r -> r.mode() == mode).toList();

@@ -43,17 +43,15 @@ class UserInterventionQueueTest {
         var queue = new UserInterventionQueue();
         var barrier = new CyclicBarrier(2);
         var input =
-            executor.submit(
-                () -> {
-                  barrier.await();
-                  return queue.offer("guidance");
-                });
+            executor.submit(() -> {
+              barrier.await();
+              return queue.offer("guidance");
+            });
         var completion =
-            executor.submit(
-                () -> {
-                  barrier.await();
-                  return queue.finishIfEmpty();
-                });
+            executor.submit(() -> {
+              barrier.await();
+              return queue.finishIfEmpty();
+            });
         boolean accepted = input.get(5, TimeUnit.SECONDS);
         assertThat(completion.get(5, TimeUnit.SECONDS)).isEqualTo(!accepted);
         assertThat(queue.drain()).hasSize(accepted ? 1 : 0);

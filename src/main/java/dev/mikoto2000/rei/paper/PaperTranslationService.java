@@ -132,21 +132,19 @@ public class PaperTranslationService {
                   "Computer Use"));
       findMetadata
           .find(paper.id(), "glossary", config.glossaryVersion())
-          .ifPresent(
-              saved -> {
-                var dictionary =
-                    new dev.mikoto2000.rei.subagent.SubAgentResultParser().parse(saved);
-                // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-                if (!dictionary.isObject() || dictionary.size() > 300)
-                  throw new IllegalArgumentException("invalid saved glossary");
-                for (var term : dictionary.properties()) {
-                  if (!term.getValue().isString()
-                      || term.getKey().isBlank()
-                      || term.getValue().asString().isBlank())
-                    throw new IllegalArgumentException("invalid saved glossary");
-                  glossary.put(term.getKey(), term.getValue().asString());
-                }
-              });
+          .ifPresent(saved -> {
+            var dictionary = new dev.mikoto2000.rei.subagent.SubAgentResultParser().parse(saved);
+            // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
+            if (!dictionary.isObject() || dictionary.size() > 300)
+              throw new IllegalArgumentException("invalid saved glossary");
+            for (var term : dictionary.properties()) {
+              if (!term.getValue().isString()
+                  || term.getKey().isBlank()
+                  || term.getValue().asString().isBlank())
+                throw new IllegalArgumentException("invalid saved glossary");
+              glossary.put(term.getKey(), term.getValue().asString());
+            }
+          });
       List<PaperTranslation.Chunk> result = new ArrayList<>();
       int index = 0;
       for (var s : sections)

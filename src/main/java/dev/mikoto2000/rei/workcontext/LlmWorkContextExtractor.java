@@ -59,10 +59,9 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
     int existingTokens = 0;
     for (var item :
         existing.stream()
-            .filter(
-                i ->
-                    i.status() != WorkContext.Status.SUPERSEDED
-                        && i.status() != WorkContext.Status.WITHDRAWN)
+            .filter(i ->
+                i.status() != WorkContext.Status.SUPERSEDED
+                    && i.status() != WorkContext.Status.WITHDRAWN)
             .sorted(Comparator.comparing(WorkContext.Item::updatedAt).reversed())
             .toList()) {
       var row =
@@ -138,12 +137,11 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
       if (configured != null) {
         if (!(configured instanceof Map<?, ?> values))
           throw new IllegalArgumentException("chat_template_kwargs must be an object");
-        values.forEach(
-            (key, value) -> {
-              if (!(key instanceof String name))
-                throw new IllegalArgumentException("chat_template_kwargs keys must be strings");
-              template.put(name, value);
-            });
+        values.forEach((key, value) -> {
+          if (!(key instanceof String name))
+            throw new IllegalArgumentException("chat_template_kwargs keys must be strings");
+          template.put(name, value);
+        });
       }
       template.put("enable_thinking", properties.enableThinking());
       extra.put("chat_template_kwargs", template);
@@ -171,23 +169,21 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
       WorkContextRepository.checkCancellation();
       WorkContextExtractionDeadline.remaining(Duration.ofSeconds(properties.batchTimeoutSeconds()));
       model.stream(new Prompt(List.of(new SystemMessage(system), new UserMessage(data)), options))
-          .doOnNext(
-              r -> {
-                WorkContextRepository.checkCancellation();
-                if (OutputLimitDetector.isOutputLimitReached(r))
-                  throw new WorkContextExtractionException(
-                      WorkContextExtractionException.Reason.OUTPUT_TRUNCATED);
-                var generation = r.getResult();
-                var message = generation == null ? null : generation.getOutput();
-                var content = message == null ? null : message.getText();
-                if (content != null) result.append(content);
-                if (result.length()
-                    > dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS)
-                  throw new WorkContextExtractionException(
-                      WorkContextExtractionException.Reason.OUTPUT_TOO_LARGE,
-                      result.length(),
-                      dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS);
-              })
+          .doOnNext(r -> {
+            WorkContextRepository.checkCancellation();
+            if (OutputLimitDetector.isOutputLimitReached(r))
+              throw new WorkContextExtractionException(
+                  WorkContextExtractionException.Reason.OUTPUT_TRUNCATED);
+            var generation = r.getResult();
+            var message = generation == null ? null : generation.getOutput();
+            var content = message == null ? null : message.getText();
+            if (content != null) result.append(content);
+            if (result.length() > dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS)
+              throw new WorkContextExtractionException(
+                  WorkContextExtractionException.Reason.OUTPUT_TOO_LARGE,
+                  result.length(),
+                  dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS);
+          })
           .blockLast(
               WorkContextExtractionDeadline.remaining(
                   Duration.ofSeconds(

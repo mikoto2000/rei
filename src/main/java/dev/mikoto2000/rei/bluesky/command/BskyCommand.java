@@ -146,10 +146,8 @@ public class BskyCommand {
         out.println("対象ユーザーの会話履歴はありません: " + handle);
         return;
       }
-      messages.forEach(
-          message ->
-              out.println(
-                  message.createdAt() + " | " + message.role() + " | " + message.content()));
+      messages.forEach(message ->
+          out.println(message.createdAt() + " | " + message.role() + " | " + message.content()));
     }
   }
 }

@@ -49,18 +49,17 @@ class DesktopContextQueueTest {
     assertEquals(1, f.pipeline.desktopPending());
     var scopes = new ArrayList<String>();
     when(f.extractor.extract(any(), any()))
-        .thenAnswer(
-            i -> {
-              scopes.add(org.slf4j.MDC.get("activityScope"));
-              if (scopes.size() == 1) {
-                f.time.advance(30);
-                f.change("B");
-                f.pipeline.tick();
-                assertEquals(0, f.tasks.size());
-              }
-              return new ActivityExtractor.Result(
-                  ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .9);
-            });
+        .thenAnswer(i -> {
+          scopes.add(org.slf4j.MDC.get("activityScope"));
+          if (scopes.size() == 1) {
+            f.time.advance(30);
+            f.change("B");
+            f.pipeline.tick();
+            assertEquals(0, f.tasks.size());
+          }
+          return new ActivityExtractor.Result(
+              ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .9);
+        });
     f.run();
     assertEquals(List.of("foreground", "foreground", "background"), scopes);
     assertEquals(0, f.pipeline.desktopPending());
@@ -107,13 +106,12 @@ class DesktopContextQueueTest {
   void failedDesktopLeavesMainRecordAndWorkerAvailable() throws Exception {
     var f = new Fixture();
     when(f.extractor.extract(any(), any()))
-        .thenAnswer(
-            i -> {
-              if ("background".equals(org.slf4j.MDC.get("activityScope")))
-                throw new java.io.IOException();
-              return new ActivityExtractor.Result(
-                  ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .9);
-            });
+        .thenAnswer(i -> {
+          if ("background".equals(org.slf4j.MDC.get("activityScope")))
+            throw new java.io.IOException();
+          return new ActivityExtractor.Result(
+              ActivityPolicyTest.record("2026-09-22T10:00:00Z", "social").inference(), .9);
+        });
     f.pipeline.tick();
     f.run();
     verify(f.store).append(any());

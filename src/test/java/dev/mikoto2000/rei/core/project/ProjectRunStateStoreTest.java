@@ -51,14 +51,12 @@ class ProjectRunStateStoreTest {
       var gate = new java.util.concurrent.CountDownLatch(1);
       var futures =
           java.util.stream.Stream.of(newest, older, other)
-              .map(
-                  result ->
-                      executor.submit(
-                          () -> {
-                            gate.await();
-                            store.saveCompleted(result);
-                            return null;
-                          }))
+              .map(result ->
+                  executor.submit(() -> {
+                    gate.await();
+                    store.saveCompleted(result);
+                    return null;
+                  }))
               .toList();
       gate.countDown();
       for (var future : futures) future.get(5, java.util.concurrent.TimeUnit.SECONDS);

@@ -79,9 +79,9 @@ public class BlueskyReplyStateRepository {
     return jdbcClient
             .sql(
                 """
-        INSERT OR IGNORE INTO bluesky_reply_claims(post_uri, claimed_at)
-        SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM bluesky_replied_posts WHERE post_uri = ?)
-        """)
+                INSERT OR IGNORE INTO bluesky_reply_claims(post_uri, claimed_at)
+                SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM bluesky_replied_posts WHERE post_uri = ?)
+                """)
             .params(postUri, OffsetDateTime.now().toString(), postUri)
             .update()
         == 1;
@@ -130,44 +130,44 @@ public class BlueskyReplyStateRepository {
     jdbcClient
         .sql(
             """
-        CREATE TABLE IF NOT EXISTS bluesky_reply_claims (
-          post_uri TEXT PRIMARY KEY,
-          claimed_at TEXT NOT NULL
-        )
-        """)
+            CREATE TABLE IF NOT EXISTS bluesky_reply_claims (
+              post_uri TEXT PRIMARY KEY,
+              claimed_at TEXT NOT NULL
+            )
+            """)
         .update();
     jdbcClient
         .sql(
             """
-        CREATE TABLE IF NOT EXISTS bluesky_reply_user_state (
-          handle TEXT PRIMARY KEY,
-          last_seen_post_uri TEXT,
-          last_seen_indexed_at TEXT,
-          updated_at TEXT NOT NULL
-        )
-        """)
+            CREATE TABLE IF NOT EXISTS bluesky_reply_user_state (
+              handle TEXT PRIMARY KEY,
+              last_seen_post_uri TEXT,
+              last_seen_indexed_at TEXT,
+              updated_at TEXT NOT NULL
+            )
+            """)
         .update();
     jdbcClient
         .sql(
             """
-        CREATE TABLE IF NOT EXISTS bluesky_replied_posts (
-          post_uri TEXT PRIMARY KEY,
-          handle TEXT NOT NULL,
-          replied_post_uri TEXT,
-          replied_at TEXT NOT NULL
-        )
-        """)
+            CREATE TABLE IF NOT EXISTS bluesky_replied_posts (
+              post_uri TEXT PRIMARY KEY,
+              handle TEXT NOT NULL,
+              replied_post_uri TEXT,
+              replied_at TEXT NOT NULL
+            )
+            """)
         .update();
     jdbcClient
         .sql(
             """
-        CREATE TABLE IF NOT EXISTS bluesky_reply_daily_count (
-          handle TEXT NOT NULL,
-          date TEXT NOT NULL,
-          count INTEGER NOT NULL,
-          PRIMARY KEY(handle, date)
-        )
-        """)
+            CREATE TABLE IF NOT EXISTS bluesky_reply_daily_count (
+              handle TEXT NOT NULL,
+              date TEXT NOT NULL,
+              count INTEGER NOT NULL,
+              PRIMARY KEY(handle, date)
+            )
+            """)
         .update();
   }
 

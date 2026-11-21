@@ -46,31 +46,29 @@ class SkillSelectionTokenLimitTest {
     var model =
         org.springframework.ai.openai.OpenAiChatModel.builder()
             .options(defaults.build())
-            .httpClientBuilderCustomizer(
-                builder ->
-                    builder.interceptor(
-                        chain -> {
-                          var body = new okio.Buffer();
-                          chain.request().body().writeTo(body);
-                          requests.add(
-                              new com.fasterxml.jackson.databind.ObjectMapper()
-                                  .readTree(body.readByteArray()));
-                          return new okhttp3.Response.Builder()
-                              .request(chain.request())
-                              .protocol(okhttp3.Protocol.HTTP_1_1)
-                              .code(200)
-                              .message("OK")
-                              .body(
-                                  okhttp3.ResponseBody.create(
-                                      """
-                  data: {"id":"skill-selection","object":"chat.completion.chunk","created":0,"model":"skill-model","choices":[{"index":0,"finish_reason":"stop","delta":{"role":"assistant","content":"[\\\"sample\\\"]"}}],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}
+            .httpClientBuilderCustomizer(builder ->
+                builder.interceptor(chain -> {
+                  var body = new okio.Buffer();
+                  chain.request().body().writeTo(body);
+                  requests.add(
+                      new com.fasterxml.jackson.databind.ObjectMapper()
+                          .readTree(body.readByteArray()));
+                  return new okhttp3.Response.Builder()
+                      .request(chain.request())
+                      .protocol(okhttp3.Protocol.HTTP_1_1)
+                      .code(200)
+                      .message("OK")
+                      .body(
+                          okhttp3.ResponseBody.create(
+                              """
+                              data: {"id":"skill-selection","object":"chat.completion.chunk","created":0,"model":"skill-model","choices":[{"index":0,"finish_reason":"stop","delta":{"role":"assistant","content":"[\\\"sample\\\"]"}}],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}
 
-                  data: [DONE]
+                              data: [DONE]
 
-                  """,
-                                      okhttp3.MediaType.get("text/event-stream")))
-                              .build();
-                        }))
+                              """,
+                              okhttp3.MediaType.get("text/event-stream")))
+                      .build();
+                }))
             .build();
     var properties = new dev.mikoto2000.rei.llm.LlmProperties();
     var feature = new dev.mikoto2000.rei.llm.LlmProperties.Server();

@@ -98,13 +98,12 @@ public final class ChatGptCommand {
   /** ChatGPTとの連携で用いるログインを返す。 */
   @Command(name = "login", description = "本人がブラウザで ChatGPT にログインします")
   public int login(@Option(names = "--account", defaultValue = "default") String account) {
-    return execute(
-        () -> {
-          require(login).login(account);
-          out(
-              "Sign-in validated. Use /chatgpt status and /chatgpt models. ChatGPT plan usage"
-                  + " applies.");
-        });
+    return execute(() -> {
+      require(login).login(account);
+      out(
+          "Sign-in validated. Use /chatgpt status and /chatgpt models. ChatGPT plan usage"
+              + " applies.");
+    });
   }
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
@@ -123,18 +122,17 @@ public final class ChatGptCommand {
   /** ChatGPTとの連携で用いるログアウトを返す。 */
   @Command(name = "logout", description = "指定アカウントからログアウトし、保存済み認証情報を削除します")
   public int logout(@Option(names = "--account", defaultValue = "default") String account) {
-    return execute(
-        () -> {
-          require(client).stop(account);
-          boolean revoked = require(oauth).logout(account);
-          require(client).stop(account);
-          require(client).invalidate();
-          out(
-              revoked
-                  ? "Signed out; renewable session revoked."
-                  : "Signed out locally. Remote revocation was not confirmed; disconnect rei in"
-                      + " ChatGPT Settings.");
-        });
+    return execute(() -> {
+      require(client).stop(account);
+      boolean revoked = require(oauth).logout(account);
+      require(client).stop(account);
+      require(client).invalidate();
+      out(
+          revoked
+              ? "Signed out; renewable session revoked."
+              : "Signed out locally. Remote revocation was not confirmed; disconnect rei in"
+                  + " ChatGPT Settings.");
+    });
   }
 
   /** ChatGPTとの連携で用いる推定を返す。 */
@@ -143,35 +141,34 @@ public final class ChatGptCommand {
       @Option(names = "--account", defaultValue = "default") String account,
       @Option(names = "--model", required = true) String model,
       @Parameters String task) {
-    return execute(
-        () -> {
-          authorizeProbe(account, model, task);
-          var result =
-              require(client)
-                  .infer(
-                      account,
-                      model,
-                      "Return a concise text answer; no tools.",
-                      task,
-                      java.time.Duration.ofSeconds(120),
-                      262144,
-                      1048576,
-                      () -> Thread.currentThread().isInterrupted());
-          out(
-              "ChatGPT plan: "
-                  + result.state()
-                  + "; usage="
-                  + result.totalTokens()
-                  + "; error="
-                  + result.error());
-          out("ChatGPT plan output: " + result.diagnostic());
-          if (result.state() == PlanSseAssembler.State.COMPLETED) {
-            if (result.text().isEmpty()) out("ChatGPT plan: completed without output text");
-            else out(dev.mikoto2000.rei.event.CredentialRedactor.redact(result.text()));
-          } else
-            throw ChatGptException.of(
-                result.error() == null ? ChatGptException.Code.PROTOCOL : result.error());
-        });
+    return execute(() -> {
+      authorizeProbe(account, model, task);
+      var result =
+          require(client)
+              .infer(
+                  account,
+                  model,
+                  "Return a concise text answer; no tools.",
+                  task,
+                  java.time.Duration.ofSeconds(120),
+                  262144,
+                  1048576,
+                  () -> Thread.currentThread().isInterrupted());
+      out(
+          "ChatGPT plan: "
+              + result.state()
+              + "; usage="
+              + result.totalTokens()
+              + "; error="
+              + result.error());
+      out("ChatGPT plan output: " + result.diagnostic());
+      if (result.state() == PlanSseAssembler.State.COMPLETED) {
+        if (result.text().isEmpty()) out("ChatGPT plan: completed without output text");
+        else out(dev.mikoto2000.rei.event.CredentialRedactor.redact(result.text()));
+      } else
+        throw ChatGptException.of(
+            result.error() == null ? ChatGptException.Code.PROTOCOL : result.error());
+    });
   }
 
   /** 条件を満たさない操作を拒否するため、チャットGPTコマンドの前提条件を確認する。 */

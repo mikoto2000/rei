@@ -157,7 +157,8 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
       add(a, "chat:main", role, role + " message");
     add(a, "chat:main", "tool", "Authorization: Bearer SECRET_VALUE\n" + "payload".repeat(600));
     assertThat(run("show", "chat:main"))
-        .contains("] system", "] user", "] assistant", "] tool", "[REDACTED]", "payload".repeat(600))
+        .contains(
+            "] system", "] user", "] assistant", "] tool", "[REDACTED]", "payload".repeat(600))
         .doesNotContain("SECRET_VALUE", "(truncated)");
   }
 
@@ -176,10 +177,9 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
         .doesNotContain("2.");
     verify(search)
         .searchForShell(
-            argThat(
-                r ->
-                    r.retrievalScope() == HistorySearchScope.CURRENT_PROJECT_PREFERRED
-                        && r.preferredProjectId().equals(a.id())));
+            argThat(r ->
+                r.retrievalScope() == HistorySearchScope.CURRENT_PROJECT_PREFERRED
+                    && r.preferredProjectId().equals(a.id())));
     verify(search)
         .searchForShell(
             argThat(r -> r.retrievalScope() == HistorySearchScope.CURRENT_PROJECT_ONLY));

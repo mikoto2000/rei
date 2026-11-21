@@ -392,6 +392,10 @@ async fn task_submit(
         .await
 }
 #[tauri::command]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Preserves the Tauri command argument contract"
+)]
 async fn task_control(
     app: App<'_>,
     server_id: String,

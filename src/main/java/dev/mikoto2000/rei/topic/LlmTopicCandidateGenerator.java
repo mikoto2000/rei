@@ -60,33 +60,33 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
     var topicSettings = settings.get();
     String model = readSelectedModel.get();
     return """
-        あなたは会話の話題候補を生成する補助コンポーネントです。
+    あなたは会話の話題候補を生成する補助コンポーネントです。
 
-        ユーザーとの最近の会話および Working Set から、
-        まだ完了していない作業、または後で確認した方がよい事項を探してください。
+    ユーザーとの最近の会話および Working Set から、
+    まだ完了していない作業、または後で確認した方がよい事項を探してください。
 
-        この処理では発話そのものを生成しません。話題候補だけを生成してください。
+    この処理では発話そのものを生成しません。話題候補だけを生成してください。
 
-        出力言語:
-        - 入力の言語にかかわらず、topic と reason は必ず日本語で記述してください。
-        - ファイル名、コマンド、コードの識別子、URL、固有名詞は原文のまま保持してください。
-        - JSON のキーと type、source の列挙値は翻訳しないでください。
+    出力言語:
+    - 入力の言語にかかわらず、topic と reason は必ず日本語で記述してください。
+    - ファイル名、コマンド、コードの識別子、URL、固有名詞は原文のまま保持してください。
+    - JSON のキーと type、source の列挙値は翻訳しないでください。
 
-        対象 type:
-        - unfinished_work
-        - follow_up
+    対象 type:
+    - unfinished_work
+    - follow_up
 
-        次のものは候補にしないでください。
-        - 完了済みの作業
-        - 既に直近で話題にした内容
-        - 根拠のない推測
-        - ユーザーに価値が薄い雑談
-        - 単なる過去情報の繰り返し
+    次のものは候補にしないでください。
+    - 完了済みの作業
+    - 既に直近で話題にした内容
+    - 根拠のない推測
+    - ユーザーに価値が薄い雑談
+    - 単なる過去情報の繰り返し
 
-        Output must be a JSON object only:
-        {"candidates":[{"topic":"スクリプトの実行・テスト状況を確認する","reason":"最近の会話では実行結果がまだ確認できていないため","type":"unfinished_work","source":"working_set","priority":0.8,"freshness":0.9,"usefulness":0.8,"intrusiveness":0.2,"confidence":0.9}]}
-        Max candidates:\s\
-        """
+    Output must be a JSON object only:
+    {"candidates":[{"topic":"スクリプトの実行・テスト状況を確認する","reason":"最近の会話では実行結果がまだ確認できていないため","type":"unfinished_work","source":"working_set","priority":0.8,"freshness":0.9,"usefulness":0.8,"intrusiveness":0.2,"confidence":0.9}]}
+    Max candidates:\s\
+    """
         + String.format("%d", topicSettings.maxCandidates())
         + "\nModel hint: "
         + model

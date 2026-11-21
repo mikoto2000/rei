@@ -124,14 +124,13 @@ public final class BehaviorConversationHistoryAppender {
             sessions
                 .findById(entry.conversationId())
                 .map(s -> s.touched(at))
-                .orElseGet(
-                    () ->
-                        new SessionMetadata(
-                            entry.conversationId(),
-                            projectId,
-                            SessionTitle.from(entry.content()),
-                            at,
-                            at));
+                .orElseGet(() ->
+                    new SessionMetadata(
+                        entry.conversationId(),
+                        projectId,
+                        SessionTitle.from(entry.content()),
+                        at,
+                        at));
         // 別のプロジェクトの情報を、この作業の対象として扱わせない。
         if (!metadataRow.projectId().equals(projectId))
           throw new IllegalArgumentException("Session ownership mismatch");

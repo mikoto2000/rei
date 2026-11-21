@@ -105,8 +105,9 @@ public final class WindowsAudioEndpoints {
         Pointer enumerator = null, collection = null;
         try {
           output.clear();
-          check(function("CoCreateInstance")
-              .invokeInt(new Object[] {classId, null, 1, interfaceId, output}));
+          check(
+              function("CoCreateInstance")
+                  .invokeInt(new Object[] {classId, null, 1, interfaceId, output}));
           enumerator = output.getPointer(0);
           output.clear();
           check(invoke(enumerator, 3, 1, 15, output));

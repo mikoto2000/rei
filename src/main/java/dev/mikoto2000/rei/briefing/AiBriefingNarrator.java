@@ -42,9 +42,7 @@ public class AiBriefingNarrator implements BriefingNarrator {
   @Override
   public BriefingNarration narrate(BriefingContext context) {
     Prompt prompt =
-        new Prompt(
-            buildPrompt(context),
-            optionsForModel.apply(readSelectedModel.get()));
+        new Prompt(buildPrompt(context), optionsForModel.apply(readSelectedModel.get()));
 
     var response = featureModel.get().call(prompt);
     var generation = response == null ? null : response.getResult();
@@ -57,16 +55,16 @@ public class AiBriefingNarrator implements BriefingNarrator {
   /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   private String buildPrompt(BriefingContext context) {
     return """
-        あなたは AI 秘書です。与えられた情報から、今日の業務開始時に読む日次ブリーフィングを日本語で作成してください。
-        次の形式を厳守してください。
-        OVERVIEW: 1段落
-        CAUTIONS:
-        - 箇条書き
-        NEXT_ACTIONS:
-        - 箇条書き
+    あなたは AI 秘書です。与えられた情報から、今日の業務開始時に読む日次ブリーフィングを日本語で作成してください。
+    次の形式を厳守してください。
+    OVERVIEW: 1段落
+    CAUTIONS:
+    - 箇条書き
+    NEXT_ACTIONS:
+    - 箇条書き
 
-        対象日:\s\
-        """
+    対象日:\s\
+    """
         + context.date()
         + """
 
@@ -113,14 +111,13 @@ public class AiBriefingNarrator implements BriefingNarrator {
       return "- なし";
     }
     return tasks.stream()
-        .map(
-            task ->
-                "- "
-                    + task.id()
-                    + " | "
-                    + (task.dueDate() == null ? "" : task.dueDate())
-                    + " | "
-                    + task.title())
+        .map(task ->
+            "- "
+                + task.id()
+                + " | "
+                + (task.dueDate() == null ? "" : task.dueDate())
+                + " | "
+                + task.title())
         .reduce((left, right) -> left + "\n" + right)
         .orElse("- なし");
   }

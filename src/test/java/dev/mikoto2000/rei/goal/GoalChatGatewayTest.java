@@ -140,15 +140,14 @@ class GoalChatGatewayTest {
         .when(continuation)
         .attachParent(any(), any(), any());
     when(chat.execute(any(), anyString(), any(), any()))
-        .thenAnswer(
-            inv -> {
-              var owner = inv.getArgument(0, AgentRunContext.class);
-              assertSame(reservation.get(), inv.getArgument(3));
-              assertTrue(reservation.get().tryReserve());
-              registry.transition(
-                  owner.runId(), dev.mikoto2000.rei.application.run.RunStatus.WAITING, null);
-              return ChatExecutionResult.waiting();
-            });
+        .thenAnswer(inv -> {
+          var owner = inv.getArgument(0, AgentRunContext.class);
+          assertSame(reservation.get(), inv.getArgument(3));
+          assertTrue(reservation.get().tryReserve());
+          registry.transition(
+              owner.runId(), dev.mikoto2000.rei.application.run.RunStatus.WAITING, null);
+          return ChatExecutionResult.waiting();
+        });
     var running = loop.run(project, goal.id());
     jobs.remove().run();
     assertEquals("RUNNING", goals.get(project, goal.id()).status());
@@ -173,14 +172,13 @@ class GoalChatGatewayTest {
             1,
             5);
     when(chat.execute(any(), anyString(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              String prompt = invocation.getArgument(1);
-              assertTrue(prompt.contains("JSON Pointer"));
-              assertTrue(prompt.contains("/ready"));
-              assertTrue(prompt.contains("expectedJson=true"));
-              return ChatExecutionResult.success("done", false);
-            });
+        .thenAnswer(invocation -> {
+          String prompt = invocation.getArgument(1);
+          assertTrue(prompt.contains("JSON Pointer"));
+          assertTrue(prompt.contains("/ready"));
+          assertTrue(prompt.contains("expectedJson=true"));
+          return ChatExecutionResult.success("done", false);
+        });
     loop.run(project, structured.id());
     jobs.removeFirst().run();
     assertEquals("BLOCKED", goals.get(project, structured.id()).status());
@@ -198,23 +196,20 @@ class GoalChatGatewayTest {
     gateway.setTiming(execution);
     verifier.setTiming(execution);
     when(chat.execute(any(), anyString(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              tick.set(10);
-              Files.writeString(dir.resolve("out.txt"), "correct");
-              return ChatExecutionResult.success("SECRET", false);
-            });
+        .thenAnswer(invocation -> {
+          tick.set(10);
+          Files.writeString(dir.resolve("out.txt"), "correct");
+          return ChatExecutionResult.success("SECRET", false);
+        });
     var running = loop.run(project, goal.id());
     jobs.remove().run();
     var recorded = timings.snapshot(project, "session", running.currentRunId()).orElseThrow();
     assertEquals(dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS, recorded.status());
     assertTrue(
         recorded.spans().stream()
-                .filter(
-                    s ->
-                        s.category()
-                            == dev.mikoto2000.rei.timing.TimingRecorder.Category
-                                .COMPLETION_VALIDATION)
+                .filter(s ->
+                    s.category()
+                        == dev.mikoto2000.rei.timing.TimingRecorder.Category.COMPLETION_VALIDATION)
                 .count()
             >= 2);
     assertFalse(recorded.toString().contains("SECRET"));
@@ -297,19 +292,18 @@ class GoalChatGatewayTest {
   @Test
   void actualGatewayPassesCapturedOwnerAndPersistentReservationThroughFifo() throws Exception {
     when(chat.execute(any(), anyString(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              var owner = invocation.getArgument(0, AgentRunContext.class);
-              assertEquals(project, owner.projectId());
-              assertEquals("session", owner.conversationId());
-              assertEquals(dir, owner.projectRoot());
-              var reservation =
-                  invocation.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class);
-              var budget = new OutputLimitRunBudget(1, 2, reservation);
-              assertTrue(budget.tryConsumeLlmCall());
-              Files.writeString(dir.resolve("out.txt"), "correct");
-              return ChatExecutionResult.success("Done", false);
-            });
+        .thenAnswer(invocation -> {
+          var owner = invocation.getArgument(0, AgentRunContext.class);
+          assertEquals(project, owner.projectId());
+          assertEquals("session", owner.conversationId());
+          assertEquals(dir, owner.projectRoot());
+          var reservation =
+              invocation.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class);
+          var budget = new OutputLimitRunBudget(1, 2, reservation);
+          assertTrue(budget.tryConsumeLlmCall());
+          Files.writeString(dir.resolve("out.txt"), "correct");
+          return ChatExecutionResult.success("Done", false);
+        });
     assertEquals("RUNNING", loop.run(project, goal.id()).status());
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(chat);
@@ -319,11 +313,10 @@ class GoalChatGatewayTest {
     assertEquals(1, goals.get(project, goal.id()).llmCallsUsed());
     assertTrue(
         events.stream()
-            .anyMatch(
-                e ->
-                    e.payload() instanceof GoalLifecyclePayload p
-                        && p.status().equals("COMPLETED")
-                        && project.equals(e.projectId())));
+            .anyMatch(e ->
+                e.payload() instanceof GoalLifecyclePayload p
+                    && p.status().equals("COMPLETED")
+                    && project.equals(e.projectId())));
   }
 
   /** 登録済み目標について、会話を保持することを確認する。 */
@@ -331,15 +324,14 @@ class GoalChatGatewayTest {
   void trackedGoalRetainsSessionAndReachesTerminalRunWithoutDuplicateExecution() throws Exception {
     trackRuns();
     when(chat.execute(any(), anyString(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              var owner = invocation.getArgument(0, AgentRunContext.class);
-              assertEquals(
-                  dev.mikoto2000.rei.application.run.RunStatus.RUNNING,
-                  tracking.get(owner.runId()).status());
-              Files.writeString(dir.resolve("out.txt"), "correct");
-              return ChatExecutionResult.success("Done", false);
-            });
+        .thenAnswer(invocation -> {
+          var owner = invocation.getArgument(0, AgentRunContext.class);
+          assertEquals(
+              dev.mikoto2000.rei.application.run.RunStatus.RUNNING,
+              tracking.get(owner.runId()).status());
+          Files.writeString(dir.resolve("out.txt"), "correct");
+          return ChatExecutionResult.success("Done", false);
+        });
     var running = loop.run(project, goal.id());
     var queued = tracking.get(running.currentRunId());
     assertEquals(dev.mikoto2000.rei.application.run.RunStatus.QUEUED, queued.status());
@@ -461,19 +453,18 @@ class GoalChatGatewayTest {
             .orElseThrow();
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     when(chat.execute(any(), anyString(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              String prompt = invocation.getArgument(1);
-              assertTrue(prompt.contains("ALL"));
-              assertTrue(prompt.contains("A.txt"));
-              assertTrue(prompt.contains("B.txt"));
-              var reservation =
-                  invocation.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class);
-              assertTrue(reservation.tryReserve());
-              Files.writeString(
-                  dir.resolve(calls.incrementAndGet() == 1 ? "A.txt" : "B.txt"), "correct");
-              return ChatExecutionResult.success("Complete", false);
-            });
+        .thenAnswer(invocation -> {
+          String prompt = invocation.getArgument(1);
+          assertTrue(prompt.contains("ALL"));
+          assertTrue(prompt.contains("A.txt"));
+          assertTrue(prompt.contains("B.txt"));
+          var reservation =
+              invocation.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class);
+          assertTrue(reservation.tryReserve());
+          Files.writeString(
+              dir.resolve(calls.incrementAndGet() == 1 ? "A.txt" : "B.txt"), "correct");
+          return ChatExecutionResult.success("Complete", false);
+        });
     loop.run(project, multi.id());
     jobs.remove().run();
     assertEquals("RUNNING", goals.get(project, multi.id()).status());
@@ -528,12 +519,10 @@ class GoalChatGatewayTest {
     assertThrows(IllegalStateException.class, () -> loop.reconcile(project, goal.id(), run));
     assertEquals("RUNNING", goals.get(project, goal.id()).status());
     when(chat.execute(any(), anyString(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              assertThrows(
-                  IllegalStateException.class, () -> loop.reconcile(project, goal.id(), run));
-              return ChatExecutionResult.failed("stop");
-            });
+        .thenAnswer(invocation -> {
+          assertThrows(IllegalStateException.class, () -> loop.reconcile(project, goal.id(), run));
+          return ChatExecutionResult.failed("stop");
+        });
     jobs.remove().run();
     assertEquals("FAILED", goals.get(project, goal.id()).status());
   }
@@ -561,11 +550,10 @@ class GoalChatGatewayTest {
     verifyNoInteractions(chat);
     assertTrue(jobs.isEmpty());
     when(chat.execute(any(), anyString(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              assertTrue(invocation.getArgument(1, String.class).contains("unknown side effects"));
-              return ChatExecutionResult.failed("stop");
-            });
+        .thenAnswer(invocation -> {
+          assertTrue(invocation.getArgument(1, String.class).contains("unknown side effects"));
+          return ChatExecutionResult.failed("stop");
+        });
     loop.run(project, goal.id());
     jobs.remove().run();
     assertEquals(2, goals.get(project, goal.id()).attempts());
@@ -596,22 +584,21 @@ class GoalChatGatewayTest {
             new GoalCompletionGate.Definition(goal.criteria(), null, List.of(), List.of(), null));
     var attempts = new java.util.concurrent.atomic.AtomicInteger();
     when(chat.execute(any(), anyString(), any(), any()))
-        .thenAnswer(
-            inv -> {
-              var reservation = inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class);
-              if (attempts.incrementAndGet() == 1) {
-                while (reservation.tryReserve()) {}
-                assertEquals(2, goals.get(project, goal.id()).llmCallsUsed());
-                return ChatExecutionResult.failed("bounded", "llm_call_budget_exceeded");
-              }
-              String prompt = inv.getArgument(1);
-              assertTrue(prompt.contains("Repair diagnosis"));
-              assertTrue(prompt.contains("REQUIREMENT_UNMET"));
-              assertTrue(prompt.contains("file-0"));
-              assertTrue(reservation.tryReserve());
-              Files.writeString(dir.resolve("out.txt"), "correct");
-              return ChatExecutionResult.success("done", false);
-            });
+        .thenAnswer(inv -> {
+          var reservation = inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class);
+          if (attempts.incrementAndGet() == 1) {
+            while (reservation.tryReserve()) {}
+            assertEquals(2, goals.get(project, goal.id()).llmCallsUsed());
+            return ChatExecutionResult.failed("bounded", "llm_call_budget_exceeded");
+          }
+          String prompt = inv.getArgument(1);
+          assertTrue(prompt.contains("Repair diagnosis"));
+          assertTrue(prompt.contains("REQUIREMENT_UNMET"));
+          assertTrue(prompt.contains("file-0"));
+          assertTrue(reservation.tryReserve());
+          Files.writeString(dir.resolve("out.txt"), "correct");
+          return ChatExecutionResult.success("done", false);
+        });
     loop.run(project, goal.id());
     jobs.removeFirst().run();
     assertEquals("RUNNING", goals.get(project, goal.id()).status());
@@ -644,15 +631,14 @@ class GoalChatGatewayTest {
         new java.util.concurrent.atomic.AtomicReference<
             dev.mikoto2000.rei.secretary.SecretaryPreparationRuntime.Outcome>();
     when(chat.execute(any(), anyString(), any(), any()))
-        .thenAnswer(
-            inv -> {
-              var owner = inv.getArgument(0, AgentRunContext.class);
-              assertEquals(AgentRunContext.Mode.READ_ONLY, owner.mode());
-              var reservation = inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class);
-              assertTrue(reservation.tryReserve());
-              assertFalse(reservation.tryReserve());
-              return ChatExecutionResult.success("prepared", false);
-            });
+        .thenAnswer(inv -> {
+          var owner = inv.getArgument(0, AgentRunContext.class);
+          assertEquals(AgentRunContext.Mode.READ_ONLY, owner.mode());
+          var reservation = inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class);
+          assertTrue(reservation.tryReserve());
+          assertFalse(reservation.tryReserve());
+          return ChatExecutionResult.success("prepared", false);
+        });
     gateway.start(
         new dev.mikoto2000.rei.secretary.SecretaryPreparationRuntime.Request(
             "prep", project, "session", "research", "RESEARCH"),
@@ -673,13 +659,12 @@ class GoalChatGatewayTest {
         () -> loop.start(project, goal.id(), descriptor.fingerprint(), () -> false));
     verifyNoInteractions(chat);
     when(chat.execute(any(), anyString(), any(), any()))
-        .thenAnswer(
-            inv -> {
-              assertTrue(
-                  inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class).tryReserve());
-              Files.writeString(dir.resolve("out.txt"), "correct");
-              return ChatExecutionResult.success("done", false);
-            });
+        .thenAnswer(inv -> {
+          assertTrue(
+              inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class).tryReserve());
+          Files.writeString(dir.resolve("out.txt"), "correct");
+          return ChatExecutionResult.success("done", false);
+        });
     loop.start(project, goal.id(), descriptor.fingerprint(), () -> true);
     jobs.remove().run();
     var completed = loop.describe(project, goal.id());
@@ -696,13 +681,12 @@ class GoalChatGatewayTest {
     assertEquals("PAUSED", goals.get(project, goal.id()).status());
     var allowed = new java.util.concurrent.atomic.AtomicBoolean(true);
     when(chat.execute(any(), anyString(), any(), any()))
-        .thenAnswer(
-            inv -> {
-              allowed.set(false);
-              assertFalse(
-                  inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class).tryReserve());
-              return ChatExecutionResult.failed("stopped", "llm_call_budget_exceeded");
-            });
+        .thenAnswer(inv -> {
+          allowed.set(false);
+          assertFalse(
+              inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class).tryReserve());
+          return ChatExecutionResult.failed("stopped", "llm_call_budget_exceeded");
+        });
     loop.start(project, goal.id(), loop.describe(project, goal.id()).fingerprint(), allowed::get);
     jobs.remove().run();
     assertEquals(0, goals.get(project, goal.id()).llmCallsUsed());

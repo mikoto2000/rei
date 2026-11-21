@@ -64,15 +64,14 @@ class DurableSubAgentConfigurationTest {
     context.run(app -> assertThat(app).doesNotHaveBean(DurableSubAgentRepository.class));
     context
         .withPropertyValues("rei.subagents.durable-enabled=true")
-        .run(
-            app -> {
-              assertThat(app).hasSingleBean(DurableSubAgentRepository.class);
-              assertThat(
-                      org.springframework.jdbc.core.simple.JdbcClient.create(source)
-                          .sql("SELECT COUNT(*) FROM subagent_checkpoints")
-                          .query(Long.class)
-                          .single())
-                  .isZero();
-            });
+        .run(app -> {
+          assertThat(app).hasSingleBean(DurableSubAgentRepository.class);
+          assertThat(
+                  org.springframework.jdbc.core.simple.JdbcClient.create(source)
+                      .sql("SELECT COUNT(*) FROM subagent_checkpoints")
+                      .query(Long.class)
+                      .single())
+              .isZero();
+        });
   }
 }

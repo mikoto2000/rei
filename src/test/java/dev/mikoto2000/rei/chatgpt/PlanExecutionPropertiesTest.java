@@ -22,14 +22,13 @@ class PlanExecutionPropertiesTest {
   /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void startsWithDefaultSettings() {
-    runner.run(
-        context -> {
-          assertThat(context).hasNotFailed();
-          assertThat(context.getBean(PlanExecutionProperties.class))
-              .isEqualTo(
-                  new PlanExecutionProperties(
-                      false, 3, 2, 2, 262144, 1048576, Duration.ofMinutes(10), false, 0));
-        });
+    runner.run(context -> {
+      assertThat(context).hasNotFailed();
+      assertThat(context.getBean(PlanExecutionProperties.class))
+          .isEqualTo(
+              new PlanExecutionProperties(
+                  false, 3, 2, 2, 262144, 1048576, Duration.ofMinutes(10), false, 0));
+    });
   }
 
   /** 長い合計期限一覧を受け付けられることを確認する。 */
@@ -38,13 +37,11 @@ class PlanExecutionPropertiesTest {
   void acceptsLongTotalDeadlinesAndExistingShortLimits(String timeout) {
     runner
         .withPropertyValues("rei.chatgpt-plan.execution.timeout=" + timeout)
-        .run(
-            context -> {
-              assertThat(context).hasNotFailed();
-              assertThat(context.getBean(PlanExecutionProperties.class).timeout())
-                  .isEqualTo(
-                      org.springframework.boot.convert.DurationStyle.detectAndParse(timeout));
-            });
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context.getBean(PlanExecutionProperties.class).timeout())
+              .isEqualTo(org.springframework.boot.convert.DurationStyle.detectAndParse(timeout));
+        });
   }
 
   /** 不正なを受け付けないことを確認する。 */
@@ -53,13 +50,12 @@ class PlanExecutionPropertiesTest {
   void rejectsInvalidOrUnboundedDeadlinesWithTheExactSettingName(String timeout) {
     runner
         .withPropertyValues("rei.chatgpt-plan.execution.timeout=" + timeout)
-        .run(
-            context -> {
-              assertThat(context).hasFailed();
-              assertThat(context.getStartupFailure())
-                  .hasRootCauseMessage(
-                      "rei.chatgpt-plan.execution.timeout must be positive and at most 30m");
-            });
+        .run(context -> {
+          assertThat(context).hasFailed();
+          assertThat(context.getStartupFailure())
+              .hasRootCauseMessage(
+                  "rei.chatgpt-plan.execution.timeout must be positive and at most 30m");
+        });
   }
 
   /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
@@ -76,13 +72,12 @@ class PlanExecutionPropertiesTest {
             "rei.chatgpt-plan.execution.timeout=30s",
             "rei.chatgpt-plan.execution.semantic-validation=true",
             "rei.chatgpt-plan.execution.refinement-rounds=2")
-        .run(
-            context -> {
-              assertThat(context).hasNotFailed();
-              assertThat(context.getBean(PlanExecutionProperties.class))
-                  .isEqualTo(
-                      new PlanExecutionProperties(
-                          true, 4, 1, 1, 2048, 4096, Duration.ofSeconds(30), true, 2));
-            });
+        .run(context -> {
+          assertThat(context).hasNotFailed();
+          assertThat(context.getBean(PlanExecutionProperties.class))
+              .isEqualTo(
+                  new PlanExecutionProperties(
+                      true, 4, 1, 1, 2048, 4096, Duration.ofSeconds(30), true, 2));
+        });
   }
 }

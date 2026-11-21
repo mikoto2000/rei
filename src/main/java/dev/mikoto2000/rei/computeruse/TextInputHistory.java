@@ -32,10 +32,9 @@ final class TextInputHistory {
     String id = identity(state);
     boolean repeated =
         entries.stream()
-            .anyMatch(
-                e ->
-                    e.text().equals(text)
-                        && (id == null || e.elementId() == null || id.equals(e.elementId())));
+            .anyMatch(e ->
+                e.text().equals(text)
+                    && (id == null || e.elementId() == null || id.equals(e.elementId())));
     if (!repeated) return;
     boolean readable =
         "ok".equals(state.path("status").asText())

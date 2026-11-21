@@ -59,15 +59,14 @@ class ChatSubmitServiceTest {
             client);
     assertThat(captures.sessions()).hasSize(1);
     assertThat(captures.sessions().getFirst().runId()).isEqualTo(context.runId());
-    assertThatThrownBy(
-            () ->
-                service.submit(
-                    "hello",
-                    project.id(),
-                    session.sessionId(),
-                    AgentRunContext.Mode.EXCLUSIVE,
-                    null,
-                    "bad"))
+    assertThatThrownBy(() ->
+            service.submit(
+                "hello",
+                project.id(),
+                session.sessionId(),
+                AgentRunContext.Mode.EXCLUSIVE,
+                null,
+                "bad"))
         .isInstanceOf(IllegalArgumentException.class);
   }
 

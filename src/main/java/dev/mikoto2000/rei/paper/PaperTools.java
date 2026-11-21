@@ -43,11 +43,10 @@ public class PaperTools {
               + " paper requests to structured query/year/authors/venues/OA/sort/limit. Results are"
               + " automatically saved. References are session-local.")
   public Object searchPapers(PaperSearchQuery query, ToolContext context) {
-    return safe(
-        () -> {
-          var r = service.search.search(query, PaperOperation.from(context));
-          return Map.of("papers", PaperViews.listing(r.papers()), "warnings", r.warnings());
-        });
+    return safe(() -> {
+      var r = service.search.search(query, PaperOperation.from(context));
+      return Map.of("papers", PaperViews.listing(r.papers()), "warnings", r.warnings());
+    });
   }
 
   /** 論文の調査と整理で参照する論文を返す。 */
@@ -56,12 +55,11 @@ public class PaperTools {
           "Get saved paper metadata by session result number or permanent UUID. enrich=true"
               + " supplements DOI metadata through Crossref. Never invent authors, DOI or year.")
   public Object getPaper(String reference, boolean enrich, ToolContext context) {
-    return safe(
-        () -> {
-          var op = PaperOperation.from(context);
-          var p = service.library.get(reference, op);
-          return service.library.describe(enrich ? service.search.enrich(p, op) : p);
-        });
+    return safe(() -> {
+      var op = PaperOperation.from(context);
+      var p = service.library.get(reference, op);
+      return service.library.describe(enrich ? service.search.enrich(p, op) : p);
+    });
   }
 
   /** 依頼に関連する情報を得るため、論文保管資料を検索する。 */
@@ -70,9 +68,8 @@ public class PaperTools {
           "Search previously saved/read papers in Paper Library by title, author, abstract, venue,"
               + " DOI, year or tags. Empty query lists papers.")
   public Object searchPaperLibrary(String query, int limit, ToolContext context) {
-    return safe(
-        () ->
-            PaperViews.listing(service.library.search(query, limit, PaperOperation.from(context))));
+    return safe(() ->
+        PaperViews.listing(service.library.search(query, limit, PaperOperation.from(context))));
   }
 
   /** 論文の調査と整理で参照する論文内容を返す。 */
@@ -81,12 +78,10 @@ public class PaperTools {
           "Download/parse a public paper if possible. Returns availability and section index only,"
               + " never the full text. Abstract-only must be disclosed.")
   public Object getPaperContent(String reference, ToolContext context) {
-    return safe(
-        () -> {
-          var op = PaperOperation.from(context);
-          return PaperViews.content(
-              service.content.content(service.library.get(reference, op), op));
-        });
+    return safe(() -> {
+      var op = PaperOperation.from(context);
+      return PaperViews.content(service.content.content(service.library.get(reference, op), op));
+    });
   }
 
   /** 論文の調査と整理で参照する論文節を返す。 */
@@ -95,28 +90,27 @@ public class PaperTools {
           "Retrieve a single paper section by zero-based index from getPaperContent, with character"
               + " offset. Returns at most 4000 characters for working context.")
   public Object getPaperSection(String reference, int section, int offset, ToolContext context) {
-    return safe(
-        () -> {
-          var op = PaperOperation.from(context);
-          var p = service.content.content(service.library.get(reference, op), op);
-          if (section < 0 || section >= p.sections().size())
-            throw new PaperException(PaperException.Code.INVALID_QUERY, "セクション番号が不正です");
-          var s = p.sections().get(section);
-          if (offset < 0 || offset > s.text().length())
-            throw new PaperException(PaperException.Code.INVALID_QUERY, "offset が不正です");
-          int end = Math.min(s.text().length(), offset + 4000);
-          return Map.of(
-              "heading",
-              s.heading(),
-              "page",
-              s.startPage(),
-              "text",
-              s.text().substring(offset, end),
-              "nextOffset",
-              end,
-              "complete",
-              end == s.text().length());
-        });
+    return safe(() -> {
+      var op = PaperOperation.from(context);
+      var p = service.content.content(service.library.get(reference, op), op);
+      if (section < 0 || section >= p.sections().size())
+        throw new PaperException(PaperException.Code.INVALID_QUERY, "セクション番号が不正です");
+      var s = p.sections().get(section);
+      if (offset < 0 || offset > s.text().length())
+        throw new PaperException(PaperException.Code.INVALID_QUERY, "offset が不正です");
+      int end = Math.min(s.text().length(), offset + 4000);
+      return Map.of(
+          "heading",
+          s.heading(),
+          "page",
+          s.startPage(),
+          "text",
+          s.text().substring(offset, end),
+          "nextOffset",
+          end,
+          "complete",
+          end == s.text().length());
+    });
   }
 
   /** 利用者が要点を把握できるよう、論文を要約する。 */
@@ -127,19 +121,13 @@ public class PaperTools {
               + " and excerpt warnings.")
   public Object summarizePaper(
       String reference, PaperSummary.Mode mode, boolean refresh, ToolContext context) {
-    return safe(
-        () -> {
-          var op = PaperOperation.from(context);
-          var p = service.library.get(reference, op);
-          var s = service.summary.summarize(p, mode, refresh, op);
-          return Map.of(
-              "paper",
-              PaperViews.detail(p),
-              "scope",
-              PaperViews.scope(s.availability()),
-              "summary",
-              s);
-        });
+    return safe(() -> {
+      var op = PaperOperation.from(context);
+      var p = service.library.get(reference, op);
+      var s = service.summary.summarize(p, mode, refresh, op);
+      return Map.of(
+          "paper", PaperViews.detail(p), "scope", PaperViews.scope(s.availability()), "summary", s);
+    });
   }
 
   /** 利用者が内容を読めるよう、論文を翻訳する。 */
@@ -154,13 +142,12 @@ public class PaperTools {
       String section,
       boolean refresh,
       ToolContext context) {
-    return safe(
-        () -> {
-          var op = PaperOperation.from(context);
-          return PaperViews.translation(
-              service.translation.translate(
-                  service.library.get(reference, op), mode, section, refresh, op));
-        });
+    return safe(() -> {
+      var op = PaperOperation.from(context);
+      return PaperViews.translation(
+          service.translation.translate(
+              service.library.get(reference, op), mode, section, refresh, op));
+    });
   }
 
   /** 論文の調査と整理で参照する論文翻訳文書の分割単位を返す。 */
@@ -175,29 +162,28 @@ public class PaperTools {
       int chunk,
       int offset,
       ToolContext context) {
-    return safe(
-        () -> {
-          var op = PaperOperation.from(context);
-          var t =
-              service.translation.translate(
-                  service.library.get(reference, op), mode, section, false, op);
-          if (chunk < 0 || chunk >= t.chunks().size())
-            throw new PaperException(PaperException.Code.INVALID_QUERY, "chunk が不正です");
-          var c = t.chunks().get(chunk);
-          if (offset < 0 || offset > c.content().length())
-            throw new PaperException(PaperException.Code.INVALID_QUERY, "offset が不正です");
-          int end = Math.min(c.content().length(), offset + 4000);
-          return Map.of(
-              "section",
-              c.section(),
-              "page",
-              c.page(),
-              "content",
-              c.content().substring(offset, end),
-              "nextOffset",
-              end,
-              "complete",
-              end == c.content().length());
-        });
+    return safe(() -> {
+      var op = PaperOperation.from(context);
+      var t =
+          service.translation.translate(
+              service.library.get(reference, op), mode, section, false, op);
+      if (chunk < 0 || chunk >= t.chunks().size())
+        throw new PaperException(PaperException.Code.INVALID_QUERY, "chunk が不正です");
+      var c = t.chunks().get(chunk);
+      if (offset < 0 || offset > c.content().length())
+        throw new PaperException(PaperException.Code.INVALID_QUERY, "offset が不正です");
+      int end = Math.min(c.content().length(), offset + 4000);
+      return Map.of(
+          "section",
+          c.section(),
+          "page",
+          c.page(),
+          "content",
+          c.content().substring(offset, end),
+          "nextOffset",
+          end,
+          "complete",
+          end == c.content().length());
+    });
   }
 }

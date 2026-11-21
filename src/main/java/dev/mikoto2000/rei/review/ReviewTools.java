@@ -494,15 +494,14 @@ public final class ReviewTools {
                 .toList());
     var located =
         saved.findings().stream()
-            .map(
-                f ->
-                    new dev.mikoto2000.rei.durable.WorkItemStore.Finding(
-                        f.id(),
-                        f.severity(),
-                        f.location().start(),
-                        f.location().end(),
-                        f.evidence(),
-                        f.assessment()))
+            .map(f ->
+                new dev.mikoto2000.rei.durable.WorkItemStore.Finding(
+                    f.id(),
+                    f.severity(),
+                    f.location().start(),
+                    f.location().end(),
+                    f.evidence(),
+                    f.assessment()))
             .toList();
     var body =
         new dev.mikoto2000.rei.durable.WorkItemStore.ReviewResult(
@@ -910,10 +909,8 @@ public final class ReviewTools {
         job.ranges().stream()
             .filter(e -> e.reviewed() && e.delivered() && !e.stale())
             .map(e -> e.range())
-            .filter(
-                r ->
-                    r.path().equals(page.range().path())
-                        && r.version().equals(page.range().version()))
+            .filter(r ->
+                r.path().equals(page.range().path()) && r.version().equals(page.range().version()))
             .sorted(Comparator.comparingInt(r -> r.span().start()))
             .toList()) {
       if (range.span().start() > covered) break;
@@ -1072,11 +1069,10 @@ public final class ReviewTools {
           job.id(),
           job.status(),
           job.findings().stream()
-              .filter(
-                  f ->
-                      f.id().equals(findingId)
-                          && f.path().equals(path)
-                          && (originalEvidence == null || f.evidence().equals(originalEvidence)))
+              .filter(f ->
+                  f.id().equals(findingId)
+                      && f.path().equals(path)
+                      && (originalEvidence == null || f.evidence().equals(originalEvidence)))
               .toList(),
           job.revision(),
           transition.changed());
@@ -1215,13 +1211,12 @@ public final class ReviewTools {
       Source snapshot) {
     var matching =
         job.ranges().stream()
-            .filter(
-                e ->
-                    e.delivered()
-                        && !e.stale()
-                        && e.range().path().equals(path)
-                        && e.range().span().start() == offset
-                        && e.range().span().end() == nextOffset)
+            .filter(e ->
+                e.delivered()
+                    && !e.stale()
+                    && e.range().path().equals(path)
+                    && e.range().span().start() == offset
+                    && e.range().span().end() == nextOffset)
             .toList();
     if (matching.size() != 1)
       throw new ReviewResultRejectedException(
@@ -1264,15 +1259,13 @@ public final class ReviewTools {
         saved.ranges().stream().filter(e -> e.range().equals(range)).findFirst().orElseThrow();
     var acceptedFindings =
         saved.findings().stream()
-            .filter(
-                f ->
-                    located.stream()
-                        .anyMatch(
-                            l ->
-                                l.path().equals(f.path())
-                                    && l.version().equals(f.version())
-                                    && l.location().equals(f.location())
-                                    && l.evidence().equals(f.evidence())))
+            .filter(f ->
+                located.stream()
+                    .anyMatch(l ->
+                        l.path().equals(f.path())
+                            && l.version().equals(f.version())
+                            && l.location().equals(f.location())
+                            && l.evidence().equals(f.evidence())))
             .toList();
     return new PageSubmission(
         saved.id(),
@@ -1549,13 +1542,12 @@ public final class ReviewTools {
       for (var required : target.required()) {
         var complete =
             job.ranges().stream()
-                .filter(
-                    e ->
-                        e.reviewed()
-                            && e.delivered()
-                            && !e.stale()
-                            && e.range().path().equals(target.path())
-                            && e.range().version().equals(target.version()))
+                .filter(e ->
+                    e.reviewed()
+                        && e.delivered()
+                        && !e.stale()
+                        && e.range().path().equals(target.path())
+                        && e.range().version().equals(target.version()))
                 .map(e -> e.range().span())
                 .sorted(Comparator.comparingInt(Span::start))
                 .toList();
@@ -1729,17 +1721,16 @@ public final class ReviewTools {
             Map.of(
                 "durableTasks",
                 durable.entries().stream()
-                    .map(
-                        task ->
-                            Map.of(
-                                "taskId",
-                                task.id(),
-                                "state",
-                                task.state(),
-                                "enumeration",
-                                task.enumeration(),
-                                "nextAction",
-                                "Use listReviewTaskResults(taskId) to report saved assessments and findings. Only if more review work is requested, resumeRepositoryReview, scan until SEALED, then readNextReviewWorkItem and submitReviewWorkItem by IDs."))
+                    .map(task ->
+                        Map.of(
+                            "taskId",
+                            task.id(),
+                            "state",
+                            task.state(),
+                            "enumeration",
+                            task.enumeration(),
+                            "nextAction",
+                            "Use listReviewTaskResults(taskId) to report saved assessments and findings. Only if more review work is requested, resumeRepositoryReview, scan until SEALED, then readNextReviewWorkItem and submitReviewWorkItem by IDs."))
                     .toList(),
                 "durableTasksNextCursor",
                 durable.nextCursor() == null ? "" : durable.nextCursor(),
@@ -1753,18 +1744,17 @@ public final class ReviewTools {
                 jobs.stream()
                     .filter(job -> !job.findings().isEmpty())
                     .limit(3)
-                    .map(
-                        job ->
-                            Map.of(
-                                "reviewJobId",
-                                job.id(),
-                                "status",
-                                job.status(),
-                                "findings",
-                                job.findings().size(),
-                                "nextAction",
-                                "Use reviewFindings(offset=0,limit=5); corroborate and resolve candidates. "
-                                    + "Coverage COMPLETE alone does not mean requested repairs are finished."))
+                    .map(job ->
+                        Map.of(
+                            "reviewJobId",
+                            job.id(),
+                            "status",
+                            job.status(),
+                            "findings",
+                            job.findings().size(),
+                            "nextAction",
+                            "Use reviewFindings(offset=0,limit=5); corroborate and resolve candidates. "
+                                + "Coverage COMPLETE alone does not mean requested repairs are finished."))
                     .toList(),
                 "savedPendingSample",
                 rows))

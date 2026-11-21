@@ -41,10 +41,9 @@ final class HttpCacheRules {
     if (searchPost && sensitive.containsSensitiveInfo(request.body())) return false;
     if (request.policy().allowPrivateOrigin()
         || request.headers().keySet().stream()
-            .anyMatch(
-                name ->
-                    !HEADERS.contains(name)
-                        && !(searchPost && Set.of("authorization", "content-type").contains(name))))
+            .anyMatch(name ->
+                !HEADERS.contains(name)
+                    && !(searchPost && Set.of("authorization", "content-type").contains(name))))
       return false;
     if (restricted(request.headers().get("cache-control"))) return false;
     String host = request.uri().getHost();

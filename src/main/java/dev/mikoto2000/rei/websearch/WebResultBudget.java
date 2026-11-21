@@ -163,18 +163,17 @@ public final class WebResultBudget {
         page.excerpts().stream()
             .filter(excerpt -> excerpt.contentStart() < length)
             .limit(8)
-            .map(
-                excerpt ->
-                    new WebExcerpt(
-                        excerpt.kind(),
-                        excerpt.headings().stream().map(h -> clip(h, 80)).limit(6).toList(),
-                        excerpt.position(),
-                        excerpt.sourceStart(),
-                        excerpt.sourceEnd(),
-                        clip(excerpt.anchor(), 128),
-                        excerpt.contentStart(),
-                        Math.min(length, excerpt.contentEnd()),
-                        excerpt.truncated() || excerpt.contentEnd() > length))
+            .map(excerpt ->
+                new WebExcerpt(
+                    excerpt.kind(),
+                    excerpt.headings().stream().map(h -> clip(h, 80)).limit(6).toList(),
+                    excerpt.position(),
+                    excerpt.sourceStart(),
+                    excerpt.sourceEnd(),
+                    clip(excerpt.anchor(), 128),
+                    excerpt.contentStart(),
+                    Math.min(length, excerpt.contentEnd()),
+                    excerpt.truncated() || excerpt.contentEnd() > length))
             .toList();
     if (!excerpts.equals(page.excerpts())) omissions.add("excerpt_metadata_omitted");
     return new WebSearchPage(
@@ -289,17 +288,16 @@ public final class WebResultBudget {
       int bound = cap;
       var result =
           rows.stream()
-              .map(
-                  row ->
-                      new WebSearchResult(
-                          clip(row.title(), bound),
-                          row.url(),
-                          Objects.equals(clip(row.snippet(), bound), row.snippet())
-                                  && Objects.equals(clip(row.title(), bound), row.title())
-                              ? row.snippet()
-                              : Objects.toString(clip(row.snippet(), bound), "")
-                                  + " [metadata omitted: output_budget]",
-                          row.publishedAt()))
+              .map(row ->
+                  new WebSearchResult(
+                      clip(row.title(), bound),
+                      row.url(),
+                      Objects.equals(clip(row.snippet(), bound), row.snippet())
+                              && Objects.equals(clip(row.title(), bound), row.title())
+                          ? row.snippet()
+                          : Objects.toString(clip(row.snippet(), bound), "")
+                              + " [metadata omitted: output_budget]",
+                      row.publishedAt()))
               .toList();
       if (fits(result, tool)) return result;
     }

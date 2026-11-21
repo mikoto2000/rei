@@ -71,35 +71,31 @@ class DoctorConfigurationIntegrationTest {
             "rei.llm.features.chat.api-key=KEY-SECRET",
             "rei.voice.auto-start=true",
             "rei.voice.bundle-directory=" + root)
-        .run(
-            context -> {
-              assertNull(context.getStartupFailure());
-              var doctor = context.getBean(DoctorService.class);
-              assertEquals("http://override.invalid", doctor.endpoint());
-              var reports = doctor.passive(true);
-              assertEquals(
-                  DoctorResult.Status.ERROR,
-                  reports.stream()
-                      .filter(r -> r.id().equals("voice.bundle"))
-                      .findFirst()
-                      .orElseThrow()
-                      .status());
-              var out = new StringWriter();
-              var command = new picocli.CommandLine(context.getBean(DoctorCommand.class));
-              command.setOut(new PrintWriter(out));
-              assertEquals(0, command.execute("--details"));
-              assertTrue(out.toString().contains("rei.llm.features.chat.base-url"));
-              assertFalse(out.toString().contains("KEY-SECRET"));
-              assertFalse(out.toString().contains("MODEL-SECRET"));
-              assertFalse(out.toString().contains("override.invalid"));
-              assertEquals(
-                  0,
-                  context.getBeanNamesForType(dev.mikoto2000.rei.llm.LlmModelProvider.class)
-                      .length);
-              assertEquals(
-                  0,
-                  context.getBeanNamesForType(dev.mikoto2000.rei.voice.VoiceModelManager.class)
-                      .length);
-            });
+        .run(context -> {
+          assertNull(context.getStartupFailure());
+          var doctor = context.getBean(DoctorService.class);
+          assertEquals("http://override.invalid", doctor.endpoint());
+          var reports = doctor.passive(true);
+          assertEquals(
+              DoctorResult.Status.ERROR,
+              reports.stream()
+                  .filter(r -> r.id().equals("voice.bundle"))
+                  .findFirst()
+                  .orElseThrow()
+                  .status());
+          var out = new StringWriter();
+          var command = new picocli.CommandLine(context.getBean(DoctorCommand.class));
+          command.setOut(new PrintWriter(out));
+          assertEquals(0, command.execute("--details"));
+          assertTrue(out.toString().contains("rei.llm.features.chat.base-url"));
+          assertFalse(out.toString().contains("KEY-SECRET"));
+          assertFalse(out.toString().contains("MODEL-SECRET"));
+          assertFalse(out.toString().contains("override.invalid"));
+          assertEquals(
+              0, context.getBeanNamesForType(dev.mikoto2000.rei.llm.LlmModelProvider.class).length);
+          assertEquals(
+              0,
+              context.getBeanNamesForType(dev.mikoto2000.rei.voice.VoiceModelManager.class).length);
+        });
   }
 }

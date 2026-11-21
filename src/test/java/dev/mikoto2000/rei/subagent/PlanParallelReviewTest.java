@@ -51,9 +51,8 @@ class PlanParallelReviewTest {
     when(runner.run(eq("reviewer"), eq("same task"), isNull(), eq(budget))).thenReturn(local);
     when(runner.runAutomaticBackend(any(), eq(owner), eq(budget)))
         .thenThrow(new IllegalArgumentException("unavailable"));
-    try (
-        var parallel =
-            new ParallelSubAgentDelegator(runner, registry, new CommandCancellationService())) {
+    try (var parallel =
+        new ParallelSubAgentDelegator(runner, registry, new CommandCancellationService())) {
       var scope = AgentRunScope.open(owner);
       try (scope) {
         var batch =

@@ -203,151 +203,134 @@ public final class BoundedToolLoop {
       ModelRetries retries,
       boolean retrying,
       dev.mikoto2000.rei.timing.TimingAttempt previous) {
-    return Mono.defer(
-        () -> {
-          checkActive.run();
-          var timing =
-              model instanceof dev.mikoto2000.rei.timing.TimingAwareModel observed
-                  ? observed.timing()
-                  : null;
-          var trace =
-              timing != null && timing.enabled()
-                  ? (previous == null
-                      ? new dev.mikoto2000.rei.timing.TimingAttempt(UUID.randomUUID().toString(), 1)
-                      : previous)
-                  : null;
-          if (remaining.getAndDecrement() <= 0) return Mono.error(new MaxStepsExceeded());
-          if (reservation != null && !reservation.tryReserve())
-            return Mono.error(new SharedBudgetExceeded());
-          checkActive.run();
-          AtomicReference<ChatResponse> aggregated = new AtomicReference<>();
-          var started = new java.util.concurrent.atomic.AtomicBoolean();
-          var reported = new java.util.concurrent.atomic.AtomicBoolean();
-          var received = new java.util.concurrent.atomic.AtomicBoolean();
-          return new MessageAggregator()
-              .aggregate(
-                  reactor.core.publisher.Flux.defer(
-                          () -> {
-                            checkActive.run();
-                            started.set(true);
-                            if (retrying) retries.attempts.incrementAndGet();
-                            var stream = model.stream(prompt);
-                            return trace == null
-                                ? stream
-                                : stream.contextWrite(
-                                    context ->
-                                        context.put(
-                                            dev.mikoto2000.rei.timing.TimingAttempt.KEY, trace));
-                          })
-                      .doOnNext(chunk -> received.set(true))
-                      .doOnError(error -> retries.failure(error, received.get())),
-                  aggregated::set)
-              .then(
-                  Mono.defer(
+    return Mono.defer(() -> {
+      checkActive.run();
+      var timing =
+          model instanceof dev.mikoto2000.rei.timing.TimingAwareModel observed
+              ? observed.timing()
+              : null;
+      var trace =
+          timing != null && timing.enabled()
+              ? (previous == null
+                  ? new dev.mikoto2000.rei.timing.TimingAttempt(UUID.randomUUID().toString(), 1)
+                  : previous)
+              : null;
+      if (remaining.getAndDecrement() <= 0) return Mono.error(new MaxStepsExceeded());
+      if (reservation != null && !reservation.tryReserve())
+        return Mono.error(new SharedBudgetExceeded());
+      checkActive.run();
+      AtomicReference<ChatResponse> aggregated = new AtomicReference<>();
+      var started = new java.util.concurrent.atomic.AtomicBoolean();
+      var reported = new java.util.concurrent.atomic.AtomicBoolean();
+      var received = new java.util.concurrent.atomic.AtomicBoolean();
+      return new MessageAggregator()
+          .aggregate(
+              reactor.core.publisher.Flux.defer(
                       () -> {
                         checkActive.run();
-                        var response = aggregated.get();
-                        if (response == null || response.getResult() == null)
-                          return Mono.error(new IllegalStateException("Empty response"));
-                        if (reservation != null) {
-                          reported.set(true);
-                          var usage = response.getMetadata().getUsage();
-                          reservation.recordTotalTokens(
-                              usage == null ? null : usage.getTotalTokens());
-                        }
-                        if (OutputLimitDetector.isOutputLimitReached(response))
-                          return Mono.error(new IllegalStateException("Output limit"));
-                        return Mono.just(response);
-                      }))
-              .doOnError(
-                  error -> {
-                    if (reservation != null
-                        && reservation.tokenLimitEnabled()
-                        && started.get()
-                        && !reported.getAndSet(true)) reservation.recordTotalTokens(null);
-                  })
-              .doFinally(
-                  signal -> {
-                    if (signal == reactor.core.publisher.SignalType.CANCEL
-                        && reservation != null
-                        && reservation.tokenLimitEnabled()
-                        && started.get()
-                        && !reported.getAndSet(true)) {
-                      try {
-                        reservation.recordTotalTokens(null);
-                      } catch (RuntimeException stopped) {
-                        /* Accounting state prevents further calls. */
-                      }
-                    }
-                  })
-              .onErrorResume(
-                  error -> {
-                    if (isTransientModelFailure(error) && !received.get()) {
-                      checkActive.run();
-                      if (retries.reserve()) {
-                        var delay = Mono.delay(java.time.Duration.ofMillis(100));
-                        var values =
-                            trace != null
-                                    && prompt.getOptions() instanceof ToolCallingChatOptions options
-                                ? options.getToolContext()
-                                : null;
-                        if (trace != null && values != null) {
-                          var captured =
-                              values.get(
-                                  dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY);
-                          AgentRunContext owner =
-                              captured
-                                      instanceof
-                                      dev.mikoto2000.rei.core.stagnation.RunExecutionContext
-                                          execution
-                                  ? execution.runContext()
-                                  : values.get(AgentRunContext.class.getName())
-                                          instanceof AgentRunContext context
-                                      ? context
-                                      : null;
-                          if (owner != null) {
-                            String parent = trace.physicalSpan();
-                            var span =
-                                timing.startSpan(
-                                    owner.runId(),
-                                    parent == null ? owner.runId() : parent,
-                                    trace.requestId(),
-                                    Integer.toString(trace.number() + 1),
-                                    dev.mikoto2000.rei.timing.TimingRecorder.Category.RETRY);
-                            delay =
-                                delay
-                                    .doOnSuccess(
-                                        value ->
-                                            span.finish(
-                                                dev.mikoto2000.rei.timing.TimingRecorder.Status
-                                                    .SUCCESS))
-                                    .doOnError(
-                                        failure ->
-                                            span.finish(
-                                                dev.mikoto2000.rei.timing.TimingExecution.status(
-                                                    failure)))
-                                    .doOnCancel(
-                                        () ->
-                                            span.finish(
-                                                dev.mikoto2000.rei.timing.TimingRecorder.Status
-                                                    .CANCELLED));
-                          }
-                        }
-                        return delay.then(
-                            response(
-                                model,
-                                prompt,
-                                remaining,
-                                checkActive,
-                                reservation,
-                                retries,
-                                true,
-                                trace == null ? null : trace.next()));
-                      }
-                    }
-                    return Mono.error(error);
-                  });
-        });
+                        started.set(true);
+                        if (retrying) retries.attempts.incrementAndGet();
+                        var stream = model.stream(prompt);
+                        return trace == null
+                            ? stream
+                            : stream.contextWrite(context ->
+                                context.put(dev.mikoto2000.rei.timing.TimingAttempt.KEY, trace));
+                      })
+                  .doOnNext(chunk -> received.set(true))
+                  .doOnError(error -> retries.failure(error, received.get())),
+              aggregated::set)
+          .then(
+              Mono.defer(() -> {
+                checkActive.run();
+                var response = aggregated.get();
+                if (response == null || response.getResult() == null)
+                  return Mono.error(new IllegalStateException("Empty response"));
+                if (reservation != null) {
+                  reported.set(true);
+                  var usage = response.getMetadata().getUsage();
+                  reservation.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+                }
+                if (OutputLimitDetector.isOutputLimitReached(response))
+                  return Mono.error(new IllegalStateException("Output limit"));
+                return Mono.just(response);
+              }))
+          .doOnError(error -> {
+            if (reservation != null
+                && reservation.tokenLimitEnabled()
+                && started.get()
+                && !reported.getAndSet(true)) reservation.recordTotalTokens(null);
+          })
+          .doFinally(signal -> {
+            if (signal == reactor.core.publisher.SignalType.CANCEL
+                && reservation != null
+                && reservation.tokenLimitEnabled()
+                && started.get()
+                && !reported.getAndSet(true)) {
+              try {
+                reservation.recordTotalTokens(null);
+              } catch (RuntimeException stopped) {
+                /* Accounting state prevents further calls. */
+              }
+            }
+          })
+          .onErrorResume(error -> {
+            if (isTransientModelFailure(error) && !received.get()) {
+              checkActive.run();
+              if (retries.reserve()) {
+                var delay = Mono.delay(java.time.Duration.ofMillis(100));
+                var values =
+                    trace != null && prompt.getOptions() instanceof ToolCallingChatOptions options
+                        ? options.getToolContext()
+                        : null;
+                if (trace != null && values != null) {
+                  var captured =
+                      values.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY);
+                  AgentRunContext owner =
+                      captured
+                              instanceof
+                              dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution
+                          ? execution.runContext()
+                          : values.get(AgentRunContext.class.getName())
+                                  instanceof AgentRunContext context
+                              ? context
+                              : null;
+                  if (owner != null) {
+                    String parent = trace.physicalSpan();
+                    var span =
+                        timing.startSpan(
+                            owner.runId(),
+                            parent == null ? owner.runId() : parent,
+                            trace.requestId(),
+                            Integer.toString(trace.number() + 1),
+                            dev.mikoto2000.rei.timing.TimingRecorder.Category.RETRY);
+                    delay =
+                        delay
+                            .doOnSuccess(value ->
+                                span.finish(
+                                    dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS))
+                            .doOnError(failure ->
+                                span.finish(
+                                    dev.mikoto2000.rei.timing.TimingExecution.status(failure)))
+                            .doOnCancel(() ->
+                                span.finish(
+                                    dev.mikoto2000.rei.timing.TimingRecorder.Status.CANCELLED));
+                  }
+                }
+                return delay.then(
+                    response(
+                        model,
+                        prompt,
+                        remaining,
+                        checkActive,
+                        reservation,
+                        retries,
+                        true,
+                        trace == null ? null : trace.next()));
+              }
+            }
+            return Mono.error(error);
+          });
+    });
   }
 
   /** 会話の実行で用いる繰り返しを返す。 */
@@ -393,92 +376,73 @@ public final class BoundedToolLoop {
               }
             })
         .subscribeOn(Schedulers.boundedElastic())
-        .flatMap(
-            projected ->
-                response(
-                        model, projected, remaining, checkActive, reservation, retries, false, null)
-                    .flatMap(
-                        response ->
-                            Mono.defer(
-                                () -> {
-                                  checkActive.run();
-                                  var readingUsage = response.getMetadata().getUsage();
-                                  if (readingUsage != null
-                                      && readingUsage.getPromptTokens() != null
-                                      && readingUsage.getPromptTokens() > 0)
-                                    dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
-                                        owner,
-                                        "providerInputTokens",
-                                        readingUsage.getPromptTokens());
-                                  else
-                                    dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
-                                        owner, "providerInputTokensUnavailable", 1);
-                                  if (assemblePrompt != null)
-                                    confirmDelivery.accept(projected, owner);
-                                  if (!response.hasToolCalls()) {
-                                    var generation =
-                                        Objects.requireNonNull(
-                                            response.getResult(), "Missing model result");
-                                    var history = new ArrayList<Message>(prompt.getInstructions());
-                                    history.add(generation.getOutput());
-                                    return Mono.just(
-                                        new Outcome(
-                                            Objects.toString(generation.getOutput().getText(), ""),
-                                            history));
-                                  }
-                                  var options =
-                                      Objects.requireNonNull(
-                                          (ToolCallingChatOptions) prompt.getOptions(),
-                                          "Missing tool options");
-                                  Set<String> allowed = new HashSet<>();
-                                  Objects.requireNonNull(
-                                          options.getToolCallbacks(), "Missing tool callbacks")
-                                      .forEach(
-                                          tool -> allowed.add(tool.getToolDefinition().name()));
-                                  // Validate the entire batch before any side effect. Never let a
-                                  // resolver find ambient tools.
-                                  String rejection = batchRejection(response, allowed);
-                                  var dispatch =
-                                      rejection != null
-                                          ? Mono.just(
-                                              ToolLoopSupport.rejectedBatch(prompt, rejection))
-                                          : Mono.fromCallable(
-                                                  () -> {
-                                                    var scope = AgentRunScope.open(owner);
-                                                    try (scope) {
-                                                      checkActive.run();
-                                                      return tools.execute(
-                                                          dev.mikoto2000.rei.tooldelivery
-                                                              .FileReadContext.withProjection(
-                                                              prompt, projected),
-                                                          response);
-                                                    }
-                                                  })
-                                              .subscribeOn(Schedulers.boundedElastic());
-                                  return dispatch.flatMap(
-                                      result -> {
-                                        checkActive.run();
-                                        if (result.returnDirect()) {
-                                          var output =
-                                              ToolExecutionResult.buildGenerations(result)
-                                                  .getFirst()
-                                                  .getOutput();
-                                          var history =
-                                              new ArrayList<Message>(result.conversationHistory());
-                                          history.add(output);
-                                          return Mono.just(new Outcome(output.getText(), history));
+        .flatMap(projected ->
+            response(model, projected, remaining, checkActive, reservation, retries, false, null)
+                .flatMap(response ->
+                    Mono.defer(() -> {
+                      checkActive.run();
+                      var readingUsage = response.getMetadata().getUsage();
+                      if (readingUsage != null
+                          && readingUsage.getPromptTokens() != null
+                          && readingUsage.getPromptTokens() > 0)
+                        dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
+                            owner, "providerInputTokens", readingUsage.getPromptTokens());
+                      else
+                        dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
+                            owner, "providerInputTokensUnavailable", 1);
+                      if (assemblePrompt != null) confirmDelivery.accept(projected, owner);
+                      if (!response.hasToolCalls()) {
+                        var generation =
+                            Objects.requireNonNull(response.getResult(), "Missing model result");
+                        var history = new ArrayList<Message>(prompt.getInstructions());
+                        history.add(generation.getOutput());
+                        return Mono.just(
+                            new Outcome(
+                                Objects.toString(generation.getOutput().getText(), ""), history));
+                      }
+                      var options =
+                          Objects.requireNonNull(
+                              (ToolCallingChatOptions) prompt.getOptions(), "Missing tool options");
+                      Set<String> allowed = new HashSet<>();
+                      Objects.requireNonNull(options.getToolCallbacks(), "Missing tool callbacks")
+                          .forEach(tool -> allowed.add(tool.getToolDefinition().name()));
+                      // Validate the entire batch before any side effect. Never let a
+                      // resolver find ambient tools.
+                      String rejection = batchRejection(response, allowed);
+                      var dispatch =
+                          rejection != null
+                              ? Mono.just(ToolLoopSupport.rejectedBatch(prompt, rejection))
+                              : Mono.fromCallable(
+                                      () -> {
+                                        var scope = AgentRunScope.open(owner);
+                                        try (scope) {
+                                          checkActive.run();
+                                          return tools.execute(
+                                              dev.mikoto2000.rei.tooldelivery.FileReadContext
+                                                  .withProjection(prompt, projected),
+                                              response);
                                         }
-                                        return iteration(
-                                            model,
-                                            new Prompt(
-                                                result.conversationHistory(), prompt.getOptions()),
-                                            remaining,
-                                            owner,
-                                            checkActive,
-                                            reservation,
-                                            retries);
-                                      });
-                                })));
+                                      })
+                                  .subscribeOn(Schedulers.boundedElastic());
+                      return dispatch.flatMap(result -> {
+                        checkActive.run();
+                        if (result.returnDirect()) {
+                          var output =
+                              ToolExecutionResult.buildGenerations(result).getFirst().getOutput();
+                          var history = new ArrayList<Message>(result.conversationHistory());
+                          history.add(output);
+                          return Mono.just(new Outcome(output.getText(), history));
+                        }
+                        return iteration(
+                            model,
+                            new Prompt(result.conversationHistory(), prompt.getOptions()),
+                            remaining,
+                            owner,
+                            checkActive,
+                            reservation,
+                            retries);
+                      });
+                    })));
   }
 
   private static String batchRejection(ChatResponse response, Set<String> allowed) {

@@ -236,24 +236,22 @@ public class ExternalReviewRepository {
             || result.warnings().size() > 12
             || length(result.summary()) > 2048
             || result.findings().stream()
-                .anyMatch(
-                    f ->
-                        length(f.title()) > 256
-                            || length(f.reason()) > 1024
-                            || length(f.recommendation()) > 1024
-                            || length(f.location()) > 512)
+                .anyMatch(f ->
+                    length(f.title()) > 256
+                        || length(f.reason()) > 1024
+                        || length(f.recommendation()) > 1024
+                        || length(f.location()) > 512)
             || result.warnings().stream().anyMatch(s -> length(s) > 512);
     var findings =
         result.findings().stream()
             .limit(24)
-            .map(
-                f ->
-                    new ExternalAgentFinding(
-                        f.severity() == null ? ExternalAgentFinding.Severity.info : f.severity(),
-                        bounded(f.title(), 256),
-                        bounded(f.reason(), 1024),
-                        bounded(f.recommendation(), 1024),
-                        bounded(f.location(), 512)))
+            .map(f ->
+                new ExternalAgentFinding(
+                    f.severity() == null ? ExternalAgentFinding.Severity.info : f.severity(),
+                    bounded(f.title(), 256),
+                    bounded(f.reason(), 1024),
+                    bounded(f.recommendation(), 1024),
+                    bounded(f.location(), 512)))
             .toList();
     var warnings =
         new ArrayList<>(

@@ -125,31 +125,29 @@ class SecretaryPreparationSelectionTest {
                 from.plusSeconds(1800).toString(),
                 "end",
                 from.plusSeconds(3600).toString()));
-    db.transaction(
-        sql -> {
-          try (var q =
-              sql.prepareStatement(
-                  "INSERT INTO secretary_connections VALUES('c','p','private','CALENDAR',0,?,0,'ACTIVE',0)")) {
-            q.setString(1, SecretaryJson.JSON.writeValueAsString(connection));
-            q.executeUpdate();
-          }
-          try (var q =
-              sql.prepareStatement(
-                  "INSERT INTO secretary_external_items VALUES('c','p','e','1',?,NULL,0)")) {
-            q.setString(1, SecretaryJson.JSON.writeValueAsString(item));
-            q.executeUpdate();
-          }
-          return null;
-        });
+    db.transaction(sql -> {
+      try (var q =
+          sql.prepareStatement(
+              "INSERT INTO secretary_connections VALUES('c','p','private','CALENDAR',0,?,0,'ACTIVE',0)")) {
+        q.setString(1, SecretaryJson.JSON.writeValueAsString(connection));
+        q.executeUpdate();
+      }
+      try (var q =
+          sql.prepareStatement(
+              "INSERT INTO secretary_external_items VALUES('c','p','e','1',?,NULL,0)")) {
+        q.setString(1, SecretaryJson.JSON.writeValueAsString(item));
+        q.executeUpdate();
+      }
+      return null;
+    });
     assertEquals(from.plusSeconds(1800), source.availableUntil(from, until));
     assertTrue(source.busy(from.plusSeconds(1800)));
-    db.transaction(
-        sql -> {
-          try (var q = sql.createStatement()) {
-            q.executeUpdate("UPDATE secretary_connections SET state='DISABLED'");
-          }
-          return null;
-        });
+    db.transaction(sql -> {
+      try (var q = sql.createStatement()) {
+        q.executeUpdate("UPDATE secretary_connections SET state='DISABLED'");
+      }
+      return null;
+    });
     assertEquals(until, source.availableUntil(from, until));
   }
 }

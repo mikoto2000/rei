@@ -139,11 +139,10 @@ public final class StorageObjectRegistry {
   public void verifyRawReadable(String conversation, String ref) {
     verifyBodyPath(rawPath(conversation, ref));
     rawObject(conversation, ref)
-        .ifPresent(
-            object -> {
-              if (!object.status().equals("AVAILABLE"))
-                throw new IllegalStateException("Raw result body is unavailable");
-            });
+        .ifPresent(object -> {
+          if (!object.status().equals("AVAILABLE"))
+            throw new IllegalStateException("Raw result body is unavailable");
+        });
   }
 
   /** データ保存の共通処理で用いる対象範囲を返す。 */
@@ -244,33 +243,31 @@ public final class StorageObjectRegistry {
     if (!parent.equals(normalized.getParent()) || !name.endsWith(".jsonl"))
       throw new IllegalArgumentException("Unsupported managed activity path");
     UUID.fromString(name.replaceFirst("\\.jsonl$", ""));
-    return database.transaction(
-        db ->
-            put(
-                db,
-                root,
-                normalized,
-                kind,
-                physicalScope,
-                null,
-                run,
-                Objects.requireNonNull(created),
-                verified,
-                references));
+    return database.transaction(db ->
+        put(
+            db,
+            root,
+            normalized,
+            kind,
+            physicalScope,
+            null,
+            run,
+            Objects.requireNonNull(created),
+            verified,
+            references));
   }
 
   /** データ保存の共通処理で用いる元の保存済みバイト数を返す。 */
   public long rawStoredBytes() {
-    return database.read(
-        db -> {
-          try (var sql = db.createStatement();
-              var rows =
-                  sql.executeQuery(
-                      "SELECT COALESCE(SUM(size),0) FROM stored_objects WHERE kind='RAW_RESULT' AND status<>'PURGED'")) {
-            rows.next();
-            return rows.getLong(1);
-          }
-        });
+    return database.read(db -> {
+      try (var sql = db.createStatement();
+          var rows =
+              sql.executeQuery(
+                  "SELECT COALESCE(SUM(size),0) FROM stored_objects WHERE kind='RAW_RESULT' AND status<>'PURGED'")) {
+        rows.next();
+        return rows.getLong(1);
+      }
+    });
   }
 
   /** データ保存の共通処理で用いる元の本文パスを返す。 */
@@ -288,13 +285,12 @@ public final class StorageObjectRegistry {
   public void verifyRawBodyReadable(String conversation, String hash) {
     var path = rawBodyPath(conversation, hash);
     verifyBodyPath(path);
-    database.read(
-        db -> {
-          var object = find(db, id(root, path));
-          if (object.isPresent() && !object.get().status().equals("AVAILABLE"))
-            throw new IllegalStateException("RAW_RESULT_NOT_FOUND");
-          return null;
-        });
+    database.read(db -> {
+      var object = find(db, id(root, path));
+      if (object.isPresent() && !object.get().status().equals("AVAILABLE"))
+        throw new IllegalStateException("RAW_RESULT_NOT_FOUND");
+      return null;
+    });
   }
 
   /** 後から対象を参照できるよう、元の付き本文を登録する。 */
@@ -305,65 +301,62 @@ public final class StorageObjectRegistry {
       String hash,
       boolean pointerCreated,
       boolean bodyCreated) {
-    return database.transaction(
-        db -> {
-          Path pointer = rawPath(conversation, ref), body = rawBodyPath(conversation, hash);
-          if (pointerCreated) StorageBackup.force(pointer);
-          if (bodyCreated) StorageBackup.force(body);
-          var parent =
-              put(
-                  db,
-                  root,
-                  pointer,
-                  "RAW_RESULT",
-                  scope(conversation),
-                  key(conversation),
-                  run,
-                  pointerCreated ? clock.instant() : null,
-                  pointerCreated,
-                  List.of());
+    return database.transaction(db -> {
+      Path pointer = rawPath(conversation, ref), body = rawBodyPath(conversation, hash);
+      if (pointerCreated) StorageBackup.force(pointer);
+      if (bodyCreated) StorageBackup.force(body);
+      var parent =
           put(
               db,
               root,
-              body,
+              pointer,
               "RAW_RESULT",
               scope(conversation),
               key(conversation),
               run,
-              bodyCreated ? clock.instant() : null,
-              bodyCreated,
-              List.of(new Reference("RAW_RESULT_BODY", parent.id())));
-          return parent;
-        });
+              pointerCreated ? clock.instant() : null,
+              pointerCreated,
+              List.of());
+      put(
+          db,
+          root,
+          body,
+          "RAW_RESULT",
+          scope(conversation),
+          key(conversation),
+          run,
+          bodyCreated ? clock.instant() : null,
+          bodyCreated,
+          List.of(new Reference("RAW_RESULT_BODY", parent.id())));
+      return parent;
+    });
   }
 
   /** 後から対象を参照できるよう、元のを登録する。 */
   public StoredObject registerRaw(
       String conversation, String run, String ref, boolean createdByProducer) {
-    return database.transaction(
-        db -> {
-          StorageBackup.force(rawPath(conversation, ref));
-          return put(
-              db,
-              root,
-              rawPath(conversation, ref),
-              "RAW_RESULT",
-              scope(conversation),
-              key(conversation),
-              run,
-              createdByProducer ? clock.instant() : null,
-              createdByProducer,
-              List.of());
-        });
+    return database.transaction(db -> {
+      StorageBackup.force(rawPath(conversation, ref));
+      return put(
+          db,
+          root,
+          rawPath(conversation, ref),
+          "RAW_RESULT",
+          scope(conversation),
+          key(conversation),
+          run,
+          createdByProducer ? clock.instant() : null,
+          createdByProducer,
+          List.of());
+    });
   }
 
   /** データ保存の共通処理に関する保護再開用の記録を処理する。 */
   public void protectCheckpoint(dev.mikoto2000.rei.checkpoint.PersistentCheckpoint state) {
-    database.transaction(
-        db -> {
-          protectCheckpoint(db, root, state);
-          return null;
-        });
+    database.transaction(db -> {
+      protectCheckpoint(db, root, state);
+      return null;
+    });
   }
 
   /**
@@ -373,24 +366,23 @@ public final class StorageObjectRegistry {
    * intact.
    */
   public void releaseCheckpointHistory(List<String> owners) {
-    database.transaction(
-        db -> {
-          for (String owner : owners) {
-            try (var update =
-                db.prepareStatement(
-                    "UPDATE stored_objects SET revision=revision+1 WHERE id IN (SELECT object_id FROM object_references WHERE kind='CHECKPOINT' AND owner=?)")) {
-              update.setString(1, owner);
-              update.executeUpdate();
-            }
-            try (var delete =
-                db.prepareStatement(
-                    "DELETE FROM object_references WHERE kind='CHECKPOINT' AND owner=?")) {
-              delete.setString(1, owner);
-              delete.executeUpdate();
-            }
-          }
-          return null;
-        });
+    database.transaction(db -> {
+      for (String owner : owners) {
+        try (var update =
+            db.prepareStatement(
+                "UPDATE stored_objects SET revision=revision+1 WHERE id IN (SELECT object_id FROM object_references WHERE kind='CHECKPOINT' AND owner=?)")) {
+          update.setString(1, owner);
+          update.executeUpdate();
+        }
+        try (var delete =
+            db.prepareStatement(
+                "DELETE FROM object_references WHERE kind='CHECKPOINT' AND owner=?")) {
+          delete.setString(1, owner);
+          delete.executeUpdate();
+        }
+      }
+      return null;
+    });
   }
 
   /** データ保存の共通処理に関する保護再開用の記録を処理する。 */
@@ -495,11 +487,10 @@ public final class StorageObjectRegistry {
 
   /** 新たな対象を管理できるよう、参照先を追加する。 */
   public void addReference(String id, String kind, String owner) {
-    database.transaction(
-        db -> {
-          addReference(db, id, kind, owner);
-          return null;
-        });
+    database.transaction(db -> {
+      addReference(db, id, kind, owner);
+      return null;
+    });
   }
 
   /** 新たな対象を管理できるよう、参照先を追加する。 */
@@ -570,33 +561,33 @@ public final class StorageObjectRegistry {
 
   /** データ保存の共通処理に関する判定状態を処理する。 */
   private void flag(String id, String column, boolean value) {
-    database.transaction(
-        db -> {
-          try (var query =
-              switch (column) {
-                case "pinned" -> db.prepareStatement(
+    database.transaction(db -> {
+      try (var query =
+          switch (column) {
+            case "pinned" ->
+                db.prepareStatement(
                     "UPDATE stored_objects SET pinned=?,revision=revision+1 WHERE id=?");
-                case "legal_hold" -> db.prepareStatement(
+            case "legal_hold" ->
+                db.prepareStatement(
                     "UPDATE stored_objects SET legal_hold=?,revision=revision+1 WHERE id=?");
-                default -> throw new IllegalArgumentException("Unknown storage flag");
-              }) {
-            query.setBoolean(1, value);
-            query.setString(2, id);
-            if (query.executeUpdate() != 1) throw new IllegalArgumentException("Unknown object");
-          }
-          return null;
-        });
+            default -> throw new IllegalArgumentException("Unknown storage flag");
+          }) {
+        query.setBoolean(1, value);
+        query.setString(2, id);
+        if (query.executeUpdate() != 1) throw new IllegalArgumentException("Unknown object");
+      }
+      return null;
+    });
   }
 
   /** データ保存の共通処理で用いる保護理由を返す。 */
   public Optional<String> protectionReason(StoredObject object) {
-    return database.read(
-        db -> {
-          var current = find(db, object.id());
-          return current.isEmpty()
-              ? Optional.of("unknown-object")
-              : protectionReason(db, current.get());
-        });
+    return database.read(db -> {
+      var current = find(db, object.id());
+      return current.isEmpty()
+          ? Optional.of("unknown-object")
+          : protectionReason(db, current.get());
+    });
   }
 
   /** データ保存の共通処理で用いる保護理由を返す。 */
@@ -654,27 +645,26 @@ public final class StorageObjectRegistry {
   /** データ保存の共通処理において、変更なしに該当するか判定する。 */
   boolean unchanged(StoredObject object) throws IOException {
     if (object.kind().equals("EVENT"))
-      return database.read(
-          db -> {
-            try (var query =
-                db.prepareStatement(
-                    "SELECT length(CAST(record AS BLOB)),record FROM agent_events WHERE project_id=? AND id=?")) {
-              query.setString(1, object.scope());
-              query.setString(2, object.id().substring(("event:" + object.scope() + ":").length()));
-              try (var rows = query.executeQuery()) {
-                if (!rows.next()
-                    || rows.getLong(1) != object.size()
-                    || object.size()
-                        > dev.mikoto2000.rei.event.SqliteProjectAgentEventStore.MAX_RECORD_BYTES)
-                  return false;
-                return HexFormat.of()
-                    .formatHex(
-                        MessageDigest.getInstance("SHA-256")
-                            .digest(rows.getString(2).getBytes(StandardCharsets.UTF_8)))
-                    .equals(object.sha256());
-              }
-            }
-          });
+      return database.read(db -> {
+        try (var query =
+            db.prepareStatement(
+                "SELECT length(CAST(record AS BLOB)),record FROM agent_events WHERE project_id=? AND id=?")) {
+          query.setString(1, object.scope());
+          query.setString(2, object.id().substring(("event:" + object.scope() + ":").length()));
+          try (var rows = query.executeQuery()) {
+            if (!rows.next()
+                || rows.getLong(1) != object.size()
+                || object.size()
+                    > dev.mikoto2000.rei.event.SqliteProjectAgentEventStore.MAX_RECORD_BYTES)
+              return false;
+            return HexFormat.of()
+                .formatHex(
+                    MessageDigest.getInstance("SHA-256")
+                        .digest(rows.getString(2).getBytes(StandardCharsets.UTF_8)))
+                .equals(object.sha256());
+          }
+        }
+      });
     Path file = root.resolve(object.relativePath()).normalize();
     if (!file.startsWith(root)) return false;
     StorageBackup.requireSafePath(file);

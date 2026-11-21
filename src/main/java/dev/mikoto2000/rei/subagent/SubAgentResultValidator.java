@@ -23,11 +23,10 @@ public final class SubAgentResultValidator {
     // Do not expose library messages: enum/const/property errors may echo instance values.
     return errors.stream()
         .limit(100)
-        .map(
-            error ->
-                new ValidationError(
-                    bounded(prefix + error.getInstanceLocation()),
-                    "Schema constraint violated: " + error.getKeyword()))
+        .map(error ->
+            new ValidationError(
+                bounded(prefix + error.getInstanceLocation()),
+                "Schema constraint violated: " + error.getKeyword()))
         .toList();
   }
 

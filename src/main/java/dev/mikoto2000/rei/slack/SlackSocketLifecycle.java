@@ -82,7 +82,9 @@ public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable
               created.close();
             } catch (Exception failure) {
               LoggerFactory.getLogger(getClass())
-                  .debug("Unused Slack connection close failed ({})", failure.getClass().getSimpleName());
+                  .debug(
+                      "Unused Slack connection close failed ({})",
+                      failure.getClass().getSimpleName());
             }
           return false;
         }

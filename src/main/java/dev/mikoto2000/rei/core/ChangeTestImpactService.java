@@ -102,17 +102,13 @@ public final class ChangeTestImpactService {
     public Result {
       warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
       changedFiles =
-          changedFiles == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(changedFiles));
+          changedFiles == null ? null : Collections.unmodifiableList(new ArrayList<>(changedFiles));
       unindexedChanges =
           unindexedChanges == null
               ? null
               : Collections.unmodifiableList(new ArrayList<>(unindexedChanges));
       candidates =
-          candidates == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(candidates));
+          candidates == null ? null : Collections.unmodifiableList(new ArrayList<>(candidates));
     }
 
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -381,10 +377,9 @@ public final class ChangeTestImpactService {
       else if (name.endsWith("IT.java") || name.endsWith("IntegrationTest.java"))
         reason = "AFFECTED_MODULE_NAME_CONVENTION";
       else if (file.imports().stream()
-          .anyMatch(
-              value ->
-                  value.equals("org.springframework.boot.test.context.SpringBootTest")
-                      || value.startsWith("org.testcontainers.")))
+          .anyMatch(value ->
+              value.equals("org.springframework.boot.test.context.SpringBootTest")
+                  || value.startsWith("org.testcontainers.")))
         reason = "AFFECTED_MODULE_TEST_CONTEXT_IMPORT";
       if (reason != null)
         integrations.add(new IntegrationCandidate(file.path(), file.module(), reason));

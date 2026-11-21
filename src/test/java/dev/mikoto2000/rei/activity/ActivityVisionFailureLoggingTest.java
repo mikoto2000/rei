@@ -120,14 +120,12 @@ class ActivityVisionFailureLoggingTest {
               "provider_code=unsupported_parameter", "provider_param=max_completion_tokens",
               "provider_type=invalid_request_error", "provider_hint=unsupported_parameter");
       assertThat(appender.list)
-          .allSatisfy(
-              event -> {
-                assertThat(event.getFormattedMessage())
-                    .doesNotContain("PRIVATE", "forged_log_entry");
-                assertThat(event.getThrowableProxy()).isNull();
-                assertThat(java.util.Arrays.toString(event.getArgumentArray()))
-                    .doesNotContain("PRIVATE", "forged_log_entry");
-              });
+          .allSatisfy(event -> {
+            assertThat(event.getFormattedMessage()).doesNotContain("PRIVATE", "forged_log_entry");
+            assertThat(event.getThrowableProxy()).isNull();
+            assertThat(java.util.Arrays.toString(event.getArgumentArray()))
+                .doesNotContain("PRIVATE", "forged_log_entry");
+          });
     } finally {
       logger.detachAppender(appender);
       appender.stop();
@@ -223,12 +221,10 @@ class ActivityVisionFailureLoggingTest {
               "http_status=400",
               "cause_chain_truncated=false");
       assertThat(appender.list)
-          .allSatisfy(
-              event -> {
-                assertThat(event.getFormattedMessage())
-                    .doesNotContain("PRIVATE", "forged_log_entry");
-                assertThat(event.getThrowableProxy()).isNull();
-              });
+          .allSatisfy(event -> {
+            assertThat(event.getFormattedMessage()).doesNotContain("PRIVATE", "forged_log_entry");
+            assertThat(event.getThrowableProxy()).isNull();
+          });
       assertThat(fixture.pipeline.queueMetrics().failed()).isEqualTo(1);
     } finally {
       logger.detachAppender(appender);

@@ -167,25 +167,23 @@ public final class ActivityTimeline {
     var records = observations.apply(start, end);
     return new SummaryGroupingPolicy(summaryPolicy)
         .aggregate(summaryPolicy.aggregate(records, start, end)).stream()
-            .map(
-                segment -> {
-                  var ids =
-                      new HashSet<>(segment.evidence().stream().map(ActivityRecord::id).toList());
-                  var fineIds =
-                      fine.stream()
-                          .filter(s -> s.recordIds().stream().anyMatch(ids::contains))
-                          .map(ActivitySession::id)
-                          .toList();
-                  return new SummarySegment(
-                      segment.startedAt(),
-                      segment.endedAt(),
-                      segment.observedSeconds(),
-                      segment.roles(),
-                      segment.evidence(),
-                      fineIds,
-                      segment.theme(),
-                      segment.primaryCategories());
-                })
+            .map(segment -> {
+              var ids = new HashSet<>(segment.evidence().stream().map(ActivityRecord::id).toList());
+              var fineIds =
+                  fine.stream()
+                      .filter(s -> s.recordIds().stream().anyMatch(ids::contains))
+                      .map(ActivitySession::id)
+                      .toList();
+              return new SummarySegment(
+                  segment.startedAt(),
+                  segment.endedAt(),
+                  segment.observedSeconds(),
+                  segment.roles(),
+                  segment.evidence(),
+                  fineIds,
+                  segment.theme(),
+                  segment.primaryCategories());
+            })
             .toList();
   }
 

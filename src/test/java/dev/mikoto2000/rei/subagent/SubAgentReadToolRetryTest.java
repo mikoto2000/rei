@@ -53,7 +53,10 @@ class SubAgentReadToolRetryTest {
                     .toolCalls(
                         List.of(
                             new AssistantMessage.ToolCall(
-                                "call", "function", "readMultiFile", SubAgentRunnerTest.READ_ARGUMENTS)))
+                                "call",
+                                "function",
+                                "readMultiFile",
+                                SubAgentRunnerTest.READ_ARGUMENTS)))
                     .build())));
   }
 
@@ -104,12 +107,11 @@ class SubAgentReadToolRetryTest {
     var reads = new AtomicInteger();
     var models = new AtomicInteger();
     var cb =
-        callback(
-            () -> {
-              if (reads.incrementAndGet() == 1)
-                throw new TransientDataAccessResourceException("private database detail");
-              return "saved evidence";
-            });
+        callback(() -> {
+          if (reads.incrementAndGet() == 1)
+            throw new TransientDataAccessResourceException("private database detail");
+          return "saved evidence";
+        });
     var runner =
         f.runner(
             prompt ->
@@ -148,12 +150,11 @@ class SubAgentReadToolRetryTest {
               "2s",
               () ->
                   List.of(
-                      callback(
-                          () -> {
-                            reads.incrementAndGet();
-                            if (value == 2) throw new IllegalArgumentException("permanent");
-                            throw new TransientDataAccessResourceException("temporary");
-                          })));
+                      callback(() -> {
+                        reads.incrementAndGet();
+                        if (value == 2) throw new IllegalArgumentException("permanent");
+                        throw new TransientDataAccessResourceException("temporary");
+                      })));
       configure(
           runner,
           f,
@@ -182,13 +183,12 @@ class SubAgentReadToolRetryTest {
             "2s",
             () ->
                 List.of(
-                    callback(
-                        () -> {
-                          int n = reads.incrementAndGet();
-                          if (n == 1 || n == 3)
-                            throw new TransientDataAccessResourceException("temporary");
-                          return "read";
-                        })));
+                    callback(() -> {
+                      int n = reads.incrementAndGet();
+                      if (n == 1 || n == 3)
+                        throw new TransientDataAccessResourceException("temporary");
+                      return "read";
+                    })));
     configure(runner, f, 1, Set.of(ActionCapability.READ));
     var result = runner.run("reviewer", "task", null);
     assertEquals(3, reads.get());
@@ -217,11 +217,10 @@ class SubAgentReadToolRetryTest {
             "2s",
             () ->
                 List.of(
-                    callback(
-                        () -> {
-                          reads.incrementAndGet();
-                          throw new TransientDataAccessResourceException("temporary");
-                        })));
+                    callback(() -> {
+                      reads.incrementAndGet();
+                      throw new TransientDataAccessResourceException("temporary");
+                    })));
     var props = new SubAgentProperties();
     props.setMaxTransientReadToolRetries(3);
     runner.setStandaloneBudgetProperties(props);
@@ -372,12 +371,11 @@ class SubAgentReadToolRetryTest {
             "2s",
             () ->
                 List.of(
-                    callback(
-                        () -> {
-                          reads.incrementAndGet();
-                          embedding.embed("query");
-                          throw new TransientDataAccessResourceException("temporary");
-                        })));
+                    callback(() -> {
+                      reads.incrementAndGet();
+                      embedding.embed("query");
+                      throw new TransientDataAccessResourceException("temporary");
+                    })));
     configure(runner, f, 1, Set.of(ActionCapability.READ));
     var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(parent);
     try (scope) {

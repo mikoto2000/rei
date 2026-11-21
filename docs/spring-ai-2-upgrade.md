@@ -1,5 +1,32 @@
 # Spring Boot 4.1.1 / Spring AI 2.0.1 への更新
 
+現在の基盤は Spring Boot 4.2.0 / Spring AI 2.1.0 です（2026-11-21 更新）。
+以下の4.1.1 / 2.0.1 の説明は、その時点の移行記録です。
+
+今回の更新では、直接指定している Java ライブラリと Maven プラグインも Maven Central の
+最新安定版へ更新しました。軽量 CLI と Backend の JLine は 4.7.0 にそろえています。
+JLine 4 がマウス用 terminfo を文字列 `\\E[M` のまま登録する場合に、Windows パスの
+バックスラッシュ直後の文字が失われるため、共通の LineReader でキー定義を正規化します。
+文字入力・Tab 補完・複数行入力と軽量 CLI の回帰テストで確認しています。
+JLine 4 では標準出力・標準エラーの文字コードも個別に解決されるため、JLine の明示的な
+設定を尊重しつつ、Rei が使用する PrintStream の文字コードを両方へ指定します。
+実ターミナルで UTF-8 / windows-31j の日本語出力を確認しています。
+
+Spring AI のツール応答はコピーされるため、結果の保持を検証するテストはオブジェクトの
+同一性ではなく値の一致を確認します。ArchUnit 1.5 の catch 節検出に伴う基準データの移行は
+[アーキテクチャ資料](architecture/README.md)を参照してください。
+google-java-format 2.0.0 の新しい書式は Java ソース全体へ適用しています。
+
+永続 DB のスキーマ変更は追加していません。既存のストレージ移行テストも全件回帰の対象です。
+
+2026-11-21、Windows / JDK 25 で Backend の full 分類7,540件と、最後の修正に関係する
+結合テストを含む201件を検証しました。再検証後の Surefire XML 1,293ファイルの集計は
+failures / errors = 0、環境条件による skip = 12 です。
+軽量 CLI は179件、Rust は130件、Frontend は103件、Desktop / Mobile のブラウザ E2E は
+38件が成功しました。[クライアントの移行・検証記録](../client/VALIDATION.md)も参照してください。
+Checkstyle / SpotBugs / Spotless は指摘0件、Tauri の Windows debug 実行ファイルの
+ビルドと厳格な Clippy 検査も成功しています。
+
 Java 25 は維持し、Spring Boot を 4.0.4 から 4.1.1、Spring AI を 2.0.0-M3 から 2.0.1 に更新しました。
 `spring-ai-advisors-vector-store` は正式版の `spring-ai-vector-store-advisor` に変更しています。
 

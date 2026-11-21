@@ -46,11 +46,10 @@ class MultilanguageRepositoryMapTest {
   void edge(RepositoryMapService.View view, String source, String target) {
     assertTrue(
         view.relations().stream()
-            .anyMatch(
-                value ->
-                    value.source().equals(source)
-                        && value.target().equals(target)
-                        && value.kind().equals("HEURISTIC_IMPORT")),
+            .anyMatch(value ->
+                value.source().equals(source)
+                    && value.target().equals(target)
+                    && value.kind().equals("HEURISTIC_IMPORT")),
         () -> view.relations().toString());
   }
 
@@ -181,11 +180,10 @@ class MultilanguageRepositoryMapTest {
         new ChangeTestImpactService(service()).analyze(root, List.of("src/helper.ts"), 100);
     assertTrue(
         result.candidates().stream()
-            .anyMatch(
-                value ->
-                    value.path().equals("src/app.test.ts")
-                        && value.testCandidate()
-                        && value.distance() == 2));
+            .anyMatch(value ->
+                value.path().equals("src/app.test.ts")
+                    && value.testCandidate()
+                    && value.distance() == 2));
     assertTrue(result.partial());
     assertEquals("BROAD_REGRESSION_REQUIRED", result.regressionAssessment().scope());
     assertTrue(result.warnings().stream().anyMatch(value -> value.contains("coverage")));

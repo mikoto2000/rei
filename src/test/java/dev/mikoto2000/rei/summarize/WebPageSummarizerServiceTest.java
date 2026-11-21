@@ -51,8 +51,8 @@ class WebPageSummarizerServiceTest {
         new RecordingFetcher(
             UrlFetch.success(
                 """
-        <html><body><article>Article body only</article><nav>menu</nav></body></html>
-        """));
+                <html><body><article>Article body only</article><nav>menu</nav></body></html>
+                """));
     RecordingExtractor extractor = new RecordingExtractor("Article body only");
     RecordingSummarizationClient summarizationClient = new RecordingSummarizationClient("要約結果");
     RecordingConversationHistory history = new RecordingConversationHistory();

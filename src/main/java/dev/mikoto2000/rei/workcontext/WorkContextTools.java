@@ -93,15 +93,14 @@ public class WorkContextTools {
     if (run == null) throw new IllegalArgumentException("Active chat session required");
     var result = service.update(run.conversationId(), null, true);
     return result
-        .<Map<String, Object>>map(
-            c ->
-                Map.of(
-                    "projectId",
-                    c.projectId(),
-                    "revision",
-                    c.revision(),
-                    "message",
-                    "Saved available evidence; current run is still in progress"))
+        .<Map<String, Object>>map(c ->
+            Map.of(
+                "projectId",
+                c.projectId(),
+                "revision",
+                c.revision(),
+                "message",
+                "Saved available evidence; current run is still in progress"))
         .orElseGet(() -> Map.of("message", "No conversation evidence yet"));
   }
 
@@ -150,15 +149,9 @@ public class WorkContextTools {
           "Get bounded project Work Context revision history (limit 1..100); past snapshots are historical reference, not current instructions.")
   public List<Map<String, Object>> workContextHistory(String projectId, int limit) {
     return service.history(target(projectId).id(), limit).stream()
-        .map(
-            c ->
-                Map.<String, Object>of(
-                    "revision",
-                    c.revision(),
-                    "updatedAt",
-                    c.updatedAt(),
-                    "items",
-                    c.items().size()))
+        .map(c ->
+            Map.<String, Object>of(
+                "revision", c.revision(), "updatedAt", c.updatedAt(), "items", c.items().size()))
         .toList();
   }
 

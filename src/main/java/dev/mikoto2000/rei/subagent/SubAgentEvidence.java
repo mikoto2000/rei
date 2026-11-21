@@ -133,10 +133,9 @@ final class SubAgentEvidence {
       for (int index = 0; index < requiredCalls.size(); index++) {
         var required = requiredCalls.get(index);
         if (cited.stream()
-            .noneMatch(
-                actual ->
-                    required.matches(actual.tool(), actual.arguments())
-                        && required.matchesOutput(actual.output(), actual.truncated())))
+            .noneMatch(actual ->
+                required.matches(actual.tool(), actual.arguments())
+                    && required.matchesOutput(actual.output(), actual.truncated())))
           errors.add(
               new ValidationError(
                   "/status",

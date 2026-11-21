@@ -103,11 +103,10 @@ public record SubAgentDagSpec(List<Node> nodes, FailurePolicy failurePolicy, int
       throw new IllegalArgumentException("Invalid child DAG result inventory");
     if (failurePolicy == FailurePolicy.FAIL_FAST && !failed.isEmpty()) return List.of();
     return nodes.stream()
-        .filter(
-            node ->
-                !completed.contains(node.id())
-                    && !failed.contains(node.id())
-                    && completed.containsAll(node.dependencies()))
+        .filter(node ->
+            !completed.contains(node.id())
+                && !failed.contains(node.id())
+                && completed.containsAll(node.dependencies()))
         .limit(maxConcurrency)
         .map(Node::id)
         .toList();

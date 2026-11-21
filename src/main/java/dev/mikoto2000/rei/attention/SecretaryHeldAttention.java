@@ -22,24 +22,23 @@ public final class SecretaryHeldAttention implements SecretaryContext {
   public List<Item> context(String project, LocalDate date, ZoneId zone) {
     return inbox.getObject().list(project).stream()
         .filter(i -> i.status().equals("HELD"))
-        .map(
-            i ->
-                new Item(
-                    "attention",
-                    i.id(),
-                    i.message(),
-                    "HELD",
-                    "Persisted held notice; content is not independently verified.",
-                    Reliability.UNKNOWN,
-                    List.of("attention:" + i.id()),
-                    new Observation(
-                        "attention:" + i.id(),
-                        i.createdAt(),
-                        "WAITING",
-                        true,
-                        null,
-                        null,
-                        "ATTENTION")))
+        .map(i ->
+            new Item(
+                "attention",
+                i.id(),
+                i.message(),
+                "HELD",
+                "Persisted held notice; content is not independently verified.",
+                Reliability.UNKNOWN,
+                List.of("attention:" + i.id()),
+                new Observation(
+                    "attention:" + i.id(),
+                    i.createdAt(),
+                    "WAITING",
+                    true,
+                    null,
+                    null,
+                    "ATTENTION")))
         .toList();
   }
 }

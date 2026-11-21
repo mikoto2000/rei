@@ -4,7 +4,6 @@ package dev.mikoto2000.rei.summarize;
 public class SummarizationException extends RuntimeException {
   @java.io.Serial private static final long serialVersionUID = -8514079404255970433L;
 
-
   /** コード。 */
   private final String code;
 

@@ -49,22 +49,19 @@ class ActivityOwnerReferencesTest {
       owners.add(new StorageObjectRegistry.Reference("SESSION_HISTORY", "session"));
       owners.add(new StorageObjectRegistry.Reference("RUN_HISTORY", "run"));
     }
-    registry.database.transaction(
-        db -> {
-          try (var sql = db.createStatement()) {
-            sql.execute(
-                "INSERT INTO stored_objects(id,kind,scope,relative_path,size,sha256,origin_verified) VALUES('segment','ACTIVITY_RAW','','segment',1,'hash',1)");
-          }
-          var prepared = new AtomicInteger();
-          StorageObjectRegistry.addReferences(counted(db, prepared), "segment", owners);
-          assertThat(prepared).hasValue(3);
-          assertThat(StorageObjectRegistry.find(db, "segment").orElseThrow().revision())
-              .isEqualTo(3);
-          StorageObjectRegistry.addReferences(db, "segment", owners);
-          assertThat(StorageObjectRegistry.find(db, "segment").orElseThrow().revision())
-              .isEqualTo(3);
-          return null;
-        });
+    registry.database.transaction(db -> {
+      try (var sql = db.createStatement()) {
+        sql.execute(
+            "INSERT INTO stored_objects(id,kind,scope,relative_path,size,sha256,origin_verified) VALUES('segment','ACTIVITY_RAW','','segment',1,'hash',1)");
+      }
+      var prepared = new AtomicInteger();
+      StorageObjectRegistry.addReferences(counted(db, prepared), "segment", owners);
+      assertThat(prepared).hasValue(3);
+      assertThat(StorageObjectRegistry.find(db, "segment").orElseThrow().revision()).isEqualTo(3);
+      StorageObjectRegistry.addReferences(db, "segment", owners);
+      assertThat(StorageObjectRegistry.find(db, "segment").orElseThrow().revision()).isEqualTo(3);
+      return null;
+    });
     assertThat(registry.references("segment")).hasSize(2);
   }
 
@@ -90,15 +87,14 @@ class ActivityOwnerReferencesTest {
               Map.of()));
     log.closeSegment(null);
     var id =
-        registry.database.read(
-            db -> {
-              try (var q = db.createStatement();
-                  var rows =
-                      q.executeQuery("SELECT id FROM stored_objects WHERE kind='ACTIVITY_RAW'")) {
-                rows.next();
-                return rows.getString(1);
-              }
-            });
+        registry.database.read(db -> {
+          try (var q = db.createStatement();
+              var rows =
+                  q.executeQuery("SELECT id FROM stored_objects WHERE kind='ACTIVITY_RAW'")) {
+            rows.next();
+            return rows.getString(1);
+          }
+        });
     assertThat(registry.references(id)).hasSize(5);
     log.append(
         null,
@@ -117,53 +113,45 @@ class ActivityOwnerReferencesTest {
             Map.of()));
     assertThatThrownBy(() -> log.closeSegment(null)).isInstanceOf(IllegalArgumentException.class);
     assertThat(
-            registry.database.<Integer>read(
-                db -> {
-                  try (var q = db.createStatement();
-                      var rows =
-                          q.executeQuery(
-                              "SELECT COUNT(*) FROM activity_segments WHERE state='OPEN'")) {
-                    rows.next();
-                    return rows.getInt(1);
-                  }
-                }))
+            registry.database.<Integer>read(db -> {
+              try (var q = db.createStatement();
+                  var rows =
+                      q.executeQuery("SELECT COUNT(*) FROM activity_segments WHERE state='OPEN'")) {
+                rows.next();
+                return rows.getInt(1);
+              }
+            }))
         .isEqualTo(1);
   }
 
   @Test
   void unavailableOrMalformedMetadataCannotBeProtected() throws Exception {
     var registry = registry();
-    registry.database.transaction(
-        db -> {
-          try (var sql = db.createStatement()) {
-            sql.execute(
-                "INSERT INTO stored_objects(id,kind,scope,relative_path,size,sha256,origin_verified,status) VALUES('bad','ACTIVITY_RAW','','bad',1,'hash',1,'PURGED')");
-          }
-          return null;
-        });
+    registry.database.transaction(db -> {
+      try (var sql = db.createStatement()) {
+        sql.execute(
+            "INSERT INTO stored_objects(id,kind,scope,relative_path,size,sha256,origin_verified,status) VALUES('bad','ACTIVITY_RAW','','bad',1,'hash',1,'PURGED')");
+      }
+      return null;
+    });
     var owners = List.of(new StorageObjectRegistry.Reference("RUN_HISTORY", "run"));
-    assertThatThrownBy(
-            () ->
-                registry.database.transaction(
-                    db -> {
-                      StorageObjectRegistry.addReferences(db, "bad", owners);
-                      return null;
-                    }))
+    assertThatThrownBy(() ->
+            registry.database.transaction(db -> {
+              StorageObjectRegistry.addReferences(db, "bad", owners);
+              return null;
+            }))
         .isInstanceOf(IllegalStateException.class);
-    registry.database.transaction(
-        db -> {
-          try (var sql = db.createStatement()) {
-            sql.execute("UPDATE stored_objects SET status='AVAILABLE',created='bad-date'");
-          }
-          return null;
-        });
-    assertThatThrownBy(
-            () ->
-                registry.database.transaction(
-                    db -> {
-                      StorageObjectRegistry.addReferences(db, "bad", owners);
-                      return null;
-                    }))
+    registry.database.transaction(db -> {
+      try (var sql = db.createStatement()) {
+        sql.execute("UPDATE stored_objects SET status='AVAILABLE',created='bad-date'");
+      }
+      return null;
+    });
+    assertThatThrownBy(() ->
+            registry.database.transaction(db -> {
+              StorageObjectRegistry.addReferences(db, "bad", owners);
+              return null;
+            }))
         .isInstanceOf(java.time.format.DateTimeParseException.class);
     assertThat(registry.references("bad")).isEmpty();
   }

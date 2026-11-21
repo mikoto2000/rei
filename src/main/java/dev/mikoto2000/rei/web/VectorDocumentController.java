@@ -99,15 +99,14 @@ public final class VectorDocumentController {
     optional(request.sessionId());
     request
         .documents()
-        .forEach(
-            path -> {
-              required(path);
-              if (!java.nio.file.Path.of(path).isAbsolute()
-                  || path.indexOf('*') >= 0
-                  || path.indexOf('?') >= 0
-                  || path.indexOf('[') >= 0)
-                throw new IllegalArgumentException("Expand file globs in the client");
-            });
+        .forEach(path -> {
+          required(path);
+          if (!java.nio.file.Path.of(path).isAbsolute()
+              || path.indexOf('*') >= 0
+              || path.indexOf('?') >= 0
+              || path.indexOf('[') >= 0)
+            throw new IllegalArgumentException("Expand file globs in the client");
+        });
     String runId =
         java.util.Objects.requireNonNull(submitIngestion, "Embedding runtime unavailable")
             .apply(request);
@@ -167,12 +166,11 @@ public final class VectorDocumentController {
       throw new IllegalArgumentException("Explicit documents required");
     request
         .documents()
-        .forEach(
-            path -> {
-              required(path);
-              if (path.indexOf('*') >= 0 || path.indexOf('?') >= 0 || path.indexOf('[') >= 0)
-                throw new IllegalArgumentException("Expand file globs in the client");
-            });
+        .forEach(path -> {
+          required(path);
+          if (path.indexOf('*') >= 0 || path.indexOf('?') >= 0 || path.indexOf('[') >= 0)
+            throw new IllegalArgumentException("Expand file globs in the client");
+        });
     var documents = List.copyOf(request.documents());
     addDocuments.accept(documents);
     return text("追加処理を開始: " + String.join(", ", documents));

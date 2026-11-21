@@ -142,11 +142,10 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
   /** 作業状況の把握で用いる設定期待する内容を返す。 */
   @Override
   public Snapshot configureExpected(PeriodCoaching.Settings settings, long revision) {
-    return transaction(
-        c -> {
-          expected(c, revision);
-          return write(c, settings);
-        });
+    return transaction(c -> {
+      expected(c, revision);
+      return write(c, settings);
+    });
   }
 
   /** 作業状況の把握で使用する有効状態期待する内容を設定する。 */
@@ -163,38 +162,36 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
         || key.length() > 200
         || !java.util.Set.of("BELOW_TARGET", "BELOW_TARGET_DECLINING").contains(reason))
       throw new IllegalArgumentException("Invalid coaching reservation");
-    return transaction(
-        c -> {
-          var current = read(c);
-          if (!current.equals(expected)) return "SETTINGS_CHANGED";
-          if (!current.settings().enabled()) return "DISABLED";
-          try (var s =
-              c.prepareStatement(
-                  "SELECT 1 FROM activity_period_coaching_receipts WHERE period_key=?")) {
-            s.setString(1, key);
-            try (var r = s.executeQuery()) {
-              if (r.next()) return "ALREADY_SHOWN";
-            }
-          }
-          try (var s = c.createStatement();
-              var r =
-                  s.executeQuery("SELECT MAX(shown_at) FROM activity_period_coaching_receipts")) {
-            if (r.next()) {
-              long last = r.getLong(1);
-              if (!r.wasNull()
-                  && now.getEpochSecond() < last + current.settings().cooldownDays() * 86400L)
-                return "COOLDOWN";
-            }
-          }
-          try (var s =
-              c.prepareStatement("INSERT INTO activity_period_coaching_receipts VALUES(?,?,?,?)")) {
-            s.setString(1, key);
-            s.setString(2, reason);
-            s.setLong(3, now.getEpochSecond());
-            s.setLong(4, current.revision());
-            s.executeUpdate();
-          }
-          return "RESERVED";
-        });
+    return transaction(c -> {
+      var current = read(c);
+      if (!current.equals(expected)) return "SETTINGS_CHANGED";
+      if (!current.settings().enabled()) return "DISABLED";
+      try (var s =
+          c.prepareStatement(
+              "SELECT 1 FROM activity_period_coaching_receipts WHERE period_key=?")) {
+        s.setString(1, key);
+        try (var r = s.executeQuery()) {
+          if (r.next()) return "ALREADY_SHOWN";
+        }
+      }
+      try (var s = c.createStatement();
+          var r = s.executeQuery("SELECT MAX(shown_at) FROM activity_period_coaching_receipts")) {
+        if (r.next()) {
+          long last = r.getLong(1);
+          if (!r.wasNull()
+              && now.getEpochSecond() < last + current.settings().cooldownDays() * 86400L)
+            return "COOLDOWN";
+        }
+      }
+      try (var s =
+          c.prepareStatement("INSERT INTO activity_period_coaching_receipts VALUES(?,?,?,?)")) {
+        s.setString(1, key);
+        s.setString(2, reason);
+        s.setLong(3, now.getEpochSecond());
+        s.setLong(4, current.revision());
+        s.executeUpdate();
+      }
+      return "RESERVED";
+    });
   }
 }

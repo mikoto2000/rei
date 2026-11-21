@@ -3,9 +3,9 @@ package dev.mikoto2000.rei.paper;
 import dev.mikoto2000.rei.subagent.SubAgentResultParser;
 import dev.mikoto2000.rei.subagent.SubAgentResultSchema;
 import java.nio.file.Path;
-import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.Collections;
+import org.springframework.stereotype.Component;
 
 /** 論文の調査と整理に必要な論文要約検証の窓口を扱う。 */
 @Component
@@ -46,12 +46,11 @@ public class PaperSummaryValidator {
       var result = PaperJson.MAPPER.treeToValue(json, Validated.class);
       for (var e : result.evidence())
         if (source.sections().stream()
-            .noneMatch(
-                s ->
-                    s.heading().equals(e.section())
-                        && e.page() >= s.startPage()
-                        && e.page() <= s.endPage()
-                        && s.text().contains(e.text())))
+            .noneMatch(s ->
+                s.heading().equals(e.section())
+                    && e.page() >= s.startPage()
+                    && e.page() <= s.endPage()
+                    && s.text().contains(e.text())))
           throw new IllegalArgumentException("ungrounded");
       return result;
     } catch (RuntimeException e) {

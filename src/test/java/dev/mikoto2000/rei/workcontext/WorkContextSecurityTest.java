@@ -57,29 +57,27 @@ class WorkContextSecurityTest {
     new WebApplicationContextRunner()
         .withPropertyValues("rei.web.enabled=true")
         .withUserConfiguration(Config.class)
-        .run(
-            context -> {
-              var mvc =
-                  MockMvcBuilders.webAppContextSetup(context)
-                      .addFilters(
-                          context.getBean(
-                              "springSecurityFilterChain", jakarta.servlet.Filter.class))
-                      .build();
-              for (String path :
-                  new String[] {
-                    "/api/v1/projects/a/work-context",
-                    "/api/v1/projects/a/work-context/summary",
-                    "/api/v1/projects/a/work-context/history",
-                    "/api/v1/projects/a/work-context/history/1"
-                  }) {
-                mvc.perform(get(path)).andExpect(status().isUnauthorized());
-                mvc.perform(get(path).header("Authorization", "Bearer wrong"))
-                    .andExpect(status().isUnauthorized());
-              }
-              mvc.perform(post("/api/v1/sessions/s/work-context/update"))
-                  .andExpect(status().isUnauthorized());
-              // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
-              verifyNoInteractions(context.getBean(WorkContextService.class));
-            });
+        .run(context -> {
+          var mvc =
+              MockMvcBuilders.webAppContextSetup(context)
+                  .addFilters(
+                      context.getBean("springSecurityFilterChain", jakarta.servlet.Filter.class))
+                  .build();
+          for (String path :
+              new String[] {
+                "/api/v1/projects/a/work-context",
+                "/api/v1/projects/a/work-context/summary",
+                "/api/v1/projects/a/work-context/history",
+                "/api/v1/projects/a/work-context/history/1"
+              }) {
+            mvc.perform(get(path)).andExpect(status().isUnauthorized());
+            mvc.perform(get(path).header("Authorization", "Bearer wrong"))
+                .andExpect(status().isUnauthorized());
+          }
+          mvc.perform(post("/api/v1/sessions/s/work-context/update"))
+              .andExpect(status().isUnauthorized());
+          // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
+          verifyNoInteractions(context.getBean(WorkContextService.class));
+        });
   }
 }

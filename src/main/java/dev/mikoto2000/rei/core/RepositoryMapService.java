@@ -440,14 +440,13 @@ public final class RepositoryMapService {
       try {
         persistentIndex
             .load(root)
-            .forEach(
-                (path, entry) ->
-                    previous.putIfAbsent(
-                        path,
-                        new Cached(
-                            entry.digest(),
-                            new Parsed(
-                                entry.packageName(), "PARSED", entry.symbols(), entry.imports()))));
+            .forEach((path, entry) ->
+                previous.putIfAbsent(
+                    path,
+                    new Cached(
+                        entry.digest(),
+                        new Parsed(
+                            entry.packageName(), "PARSED", entry.symbols(), entry.imports()))));
       } catch (RuntimeException error) {
         RunCancellation.propagate(error);
         org.slf4j.LoggerFactory.getLogger(getClass())
@@ -565,14 +564,13 @@ public final class RepositoryMapService {
             root,
             next.entrySet().stream()
                 .filter(e -> e.getValue().parsed().status().equals("PARSED"))
-                .map(
-                    e ->
-                        new SqliteRepositoryMapIndex.Entry(
-                            e.getKey(),
-                            e.getValue().digest(),
-                            e.getValue().parsed().packageName(),
-                            e.getValue().parsed().symbols(),
-                            e.getValue().parsed().imports()))
+                .map(e ->
+                    new SqliteRepositoryMapIndex.Entry(
+                        e.getKey(),
+                        e.getValue().digest(),
+                        e.getValue().parsed().packageName(),
+                        e.getValue().parsed().symbols(),
+                        e.getValue().parsed().imports()))
                 .toList());
       } catch (RuntimeException error) {
         RunCancellation.propagate(error);
@@ -589,13 +587,12 @@ public final class RepositoryMapService {
     String filter = Objects.toString(query, "").toLowerCase(Locale.ROOT);
     var selected =
         files.stream()
-            .filter(
-                f ->
-                    (f.path() + " " + f.packageName() + " " + f.module())
-                            .toLowerCase(Locale.ROOT)
-                            .contains(filter)
-                        || f.symbols().stream()
-                            .anyMatch(s -> s.name().toLowerCase(Locale.ROOT).contains(filter)))
+            .filter(f ->
+                (f.path() + " " + f.packageName() + " " + f.module())
+                        .toLowerCase(Locale.ROOT)
+                        .contains(filter)
+                    || f.symbols().stream()
+                        .anyMatch(s -> s.name().toLowerCase(Locale.ROOT).contains(filter)))
             .limit(complete ? 1024 : limit)
             .toList();
     Set<String> visible = new HashSet<>();
@@ -652,19 +649,18 @@ public final class RepositoryMapService {
     var moduleSummaries =
         modules.entrySet().stream()
             .limit(100)
-            .map(
-                entry ->
-                    new ModuleSummary(
-                        entry.getKey(),
-                        entry.getValue().size(),
-                        (int)
-                            entry.getValue().stream()
-                                .filter(file -> file.status().equals("PARSED"))
-                                .count(),
-                        (int)
-                            entry.getValue().stream()
-                                .filter(file -> HeuristicSourceIndex.test(file.path()))
-                                .count()))
+            .map(entry ->
+                new ModuleSummary(
+                    entry.getKey(),
+                    entry.getValue().size(),
+                    (int)
+                        entry.getValue().stream()
+                            .filter(file -> file.status().equals("PARSED"))
+                            .count(),
+                    (int)
+                        entry.getValue().stream()
+                            .filter(file -> HeuristicSourceIndex.test(file.path()))
+                            .count()))
             .toList();
     var packageSummaries =
         packages.entrySet().stream()
@@ -688,10 +684,9 @@ public final class RepositoryMapService {
                 .count(),
         (int)
             relations.stream()
-                .filter(
-                    relation ->
-                        Set.of("TEST_NAME_CANDIDATE", "HEURISTIC_TEST_NAME_CANDIDATE")
-                            .contains(relation.kind()))
+                .filter(relation ->
+                    Set.of("TEST_NAME_CANDIDATE", "HEURISTIC_TEST_NAME_CANDIDATE")
+                        .contains(relation.kind()))
                 .count(),
         partial || truncated,
         heuristic);

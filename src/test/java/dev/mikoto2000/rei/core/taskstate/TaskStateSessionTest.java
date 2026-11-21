@@ -54,7 +54,11 @@ class TaskStateSessionTest {
     assertEquals("Verify shared task state", state.goal());
     var request = ChatClientRequest.builder().prompt(new Prompt("Continue the task")).build();
     assertTrue(
-        advisor.before(request, null).prompt().getUserMessage().getText()
+        advisor
+            .before(request, null)
+            .prompt()
+            .getUserMessage()
+            .getText()
             .contains("Verify shared task state"));
   }
 

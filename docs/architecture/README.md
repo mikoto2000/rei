@@ -71,6 +71,11 @@ CIの最終結果はPRのチェックを参照してください。
 
 ## CIのゲートとベースライン
 
+2026-11-21 の ArchUnit 1.5.1 更新では、既存の catch 節の例外型依存が新たに検出されます。
+production の依存レポートで根拠を確認し、C-business に19辺、C-wiring に4辺、D に2辺、
+E に4辺を追加しました。処理本体の新しい結合を追加したものではなく、検出対象の拡張に伴う
+ベースラインの移行です。A / B の予算と、新規辺を拒否するゲートは維持しています。
+
 `PackageArchitectureTest`は既定テストにもfullにも含まれます。Java regression CIは専用ステップでも
 `ArchitectureGuardTest`と合わせて実行し、レポートをartifactに保存します。
 

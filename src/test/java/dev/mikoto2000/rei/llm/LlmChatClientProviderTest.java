@@ -125,19 +125,18 @@ class LlmChatClientProviderTest {
     provider.setSubAgentProperties(settings);
     var tools = mock(dev.mikoto2000.rei.subagent.SubAgentTools.class);
     when(tools.callback(org.mockito.ArgumentMatchers.anyString()))
-        .thenAnswer(
-            invocation -> {
-              String name = invocation.getArgument(0);
-              var callback = mock(org.springframework.ai.tool.ToolCallback.class);
-              when(callback.getToolDefinition())
-                  .thenReturn(
-                      org.springframework.ai.tool.definition.ToolDefinition.builder()
-                          .name(name)
-                          .description(name)
-                          .inputSchema("{}")
-                          .build());
-              return callback;
-            });
+        .thenAnswer(invocation -> {
+          String name = invocation.getArgument(0);
+          var callback = mock(org.springframework.ai.tool.ToolCallback.class);
+          when(callback.getToolDefinition())
+              .thenReturn(
+                  org.springframework.ai.tool.definition.ToolDefinition.builder()
+                      .name(name)
+                      .description(name)
+                      .inputSchema("{}")
+                      .build());
+          return callback;
+        });
     ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> toolsProvider = optional(tools);
     when(toolsProvider.getObject()).thenReturn(tools);
     provider.setSubAgentTools(toolsProvider);

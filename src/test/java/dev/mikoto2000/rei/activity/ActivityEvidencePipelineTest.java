@@ -105,22 +105,20 @@ class ActivityEvidencePipelineTest {
                 "Firefox", 1, "Mozilla Firefox", "1", new ActivityRecord.Bounds(0, 0, 16, 32)));
     when(observer.capture()).thenReturn(ActivityChangeScopeTest.screen(20, 200));
     when(extractor.extract(any(), any()))
-        .thenAnswer(
-            i -> {
-              verify(store).append(any());
-              assertEquals(
-                  16,
-                  ((dev.mikoto2000.rei.computeruse.CapturedScreen) i.getArgument(0))
-                      .image()
-                      .getWidth());
-              return new ActivityExtractor.Result(
-                  new ActivityRecord.Inference(
-                      "visible",
-                      List.of(
-                          new ActivityRecord.Activity(
-                              "primary", "social", "Firefox", "X", "", ""))),
-                  .9);
-            });
+        .thenAnswer(i -> {
+          verify(store).append(any());
+          assertEquals(
+              16,
+              ((dev.mikoto2000.rei.computeruse.CapturedScreen) i.getArgument(0))
+                  .image()
+                  .getWidth());
+          return new ActivityExtractor.Result(
+              new ActivityRecord.Inference(
+                  "visible",
+                  List.of(
+                      new ActivityRecord.Activity("primary", "social", "Firefox", "X", "", ""))),
+              .9);
+        });
     var capture =
         new ActivityCapture(
             p,

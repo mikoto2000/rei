@@ -195,39 +195,39 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
   /** ChatGPTとの連携で用いる機能の構成を返す。 */
   static String configuration() {
     return """
-      model_provider = "rei_plan"
-      default_permissions = "rei-read"
-      web_search = "disabled"
-      [model_providers.rei_plan]
-      name = "Rei own ChatGPT Plan"
-      base_url = "https://api.openai.com/v1"
-      env_key = "REI_PLAN_ACCESS_TOKEN"
-      wire_api = "responses"
-      requires_openai_auth = false
-      supports_websockets = false
-      request_max_retries = 0
-      stream_max_retries = 0
-      [features]
-      shell_tool = false
-      multi_agent = false
-      unified_exec = false
-      apps = false
-      browser_use = false
-      computer_use = false
-      view_image = false
-      goals = false
-      guardian_approval = false
-      worktrees = false
-      unbounded_connection_retries = false
-      [permissions.rei-read.filesystem]
-      ":root" = "deny"
-      ":minimal" = "read"
-      ":workspace_roots" = "read"
-      [permissions.rei-read.network]
-      enabled = false
-      [shell_environment_policy]
-      inherit = "none"
-      """;
+    model_provider = "rei_plan"
+    default_permissions = "rei-read"
+    web_search = "disabled"
+    [model_providers.rei_plan]
+    name = "Rei own ChatGPT Plan"
+    base_url = "https://api.openai.com/v1"
+    env_key = "REI_PLAN_ACCESS_TOKEN"
+    wire_api = "responses"
+    requires_openai_auth = false
+    supports_websockets = false
+    request_max_retries = 0
+    stream_max_retries = 0
+    [features]
+    shell_tool = false
+    multi_agent = false
+    unified_exec = false
+    apps = false
+    browser_use = false
+    computer_use = false
+    view_image = false
+    goals = false
+    guardian_approval = false
+    worktrees = false
+    unbounded_connection_retries = false
+    [permissions.rei-read.filesystem]
+    ":root" = "deny"
+    ":minimal" = "read"
+    ":workspace_roots" = "read"
+    [permissions.rei-read.network]
+    enabled = false
+    [shell_environment_policy]
+    inherit = "none"
+    """;
   }
 
   /** 指定された対象を管理から取り除く。 */

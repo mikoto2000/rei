@@ -183,13 +183,12 @@ public final class ActivityOutputParser {
     public String diagnostic() {
       return errors.stream()
           .limit(5)
-          .map(
-              e ->
-                  safePath(e.path())
-                      + ":"
-                      + (e.code() != null && SAFE_CODES.contains(e.code())
-                          ? e.code()
-                          : "validation_error"))
+          .map(e ->
+              safePath(e.path())
+                  + ":"
+                  + (e.code() != null && SAFE_CODES.contains(e.code())
+                      ? e.code()
+                      : "validation_error"))
           .distinct()
           .collect(java.util.stream.Collectors.joining(", "));
     }

@@ -72,10 +72,9 @@ class ChatExecutionFailureDiagnosticsTest {
   /** {@code terminals} の条件を再現するための補助情報を返す。 */
   private List<AgentEvent> terminals() {
     return events.stream()
-        .filter(
-            e ->
-                e.type() == AgentEventType.AGENT_RUN_FAILED
-                    || e.type() == AgentEventType.AGENT_RUN_COMPLETED)
+        .filter(e ->
+            e.type() == AgentEventType.AGENT_RUN_FAILED
+                || e.type() == AgentEventType.AGENT_RUN_COMPLETED)
         .toList();
   }
 

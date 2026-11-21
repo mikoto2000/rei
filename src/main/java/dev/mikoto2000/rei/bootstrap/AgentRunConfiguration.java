@@ -68,14 +68,13 @@ public class AgentRunConfiguration {
             },
             enabled,
             router);
-    shell.onPendingCancellation(
-        context -> {
-          var runner = service.getIfAvailable();
-          var runs = registry.getIfAvailable();
-          if ((enabled || tasksEnabled || todayEnabled) && runner != null && runs != null)
-            return runner.cancelQueuedOnly(context.runId()).accepted();
-          return router.cancelQueued(context.runId());
-        });
+    shell.onPendingCancellation(context -> {
+      var runner = service.getIfAvailable();
+      var runs = registry.getIfAvailable();
+      if ((enabled || tasksEnabled || todayEnabled) && runner != null && runs != null)
+        return runner.cancelQueuedOnly(context.runId()).accepted();
+      return router.cancelQueued(context.runId());
+    });
     return shell;
   }
 
@@ -108,13 +107,12 @@ public class AgentRunConfiguration {
               // Audio can block for minutes; it is not an active AgentRun and must not hold its
               // mailbox open.
               try {
-                agentRunExecutor.execute(
-                    () -> {
-                      var scope = AgentRunScope.open(context);
-                      try (scope) {
-                        narrator.narrateCompletedRun(result.text());
-                      }
-                    });
+                agentRunExecutor.execute(() -> {
+                  var scope = AgentRunScope.open(context);
+                  try (scope) {
+                    narrator.narrateCompletedRun(result.text());
+                  }
+                });
               } catch (RejectedExecutionException closing) {
                 org.slf4j.LoggerFactory.getLogger(AgentRunConfiguration.class)
                     .debug("Narration skipped during shutdown");

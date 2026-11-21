@@ -59,15 +59,14 @@ public class ActionPlan {
     if (saved.size() > 100
         || saved.stream().map(PlanStep::id).distinct().count() != saved.size()
         || saved.stream()
-            .anyMatch(
-                s ->
-                    !List.of(
-                            STATUS_TODO,
-                            STATUS_IN_PROGRESS,
-                            STATUS_DONE,
-                            STATUS_BLOCKED,
-                            STATUS_SKIPPED)
-                        .contains(s.status()))
+            .anyMatch(s ->
+                !List.of(
+                        STATUS_TODO,
+                        STATUS_IN_PROGRESS,
+                        STATUS_DONE,
+                        STATUS_BLOCKED,
+                        STATUS_SKIPPED)
+                    .contains(s.status()))
         || saved.stream().filter(s -> STATUS_IN_PROGRESS.equals(s.status())).count() > 1)
       throw new IllegalArgumentException("Invalid action plan");
     steps.clear();

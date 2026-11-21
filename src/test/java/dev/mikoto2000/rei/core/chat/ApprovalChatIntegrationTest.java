@@ -168,12 +168,8 @@ class ApprovalChatIntegrationTest {
                 p.getInstructions().stream()
                     .filter(ToolResponseMessage.class::isInstance)
                     .map(ToolResponseMessage.class::cast)
-                    .anyMatch(
-                        m ->
-                            m.getResponses()
-                                .getFirst()
-                                .responseData()
-                                .equals("validation passed")));
+                    .anyMatch(m ->
+                        m.getResponses().getFirst().responseData().equals("validation passed")));
             return Flux.just(
                 new ChatResponse(
                     List.of(new Generation(new AssistantMessage("review completed")))));

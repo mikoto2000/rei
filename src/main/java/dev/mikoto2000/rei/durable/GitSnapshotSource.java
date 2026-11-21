@@ -11,7 +11,9 @@ import java.util.List;
 import java.util.PriorityQueue;
 import java.util.concurrent.TimeUnit;
 
-/** Reads immutable Git tree/blob objects without checkout, archive exclusions, or shell commands. */
+/**
+ * Reads immutable Git tree/blob objects without checkout, archive exclusions, or shell commands.
+ */
 public final class GitSnapshotSource {
   private static final int MAX_FILE_BYTES = 64 * 1024 * 1024;
 
@@ -92,7 +94,8 @@ public final class GitSnapshotSource {
           throw new IOException("Invalid Git blob size", invalid);
         }
         if (size < 0 || size > MAX_FILE_BYTES) {
-          entries.add(SnapshotEnumerator.entry(blob.path(), null, null, "", "FILE_BYTE_LIMIT", false));
+          entries.add(
+              SnapshotEnumerator.entry(blob.path(), null, null, "", "FILE_BYTE_LIMIT", false));
           return new Page(entries, false);
         }
         byte[] content = batch.getInputStream().readNBytes((int) size);
@@ -116,7 +119,8 @@ public final class GitSnapshotSource {
       // Test ancestors too: excluding a directory must exclude every committed descendant.
       Path candidate = Path.of(path);
       while (candidate != null) {
-        if (matcher.matches(candidate) || matcher.matches(candidate.resolve("_"))) return "EXCLUDED:" + pattern;
+        if (matcher.matches(candidate) || matcher.matches(candidate.resolve("_")))
+          return "EXCLUDED:" + pattern;
         candidate = candidate.getParent();
       }
     }
@@ -125,7 +129,7 @@ public final class GitSnapshotSource {
 
   private static String terminated(InputStream input, int limit) throws IOException {
     var bytes = new ByteArrayOutputStream();
-    for (int value; (value = input.read()) != -1;) {
+    for (int value; (value = input.read()) != -1; ) {
       if (value == 0) return bytes.toString(StandardCharsets.UTF_8);
       if (bytes.size() >= limit) throw new IOException("Git output record limit");
       bytes.write(value);
@@ -137,14 +141,20 @@ public final class GitSnapshotSource {
   private static Process start(Path root, String... arguments) throws IOException {
     var command = new ArrayList<>(List.of("git"));
     command.addAll(List.of(arguments));
-    var builder = new ProcessBuilder(command).directory(root.toFile()).redirectError(ProcessBuilder.Redirect.DISCARD);
+    var builder =
+        new ProcessBuilder(command)
+            .directory(root.toFile())
+            .redirectError(ProcessBuilder.Redirect.DISCARD);
     builder.environment().put("GIT_NO_REPLACE_OBJECTS", "1");
     builder.environment().put("GIT_NO_LAZY_FETCH", "1");
     var process = builder.start();
-    process.onExit().orTimeout(30, TimeUnit.SECONDS).exceptionally(error -> {
-      process.destroyForcibly();
-      return null;
-    });
+    process
+        .onExit()
+        .orTimeout(30, TimeUnit.SECONDS)
+        .exceptionally(error -> {
+          process.destroyForcibly();
+          return null;
+        });
     return process;
   }
 

@@ -48,19 +48,33 @@ class AgentEventClientRoutingTest {
     var client = projects.newClient().open();
     try (client) {
       var project = projects.currentContext();
-      var caller = new AgentRunContext("cli-run", "cli-session", project.root(), project.id(),
-          AgentRunContext.RequestSource.WEB);
-      var other = new AgentRunContext("other-run", "other-session", project.root(), project.id(),
-          AgentRunContext.RequestSource.WEB);
+      var caller =
+          new AgentRunContext(
+              "cli-run",
+              "cli-session",
+              project.root(),
+              project.id(),
+              AgentRunContext.RequestSource.WEB);
+      var other =
+          new AgentRunContext(
+              "other-run",
+              "other-session",
+              project.root(),
+              project.id(),
+              AgentRunContext.RequestSource.WEB);
       var registry = new RunRegistry(Clock.systemUTC());
       registry.register(caller);
       registry.register(other);
       var bus = new InMemoryAgentEventBus();
       var factory = new AgentEventFactory(Clock.systemUTC());
       var shellOutput = mock(ShellEventOutput.class);
-      var activity = new ProjectShellActivity(projects,
-          new dev.mikoto2000.rei.event.ProjectAgentEventStore(root),
-          new ProjectRunStateStore(root), new WorkingSet(), mock(ChatMemory.class));
+      var activity =
+          new ProjectShellActivity(
+              projects,
+              new dev.mikoto2000.rei.event.ProjectAgentEventStore(root),
+              new ProjectRunStateStore(root),
+              new WorkingSet(),
+              mock(ChatMemory.class));
       activity.attach(shellOutput);
       clearInvocations(shellOutput);
       bus.subscribe(activity);
@@ -77,20 +91,29 @@ class AgentEventClientRoutingTest {
         Flux<ChatResponse> stream;
         {
           var scope = AgentRunScope.open(caller);
-          try (scope) { stream = model.stream(prompt); }
+          try (scope) {
+            stream = model.stream(prompt);
+          }
         }
-        stream.subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
-            .onErrorComplete().blockLast(Duration.ofSeconds(5));
-        bus.publish(factory.runFailed(caller.runId(),
-            dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(failure))
-            .withOwnership(caller));
+        stream
+            .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
+            .onErrorComplete()
+            .blockLast(Duration.ofSeconds(5));
+        bus.publish(
+            factory
+                .runFailed(
+                    caller.runId(),
+                    dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(failure))
+                .withOwnership(caller));
         assertThat(callerSink.ended.await(5, TimeUnit.SECONDS)).isTrue();
-        assertThat(callerSink.events).extracting(WebApiEventDto::type).containsExactly(
-            "llm.request.started", "llm.request.failed", "agent.run.failed");
-        assertThat(callerSink.events).allSatisfy(event -> {
-          assertThat(event.runId()).isEqualTo(caller.runId());
-          assertThat(event.sessionId()).isEqualTo(caller.conversationId());
-        });
+        assertThat(callerSink.events)
+            .extracting(WebApiEventDto::type)
+            .containsExactly("llm.request.started", "llm.request.failed", "agent.run.failed");
+        assertThat(callerSink.events)
+            .allSatisfy(event -> {
+              assertThat(event.runId()).isEqualTo(caller.runId());
+              assertThat(event.sessionId()).isEqualTo(caller.conversationId());
+            });
         assertThat(callerSink.events.get(1).payload().toString())
             .contains("connection_failed", "接続先へ接続できませんでした")
             .doesNotContain("PRIVATE_HOST", "secret");
@@ -113,8 +136,14 @@ class AgentEventClientRoutingTest {
     final List<WebApiEventDto> events = new CopyOnWriteArrayList<>();
     final CountDownLatch ended = new CountDownLatch(1);
 
-    public void event(WebApiEventDto event) { events.add(event); }
+    public void event(WebApiEventDto event) {
+      events.add(event);
+    }
+
     public void heartbeat() {}
-    public void complete(Throwable error) { ended.countDown(); }
+
+    public void complete(Throwable error) {
+      ended.countDown();
+    }
   }
 }

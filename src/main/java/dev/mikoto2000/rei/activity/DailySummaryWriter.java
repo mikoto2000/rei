@@ -2,7 +2,6 @@ package dev.mikoto2000.rei.activity;
 
 import java.io.IOException;
 
-
 /** 作業状況の把握に必要な日次要約書き込み先を扱う。 */
 @FunctionalInterface
 public interface DailySummaryWriter {

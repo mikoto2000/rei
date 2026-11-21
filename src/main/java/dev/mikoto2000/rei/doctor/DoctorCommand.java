@@ -66,10 +66,8 @@ public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
         submit.accept(
             "/doctor "
                 + java.util.Arrays.stream(args)
-                    .map(
-                        a ->
-                            dev.mikoto2000.rei.core.command.UserInputParser.quote(
-                                a, true, (char) 0))
+                    .map(a ->
+                        dev.mikoto2000.rei.core.command.UserInputParser.quote(a, true, (char) 0))
                     .collect(java.util.stream.Collectors.joining(" ")));
       }
       return 0;

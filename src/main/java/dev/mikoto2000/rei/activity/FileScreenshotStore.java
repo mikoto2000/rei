@@ -26,7 +26,8 @@ public final class FileScreenshotStore implements ScreenshotStore {
   }
 
   /** 後から参照できるよう、指定された情報を保存する。 */
-  public List<String> save(String id, Instant capturedAt, CapturedScreen screen) throws IOException {
+  public List<String> save(String id, Instant capturedAt, CapturedScreen screen)
+      throws IOException {
     UUID.fromString(id);
     Files.createDirectories(root);
     if (Files.isSymbolicLink(root))

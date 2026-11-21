@@ -15,14 +15,13 @@ final class ClaudeCodeProcessRunner extends ExternalAgentProcessRunner {
   protected void configureEnvironment(Map<String, String> environment) {
     environment
         .keySet()
-        .removeIf(
-            name -> {
-              String upper = name.toUpperCase(Locale.ROOT);
-              return upper.startsWith("ANTHROPIC_")
-                  || upper.startsWith("CLAUDE_CODE_USE_")
-                  || upper.equals("CLAUDE_CODE_SIMPLE")
-                  || upper.equals("CLAUDE_CODE_API_KEY_HELPER_TTL_MS");
-            });
+        .removeIf(name -> {
+          String upper = name.toUpperCase(Locale.ROOT);
+          return upper.startsWith("ANTHROPIC_")
+              || upper.startsWith("CLAUDE_CODE_USE_")
+              || upper.equals("CLAUDE_CODE_SIMPLE")
+              || upper.equals("CLAUDE_CODE_API_KEY_HELPER_TTL_MS");
+        });
     environment.put("CLAUDE_CODE_SAFE_MODE", "1");
   }
 }

@@ -77,8 +77,9 @@ public class ImageModelProvider {
     if (server != null && server.hasCustomServer()) {
       model = createOpenAiCompatibleImageModel(server);
       if (server.isFallbackToDefault()) {
-        model = new FallbackImageModel(
-            LlmFeature.IMAGE_GENERATION, model, defaultImageModel, server.getModel());
+        model =
+            new FallbackImageModel(
+                LlmFeature.IMAGE_GENERATION, model, defaultImageModel, server.getModel());
       }
     }
     return eventFactory == null || eventPublisher == null

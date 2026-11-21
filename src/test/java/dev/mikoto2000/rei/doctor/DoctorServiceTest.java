@@ -77,9 +77,8 @@ class DoctorServiceTest {
     assertEquals(clock.instant(), result(results, "runtime.java").observedAt());
     assertTrue(
         results.stream()
-            .allMatch(
-                r ->
-                    !r.method().isBlank() && !r.evidence().isBlank() && !r.nextAction().isBlank()));
+            .allMatch(r ->
+                !r.method().isBlank() && !r.evidence().isBlank() && !r.nextAction().isBlank()));
   }
 
   /** 実行環境の診断で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */

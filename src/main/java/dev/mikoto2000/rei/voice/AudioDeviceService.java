@@ -90,10 +90,9 @@ public final class AudioDeviceService {
   /** 音声による対話で用いる調査を返す。 */
   private static List<AudioDevice> scan() {
     return Arrays.stream(AudioSystem.getMixerInfo())
-        .filter(
-            info ->
-                Arrays.stream(AudioSystem.getMixer(info).getTargetLineInfo())
-                    .anyMatch(line -> TargetDataLine.class.isAssignableFrom(line.getLineClass())))
+        .filter(info ->
+            Arrays.stream(AudioSystem.getMixer(info).getTargetLineInfo())
+                .anyMatch(line -> TargetDataLine.class.isAssignableFrom(line.getLineClass())))
         .map(AudioDeviceService::describe)
         .toList();
   }

@@ -128,21 +128,17 @@ public class ApprovalContinuationStore {
     var messages =
         history.stream()
             .filter(m -> !(m instanceof SystemMessage))
-            .map(
-                m -> {
-                  if (m instanceof AssistantMessage a)
-                    return new StoredMessage(
-                        "ASSISTANT",
-                        Objects.toString(a.getText(), ""),
-                        a.getToolCalls(),
-                        List.of());
-                  if (m instanceof ToolResponseMessage t)
-                    return new StoredMessage(
-                        "TOOL", "", List.of(), t.getResponses(), ToolResultMetadata.capture(t));
-                  if (m instanceof UserMessage)
-                    return new StoredMessage("USER", m.getText(), List.of(), List.of());
-                  throw new IllegalArgumentException("Unsupported continuation message");
-                })
+            .map(m -> {
+              if (m instanceof AssistantMessage a)
+                return new StoredMessage(
+                    "ASSISTANT", Objects.toString(a.getText(), ""), a.getToolCalls(), List.of());
+              if (m instanceof ToolResponseMessage t)
+                return new StoredMessage(
+                    "TOOL", "", List.of(), t.getResponses(), ToolResultMetadata.capture(t));
+              if (m instanceof UserMessage)
+                return new StoredMessage("USER", m.getText(), List.of(), List.of());
+              throw new IllegalArgumentException("Unsupported continuation message");
+            })
             .toList();
     String encoded = encode(new Document(owner, request, messages, pending, budget, managed));
     if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576
@@ -223,27 +219,22 @@ public class ApprovalContinuationStore {
     return new RunContinuation.Saved(
         d.request(),
         d.history().stream()
-            .map(
-                m ->
-                    (Message)
-                        switch (m.kind()) {
-                          case "USER" -> new UserMessage(m.text());
-                          case "ASSISTANT" ->
-                              AssistantMessage.builder()
-                                  .content(m.text())
-                                  .toolCalls(m.calls())
-                                  .build();
-                          case "TOOL" ->
-                              ToolResponseMessage.builder()
-                                  .responses(m.responses())
-                                  .metadata(
-                                      m.delivery() == null
-                                          ? java.util.Map.of()
-                                          : m.delivery().restore())
-                                  .build();
-                          default ->
-                              throw new IllegalStateException("Invalid continuation message");
-                        })
+            .map(m ->
+                (Message)
+                    switch (m.kind()) {
+                      case "USER" -> new UserMessage(m.text());
+                      case "ASSISTANT" ->
+                          AssistantMessage.builder().content(m.text()).toolCalls(m.calls()).build();
+                      case "TOOL" ->
+                          ToolResponseMessage.builder()
+                              .responses(m.responses())
+                              .metadata(
+                                  m.delivery() == null
+                                      ? java.util.Map.of()
+                                      : m.delivery().restore())
+                              .build();
+                      default -> throw new IllegalStateException("Invalid continuation message");
+                    })
             .toList(),
         d.budget(),
         d.pending());

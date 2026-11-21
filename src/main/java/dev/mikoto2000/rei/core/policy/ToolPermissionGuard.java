@@ -51,6 +51,7 @@ public class ToolPermissionGuard {
 
   /** 判断基準。 */
   private final java.util.function.BiConsumer<String, String> validatePolicyArguments;
+
   private final java.util.function.BiFunction<String, String, PermissionDecision> evaluatePolicy;
   private final java.util.function.Function<String, PermissionDecision> evaluateDefaultPolicy;
   private final java.util.function.Function<String, java.util.Set<ActionCapability>> capabilities;
@@ -127,8 +128,8 @@ public class ToolPermissionGuard {
    * grant.
    */
   public void checkAuthorizedPlanPolicy(String tool, String input, AgentRunContext owner) {
-    if (restricted(tool, input, owner) || evaluatePolicy.apply(tool, input) == PermissionDecision.DENY)
-      check(tool, input, owner);
+    if (restricted(tool, input, owner)
+        || evaluatePolicy.apply(tool, input) == PermissionDecision.DENY) check(tool, input, owner);
     validatePolicyArguments.accept(tool, input);
   }
 
@@ -150,10 +151,9 @@ public class ToolPermissionGuard {
             && parent.requestSource() == child.requestSource()
             && parent.voiceInput() == child.voiceInput()
             && capabilities.apply(tool).stream()
-                .allMatch(
-                    capability ->
-                        capability == ActionCapability.READ
-                            || capability == ActionCapability.NETWORK_READ);
+                .allMatch(capability ->
+                    capability == ActionCapability.READ
+                        || capability == ActionCapability.NETWORK_READ);
     check(tool, input, child, matching ? parent : null);
   }
 
@@ -178,7 +178,9 @@ public class ToolPermissionGuard {
   private void check(
       String tool, String input, AgentRunContext owner, AgentRunContext approvalOwner) {
     var decision =
-        restricted(tool, input, owner) ? PermissionDecision.DENY : evaluatePolicy.apply(tool, input);
+        restricted(tool, input, owner)
+            ? PermissionDecision.DENY
+            : evaluatePolicy.apply(tool, input);
     if (decision != PermissionDecision.DENY) validatePolicyArguments.accept(tool, input);
     // Speech requires exact-input approval unless startup explicitly opted into common full auto.
     if (decision == PermissionDecision.AUTO_APPROVE

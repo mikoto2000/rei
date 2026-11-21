@@ -34,10 +34,9 @@ public class ProjectController {
               var project =
                   registry
                       .resolveById(id)
-                      .orElseThrow(
-                          () ->
-                              new dev.mikoto2000.rei.application.run.ResourceNotFoundException(
-                                  "Project"));
+                      .orElseThrow(() ->
+                          new dev.mikoto2000.rei.application.run.ResourceNotFoundException(
+                              "Project"));
               registry.remove(project.root());
               return new ProjectResponse(project.id(), project.name(), project.root().toString());
             };

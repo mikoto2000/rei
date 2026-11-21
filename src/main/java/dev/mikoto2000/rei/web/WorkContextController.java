@@ -86,14 +86,13 @@ public class WorkContextController {
         rows.isEmpty()
             ? "Work Context: 履歴はまだありません。"
             : rows.stream()
-                .map(
-                    context ->
-                        "revision="
-                            + context.revision()
-                            + " updated="
-                            + context.updatedAt()
-                            + " items="
-                            + context.items().size())
+                .map(context ->
+                    "revision="
+                        + context.revision()
+                        + " updated="
+                        + context.updatedAt()
+                        + " items="
+                        + context.items().size())
                 .collect(java.util.stream.Collectors.joining("\n")));
   }
 
@@ -138,15 +137,14 @@ public class WorkContextController {
   public Map<String, Object> update(@PathVariable String sessionId) {
     return service
         .update(sessionId, null)
-        .<Map<String, Object>>map(
-            c ->
-                Map.of(
-                    "projectId",
-                    c.projectId(),
-                    "revision",
-                    c.revision(),
-                    "message",
-                    "Saved finalized turns"))
+        .<Map<String, Object>>map(c ->
+            Map.of(
+                "projectId",
+                c.projectId(),
+                "revision",
+                c.revision(),
+                "message",
+                "Saved finalized turns"))
         .orElseGet(() -> Map.of("message", "No finalized turns"));
   }
 }

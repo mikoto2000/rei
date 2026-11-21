@@ -40,11 +40,10 @@ class SelfPatchReviewCancellationTest {
     try {
       var started = new java.util.concurrent.CountDownLatch(1);
       var result =
-          executor.submit(
-              () -> {
-                started.countDown();
-                return service.verify(root, new SelfPatchReviewService.Request(command, 30));
-              });
+          executor.submit(() -> {
+            started.countDown();
+            return service.verify(root, new SelfPatchReviewService.Request(command, 30));
+          });
       assertTrue(started.await(1, java.util.concurrent.TimeUnit.SECONDS));
       Thread.sleep(750);
       cancelled.set(true);

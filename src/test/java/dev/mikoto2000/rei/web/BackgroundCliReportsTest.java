@@ -79,13 +79,11 @@ class BackgroundCliReportsTest {
       assertEquals(RunStatus.FAILED, runs.get(failed.runId()).status());
       assertTrue(states.latestCompleted(project.id(), ExecutionType.IMAGE).isEmpty());
       when(images.generate(any()))
-          .thenAnswer(
-              call -> {
-                runs.cancel(AgentRunScope.current().runId());
-                Thread.interrupted();
-                return ImageGenerationResult.success(
-                    directory.resolve("cancelled.png"), "cancelled");
-              });
+          .thenAnswer(call -> {
+            runs.cancel(AgentRunScope.current().runId());
+            Thread.interrupted();
+            return ImageGenerationResult.success(directory.resolve("cancelled.png"), "cancelled");
+          });
       var cancelled = service.imageForCli(project.id(), "prompt", null, null, null, false);
       pending.remove().run();
       assertEquals(RunStatus.CANCELLED, runs.get(cancelled.runId()).status());
@@ -116,16 +114,15 @@ class BackgroundCliReportsTest {
     var summaries = mock(WebPageSummarizerService.class);
     var output = directory.resolve("picture.png");
     when(images.generate(any()))
-        .thenAnswer(
-            call -> {
-              ImageGenerationRequest request = call.getArgument(0);
-              assertEquals(output, request.outputPath());
-              assertEquals("image-test", request.model());
-              assertFalse(request.enhancePrompt());
-              assertEquals(new ImageSize(512, 768), request.size());
-              assertEquals(directory, ExecutionScope.current().projectRoot());
-              return ImageGenerationResult.success(output, "raw prompt");
-            });
+        .thenAnswer(call -> {
+          ImageGenerationRequest request = call.getArgument(0);
+          assertEquals(output, request.outputPath());
+          assertEquals("image-test", request.model());
+          assertFalse(request.enhancePrompt());
+          assertEquals(new ImageSize(512, 768), request.size());
+          assertEquals(directory, ExecutionScope.current().projectRoot());
+          return ImageGenerationResult.success(output, "raw prompt");
+        });
     when(summaries.summarize(any()))
         .thenAnswer(call -> new SummaryResult(call.getArgument(0), "summary", null));
     try (var runs = new RunService(registry, bus, events, cancellation, router::cancelQueued)) {

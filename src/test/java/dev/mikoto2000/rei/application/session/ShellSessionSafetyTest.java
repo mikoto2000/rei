@@ -194,17 +194,14 @@ class ShellSessionSafetyTest {
       for (int i = 0; i < 20; i++) {
         final int n = i;
         futures.add(
-            workers.submit(
-                () -> {
-                  if (n % 2 == 0)
-                    {
-                      var scope = client.open();
-                      try (scope) {
-                        shell.submit("shell " + n);
-                      }
-                    }
-                  else web.submit("web " + n, project.id(), id);
-                }));
+            workers.submit(() -> {
+              if (n % 2 == 0) {
+                var scope = client.open();
+                try (scope) {
+                  shell.submit("shell " + n);
+                }
+              } else web.submit("web " + n, project.id(), id);
+            }));
       }
       for (var future : futures) future.get(5, TimeUnit.SECONDS);
     }

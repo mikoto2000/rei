@@ -147,10 +147,9 @@ public class WorkContextService {
     project(project);
     return repository
         .revision(project, revision)
-        .orElseThrow(
-            () ->
-                new dev.mikoto2000.rei.application.run.ResourceNotFoundException(
-                    "Work Context revision"));
+        .orElseThrow(() ->
+            new dev.mikoto2000.rei.application.run.ResourceNotFoundException(
+                "Work Context revision"));
   }
 
   /** 指定された変更を、管理中の情報へ反映する。 */
@@ -360,40 +359,36 @@ public class WorkContextService {
           var existing = draft == null ? List.<WorkContext.Item>of() : draft.items();
           var candidates =
               LlmWorkContextExtractor.extractWithRetries(
-                  () -> extractor.extract(List.copyOf(batch.values()), existing, statuses), properties);
+                  () -> extractor.extract(List.copyOf(batch.values()), existing, statuses),
+                  properties);
           candidates =
               candidates.stream()
-                  .map(
-                      c -> {
-                        var cited =
-                            c.sourceIds().stream()
-                                .map(evidence::get)
-                                .filter(Objects::nonNull)
-                                .toList();
-                        boolean interrupted =
-                            cited.stream().anyMatch(e -> unfinished.contains(e.runId()));
-                        boolean partialConfirmed =
-                            c.certainty() == Origin.USER
-                                || c.certainty() == Origin.TOOL
-                                    && cited.stream()
-                                        .anyMatch(
-                                            e ->
-                                                e.toolCallId() != null
-                                                    && !e.text().startsWith("Tool failed:"));
-                        if (c.status() == Status.COMPLETED
-                            && interrupted
-                            && (c.kind() == Kind.CURRENT_WORK || !partialConfirmed))
-                          return new WorkContextCandidate(
-                              c.action(),
-                              c.targetId(),
-                              c.kind(),
-                              c.text(),
-                              c.reason(),
-                              Status.UNCONFIRMED,
-                              c.sourceIds(),
-                              c.certainty());
-                        return c;
-                      })
+                  .map(c -> {
+                    var cited =
+                        c.sourceIds().stream().map(evidence::get).filter(Objects::nonNull).toList();
+                    boolean interrupted =
+                        cited.stream().anyMatch(e -> unfinished.contains(e.runId()));
+                    boolean partialConfirmed =
+                        c.certainty() == Origin.USER
+                            || c.certainty() == Origin.TOOL
+                                && cited.stream()
+                                    .anyMatch(e ->
+                                        e.toolCallId() != null
+                                            && !e.text().startsWith("Tool failed:"));
+                    if (c.status() == Status.COMPLETED
+                        && interrupted
+                        && (c.kind() == Kind.CURRENT_WORK || !partialConfirmed))
+                      return new WorkContextCandidate(
+                          c.action(),
+                          c.targetId(),
+                          c.kind(),
+                          c.text(),
+                          c.reason(),
+                          Status.UNCONFIRMED,
+                          c.sourceIds(),
+                          c.certainty());
+                    return c;
+                  })
                   .toList();
           draft = merger.merge(project.id(), draft, null, candidates, batch, snapshot, now);
         }

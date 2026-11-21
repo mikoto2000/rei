@@ -26,8 +26,8 @@ Activity はメモリ内のライブ Run 状態だけです。アプリ再起動
 
 必要なもの:
 
-- Node.js 22.12+（検証: 24.11.1）、npm
-- Rust stable / Cargo（検証: 1.91.1）、Windows MSVC Build Tools / Windows SDK / WebView2
+- Node.js 22.22.2+ / 24.15.0+ / 26+（検証: 24.22.1）、npm
+- Rust stable / Cargo（検証: 1.99.1）、Windows MSVC Build Tools / Windows SDK / WebView2
 - Android: Android Studio、SDK、NDK、JDK、`ANDROID_HOME` / `NDK_HOME`
 - iOS: macOS、Xcode、Apple の署名環境
 
@@ -57,6 +57,17 @@ npm run tauri -- build --no-bundle
 `typescript-eslint` は TypeScript 7.0 のコンパイラ API に未対応のため、lint 用の
 `typescript` は対応範囲内の 6.0 に固定しています。`npm run typecheck` と `npm run build`
 は TypeScript 7 を明示的に起動します。
+
+Vite 8 の開発サーバーは設定を `runner` で読み込み、`experimental.bundledDev` を
+有効にしています。この Windows 環境では通常の依存事前バンドルが停止するため、
+開発用バンドルを一括生成する方式へ移行しています。Playwright と Tauri の開発起動も
+同じ `npm run dev` を使用します。
+E2E は `--mode e2e` で fixture をエントリーに指定し、本番ビルドには含めません。
+Node.js の型定義は検証環境に合わせて 24 系を使用しています。
+
+Rust の HTTP adapter は reqwest 0.13 の `rustls` / `json` / `query` / `stream` を
+明示的に有効にしています。Argon2 0.6 への更新後も Vault の保存形式と鍵導出パラメーターは
+維持し、0.5.3 で生成した固定データの読み取り・追記・再読み取りをテストしています。
 
 Windows 実行ファイル: `src-tauri/target/debug/rei-client.exe`。通常の `cargo build` は開発用 URL を利用するため、配布可能な assets 埋込みビルドには Tauri CLI を利用します。インストーラー作成・署名は今回の対象外です。
 

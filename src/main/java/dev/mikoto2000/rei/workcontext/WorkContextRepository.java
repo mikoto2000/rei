@@ -77,21 +77,20 @@ public class WorkContextRepository {
   public void save(WorkContext context, long expected) {
     if (context.revision() != expected + 1) throw new IllegalArgumentException("Invalid revision");
     String snapshot = encode(context);
-    transactions.executeWithoutResult(
-        tx -> {
-          checkCancellation();
-          db.sql("INSERT OR IGNORE INTO work_context_heads(project_id,revision) VALUES(?,0)")
-              .param(context.projectId())
-              .update();
-          if (db.sql("UPDATE work_context_heads SET revision=? WHERE project_id=? AND revision=?")
-                  .params(context.revision(), context.projectId(), expected)
-                  .update()
-              != 1) throw new WorkContextConflictException("Work Context changed; retry update");
-          db.sql("INSERT INTO work_context_revisions(project_id,revision,snapshot) VALUES(?,?,?)")
-              .params(context.projectId(), context.revision(), snapshot)
-              .update();
-          checkCancellation();
-        });
+    transactions.executeWithoutResult(tx -> {
+      checkCancellation();
+      db.sql("INSERT OR IGNORE INTO work_context_heads(project_id,revision) VALUES(?,0)")
+          .param(context.projectId())
+          .update();
+      if (db.sql("UPDATE work_context_heads SET revision=? WHERE project_id=? AND revision=?")
+              .params(context.revision(), context.projectId(), expected)
+              .update()
+          != 1) throw new WorkContextConflictException("Work Context changed; retry update");
+      db.sql("INSERT INTO work_context_revisions(project_id,revision,snapshot) VALUES(?,?,?)")
+          .params(context.projectId(), context.revision(), snapshot)
+          .update();
+      checkCancellation();
+    });
   }
 
   /** 後続の操作を進められるか判断するため、キャンセルを確認する。 */

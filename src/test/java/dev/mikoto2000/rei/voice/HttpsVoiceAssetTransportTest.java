@@ -60,14 +60,13 @@ class HttpsVoiceAssetTransportTest {
         List.of(
             new byte[content.length + 1], new byte[content.length - 1], new byte[content.length])) {
       Path target = root.resolve(UUID.randomUUID().toString());
-      assertThatThrownBy(
-              () ->
-                  HttpsVoiceAssetTransport.writeBody(
-                      asset(),
-                      new ByteArrayInputStream(invalid),
-                      target,
-                      new VoiceAssetTransport.Cancellation(),
-                      n -> {}))
+      assertThatThrownBy(() ->
+              HttpsVoiceAssetTransport.writeBody(
+                  asset(),
+                  new ByteArrayInputStream(invalid),
+                  target,
+                  new VoiceAssetTransport.Cancellation(),
+                  n -> {}))
           .isInstanceOf(IOException.class);
       if (Files.exists(target))
         assertThat(Files.size(target)).isLessThanOrEqualTo((long) content.length);
@@ -106,16 +105,15 @@ class HttpsVoiceAssetTransportTest {
         };
     try (var executor = Executors.newSingleThreadExecutor()) {
       var future =
-          executor.submit(
-              () -> {
-                try {
-                  HttpsVoiceAssetTransport.writeBody(
-                      asset(), input, root.resolve("asset"), token, n -> {});
-                  return "unexpected";
-                } catch (Exception e) {
-                  return e.getClass().getSimpleName();
-                }
-              });
+          executor.submit(() -> {
+            try {
+              HttpsVoiceAssetTransport.writeBody(
+                  asset(), input, root.resolve("asset"), token, n -> {});
+              return "unexpected";
+            } catch (Exception e) {
+              return e.getClass().getSimpleName();
+            }
+          });
       assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
       token.cancel();
       assertThat(future.get(2, TimeUnit.SECONDS)).isEqualTo("InterruptedIOException");

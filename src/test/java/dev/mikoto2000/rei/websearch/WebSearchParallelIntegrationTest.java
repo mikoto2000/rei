@@ -68,13 +68,12 @@ class WebSearchParallelIntegrationTest {
     var started = new CountDownLatch(3);
     var release = new CountDownLatch(1);
     when(fetch.fetch(anyString(), any()))
-        .thenAnswer(
-            invocation -> {
-              started.countDown();
-              assertTrue(release.await(2, TimeUnit.SECONDS));
-              String url = invocation.getArgument(0);
-              return UrlContentFetchResult.success("<body>topic " + url + "</body>", "text/html");
-            });
+        .thenAnswer(invocation -> {
+          started.countDown();
+          assertTrue(release.await(2, TimeUnit.SECONDS));
+          String url = invocation.getArgument(0);
+          return UrlContentFetchResult.success("<body>topic " + url + "</body>", "text/html");
+        });
     try (var batch = new WebFetchBatch(3, 2, 32);
         var caller = Executors.newSingleThreadExecutor()) {
       var service =

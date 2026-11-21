@@ -32,10 +32,8 @@ public final class SecretaryDesktopContext implements SecretaryActivity {
           store
               .findObservationsBetweenBounded(now.minusSeconds(120), now.plusNanos(1), 256)
               .stream()
-              .filter(
-                  r ->
-                      !r.capturedAt().isAfter(now)
-                          && !r.capturedAt().isBefore(now.minusSeconds(120)))
+              .filter(r ->
+                  !r.capturedAt().isAfter(now) && !r.capturedAt().isBefore(now.minusSeconds(120)))
               .max(Comparator.comparing(ActivityRecord::capturedAt));
       if (latest.isEmpty()) return unknown;
       var record = latest.get();

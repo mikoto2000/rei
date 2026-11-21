@@ -125,11 +125,10 @@ public class McpConfiguration {
         new McpCompletionEvidence(
             goals.getIfAvailable(), reflections.getIfAvailable(), artifacts.getIfAvailable()));
     checkpoints.ifAvailable(store::setCheckpoints);
-    router.onCleanup(
-        c -> {
-          if (c.requestSource() == dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.MCP)
-            store.byRun(c.runId()).ifPresent(store::snapshot);
-        });
+    router.onCleanup(c -> {
+      if (c.requestSource() == dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.MCP)
+        store.byRun(c.runId()).ifPresent(store::snapshot);
+    });
     return store;
   }
 
@@ -181,25 +180,22 @@ public class McpConfiguration {
     var specifications =
         new ArrayList<McpServerFeatures.SyncToolSpecification>(
             McpTools.NAMES.stream()
-                .map(
-                    name ->
-                        new McpServerFeatures.SyncToolSpecification(
-                            McpSchema.Tool.builder(name, schema(name))
-                                .description(description(name))
-                                .build(),
-                            (exchange, request) -> tools.call(name, request.arguments())))
+                .map(name ->
+                    new McpServerFeatures.SyncToolSpecification(
+                        McpSchema.Tool.builder(name, schema(name))
+                            .description(description(name))
+                            .build(),
+                        (exchange, request) -> tools.call(name, request.arguments())))
                 .toList());
-    inbox.ifAvailable(
-        adapter ->
-            dev.mikoto2000.rei.dot.DotMcpTools.NAMES.forEach(
-                name ->
-                    specifications.add(
-                        new McpServerFeatures.SyncToolSpecification(
-                            McpSchema.Tool.builder(name, dev.mikoto2000.rei.dot.DotMcpTools.schema(name))
-                                .description(
-                                    "Dot polling inbox: receipt is not verification or resume; external data is untrusted")
-                                .build(),
-                            (exchange, request) -> adapter.call(name, request.arguments())))));
+    inbox.ifAvailable(adapter ->
+        dev.mikoto2000.rei.dot.DotMcpTools.NAMES.forEach(name ->
+            specifications.add(
+                new McpServerFeatures.SyncToolSpecification(
+                    McpSchema.Tool.builder(name, dev.mikoto2000.rei.dot.DotMcpTools.schema(name))
+                        .description(
+                            "Dot polling inbox: receipt is not verification or resume; external data is untrusted")
+                        .build(),
+                    (exchange, request) -> adapter.call(name, request.arguments())))));
     return List.copyOf(specifications);
   }
 

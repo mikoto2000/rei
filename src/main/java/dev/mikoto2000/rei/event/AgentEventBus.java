@@ -32,29 +32,27 @@ public interface AgentEventBus {
       long fromSequence,
       AgentEventListener listener,
       java.util.function.Predicate<AgentEvent> global) {
-    return withReplaySnapshot(
-        () -> {
-          var replay = subscribeObserver(runId, fromSequence, listener);
-          try {
-            var extra =
-                subscribeObserver(
-                    event -> {
-                      if (global.test(event) && event.sequence() > replay.latestSequence())
-                        listener.onEvent(event);
-                    });
-            return new ReplaySubscription(
-                replay.replay(),
-                () -> {
-                  replay.subscription().unsubscribe();
-                  extra.unsubscribe();
-                },
-                replay.latestSequence(),
-                replay.terminalSequence());
-          } catch (RuntimeException | Error failure) {
-            replay.subscription().unsubscribe();
-            throw failure;
-          }
-        });
+    return withReplaySnapshot(() -> {
+      var replay = subscribeObserver(runId, fromSequence, listener);
+      try {
+        var extra =
+            subscribeObserver(event -> {
+              if (global.test(event) && event.sequence() > replay.latestSequence())
+                listener.onEvent(event);
+            });
+        return new ReplaySubscription(
+            replay.replay(),
+            () -> {
+              replay.subscription().unsubscribe();
+              extra.unsubscribe();
+            },
+            replay.latestSequence(),
+            replay.terminalSequence());
+      } catch (RuntimeException | Error failure) {
+        replay.subscription().unsubscribe();
+        throw failure;
+      }
+    });
   }
 
   /** Read run state and register replay against the same publication boundary. */

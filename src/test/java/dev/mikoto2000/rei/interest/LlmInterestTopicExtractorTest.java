@@ -38,15 +38,15 @@ class LlmInterestTopicExtractorTest {
                     new Generation(
                         new AssistantMessage(
                             """
-            [
-              {
-                "topic": "Neovim setup",
-                "reason": "User talked about editor setup",
-                "searchQuery": "Neovim devcontainer best practices",
-                "score": 0.82
-              }
-            ]
-            """)))));
+                            [
+                              {
+                                "topic": "Neovim setup",
+                                "reason": "User talked about editor setup",
+                                "searchQuery": "Neovim devcontainer best practices",
+                                "score": 0.82
+                              }
+                            ]
+                            """)))));
 
     List<InterestTopicCandidate> topics =
         extractor.extract(
@@ -129,12 +129,12 @@ class LlmInterestTopicExtractorTest {
     String normalized =
         LlmInterestTopicExtractor.normalizeJsonArray(
             """
-        ```json
-        [
-          {"topic":"t","reason":"r","searchQuery":"q","score":0.7}
-        ]
-        ```
-        """);
+            ```json
+            [
+              {"topic":"t","reason":"r","searchQuery":"q","score":0.7}
+            ]
+            ```
+            """);
     assertTrue(normalized.startsWith("["));
     assertTrue(normalized.endsWith("]"));
   }
@@ -145,12 +145,12 @@ class LlmInterestTopicExtractorTest {
     String normalized =
         LlmInterestTopicExtractor.normalizeJsonArray(
             """
-        Here are candidates:
-        [
-          {"topic":"t","reason":"r","searchQuery":"q","score":0.7}
-        ]
-        Thanks.
-        """);
+            Here are candidates:
+            [
+              {"topic":"t","reason":"r","searchQuery":"q","score":0.7}
+            ]
+            Thanks.
+            """);
     assertTrue(normalized.startsWith("["));
     assertTrue(normalized.endsWith("]"));
   }

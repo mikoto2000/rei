@@ -74,12 +74,11 @@ public final class TextDiff {
     Optional<Page> verifiedPage(Scope scope, int offset, int maxBytes, Runnable verify) {
       return entries
           .get(scope)
-          .map(
-              rendered -> {
-                verify.run();
-                validatePageSize(maxBytes);
-                return page(rendered, offset, maxBytes);
-              });
+          .map(rendered -> {
+            verify.run();
+            validatePageSize(maxBytes);
+            return page(rendered, offset, maxBytes);
+          });
     }
 
     Preview preview(

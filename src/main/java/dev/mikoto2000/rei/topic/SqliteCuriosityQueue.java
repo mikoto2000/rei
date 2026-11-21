@@ -23,10 +23,10 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
     jdbcClient
         .sql(
             """
-        INSERT OR IGNORE INTO curiosity_items
-          (id, question, normalized_question, reason, source, priority, created_at, expires_at, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """)
+            INSERT OR IGNORE INTO curiosity_items
+              (id, question, normalized_question, reason, source, priority, created_at, expires_at, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """)
         .params(
             item.id(),
             item.question(),
@@ -49,22 +49,22 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
     jdbcClient
         .sql(
             """
-        UPDATE curiosity_items
-        SET status = 'EXPIRED'
-        WHERE status = 'PENDING' AND expires_at IS NOT NULL AND expires_at <= ?
-        """)
+            UPDATE curiosity_items
+            SET status = 'EXPIRED'
+            WHERE status = 'PENDING' AND expires_at IS NOT NULL AND expires_at <= ?
+            """)
         .param(toDbTime(now))
         .update();
     return jdbcClient
         .sql(
             """
-        SELECT id, question, reason, source, priority, created_at, expires_at, status
-        FROM curiosity_items
-        WHERE status = 'PENDING'
-          AND (expires_at IS NULL OR expires_at > ?)
-        ORDER BY priority DESC, created_at ASC
-        LIMIT ?
-        """)
+            SELECT id, question, reason, source, priority, created_at, expires_at, status
+            FROM curiosity_items
+            WHERE status = 'PENDING'
+              AND (expires_at IS NULL OR expires_at > ?)
+            ORDER BY priority DESC, created_at ASC
+            LIMIT ?
+            """)
         .params(toDbTime(now), limit)
         .query(this::mapItem)
         .list();
@@ -109,33 +109,33 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
     jdbcClient
         .sql(
             """
-        CREATE TABLE IF NOT EXISTS curiosity_items (
-          id TEXT PRIMARY KEY,
-          question TEXT NOT NULL,
-          normalized_question TEXT NOT NULL UNIQUE,
-          reason TEXT NOT NULL,
-          source TEXT NOT NULL,
-          priority REAL NOT NULL,
-          created_at TEXT NOT NULL,
-          expires_at TEXT,
-          status TEXT NOT NULL
-        )
-        """)
+            CREATE TABLE IF NOT EXISTS curiosity_items (
+              id TEXT PRIMARY KEY,
+              question TEXT NOT NULL,
+              normalized_question TEXT NOT NULL UNIQUE,
+              reason TEXT NOT NULL,
+              source TEXT NOT NULL,
+              priority REAL NOT NULL,
+              created_at TEXT NOT NULL,
+              expires_at TEXT,
+              status TEXT NOT NULL
+            )
+            """)
         .update();
     addColumnIfMissing("curiosity_items", "normalized_question", "TEXT");
     jdbcClient
         .sql(
             """
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_curiosity_items_normalized_question
-        ON curiosity_items(normalized_question)
-        """)
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_curiosity_items_normalized_question
+            ON curiosity_items(normalized_question)
+            """)
         .update();
     jdbcClient
         .sql(
             """
-        CREATE INDEX IF NOT EXISTS idx_curiosity_items_status_priority
-        ON curiosity_items(status, priority DESC, created_at ASC)
-        """)
+            CREATE INDEX IF NOT EXISTS idx_curiosity_items_status_priority
+            ON curiosity_items(status, priority DESC, created_at ASC)
+            """)
         .update();
   }
 

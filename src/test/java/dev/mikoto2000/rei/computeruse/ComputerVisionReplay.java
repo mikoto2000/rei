@@ -64,13 +64,12 @@ public final class ComputerVisionReplay {
     var model =
         OpenAiChatModel.builder()
             .options(options)
-            .httpClientBuilderCustomizer(
-                builder ->
-                    builder.timeout(
-                        com.openai.core.Timeout.builder()
-                            .connect(java.time.Duration.ofSeconds(15))
-                            .read(java.time.Duration.ofMinutes(4))
-                            .build()))
+            .httpClientBuilderCustomizer(builder ->
+                builder.timeout(
+                    com.openai.core.Timeout.builder()
+                        .connect(java.time.Duration.ofSeconds(15))
+                        .read(java.time.Duration.ofMinutes(4))
+                        .build()))
             .build();
     var diagnostics = new ComputerDiagnostics(Path.of(args[3]));
     var run = diagnostics.begin();

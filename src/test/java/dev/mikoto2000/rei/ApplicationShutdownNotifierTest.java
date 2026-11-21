@@ -21,15 +21,14 @@ class ApplicationShutdownNotifierTest {
   void contextCloseAnnouncesBeforeLifecycleStop() {
     var bus = new InMemoryAgentEventBus();
     var order = new ArrayList<String>();
-    bus.subscribe(
-        event -> {
-          assertThat(event.type()).isEqualTo(AgentEventType.APPLICATION_SHUTDOWN_STARTED);
-          assertThat(event.runId()).isNull();
-          assertThat(event.projectId()).isNull();
-          assertThat(event.payload())
-              .isEqualTo(new ApplicationShutdownStartedPayload("context_closed"));
-          order.add("event");
-        });
+    bus.subscribe(event -> {
+      assertThat(event.type()).isEqualTo(AgentEventType.APPLICATION_SHUTDOWN_STARTED);
+      assertThat(event.runId()).isNull();
+      assertThat(event.projectId()).isNull();
+      assertThat(event.payload())
+          .isEqualTo(new ApplicationShutdownStartedPayload("context_closed"));
+      order.add("event");
+    });
     var context = new GenericApplicationContext();
     context.registerBean(
         ApplicationShutdownNotifier.class,

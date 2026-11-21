@@ -202,7 +202,8 @@ final class PagedFileSearch {
               var range = state.ranges.get(state.rangeIndex);
               int start = range.start();
               int stop = Math.min(range.end(), start + maxLines - count);
-              // Select an exact source prefix and fit its serialized envelope before advancing state.
+              // Select an exact source prefix and fit its serialized envelope before advancing
+              // state.
               var budget = new TextReadBudget(Math.max(0, bytes - 1024));
               var slice = budget.take(lines, start, stop, state.offset, maxLines - count);
               if (slice.lines().isEmpty()) break;
@@ -281,7 +282,9 @@ final class PagedFileSearch {
               if (slice.nextOffset() > 0) {
                 state.ranges =
                     replaceRange(
-                        state.ranges, state.rangeIndex, new Range(slice.nextLine() - 1, range.end()));
+                        state.ranges,
+                        state.rangeIndex,
+                        new Range(slice.nextLine() - 1, range.end()));
                 state.offset = slice.nextOffset();
                 break;
               }
@@ -317,7 +320,12 @@ final class PagedFileSearch {
         failure = cause;
       Tools.checkReadingCancellation(failure);
       return new Page(
-          List.of(), null, null, new Progress(0, 0, 0, "FAILED"), ReadingProblem.from(failure), null);
+          List.of(),
+          null,
+          null,
+          new Progress(0, 0, 0, "FAILED"),
+          ReadingProblem.from(failure),
+          null);
     }
   }
 
@@ -566,11 +574,10 @@ final class PagedFileSearch {
           int to = (int) ((long) (worker + 1) * size / workers);
           tasks.add(
               executor.submit(
-                  Tools.captureReadingScope(
-                      () -> {
-                        check.check(from, to);
-                        return null;
-                      })));
+                  Tools.captureReadingScope(() -> {
+                    check.check(from, to);
+                    return null;
+                  })));
         }
         // Contiguous ranges joined in input order preserve the first failing candidate.
         for (var task : tasks) task.get();

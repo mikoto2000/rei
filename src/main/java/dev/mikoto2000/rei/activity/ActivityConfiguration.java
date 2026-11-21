@@ -421,22 +421,20 @@ public class ActivityConfiguration {
     var agent =
         bus == null
             ? null
-            : bus.subscribe(
-                e -> {
-                  if (e.type() == dev.mikoto2000.rei.event.AgentEventType.COMPUTER_USE_PROGRESS)
-                    capture.forceObservation();
-                });
+            : bus.subscribe(e -> {
+              if (e.type() == dev.mikoto2000.rei.event.AgentEventType.COMPUTER_USE_PROGRESS)
+                capture.forceObservation();
+            });
     var audio =
         voice == null
             ? null
-            : voice.subscribe(
-                e -> {
-                  switch (e.type()) {
-                    case STATE_CHANGED, CAPTURE_RESUMED, CAPTURE_FAILED, REVIEW_REQUIRED ->
-                        capture.forceObservation();
-                    default -> {} // Do not collect recognition text or audio.
-                  }
-                });
+            : voice.subscribe(e -> {
+              switch (e.type()) {
+                case STATE_CHANGED, CAPTURE_RESUMED, CAPTURE_FAILED, REVIEW_REQUIRED ->
+                    capture.forceObservation();
+                default -> {} // Do not collect recognition text or audio.
+              }
+            });
     return () -> {
       if (agent != null) agent.unsubscribe();
       if (audio != null) audio.close();

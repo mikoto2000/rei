@@ -157,11 +157,10 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
   }
 
   private void queueGlobal(SecretaryNotifications.Notice notice) {
-    database.transaction(
-        db -> {
-          SecretaryOrchestrator.queue(db, notice);
-          return null;
-        });
+    database.transaction(db -> {
+      SecretaryOrchestrator.queue(db, notice);
+      return null;
+    });
   }
 
   private final Clock clock;
@@ -217,11 +216,10 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
         database,
         ledger,
         clock,
-        notifications.getIfAvailable(
-            () ->
-                n -> {
-                  throw new IllegalStateException("Notification ingress unavailable");
-                }),
+        notifications.getIfAvailable(() ->
+            n -> {
+              throw new IllegalStateException("Notification ingress unavailable");
+            }),
         enabled);
   }
 
@@ -246,27 +244,26 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
 
   public Settings settings(String project) {
     required(project);
-    return database.read(
-        db -> {
-          try (var query =
-              db.prepareStatement("SELECT record FROM secretary_settings WHERE project=?")) {
-            query.setString(1, project);
-            try (var rows = query.executeQuery()) {
-              return rows.next()
-                  ? SecretaryJson.JSON.readValue(rows.getString(1), Settings.class)
-                  : new Settings(
-                      project,
-                      false,
-                      false,
-                      "",
-                      "",
-                      life == null ? clock.getZone().getId() : life.settings().zone(),
-                      86400,
-                      3,
-                      "INBOX");
-            }
-          }
-        });
+    return database.read(db -> {
+      try (var query =
+          db.prepareStatement("SELECT record FROM secretary_settings WHERE project=?")) {
+        query.setString(1, project);
+        try (var rows = query.executeQuery()) {
+          return rows.next()
+              ? SecretaryJson.JSON.readValue(rows.getString(1), Settings.class)
+              : new Settings(
+                  project,
+                  false,
+                  false,
+                  "",
+                  "",
+                  life == null ? clock.getZone().getId() : life.settings().zone(),
+                  86400,
+                  3,
+                  "INBOX");
+        }
+      }
+    });
   }
 
   public Settings configure(Settings settings) {
@@ -288,24 +285,23 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
         || settings.notificationPriority() > 5
         || !Set.of("INBOX", "DELIVERY").contains(settings.destination()))
       throw new IllegalArgumentException("Invalid notification settings");
-    return database.transaction(
-        db -> {
-          try (var query = db.createStatement();
-              var rows = query.executeQuery("SELECT COUNT(*) FROM secretary_settings")) {
-            rows.next();
-            if (rows.getInt(1) >= 256 && !configured(db, settings.projectId()))
-              throw new IllegalStateException("Secretary project capacity reached");
-          }
-          try (var write =
-              db.prepareStatement(
-                  "INSERT INTO secretary_settings VALUES(?,?,?) ON CONFLICT(project) DO UPDATE SET record=excluded.record,configured=excluded.configured")) {
-            write.setString(1, settings.projectId());
-            write.setString(2, SecretaryJson.JSON.writeValueAsString(settings));
-            write.setLong(3, clock.millis());
-            write.executeUpdate();
-          }
-          return settings;
-        });
+    return database.transaction(db -> {
+      try (var query = db.createStatement();
+          var rows = query.executeQuery("SELECT COUNT(*) FROM secretary_settings")) {
+        rows.next();
+        if (rows.getInt(1) >= 256 && !configured(db, settings.projectId()))
+          throw new IllegalStateException("Secretary project capacity reached");
+      }
+      try (var write =
+          db.prepareStatement(
+              "INSERT INTO secretary_settings VALUES(?,?,?) ON CONFLICT(project) DO UPDATE SET record=excluded.record,configured=excluded.configured")) {
+        write.setString(1, settings.projectId());
+        write.setString(2, SecretaryJson.JSON.writeValueAsString(settings));
+        write.setLong(3, clock.millis());
+        write.executeUpdate();
+      }
+      return settings;
+    });
   }
 
   private static boolean configured(Connection db, String project) throws java.sql.SQLException {
@@ -342,11 +338,8 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
     sections.put(
         "near",
         open.stream()
-            .filter(
-                t ->
-                    t.due() != null
-                        && !t.due().isBefore(date)
-                        && !t.due().isAfter(date.plusDays(3)))
+            .filter(t ->
+                t.due() != null && !t.due().isBefore(date) && !t.due().isAfter(date.plusDays(3)))
             .toList());
     sections.put("important", open.stream().filter(t -> t.priority() <= 2).toList());
     sections.put(
@@ -354,10 +347,9 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
     sections.put(
         "yesterday",
         tasks.stream()
-            .filter(
-                t ->
-                    t.status() == SecretaryTask.Status.DONE
-                        && t.updated().atZone(zone).toLocalDate().equals(date.minusDays(1)))
+            .filter(t ->
+                t.status() == SecretaryTask.Status.DONE
+                    && t.updated().atZone(zone).toLocalDate().equals(date.minusDays(1)))
             .toList());
     sections.put("continuation", open);
     sections.put(
@@ -371,10 +363,9 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
     sections.put(
         "completed",
         tasks.stream()
-            .filter(
-                t ->
-                    t.status() == SecretaryTask.Status.DONE
-                        && t.updated().atZone(zone).toLocalDate().equals(date))
+            .filter(t ->
+                t.status() == SecretaryTask.Status.DONE
+                    && t.updated().atZone(zone).toLocalDate().equals(date))
             .toList());
     sections.put("unfinished", open);
     sections.put(
@@ -460,12 +451,11 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
       try {
         var facts =
             ids.stream()
-                .map(
-                    r ->
-                        dependencies == null
-                            ? java.util.Optional.<SecretaryDependencies.Fact>empty()
-                            : dependencies.fact(
-                                project, r.substring(r.lastIndexOf("dependency:") + 11)))
+                .map(r ->
+                    dependencies == null
+                        ? java.util.Optional.<SecretaryDependencies.Fact>empty()
+                        : dependencies.fact(
+                            project, r.substring(r.lastIndexOf("dependency:") + 11)))
                 .toList();
         if (facts.stream().allMatch(java.util.Optional::isPresent)) {
           verified = true;
@@ -477,10 +467,9 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
                       ? "COMPLETED"
                       : "PENDING")
                   : facts.stream()
-                          .anyMatch(
-                              f ->
-                                  java.util.Set.of("FAILED", "BLOCKED", "CANCELLED")
-                                      .contains(f.orElseThrow().state()))
+                          .anyMatch(f ->
+                              java.util.Set.of("FAILED", "BLOCKED", "CANCELLED")
+                                  .contains(f.orElseThrow().state()))
                       ? "BLOCKED"
                       : "WAITING";
         }
@@ -566,11 +555,10 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
         selected == null
             ? null
             : selected.stream()
-                .map(
-                    v ->
-                        v != null && v.startsWith(project + "::")
-                            ? v.substring(project.length() + 2)
-                            : v)
+                .map(v ->
+                    v != null && v.startsWith(project + "::")
+                        ? v.substring(project.length() + 2)
+                        : v)
                 .toList();
     return new SecretaryMeetingDecisions(snapshots, clock)
         .confirm(
@@ -640,27 +628,26 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
   }
 
   private List<Delivery> held(String project) {
-    return database.read(
-        db -> {
-          var result = new ArrayList<Delivery>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT record,status,attempts,error FROM secretary_notices WHERE project=? AND status='HELD' ORDER BY priority,created,id LIMIT 20")) {
-            q.setString(1, project);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                result.add(
-                    new Delivery(
-                        SecretaryJson.JSON.readValue(
-                            r.getString(1), SecretaryNotifications.Notice.class),
-                        r.getString(2),
-                        r.getInt(3),
-                        null,
-                        r.getString(4)));
-            }
-          }
-          return List.copyOf(result);
-        });
+    return database.read(db -> {
+      var result = new ArrayList<Delivery>();
+      try (var q =
+          db.prepareStatement(
+              "SELECT record,status,attempts,error FROM secretary_notices WHERE project=? AND status='HELD' ORDER BY priority,created,id LIMIT 20")) {
+        q.setString(1, project);
+        try (var r = q.executeQuery()) {
+          while (r.next())
+            result.add(
+                new Delivery(
+                    SecretaryJson.JSON.readValue(
+                        r.getString(1), SecretaryNotifications.Notice.class),
+                    r.getString(2),
+                    r.getInt(3),
+                    null,
+                    r.getString(4)));
+        }
+      }
+      return List.copyOf(result);
+    });
   }
 
   /** A duplicate/older observation cannot roll a dependency backwards. */
@@ -670,36 +657,34 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
     if (revision < 0
         || !Set.of("RUNNING", "WAITING", "BLOCKED", "COMPLETED", "FAILED", "CANCELLED")
             .contains(state)) throw new IllegalArgumentException("Invalid dependency fact");
-    database.transaction(
-        db -> {
-          try (var write =
-              db.prepareStatement(
-                  "INSERT INTO secretary_dependencies VALUES(?,?,?,?) ON CONFLICT(project,id) DO UPDATE SET state=excluded.state,revision=excluded.revision WHERE excluded.revision>secretary_dependencies.revision")) {
-            write.setString(1, project);
-            write.setString(2, id);
-            write.setString(3, state);
-            write.setLong(4, revision);
-            write.executeUpdate();
-          }
-          return null;
-        });
+    database.transaction(db -> {
+      try (var write =
+          db.prepareStatement(
+              "INSERT INTO secretary_dependencies VALUES(?,?,?,?) ON CONFLICT(project,id) DO UPDATE SET state=excluded.state,revision=excluded.revision WHERE excluded.revision>secretary_dependencies.revision")) {
+        write.setString(1, project);
+        write.setString(2, id);
+        write.setString(3, state);
+        write.setLong(4, revision);
+        write.executeUpdate();
+      }
+      return null;
+    });
   }
 
   @Override
   public void tick() {
     if (!enabled || worker.isShutdown() || !busy.compareAndSet(false, true)) return;
     try {
-      worker.execute(
-          () -> {
-            try {
-              poll();
-            } catch (RuntimeException failure) {
-              org.slf4j.LoggerFactory.getLogger(getClass())
-                  .warn("Secretary followup failed: {}", failure.getClass().getSimpleName());
-            } finally {
-              busy.set(false);
-            }
-          });
+      worker.execute(() -> {
+        try {
+          poll();
+        } catch (RuntimeException failure) {
+          org.slf4j.LoggerFactory.getLogger(getClass())
+              .warn("Secretary followup failed: {}", failure.getClass().getSimpleName());
+        } finally {
+          busy.set(false);
+        }
+      });
     } catch (java.util.concurrent.RejectedExecutionException closed) {
       busy.set(false);
     }
@@ -709,17 +694,16 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
     if (globalBriefings != null && globalBriefings.getIfAvailable() != null)
       globalBriefings.getObject().schedule(this::queueGlobal);
     var projects =
-        database.read(
-            db -> {
-              try (var query = db.createStatement();
-                  var rows =
-                      query.executeQuery(
-                          "SELECT project FROM secretary_settings ORDER BY project LIMIT 256")) {
-                var result = new ArrayList<String>();
-                while (rows.next()) result.add(rows.getString(1));
-                return result;
-              }
-            });
+        database.read(db -> {
+          try (var query = db.createStatement();
+              var rows =
+                  query.executeQuery(
+                      "SELECT project FROM secretary_settings ORDER BY project LIMIT 256")) {
+            var result = new ArrayList<String>();
+            while (rows.next()) result.add(rows.getString(1));
+            return result;
+          }
+        });
     if (projects.isEmpty()) {
       deliver(null);
       return;
@@ -748,21 +732,19 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
   public Status status(String project) {
     required(project);
     var facts =
-        database.read(
-            db -> {
-              try (var query =
-                  db.prepareStatement(
-                      "SELECT id,state,revision FROM secretary_dependencies WHERE project=? ORDER BY id LIMIT 100")) {
-                query.setString(1, project);
-                var result = new ArrayList<Dependency>();
-                try (var rows = query.executeQuery()) {
-                  while (rows.next())
-                    result.add(
-                        new Dependency(rows.getString(1), rows.getString(2), rows.getLong(3)));
-                }
-                return List.copyOf(result);
-              }
-            });
+        database.read(db -> {
+          try (var query =
+              db.prepareStatement(
+                  "SELECT id,state,revision FROM secretary_dependencies WHERE project=? ORDER BY id LIMIT 100")) {
+            query.setString(1, project);
+            var result = new ArrayList<Dependency>();
+            try (var rows = query.executeQuery()) {
+              while (rows.next())
+                result.add(new Dependency(rows.getString(1), rows.getString(2), rows.getLong(3)));
+            }
+            return List.copyOf(result);
+          }
+        });
     return new Status(settings(project), enabled, history(project, 20), facts);
   }
 
@@ -782,17 +764,16 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
           || current.status() == SecretaryTask.Status.CANCELLED) continue;
       if (current.status() == SecretaryTask.Status.DONE) {
         long configured =
-            database.read(
-                db -> {
-                  try (var q =
-                      db.prepareStatement(
-                          "SELECT configured FROM secretary_settings WHERE project=?")) {
-                    q.setString(1, project);
-                    try (var r = q.executeQuery()) {
-                      return r.next() ? r.getLong(1) : Long.MAX_VALUE;
-                    }
-                  }
-                });
+            database.read(db -> {
+              try (var q =
+                  db.prepareStatement(
+                      "SELECT configured FROM secretary_settings WHERE project=?")) {
+                q.setString(1, project);
+                try (var r = q.executeQuery()) {
+                  return r.next() ? r.getLong(1) : Long.MAX_VALUE;
+                }
+              }
+            });
         if (current.updated().toEpochMilli() >= configured)
           enqueue(
               settings,
@@ -867,21 +848,20 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
       }
       return true;
     }
-    return database.read(
-        db -> {
-          try (var query =
-              db.prepareStatement(
-                  "SELECT state FROM secretary_dependencies WHERE project=? AND id=?")) {
-            for (var id : ids) {
-              query.setString(1, project);
-              query.setString(2, id);
-              try (var rows = query.executeQuery()) {
-                if (!rows.next() || !rows.getString(1).equals("COMPLETED")) return false;
-              }
-            }
-            return true;
+    return database.read(db -> {
+      try (var query =
+          db.prepareStatement(
+              "SELECT state FROM secretary_dependencies WHERE project=? AND id=?")) {
+        for (var id : ids) {
+          query.setString(1, project);
+          query.setString(2, id);
+          try (var rows = query.executeQuery()) {
+            if (!rows.next() || !rows.getString(1).equals("COMPLETED")) return false;
           }
-        });
+        }
+        return true;
+      }
+    });
   }
 
   private void scheduleReport(Settings settings, LocalDate date, LocalTime time, boolean review) {
@@ -942,115 +922,110 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
             settings.destination(),
             clock.instant());
     boolean exists =
-        database.read(
-            db -> {
-              try (var q = db.prepareStatement("SELECT 1 FROM secretary_notices WHERE id=?")) {
-                q.setString(1, notice.id());
-                try (var r = q.executeQuery()) {
-                  return r.next();
-                }
-              }
-            });
-    if (exists) return;
-    database.transaction(
-        db -> {
-          if (notice.taskId() != null && !notice.kind().equals("COMPLETED")) {
-            try (var query =
-                db.prepareStatement(
-                    "SELECT 1 FROM secretary_notices WHERE project=? AND task=? AND kind=? AND created>? LIMIT 1")) {
-              query.setString(1, notice.projectId());
-              query.setString(2, notice.taskId());
-              query.setString(3, notice.kind());
-              query.setLong(4, notice.created().toEpochMilli() - settings.repeatSeconds() * 1000);
-              try (var rows = query.executeQuery()) {
-                if (rows.next()) return null;
-              }
+        database.read(db -> {
+          try (var q = db.prepareStatement("SELECT 1 FROM secretary_notices WHERE id=?")) {
+            q.setString(1, notice.id());
+            try (var r = q.executeQuery()) {
+              return r.next();
             }
           }
-          try (var write =
-              db.prepareStatement(
-                  "INSERT OR IGNORE INTO secretary_notices(id,project,task,kind,status,attempts,next,record,priority,created) VALUES(?,?,?,?,'PENDING',0,?,?,?,?)")) {
-            write.setString(1, notice.id());
-            write.setString(2, notice.projectId());
-            write.setString(3, notice.taskId());
-            write.setString(4, kind);
-            write.setLong(5, clock.millis());
-            write.setString(6, SecretaryJson.JSON.writeValueAsString(notice));
-            write.setInt(7, notice.priority());
-            write.setLong(8, notice.created().toEpochMilli());
-            write.executeUpdate();
-          }
-          return null;
         });
+    if (exists) return;
+    database.transaction(db -> {
+      if (notice.taskId() != null && !notice.kind().equals("COMPLETED")) {
+        try (var query =
+            db.prepareStatement(
+                "SELECT 1 FROM secretary_notices WHERE project=? AND task=? AND kind=? AND created>? LIMIT 1")) {
+          query.setString(1, notice.projectId());
+          query.setString(2, notice.taskId());
+          query.setString(3, notice.kind());
+          query.setLong(4, notice.created().toEpochMilli() - settings.repeatSeconds() * 1000);
+          try (var rows = query.executeQuery()) {
+            if (rows.next()) return null;
+          }
+        }
+      }
+      try (var write =
+          db.prepareStatement(
+              "INSERT OR IGNORE INTO secretary_notices(id,project,task,kind,status,attempts,next,record,priority,created) VALUES(?,?,?,?,'PENDING',0,?,?,?,?)")) {
+        write.setString(1, notice.id());
+        write.setString(2, notice.projectId());
+        write.setString(3, notice.taskId());
+        write.setString(4, kind);
+        write.setLong(5, clock.millis());
+        write.setString(6, SecretaryJson.JSON.writeValueAsString(notice));
+        write.setInt(7, notice.priority());
+        write.setLong(8, notice.created().toEpochMilli());
+        write.executeUpdate();
+      }
+      return null;
+    });
   }
 
   private void deliver(String project) {
     // Global meetings already aggregate projects, so retain their own identity while held.
-    database.transaction(
-        db -> {
-          if (globalMode()) {
-            try (var q =
-                db.prepareStatement(
-                    "UPDATE secretary_notices SET status='SUPPRESSED',error='global_briefings_enabled' WHERE kind IN ('BRIEFING','REVIEW') AND status IN ('PENDING','HELD','SENDING')")) {
-              q.executeUpdate();
-            }
-          }
-          if (life == null || life.notificationAllowed("BRIEFING", "")) {
-            try (var q =
-                db.prepareStatement(
-                    "UPDATE secretary_notices SET status='PENDING' WHERE project=? AND status='HELD'")) {
-              q.setString(1, SecretaryNotifications.GLOBAL_SCOPE);
-              q.executeUpdate();
-            }
-          }
-          return null;
-        });
+    database.transaction(db -> {
+      if (globalMode()) {
+        try (var q =
+            db.prepareStatement(
+                "UPDATE secretary_notices SET status='SUPPRESSED',error='global_briefings_enabled' WHERE kind IN ('BRIEFING','REVIEW') AND status IN ('PENDING','HELD','SENDING')")) {
+          q.executeUpdate();
+        }
+      }
+      if (life == null || life.notificationAllowed("BRIEFING", "")) {
+        try (var q =
+            db.prepareStatement(
+                "UPDATE secretary_notices SET status='PENDING' WHERE project=? AND status='HELD'")) {
+          q.setString(1, SecretaryNotifications.GLOBAL_SCOPE);
+          q.executeUpdate();
+        }
+      }
+      return null;
+    });
     var gate = interruption();
     if (gate != null) gate.release(project);
-    database.transaction(
-        db -> {
-          try (var write =
-              project == null
-                  ? db.prepareStatement(
-                      "UPDATE secretary_notices SET status='FAILED',error='delivery_result_unconfirmed' WHERE status='SENDING' AND attempts>=5 AND next<=?")
-                  : db.prepareStatement(
-                      "UPDATE secretary_notices SET status='FAILED',error='delivery_result_unconfirmed' WHERE status='SENDING' AND attempts>=5 AND next<=? AND project=?")) {
-            write.setLong(1, clock.millis());
-            if (project != null) write.setString(2, project);
-            write.executeUpdate();
-          }
-          return null;
-        });
+    database.transaction(db -> {
+      try (var write =
+          project == null
+              ? db.prepareStatement(
+                  "UPDATE secretary_notices SET status='FAILED',error='delivery_result_unconfirmed' WHERE status='SENDING' AND attempts>=5 AND next<=?")
+              : db.prepareStatement(
+                  "UPDATE secretary_notices SET status='FAILED',error='delivery_result_unconfirmed' WHERE status='SENDING' AND attempts>=5 AND next<=? AND project=?")) {
+        write.setLong(1, clock.millis());
+        if (project != null) write.setString(2, project);
+        write.executeUpdate();
+      }
+      return null;
+    });
     for (int i = 0; i < 8; i++) {
       if (Thread.currentThread().isInterrupted()) return;
       var claimed =
-          database.transaction(
-              db -> {
-                try (var query =
-                    project == null
-                        ? db.prepareStatement(
-                            "SELECT id,record FROM secretary_notices WHERE status IN ('PENDING','SENDING') AND next<=? AND attempts<5 ORDER BY priority,next,id LIMIT 1")
-                        : db.prepareStatement(
-                            "SELECT id,record FROM secretary_notices WHERE status IN ('PENDING','SENDING') AND next<=? AND attempts<5 AND project=? ORDER BY priority,next,id LIMIT 1")) {
-                  query.setLong(1, clock.millis());
-                  if (project != null) query.setString(2, project);
-                  try (var rows = query.executeQuery()) {
-                    if (!rows.next()) return null;
-                    String id = rows.getString(1);
-                    var notice =
-                        SecretaryJson.JSON.readValue(
-                            rows.getString(2), SecretaryNotifications.Notice.class);
-                    try (var write =
-                        db.prepareStatement(
-                            "UPDATE secretary_notices SET status='SENDING',attempts=attempts+1,next=? WHERE id=?")) {
-                      write.setLong(1, clock.millis() + 60000);
-                      write.setString(2, id);
-                      write.executeUpdate();
-                    }
-                    return notice;
-                  }
+          database.transaction(db -> {
+            try (var query =
+                project == null
+                    ? db.prepareStatement(
+                        "SELECT id,record FROM secretary_notices WHERE status IN ('PENDING','SENDING') AND next<=? AND attempts<5 ORDER BY priority,next,id LIMIT 1")
+                    : db.prepareStatement(
+                        "SELECT id,record FROM secretary_notices WHERE status IN ('PENDING','SENDING') AND next<=? AND attempts<5 AND project=? ORDER BY priority,next,id LIMIT 1")) {
+              query.setLong(1, clock.millis());
+              if (project != null) query.setString(2, project);
+              try (var rows = query.executeQuery()) {
+                if (!rows.next()) return null;
+                String id = rows.getString(1);
+                var notice =
+                    SecretaryJson.JSON.readValue(
+                        rows.getString(2), SecretaryNotifications.Notice.class);
+                try (var write =
+                    db.prepareStatement(
+                        "UPDATE secretary_notices SET status='SENDING',attempts=attempts+1,next=? WHERE id=?")) {
+                  write.setLong(1, clock.millis() + 60000);
+                  write.setString(2, id);
+                  write.executeUpdate();
                 }
-              });
+                return notice;
+              }
+            }
+          });
       if (claimed == null) return;
       boolean eligible;
       if (claimed.global())
@@ -1100,90 +1075,84 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
   }
 
   private void hold(SecretaryNotifications.Notice notice, String reason) {
-    database.transaction(
-        db -> {
-          try (var q =
-              db.prepareStatement(
-                  "UPDATE secretary_notices SET status='HELD',attempts=max(0,attempts-1),error=? WHERE id=? AND status='SENDING'")) {
-            q.setString(1, reason);
-            q.setString(2, notice.id());
-            q.executeUpdate();
-          }
-          return null;
-        });
+    database.transaction(db -> {
+      try (var q =
+          db.prepareStatement(
+              "UPDATE secretary_notices SET status='HELD',attempts=max(0,attempts-1),error=? WHERE id=? AND status='SENDING'")) {
+        q.setString(1, reason);
+        q.setString(2, notice.id());
+        q.executeUpdate();
+      }
+      return null;
+    });
   }
 
   private void finish(SecretaryNotifications.Notice notice, String status, String error) {
-    database.transaction(
-        db -> {
-          try (var write =
-              db.prepareStatement(
-                  "UPDATE secretary_notices SET status=CASE WHEN attempts>=5 AND ?='PENDING' THEN 'FAILED' ELSE ? END,error=?,next=?+min(3600000,60000*(1 << min(attempts-1,6))) WHERE id=? AND status='SENDING'")) {
-            write.setString(1, status);
-            write.setString(2, status);
-            write.setString(3, error);
-            write.setLong(4, clock.millis());
-            write.setString(5, notice.id());
-            write.executeUpdate();
-          }
-          return null;
-        });
+    database.transaction(db -> {
+      try (var write =
+          db.prepareStatement(
+              "UPDATE secretary_notices SET status=CASE WHEN attempts>=5 AND ?='PENDING' THEN 'FAILED' ELSE ? END,error=?,next=?+min(3600000,60000*(1 << min(attempts-1,6))) WHERE id=? AND status='SENDING'")) {
+        write.setString(1, status);
+        write.setString(2, status);
+        write.setString(3, error);
+        write.setLong(4, clock.millis());
+        write.setString(5, notice.id());
+        write.executeUpdate();
+      }
+      return null;
+    });
   }
 
   public List<Delivery> history(String project, int limit) {
     required(project);
     if (limit < 1 || limit > 1000) throw new IllegalArgumentException("Invalid history limit");
-    return database.read(
-        db -> {
-          try (var query =
-              db.prepareStatement(
-                  "SELECT record,status,attempts,next,error FROM secretary_notices WHERE project=? ORDER BY created DESC,id LIMIT ?")) {
-            query.setString(1, project);
-            query.setInt(2, limit);
-            var result = new ArrayList<Delivery>();
-            try (var rows = query.executeQuery()) {
-              while (rows.next())
-                result.add(
-                    new Delivery(
-                        SecretaryJson.JSON.readValue(
-                            rows.getString(1), SecretaryNotifications.Notice.class),
-                        rows.getString(2),
-                        rows.getInt(3),
-                        Set.of("PENDING", "SENDING").contains(rows.getString(2))
-                            ? Instant.ofEpochMilli(rows.getLong(4))
-                            : null,
-                        rows.getString(5)));
-            }
-            return List.copyOf(result);
-          }
-        });
+    return database.read(db -> {
+      try (var query =
+          db.prepareStatement(
+              "SELECT record,status,attempts,next,error FROM secretary_notices WHERE project=? ORDER BY created DESC,id LIMIT ?")) {
+        query.setString(1, project);
+        query.setInt(2, limit);
+        var result = new ArrayList<Delivery>();
+        try (var rows = query.executeQuery()) {
+          while (rows.next())
+            result.add(
+                new Delivery(
+                    SecretaryJson.JSON.readValue(
+                        rows.getString(1), SecretaryNotifications.Notice.class),
+                    rows.getString(2),
+                    rows.getInt(3),
+                    Set.of("PENDING", "SENDING").contains(rows.getString(2))
+                        ? Instant.ofEpochMilli(rows.getLong(4))
+                        : null,
+                    rows.getString(5)));
+        }
+        return List.copyOf(result);
+      }
+    });
   }
 
   private int state(String key) {
-    return database.read(
-        db -> {
-          try (var q =
-              db.prepareStatement("SELECT value FROM secretary_followup_state WHERE key=?")) {
-            q.setString(1, key);
-            try (var r = q.executeQuery()) {
-              return r.next() ? r.getInt(1) : 0;
-            }
-          }
-        });
+    return database.read(db -> {
+      try (var q = db.prepareStatement("SELECT value FROM secretary_followup_state WHERE key=?")) {
+        q.setString(1, key);
+        try (var r = q.executeQuery()) {
+          return r.next() ? r.getInt(1) : 0;
+        }
+      }
+    });
   }
 
   private void state(String key, int value) {
-    database.transaction(
-        db -> {
-          try (var q =
-              db.prepareStatement(
-                  "INSERT INTO secretary_followup_state VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE value<>excluded.value")) {
-            q.setString(1, key);
-            q.setInt(2, value);
-            q.executeUpdate();
-          }
-          return null;
-        });
+    database.transaction(db -> {
+      try (var q =
+          db.prepareStatement(
+              "INSERT INTO secretary_followup_state VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value WHERE value<>excluded.value")) {
+        q.setString(1, key);
+        q.setInt(2, value);
+        q.executeUpdate();
+      }
+      return null;
+    });
   }
 
   private static boolean active(SecretaryTask task) {

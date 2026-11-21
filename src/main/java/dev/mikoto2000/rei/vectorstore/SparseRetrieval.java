@@ -57,16 +57,10 @@ public final class SparseRetrieval {
    * @param truthVerified 確定情報確認済み
    */
   public record Result(
-      String mode,
-      String reason,
-      String modelId,
-      List<Document> documents,
-      boolean truthVerified) {
+      String mode, String reason, String modelId, List<Document> documents, boolean truthVerified) {
     public Result {
       documents =
-          documents == null
-              ? null
-              : Collections.unmodifiableList(new ArrayList<>(documents));
+          documents == null ? null : Collections.unmodifiableList(new ArrayList<>(documents));
     }
   }
 

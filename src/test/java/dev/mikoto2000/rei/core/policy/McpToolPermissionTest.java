@@ -28,7 +28,8 @@ class McpToolPermissionTest {
             "project",
             AgentRunContext.RequestSource.MCP,
             AgentRunContext.Mode.READ_ONLY);
-    assertDoesNotThrow(() -> guard.check("readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}", owner));
+    assertDoesNotThrow(
+        () -> guard.check("readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}", owner));
     assertDoesNotThrow(() -> guard.check("webSearch", "{}", owner));
     for (String tool :
         List.of(
@@ -47,6 +48,7 @@ class McpToolPermissionTest {
             AgentRunContext.RequestSource.MCP,
             AgentRunContext.Mode.EXCLUSIVE);
     assertThrows(
-        ToolPermissionException.class, () -> guard.check("readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}", escalated));
+        ToolPermissionException.class,
+        () -> guard.check("readMultiFile", "{\"files\":[{\"path\":\"a.txt\"}]}", escalated));
   }
 }

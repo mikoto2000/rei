@@ -45,10 +45,9 @@ class BackgroundRunHttpTest {
     ImageGenerationService images() {
       var service = mock(ImageGenerationService.class);
       when(service.generate(any()))
-          .thenAnswer(
-              a ->
-                  ImageGenerationResult.success(
-                      ((ImageGenerationRequest) a.getArgument(0)).outputPath()));
+          .thenAnswer(a ->
+              ImageGenerationResult.success(
+                  ((ImageGenerationRequest) a.getArgument(0)).outputPath()));
       return service;
     }
 

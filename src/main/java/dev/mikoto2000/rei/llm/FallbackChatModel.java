@@ -53,24 +53,22 @@ class FallbackChatModel implements ChatModel {
   /** 用途に応じたモデル利用で用いる逐次データを返す。 */
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
-    return Flux.defer(
-        () -> {
-          var emitted = new java.util.concurrent.atomic.AtomicBoolean();
-          return Flux.defer(
-                  () -> {
-                    dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
-                    return primary.stream(prompt);
-                  })
-              .doOnNext(response -> emitted.set(true))
-              .onErrorResume(
-                  error -> {
-                    dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
-                    dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
-                    if (emitted.get()) return Flux.error(error);
-                    logFeatureFailure("stream", error);
-                    return fallback.stream(fallbackPrompt(prompt));
-                  });
-        });
+    return Flux.defer(() -> {
+      var emitted = new java.util.concurrent.atomic.AtomicBoolean();
+      return Flux.defer(
+              () -> {
+                dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
+                return primary.stream(prompt);
+              })
+          .doOnNext(response -> emitted.set(true))
+          .onErrorResume(error -> {
+            dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
+            dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+            if (emitted.get()) return Flux.error(error);
+            logFeatureFailure("stream", error);
+            return fallback.stream(fallbackPrompt(prompt));
+          });
+    });
   }
 
   /** 用途に応じたモデル利用で参照する選択可能な設定を返す。 */

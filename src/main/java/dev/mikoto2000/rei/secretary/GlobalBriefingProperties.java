@@ -40,11 +40,8 @@ public record GlobalBriefingProperties(
   private static void validate(List<String> projects) {
     if (projects.size() > 16
         || projects.stream()
-            .anyMatch(
-                p ->
-                    p.isBlank()
-                        || p.length() > 128
-                        || p.equals(SecretaryNotifications.GLOBAL_SCOPE))
+            .anyMatch(p ->
+                p.isBlank() || p.length() > 128 || p.equals(SecretaryNotifications.GLOBAL_SCOPE))
         || projects.stream().distinct().count() != projects.size())
       throw new IllegalArgumentException(
           "Select at most 16 unique project IDs for global briefings");

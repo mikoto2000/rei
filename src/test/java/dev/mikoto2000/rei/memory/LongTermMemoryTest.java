@@ -85,11 +85,10 @@ class LongTermMemoryTest {
     assertThrows(
         IllegalStateException.class,
         () ->
-            repository.transaction(
-                () -> {
-                  repository.insert(candidate("rollback", MemoryScope.GLOBAL), null, "s");
-                  throw new IllegalStateException("failure");
-                }));
+            repository.transaction(() -> {
+              repository.insert(candidate("rollback", MemoryScope.GLOBAL), null, "s");
+              throw new IllegalStateException("failure");
+            }));
     assertTrue(repository.list("p", 100, 0).isEmpty());
     assertEquals(0, repository.lastProcessed("s"));
   }

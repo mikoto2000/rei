@@ -86,10 +86,9 @@ class RestoredSkillRoutingTest {
         new RunContinuation.Saved(
             "resume", List.of(new UserMessage("saved")), run.budgetSnapshot()));
     run.cancel();
-    assertThatThrownBy(
-            () ->
-                new AgentSkillAdvisor(selection, new AgentSkillPromptRenderer())
-                    .before(request(run, "resume"), null))
+    assertThatThrownBy(() ->
+            new AgentSkillAdvisor(selection, new AgentSkillPromptRenderer())
+                .before(request(run, "resume"), null))
         .isInstanceOf(java.util.concurrent.CancellationException.class);
     verifyNoInteractions(selection);
   }

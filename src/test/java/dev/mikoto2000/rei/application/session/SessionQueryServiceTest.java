@@ -98,10 +98,9 @@ class SessionQueryServiceTest {
   @ParameterizedTest
   @ValueSource(ints = {0, -1, 101})
   void rejectsInvalidLimit(int limit) {
-    assertThatThrownBy(
-            () ->
-                new SessionQueryService(store(), (id, after, count) -> java.util.List.of())
-                    .listSessions(null, limit, null))
+    assertThatThrownBy(() ->
+            new SessionQueryService(store(), (id, after, count) -> java.util.List.of())
+                .listSessions(null, limit, null))
         .isInstanceOf(IllegalArgumentException.class);
   }
 
@@ -109,10 +108,9 @@ class SessionQueryServiceTest {
   @ParameterizedTest
   @ValueSource(strings = {"", "bad", "%%%%", "e30", "AA=="})
   void rejectsInvalidCursor(String cursor) {
-    assertThatThrownBy(
-            () ->
-                new SessionQueryService(store(), (id, after, count) -> java.util.List.of())
-                    .listSessions(null, 50, cursor))
+    assertThatThrownBy(() ->
+            new SessionQueryService(store(), (id, after, count) -> java.util.List.of())
+                .listSessions(null, 50, cursor))
         .isInstanceOf(IllegalArgumentException.class);
   }
 }

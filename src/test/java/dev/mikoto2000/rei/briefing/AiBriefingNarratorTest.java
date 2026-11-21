@@ -39,14 +39,14 @@ class AiBriefingNarratorTest {
                     new Generation(
                         new AssistantMessage(
                             """
-            OVERVIEW: 午前は顧客定例、午後は提案書更新のフォローが中心です。
-            CAUTIONS:
-            - 期限切れタスクが 1 件あります。
-            - 会議前に提案資料を確認してください。
-            NEXT_ACTIONS:
-            - 顧客定例の論点を3つに絞る。
-            - 提案書更新の期限を見直す。
-            """)))));
+                            OVERVIEW: 午前は顧客定例、午後は提案書更新のフォローが中心です。
+                            CAUTIONS:
+                            - 期限切れタスクが 1 件あります。
+                            - 会議前に提案資料を確認してください。
+                            NEXT_ACTIONS:
+                            - 顧客定例の論点を3つに絞る。
+                            - 提案書更新の期限を見直す。
+                            """)))));
 
     BriefingNarration narration =
         narrator.narrate(

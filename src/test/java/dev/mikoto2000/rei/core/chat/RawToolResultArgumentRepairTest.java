@@ -245,8 +245,7 @@ class RawToolResultArgumentRepairTest {
 
     assertThat(result.status()).isEqualTo(ChatExecutionResult.Status.FAILED);
     assertThat(result.stopCode()).isEqualTo("tool_argument_repair_exhausted");
-    assertThat(result.errorMessage())
-        .contains("2回", "/resume <taskId>", "同じタスク", "累積使用量");
+    assertThat(result.errorMessage()).contains("2回", "/resume <taskId>", "同じタスク", "累積使用量");
     assertThat(calls).hasValue(3);
     assertThat(remaining).containsExactly(1, 0);
     var rejections = invalidArgumentEvents(fixture.events());
@@ -381,12 +380,11 @@ class RawToolResultArgumentRepairTest {
     restored.restore(budget.snapshot());
     var resumed = context(restored, false);
 
-    assertThatThrownBy(
-            () ->
-                loop.executeResumable(
-                    prompt(resumed, raw),
-                    response(toolCall("invalid-after-resume", "readRawToolResult", INVALID)),
-                    resumed))
+    assertThatThrownBy(() ->
+            loop.executeResumable(
+                prompt(resumed, raw),
+                response(toolCall("invalid-after-resume", "readRawToolResult", INVALID)),
+                resumed))
         .isInstanceOfSatisfying(
             ExecutionStoppedException.class,
             stopped ->

@@ -133,13 +133,11 @@ class SearchRankingBudgetTest {
     tools.searchAndRead(request, root);
     var completed =
         events.stream()
-            .filter(
-                event ->
-                    event.type()
-                        == dev.mikoto2000.rei.event.AgentEventType.WORKING_SET_SEARCH_COMPLETED)
-            .map(
-                event ->
-                    (dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload) event.payload())
+            .filter(event ->
+                event.type()
+                    == dev.mikoto2000.rei.event.AgentEventType.WORKING_SET_SEARCH_COMPLETED)
+            .map(event ->
+                (dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload) event.payload())
             .toList();
     assertEquals(0, completed.getFirst().alreadyPresentCount());
     assertEquals(1, completed.getLast().alreadyPresentCount());

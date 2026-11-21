@@ -20,16 +20,15 @@ class CommandCancellationServiceTest {
     CountDownLatch started = new CountDownLatch(1);
 
     Thread executionThread =
-        new Thread(
-            () -> {
-              service.begin(Thread.currentThread());
-              started.countDown();
-              try {
-                new CountDownLatch(1).await();
-              } catch (InterruptedException e) {
-                interrupted.countDown();
-              }
-            });
+        new Thread(() -> {
+          service.begin(Thread.currentThread());
+          started.countDown();
+          try {
+            new CountDownLatch(1).await();
+          } catch (InterruptedException e) {
+            interrupted.countDown();
+          }
+        });
     executionThread.start();
     assertTrue(started.await(5, TimeUnit.SECONDS));
 

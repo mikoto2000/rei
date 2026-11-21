@@ -126,13 +126,10 @@ public class OpenAlexSearchProvider implements AcademicSearchProvider {
         || (q.toYear() != null && (p.publicationYear() == null || p.publicationYear() > q.toYear()))
         || (q.openAccessOnly() && !Boolean.TRUE.equals(p.openAccess()))) return false;
     return q.authors().stream()
-            .allMatch(
-                a ->
-                    p.authors().stream()
-                        .anyMatch(
-                            v ->
-                                SqlitePaperRepository.norm(v)
-                                    .contains(SqlitePaperRepository.norm(a))))
+            .allMatch(a ->
+                p.authors().stream()
+                    .anyMatch(
+                        v -> SqlitePaperRepository.norm(v).contains(SqlitePaperRepository.norm(a))))
         && q.venues().stream()
             .allMatch(
                 v -> SqlitePaperRepository.norm(p.venue()).contains(SqlitePaperRepository.norm(v)));

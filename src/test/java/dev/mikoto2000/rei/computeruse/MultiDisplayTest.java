@@ -115,9 +115,7 @@ class MultiDisplayTest {
     when(driver.capture(main().bounds())).thenReturn(desktop().displays().get(0).image());
     when(driver.capture(left().bounds())).thenReturn(desktop().displays().get(1).image());
     assertEquals(2, new RobotScreenCapture(driver).captureScreen().displays().size());
-    when(driver.displays())
-        .thenReturn(List.of(main(), left()))
-        .thenReturn(List.of(main()));
+    when(driver.displays()).thenReturn(List.of(main(), left())).thenReturn(List.of(main()));
     assertThrows(IllegalStateException.class, () -> new RobotScreenCapture(driver).captureScreen());
   }
 

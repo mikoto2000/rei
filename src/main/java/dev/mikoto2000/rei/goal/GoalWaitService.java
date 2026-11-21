@@ -162,10 +162,9 @@ public class GoalWaitService {
       saved =
           checkpointForRun
               .apply(project, goal.currentRunId())
-              .orElseThrow(
-                  () ->
-                      new IllegalStateException(
-                          "Owning Run checkpoint required; inspect effects before continuation"));
+              .orElseThrow(() ->
+                  new IllegalStateException(
+                      "Owning Run checkpoint required; inspect effects before continuation"));
       validateCheckpoint(goal, saved);
     }
     var snapshot =

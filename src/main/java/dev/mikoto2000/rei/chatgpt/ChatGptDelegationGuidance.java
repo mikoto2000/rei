@@ -51,16 +51,14 @@ public final class ChatGptDelegationGuidance {
         agents == null
             ? List.of()
             : plan.allowedRoles().stream()
-                .filter(
-                    id ->
-                        agents
-                            .findById(id)
-                            .filter(
-                                role ->
-                                    role.requiredToolCalls().isEmpty()
-                                        && role.evidenceTools().isEmpty()
-                                        && !role.semanticValidation())
-                            .isPresent())
+                .filter(id ->
+                    agents
+                        .findById(id)
+                        .filter(role ->
+                            role.requiredToolCalls().isEmpty()
+                                && role.evidenceTools().isEmpty()
+                                && !role.semanticValidation())
+                        .isPresent())
                 .filter(id -> id.matches("[A-Za-z0-9_-]{1,64}"))
                 .sorted()
                 .limit(16)

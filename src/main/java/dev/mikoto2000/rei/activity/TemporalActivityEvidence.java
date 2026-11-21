@@ -44,9 +44,7 @@ public record TemporalActivityEvidence(
             ? null
             : Collections.unmodifiableList(new ArrayList<>(observationIds));
     executions =
-        executions == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(executions));
+        executions == null ? null : Collections.unmodifiableList(new ArrayList<>(executions));
   }
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
@@ -217,15 +215,14 @@ public record TemporalActivityEvidence(
                     || background.timing().completedAt() == null
                     || !background.timing().completedAt().isAfter(end))
             ? context.candidates().stream()
-                .map(
-                    a2 ->
-                        new ActivityRecord.Activity(
-                            clean(a2.monitor()),
-                            clean(a2.type()),
-                            clean(a2.application()),
-                            clean(a2.service()),
-                            clean(a2.contentTitle()),
-                            clean(a2.projectCandidate())))
+                .map(a2 ->
+                    new ActivityRecord.Activity(
+                        clean(a2.monitor()),
+                        clean(a2.type()),
+                        clean(a2.application()),
+                        clean(a2.service()),
+                        clean(a2.contentTitle()),
+                        clean(a2.projectCandidate())))
                 .toList()
             : List.<ActivityRecord.Activity>of();
     return new Facts(
@@ -261,10 +258,9 @@ public record TemporalActivityEvidence(
       boolean anchored =
           augmented()
               && groups.stream()
-                  .allMatch(
-                      g ->
-                          workCategory(g.facts().category())
-                              && (g.facts().candidate().isBlank() || sameProject(g.facts())))
+                  .allMatch(g ->
+                      workCategory(g.facts().category())
+                          && (g.facts().candidate().isBlank() || sameProject(g.facts())))
               && groups.stream()
                   .anyMatch(g -> development(g.facts().category()) && sameProject(g.facts()));
       if (distinct.size() == 1
@@ -272,11 +268,10 @@ public record TemporalActivityEvidence(
           && !f.project().isBlank()
           && (strict || anchored)
           && groups.stream()
-              .allMatch(
-                  g ->
-                      g.facts().confidence() >= .5
-                          && !g.facts().category().isBlank()
-                          && !"unknown".equals(g.facts().category()))) {
+              .allMatch(g ->
+                  g.facts().confidence() >= .5
+                      && !g.facts().category().isBlank()
+                      && !"unknown".equals(g.facts().category()))) {
         project = f.project();
         projectId = f.projectId();
         text =
@@ -299,10 +294,9 @@ public record TemporalActivityEvidence(
                 groups.stream().allMatch(g -> workCategory(g.facts().category()))
                     && groups.stream().anyMatch(g -> development(g.facts().category()))
                     && groups.stream()
-                        .anyMatch(
-                            g ->
-                                (g.facts().content() + " " + g.facts().title())
-                                    .matches("(?i).*(テスト|test|maven).*"));
+                        .anyMatch(g ->
+                            (g.facts().content() + " " + g.facts().title())
+                                .matches("(?i).*(テスト|test|maven).*"));
             text =
                 project
                     + " の「"
@@ -314,14 +308,11 @@ public record TemporalActivityEvidence(
         var supporting =
             groups.stream()
                 .flatMap(g -> g.facts().desktop().stream())
-                .filter(
-                    a ->
-                        ActivityRolePolicy.normalize(a.projectCandidate())
-                            .equals(ActivityRolePolicy.normalize(f.project())))
-                .filter(
-                    a ->
-                        Set.of("research", "development", "documentation", "coding")
-                            .contains(a.type()))
+                .filter(a ->
+                    ActivityRolePolicy.normalize(a.projectCandidate())
+                        .equals(ActivityRolePolicy.normalize(f.project())))
+                .filter(a ->
+                    Set.of("research", "development", "documentation", "coding").contains(a.type()))
                 .map(ActivityRecord.Activity::contentTitle)
                 .filter(t -> !t.isBlank())
                 .map(t -> t.substring(0, Math.min(60, t.length())))

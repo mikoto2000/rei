@@ -474,13 +474,10 @@ public final class TaskManagerService {
           references.add(new TaskView.Reference("RUN", schedule.runId()));
         scheduleEventTrigger
             .apply(project.id(), schedule.task().id())
-            .filter(
-                trigger ->
-                    trigger.sourceRunId().startsWith("github:") && trigger.matchedEventId() != null)
-            .ifPresent(
-                trigger ->
-                    references.add(
-                        new TaskView.Reference("GITHUB_EVENT", trigger.matchedEventId())));
+            .filter(trigger ->
+                trigger.sourceRunId().startsWith("github:") && trigger.matchedEventId() != null)
+            .ifPresent(trigger ->
+                references.add(new TaskView.Reference("GITHUB_EVENT", trigger.matchedEventId())));
         result.put(
             id,
             new TaskView(
@@ -513,26 +510,24 @@ public final class TaskManagerService {
       }
     parents.putAll(goalParents);
     var children = new HashMap<String, List<String>>();
-    parents.forEach(
-        (child, parent) ->
-            children.computeIfAbsent(parent, ignored -> new ArrayList<>()).add(child));
+    parents.forEach((child, parent) ->
+        children.computeIfAbsent(parent, ignored -> new ArrayList<>()).add(child));
     return result.values().stream()
-        .map(
-            task -> {
-              String parent = parents.getOrDefault(task.id(), task.parentId());
-              String goal =
-                  goalParents.containsKey(task.id())
-                      ? parent.substring("goal:".length())
-                      : task.goalId();
-              return related(
-                  project,
-                  task.links(
-                      goal,
-                      dependencyLinks.getOrDefault(task.id(), task.dependencyIds()),
-                      scheduleLinks.getOrDefault(task.id(), task.schedulerId()),
-                      parent,
-                      children.getOrDefault(task.id(), List.of()).stream().sorted().toList()));
-            })
+        .map(task -> {
+          String parent = parents.getOrDefault(task.id(), task.parentId());
+          String goal =
+              goalParents.containsKey(task.id())
+                  ? parent.substring("goal:".length())
+                  : task.goalId();
+          return related(
+              project,
+              task.links(
+                  goal,
+                  dependencyLinks.getOrDefault(task.id(), task.dependencyIds()),
+                  scheduleLinks.getOrDefault(task.id(), task.schedulerId()),
+                  parent,
+                  children.getOrDefault(task.id(), List.of()).stream().sorted().toList()));
+        })
         .toList();
   }
 

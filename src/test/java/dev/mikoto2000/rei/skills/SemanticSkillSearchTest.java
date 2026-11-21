@@ -41,11 +41,10 @@ class SemanticSkillSearchTest {
         input -> {
           texts.addAll(input);
           return input.stream()
-              .map(
-                  s ->
-                      s.contains("writer") || s.contains("compose")
-                          ? new float[] {1, 0}
-                          : new float[] {0, 1})
+              .map(s ->
+                  s.contains("writer") || s.contains("compose")
+                      ? new float[] {1, 0}
+                      : new float[] {0, 1})
               .toList();
         };
     var selector = new SkillCandidateSelector();

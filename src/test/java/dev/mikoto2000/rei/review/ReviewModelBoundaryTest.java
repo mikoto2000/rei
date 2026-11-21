@@ -122,9 +122,8 @@ class ReviewModelBoundaryTest {
     execution.beginContextRestoration();
     var callbacks =
         java.util.Arrays.stream(DeliveryToolRegistration.provider(reviews).getToolCallbacks())
-            .<org.springframework.ai.tool.ToolCallback>map(
-                t ->
-                    new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(t, events, event -> {}))
+            .<org.springframework.ai.tool.ToolCallback>map(t ->
+                new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(t, events, event -> {}))
             .toList();
     var options =
         OpenAiChatOptions.builder()
@@ -134,191 +133,195 @@ class ReviewModelBoundaryTest {
     var model = mock(ChatModel.class);
     var invocations = new AtomicInteger();
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              int n = invocations.incrementAndGet();
-              String name;
-              Map<String, Object> args;
-              if (operation.startsWith("read-") && n <= 2) {
-                if (n == 2) {
-                  var prompt = (Prompt) invocation.getArgument(0);
-                  var message =
-                      prompt.getInstructions().stream()
-                          .filter(ToolResponseMessage.class::isInstance)
-                          .map(ToolResponseMessage.class::cast)
-                          .toList()
-                          .getLast();
-                  var correction =
-                      tools.jackson.databind.json.JsonMapper.builder()
-                          .build()
-                          .readTree(message.getResponses().getLast().responseData());
-                  assertThat(correction.path("error").asString())
-                      .isEqualTo("INVALID_REVIEW_READ_ARGUMENTS");
-                  assertThat(correction.path("accepted").asBoolean(true)).isFalse();
-                  assertThat(correction.path("guidance").asString()).contains("1..4", "512..2048");
-                  assertThat(message.getMetadata()).doesNotContainKey("rei.reviewReceipts");
-                  assertThat(
-                          ((Map<?, ?>) message.getMetadata().get("rei.deliveryPolicies"))
-                              .get("call-1"))
-                      .isEqualTo(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL);
-                  assertThat(ledger.get(job.id(), ReviewTools.scope(owner)).ranges())
-                      .noneMatch(e -> e.delivered() || e.reviewed());
-                }
-                name = "readReviewPages";
-                args =
-                    Map.of(
-                        "reviewJobId",
-                        job.id(),
-                        "path",
-                        "lesson.md",
-                        "expectedVersion",
-                        page.range().version(),
-                        "offset",
-                        0,
-                        "maxPages",
-                        n == 1
-                            ? (operation.equals("read-count-low")
-                                ? 0
-                                : operation.equals("read-count-high") ? 5 : 1)
-                            : 1,
-                        "totalTokenBudget",
-                        n == 1
-                            ? (operation.equals("read-budget-low")
-                                ? 511
-                                : operation.equals("read-budget-high") ? 2049 : 1024)
-                            : 1024);
-              } else if ((operation.equals("work-item") || operation.equals("next-work-item")) && n <= 3) {
-                if (n == 1) {
-                  name = operation.equals("next-work-item") ? "readNextReviewWorkItem" : "readReviewWorkItem";
-                  args = operation.equals("next-work-item") ? Map.of("taskId", claim.item().task())
+        .thenAnswer(invocation -> {
+          int n = invocations.incrementAndGet();
+          String name;
+          Map<String, Object> args;
+          if (operation.startsWith("read-") && n <= 2) {
+            if (n == 2) {
+              var prompt = (Prompt) invocation.getArgument(0);
+              var message =
+                  prompt.getInstructions().stream()
+                      .filter(ToolResponseMessage.class::isInstance)
+                      .map(ToolResponseMessage.class::cast)
+                      .toList()
+                      .getLast();
+              var correction =
+                  tools.jackson.databind.json.JsonMapper.builder()
+                      .build()
+                      .readTree(message.getResponses().getLast().responseData());
+              assertThat(correction.path("error").asString())
+                  .isEqualTo("INVALID_REVIEW_READ_ARGUMENTS");
+              assertThat(correction.path("accepted").asBoolean(true)).isFalse();
+              assertThat(correction.path("guidance").asString()).contains("1..4", "512..2048");
+              assertThat(message.getMetadata()).doesNotContainKey("rei.reviewReceipts");
+              assertThat(
+                      ((Map<?, ?>) message.getMetadata().get("rei.deliveryPolicies")).get("call-1"))
+                  .isEqualTo(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL);
+              assertThat(ledger.get(job.id(), ReviewTools.scope(owner)).ranges())
+                  .noneMatch(e -> e.delivered() || e.reviewed());
+            }
+            name = "readReviewPages";
+            args =
+                Map.of(
+                    "reviewJobId",
+                    job.id(),
+                    "path",
+                    "lesson.md",
+                    "expectedVersion",
+                    page.range().version(),
+                    "offset",
+                    0,
+                    "maxPages",
+                    n == 1
+                        ? (operation.equals("read-count-low")
+                            ? 0
+                            : operation.equals("read-count-high") ? 5 : 1)
+                        : 1,
+                    "totalTokenBudget",
+                    n == 1
+                        ? (operation.equals("read-budget-low")
+                            ? 511
+                            : operation.equals("read-budget-high") ? 2049 : 1024)
+                        : 1024);
+          } else if ((operation.equals("work-item") || operation.equals("next-work-item"))
+              && n <= 3) {
+            if (n == 1) {
+              name =
+                  operation.equals("next-work-item")
+                      ? "readNextReviewWorkItem"
+                      : "readReviewWorkItem";
+              args =
+                  operation.equals("next-work-item")
+                      ? Map.of("taskId", claim.item().task())
                       : Map.of("workItemId", claim.item().id(), "attempt", claim.attempt());
-                } else {
-                  if (n == 3)
-                    assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
-                        .contains("REVIEW_RESULT_INVALID", "accepted", "workItemId");
-                  name = "submitReviewWorkItem";
-                  args =
-                      Map.of(
-                          "workItemId",
-                          claim.item().id(),
-                          "attempt",
-                          claim.attempt(),
-                          "assessment",
-                          n == 2 ? "" : "checked",
-                          "findings",
-                          List.of());
-                }
-              } else if (n == 1) {
-                name = "readReviewFile";
-                args =
-                    Map.of(
-                        "reviewJobId",
-                        job.id(),
-                        "path",
-                        "lesson.md",
-                        "expectedVersion",
-                        page.range().version(),
-                        "offset",
-                        0,
-                        "tokenBudget",
-                        512);
-              } else if (n == 2 && operation.startsWith("batch-")) {
-                name = "submitReviewPages";
-                var input =
-                    new ReviewTools.PageAssessment(
-                        "lesson.md",
-                        0,
-                        page.nextOffset(),
-                        operation.equals("batch-assessment") ? "" : "checked",
-                        operation.equals("batch-findings")
-                            ? List.of(new ReviewTools.PageFinding("finding", "P2", "", "issue"))
-                            : List.of());
-                List<ReviewTools.PageAssessment> pages =
-                    switch (operation) {
-                      case "batch-limit" -> java.util.Collections.nCopies(5, input);
-                      case "batch-empty" -> List.of();
-                      case "batch-duplicate" -> List.of(input, input);
-                      default -> List.of(input);
-                    };
-                args = Map.of("reviewJobId", job.id(), "pages", pages);
-              } else if (n == 2 && operation.equals("restart")) {
-                name = "restartReview";
-                args = Map.of("reviewJobId", job.id());
-              } else if (n == 2 && operation.equals("legacy")) {
-                name = "submitReviewResult";
-                var wrong =
-                    new ReviewCoverageLedger.Range(
-                        page.range().path(),
-                        page.range().version(),
-                        page.range().span(),
-                        "0".repeat(64));
-                args =
-                    Map.of(
-                        "reviewJobId",
-                        job.id(),
-                        "range",
-                        wrong,
-                        "assessment",
-                        "checked",
-                        "findings",
-                        List.of());
-              } else if (n <= 3) {
-                if (n == 3 && !operation.startsWith("read-")) {
-                  assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
-                      .contains("REVIEW_RESULT_INVALID", "accepted");
-                  if (operation.equals("restart"))
-                    assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
-                        .contains("No restart was performed", "reviewPending", "submitReviewPage");
-                  if (operation.equals("batch-limit"))
-                    assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
-                        .contains("1..4", "Split larger batches");
-                  assertThat(ledger.get(job.id(), ReviewTools.scope(owner)).ranges())
-                      .noneMatch(e -> e.reviewed());
-                }
-                name = "submitReviewPage";
-                args =
-                    Map.of(
-                        "reviewJobId",
-                        job.id(),
-                        "path",
-                        "lesson.md",
-                        "offset",
-                        0,
-                        "nextOffset",
-                        page.nextOffset() + (n == 2 ? 1 : 0),
-                        "assessment",
-                        "checked",
-                        "findings",
-                        List.of());
-                if (operation.startsWith("batch-")) {
-                  name = "submitReviewPages";
-                  args =
-                      Map.of(
-                          "reviewJobId",
-                          job.id(),
-                          "pages",
-                          List.of(
-                              new ReviewTools.PageAssessment(
-                                  "lesson.md", 0, page.nextOffset(), "checked", List.of())));
-                }
-              } else
-                return Flux.just(
-                    new ChatResponse(
-                        List.of(new Generation(new AssistantMessage("Review complete.")))));
-              return Flux.just(
-                  new ChatResponse(
+            } else {
+              if (n == 3)
+                assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
+                    .contains("REVIEW_RESULT_INVALID", "accepted", "workItemId");
+              name = "submitReviewWorkItem";
+              args =
+                  Map.of(
+                      "workItemId",
+                      claim.item().id(),
+                      "attempt",
+                      claim.attempt(),
+                      "assessment",
+                      n == 2 ? "" : "checked",
+                      "findings",
+                      List.of());
+            }
+          } else if (n == 1) {
+            name = "readReviewFile";
+            args =
+                Map.of(
+                    "reviewJobId",
+                    job.id(),
+                    "path",
+                    "lesson.md",
+                    "expectedVersion",
+                    page.range().version(),
+                    "offset",
+                    0,
+                    "tokenBudget",
+                    512);
+          } else if (n == 2 && operation.startsWith("batch-")) {
+            name = "submitReviewPages";
+            var input =
+                new ReviewTools.PageAssessment(
+                    "lesson.md",
+                    0,
+                    page.nextOffset(),
+                    operation.equals("batch-assessment") ? "" : "checked",
+                    operation.equals("batch-findings")
+                        ? List.of(new ReviewTools.PageFinding("finding", "P2", "", "issue"))
+                        : List.of());
+            List<ReviewTools.PageAssessment> pages =
+                switch (operation) {
+                  case "batch-limit" -> java.util.Collections.nCopies(5, input);
+                  case "batch-empty" -> List.of();
+                  case "batch-duplicate" -> List.of(input, input);
+                  default -> List.of(input);
+                };
+            args = Map.of("reviewJobId", job.id(), "pages", pages);
+          } else if (n == 2 && operation.equals("restart")) {
+            name = "restartReview";
+            args = Map.of("reviewJobId", job.id());
+          } else if (n == 2 && operation.equals("legacy")) {
+            name = "submitReviewResult";
+            var wrong =
+                new ReviewCoverageLedger.Range(
+                    page.range().path(),
+                    page.range().version(),
+                    page.range().span(),
+                    "0".repeat(64));
+            args =
+                Map.of(
+                    "reviewJobId",
+                    job.id(),
+                    "range",
+                    wrong,
+                    "assessment",
+                    "checked",
+                    "findings",
+                    List.of());
+          } else if (n <= 3) {
+            if (n == 3 && !operation.startsWith("read-")) {
+              assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
+                  .contains("REVIEW_RESULT_INVALID", "accepted");
+              if (operation.equals("restart"))
+                assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
+                    .contains("No restart was performed", "reviewPending", "submitReviewPage");
+              if (operation.equals("batch-limit"))
+                assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
+                    .contains("1..4", "Split larger batches");
+              assertThat(ledger.get(job.id(), ReviewTools.scope(owner)).ranges())
+                  .noneMatch(e -> e.reviewed());
+            }
+            name = "submitReviewPage";
+            args =
+                Map.of(
+                    "reviewJobId",
+                    job.id(),
+                    "path",
+                    "lesson.md",
+                    "offset",
+                    0,
+                    "nextOffset",
+                    page.nextOffset() + (n == 2 ? 1 : 0),
+                    "assessment",
+                    "checked",
+                    "findings",
+                    List.of());
+            if (operation.startsWith("batch-")) {
+              name = "submitReviewPages";
+              args =
+                  Map.of(
+                      "reviewJobId",
+                      job.id(),
+                      "pages",
                       List.of(
-                          new Generation(
-                              AssistantMessage.builder()
-                                  .toolCalls(
-                                      List.of(
-                                          new AssistantMessage.ToolCall(
-                                              "call-" + n,
-                                              "function",
-                                              name,
-                                              StorageDatabase.JSON.writeValueAsString(args))))
-                                  .build()))));
-            });
+                          new ReviewTools.PageAssessment(
+                              "lesson.md", 0, page.nextOffset(), "checked", List.of())));
+            }
+          } else
+            return Flux.just(
+                new ChatResponse(
+                    List.of(new Generation(new AssistantMessage("Review complete.")))));
+          return Flux.just(
+              new ChatResponse(
+                  List.of(
+                      new Generation(
+                          AssistantMessage.builder()
+                              .toolCalls(
+                                  List.of(
+                                      new AssistantMessage.ToolCall(
+                                          "call-" + n,
+                                          "function",
+                                          name,
+                                          StorageDatabase.JSON.writeValueAsString(args))))
+                              .build()))));
+        });
     new StagnationChatModel(model, assembler)
         .stream(new Prompt(new UserMessage("review"), options)).blockLast();
     assertThat(invocations).hasValue(4);
@@ -401,31 +404,29 @@ class ReviewModelBoundaryTest {
                     "tokenBudget",
                     256));
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              if (calls.incrementAndGet() == 1)
-                return Flux.just(
-                    new ChatResponse(
-                        List.of(
-                            new Generation(
-                                AssistantMessage.builder()
-                                    .toolCalls(
-                                        List.of(
-                                            new AssistantMessage.ToolCall(
-                                                "read",
-                                                "function",
-                                                durable ? "readReviewWorkItem" : "readReviewFile",
-                                                args)))
-                                    .build()))));
-              return transportFailure
-                  ? Flux.error(new IllegalStateException("transport"))
-                  : Flux.just(
-                      new ChatResponse(List.of(new Generation(new AssistantMessage("レビュー完了")))));
-            });
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(model, assembler)
-                    .stream(new Prompt(new UserMessage("review"), options)).blockLast())
+        .thenAnswer(invocation -> {
+          if (calls.incrementAndGet() == 1)
+            return Flux.just(
+                new ChatResponse(
+                    List.of(
+                        new Generation(
+                            AssistantMessage.builder()
+                                .toolCalls(
+                                    List.of(
+                                        new AssistantMessage.ToolCall(
+                                            "read",
+                                            "function",
+                                            durable ? "readReviewWorkItem" : "readReviewFile",
+                                            args)))
+                                .build()))));
+          return transportFailure
+              ? Flux.error(new IllegalStateException("transport"))
+              : Flux.just(
+                  new ChatResponse(List.of(new Generation(new AssistantMessage("レビュー完了")))));
+        });
+    assertThatThrownBy(() ->
+            new StagnationChatModel(model, assembler)
+                .stream(new Prompt(new UserMessage("review"), options)).blockLast())
         .hasMessageContaining(transportFailure ? "transport" : "REVIEW_PARTIAL");
     if (durable) {
       var scope =

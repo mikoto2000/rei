@@ -59,12 +59,11 @@ class DependencyToolsTest {
             Clock.fixed(Instant.EPOCH, ZoneOffset.UTC));
     source = mock(DependencySourceProbe.class);
     when(source.probe(any()))
-        .thenAnswer(
-            invocation -> {
-              var entry = invocation.getArgument(0, PersistentDependencyRepository.Entry.class);
-              return new DependencyObservation(
-                  entry.id(), DependencyState.WAITING, "user_answer_waiting");
-            });
+        .thenAnswer(invocation -> {
+          var entry = invocation.getArgument(0, PersistentDependencyRepository.Entry.class);
+          return new DependencyObservation(
+              entry.id(), DependencyState.WAITING, "user_answer_waiting");
+        });
     service =
         new DependencyObservationService(
             repo,
@@ -90,7 +89,10 @@ class DependencyToolsTest {
     {
       var scope = AgentRunScope.open(owner());
       try (scope) {
-        id = tools.registerDependency("HTTP_STATUS", "https://example.com", "200", "PT1H", null).id();
+        id =
+            tools
+                .registerDependency("HTTP_STATUS", "https://example.com", "200", "PT1H", null)
+                .id();
         assertThrows(IllegalArgumentException.class, () -> tools.checkDependency(id));
         // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
         verifyNoInteractions(source);

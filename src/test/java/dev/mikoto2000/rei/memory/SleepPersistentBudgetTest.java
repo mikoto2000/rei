@@ -100,15 +100,14 @@ class SleepPersistentBudgetTest {
     try (var executor = java.util.concurrent.Executors.newFixedThreadPool(4)) {
       var tasks = new java.util.ArrayList<java.util.concurrent.Callable<Boolean>>();
       for (int i = 0; i < 8; i++)
-        tasks.add(
-            () -> {
-              try {
-                repository.reserveSleepModelCall("p", 3, 0);
-                return true;
-              } catch (dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped) {
-                return false;
-              }
-            });
+        tasks.add(() -> {
+          try {
+            repository.reserveSleepModelCall("p", 3, 0);
+            return true;
+          } catch (dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped) {
+            return false;
+          }
+        });
       int accepted = 0;
       for (var result : executor.invokeAll(tasks)) if (result.get()) accepted++;
       assertEquals(3, accepted);

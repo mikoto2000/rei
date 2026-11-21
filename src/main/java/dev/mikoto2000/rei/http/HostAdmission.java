@@ -71,13 +71,14 @@ public final class HostAdmission {
       }
       operation.check();
       var released = new AtomicBoolean();
-      Lease lease = () -> {
-        // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
-        if (released.compareAndSet(false, true)) {
-          entry.slots.release();
-          release(key, entry);
-        }
-      };
+      Lease lease =
+          () -> {
+            // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
+            if (released.compareAndSet(false, true)) {
+              entry.slots.release();
+              release(key, entry);
+            }
+          };
       handedOff = true;
       return lease;
     } catch (InterruptedException interrupted) {

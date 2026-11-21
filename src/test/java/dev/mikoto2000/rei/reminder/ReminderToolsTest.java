@@ -80,8 +80,8 @@ class ReminderToolsTest {
     createCallback(new ReminderTools(service))
         .call(
             """
-        {"message":"会議準備","targetAt":"2026-09-07T09:00:00+09:00","minutesBefore":15}
-        """);
+            {"message":"会議準備","targetAt":"2026-09-07T09:00:00+09:00","minutesBefore":15}
+            """);
     var created = service.listActive().getFirst();
     assertEquals(ReminderType.BEFORE_TARGET, created.type());
     assertEquals(OffsetDateTime.parse("2026-09-07T08:45:00+09:00"), created.remindAt());

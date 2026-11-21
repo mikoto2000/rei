@@ -90,23 +90,21 @@ public final class SqliteVectorStore
   /** 新たな対象を登録し、後から利用できるようにする。 */
   @Override
   public void add(List<Document> documents) {
-    withTransaction(
-        connection -> {
-          insertDocuments(connection, documents);
-          return null;
-        });
+    withTransaction(connection -> {
+      insertDocuments(connection, documents);
+      return null;
+    });
   }
 
   /** 指定された内容へ切り替えるため、別取得元を置き換える。 */
   @Override
   public VectorDocumentEntry replaceBySource(
       String docId, String source, String ingestedAt, List<Document> documents) {
-    withTransaction(
-        connection -> {
-          deleteBySource(connection, source);
-          insertDocuments(connection, documents);
-          return null;
-        });
+    withTransaction(connection -> {
+      deleteBySource(connection, source);
+      insertDocuments(connection, documents);
+      return null;
+    });
     return new VectorDocumentEntry(docId, source, documents.size(), ingestedAt);
   }
 
@@ -117,11 +115,11 @@ public final class SqliteVectorStore
         var statement =
             connection.prepareStatement(
                 """
-            SELECT doc_id, source, COUNT(chunk_id) AS chunk_count, ingested_at
-            FROM document_chunks_vec
-            GROUP BY doc_id, source, ingested_at
-            ORDER BY source ASC, doc_id ASC
-            """)) {
+                SELECT doc_id, source, COUNT(chunk_id) AS chunk_count, ingested_at
+                FROM document_chunks_vec
+                GROUP BY doc_id, source, ingested_at
+                ORDER BY source ASC, doc_id ASC
+                """)) {
       try (var rs = statement.executeQuery()) {
         List<VectorDocumentEntry> entries = new ArrayList<>();
         while (rs.next()) {
@@ -148,33 +146,30 @@ public final class SqliteVectorStore
   /** 対象を管理から外すため、別取得元を削除する。 */
   @Override
   public int deleteBySource(String source) {
-    return withTransaction(
-        connection -> {
-          int count = countDocumentsBySource(connection, source);
-          deleteBySource(connection, source);
-          return count;
-        });
+    return withTransaction(connection -> {
+      int count = countDocumentsBySource(connection, source);
+      deleteBySource(connection, source);
+      return count;
+    });
   }
 
   /** 指定された対象を削除する。 */
   @Override
   public void delete(List<String> ids) {
-    withTransaction(
-        connection -> {
-          deleteChunks(connection, ids);
-          return null;
-        });
+    withTransaction(connection -> {
+      deleteChunks(connection, ids);
+      return null;
+    });
   }
 
   /** 指定された対象を削除する。 */
   @Override
   public void delete(Filter.Expression filterExpression) {
     FilterCriteria criteria = parseFilter(filterExpression);
-    withTransaction(
-        connection -> {
-          deleteMatching(connection, criteria);
-          return null;
-        });
+    withTransaction(connection -> {
+      deleteMatching(connection, criteria);
+      return null;
+    });
   }
 
   /** 関連文書の検索で用いる類似度検索を返す。 */
@@ -213,11 +208,11 @@ public final class SqliteVectorStore
     StringBuilder sql =
         new StringBuilder(
             """
-        SELECT v.chunk_id, v.doc_id, v.source, v.chunk_index, v.ingested_at, v.chunk_text, v.metadata_json,
-               -bm25(document_chunks_fts) AS score
-        FROM document_chunks_fts JOIN document_chunks_vec v ON v.chunk_id = document_chunks_fts.chunk_id
-        WHERE document_chunks_fts MATCH ?
-        """);
+            SELECT v.chunk_id, v.doc_id, v.source, v.chunk_index, v.ingested_at, v.chunk_text, v.metadata_json,
+                   -bm25(document_chunks_fts) AS score
+            FROM document_chunks_fts JOIN document_chunks_vec v ON v.chunk_id = document_chunks_fts.chunk_id
+            WHERE document_chunks_fts MATCH ?
+            """);
     List<Object> params = new ArrayList<>();
     // Terms contain letters/digits only, and quotes ensure OR/NOT are literal query terms.
     params.add(
@@ -289,11 +284,11 @@ public final class SqliteVectorStore
     StringBuilder sql =
         new StringBuilder(
             """
-        SELECT chunk_id, doc_id, source, chunk_index, ingested_at, chunk_text, metadata_json, distance
-        FROM document_chunks_vec
-        WHERE embedding MATCH ?
-          AND k = ?
-        """);
+            SELECT chunk_id, doc_id, source, chunk_index, ingested_at, chunk_text, metadata_json, distance
+            FROM document_chunks_vec
+            WHERE embedding MATCH ?
+              AND k = ?
+            """);
     List<Object> params = new ArrayList<>();
     params.add(writeEmbeddingLiteral(queryEmbedding));
     params.add(candidateLimit);
@@ -648,11 +643,11 @@ public final class SqliteVectorStore
           """
               + String.format("%d", embeddingDimensions)
               + """
-          ] distance_metric=cosine,
-            +chunk_text text,
-            +metadata_json text
-          )
-          """);
+              ] distance_metric=cosine,
+                +chunk_text text,
+                +metadata_json text
+              )
+              """);
       statement.executeUpdate("DROP TABLE IF EXISTS documents");
       if (bm25Enabled) {
         // Rebuild on activation, including mutations made while the opt-in was disabled.

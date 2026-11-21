@@ -167,18 +167,16 @@ class SoundNotificationServiceTest {
     CountDownLatch start = new CountDownLatch(1);
     CountDownLatch done = new CountDownLatch(2);
 
-    pool.submit(
-        () -> {
-          await(start);
-          service.notify("first");
-          done.countDown();
-        });
-    pool.submit(
-        () -> {
-          await(start);
-          service.notify("second");
-          done.countDown();
-        });
+    pool.submit(() -> {
+      await(start);
+      service.notify("first");
+      done.countDown();
+    });
+    pool.submit(() -> {
+      await(start);
+      service.notify("second");
+      done.countDown();
+    });
 
     start.countDown();
     assertTrue(done.await(5, TimeUnit.SECONDS));

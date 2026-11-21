@@ -22,9 +22,9 @@ class OpmlParserTest {
     var feeds =
         parse(
             """
-        <opml version="2.0"><body><outline type="rss" title="技術ブログ" text="Text"
-          xmlUrl="https://example.jp/feed" htmlUrl="https://example.jp/"/></body></opml>
-        """);
+            <opml version="2.0"><body><outline type="rss" title="技術ブログ" text="Text"
+              xmlUrl="https://example.jp/feed" htmlUrl="https://example.jp/"/></body></opml>
+            """);
     assertEquals(1, feeds.size());
     var feed = feeds.getFirst();
     assertEquals("技術ブログ", feed.title());
@@ -40,13 +40,13 @@ class OpmlParserTest {
     var feeds =
         parse(
             """
-        <opml><head><outline xmlUrl="ignored"/></head><body>
-          <outline text="Development"><outline text="Java">
-            <outline text="Example" xmlUrl="https://example.com/a"/>
-          </outline></outline>
-          <outline xmlUrl="https://example.com/b"/>
-        </body></opml>
-        """);
+            <opml><head><outline xmlUrl="ignored"/></head><body>
+              <outline text="Development"><outline text="Java">
+                <outline text="Example" xmlUrl="https://example.com/a"/>
+              </outline></outline>
+              <outline xmlUrl="https://example.com/b"/>
+            </body></opml>
+            """);
     assertEquals(2, feeds.size());
     assertEquals("Example", feeds.getFirst().displayName());
     assertEquals(List.of("Development", "Java"), feeds.getFirst().categories());
@@ -115,11 +115,11 @@ class OpmlParserTest {
     var feeds =
         parse(
             """
-        <opml xmlns:xi="http://www.w3.org/2001/XInclude"><body>
-          <xi:include href="file:///nonexistent-secret"/>
-          <outline xmlUrl="https://example.com"/>
-        </body></opml>
-        """);
+            <opml xmlns:xi="http://www.w3.org/2001/XInclude"><body>
+              <xi:include href="file:///nonexistent-secret"/>
+              <outline xmlUrl="https://example.com"/>
+            </body></opml>
+            """);
     assertEquals(1, feeds.size());
   }
 

@@ -60,12 +60,12 @@ class FeedOpmlImportServiceTest {
             .importFile(
                 file(
                     """
-        <outline xmlUrl='https://example.com/a'/>
-        <outline xmlUrl='not a url'/><outline xmlUrl=''/><outline xmlUrl='file:///secret'/>
-        <outline xmlUrl='https://'/><outline xmlUrl='https://example.com/error'/>
-        <outline xmlUrl='https://example.com/existing'/><outline xmlUrl='https://example.com/a'/>
-        <outline xmlUrl='https://example.com/b'/>
-        """));
+                    <outline xmlUrl='https://example.com/a'/>
+                    <outline xmlUrl='not a url'/><outline xmlUrl=''/><outline xmlUrl='file:///secret'/>
+                    <outline xmlUrl='https://'/><outline xmlUrl='https://example.com/error'/>
+                    <outline xmlUrl='https://example.com/existing'/><outline xmlUrl='https://example.com/a'/>
+                    <outline xmlUrl='https://example.com/b'/>
+                    """));
     assertEquals(2, result.imported().size());
     assertEquals(2, result.skipped().size());
     assertEquals(5, result.failed().size());

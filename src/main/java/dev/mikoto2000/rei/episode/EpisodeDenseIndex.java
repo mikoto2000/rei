@@ -131,10 +131,9 @@ public class EpisodeDenseIndex {
       if (id instanceof String key)
         repository
             .find(key, project)
-            .filter(
-                e ->
-                    e.revision().equals(revision)
-                        && range.includes(java.time.Instant.parse(e.occurredAt())))
+            .filter(e ->
+                e.revision().equals(revision)
+                    && range.includes(java.time.Instant.parse(e.occurredAt())))
             .ifPresent(e -> result.putIfAbsent(e.id(), e));
     }
     return List.copyOf(result.values());

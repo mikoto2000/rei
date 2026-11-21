@@ -92,11 +92,10 @@ class SubAgentResultValidatorTest {
     var result = validator.validate(definition(null), json);
     assertThat(result.valid()).isFalse();
     assertThat(result.errors())
-        .allSatisfy(
-            e -> {
-              assertThat(e.path()).isNotNull();
-              assertThat(e.message()).isNotBlank();
-            });
+        .allSatisfy(e -> {
+          assertThat(e.path()).isNotNull();
+          assertThat(e.message()).isNotBlank();
+        });
   }
 
   /** 結果パスを維持することを確認する。 */

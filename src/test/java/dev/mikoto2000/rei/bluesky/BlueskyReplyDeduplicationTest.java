@@ -97,11 +97,10 @@ class BlueskyReplyDeduplicationTest {
                 new BlueskyApiClient.FeedPost(
                     TARGET, "cid", "hello", OffsetDateTime.now(), false, false, null, null)));
     when(generator.generate(any(), any(), any()))
-        .thenAnswer(
-            invocation -> {
-              assertThat(manual.reply(URL, "manual").success()).isTrue();
-              return "automatic";
-            });
+        .thenAnswer(invocation -> {
+          assertThat(manual.reply(URL, "manual").success()).isTrue();
+          return "automatic";
+        });
     var scheduled =
         new BlueskyReplyService(
             properties,

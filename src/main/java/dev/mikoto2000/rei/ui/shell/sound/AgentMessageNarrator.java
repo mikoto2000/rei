@@ -47,14 +47,13 @@ public class AgentMessageNarrator {
         || message.content() == null
         || message.content().isBlank()) return;
     try {
-      executor.execute(
-          () -> {
-            try {
-              if (narrationEnabled.getAsBoolean()) narrator.narrateCompletedRun(message.content());
-            } catch (RuntimeException error) {
-              log.warn("Behavior narration failed ({})", error.getClass().getSimpleName());
-            }
-          });
+      executor.execute(() -> {
+        try {
+          if (narrationEnabled.getAsBoolean()) narrator.narrateCompletedRun(message.content());
+        } catch (RuntimeException error) {
+          log.warn("Behavior narration failed ({})", error.getClass().getSimpleName());
+        }
+      });
     } catch (RejectedExecutionException closing) {
       log.debug("Behavior narration skipped during shutdown");
     }

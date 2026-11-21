@@ -207,17 +207,15 @@ public class ContextAssembler {
       checkActive.run();
       var messages =
           raw.getInstructions().stream()
-              .map(
-                  message -> {
-                    if (message instanceof ToolResponseMessage tool
-                        && tool.getResponses().stream()
-                            .anyMatch(
-                                response ->
-                                    ToolResultCompressor.lossless(
-                                        ToolResultCompressor.policy(tool, response.id()))))
-                      return compactToolResult.apply(message, conversation, run);
-                    return message;
-                  })
+              .map(message -> {
+                if (message instanceof ToolResponseMessage tool
+                    && tool.getResponses().stream()
+                        .anyMatch(response ->
+                            ToolResultCompressor.lossless(
+                                ToolResultCompressor.policy(tool, response.id()))))
+                  return compactToolResult.apply(message, conversation, run);
+                return message;
+              })
               .toList();
       var restored = restoreSuppressed(new Prompt(messages, raw.getOptions()));
       var projected =
@@ -267,9 +265,8 @@ public class ContextAssembler {
     // Never reuse a rolling summary that may still contain an archived cancelled task.
     var generation =
         raw.getInstructions().stream()
-            .map(
-                m ->
-                    m.getMetadata().get(dev.mikoto2000.rei.context.CancelledTaskHistory.GENERATION))
+            .map(m ->
+                m.getMetadata().get(dev.mikoto2000.rei.context.CancelledTaskHistory.GENERATION))
             .filter(String.class::isInstance)
             .map(String.class::cast)
             .findFirst();
@@ -297,17 +294,15 @@ public class ContextAssembler {
     // limit.
     if (estimate(project(raw, h, a, workingSetSnapshot)) > hard
         && raw.getInstructions().stream()
-            .anyMatch(
-                m ->
-                    Boolean.TRUE.equals(m.getMetadata().get("rei.longTermMemory"))
-                        || Boolean.TRUE.equals(m.getMetadata().get("rei.workContext")))) {
+            .anyMatch(m ->
+                Boolean.TRUE.equals(m.getMetadata().get("rei.longTermMemory"))
+                    || Boolean.TRUE.equals(m.getMetadata().get("rei.workContext")))) {
       raw =
           new Prompt(
               raw.getInstructions().stream()
-                  .filter(
-                      m ->
-                          !Boolean.TRUE.equals(m.getMetadata().get("rei.longTermMemory"))
-                              && !Boolean.TRUE.equals(m.getMetadata().get("rei.workContext")))
+                  .filter(m ->
+                      !Boolean.TRUE.equals(m.getMetadata().get("rei.longTermMemory"))
+                          && !Boolean.TRUE.equals(m.getMetadata().get("rei.workContext")))
                   .toList(),
               raw.getOptions());
     }

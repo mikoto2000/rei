@@ -3,7 +3,7 @@
   <dependencies>
     <dependency><groupId>dev.mikoto2000</groupId><artifactId>rei-contract</artifactId><version>${project.version}</version></dependency>
     <dependency><groupId>dev.mikoto2000</groupId><artifactId>rei-completion</artifactId><version>${project.version}</version></dependency>
-    <dependency><groupId>org.jline</groupId><artifactId>jline</artifactId><version>3.29.0</version></dependency>
+    <dependency><groupId>org.jline</groupId><artifactId>jline</artifactId><version>4.7.0</version></dependency>
     <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
   </dependencies>
 </project>

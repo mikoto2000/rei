@@ -51,14 +51,12 @@ class ValidatingResolverGroupTest {
               /** {@code doResolveAll} の条件を再現するため、検証用の操作や状態を扱う。 */
               protected void doResolveAll(
                   InetSocketAddress address, Promise<List<InetSocketAddress>> result) {
-                pending.addListener(
-                    done -> {
-                      if (done.isCancelled()) result.cancel(false);
-                    });
-                result.addListener(
-                    done -> {
-                      if (done.isCancelled()) pending.cancel(false);
-                    });
+                pending.addListener(done -> {
+                  if (done.isCancelled()) result.cancel(false);
+                });
+                result.addListener(done -> {
+                  if (done.isCancelled()) pending.cancel(false);
+                });
               }
             };
           }
@@ -105,8 +103,9 @@ class ValidatingResolverGroupTest {
           protected AddressResolver<SocketAddress> newResolver(EventExecutor owner) {
             AddressResolver<SocketAddress> resolver = mock();
             when(resolver.resolveAll(any()))
-                .thenReturn(owner.newSucceededFuture(
-                    List.of(publicAddress, UnixDomainSocketAddress.of("fixture.sock"))));
+                .thenReturn(
+                    owner.newSucceededFuture(
+                        List.of(publicAddress, UnixDomainSocketAddress.of("fixture.sock"))));
             return resolver;
           }
         };
@@ -114,7 +113,9 @@ class ValidatingResolverGroupTest {
         var group =
             new ValidatingResolverGroup(PublicNetworkPolicy::isPublic, approved, delegate)) {
       var resolution =
-          group.getResolver(executor).resolve(InetSocketAddress.createUnresolved("fixture.example", 80));
+          group
+              .getResolver(executor)
+              .resolve(InetSocketAddress.createUnresolved("fixture.example", 80));
       var failure =
           assertThrows(ExecutionException.class, () -> resolution.get(2, TimeUnit.SECONDS));
       assertEquals(HttpFetchException.class, failure.getCause().getClass());

@@ -203,17 +203,16 @@ class McpHttpIntegrationTest {
     dev.mikoto2000.rei.workcontext.WorkContextService contexts() {
       var result = mock(dev.mikoto2000.rei.workcontext.WorkContextService.class);
       when(result.current(anyString()))
-          .thenAnswer(
-              i ->
-                  Optional.of(
-                      new dev.mikoto2000.rei.workcontext.WorkContext(
-                          i.getArgument(0),
-                          1,
-                          Instant.EPOCH,
-                          Instant.EPOCH,
-                          null,
-                          List.of(),
-                          Set.of())));
+          .thenAnswer(i ->
+              Optional.of(
+                  new dev.mikoto2000.rei.workcontext.WorkContext(
+                      i.getArgument(0),
+                      1,
+                      Instant.EPOCH,
+                      Instant.EPOCH,
+                      null,
+                      List.of(),
+                      Set.of())));
       return result;
     }
 
@@ -318,14 +317,13 @@ class McpHttpIntegrationTest {
               .statusCode());
       var addresses =
           Collections.list(NetworkInterface.getNetworkInterfaces()).stream()
-              .filter(
-                  n -> {
-                    try {
-                      return n.isUp();
-                    } catch (SocketException ignored) {
-                      return false;
-                    }
-                  })
+              .filter(n -> {
+                try {
+                  return n.isUp();
+                } catch (SocketException ignored) {
+                  return false;
+                }
+              })
               .flatMap(n -> Collections.list(n.getInetAddresses()).stream())
               .filter(a -> a instanceof Inet4Address && a.isSiteLocalAddress())
               .toList();
@@ -381,7 +379,8 @@ class McpHttpIntegrationTest {
         assertFalse(
             client
                 .callTool(
-                    new McpSchema.CallToolRequest("rei_request_get", Map.of("request_id", dot), null))
+                    new McpSchema.CallToolRequest(
+                        "rei_request_get", Map.of("request_id", dot), null))
                 .isError());
         String claim = UUID.randomUUID().toString();
         assertFalse(
@@ -404,20 +403,22 @@ class McpHttpIntegrationTest {
                         "outcome",
                         "COMPLETED",
                         "summary",
-                        "Fixed short report"), null));
+                        "Fixed short report"),
+                    null));
         assertFalse(receipt.isError());
         assertEquals(true, ((Map<?, ?>) receipt.structuredContent()).get("persisted"));
         assertFalse(
             client
                 .callTool(
-                    new McpSchema.CallToolRequest("rei_context_get", Map.of("project_id", p.id()), null))
+                    new McpSchema.CallToolRequest(
+                        "rei_context_get", Map.of("project_id", p.id()), null))
                 .isError());
         var submitted =
             client.callTool(
                 new McpSchema.CallToolRequest(
                     "rei_task_submit",
-                    Map.of(
-                        "project_id", p.id(), "instruction", "review", "request_id", "sdk-key"), null));
+                    Map.of("project_id", p.id(), "instruction", "review", "request_id", "sdk-key"),
+                    null));
         assertFalse(submitted.isError(), submitted.toString());
         var data = (Map<?, ?>) submitted.structuredContent();
         String run = (String) data.get("run_id");

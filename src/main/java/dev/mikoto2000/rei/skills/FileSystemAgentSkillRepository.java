@@ -76,10 +76,8 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
             .filter(Files::isDirectory)
             .map(path -> path.resolve(SKILL_FILE_NAME))
             .filter(Files::isRegularFile)
-            .forEach(
-                skillFile ->
-                    loadSkill(skillFile)
-                        .ifPresent(skill -> skills.putIfAbsent(skill.name(), skill)));
+            .forEach(skillFile ->
+                loadSkill(skillFile).ifPresent(skill -> skills.putIfAbsent(skill.name(), skill)));
       } catch (IOException e) {
         log.warn("Failed to scan Agent Skills directory: {}", skillsDirectory, e);
       }

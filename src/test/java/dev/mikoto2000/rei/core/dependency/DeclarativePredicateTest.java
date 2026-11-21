@@ -131,11 +131,10 @@ class DeclarativePredicateTest {
     String wide =
         "{\"op\":\"AND\",\"args\":["
             + java.util.stream.IntStream.range(0, 8)
-                .mapToObj(
-                    i ->
-                        "{\"op\":\"OR\",\"args\":["
-                            + String.join(",", java.util.Collections.nCopies(4, leaf))
-                            + "]}")
+                .mapToObj(i ->
+                    "{\"op\":\"OR\",\"args\":["
+                        + String.join(",", java.util.Collections.nCopies(4, leaf))
+                        + "]}")
                 .collect(java.util.stream.Collectors.joining(","))
             + "]}";
     assertThrows(IllegalArgumentException.class, () -> DeclarativePredicate.parse(spec(wide)));

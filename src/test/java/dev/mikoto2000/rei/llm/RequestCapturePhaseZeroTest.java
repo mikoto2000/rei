@@ -238,12 +238,11 @@ class RequestCapturePhaseZeroTest {
       var transport =
           org.springframework.ai.openai.http.okhttp.SpringAiOpenAiHttpClient.builder()
               .interceptor(new ShowUiSdkRequestInterceptor())
-              .interceptor(
-                  chain -> {
-                    observed.add(identity);
-                    assertThat(chain.request().header("run-id")).isNull();
-                    return probe.capture(chain);
-                  })
+              .interceptor(chain -> {
+                observed.add(identity);
+                assertThat(chain.request().header("run-id")).isNull();
+                return probe.capture(chain);
+              })
               .build();
       var options =
           OpenAiChatOptions.builder()
@@ -341,9 +340,8 @@ class RequestCapturePhaseZeroTest {
                   .model("probe")
                   .maxRetries(1)
                   .build())
-          .httpClientBuilderCustomizer(
-              builder ->
-                  builder.interceptor(new ShowUiSdkRequestInterceptor()).interceptor(this::capture))
+          .httpClientBuilderCustomizer(builder ->
+              builder.interceptor(new ShowUiSdkRequestInterceptor()).interceptor(this::capture))
           .build();
     }
 

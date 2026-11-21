@@ -17,14 +17,14 @@ class OutputLimitReplanParserTest {
     OutputLimitReplanPlan plan =
         parser.parse(
             """
-        {
-          "subgoals": [
-            {"id": "architecture", "goal": "アーキテクチャをレビューする"},
-            {"id": "testing", "goal": "テスト戦略をレビューする"}
-          ],
-          "finalGoal": "結果を統合する"
-        }
-        """,
+            {
+              "subgoals": [
+                {"id": "architecture", "goal": "アーキテクチャをレビューする"},
+                {"id": "testing", "goal": "テスト戦略をレビューする"}
+              ],
+              "finalGoal": "結果を統合する"
+            }
+            """,
             8);
 
     assertThat(plan.subgoals()).hasSize(2);
@@ -39,10 +39,10 @@ class OutputLimitReplanParserTest {
     OutputLimitReplanPlan plan =
         parser.parse(
             """
-        ```json
-        {"subgoals":[{"id":"one","goal":"小さく実行する"}],"finalGoal":"統合する"}
-        ```
-        """,
+            ```json
+            {"subgoals":[{"id":"one","goal":"小さく実行する"}],"finalGoal":"統合する"}
+            ```
+            """,
             8);
 
     assertThat(plan.subgoals()).hasSize(1);
@@ -63,15 +63,15 @@ class OutputLimitReplanParserTest {
     OutputLimitReplanPlan plan =
         parser.parse(
             """
-        {
-          "subgoals": [
-            {"id": "one", "goal": "1"},
-            {"id": "two", "goal": "2"},
-            {"id": "three", "goal": "3"}
-          ],
-          "finalGoal": "統合"
-        }
-        """,
+            {
+              "subgoals": [
+                {"id": "one", "goal": "1"},
+                {"id": "two", "goal": "2"},
+                {"id": "three", "goal": "3"}
+              ],
+              "finalGoal": "統合"
+            }
+            """,
             2);
 
     assertThat(plan.subgoals())
@@ -82,10 +82,8 @@ class OutputLimitReplanParserTest {
   /** 空白の目標を受け付けないことを確認する。 */
   @Test
   void rejectsBlankGoal() {
-    assertThatThrownBy(
-            () ->
-                parser.parse(
-                    "{\"subgoals\":[{\"id\":\"x\",\"goal\":\" \"}],\"finalGoal\":\"統合\"}", 8))
+    assertThatThrownBy(() ->
+            parser.parse("{\"subgoals\":[{\"id\":\"x\",\"goal\":\" \"}],\"finalGoal\":\"統合\"}", 8))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("goal");
   }

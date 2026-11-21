@@ -78,9 +78,8 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
                     providedCandidates == null
                         ? java.util.Comparator.comparing(AgentSkill::name)
                         : (a, b) -> 0)
-                .filter(
-                    skill ->
-                        excludedSkillNames == null || !excludedSkillNames.contains(skill.name()))
+                .filter(skill ->
+                    excludedSkillNames == null || !excludedSkillNames.contains(skill.name()))
                 .toList();
     if (candidates.isEmpty()) {
       return List.of();

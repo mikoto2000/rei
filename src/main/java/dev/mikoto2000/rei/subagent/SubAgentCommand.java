@@ -81,11 +81,10 @@ public class SubAgentCommand implements Callable<Integer> {
 
   /** サブエージェントの定義を管理しますを行う。 */
   public Integer call() {
-    return execute(
-        () -> {
-          if (registry.list().isEmpty()) out("SubAgents: none");
-          for (var d : registry.list()) out(d.id() + " | " + d.name() + " | " + d.description());
-        });
+    return execute(() -> {
+      if (registry.list().isEmpty()) out("SubAgents: none");
+      for (var d : registry.list()) out(d.id() + " | " + d.name() + " | " + d.description());
+    });
   }
 
   /**
@@ -113,45 +112,41 @@ public class SubAgentCommand implements Callable<Integer> {
 
   /** 利用者が内容を確認できるよう、表示を表示する。 */
   public String renderShow(String id) {
-    return report(
-        parent -> {
-          var command = new ShowCommand();
-          command.parent = parent;
-          command.id = id;
-          command.call();
-        });
+    return report(parent -> {
+      var command = new ShowCommand();
+      command.parent = parent;
+      command.id = id;
+      command.call();
+    });
   }
 
   /** 利用者が内容を確認できるよう、再読み込みを表示する。 */
   public String renderReload() {
-    return report(
-        parent -> {
-          var command = new ReloadCommand();
-          command.parent = parent;
-          command.call();
-        });
+    return report(parent -> {
+      var command = new ReloadCommand();
+      command.parent = parent;
+      command.call();
+    });
   }
 
   /** 利用者が内容を確認できるよう、検証を表示する。 */
   public String renderValidate(Path file) {
-    return report(
-        parent -> {
-          var command = new ValidateCommand();
-          command.parent = parent;
-          command.file = file;
-          command.call();
-        });
+    return report(parent -> {
+      var command = new ValidateCommand();
+      command.parent = parent;
+      command.file = file;
+      command.call();
+    });
   }
 
   /** 利用者が内容を確認できるよう、初期化を表示する。 */
   public String renderInitialize(String id) {
-    return report(
-        parent -> {
-          var command = new InitCommand();
-          command.parent = parent;
-          command.id = id;
-          command.call();
-        });
+    return report(parent -> {
+      var command = new InitCommand();
+      command.parent = parent;
+      command.id = id;
+      command.call();
+    });
   }
 
   /** 補助エージェントへの委譲で用いる出力を返す。 */
@@ -250,52 +245,50 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return parent.execute(
-          () -> {
-            if (parent.runLocal == null)
-              throw new IllegalArgumentException("SubAgent runtime unavailable");
-            if (backend.equals("local")) {
-              if (model != null)
-                throw new IllegalArgumentException(
-                    "Local model is selected by the existing role definition");
-              var result = parent.runLocal.run(role, task, context);
-              parent.out(
-                  result.status()
-                      + " | "
-                      + dev.mikoto2000.rei.event.CredentialRedactor.redact(result.output()));
-              if (result.status() != SubAgentResult.Status.COMPLETED)
-                throw new IllegalArgumentException("SubAgent did not complete");
-              return;
-            }
-            if (!java.util.Set.of("chatgpt-plan", "codex-app-server").contains(backend)
-                || model == null
-                || expected == null
-                || context != null)
-              throw new IllegalArgumentException(
-                  "External backend requires --model and --expected-result; material is supplied by --source");
-            var selection = parent.selectedOwner.get();
-            var request =
-                new ChatGptSubAgentBackend.Request(
-                    role, backend, model, account, task, sources, expected);
-            var receipt = parent.runExternal.apply(request, selection);
-            parent.out(
-                "ChatGPT plan usage | "
-                    + receipt.backendId()
-                    + " | "
-                    + receipt.requestId()
-                    + " | "
-                    + receipt.state()
-                    + " | tokens="
-                    + receipt.totalTokens()
-                    + " | error="
-                    + receipt.error());
-            if (!receipt.result().output().isBlank())
-              parent.out(
-                  dev.mikoto2000.rei.event.CredentialRedactor.redact(receipt.result().output()));
-            if (receipt.state() != ChatGptSubAgentBackend.State.COMPLETED)
-              throw new IllegalArgumentException(
-                  "SubAgent did not complete; inspect Run status before retrying");
-          });
+      return parent.execute(() -> {
+        if (parent.runLocal == null)
+          throw new IllegalArgumentException("SubAgent runtime unavailable");
+        if (backend.equals("local")) {
+          if (model != null)
+            throw new IllegalArgumentException(
+                "Local model is selected by the existing role definition");
+          var result = parent.runLocal.run(role, task, context);
+          parent.out(
+              result.status()
+                  + " | "
+                  + dev.mikoto2000.rei.event.CredentialRedactor.redact(result.output()));
+          if (result.status() != SubAgentResult.Status.COMPLETED)
+            throw new IllegalArgumentException("SubAgent did not complete");
+          return;
+        }
+        if (!java.util.Set.of("chatgpt-plan", "codex-app-server").contains(backend)
+            || model == null
+            || expected == null
+            || context != null)
+          throw new IllegalArgumentException(
+              "External backend requires --model and --expected-result; material is supplied by --source");
+        var selection = parent.selectedOwner.get();
+        var request =
+            new ChatGptSubAgentBackend.Request(
+                role, backend, model, account, task, sources, expected);
+        var receipt = parent.runExternal.apply(request, selection);
+        parent.out(
+            "ChatGPT plan usage | "
+                + receipt.backendId()
+                + " | "
+                + receipt.requestId()
+                + " | "
+                + receipt.state()
+                + " | tokens="
+                + receipt.totalTokens()
+                + " | error="
+                + receipt.error());
+        if (!receipt.result().output().isBlank())
+          parent.out(dev.mikoto2000.rei.event.CredentialRedactor.redact(receipt.result().output()));
+        if (receipt.state() != ChatGptSubAgentBackend.State.COMPLETED)
+          throw new IllegalArgumentException(
+              "SubAgent did not complete; inspect Run status before retrying");
+      });
     }
   }
 
@@ -329,36 +322,35 @@ public class SubAgentCommand implements Callable<Integer> {
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       return requireParent(parent)
-          .execute(
-              () -> {
-                var command = requireParent(parent);
-                var d =
-                    command
-                        .registry
-                        .findById(id)
-                        .orElseThrow(() -> new IllegalArgumentException("Unknown SubAgent: " + id));
-                command.out(
-                    "id: "
-                        + d.id()
-                        + "\nname: "
-                        + d.name()
-                        + "\ndescription: "
-                        + d.description()
-                        + "\nrequested tools: "
-                        + d.requestedTools()
-                        + "\neffective tools: "
-                        + command.policy.effectiveTools(d.requestedTools())
-                        + "\nmodel: "
-                        + (d.model() == null ? "(current chat model)" : d.model())
-                        + "\nmaxSteps: "
-                        + d.maxSteps()
-                        + "\ntimeout: "
-                        + d.timeout()
-                        + "\nresultSchema: "
-                        + (d.resultSchema() == null ? "(envelope only)" : "compiled")
-                        + "\nsource config file: "
-                        + d.source());
-              });
+          .execute(() -> {
+            var command = requireParent(parent);
+            var d =
+                command
+                    .registry
+                    .findById(id)
+                    .orElseThrow(() -> new IllegalArgumentException("Unknown SubAgent: " + id));
+            command.out(
+                "id: "
+                    + d.id()
+                    + "\nname: "
+                    + d.name()
+                    + "\ndescription: "
+                    + d.description()
+                    + "\nrequested tools: "
+                    + d.requestedTools()
+                    + "\neffective tools: "
+                    + command.policy.effectiveTools(d.requestedTools())
+                    + "\nmodel: "
+                    + (d.model() == null ? "(current chat model)" : d.model())
+                    + "\nmaxSteps: "
+                    + d.maxSteps()
+                    + "\ntimeout: "
+                    + d.timeout()
+                    + "\nresultSchema: "
+                    + (d.resultSchema() == null ? "(envelope only)" : "compiled")
+                    + "\nsource config file: "
+                    + d.source());
+          });
     }
   }
 
@@ -371,14 +363,12 @@ public class SubAgentCommand implements Callable<Integer> {
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       return requireParent(parent)
-          .execute(
-              () -> {
-                var command = requireParent(parent);
-                var errors = command.registry.reload();
-                if (!errors.isEmpty())
-                  throw new IllegalArgumentException(String.join("\n", errors));
-                command.out("SubAgents reloaded: " + command.registry.list().size());
-              });
+          .execute(() -> {
+            var command = requireParent(parent);
+            var errors = command.registry.reload();
+            if (!errors.isEmpty()) throw new IllegalArgumentException(String.join("\n", errors));
+            command.out("SubAgents reloaded: " + command.registry.list().size());
+          });
     }
   }
 
@@ -395,19 +385,18 @@ public class SubAgentCommand implements Callable<Integer> {
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       return requireParent(parent)
-          .execute(
-              () -> {
-                var command = requireParent(parent);
-                var d = command.loader.load(file);
-                command.out(
-                    "valid: "
-                        + d.id()
-                        + "\nprompt: valid\nmaxSteps: "
-                        + d.maxSteps()
-                        + "\ntimeout: "
-                        + d.timeout());
-                for (String tool : d.requestedTools()) command.out(tool + ": allowed");
-              });
+          .execute(() -> {
+            var command = requireParent(parent);
+            var d = command.loader.load(file);
+            command.out(
+                "valid: "
+                    + d.id()
+                    + "\nprompt: valid\nmaxSteps: "
+                    + d.maxSteps()
+                    + "\ntimeout: "
+                    + d.timeout());
+            for (String tool : d.requestedTools()) command.out(tool + ": allowed");
+          });
     }
   }
 
@@ -424,36 +413,35 @@ public class SubAgentCommand implements Callable<Integer> {
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       return requireParent(parent)
-          .execute(
-              () -> {
-                var command = requireParent(parent);
-                if (id == null || !id.matches("[a-z][a-z0-9-]{0,63}"))
-                  throw new IllegalArgumentException("id: expected [a-z][a-z0-9-]{0,63}");
-                Path directory = command.registry.directory();
-                Files.createDirectories(directory);
-                Path target = directory.resolve(id + ".yaml").normalize();
-                if (!directory.equals(target.getParent()))
-                  throw new IllegalArgumentException("id: invalid path");
-                Files.writeString(
-                    target,
-                    "id: "
-                        + id
-                        + "\nname: "
-                        + id
-                        + """
+          .execute(() -> {
+            var command = requireParent(parent);
+            if (id == null || !id.matches("[a-z][a-z0-9-]{0,63}"))
+              throw new IllegalArgumentException("id: expected [a-z][a-z0-9-]{0,63}");
+            Path directory = command.registry.directory();
+            Files.createDirectories(directory);
+            Path target = directory.resolve(id + ".yaml").normalize();
+            if (!directory.equals(target.getParent()))
+              throw new IllegalArgumentException("id: invalid path");
+            Files.writeString(
+                target,
+                "id: "
+                    + id
+                    + "\nname: "
+                    + id
+                    + """
 
-          description: TODO
-          systemPrompt: |
-            TODO
-          tools: []
-          maxSteps: 10
-          timeout:\s\
-          """
-                        + (id.equals("reviewer") ? "30m" : "120s")
-                        + "\n",
-                    StandardOpenOption.CREATE_NEW);
-                command.out("Created: " + target + " (edit, validate, then reload)");
-              });
+                    description: TODO
+                    systemPrompt: |
+                      TODO
+                    tools: []
+                    maxSteps: 10
+                    timeout:\s\
+                    """
+                    + (id.equals("reviewer") ? "30m" : "120s")
+                    + "\n",
+                StandardOpenOption.CREATE_NEW);
+            command.out("Created: " + target + " (edit, validate, then reload)");
+          });
     }
   }
 }

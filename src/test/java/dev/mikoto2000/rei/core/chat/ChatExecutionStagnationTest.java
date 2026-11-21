@@ -253,7 +253,8 @@ class ChatExecutionStagnationTest {
     when(holder.get()).thenReturn("test");
     var properties = new LlmProperties();
     properties.updateOutputLimit(limits -> limits.setLlmCallBudgetEnabled(callBudgetEnabled));
-    properties.updateOutputLimit(limits -> limits.setMaxLlmCallsPerRun(callBudgetEnabled ? 120 : 1));
+    properties.updateOutputLimit(
+        limits -> limits.setMaxLlmCallsPerRun(callBudgetEnabled ? 120 : 1));
     var service =
         new ChatExecutionService(
             new FixedLlmChatClientProvider(client),

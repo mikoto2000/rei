@@ -26,25 +26,20 @@ public class FeedDiscoverySource implements DiscoverySource {
     OffsetDateTime now = OffsetDateTime.ofInstant(context.currentTime(), java.time.ZoneOffset.UTC);
     OffsetDateTime from = now.minusDays(30);
     return readBriefing.apply(from, now).stream()
-        .flatMap(
-            item ->
-                context.seeds().stream()
-                    .filter(
-                        seed ->
-                            matches(
-                                seed,
-                                item.title() + " " + item.description() + " " + item.content()))
-                    .map(
-                        seed ->
-                            new DiscoveryItem(
-                                "feed:" + item.id(),
-                                item.title(),
-                                item.description(),
-                                item.url(),
-                                TopicSource.FEED,
-                                item.publishedAt() == null ? null : item.publishedAt().toInstant(),
-                                0.80d,
-                                seed)))
+        .flatMap(item ->
+            context.seeds().stream()
+                .filter(seed ->
+                    matches(seed, item.title() + " " + item.description() + " " + item.content()))
+                .map(seed ->
+                    new DiscoveryItem(
+                        "feed:" + item.id(),
+                        item.title(),
+                        item.description(),
+                        item.url(),
+                        TopicSource.FEED,
+                        item.publishedAt() == null ? null : item.publishedAt().toInstant(),
+                        0.80d,
+                        seed)))
         .toList();
   }
 

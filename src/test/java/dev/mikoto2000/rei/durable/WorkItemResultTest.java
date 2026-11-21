@@ -25,14 +25,17 @@ class WorkItemResultTest {
     new SnapshotEnumerator(store).step(scope, task.id(), 100);
     var work = new WorkItemStore(store);
     var claim = work.claim(scope, task.id(), "run");
-    assertThatThrownBy(() -> work.commit(scope, claim, "checked", List.of())).hasMessageContaining("SOURCE_NOT_DELIVERED");
+    assertThatThrownBy(() -> work.commit(scope, claim, "checked", List.of()))
+        .hasMessageContaining("SOURCE_NOT_DELIVERED");
     work.delivered(scope, claim, WorkItemStore.hash("abcdef".getBytes(StandardCharsets.UTF_8)));
     var invented = new WorkItemStore.Finding("f", "P2", 0, 3, "invented", "issue");
-    assertThatThrownBy(() -> work.commit(scope, claim, "checked", List.of(invented))).hasMessageContaining("REVIEW_RESULT_INVALID");
+    assertThatThrownBy(() -> work.commit(scope, claim, "checked", List.of(invented)))
+        .hasMessageContaining("REVIEW_RESULT_INVALID");
     var finding = new WorkItemStore.Finding("f", "P2", 0, 3, "abc", "issue");
     var result = work.commit(scope, claim, "checked", List.of(finding));
     assertThat(work.commit(scope, claim, "checked", List.of(finding))).isEqualTo(result);
-    assertThatThrownBy(() -> work.commit(scope, claim, "different", List.of(finding))).hasMessageContaining("RESULT_CONFLICT");
+    assertThatThrownBy(() -> work.commit(scope, claim, "different", List.of(finding)))
+        .hasMessageContaining("RESULT_CONFLICT");
     var reopened = new WorkItemStore(fixture.store());
     assertThat(reopened.results(scope, task.id(), null, 10).entries()).containsExactly(result);
     assertThat(fixture.store().verify(scope, task.id()).complete()).isTrue();

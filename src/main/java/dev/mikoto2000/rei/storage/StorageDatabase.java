@@ -296,13 +296,12 @@ public final class StorageDatabase {
       throw new IllegalStateException("Activity commit cannot start inside a storage operation");
     var observation = StorageIoObservation.current();
     var commit =
-        new java.util.concurrent.FutureTask<T>(
-            () -> {
-              var scope = observation == null ? null : observation.observe();
-              try (scope) {
-                return transaction(work);
-              }
-            });
+        new java.util.concurrent.FutureTask<T>(() -> {
+          var scope = observation == null ? null : observation.observe();
+          try (scope) {
+            return transaction(work);
+          }
+        });
     Thread.ofVirtual().name("rei-activity-commit").start(commit);
     boolean interrupted = false;
     try {

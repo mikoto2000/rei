@@ -38,11 +38,10 @@ class EditPreparationProgressTest {
             new TextChangeSetService.Baseline("A.md", text, TextDocumentTransaction.hash(text)));
     assertThat(observe(evaluator, "readTextChangeSetBase", result))
         .singleElement()
-        .satisfies(
-            evidence -> {
-              assertThat(evidence.kind()).isEqualTo(ProgressEvent.NEW_INFORMATION);
-              assertThat(evidence.acquisitionProgress()).isTrue();
-            });
+        .satisfies(evidence -> {
+          assertThat(evidence.kind()).isEqualTo(ProgressEvent.NEW_INFORMATION);
+          assertThat(evidence.acquisitionProgress()).isTrue();
+        });
     assertThat(evaluator.readContentObserved()).isTrue();
     assertThat(observe(evaluator, "readTextChangeSetBase", result)).isEmpty();
     var restored = new ProgressEvaluator(root);

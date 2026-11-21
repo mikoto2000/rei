@@ -17,8 +17,7 @@ class AgentRunScopeTest {
     try (scope) {
       assertThat(AgentRunScope.current()).isEqualTo(context);
       assertThat(dev.mikoto2000.rei.context.RunIdentity.currentRunId()).isEqualTo("run");
-      var nested =
-          AgentRunScope.open(new AgentRunContext("nested", "chat:main", Path.of(".")));
+      var nested = AgentRunScope.open(new AgentRunContext("nested", "chat:main", Path.of(".")));
       try (nested) {
         assertThat(dev.mikoto2000.rei.context.RunIdentity.currentRunId()).isEqualTo("nested");
       }

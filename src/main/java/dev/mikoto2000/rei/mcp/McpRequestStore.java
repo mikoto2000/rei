@@ -133,14 +133,13 @@ public final class McpRequestStore {
 
   /** MCPによる機能の提供で用いる続きの取得位置キーを返す。 */
   public byte[] cursorKey() {
-    return db.read(
-        c -> {
-          try (var q = c.createStatement();
-              var r = q.executeQuery("SELECT value FROM mcp_settings WHERE name='cursor_key'")) {
-            if (!r.next()) throw new IllegalStateException("Cursor key missing");
-            return HexFormat.of().parseHex(r.getString(1));
-          }
-        });
+    return db.read(c -> {
+      try (var q = c.createStatement();
+          var r = q.executeQuery("SELECT value FROM mcp_settings WHERE name='cursor_key'")) {
+        if (!r.next()) throw new IllegalStateException("Cursor key missing");
+        return HexFormat.of().parseHex(r.getString(1));
+      }
+    });
   }
 
   /** MCPによる機能の提供で用いる別要求を返す。 */
@@ -155,56 +154,54 @@ public final class McpRequestStore {
 
   /** MCPによる機能の提供で用いる検索条件を返す。 */
   private Optional<Request> query(String column, String value) {
-    return db.read(
-        c -> {
-          try (var q =
-              switch (column) {
-                case "request_hash" -> c.prepareStatement(REQUEST_ROW + " AND request_hash=?");
-                case "run_id" -> c.prepareStatement(REQUEST_ROW + " AND run_id=?");
-                default -> throw new IllegalArgumentException("Unknown MCP request column");
-              }) {
-            q.setString(1, value);
-            try (var rows = q.executeQuery()) {
-              return rows.next()
-                  ? Optional.of(
-                      new Request(
-                          rows.getString(1),
-                          rows.getString(2),
-                          rows.getString(3),
-                          rows.getString(4),
-                          rows.getString(5),
-                          Instant.parse(rows.getString(6)),
-                          Instant.parse(rows.getString(7)),
-                          rows.getString(8),
-                          rows.getString(9) == null ? null : Instant.parse(rows.getString(9)),
-                          rows.getString(10),
-                          rows.getInt(11),
-                          Arrays.asList(
-                              StorageDatabase.JSON.readValue(rows.getString(12), String[].class)),
-                          rows.getString(13),
-                          rows.getString(14) == null
-                              ? Instant.parse(rows.getString(6))
-                              : Instant.parse(rows.getString(14))))
-                  : Optional.empty();
-            }
-          }
-        });
+    return db.read(c -> {
+      try (var q =
+          switch (column) {
+            case "request_hash" -> c.prepareStatement(REQUEST_ROW + " AND request_hash=?");
+            case "run_id" -> c.prepareStatement(REQUEST_ROW + " AND run_id=?");
+            default -> throw new IllegalArgumentException("Unknown MCP request column");
+          }) {
+        q.setString(1, value);
+        try (var rows = q.executeQuery()) {
+          return rows.next()
+              ? Optional.of(
+                  new Request(
+                      rows.getString(1),
+                      rows.getString(2),
+                      rows.getString(3),
+                      rows.getString(4),
+                      rows.getString(5),
+                      Instant.parse(rows.getString(6)),
+                      Instant.parse(rows.getString(7)),
+                      rows.getString(8),
+                      rows.getString(9) == null ? null : Instant.parse(rows.getString(9)),
+                      rows.getString(10),
+                      rows.getInt(11),
+                      Arrays.asList(
+                          StorageDatabase.JSON.readValue(rows.getString(12), String[].class)),
+                      rows.getString(13),
+                      rows.getString(14) == null
+                          ? Instant.parse(rows.getString(6))
+                          : Instant.parse(rows.getString(14))))
+              : Optional.empty();
+        }
+      }
+    });
   }
 
   /** MCPによる機能の提供において、owns会話に該当するか判定する。 */
   public boolean ownsSession(String project, String session) {
-    return db.read(
-        c -> {
-          try (var q =
-              c.prepareStatement(
-                  "SELECT 1 FROM mcp_sessions WHERE session_id=? AND project_id=? AND principal='local-mcp'")) {
-            q.setString(1, session);
-            q.setString(2, project);
-            try (var rows = q.executeQuery()) {
-              return rows.next();
-            }
-          }
-        });
+    return db.read(c -> {
+      try (var q =
+          c.prepareStatement(
+              "SELECT 1 FROM mcp_sessions WHERE session_id=? AND project_id=? AND principal='local-mcp'")) {
+        q.setString(1, session);
+        q.setString(2, project);
+        try (var rows = q.executeQuery()) {
+          return rows.next();
+        }
+      }
+    });
   }
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
@@ -220,22 +217,21 @@ public final class McpRequestStore {
       String run,
       String hash,
       String correlation) {
-    db.transaction(
-        c -> {
-          try (var q =
-              c.prepareStatement("INSERT INTO mcp_audit VALUES(?,'local-mcp',?,?,?,?,?,?,?)")) {
-            q.setString(1, UUID.randomUUID().toString());
-            q.setString(2, project);
-            q.setString(3, run);
-            q.setString(4, hash);
-            q.setString(5, operation);
-            q.setString(6, outcome);
-            q.setString(7, clock.instant().toString());
-            q.setString(8, correlation);
-            q.executeUpdate();
-            return null;
-          }
-        });
+    db.transaction(c -> {
+      try (var q =
+          c.prepareStatement("INSERT INTO mcp_audit VALUES(?,'local-mcp',?,?,?,?,?,?,?)")) {
+        q.setString(1, UUID.randomUUID().toString());
+        q.setString(2, project);
+        q.setString(3, run);
+        q.setString(4, hash);
+        q.setString(5, operation);
+        q.setString(6, outcome);
+        q.setString(7, clock.instant().toString());
+        q.setString(8, correlation);
+        q.executeUpdate();
+        return null;
+      }
+    });
   }
 
   /**
@@ -266,23 +262,22 @@ public final class McpRequestStore {
             : List.of());
     try {
       String json = StorageDatabase.JSON.writeValueAsString(result);
-      db.transaction(
-          c -> {
-            try (var q =
-                c.prepareStatement(
-                    "UPDATE mcp_requests SET result_json=?,result_expires_at=?,terminal_state=? WHERE run_id=? AND terminal_state IS NULL")) {
-              q.setString(1, json);
-              q.setString(
-                  2,
-                  (run.completedAt() == null ? clock.instant() : run.completedAt())
-                      .plus(resultRetention)
-                      .toString());
-              q.setString(3, run.status().name());
-              q.setString(4, request.run());
-              if (q.executeUpdate() == 1) auditInTransaction(c, request, run.status().name());
-              return null;
-            }
-          });
+      db.transaction(c -> {
+        try (var q =
+            c.prepareStatement(
+                "UPDATE mcp_requests SET result_json=?,result_expires_at=?,terminal_state=? WHERE run_id=? AND terminal_state IS NULL")) {
+          q.setString(1, json);
+          q.setString(
+              2,
+              (run.completedAt() == null ? clock.instant() : run.completedAt())
+                  .plus(resultRetention)
+                  .toString());
+          q.setString(3, run.status().name());
+          q.setString(4, request.run());
+          if (q.executeUpdate() == 1) auditInTransaction(c, request, run.status().name());
+          return null;
+        }
+      });
     } catch (java.io.IOException error) {
       throw new IllegalStateException("Cannot save MCP result", error);
     }
@@ -308,17 +303,16 @@ public final class McpRequestStore {
   @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 1000)
   public void captureCompleted() {
     var ids =
-        db.read(
-            c -> {
-              var result = new ArrayList<String>();
-              try (var q = c.createStatement();
-                  var rows =
-                      q.executeQuery(
-                          "SELECT run_id FROM mcp_requests WHERE terminal_state IS NULL LIMIT 100")) {
-                while (rows.next()) result.add(rows.getString(1));
-              }
-              return result;
-            });
+        db.read(c -> {
+          var result = new ArrayList<String>();
+          try (var q = c.createStatement();
+              var rows =
+                  q.executeQuery(
+                      "SELECT run_id FROM mcp_requests WHERE terminal_state IS NULL LIMIT 100")) {
+            while (rows.next()) result.add(rows.getString(1));
+          }
+          return result;
+        });
     for (String id : ids) byRun(id).ifPresent(this::snapshot);
   }
 
@@ -326,49 +320,46 @@ public final class McpRequestStore {
   @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 3600000)
   public void expire() {
     var expired =
-        db.read(
-            c -> {
-              var ids = new ArrayList<String>();
-              try (var q =
-                  c.prepareStatement(
-                      "SELECT run_id FROM mcp_requests WHERE result_json IS NOT NULL AND result_expires_at<=?")) {
-                q.setString(1, clock.instant().toString());
-                try (var r = q.executeQuery()) {
-                  while (r.next()) ids.add(r.getString(1));
-                }
-              }
-              return ids;
-            });
+        db.read(c -> {
+          var ids = new ArrayList<String>();
+          try (var q =
+              c.prepareStatement(
+                  "SELECT run_id FROM mcp_requests WHERE result_json IS NOT NULL AND result_expires_at<=?")) {
+            q.setString(1, clock.instant().toString());
+            try (var r = q.executeQuery()) {
+              while (r.next()) ids.add(r.getString(1));
+            }
+          }
+          return ids;
+        });
     for (var id : expired)
       byRun(id)
-          .ifPresent(
-              r ->
-                  audit(
-                      "result_expired",
-                      "RESULT_EXPIRED",
-                      r.project(),
-                      r.run(),
-                      r.hash(),
-                      UUID.randomUUID().toString()));
-    db.transaction(
-        c -> {
-          try (var q =
-              c.prepareStatement(
-                  "UPDATE mcp_requests SET result_json=NULL WHERE result_expires_at<=?")) {
-            q.setString(1, clock.instant().toString());
-            q.executeUpdate();
-          }
-          try (var q =
-              c.prepareStatement(
-                  "UPDATE mcp_requests SET criteria_json='[]' WHERE expires_at<=? AND terminal_state IS NOT NULL AND result_json IS NULL")) {
-            q.setString(1, clock.instant().toString());
-            q.executeUpdate();
-          }
-          try (var q = c.prepareStatement("DELETE FROM mcp_audit WHERE created_at<?")) {
-            q.setString(1, clock.instant().minus(auditRetention).toString());
-            q.executeUpdate();
-          }
-          return null;
-        });
+          .ifPresent(r ->
+              audit(
+                  "result_expired",
+                  "RESULT_EXPIRED",
+                  r.project(),
+                  r.run(),
+                  r.hash(),
+                  UUID.randomUUID().toString()));
+    db.transaction(c -> {
+      try (var q =
+          c.prepareStatement(
+              "UPDATE mcp_requests SET result_json=NULL WHERE result_expires_at<=?")) {
+        q.setString(1, clock.instant().toString());
+        q.executeUpdate();
+      }
+      try (var q =
+          c.prepareStatement(
+              "UPDATE mcp_requests SET criteria_json='[]' WHERE expires_at<=? AND terminal_state IS NOT NULL AND result_json IS NULL")) {
+        q.setString(1, clock.instant().toString());
+        q.executeUpdate();
+      }
+      try (var q = c.prepareStatement("DELETE FROM mcp_audit WHERE created_at<?")) {
+        q.setString(1, clock.instant().minus(auditRetention).toString());
+        q.executeUpdate();
+      }
+      return null;
+    });
   }
 }

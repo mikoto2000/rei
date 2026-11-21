@@ -142,30 +142,28 @@ class SecretaryLedgerTest {
       assertEquals(
           1,
           results.stream()
-              .map(
-                  f -> {
-                    try {
-                      return f.get();
-                    } catch (Exception e) {
-                      throw new AssertionError(e);
-                    }
-                  })
+              .map(f -> {
+                try {
+                  return f.get();
+                } catch (Exception e) {
+                  throw new AssertionError(e);
+                }
+              })
               .distinct()
               .count());
       var task = ledger.list("p", 0, 10).getFirst();
       var updates =
           workers.invokeAll(
               java.util.stream.IntStream.range(0, 4)
-                  .<java.util.concurrent.Callable<Boolean>>mapToObj(
-                      i ->
-                          () -> {
-                            try {
-                              ledger.transition("p", task.id(), 0, SecretaryTask.Status.OPEN);
-                              return true;
-                            } catch (IllegalStateException conflict) {
-                              return false;
-                            }
-                          })
+                  .<java.util.concurrent.Callable<Boolean>>mapToObj(i ->
+                      () -> {
+                        try {
+                          ledger.transition("p", task.id(), 0, SecretaryTask.Status.OPEN);
+                          return true;
+                        } catch (IllegalStateException conflict) {
+                          return false;
+                        }
+                      })
                   .toList());
       int successes = 0;
       for (var result : updates) if (result.get()) successes++;

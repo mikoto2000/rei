@@ -556,7 +556,8 @@ class AutoSleepFailureTest {
             .formatted(turn.createdAt(), turn.runId());
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class)))
-        .thenReturn(Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage(output))))));
+        .thenReturn(
+            Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage(output))))));
     var provider = mock(LlmModelProvider.class);
     when(provider.memoryChatModel()).thenReturn(model);
     when(provider.chatOptions(LlmFeature.MEMORY, null))
@@ -579,7 +580,8 @@ class AutoSleepFailureTest {
       runAttempt();
       assertEquals("OUTPUT_INVALID", repository.autoState("s", "p").code());
       var expectedFields =
-          List.of("session=s", "code=OUTPUT_INVALID", "field=claims.kind", "reason=unsupported_value");
+          List.of(
+              "session=s", "code=OUTPUT_INVALID", "field=claims.kind", "reason=unsupported_value");
       assertTrue(
           appender.list.stream()
               .map(ILoggingEvent::getFormattedMessage)
@@ -587,10 +589,9 @@ class AutoSleepFailureTest {
           "Expected the validation fields in the same log event");
       assertTrue(
           appender.list.stream()
-              .noneMatch(
-                  event ->
-                      event.getFormattedMessage().contains("private-model-")
-                          || event.getThrowableProxy() != null));
+              .noneMatch(event ->
+                  event.getFormattedMessage().contains("private-model-")
+                      || event.getThrowableProxy() != null));
     } finally {
       logger.detachAppender(appender);
       appender.stop();

@@ -62,19 +62,17 @@ class AgentMessageNarratorTest {
     settings.setEnabled(true);
     var narrator = mock(ChatResponseNarrator.class);
     doThrow(new IllegalStateException()).when(narrator).narrateCompletedRun(anyString());
-    assertDoesNotThrow(
-        () ->
-            new AgentMessageNarrator(narrator, settings, Runnable::run)
-                .onPublished(message(MessageOrigin.BEHAVIOR, "assistant", "notice")));
-    assertDoesNotThrow(
-        () ->
-            new AgentMessageNarrator(
-                    narrator,
-                    settings,
-                    task -> {
-                      throw new java.util.concurrent.RejectedExecutionException();
-                    })
-                .onPublished(message(MessageOrigin.BEHAVIOR, "assistant", "notice")));
+    assertDoesNotThrow(() ->
+        new AgentMessageNarrator(narrator, settings, Runnable::run)
+            .onPublished(message(MessageOrigin.BEHAVIOR, "assistant", "notice")));
+    assertDoesNotThrow(() ->
+        new AgentMessageNarrator(
+                narrator,
+                settings,
+                task -> {
+                  throw new java.util.concurrent.RejectedExecutionException();
+                })
+            .onPublished(message(MessageOrigin.BEHAVIOR, "assistant", "notice")));
   }
 
   /** {@code message} の条件を再現するための補助情報を返す。 */

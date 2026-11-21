@@ -48,8 +48,7 @@ class SubAgentEventTest {
             });
     var projection = new DefaultAgentUiProjection();
     projection.apply(factory.runStarted("parent", "task", null));
-    var scope =
-        AgentRunScope.open(new AgentRunContext("child", "subagent:child", directory));
+    var scope = AgentRunScope.open(new AgentRunContext("child", "subagent:child", directory));
     try (scope) {
       var start =
           factory.subAgentLifecycle(
@@ -109,11 +108,10 @@ class SubAgentEventTest {
             throw new IllegalStateException("password=hidden " + "x".repeat(1000));
           }
         };
-    assertThatThrownBy(
-        () ->
-            new ToolEventCallbackDecorator(
-                    callback, new AgentEventFactory(Clock.systemUTC()), events::add)
-                .call("{}"));
+    assertThatThrownBy(() ->
+        new ToolEventCallbackDecorator(
+                callback, new AgentEventFactory(Clock.systemUTC()), events::add)
+            .call("{}"));
     assertThat(events.toString()).doesNotContain("hidden").doesNotContain("x".repeat(121));
   }
 

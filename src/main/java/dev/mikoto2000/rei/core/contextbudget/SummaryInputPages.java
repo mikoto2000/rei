@@ -78,8 +78,7 @@ final class SummaryInputPages {
       if (length == 0)
         throw new ContextCompressionException(ContextCompressionException.Reason.INPUT_BUDGET);
       var fragment = new UserMessage(header + source.substring(offset, offset + length));
-      result =
-          summarize.summarize(rolling, List.of(fragment), target, remaining(started, timeout));
+      result = summarize.summarize(rolling, List.of(fragment), target, remaining(started, timeout));
       check.run();
       remaining(started, timeout);
       rolling = result == null ? null : result.text();

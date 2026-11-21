@@ -5,8 +5,8 @@ export default defineConfig({
   workers: 2,
   use: { baseURL: "http://127.0.0.1:1420", channel: "chrome", headless: true },
   webServer: {
-    command: "node node_modules/vite/bin/vite.js --host 127.0.0.1",
-    url: "http://127.0.0.1:1420",
+    command: "npm run dev -- --mode e2e",
+    url: "http://127.0.0.1:1420/e2e/fixture.html",
     reuseExistingServer: !process.env.CI,
   },
   projects: [

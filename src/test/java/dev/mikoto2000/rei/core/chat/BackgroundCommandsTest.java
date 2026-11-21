@@ -135,18 +135,16 @@ class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClie
   @Test
   void snapshotsOwnershipPersistsLatestPerProjectAndBareDisplayDoesNotStartWork() {
     when(summaries.summarize(any()))
-        .thenAnswer(
-            call -> {
-              var execution = ExecutionScope.current();
-              assertThat(dev.mikoto2000.rei.llm.ConversationIds.currentChat())
-                  .isEqualTo(execution.conversationId());
-              assertThat(ProjectService.contextForOperation().id())
-                  .isEqualTo(execution.projectId());
-              return new SummaryResult(
-                  call.getArgument(0),
-                  execution.projectId().equals(a.id()) ? "summary A" : "summary B",
-                  null);
-            });
+        .thenAnswer(call -> {
+          var execution = ExecutionScope.current();
+          assertThat(dev.mikoto2000.rei.llm.ConversationIds.currentChat())
+              .isEqualTo(execution.conversationId());
+          assertThat(ProjectService.contextForOperation().id()).isEqualTo(execution.projectId());
+          return new SummaryResult(
+              call.getArgument(0),
+              execution.projectId().equals(a.id()) ? "summary A" : "summary B",
+              null);
+        });
     assertThat(show()).contains("No completed summary", "A");
     assertThat(tasks).isEmpty();
     commands.summarize(URI.create("https://a.example"));
@@ -178,12 +176,11 @@ class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClie
   @Test
   void imagePreservesOwnershipWithoutChangingSummaryOrConversation() {
     when(images.generate(any()))
-        .thenAnswer(
-            call -> {
-              assertThat(ExecutionScope.current().projectId()).isEqualTo(a.id());
-              assertThat(AgentRunScope.current()).isNull();
-              return ImageGenerationResult.success(a.root().resolve("image.png"), "picture");
-            });
+        .thenAnswer(call -> {
+          assertThat(ExecutionScope.current().projectId()).isEqualTo(a.id());
+          assertThat(AgentRunScope.current()).isNull();
+          return ImageGenerationResult.success(a.root().resolve("image.png"), "picture");
+        });
     commands.image(
         new ImageGenerationRequest(
             "picture", Path.of("image.png"), null, new ImageSize(1024, 1024)));

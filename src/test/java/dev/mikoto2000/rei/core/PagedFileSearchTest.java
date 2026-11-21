@@ -53,7 +53,10 @@ class PagedFileSearchTest {
             first.excludedQueries().queryIndexes());
         assertEquals("PROJECT_PATH_EXCLUDED", first.excludedQueries().problem().code());
         assertTrue(
-            first.excludedQueries().problem().recovery()
+            first
+                .excludedQueries()
+                .problem()
+                .recovery()
                 .contains("Retry with an allowed Project-relative path"));
         assertEquals(19, first.files().getFirst().matches().getFirst().queryIndex());
         assertTrue(FileResultBudget.fits(first, 2048, 512));
@@ -223,15 +226,14 @@ class PagedFileSearchTest {
       assertEquals(9, requests);
       long largestCursor =
           new StorageDatabase(data)
-              .read(
-                  db -> {
-                    try (var querySize = db.createStatement();
-                        var rows =
-                            querySize.executeQuery(
-                                "SELECT MAX(bytes) FROM reading_state WHERE kind='search'")) {
-                      return rows.getLong(1);
-                    }
-                  });
+              .read(db -> {
+                try (var querySize = db.createStatement();
+                    var rows =
+                        querySize.executeQuery(
+                            "SELECT MAX(bytes) FROM reading_state WHERE kind='search'")) {
+                  return rows.getLong(1);
+                }
+              });
       assertTrue(largestCursor < 8192, "The shared inventory must not be copied into every cursor");
       assertEquals(0L, ReadingMetrics.snapshot(AgentRunScope.current()).get("unscannedFiles"));
     }

@@ -45,10 +45,9 @@ class ActivityTuningMetricsTest {
       var logs = appender.list.stream().map(e -> e.getFormattedMessage()).toList();
       assertTrue(
           logs.stream()
-              .anyMatch(
-                  s ->
-                      s.contains(
-                          "observations=2 unknown=1 partial=2 vision_output_limit=1 vision_validation=0 evidence_only_rate=0.5")));
+              .anyMatch(s ->
+                  s.contains(
+                      "observations=2 unknown=1 partial=2 vision_output_limit=1 vision_validation=0 evidence_only_rate=0.5")));
       assertTrue(logs.stream().anyMatch(s -> s.contains("reason=OUTPUT_LIMIT")));
       assertTrue(logs.stream().noneMatch(s -> s.contains("PRIVATE_")));
     } finally {

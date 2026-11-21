@@ -23,22 +23,20 @@ class CredentialProtectionIntegrationTest {
   @EnabledOnOs(OS.WINDOWS)
   void productionDpapiRoundTripsAndDoesNotStorePlaintext() {
     var store = new ProtectedCredentialStore(root, new WindowsDpapiProtector());
-    store.locked(
-        s -> {
-          s.save(
-              "account",
-              ProtectedCredentialStoreTest.tokens("dpapi-access-secret", "dpapi-refresh-secret"));
-          return null;
-        });
+    store.locked(s -> {
+      s.save(
+          "account",
+          ProtectedCredentialStoreTest.tokens("dpapi-access-secret", "dpapi-refresh-secret"));
+      return null;
+    });
     assertEquals("dpapi-access-secret", store.locked(s -> s.load("account")).accessToken());
-    assertDoesNotThrow(
-        () -> {
-          assertFalse(
-              new String(
-                      Files.readAllBytes(root.resolve("credentials.bin")),
-                      java.nio.charset.StandardCharsets.ISO_8859_1)
-                  .contains("dpapi-access-secret"));
-        });
+    assertDoesNotThrow(() -> {
+      assertFalse(
+          new String(
+                  Files.readAllBytes(root.resolve("credentials.bin")),
+                  java.nio.charset.StandardCharsets.ISO_8859_1)
+              .contains("dpapi-access-secret"));
+    });
   }
 
   /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
@@ -46,11 +44,10 @@ class CredentialProtectionIntegrationTest {
   @org.junit.jupiter.api.Tag("integration")
   void fileLockSerializesSeparateProcesses() throws Exception {
     var store = new ProtectedCredentialStore(root, ProtectedCredentialStoreTest.TEST_PROTECTION);
-    store.locked(
-        s -> {
-          s.save("default", ProtectedCredentialStoreTest.tokens("0", "refresh"));
-          return null;
-        });
+    store.locked(s -> {
+      s.save("default", ProtectedCredentialStoreTest.tokens("0", "refresh"));
+      return null;
+    });
     String javaBinary = Path.of(System.getProperty("java.home"), "bin", "java").toString();
     String cp = System.getProperty("java.class.path");
     var argsFile = root.resolve("worker.args");
@@ -89,14 +86,13 @@ class CredentialProtectionIntegrationTest {
           new ProtectedCredentialStore(
               Path.of(args[0]), ProtectedCredentialStoreTest.TEST_PROTECTION);
       for (int i = 0; i < 20; i++)
-        store.locked(
-            s -> {
-              int previous = Integer.parseInt(s.load("default").accessToken());
-              s.save(
-                  "default",
-                  ProtectedCredentialStoreTest.tokens(Integer.toString(previous + 1), "rotated"));
-              return null;
-            });
+        store.locked(s -> {
+          int previous = Integer.parseInt(s.load("default").accessToken());
+          s.save(
+              "default",
+              ProtectedCredentialStoreTest.tokens(Integer.toString(previous + 1), "rotated"));
+          return null;
+        });
     }
   }
 }

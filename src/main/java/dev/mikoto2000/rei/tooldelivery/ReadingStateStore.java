@@ -60,58 +60,56 @@ public final class ReadingStateStore {
     int bytes = record.getBytes(StandardCharsets.UTF_8).length;
     if (bytes > 4 * 1024 * 1024) throw ReadingProblem.fail("SNAPSHOT_BUDGET");
     String scope = scope(owner);
-    transaction(
-        db -> {
-          long now = clock.millis();
-          try (var delete = db.prepareStatement("DELETE FROM reading_state WHERE expires<?")) {
-            delete.setLong(1, now);
-            delete.executeUpdate();
-          }
-          try (var query =
-              db.prepareStatement(
-                  "SELECT COALESCE(SUM(bytes),0),COUNT(*) FROM reading_state WHERE NOT(scope=? AND kind=? AND id=?)")) {
-            query.setString(1, scope);
-            query.setString(2, kind);
-            query.setString(3, id);
-            try (var rows = query.executeQuery()) {
-              rows.next();
-              if (rows.getLong(1) + bytes > 64L * 1024 * 1024 || rows.getLong(2) >= 2048)
-                throw ReadingProblem.fail("SNAPSHOT_BUDGET");
-            }
-          }
-          try (var insert =
-              db.prepareStatement(
-                  "INSERT INTO reading_state VALUES(?,?,?,?,?,?) ON CONFLICT(scope,kind,id) DO UPDATE SET expires=excluded.expires,bytes=excluded.bytes,record=excluded.record")) {
-            insert.setString(1, scope);
-            insert.setString(2, kind);
-            insert.setString(3, id);
-            insert.setLong(4, now + lifetime.toMillis());
-            insert.setInt(5, bytes);
-            insert.setString(6, record);
-            insert.executeUpdate();
-          }
-          return null;
-        });
+    transaction(db -> {
+      long now = clock.millis();
+      try (var delete = db.prepareStatement("DELETE FROM reading_state WHERE expires<?")) {
+        delete.setLong(1, now);
+        delete.executeUpdate();
+      }
+      try (var query =
+          db.prepareStatement(
+              "SELECT COALESCE(SUM(bytes),0),COUNT(*) FROM reading_state WHERE NOT(scope=? AND kind=? AND id=?)")) {
+        query.setString(1, scope);
+        query.setString(2, kind);
+        query.setString(3, id);
+        try (var rows = query.executeQuery()) {
+          rows.next();
+          if (rows.getLong(1) + bytes > 64L * 1024 * 1024 || rows.getLong(2) >= 2048)
+            throw ReadingProblem.fail("SNAPSHOT_BUDGET");
+        }
+      }
+      try (var insert =
+          db.prepareStatement(
+              "INSERT INTO reading_state VALUES(?,?,?,?,?,?) ON CONFLICT(scope,kind,id) DO UPDATE SET expires=excluded.expires,bytes=excluded.bytes,record=excluded.record")) {
+        insert.setString(1, scope);
+        insert.setString(2, kind);
+        insert.setString(3, id);
+        insert.setLong(4, now + lifetime.toMillis());
+        insert.setInt(5, bytes);
+        insert.setString(6, record);
+        insert.executeUpdate();
+      }
+      return null;
+    });
   }
 
   public <T> T load(ReadingRun owner, String kind, String id, Class<T> type) {
     if (id == null || id.length() > 128) throw ReadingProblem.fail("INVALID_CURSOR");
     String scope = scope(owner);
-    return read(
-        db -> {
-          try (var query =
-              db.prepareStatement(
-                  "SELECT record,expires FROM reading_state WHERE scope=? AND kind=? AND id=?")) {
-            query.setString(1, scope);
-            query.setString(2, kind);
-            query.setString(3, id);
-            try (var rows = query.executeQuery()) {
-              if (!rows.next()) throw ReadingProblem.fail("INVALID_CURSOR");
-              if (rows.getLong(2) <= clock.millis()) throw ReadingProblem.fail("CURSOR_EXPIRED");
-              return ReadingJson.JSON.readValue(rows.getString(1), type);
-            }
-          }
-        });
+    return read(db -> {
+      try (var query =
+          db.prepareStatement(
+              "SELECT record,expires FROM reading_state WHERE scope=? AND kind=? AND id=?")) {
+        query.setString(1, scope);
+        query.setString(2, kind);
+        query.setString(3, id);
+        try (var rows = query.executeQuery()) {
+          if (!rows.next()) throw ReadingProblem.fail("INVALID_CURSOR");
+          if (rows.getLong(2) <= clock.millis()) throw ReadingProblem.fail("CURSOR_EXPIRED");
+          return ReadingJson.JSON.readValue(rows.getString(1), type);
+        }
+      }
+    });
   }
 
   private <T> T read(Work<T> work) {

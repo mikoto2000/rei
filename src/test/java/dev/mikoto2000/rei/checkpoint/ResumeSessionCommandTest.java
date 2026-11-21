@@ -44,13 +44,12 @@ class ResumeSessionCommandTest {
     var command = new picocli.CommandLine(resume).setOut(new PrintWriter(output));
     when(first.taskId()).thenReturn("first");
     when(second.request()).thenReturn("Bearer PRIVATE_TOKEN\nrequest");
-    resume.setTaskMenu(
-        (ids, labels) -> {
-          assertEquals(java.util.List.of("first", "second"), ids);
-          org.junit.jupiter.api.Assertions.assertFalse(labels.get(1).contains("PRIVATE_TOKEN"));
-          org.junit.jupiter.api.Assertions.assertFalse(labels.get(1).contains("\n"));
-          return java.util.Optional.of(ids.get(1));
-        });
+    resume.setTaskMenu((ids, labels) -> {
+      assertEquals(java.util.List.of("first", "second"), ids);
+      org.junit.jupiter.api.Assertions.assertFalse(labels.get(1).contains("PRIVATE_TOKEN"));
+      org.junit.jupiter.api.Assertions.assertFalse(labels.get(1).contains("\n"));
+      return java.util.Optional.of(ids.get(1));
+    });
     assertEquals(0, command.execute());
     verify(service).resumeForShell(eq(context.id()), eq("second"), any());
     org.mockito.Mockito.clearInvocations(service);
@@ -59,10 +58,9 @@ class ResumeSessionCommandTest {
     verify(service, org.mockito.Mockito.never()).resumeForShell(any(), any(), any());
     org.junit.jupiter.api.Assertions.assertTrue(output.toString().contains("再開せずに閉じました"));
     when(service.list(context.id())).thenReturn(java.util.List.of());
-    resume.setTaskSelection(
-        items -> {
-          throw new AssertionError("Empty list must not open a menu");
-        });
+    resume.setTaskSelection(items -> {
+      throw new AssertionError("Empty list must not open a menu");
+    });
     assertEquals(0, command.execute());
     org.junit.jupiter.api.Assertions.assertTrue(output.toString().contains("再開候補はありません"));
   }
@@ -109,23 +107,21 @@ class ResumeSessionCommandTest {
       activity.attach(output);
       var service = mock(PersistentCheckpointService.class);
       when(service.resumeForShell(eq(projects.currentContext().id()), eq("task"), any()))
-          .thenAnswer(
-              invocation -> {
-                Consumer<String> select = invocation.getArgument(2);
-                var context =
-                    new AgentRunContext("resumed", target, root, projects.currentContext().id());
-                select.accept(target);
-                assertEquals(target, conversations.currentSessionId());
-                if (fail) throw new IllegalStateException("Submission rejected");
-                var events = new dev.mikoto2000.rei.event.AgentEventFactory(Clock.systemUTC());
-                activity.onEvent(
-                    events.messageStarted("first", "assistant").withOwnership(context));
-                activity.onEvent(
-                    events.messageDelta("first", "first resumed output").withOwnership(context));
-                verify(output).print("first resumed output");
-                return new PersistentCheckpointService.ResumeResult(
-                    "task", "resumed", "old", 1, target, null);
-              });
+          .thenAnswer(invocation -> {
+            Consumer<String> select = invocation.getArgument(2);
+            var context =
+                new AgentRunContext("resumed", target, root, projects.currentContext().id());
+            select.accept(target);
+            assertEquals(target, conversations.currentSessionId());
+            if (fail) throw new IllegalStateException("Submission rejected");
+            var events = new dev.mikoto2000.rei.event.AgentEventFactory(Clock.systemUTC());
+            activity.onEvent(events.messageStarted("first", "assistant").withOwnership(context));
+            activity.onEvent(
+                events.messageDelta("first", "first resumed output").withOwnership(context));
+            verify(output).print("first resumed output");
+            return new PersistentCheckpointService.ResumeResult(
+                "task", "resumed", "old", 1, target, null);
+          });
       var command =
           new picocli.CommandLine(new ResumeCommand(service, projects))
               .setOut(new PrintWriter(new StringWriter()));

@@ -15,12 +15,8 @@ public record BriefingNarration(
     String overview, List<String> cautionPoints, List<String> nextActions) {
   public BriefingNarration {
     cautionPoints =
-        cautionPoints == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(cautionPoints));
+        cautionPoints == null ? null : Collections.unmodifiableList(new ArrayList<>(cautionPoints));
     nextActions =
-        nextActions == null
-            ? null
-            : Collections.unmodifiableList(new ArrayList<>(nextActions));
+        nextActions == null ? null : Collections.unmodifiableList(new ArrayList<>(nextActions));
   }
 }

@@ -29,10 +29,9 @@ class DelegationArgumentsAggregationTest {
     assertTrue(issues.stream().anyMatch(issue -> issue.path().equals("requests[0].accountRef")));
     assertTrue(
         issues.stream()
-            .anyMatch(
-                issue ->
-                    issue.path().equals("requests[1].modelId")
-                        && issue.requirement().contains("external delegation")));
+            .anyMatch(issue ->
+                issue.path().equals("requests[1].modelId")
+                    && issue.requirement().contains("external delegation")));
     assertTrue(issues.stream().anyMatch(issue -> issue.path().equals("requests[1].id")));
   }
 

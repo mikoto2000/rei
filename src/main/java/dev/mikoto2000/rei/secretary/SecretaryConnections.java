@@ -225,14 +225,13 @@ public final class SecretaryConnections
                 task.id(),
                 task.revision(),
                 sources.stream()
-                    .map(
-                        e ->
-                            List.of(
-                                e.connection().id(),
-                                e.connection().version(),
-                                usable(e.connection()).identity(e.connection()),
-                                e.item().id(),
-                                e.item().revision()))
+                    .map(e ->
+                        List.of(
+                            e.connection().id(),
+                            e.connection().version(),
+                            usable(e.connection()).identity(e.connection()),
+                            e.item().id(),
+                            e.item().revision()))
                     .toList(),
                 model.fingerprint())));
   }
@@ -375,36 +374,34 @@ public final class SecretaryConnections
       owner.validate(value.projectId(), value.sessionId());
     }
     String id = uuid(value.projectId() + ":" + value.name());
-    return database.transaction(
-        db -> {
-          var old = findConnection(db, value.projectId(), id);
-          if (old == null ? expectedVersion != -1 : old.version() != expectedVersion)
-            throw new SecretaryConflictException();
-          if (old == null)
-            try (var q = db.createStatement();
-                var r = q.executeQuery("SELECT COUNT(*) FROM secretary_connections")) {
-              r.next();
-              if (r.getInt(1) >= 256)
-                throw new IllegalStateException("Connection capacity reached");
-            }
-          if (old != null
-              && (!old.config().service().equals(value.service())
-                  || !old.config().resource().equals(value.resource())))
-            throw new IllegalArgumentException("Create a new name when changing service/resource");
-          var next =
-              new Connection(
-                  id,
-                  old == null ? 0 : old.version() + 1,
-                  value,
-                  value.enabled() ? "IDLE" : "DISABLED",
-                  "",
-                  old == null ? "" : old.cursor(),
-                  clock.instant(),
-                  0,
-                  clock.instant());
-          saveConnection(db, next);
-          return next;
-        });
+    return database.transaction(db -> {
+      var old = findConnection(db, value.projectId(), id);
+      if (old == null ? expectedVersion != -1 : old.version() != expectedVersion)
+        throw new SecretaryConflictException();
+      if (old == null)
+        try (var q = db.createStatement();
+            var r = q.executeQuery("SELECT COUNT(*) FROM secretary_connections")) {
+          r.next();
+          if (r.getInt(1) >= 256) throw new IllegalStateException("Connection capacity reached");
+        }
+      if (old != null
+          && (!old.config().service().equals(value.service())
+              || !old.config().resource().equals(value.resource())))
+        throw new IllegalArgumentException("Create a new name when changing service/resource");
+      var next =
+          new Connection(
+              id,
+              old == null ? 0 : old.version() + 1,
+              value,
+              value.enabled() ? "IDLE" : "DISABLED",
+              "",
+              old == null ? "" : old.cursor(),
+              clock.instant(),
+              0,
+              clock.instant());
+      saveConnection(db, next);
+      return next;
+    });
   }
 
   private Connection connection(String project, String id) {
@@ -437,20 +434,19 @@ public final class SecretaryConnections
 
   public List<Connection> list(String project) {
     identifier(project, 128);
-    return database.read(
-        db -> {
-          var values = new ArrayList<Connection>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT record FROM secretary_connections WHERE project=? ORDER BY name LIMIT 256")) {
-            q.setString(1, project);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                values.add(SecretaryJson.JSON.readValue(r.getString(1), Connection.class));
-            }
-          }
-          return List.copyOf(values);
-        });
+    return database.read(db -> {
+      var values = new ArrayList<Connection>();
+      try (var q =
+          db.prepareStatement(
+              "SELECT record FROM secretary_connections WHERE project=? ORDER BY name LIMIT 256")) {
+        q.setString(1, project);
+        try (var r = q.executeQuery()) {
+          while (r.next())
+            values.add(SecretaryJson.JSON.readValue(r.getString(1), Connection.class));
+        }
+      }
+      return List.copyOf(values);
+    });
   }
 
   public SecretaryProvider.Auth authStatus(String project, String id) {
@@ -561,73 +557,69 @@ public final class SecretaryConnections
   private void pollReplies(Connection c) {
     if (c.config().service() != SecretaryProvider.Service.GMAIL) return;
     var waits =
-        database.read(
-            db -> {
-              var rows = new ArrayList<String[]>();
-              try (var q =
-                  db.prepareStatement(
-                      "SELECT thread,task,sent FROM secretary_external_waits WHERE connection=? AND project=? ORDER BY checked,task LIMIT 3")) {
-                q.setString(1, c.id());
-                q.setString(2, c.config().projectId());
-                try (var r = q.executeQuery()) {
-                  while (r.next())
-                    rows.add(new String[] {r.getString(1), r.getString(2), r.getString(3)});
-                }
-              }
-              return rows;
-            });
+        database.read(db -> {
+          var rows = new ArrayList<String[]>();
+          try (var q =
+              db.prepareStatement(
+                  "SELECT thread,task,sent FROM secretary_external_waits WHERE connection=? AND project=? ORDER BY checked,task LIMIT 3")) {
+            q.setString(1, c.id());
+            q.setString(2, c.config().projectId());
+            try (var r = q.executeQuery()) {
+              while (r.next())
+                rows.add(new String[] {r.getString(1), r.getString(2), r.getString(3)});
+            }
+          }
+          return rows;
+        });
     for (var wait : waits) {
       try {
-        database.transaction(
-            db -> {
-              try (var q =
-                  db.prepareStatement(
-                      "UPDATE secretary_external_waits SET checked=? WHERE connection=? AND task=?")) {
-                q.setLong(1, clock.millis());
-                q.setString(2, c.id());
-                q.setString(3, wait[1]);
-                q.executeUpdate();
-              }
-              return null;
-            });
+        database.transaction(db -> {
+          try (var q =
+              db.prepareStatement(
+                  "UPDATE secretary_external_waits SET checked=? WHERE connection=? AND task=?")) {
+            q.setLong(1, clock.millis());
+            q.setString(2, c.id());
+            q.setString(3, wait[1]);
+            q.executeUpdate();
+          }
+          return null;
+        });
         var page = usable(c).read(c, "THREAD", Map.of("id", wait[0]));
         boolean replied =
             page.items().stream()
-                .anyMatch(
-                    item ->
-                        "true".equals(item.data().get("inbound"))
-                            && wait[0].equals(item.data().get("threadId"))
-                            && item.occurred() != null
-                            && item.occurred().toEpochMilli() > Long.parseLong(wait[2]));
+                .anyMatch(item ->
+                    "true".equals(item.data().get("inbound"))
+                        && wait[0].equals(item.data().get("threadId"))
+                        && item.occurred() != null
+                        && item.occurred().toEpochMilli() > Long.parseLong(wait[2]));
         if (!replied) continue;
         for (var item : page.items()) ingest(c, item);
-        database.transaction(
-            db -> {
-              var task = ledger.getWithin(db, c.config().projectId(), wait[1]);
-              if (task.status() == SecretaryTask.Status.WAITING)
-                ledger.updateWithin(
-                    db,
-                    task.projectId(),
-                    task.id(),
-                    task.revision(),
-                    task.title(),
-                    task.intent(),
-                    SecretaryTask.Status.OPEN,
-                    task.due(),
-                    task.priority(),
-                    task.tags(),
-                    task.references());
-              try (var q =
-                  db.prepareStatement(
-                      "DELETE FROM secretary_external_waits WHERE connection=? AND project=? AND thread=? AND task=?")) {
-                q.setString(1, c.id());
-                q.setString(2, c.config().projectId());
-                q.setString(3, wait[0]);
-                q.setString(4, wait[1]);
-                q.executeUpdate();
-              }
-              return null;
-            });
+        database.transaction(db -> {
+          var task = ledger.getWithin(db, c.config().projectId(), wait[1]);
+          if (task.status() == SecretaryTask.Status.WAITING)
+            ledger.updateWithin(
+                db,
+                task.projectId(),
+                task.id(),
+                task.revision(),
+                task.title(),
+                task.intent(),
+                SecretaryTask.Status.OPEN,
+                task.due(),
+                task.priority(),
+                task.tags(),
+                task.references());
+          try (var q =
+              db.prepareStatement(
+                  "DELETE FROM secretary_external_waits WHERE connection=? AND project=? AND thread=? AND task=?")) {
+            q.setString(1, c.id());
+            q.setString(2, c.config().projectId());
+            q.setString(3, wait[0]);
+            q.setString(4, wait[1]);
+            q.executeUpdate();
+          }
+          return null;
+        });
       } catch (RuntimeException unavailable) {
         /* Other threads and services remain independent. */
       }
@@ -636,24 +628,23 @@ public final class SecretaryConnections
 
   private Connection updateConnection(
       Connection expected, String state, String reason, String cursor, Instant next, int failures) {
-    return database.transaction(
-        db -> {
-          var c = findConnection(db, expected.config().projectId(), expected.id());
-          if (c.version() != expected.version() || !c.config().enabled()) return c;
-          var changed =
-              new Connection(
-                  c.id(),
-                  c.version(),
-                  c.config(),
-                  state,
-                  reason,
-                  cursor,
-                  next,
-                  failures,
-                  clock.instant());
-          saveConnection(db, changed);
-          return changed;
-        });
+    return database.transaction(db -> {
+      var c = findConnection(db, expected.config().projectId(), expected.id());
+      if (c.version() != expected.version() || !c.config().enabled()) return c;
+      var changed =
+          new Connection(
+              c.id(),
+              c.version(),
+              c.config(),
+              state,
+              reason,
+              cursor,
+              next,
+              failures,
+              clock.instant());
+      saveConnection(db, changed);
+      return changed;
+    });
   }
 
   private String destination(String project) {
@@ -701,89 +692,88 @@ public final class SecretaryConnections
             supplied.actionable(),
             arguments(supplied.data()));
     String destination = destination(c.config().projectId());
-    database.transaction(
-        db -> {
-          var current = findConnection(db, c.config().projectId(), c.id());
-          if (!current.config().enabled() || current.version() != c.version()) return null;
-          String task = null;
-          boolean existing = false;
-          try (var q =
-              db.prepareStatement(
-                  "SELECT revision,task FROM secretary_external_items WHERE connection=? AND id=?")) {
-            q.setString(1, c.id());
-            q.setString(2, item.id());
-            try (var r = q.executeQuery()) {
-              if (r.next()) {
-                existing = true;
-                if (r.getString(1).equals(item.revision())) return null;
-                task = r.getString(2);
-              }
-            }
+    database.transaction(db -> {
+      var current = findConnection(db, c.config().projectId(), c.id());
+      if (!current.config().enabled() || current.version() != c.version()) return null;
+      String task = null;
+      boolean existing = false;
+      try (var q =
+          db.prepareStatement(
+              "SELECT revision,task FROM secretary_external_items WHERE connection=? AND id=?")) {
+        q.setString(1, c.id());
+        q.setString(2, item.id());
+        try (var r = q.executeQuery()) {
+          if (r.next()) {
+            existing = true;
+            if (r.getString(1).equals(item.revision())) return null;
+            task = r.getString(2);
           }
-          if (!existing)
-            try (var q =
-                db.prepareStatement(
-                    "SELECT COUNT(*) FROM secretary_external_items WHERE connection=?")) {
-              q.setString(1, c.id());
-              try (var r = q.executeQuery()) {
-                r.next();
-                if (r.getInt(1) >= 5000)
-                  throw new IllegalStateException("External cache capacity reached");
-              }
-            }
-          if (task == null && item.actionable() && c.config().importCandidates())
-            task =
-                ledger
-                    .externalCandidateWithin(
-                        db,
-                        c.config().projectId(),
-                        "external-candidate:" + c.id() + ":" + hash(item.id()),
-                        bounded(c.config().service() + ": " + item.title(), 900),
-                        item.due(),
-                        reference(c.id(), item.id()))
-                    .id();
-          try (var q =
-              db.prepareStatement(
-                  "INSERT INTO secretary_external_items VALUES(?,?,?,?,?,?,?) ON CONFLICT(connection,id) DO UPDATE SET revision=excluded.revision,record=excluded.record,task=excluded.task,updated=excluded.updated")) {
-            q.setString(1, c.id());
-            q.setString(2, c.config().projectId());
-            q.setString(3, item.id());
-            q.setString(4, item.revision());
-            q.setString(5, encode(item));
-            q.setString(6, task);
-            q.setLong(7, clock.millis());
-            q.executeUpdate();
+        }
+      }
+      if (!existing)
+        try (var q =
+            db.prepareStatement(
+                "SELECT COUNT(*) FROM secretary_external_items WHERE connection=?")) {
+          q.setString(1, c.id());
+          try (var r = q.executeQuery()) {
+            r.next();
+            if (r.getInt(1) >= 5000)
+              throw new IllegalStateException("External cache capacity reached");
           }
-          int inserted;
-          try (var q =
-              db.prepareStatement(
-                  "INSERT OR IGNORE INTO secretary_external_events(connection,project,item,revision,kind,at) VALUES(?,?,?,?,?,?)")) {
-            q.setString(1, c.id());
-            q.setString(2, c.config().projectId());
-            q.setString(3, item.id());
-            q.setString(4, item.revision());
-            q.setString(5, item.kind());
-            q.setLong(6, clock.millis());
-            inserted = q.executeUpdate();
-          }
-          if (inserted > 0)
-            SecretaryOrchestrator.queue(
-                db,
-                new SecretaryNotifications.Notice(
-                    uuid(c.id() + ":" + item.id() + ":" + item.revision()),
+        }
+      if (task == null && item.actionable() && c.config().importCandidates())
+        task =
+            ledger
+                .externalCandidateWithin(
+                    db,
                     c.config().projectId(),
-                    null,
-                    "EXTERNAL_UPDATE",
-                    "External evidence updated: "
-                        + c.config().service()
-                        + " / "
-                        + bounded(item.title(), 300)
-                        + " (untrusted content)",
-                    3,
-                    destination,
-                    clock.instant()));
-          return null;
-        });
+                    "external-candidate:" + c.id() + ":" + hash(item.id()),
+                    bounded(c.config().service() + ": " + item.title(), 900),
+                    item.due(),
+                    reference(c.id(), item.id()))
+                .id();
+      try (var q =
+          db.prepareStatement(
+              "INSERT INTO secretary_external_items VALUES(?,?,?,?,?,?,?) ON CONFLICT(connection,id) DO UPDATE SET revision=excluded.revision,record=excluded.record,task=excluded.task,updated=excluded.updated")) {
+        q.setString(1, c.id());
+        q.setString(2, c.config().projectId());
+        q.setString(3, item.id());
+        q.setString(4, item.revision());
+        q.setString(5, encode(item));
+        q.setString(6, task);
+        q.setLong(7, clock.millis());
+        q.executeUpdate();
+      }
+      int inserted;
+      try (var q =
+          db.prepareStatement(
+              "INSERT OR IGNORE INTO secretary_external_events(connection,project,item,revision,kind,at) VALUES(?,?,?,?,?,?)")) {
+        q.setString(1, c.id());
+        q.setString(2, c.config().projectId());
+        q.setString(3, item.id());
+        q.setString(4, item.revision());
+        q.setString(5, item.kind());
+        q.setLong(6, clock.millis());
+        inserted = q.executeUpdate();
+      }
+      if (inserted > 0)
+        SecretaryOrchestrator.queue(
+            db,
+            new SecretaryNotifications.Notice(
+                uuid(c.id() + ":" + item.id() + ":" + item.revision()),
+                c.config().projectId(),
+                null,
+                "EXTERNAL_UPDATE",
+                "External evidence updated: "
+                    + c.config().service()
+                    + " / "
+                    + bounded(item.title(), 300)
+                    + " (untrusted content)",
+                3,
+                destination,
+                clock.instant()));
+      return null;
+    });
   }
 
   /** Accept only facts already authenticated by the owning webhook service. */
@@ -806,90 +796,86 @@ public final class SecretaryConnections
   public List<SecretaryProvider.Item> items(String project, String id, int limit) {
     connection(project, id);
     limit(limit);
-    return database.read(
-        db -> {
-          var values = new ArrayList<SecretaryProvider.Item>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT record FROM secretary_external_items WHERE project=? AND connection=? ORDER BY updated DESC,id LIMIT ?")) {
-            q.setString(1, project);
-            q.setString(2, id);
-            q.setInt(3, limit);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                values.add(
-                    SecretaryJson.JSON.readValue(r.getString(1), SecretaryProvider.Item.class));
-            }
-          }
-          return List.copyOf(values);
-        });
+    return database.read(db -> {
+      var values = new ArrayList<SecretaryProvider.Item>();
+      try (var q =
+          db.prepareStatement(
+              "SELECT record FROM secretary_external_items WHERE project=? AND connection=? ORDER BY updated DESC,id LIMIT ?")) {
+        q.setString(1, project);
+        q.setString(2, id);
+        q.setInt(3, limit);
+        try (var r = q.executeQuery()) {
+          while (r.next())
+            values.add(SecretaryJson.JSON.readValue(r.getString(1), SecretaryProvider.Item.class));
+        }
+      }
+      return List.copyOf(values);
+    });
   }
 
   public SecretaryTask toTask(String project, String id, String externalId) {
     var c = connection(project, id);
-    return database.transaction(
-        db -> {
-          String task;
-          SecretaryProvider.Item item;
-          try (var q =
-              db.prepareStatement(
-                  "SELECT task,record FROM secretary_external_items WHERE project=? AND connection=? AND id=?")) {
-            q.setString(1, project);
-            q.setString(2, id);
-            q.setString(3, externalId);
-            try (var r = q.executeQuery()) {
-              if (!r.next()) throw new IllegalArgumentException("External item not found");
-              task = r.getString(1);
-              item = SecretaryJson.JSON.readValue(r.getString(2), SecretaryProvider.Item.class);
-            }
-          }
-          if (task != null) return ledger.getWithin(db, project, task);
-          var candidate =
-              ledger.externalCandidateWithin(
-                  db,
-                  project,
-                  "external-candidate:" + id + ":" + hash(externalId),
-                  bounded(c.config().service() + ": " + item.title(), 900),
-                  item.due(),
-                  reference(id, externalId));
-          try (var q =
-              db.prepareStatement(
-                  "UPDATE secretary_external_items SET task=? WHERE project=? AND connection=? AND id=?")) {
-            q.setString(1, candidate.id());
-            q.setString(2, project);
-            q.setString(3, id);
-            q.setString(4, externalId);
-            q.executeUpdate();
-          }
-          return candidate;
-        });
+    return database.transaction(db -> {
+      String task;
+      SecretaryProvider.Item item;
+      try (var q =
+          db.prepareStatement(
+              "SELECT task,record FROM secretary_external_items WHERE project=? AND connection=? AND id=?")) {
+        q.setString(1, project);
+        q.setString(2, id);
+        q.setString(3, externalId);
+        try (var r = q.executeQuery()) {
+          if (!r.next()) throw new IllegalArgumentException("External item not found");
+          task = r.getString(1);
+          item = SecretaryJson.JSON.readValue(r.getString(2), SecretaryProvider.Item.class);
+        }
+      }
+      if (task != null) return ledger.getWithin(db, project, task);
+      var candidate =
+          ledger.externalCandidateWithin(
+              db,
+              project,
+              "external-candidate:" + id + ":" + hash(externalId),
+              bounded(c.config().service() + ": " + item.title(), 900),
+              item.due(),
+              reference(id, externalId));
+      try (var q =
+          db.prepareStatement(
+              "UPDATE secretary_external_items SET task=? WHERE project=? AND connection=? AND id=?")) {
+        q.setString(1, candidate.id());
+        q.setString(2, project);
+        q.setString(3, id);
+        q.setString(4, externalId);
+        q.executeUpdate();
+      }
+      return candidate;
+    });
   }
 
   public List<Event> history(String project, String id, int limit) {
     connection(project, id);
     limit(limit);
-    return database.read(
-        db -> {
-          var values = new ArrayList<Event>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT sequence,item,revision,kind,at FROM secretary_external_events WHERE project=? AND connection=? ORDER BY sequence DESC LIMIT ?")) {
-            q.setString(1, project);
-            q.setString(2, id);
-            q.setInt(3, limit);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                values.add(
-                    new Event(
-                        r.getLong(1),
-                        r.getString(2),
-                        r.getString(3),
-                        r.getString(4),
-                        Instant.ofEpochMilli(r.getLong(5))));
-            }
-          }
-          return List.copyOf(values);
-        });
+    return database.read(db -> {
+      var values = new ArrayList<Event>();
+      try (var q =
+          db.prepareStatement(
+              "SELECT sequence,item,revision,kind,at FROM secretary_external_events WHERE project=? AND connection=? ORDER BY sequence DESC LIMIT ?")) {
+        q.setString(1, project);
+        q.setString(2, id);
+        q.setInt(3, limit);
+        try (var r = q.executeQuery()) {
+          while (r.next())
+            values.add(
+                new Event(
+                    r.getLong(1),
+                    r.getString(2),
+                    r.getString(3),
+                    r.getString(4),
+                    Instant.ofEpochMilli(r.getLong(5))));
+        }
+      }
+      return List.copyOf(values);
+    });
   }
 
   private static boolean matches(SecretaryProvider.Service service, String operation) {
@@ -984,39 +970,38 @@ public final class SecretaryConnections
             clock.instant().plusSeconds(900));
     String id = uuid(project + ":" + receipt);
     var created =
-        database.transaction(
-            db -> {
-              var repeated = receipt(db, project, receipt);
-              if (repeated != null) {
-                if (!repeated.spec().fingerprint().equals(fingerprint))
-                  throw new SecretaryConflictException();
-                return repeated;
-              }
-              try (var q = db.createStatement();
-                  var r =
-                      q.executeQuery(
-                          "SELECT COUNT(*) FROM secretary_external_actions WHERE state IN ('READY','WAITING_APPROVAL','SENDING','RETRY_WAIT')")) {
-                r.next();
-                if (r.getInt(1) >= 256)
-                  throw new IllegalStateException("External action capacity reached");
-              }
-              var action =
-                  new Action(
-                      id,
-                      spec,
-                      "READY",
-                      0,
-                      null,
-                      null,
-                      0,
-                      clock.instant(),
-                      null,
-                      "",
-                      clock.instant(),
-                      clock.instant());
-              saveAction(db, action, true);
-              return action;
-            });
+        database.transaction(db -> {
+          var repeated = receipt(db, project, receipt);
+          if (repeated != null) {
+            if (!repeated.spec().fingerprint().equals(fingerprint))
+              throw new SecretaryConflictException();
+            return repeated;
+          }
+          try (var q = db.createStatement();
+              var r =
+                  q.executeQuery(
+                      "SELECT COUNT(*) FROM secretary_external_actions WHERE state IN ('READY','WAITING_APPROVAL','SENDING','RETRY_WAIT')")) {
+            r.next();
+            if (r.getInt(1) >= 256)
+              throw new IllegalStateException("External action capacity reached");
+          }
+          var action =
+              new Action(
+                  id,
+                  spec,
+                  "READY",
+                  0,
+                  null,
+                  null,
+                  0,
+                  clock.instant(),
+                  null,
+                  "",
+                  clock.instant(),
+                  clock.instant());
+          saveAction(db, action, true);
+          return action;
+        });
     return grant(created, authority);
   }
 
@@ -1080,35 +1065,34 @@ public final class SecretaryConnections
   }
 
   private Action postponeApproval(Action old) {
-    return database.transaction(
-        db -> {
-          var current = findAction(db, old.spec().projectId(), old.id());
-          expected(current, old.revision());
-          var next =
-              new Action(
-                  current.id(),
-                  current.spec(),
-                  current.state(),
-                  current.revision(),
-                  current.permit(),
-                  current.authorization(),
-                  current.attempts(),
-                  clock.instant().plusSeconds(60),
-                  current.result(),
-                  current.reason(),
-                  current.created(),
-                  current.updated());
-          try (var q =
-              db.prepareStatement(
-                  "UPDATE secretary_external_actions SET record=?,next=? WHERE id=? AND revision=?")) {
-            q.setString(1, encode(next));
-            q.setLong(2, next.next().toEpochMilli());
-            q.setString(3, next.id());
-            q.setLong(4, next.revision());
-            q.executeUpdate();
-          }
-          return next;
-        });
+    return database.transaction(db -> {
+      var current = findAction(db, old.spec().projectId(), old.id());
+      expected(current, old.revision());
+      var next =
+          new Action(
+              current.id(),
+              current.spec(),
+              current.state(),
+              current.revision(),
+              current.permit(),
+              current.authorization(),
+              current.attempts(),
+              clock.instant().plusSeconds(60),
+              current.result(),
+              current.reason(),
+              current.created(),
+              current.updated());
+      try (var q =
+          db.prepareStatement(
+              "UPDATE secretary_external_actions SET record=?,next=? WHERE id=? AND revision=?")) {
+        q.setString(1, encode(next));
+        q.setLong(2, next.next().toEpochMilli());
+        q.setString(3, next.id());
+        q.setLong(4, next.revision());
+        q.executeUpdate();
+      }
+      return next;
+    });
   }
 
   public Action execute(String project, String id, long revision) {
@@ -1180,51 +1164,50 @@ public final class SecretaryConnections
           allowed.attempts(),
           allowed.next());
     var claim =
-        database.transaction(
-            db -> {
-              var current = findAction(db, project, id);
-              expected(current, allowed.revision());
-              try (var q =
-                  db.prepareStatement(
-                      "SELECT COUNT(*) FROM secretary_external_actions WHERE state='SENDING' AND connection=?")) {
-                q.setString(1, c.id());
-                try (var r = q.executeQuery()) {
-                  r.next();
-                  if (r.getInt(1) > 0) return current;
-                }
-              }
-              var latestConnection = findConnection(db, project, c.id());
-              if (!latestConnection.config().enabled() || latestConnection.version() != c.version())
-                throw new SecretaryConflictException();
-              try (var q = db.createStatement();
-                  var r =
-                      q.executeQuery(
-                          "SELECT COUNT(*) FROM secretary_external_actions WHERE state='SENDING'")) {
-                r.next();
-                if (r.getInt(1) >= 2) return current;
-              }
-              if (current.attempts() >= 3)
-                return changed(
-                    db,
-                    current,
-                    "LIMITED",
-                    null,
-                    "attempt_limit",
-                    current.permit(),
-                    current.authorization(),
-                    current.attempts(),
-                    current.next());
-              return changed(
-                  db,
-                  current,
-                  "SENDING",
-                  null,
-                  "",
-                  current.permit(),
-                  current.authorization(),
-                  current.attempts() + 1,
-                  clock.instant().plusSeconds(120));
-            });
+        database.transaction(db -> {
+          var current = findAction(db, project, id);
+          expected(current, allowed.revision());
+          try (var q =
+              db.prepareStatement(
+                  "SELECT COUNT(*) FROM secretary_external_actions WHERE state='SENDING' AND connection=?")) {
+            q.setString(1, c.id());
+            try (var r = q.executeQuery()) {
+              r.next();
+              if (r.getInt(1) > 0) return current;
+            }
+          }
+          var latestConnection = findConnection(db, project, c.id());
+          if (!latestConnection.config().enabled() || latestConnection.version() != c.version())
+            throw new SecretaryConflictException();
+          try (var q = db.createStatement();
+              var r =
+                  q.executeQuery(
+                      "SELECT COUNT(*) FROM secretary_external_actions WHERE state='SENDING'")) {
+            r.next();
+            if (r.getInt(1) >= 2) return current;
+          }
+          if (current.attempts() >= 3)
+            return changed(
+                db,
+                current,
+                "LIMITED",
+                null,
+                "attempt_limit",
+                current.permit(),
+                current.authorization(),
+                current.attempts(),
+                current.next());
+          return changed(
+              db,
+              current,
+              "SENDING",
+              null,
+              "",
+              current.permit(),
+              current.authorization(),
+              current.attempts() + 1,
+              clock.instant().plusSeconds(120));
+        });
     if (!claim.state().equals("SENDING")) return claim;
     String authorization =
         proof ? claim.authorization() : automatic ? "POLICY:" + authority.fingerprint() : null;
@@ -1327,21 +1310,19 @@ public final class SecretaryConnections
   public List<Action> actions(String project, int limit) {
     identifier(project, 128);
     limit(limit);
-    return database.read(
-        db -> {
-          var values = new ArrayList<Action>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT record FROM secretary_external_actions WHERE project=? ORDER BY updated DESC,id LIMIT ?")) {
-            q.setString(1, project);
-            q.setInt(2, limit);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                values.add(SecretaryJson.JSON.readValue(r.getString(1), Action.class));
-            }
-          }
-          return List.copyOf(values);
-        });
+    return database.read(db -> {
+      var values = new ArrayList<Action>();
+      try (var q =
+          db.prepareStatement(
+              "SELECT record FROM secretary_external_actions WHERE project=? ORDER BY updated DESC,id LIMIT ?")) {
+        q.setString(1, project);
+        q.setInt(2, limit);
+        try (var r = q.executeQuery()) {
+          while (r.next()) values.add(SecretaryJson.JSON.readValue(r.getString(1), Action.class));
+        }
+      }
+      return List.copyOf(values);
+    });
   }
 
   /** Read-only reconciliation never replays a send or changes its approved destination. */
@@ -1388,27 +1369,26 @@ public final class SecretaryConnections
   public List<ActionHistory> actionHistory(String project, String id, int limit) {
     action(project, id);
     limit(limit);
-    return database.read(
-        db -> {
-          var values = new ArrayList<ActionHistory>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT sequence,state,reason,at FROM secretary_external_action_history WHERE project=? AND action=? ORDER BY sequence DESC LIMIT ?")) {
-            q.setString(1, project);
-            q.setString(2, id);
-            q.setInt(3, limit);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                values.add(
-                    new ActionHistory(
-                        r.getLong(1),
-                        r.getString(2),
-                        r.getString(3),
-                        Instant.ofEpochMilli(r.getLong(4))));
-            }
-          }
-          return List.copyOf(values);
-        });
+    return database.read(db -> {
+      var values = new ArrayList<ActionHistory>();
+      try (var q =
+          db.prepareStatement(
+              "SELECT sequence,state,reason,at FROM secretary_external_action_history WHERE project=? AND action=? ORDER BY sequence DESC LIMIT ?")) {
+        q.setString(1, project);
+        q.setString(2, id);
+        q.setInt(3, limit);
+        try (var r = q.executeQuery()) {
+          while (r.next())
+            values.add(
+                new ActionHistory(
+                    r.getLong(1),
+                    r.getString(2),
+                    r.getString(3),
+                    Instant.ofEpochMilli(r.getLong(4))));
+        }
+      }
+      return List.copyOf(values);
+    });
   }
 
   private static void expected(Action action, long revision) {
@@ -1425,12 +1405,11 @@ public final class SecretaryConnections
       String authorization,
       int attempts,
       Instant next) {
-    return database.transaction(
-        db -> {
-          var current = findAction(db, expected.spec().projectId(), expected.id());
-          expected(current, expected.revision());
-          return changed(db, current, state, result, reason, permit, authorization, attempts, next);
-        });
+    return database.transaction(db -> {
+      var current = findAction(db, expected.spec().projectId(), expected.id());
+      expected(current, expected.revision());
+      return changed(db, current, state, result, reason, permit, authorization, attempts, next);
+    });
   }
 
   private Action changed(
@@ -1602,20 +1581,19 @@ public final class SecretaryConnections
 
   public void check() {
     var pending =
-        database.read(
-            db -> {
-              var values = new ArrayList<Action>();
-              try (var q =
-                  db.prepareStatement(
-                      "SELECT record FROM secretary_external_actions WHERE state IN ('READY','WAITING_APPROVAL','RETRY_WAIT','SENDING') AND next<=? ORDER BY CASE state WHEN 'READY' THEN 0 WHEN 'RETRY_WAIT' THEN 1 WHEN 'SENDING' THEN 2 ELSE 3 END,next,id LIMIT 8")) {
-                q.setLong(1, clock.millis());
-                try (var r = q.executeQuery()) {
-                  while (r.next())
-                    values.add(SecretaryJson.JSON.readValue(r.getString(1), Action.class));
-                }
-              }
-              return values;
-            });
+        database.read(db -> {
+          var values = new ArrayList<Action>();
+          try (var q =
+              db.prepareStatement(
+                  "SELECT record FROM secretary_external_actions WHERE state IN ('READY','WAITING_APPROVAL','RETRY_WAIT','SENDING') AND next<=? ORDER BY CASE state WHEN 'READY' THEN 0 WHEN 'RETRY_WAIT' THEN 1 WHEN 'SENDING' THEN 2 ELSE 3 END,next,id LIMIT 8")) {
+            q.setLong(1, clock.millis());
+            try (var r = q.executeQuery()) {
+              while (r.next())
+                values.add(SecretaryJson.JSON.readValue(r.getString(1), Action.class));
+            }
+          }
+          return values;
+        });
     for (var action : pending)
       try {
         if (action.state().equals("SENDING"))
@@ -1634,20 +1612,19 @@ public final class SecretaryConnections
       }
     if (!automatic) return;
     var due =
-        database.read(
-            db -> {
-              var values = new ArrayList<Connection>();
-              try (var q =
-                  db.prepareStatement(
-                      "SELECT record FROM secretary_connections WHERE state<>'DISABLED' AND next<=? ORDER BY next,id LIMIT 8")) {
-                q.setLong(1, clock.millis());
-                try (var r = q.executeQuery()) {
-                  while (r.next())
-                    values.add(SecretaryJson.JSON.readValue(r.getString(1), Connection.class));
-                }
-              }
-              return values;
-            });
+        database.read(db -> {
+          var values = new ArrayList<Connection>();
+          try (var q =
+              db.prepareStatement(
+                  "SELECT record FROM secretary_connections WHERE state<>'DISABLED' AND next<=? ORDER BY next,id LIMIT 8")) {
+            q.setLong(1, clock.millis());
+            try (var r = q.executeQuery()) {
+              while (r.next())
+                values.add(SecretaryJson.JSON.readValue(r.getString(1), Connection.class));
+            }
+          }
+          return values;
+        });
     for (var c : due) {
       if (Thread.currentThread().isInterrupted()) return;
       if (life == null || life.backgroundAllowed(c.config().projectId(), "connection:" + c.id()))
@@ -1660,88 +1637,80 @@ public final class SecretaryConnections
     identifier(project, 128);
     var calendars =
         list(project).stream()
-            .filter(
-                c ->
-                    c.config().enabled()
-                        && c.config().service() == SecretaryProvider.Service.CALENDAR)
+            .filter(c ->
+                c.config().enabled() && c.config().service() == SecretaryProvider.Service.CALENDAR)
             .toList();
-    return database.read(
-        db -> {
-          var values = new ArrayList<Item>();
-          boolean covered =
-              !calendars.isEmpty()
-                  && calendars.stream()
-                      .allMatch(
-                          c ->
-                              c.state().equals("CURRENT")
-                                  && c.next().isAfter(clock.instant())
-                                  && !date.isBefore(
-                                      c.updated().atZone(zone).toLocalDate().minusDays(1))
-                                  && date.isBefore(
-                                      c.updated().atZone(zone).toLocalDate().plusDays(30)));
-          values.add(
-              new Item(
-                  "calendar-coverage",
-                  "coverage",
-                  "登録済み私用カレンダー",
-                  covered ? "AVAILABLE" : "UNKNOWN",
-                  "Cached opt-in coverage only; work agenda remains unknown"));
-          try (var q =
-              db.prepareStatement(
-                  "SELECT i.connection,i.id,i.record FROM secretary_external_items i JOIN secretary_connections c ON c.id=i.connection WHERE i.project=? AND c.state<>'DISABLED' AND (c.service='CALENDAR' OR (i.updated>=? AND i.updated<?)) ORDER BY i.updated DESC,i.id LIMIT 256")) {
-            q.setString(1, project);
-            q.setLong(2, date.atStartOfDay(zone).toInstant().toEpochMilli());
-            q.setLong(3, date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli());
-            try (var r = q.executeQuery()) {
-              while (r.next()) {
-                var item =
-                    SecretaryJson.JSON.readValue(r.getString(3), SecretaryProvider.Item.class);
-                if (item.kind().equals("CALENDAR")) {
-                  try {
-                    var start = java.time.ZonedDateTime.parse(item.data().get("start")).toInstant();
-                    var end = java.time.ZonedDateTime.parse(item.data().get("end")).toInstant();
-                    if (!start.isBefore(date.plusDays(1).atStartOfDay(zone).toInstant())
-                        || !end.isAfter(date.atStartOfDay(zone).toInstant())) continue;
-                  } catch (RuntimeException noTimes) {
-                    if (!item.occurred().atZone(zone).toLocalDate().equals(date)) continue;
-                  }
-                }
-                values.add(
-                    new Item(
-                        "external-untrusted",
-                        reference(r.getString(1), r.getString(2)),
-                        "[UNTRUSTED] " + item.title(),
-                        item.status(),
-                        "External body omitted; use an explicit connection read for details. External assertions are unverified.",
-                        Reliability.UNKNOWN,
-                        List.of(reference(r.getString(1), r.getString(2))),
-                        new Observation(
-                            "external:" + reference(r.getString(1), r.getString(2)),
-                            item.occurred(),
-                            "UNKNOWN",
-                            false,
-                            null,
-                            item.due(),
-                            item.kind())));
+    return database.read(db -> {
+      var values = new ArrayList<Item>();
+      boolean covered =
+          !calendars.isEmpty()
+              && calendars.stream()
+                  .allMatch(c ->
+                      c.state().equals("CURRENT")
+                          && c.next().isAfter(clock.instant())
+                          && !date.isBefore(c.updated().atZone(zone).toLocalDate().minusDays(1))
+                          && date.isBefore(c.updated().atZone(zone).toLocalDate().plusDays(30)));
+      values.add(
+          new Item(
+              "calendar-coverage",
+              "coverage",
+              "登録済み私用カレンダー",
+              covered ? "AVAILABLE" : "UNKNOWN",
+              "Cached opt-in coverage only; work agenda remains unknown"));
+      try (var q =
+          db.prepareStatement(
+              "SELECT i.connection,i.id,i.record FROM secretary_external_items i JOIN secretary_connections c ON c.id=i.connection WHERE i.project=? AND c.state<>'DISABLED' AND (c.service='CALENDAR' OR (i.updated>=? AND i.updated<?)) ORDER BY i.updated DESC,i.id LIMIT 256")) {
+        q.setString(1, project);
+        q.setLong(2, date.atStartOfDay(zone).toInstant().toEpochMilli());
+        q.setLong(3, date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli());
+        try (var r = q.executeQuery()) {
+          while (r.next()) {
+            var item = SecretaryJson.JSON.readValue(r.getString(3), SecretaryProvider.Item.class);
+            if (item.kind().equals("CALENDAR")) {
+              try {
+                var start = java.time.ZonedDateTime.parse(item.data().get("start")).toInstant();
+                var end = java.time.ZonedDateTime.parse(item.data().get("end")).toInstant();
+                if (!start.isBefore(date.plusDays(1).atStartOfDay(zone).toInstant())
+                    || !end.isAfter(date.atStartOfDay(zone).toInstant())) continue;
+              } catch (RuntimeException noTimes) {
+                if (!item.occurred().atZone(zone).toLocalDate().equals(date)) continue;
               }
             }
+            values.add(
+                new Item(
+                    "external-untrusted",
+                    reference(r.getString(1), r.getString(2)),
+                    "[UNTRUSTED] " + item.title(),
+                    item.status(),
+                    "External body omitted; use an explicit connection read for details. External assertions are unverified.",
+                    Reliability.UNKNOWN,
+                    List.of(reference(r.getString(1), r.getString(2))),
+                    new Observation(
+                        "external:" + reference(r.getString(1), r.getString(2)),
+                        item.occurred(),
+                        "UNKNOWN",
+                        false,
+                        null,
+                        item.due(),
+                        item.kind())));
           }
-          return List.copyOf(values);
-        });
+        }
+      }
+      return List.copyOf(values);
+    });
   }
 
   @Override
   public void tick() {
     if (closed.get() || !busy.compareAndSet(false, true)) return;
     try {
-      worker.execute(
-          () -> {
-            try {
-              check();
-            } finally {
-              busy.set(false);
-            }
-          });
+      worker.execute(() -> {
+        try {
+          check();
+        } finally {
+          busy.set(false);
+        }
+      });
     } catch (java.util.concurrent.RejectedExecutionException rejected) {
       busy.set(false);
     }

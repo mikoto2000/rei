@@ -22,12 +22,11 @@ public class VoiceConfiguration {
     var context = new VoiceCorrectionContext(history, null, properties);
     var llm = new VoiceCorrectionLlm(clients, models, properties);
     var service = new VoiceCorrectionService(properties, context::capture, llm::call, events);
-    events.subscribe(
-        event -> {
-          if (event.type() == VoiceEventPublisher.Type.STATE_CHANGED
-              && !event.detail().equals("LISTENING")
-              && !event.detail().equals("STARTING")) service.cancelAll();
-        });
+    events.subscribe(event -> {
+      if (event.type() == VoiceEventPublisher.Type.STATE_CHANGED
+          && !event.detail().equals("LISTENING")
+          && !event.detail().equals("STARTING")) service.cancelAll();
+    });
     return service;
   }
 
@@ -60,12 +59,11 @@ public class VoiceConfiguration {
             context ->
                 voice.state() == VoiceInputCoordinator.State.LISTENING && delivery.ownsRun(context),
             events);
-    events.subscribe(
-        event -> {
-          if (event.type() == VoiceEventPublisher.Type.STATE_CHANGED
-              && !event.detail().equals("LISTENING")
-              && !event.detail().equals("STARTING")) playback.stop();
-        });
+    events.subscribe(event -> {
+      if (event.type() == VoiceEventPublisher.Type.STATE_CHANGED
+          && !event.detail().equals("LISTENING")
+          && !event.detail().equals("STARTING")) playback.stop();
+    });
     return playback;
   }
 
@@ -74,15 +72,14 @@ public class VoiceConfiguration {
   AudioDeviceService audioDeviceService(VoiceProperties properties, VoiceEventPublisher events) {
     var devices = new AudioDeviceService();
     devices.restoreSelection(properties.getDeviceId());
-    events.subscribe(
-        event -> {
-          if (event.type() == VoiceEventPublisher.Type.DEVICE_CHANGED
-              || event.type() == VoiceEventPublisher.Type.CAPTURE_RESUMED
-              || event.type() == VoiceEventPublisher.Type.CAPTURE_FAILED) {
-            devices.invalidateSelection();
-            properties.setDeviceId(null);
-          }
-        });
+    events.subscribe(event -> {
+      if (event.type() == VoiceEventPublisher.Type.DEVICE_CHANGED
+          || event.type() == VoiceEventPublisher.Type.CAPTURE_RESUMED
+          || event.type() == VoiceEventPublisher.Type.CAPTURE_FAILED) {
+        devices.invalidateSelection();
+        properties.setDeviceId(null);
+      }
+    });
     return devices;
   }
 
@@ -110,17 +107,16 @@ public class VoiceConfiguration {
               dev.mikoto2000.rei.application.run.RunService>
           runs,
       dev.mikoto2000.rei.core.service.CommandCancellationService cancellation) {
-    shell.onActiveCancellation(
-        context -> {
-          var runner = runs.getIfAvailable();
-          if (runner != null)
-            try {
-              return runner.cancel(context.runId()).accepted();
-            } catch (dev.mikoto2000.rei.application.run.RunNotFoundException missing) {
-              /* Legacy unregistered Run. */
-            }
-          return cancellation.cancelRegisteredRun(context.runId());
-        });
+    shell.onActiveCancellation(context -> {
+      var runner = runs.getIfAvailable();
+      if (runner != null)
+        try {
+          return runner.cancel(context.runId()).accepted();
+        } catch (dev.mikoto2000.rei.application.run.RunNotFoundException missing) {
+          /* Legacy unregistered Run. */
+        }
+      return cancellation.cancelRegisteredRun(context.runId());
+    });
     var delivery = new VoiceDeliveryService(shell, clock, events, properties::advanced);
     delivery.setConfirmation(properties.isConfirmation());
     return delivery;

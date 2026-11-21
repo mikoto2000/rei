@@ -120,12 +120,11 @@ class MemoryConsolidateCommandTest {
     when(memoryService.listActiveWithExpiryCheck()).thenReturn(List.of());
     when(detector.containsSensitiveInfo(any())).thenReturn(false);
     when(resolver.check(any(), any()))
-        .thenAnswer(
-            invocation -> {
-              Thread.sleep(1_200);
-              return new MemoryConflictResolver.ConflictResult(
-                  MemoryConflictResolver.ConflictType.NONE, null, 0.2d);
-            });
+        .thenAnswer(invocation -> {
+          Thread.sleep(1_200);
+          return new MemoryConflictResolver.ConflictResult(
+              MemoryConflictResolver.ConflictType.NONE, null, 0.2d);
+        });
 
     var cmd =
         new CommandLine(

@@ -92,17 +92,15 @@ class RunRegistryTest {
     var start = new CountDownLatch(1);
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
       var cancel =
-          executor.submit(
-              () -> {
-                start.await();
-                return registry.transition("run", RunStatus.CANCELLED, null);
-              });
+          executor.submit(() -> {
+            start.await();
+            return registry.transition("run", RunStatus.CANCELLED, null);
+          });
       var complete =
-          executor.submit(
-              () -> {
-                start.await();
-                return registry.transition("run", RunStatus.COMPLETED, null);
-              });
+          executor.submit(() -> {
+            start.await();
+            return registry.transition("run", RunStatus.COMPLETED, null);
+          });
       start.countDown();
       assertThat(cancel.get(5, TimeUnit.SECONDS) ^ complete.get(5, TimeUnit.SECONDS)).isTrue();
     }
