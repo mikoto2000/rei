@@ -25,6 +25,77 @@ import org.springframework.ai.chat.prompt.Prompt;
 class ContextAssemblerTest {
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
+  void oversizedDraftRepairCommitsOnlyTheCompleteToolExchange(boolean failLater) {
+    var properties = config();
+    properties.setSummaryInputTokens(1024);
+    properties.setSummaryTokens(12000);
+    properties.setHardLimit(800000);
+    var saved = new ConversationSummaryRepository(dir);
+    saved.save(
+        "conversation", new ConversationSummary("prior decision", 1, java.time.Instant.now()));
+    var targets = new ArrayList<Integer>();
+    ConversationCompressor compressor =
+        new ConversationCompressor() {
+          public String summarize(
+              String previous, List<Message> messages, int target, Prompt owner) {
+            throw new AssertionError("Paged calls must use their shared deadline");
+          }
+
+          @Override
+          public Summary summarizeResult(
+              String previous,
+              List<Message> messages,
+              int target,
+              Prompt owner,
+              dev.mikoto2000.rei.llm.ModelCallBudget budget,
+              java.time.Duration timeout) {
+            assertThat(saved.read("conversation").throughSequence()).isEqualTo(1);
+            targets.add(target);
+            if (targets.size() == 1 || failLater && targets.size() >= 3)
+              return new Summary("oversized draft", 4000);
+            return new Summary("prior decision; pending tests; reference retained", 20);
+          }
+        };
+    var call =
+        AssistantMessage.builder()
+            .content("")
+            .properties(Map.of(ContextHistoryAdvisor.SEQUENCE, 2L))
+            .toolCalls(List.of(new AssistantMessage.ToolCall("call", "function", "readFile", "{}")))
+            .build();
+    var response =
+        ToolResponseMessage.builder()
+            .metadata(Map.of(ContextHistoryAdvisor.SEQUENCE, 3L))
+            .responses(
+                List.of(
+                    new ToolResponseMessage.ToolResponse(
+                        "call", "readFile", "untrusted ".repeat(1200))))
+            .build();
+    var raw =
+        new Prompt(
+            List.of(
+                new SystemMessage("policy"),
+                call,
+                response,
+                ContextHistoryAdvisor.historical(new AssistantMessage("recent"), 4),
+                new UserMessage("current")));
+    new ContextAssembler(
+            properties,
+            estimator,
+            saved,
+            new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
+            compressor,
+            null,
+            null)
+        .assemble(raw, "conversation", "run", () -> {});
+    assertThat(targets).startsWith(256, 128).hasSizeGreaterThan(2);
+    assertThat(saved.read("conversation").throughSequence()).isEqualTo(failLater ? 1 : 3);
+    assertThat(raw.getInstructions()).hasSize(5);
+    assertThat(response.getResponses().getFirst().responseData())
+        .isEqualTo("untrusted ".repeat(1200));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
   void oversizedToolExchangeIsPagedAndCursorCommitsOnlyAfterEveryPage(boolean failLater) {
     var properties = config();
     properties.setSummaryInputTokens(1024);

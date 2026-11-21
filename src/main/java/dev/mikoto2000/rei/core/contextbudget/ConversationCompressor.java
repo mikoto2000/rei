@@ -16,7 +16,12 @@ public interface ConversationCompressor {
    * @param text テキスト
    * @param outputTokens 出力トークン数
    */
-  record Summary(String text, Integer outputTokens) {}
+  record Summary(String text, Integer outputTokens) {
+    /** Use reported visible-text usage, falling back to the conservative estimate when unknown. */
+    public long textTokens(TokenEstimator estimator) {
+      return outputTokens != null && outputTokens > 0 ? outputTokens : estimator.text(text);
+    }
+  }
 
   /** 要約本文とモデルの思考を含め、要求全体に予約する生成トークン数。 */
   default int generationTokens(int summaryTokens) {

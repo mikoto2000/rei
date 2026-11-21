@@ -78,16 +78,27 @@ final class SummaryInputPages {
       if (length == 0)
         throw new ContextCompressionException(ContextCompressionException.Reason.INPUT_BUDGET);
       var fragment = new UserMessage(header + source.substring(offset, offset + length));
-      result = summarize.summarize(rolling, List.of(fragment), target, remaining(started, timeout));
-      check.run();
-      remaining(started, timeout);
-      rolling = result == null ? null : result.text();
-      if (rolling == null || rolling.isBlank())
-        throw new ContextCompressionException(ContextCompressionException.Reason.EMPTY_SUMMARY);
-      long tokens = estimator.text(rolling);
-      if (tokens > target || result.outputTokens() != null && result.outputTokens() > target)
-        throw new ContextCompressionException(
-            ContextCompressionException.Reason.SUMMARY_TOO_LONG, tokens, target);
+      for (int attempt = 0; ; attempt++) {
+        check.run();
+        // Re-read the same complete input once with a tighter target. Never crop a draft or
+        // advance the source offset on failure; both calls share the page/update deadline.
+        result =
+            summarize.summarize(
+                rolling,
+                List.of(fragment),
+                attempt == 0 ? target : Math.max(1, target / 2),
+                remaining(started, timeout));
+        check.run();
+        remaining(started, timeout);
+        if (result == null || result.text() == null || result.text().isBlank())
+          throw new ContextCompressionException(ContextCompressionException.Reason.EMPTY_SUMMARY);
+        long tokens = result.textTokens(estimator);
+        if (tokens <= target) break;
+        if (attempt == 1)
+          throw new ContextCompressionException(
+              ContextCompressionException.Reason.SUMMARY_TOO_LONG, tokens, target);
+      }
+      rolling = result.text();
       offset += length;
     }
     return result;
