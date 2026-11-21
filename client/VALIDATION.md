@@ -1,5 +1,21 @@
 # Live AgentEvent Activity validation
 
+## GitHub Actions の互換性修正（2026-11-21）
+
+`npm ci` がローカルミラーの名前解決で失敗したため、ロックファイルの配布元126件を
+公開 npm レジストリへ戻しました。パッケージのバージョンと integrity は変更していません。
+空の別ディレクトリ・別キャッシュで公開レジストリから新規インストールし、
+型検査・ESLint・Prettier・Vitest103件・本番ビルド・ブラウザ E2E38件が成功しました。
+
+Windows CI の terminfo は SGR の mouse capability を返すため、X10 固定の処理をやめ、
+端末の capability をデコードします。X10 / SGR、`\\E` / octal / デコード済みの形式と
+capability なしの7ケースを、emacs / vi insert 両モードで検証しました。
+マウスのキー定義を維持し、Windows パスとその末尾・UNC・空白入り引用符を保持します。
+軽量 CLI186件と Backend の関連49件は成功し、Java 静的解析は指摘0件です。
+
+Checkstyle の CI ゲートは現行14.4.0に合わせ、旧バージョン・指摘・不完全な解析・
+不正なレポートを拒否する検証も維持しています。公式 Actions は Node.js 24 版を使用します。
+
 ## 依存更新の互換性レビュー（2026-11-21）
 
 reqwest 0.13 の既定値では OS の証明書ストアを使うため、更新前の `rustls-tls` と同じ

@@ -36,16 +36,25 @@ public final class ApprovalMenuLineReader extends LineReaderImpl {
    */
   public ApprovalMenuLineReader(Terminal terminal, boolean interactive) throws IOException {
     super(terminal);
-    // JLine 4 can expose the X10 mouse capability as literal terminfo text.
-    // Its backslash prefix consumes the next character of typed Windows paths.
+    // JLine 4 can bind raw terminfo text, including either X10 or SGR mouse
+    // prefixes. Decode the terminal's actual capability before binding it.
     var mouse = new org.jline.reader.Reference(MOUSE);
-    for (var keyMap : getKeyMaps().values()) {
-      if (mouse.equals(keyMap.getBound("\\E[M"))) {
-        keyMap.unbind("\\E[M");
-        // Prune the empty prefix nodes as well; unbind only prunes one level.
-        keyMap.unbind("\\E[");
-        keyMap.unbind("\\E");
-        keyMap.bind(mouse, "\033[M");
+    String raw = terminal.getStringCapability(org.jline.utils.InfoCmp.Capability.key_mouse);
+    String decoded = org.jline.utils.Curses.tputs(raw);
+    if (raw != null && !raw.equals(decoded)) {
+      for (var keyMap : getKeyMaps().values()) {
+        if (mouse.equals(keyMap.getBound(raw))) {
+          keyMap.unbind(raw);
+          // unbind only prunes one level. Remove empty prefix nodes without
+          // deleting other bindings, and retain the literal backslash binding.
+          for (int length = raw.length() - 1; length > 1; length--) {
+            String prefix = raw.substring(0, length);
+            if (keyMap.getBoundKeys().keySet().stream().noneMatch(key -> key.startsWith(prefix))) {
+              keyMap.unbind(prefix);
+            }
+          }
+          keyMap.bind(mouse, decoded);
+        }
       }
     }
     this.interactive = interactive;

@@ -15,7 +15,7 @@ function Read-Report([string]$filename, [string]$root) {
     return ,$report
 }
 $checkstyle = Read-Report 'checkstyle-result.xml' 'checkstyle'
-if ($checkstyle.DocumentElement.GetAttribute('version') -ne '14.3.0') { throw 'Unexpected Checkstyle report version' }
+if ($checkstyle.DocumentElement.GetAttribute('version') -ne '14.4.0') { throw 'Unexpected Checkstyle report version' }
 $spotbugs = Read-Report 'spotbugsXml.xml' 'BugCollection'
 if ($spotbugs.DocumentElement.GetAttribute('version') -ne '4.10.5') { throw 'Unexpected SpotBugs report version' }
 $errors = $spotbugs.DocumentElement.SelectSingleNode('Errors')

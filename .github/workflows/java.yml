@@ -18,8 +18,8 @@ jobs:
     steps:
       - name: Preserve repository LF fixtures
         run: git config --global core.autocrlf false
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -36,7 +36,7 @@ jobs:
         run: ./mvnw.cmd -B "-Dtest=PackageArchitectureTest,ArchitectureGuardTest,ArchitectureSourceReportTest" "-Darchitecture.report=true" test
       - name: Preserve architecture evidence
         if: always() && matrix.shard == 'A'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: architecture-${{ github.run_id }}-${{ github.run_attempt }}
           retention-days: 14
@@ -49,7 +49,7 @@ jobs:
       - name: Export testcase evidence
         run: ./.github/ci/export-regression-tests.ps1
       - name: Upload testcase evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: java-regression-${{ matrix.shard }}
           path: target/regression-tests/*.xml
@@ -61,8 +61,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -91,13 +91,13 @@ jobs:
       - name: Require successful POSIX regressions
         if: needs.posix.result != 'success'
         run: exit 1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Test report and partition checks
         shell: pwsh
         run: |
           ./scripts/test-test-performance-report.ps1
           ./scripts/test-check-test-partition.ps1
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: java-regression-*
           path: target/shard-reports

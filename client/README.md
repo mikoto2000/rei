@@ -54,6 +54,8 @@ npm run tauri -- build --no-bundle
 ```
 
 型検査には `typescript-compiler` という別名でインストールした TypeScript 7 を使用します。
+依存追加・更新では `npm install --registry=https://registry.npmjs.org` を使い、
+ロックファイルの配布元 URL を公開レジストリに保ちます。ローカルミラーの URL は含めません。
 `typescript-eslint` は TypeScript 7.0 のコンパイラ API に未対応のため、lint 用の
 `typescript` は対応範囲内の 6.0 に固定しています。`npm run typecheck` と `npm run build`
 は TypeScript 7 を明示的に起動します。

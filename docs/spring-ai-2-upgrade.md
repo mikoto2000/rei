@@ -27,6 +27,7 @@ Rust の HTTPS 信頼方式も更新前の Mozilla CA bundle に戻しました�
 最新安定版へ更新しました。軽量 CLI と Backend の JLine は 4.7.0 にそろえています。
 JLine 4 がマウス用 terminfo を文字列 `\\E[M` のまま登録する場合に、Windows パスの
 バックスラッシュ直後の文字が失われるため、共通の LineReader でキー定義を正規化します。
+X10 / SGR と `\E` / octal 表記を端末の capability からデコードし、マウス操作と既存のキー定義を維持します。
 文字入力・Tab 補完・複数行入力と軽量 CLI の回帰テストで確認しています。
 JLine 4 では標準出力・標準エラーの文字コードも個別に解決されるため、JLine の明示的な
 設定を尊重しつつ、Rei が使用する PrintStream の文字コードを両方へ指定します。

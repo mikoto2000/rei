@@ -1,7 +1,7 @@
 # Java static analysis
 
 JDK 25 and the Maven Wrapper (3.9.14) are required. The pinned analyzers are
-Checkstyle 14.3.0 (Maven plugin 3.6.0) and SpotBugs 4.10.5 (Maven plugin
+Checkstyle 14.4.0 (Maven plugin 3.6.0) and SpotBugs 4.10.5 (Maven plugin
 4.10.5.0). Ordinary build/test commands retain their existing behavior.
 
 ## Local commands
@@ -64,6 +64,11 @@ turn the job green. Summary generation, the zero-findings gate and report/log ar
 `always()` and therefore also run after failures. A cancelled job or runner
 loss can still prevent upload; compilation failure may leave no SpotBugs report.
 Artifacts are retained for 14 days.
+
+The report gate expects Checkstyle 14.4.0, matching the version in `pom.xml`.
+Its fixture test also rejects the former 14.3.0 report version, findings, missing
+classes, malformed reports, and incomplete analysis. The workflows use the
+Node.js 24 editions of the official checkout, setup and artifact actions.
 
 Only `contents: read` is requested. Results appear in the Actions job summary and
 downloadable artifact, without PR comments, SARIF upload, Security tab integration

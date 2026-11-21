@@ -17,10 +17,10 @@ jobs:
       run:
         shell: pwsh
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Test static analysis gate
         run: ./.github/ci/test-static-analysis-gate.ps1
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '25'
@@ -51,7 +51,7 @@ jobs:
         run: ./.github/ci/static-analysis-gate.ps1
       - name: Preserve reports and diagnostic logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: static-analysis-${{ github.run_id }}-${{ github.run_attempt }}
           retention-days: 14

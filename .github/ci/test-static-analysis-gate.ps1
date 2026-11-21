@@ -4,7 +4,7 @@ New-Item -ItemType Directory -Force -Path "$probe/.github/ci", "$probe/target" |
 Copy-Item -LiteralPath "$PSScriptRoot/static-analysis-gate.ps1" -Destination "$probe/.github/ci"
 $gate = "$probe/.github/ci/static-analysis-gate.ps1"
 function Write-Reports([string]$checkstyle = '', [string]$spotbugs = '', [string]$errors = "<Errors errors='0'/>") {
-    Set-Content "$probe/target/checkstyle-result.xml" "<checkstyle version='14.3.0'><file name='Example.java'>$checkstyle</file></checkstyle>"
+    Set-Content "$probe/target/checkstyle-result.xml" "<checkstyle version='14.4.0'><file name='Example.java'>$checkstyle</file></checkstyle>"
     Set-Content "$probe/target/spotbugsXml.xml" "<BugCollection version='4.10.5'>$spotbugs$errors</BugCollection>"
 }
 function Expect-Failure([string]$message, [string]$reason = '') {
@@ -19,6 +19,10 @@ try {
     Write-Reports
     & $gate | Out-Null
     Write-Output 'PASS: zero findings accepted'
+    (Get-Content "$probe/target/checkstyle-result.xml" -Raw).Replace("version='14.4.0'", "version='14.3.0'") |
+        Set-Content "$probe/target/checkstyle-result.xml"
+    Expect-Failure 'unexpected Checkstyle version rejected' 'Unexpected Checkstyle report version'
+    Write-Reports
     Write-Reports -checkstyle "<error line='1' source='ExampleCheck'/>"
     Expect-Failure 'one Checkstyle finding rejected' 'found 1 findings'
     Write-Reports -spotbugs "<BugInstance type='EXAMPLE' instanceHash='old'/>"
