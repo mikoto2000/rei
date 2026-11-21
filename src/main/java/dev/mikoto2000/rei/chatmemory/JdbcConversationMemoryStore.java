@@ -49,6 +49,19 @@ public final class JdbcConversationMemoryStore implements ConversationMemoryStor
     transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
   }
 
+  private JdbcConversationMemoryStore(JdbcTemplate jdbcTemplate) {
+    Assert.notNull(jdbcTemplate, "jdbcTemplate cannot be null");
+    DataSource dataSource = jdbcTemplate.getDataSource();
+    Assert.notNull(dataSource, "jdbcTemplate dataSource cannot be null");
+    jdbc = jdbcTemplate;
+    transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
+  }
+
+  /** Uses the application's configured template, including query timeout and fetch settings. */
+  public static JdbcConversationMemoryStore fromJdbcTemplate(JdbcTemplate jdbcTemplate) {
+    return new JdbcConversationMemoryStore(jdbcTemplate);
+  }
+
   @Override
   public List<String> findConversationIds() {
     return jdbc.query(

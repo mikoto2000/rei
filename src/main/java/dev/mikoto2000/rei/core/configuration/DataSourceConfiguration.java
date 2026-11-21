@@ -38,23 +38,27 @@ public class DataSourceConfiguration {
    */
   @Bean
   public dev.mikoto2000.rei.chatmemory.JdbcConversationMemoryStore conversationMemoryStore(
-      DataSource dataSource, org.springframework.core.env.Environment environment) {
-    String mode =
-        environment.getProperty(
-            "spring.ai.chat.memory.repository.jdbc.initialize-schema", "embedded");
-    if (org.springframework.boot.sql.init.DatabaseInitializationMode.valueOf(
-            mode.toUpperCase(java.util.Locale.ROOT))
-        == org.springframework.boot.sql.init.DatabaseInitializationMode.ALWAYS) {
-      String schema =
-          environment.getProperty(
-              "spring.ai.chat.memory.repository.jdbc.schema",
-              "classpath:dev/mikoto2000/rei/conversation/schema-sqlite.sql");
-      schema = schema.replace("@@platform@@", "sqlite");
-      new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(
-              new org.springframework.core.io.DefaultResourceLoader().getResource(schema))
-          .execute(dataSource);
+      DataSource dataSource,
+      org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
+      org.springframework.core.env.Environment environment) {
+    var properties = new MemorySchemaProperties();
+    org.springframework.boot.context.properties.bind.Binder.get(environment)
+        .bind(
+            "spring.ai.chat.memory.repository.jdbc",
+            org.springframework.boot.context.properties.bind.Bindable.ofInstance(properties));
+    new org.springframework.boot.jdbc.init.PropertiesBasedDataSourceScriptDatabaseInitializer<>(
+            dataSource, properties)
+        .initializeDatabase();
+    return dev.mikoto2000.rei.chatmemory.JdbcConversationMemoryStore.fromJdbcTemplate(jdbcTemplate);
+  }
+
+  /** Keeps the same property defaults and Boot initializer used by the former JDBC starter. */
+  private static final class MemorySchemaProperties
+      extends org.springframework.boot.jdbc.init.DatabaseInitializationProperties {
+    @Override
+    public String getDefaultSchemaLocation() {
+      return "classpath:org/springframework/ai/chat/memory/repository/jdbc/schema-@@platform@@.sql";
     }
-    return new dev.mikoto2000.rei.chatmemory.JdbcConversationMemoryStore(dataSource);
   }
 
   /** 機能の組み立てで用いるベクトル保存先データ取得元を返す。 */

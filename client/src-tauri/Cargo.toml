@@ -21,6 +21,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "io-util"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "query", "stream"] }
+webpki-root-certs = "1.0"
 url = "2"
 futures-util = "0.3"
 uuid = { version = "1", features = ["v4", "serde"] }
@@ -46,6 +47,7 @@ tauri-build = { version = "2", features = [] }
 [dev-dependencies]
 axum = "0.8"
 tauri = { version = "2", features = ["test"] }
+tokio-rustls = "0.26"
 
 [patch.crates-io]
 # GTK3 still requires glib 0.18. This crate carries the upstream VariantStrIter fix.

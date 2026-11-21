@@ -68,6 +68,8 @@ Node.js の型定義は検証環境に合わせて 24 系を使用していま�
 Rust の HTTP adapter は reqwest 0.13 の `rustls` / `json` / `query` / `stream` を
 明示的に有効にしています。Argon2 0.6 への更新後も Vault の保存形式と鍵導出パラメーターは
 維持し、0.5.3 で生成した固定データの読み取り・追記・再読み取りをテストしています。
+HTTPS は更新前と同じ Mozilla CA bundle を `tls_certs_only` で明示し、OS の証明書ストアへ
+信頼方式を切り替えません。CA chain と hostname の検証は維持します。
 
 Windows 実行ファイル: `src-tauri/target/debug/rei-client.exe`。通常の `cargo build` は開発用 URL を利用するため、配布可能な assets 埋込みビルドには Tauri CLI を利用します。インストーラー作成・署名は今回の対象外です。
 

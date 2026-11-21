@@ -3,6 +3,26 @@
 現在の基盤は Spring Boot 4.2.0 / Spring AI 2.1.0 です（2026-11-21 更新）。
 以下の4.1.1 / 2.0.1 の説明は、その時点の移行記録です。
 
+### 依存更新と警告対応の互換性レビュー（2026-11-21）
+
+対象は依存更新 `c2ff9870` と警告対応 `984ee03a` です。
+
+JDBC の互換実装が旧構成の `continue-on-error`、`platform` と、設定済み `JdbcTemplate` を
+引き継いでいなかったため修正しました。Spring Boot の標準 schema initializer と property binding を使い、
+旧 starter と同じ既定値（continue-on-error は true）、明示指定した false、platform 置換を維持します。
+履歴のクエリには注入された `JdbcTemplate` を使い、query timeout などの設定も維持します。
+設定メタデータも残し、既存のプロパティ名をそのまま利用できます。
+
+旧実装で再現テストの失敗を確認し、修正後は起動・履歴・会話文脈・Shell を含む286件が成功しました。
+Checkstyle / SpotBugs / Spotless は指摘0件です。
+メモリの切り詰め・stream 集約・JDBC 保存処理は、更新前の Spring AI 2.0.2 の公式ソースとも照合しました。
+書式変更を含む既存947 Java ファイルを javac で構文解析し、文字列値の列は941ファイルで完全一致、
+残る6ファイルもキーマップ・設定・テストの意図した変更だけであることを確認しました。
+プロンプト、SQL、表示文言に意図しない変更は見つかっていません。
+
+Rust の HTTPS 信頼方式も更新前の Mozilla CA bundle に戻しました。
+[クライアントの検証記録](../client/VALIDATION.md)を参照してください。
+
 今回の更新では、直接指定している Java ライブラリと Maven プラグインも Maven Central の
 最新安定版へ更新しました。軽量 CLI と Backend の JLine は 4.7.0 にそろえています。
 JLine 4 がマウス用 terminfo を文字列 `\\E[M` のまま登録する場合に、Windows パスの

@@ -1,5 +1,17 @@
 # Live AgentEvent Activity validation
 
+## 依存更新の互換性レビュー（2026-11-21）
+
+reqwest 0.13 の既定値では OS の証明書ストアを使うため、更新前の `rustls-tls` と同じ
+Mozilla CA bundle を明示しました。`webpki-root-certs` は既存のロック済み1.0.12を直接参照します。
+`tls_certs_only` を使い、ネイティブの信頼ストアは混ぜません。
+根拠は [reqwest の移行案内](https://github.com/seanmonstar/reqwest/discussions/2906)を参照してください。
+
+ローカルの実 TLS ハンドシェイクで、fixture CA を選択したときの接続成功、
+未知の CA と hostname 不一致の拒否を確認しました。OS の証明書ストアは変更していません。
+Rust native 全134件、厳格な Clippy、型検査・Vite build、Tauri debug assets 埋込みビルドは成功しました。
+Android / iOS の実機と実サーバーを使う動作確認は今回も対象外です。
+
 ## 依存ライブラリ更新（2026-11-21）
 
 Windows / JDK 25 / Rust 1.99.1 / Node.js 24.22.1。

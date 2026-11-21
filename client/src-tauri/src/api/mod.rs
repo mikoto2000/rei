@@ -14,6 +14,8 @@ mod history;
 mod schedules;
 mod stateful;
 mod tasks;
+#[cfg(test)]
+mod tls_tests;
 mod workspace;
 use history::*;
 
@@ -29,16 +31,28 @@ pub struct HttpReiClient {
 impl HttpReiClient {
     pub fn new(base_url: &str, credential: Option<Secret>) -> Result<Self> {
         let profile = ServerProfile::new("validation", base_url)?;
-        let client = Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(Duration::from_secs(10))
-            .build()
+        // reqwest 0.12's rustls-tls used Mozilla roots. 0.13 defaults to the OS
+        // verifier, so select the same trust policy explicitly on every platform.
+        let roots = webpki_root_certs::TLS_SERVER_ROOT_CERTS
+            .iter()
+            .map(|certificate| reqwest::Certificate::from_der(certificate.as_ref()))
+            .collect::<std::result::Result<Vec<_>, _>>()
             .map_err(|_| AppError::InvalidInput)?;
+        let client = Self::http_client(roots)?;
         Ok(Self {
             client,
             base_url: profile.base_url,
             credential,
         })
+    }
+    fn http_client(roots: impl IntoIterator<Item = reqwest::Certificate>) -> Result<Client> {
+        Client::builder()
+            .tls_backend_rustls()
+            .tls_certs_only(roots)
+            .redirect(reqwest::redirect::Policy::none())
+            .connect_timeout(Duration::from_secs(10))
+            .build()
+            .map_err(|_| AppError::InvalidInput)
     }
     fn request(
         &self,

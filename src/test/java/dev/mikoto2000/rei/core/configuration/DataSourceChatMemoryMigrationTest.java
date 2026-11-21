@@ -1,8 +1,10 @@
 package dev.mikoto2000.rei.core.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.mikoto2000.rei.chatmemory.JdbcConversationMemoryStore;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,7 @@ class DataSourceChatMemoryMigrationTest {
     var store =
         configuration.conversationMemoryStore(
             source,
+            new JdbcTemplate(source),
             new MockEnvironment()
                 .withProperty("spring.ai.chat.memory.repository.jdbc.initialize-schema", "always"));
     var memory = configuration.chatMemory(store);
@@ -77,12 +80,14 @@ class DataSourceChatMemoryMigrationTest {
                 "spring.ai.chat.memory.repository.jdbc.schema",
                 "classpath:org/springframework/ai/chat/memory/repository/jdbc/schema-@@platform@@.sql");
     var configuration = new DataSourceConfiguration();
-    var store = configuration.conversationMemoryStore(source, environment);
+    var store =
+        configuration.conversationMemoryStore(source, new JdbcTemplate(source), environment);
     store.saveAll(
         "existing",
         java.util.List.of(new org.springframework.ai.chat.messages.UserMessage("saved")));
 
-    var reopened = configuration.conversationMemoryStore(source, environment);
+    var reopened =
+        configuration.conversationMemoryStore(source, new JdbcTemplate(source), environment);
     assertThat(reopened.findByConversationId("existing"))
         .extracting(Message::getText)
         .containsExactly("saved");
@@ -96,6 +101,7 @@ class DataSourceChatMemoryMigrationTest {
       new DataSourceConfiguration()
           .conversationMemoryStore(
               source,
+              new JdbcTemplate(source),
               new MockEnvironment()
                   .withProperty("spring.ai.chat.memory.repository.jdbc.initialize-schema", mode));
       assertThat(
@@ -105,5 +111,63 @@ class DataSourceChatMemoryMigrationTest {
                       Integer.class))
           .isZero();
     }
+  }
+
+  @Test
+  void defaultAndExplicitContinueOnErrorRetainExistingInitializationBehavior() throws Exception {
+    for (String setting : java.util.List.of("default", "true", "false")) {
+      var source = new SQLiteDataSource();
+      source.setUrl("jdbc:sqlite:" + tempDir.resolve(setting + ".db"));
+      var jdbc = new JdbcTemplate(source);
+      jdbc.execute("CREATE TABLE existing (id INTEGER)");
+      Path schema = tempDir.resolve(setting + ".sql");
+      Files.writeString(
+          schema, "CREATE TABLE existing (id INTEGER); CREATE TABLE after_error (id INTEGER);");
+      var environment =
+          new MockEnvironment()
+              .withProperty("spring.ai.chat.memory.repository.jdbc.initialize-schema", "always")
+              .withProperty(
+                  "spring.ai.chat.memory.repository.jdbc.schema", schema.toUri().toString());
+      if (!setting.equals("default"))
+        environment.withProperty(
+            "spring.ai.chat.memory.repository.jdbc.continue-on-error", setting);
+      if (setting.equals("false")) {
+        assertThatThrownBy(() ->
+                new DataSourceConfiguration()
+                    .conversationMemoryStore(source, new JdbcTemplate(source), environment))
+            .isInstanceOf(
+                org.springframework.jdbc.datasource.init.ScriptStatementFailedException.class);
+      } else {
+        new DataSourceConfiguration()
+            .conversationMemoryStore(source, new JdbcTemplate(source), environment);
+        assertThat(
+                jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE name = 'after_error'", Integer.class))
+            .isEqualTo(1);
+      }
+    }
+  }
+
+  @Test
+  void existingPlatformOverrideSelectsTheConfiguredSchemaResource() throws Exception {
+    var source = new SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + tempDir.resolve("platform.db"));
+    Path schema = tempDir.resolve("schema-compatible.sql");
+    Files.writeString(schema, "CREATE TABLE selected_platform (id INTEGER);");
+    var environment =
+        new MockEnvironment()
+            .withProperty("spring.ai.chat.memory.repository.jdbc.initialize-schema", "always")
+            .withProperty("spring.ai.chat.memory.repository.jdbc.platform", "compatible")
+            .withProperty(
+                "spring.ai.chat.memory.repository.jdbc.schema",
+                tempDir.resolve("schema-@@platform@@.sql").toUri().toString());
+    new DataSourceConfiguration()
+        .conversationMemoryStore(source, new JdbcTemplate(source), environment);
+    assertThat(
+            new JdbcTemplate(source)
+                .queryForObject(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE name = 'selected_platform'",
+                    Integer.class))
+        .isEqualTo(1);
   }
 }
