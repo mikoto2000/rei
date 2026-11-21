@@ -93,6 +93,10 @@ Picocli のコマンドや引数を変更した場合は、対応する GraalVM 
 
 実装変更を完了する前に対象の回帰一式を実行してください。外部サービスを使う `live-e2e` は明示的に実行します。[テスト分類と計測](docs/test-performance.md)・[実サービスを使うテスト](docs/live-environment-e2e.md)・[軽量 CLI の Windows E2E](docs/lightweight-cli-client.md#テストと実装状況)
 
+コンパイラは deprecation / unchecked 警告をエラーにします。Backend の Surefire は Mockito を
+起動時 agent として読み込み、テスト JVM の CDS は使用しません。Maven・アプリの起動・
+Surefire は必要な native access を明示します。警告の抑制設定を足さずに原因を解消してください。
+
 CI の Java 全件回帰は Windows の2ジョブで実行します。Shard A は
 [`.github/ci/java-shard-a.txt`](.github/ci/java-shard-a.txt) にあるクラスを実行し、
 Shard B は Surefire の既定対象からそのクラスを除いた残りを実行します。

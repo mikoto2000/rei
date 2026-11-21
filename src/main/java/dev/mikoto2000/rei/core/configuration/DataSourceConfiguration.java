@@ -17,11 +17,44 @@ import org.sqlite.SQLiteDataSource;
 @Configuration
 public class DataSourceConfiguration {
 
+  /** Preserves the former JDBC-backed auto-configuration and its default 20-message window. */
+  @Bean
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(
+      dev.mikoto2000.rei.chatmemory.ConversationMemory.class)
+  public dev.mikoto2000.rei.chatmemory.ConversationMemory chatMemory(
+      dev.mikoto2000.rei.chatmemory.JdbcConversationMemoryStore store) {
+    return dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.withStore(store, 20);
+  }
+
   /** 機能の組み立てで用いるデータ取得元を返す。 */
   @Bean
   @Primary
   public DataSource dataSource() throws IOException {
     return sqliteDataSource(ReiPaths.memoryDbPath());
+  }
+
+  /**
+   * Retains initialization of the legacy SQLite memory table without deprecated auto-configuration.
+   */
+  @Bean
+  public dev.mikoto2000.rei.chatmemory.JdbcConversationMemoryStore conversationMemoryStore(
+      DataSource dataSource, org.springframework.core.env.Environment environment) {
+    String mode =
+        environment.getProperty(
+            "spring.ai.chat.memory.repository.jdbc.initialize-schema", "embedded");
+    if (org.springframework.boot.sql.init.DatabaseInitializationMode.valueOf(
+            mode.toUpperCase(java.util.Locale.ROOT))
+        == org.springframework.boot.sql.init.DatabaseInitializationMode.ALWAYS) {
+      String schema =
+          environment.getProperty(
+              "spring.ai.chat.memory.repository.jdbc.schema",
+              "classpath:dev/mikoto2000/rei/conversation/schema-sqlite.sql");
+      schema = schema.replace("@@platform@@", "sqlite");
+      new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(
+              new org.springframework.core.io.DefaultResourceLoader().getResource(schema))
+          .execute(dataSource);
+    }
+    return new dev.mikoto2000.rei.chatmemory.JdbcConversationMemoryStore(dataSource);
   }
 
   /** 機能の組み立てで用いるベクトル保存先データ取得元を返す。 */

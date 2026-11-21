@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.conversation.FileSessionRepository;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
@@ -29,7 +30,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -62,7 +62,7 @@ class ShellSessionExecutionTest {
     disk.startOrdered(saved, "saved-user-marker", java.time.Instant.now());
     disk.finish(saved, ConversationTurnStore.Status.COMPLETED, "saved-answer-marker");
     var restored = new ConversationTurnStore(directory);
-    var memory = MessageWindowChatMemory.builder().build();
+    var memory = WindowedConversationMemory.builder().build();
     List<Prompt> prompts = new ArrayList<>();
     ChatModel model =
         new ChatModel() {
@@ -130,7 +130,7 @@ class ShellSessionExecutionTest {
     var projects =
         new ProjectService(directory, new ProjectRegistry(directory.resolve("projects.json")));
     var repository = new FileSessionRepository(directory.resolve("sessions.json"));
-    var memory = MessageWindowChatMemory.builder().build();
+    var memory = WindowedConversationMemory.builder().build();
     List<Prompt> prompts = new ArrayList<>();
     ChatModel model =
         new ChatModel() {
@@ -156,8 +156,7 @@ class ShellSessionExecutionTest {
             .defaultAdvisors(
                 RunScopedAdvisor.wrap(
                     List.of(
-                        org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor.builder(
-                                memory)
+                        dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor.builder(memory)
                             .build())))
             .build();
     var holder = mock(ModelHolderService.class);

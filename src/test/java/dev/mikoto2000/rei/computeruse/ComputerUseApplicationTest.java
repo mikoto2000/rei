@@ -52,7 +52,7 @@ class ComputerUseApplicationTest {
   @Autowired dev.mikoto2000.rei.llm.LlmChatClientProvider clients;
 
   /** 検証に使う履歴。 */
-  @Autowired org.springframework.ai.chat.memory.ChatMemory history;
+  @Autowired dev.mikoto2000.rei.chatmemory.ConversationMemory history;
 
   /** 正確に一度だけを利用することを確認する。 */
   @Test
@@ -90,7 +90,8 @@ class ComputerUseApplicationTest {
                         .build()))
             .advisors(a ->
                 a.param(
-                    org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, conversation))
+                    org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                    conversation))
             .stream()
             .chatResponse()
             .collectList()

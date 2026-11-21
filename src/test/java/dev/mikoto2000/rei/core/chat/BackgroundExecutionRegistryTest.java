@@ -35,7 +35,7 @@ class BackgroundExecutionRegistryTest {
             new dev.mikoto2000.rei.core.project.ProjectRegistry(
                 directory.resolve("projects.json")));
     var tasks = new ArrayList<Runnable>();
-    var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
+    var memory = dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build();
     var history =
         new dev.mikoto2000.rei.summarize.CurrentConversationHistoryAppender(
             memory, Optional.empty());

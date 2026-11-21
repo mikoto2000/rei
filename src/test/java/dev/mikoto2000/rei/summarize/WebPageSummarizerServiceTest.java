@@ -15,7 +15,7 @@ class WebPageSummarizerServiceTest {
 
   @Test
   void summaryCompletionStaysWithTheConversationThatRecordedTheRequest() {
-    var memory = org.mockito.Mockito.mock(org.springframework.ai.chat.memory.ChatMemory.class);
+    var memory = org.mockito.Mockito.mock(dev.mikoto2000.rei.chatmemory.ConversationMemory.class);
     var appender = new CurrentConversationHistoryAppender(memory, java.util.Optional.empty());
     var root = java.nio.file.Path.of(".");
     var first =

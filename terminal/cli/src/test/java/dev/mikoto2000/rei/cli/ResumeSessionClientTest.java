@@ -131,7 +131,7 @@ class ResumeSessionClientTest {
       String keys, ByteArrayOutputStream output) throws IOException {
     var terminal =
         new DumbTerminal(new ByteArrayInputStream(keys.getBytes(StandardCharsets.UTF_8)), output);
-    terminal.setSize(new org.jline.terminal.Size(100, 12));
+    terminal.setSize(org.jline.terminal.Size.of(100, 12));
     var provider =
         java.lang.reflect.Proxy.newProxyInstance(
             ResumeSessionClientTest.class.getClassLoader(),

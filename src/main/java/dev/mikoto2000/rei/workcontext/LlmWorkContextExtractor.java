@@ -118,9 +118,7 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
     Integer completionLimit = baseOptions.getMaxCompletionTokens();
     Integer tokenLimit = baseOptions.getMaxTokens();
     if (completionLimit != null)
-      optionsBuilder
-          .maxTokens(null)
-          .maxCompletionTokens(Math.min(completionLimit, properties.maxOutputTokens()));
+      optionsBuilder.maxCompletionTokens(Math.min(completionLimit, properties.maxOutputTokens()));
     else
       optionsBuilder.maxTokens(
           tokenLimit == null

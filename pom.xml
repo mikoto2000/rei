@@ -97,8 +97,8 @@
 			<version>3.0.9</version>
 		</dependency>
 		<dependency>
-			<groupId>org.springframework.ai</groupId>
-			<artifactId>spring-ai-starter-model-chat-memory-repository-jdbc</artifactId>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-jdbc</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.xerial</groupId>
@@ -108,6 +108,12 @@
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
 			<artifactId>spring-ai-starter-model-openai</artifactId>
+			<exclusions>
+				<exclusion>
+					<groupId>org.springframework.ai</groupId>
+					<artifactId>spring-ai-autoconfigure-model-chat-memory</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.ai</groupId>
@@ -314,6 +320,7 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
 					<forkCount>1</forkCount>
+					<argLine>--enable-native-access=ALL-UNNAMED -Xshare:off "-javaagent:${settings.localRepository}/org/mockito/mockito-core/${mockito.version}/mockito-core-${mockito.version}.jar"</argLine>
 					<reuseForks>true</reuseForks>
 					<failIfNoTests>true</failIfNoTests>
 					<groups>${test.groups}</groups>
@@ -376,6 +383,10 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<configuration>
 					<fork>true</fork>
+					<showWarnings>true</showWarnings>
+					<showDeprecation>true</showDeprecation>
+					<failOnWarning>true</failOnWarning>
+					<compilerArgs><arg>-Xlint:unchecked</arg></compilerArgs>
 				</configuration>
 				<executions>
 					<execution>
@@ -402,6 +413,7 @@
 				</executions>
 				<configuration>
 					<time>off</time>
+					<jvmArguments>--enable-native-access=ALL-UNNAMED</jvmArguments>
 					<excludes>
 						<exclude>
 							<groupId>org.projectlombok</groupId>

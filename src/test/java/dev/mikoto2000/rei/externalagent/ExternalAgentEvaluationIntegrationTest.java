@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor;
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.chat.RunScopedAdvisor;
@@ -24,9 +26,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -77,7 +76,7 @@ class ExternalAgentEvaluationIntegrationTest {
     run.setRunContext(owner);
     run.setUserRequest(user);
     var invocations = new AtomicInteger();
-    var memory = MessageWindowChatMemory.builder().maxMessages(20).build();
+    var memory = WindowedConversationMemory.builder().maxMessages(20).build();
     memory.add(owner.conversationId(), new AssistantMessage("Decision: require HTTPS"));
     var service =
         new ExternalAgentDelegationService(
@@ -146,7 +145,7 @@ class ExternalAgentEvaluationIntegrationTest {
             .defaultAdvisors(
                 RunScopedAdvisor.wrap(
                     List.of(
-                        MessageChatMemoryAdvisor.builder(memory).build(),
+                        ConversationMemoryAdvisor.builder(memory).build(),
                         new ExternalAgentReviewAdvisor(service, memory))))
             .build();
     var scope = AgentRunScope.open(owner);
@@ -157,7 +156,10 @@ class ExternalAgentEvaluationIntegrationTest {
           client
               .prompt(new Prompt(new UserMessage(user), options))
               .advisors(a ->
-                  a.param(ChatMemory.CONVERSATION_ID, owner.conversationId())
+                  a.param(
+                          org.springframework.ai.chat.client.advisor.api.MemoryAdvisor
+                              .CONVERSATION_ID,
+                          owner.conversationId())
                       .param(AgentRunContext.class.getName(), owner))
               .stream()
               .content()

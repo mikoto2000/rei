@@ -103,7 +103,7 @@ class ResumeSessionCommandTest {
               mock(dev.mikoto2000.rei.event.ProjectAgentEventStore.class),
               mock(dev.mikoto2000.rei.core.project.ProjectRunStateStore.class),
               new dev.mikoto2000.rei.core.working.WorkingSet(),
-              mock(org.springframework.ai.chat.memory.ChatMemory.class));
+              mock(dev.mikoto2000.rei.chatmemory.ConversationMemory.class));
       activity.attach(output);
       var service = mock(PersistentCheckpointService.class);
       when(service.resumeForShell(eq(projects.currentContext().id()), eq("task"), any()))

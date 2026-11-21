@@ -162,18 +162,8 @@ impl ReiClient for HttpReiClient {
     ) -> Result<ManagedTask> {
         self.task_submit(project, session, message).await
     }
-    async fn control_task(
-        &self,
-        project: &str,
-        session: Option<&str>,
-        id: &str,
-        run: Option<&str>,
-        revision: u64,
-        action: TaskAction,
-        message: Option<&str>,
-    ) -> Result<ManagedTask> {
-        self.task_control(project, session, id, run, revision, action, message)
-            .await
+    async fn control_task(&self, control: TaskControl<'_>) -> Result<ManagedTask> {
+        self.task_control(control).await
     }
     async fn resume_checkpoint(&self, project: &str, task: &str) -> Result<CheckpointReceipt> {
         self.saved_checkpoint_run(project, task, true).await

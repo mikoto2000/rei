@@ -148,7 +148,7 @@ class TerminalMultilineInputTest {
             new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)),
             new ByteArrayOutputStream(),
             StandardCharsets.UTF_8);
-    terminal.setSize(new Size(120, 30));
+    terminal.setSize(Size.of(120, 30));
     return terminal;
   }
 

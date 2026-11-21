@@ -60,7 +60,7 @@ class ReiApplicationMultilineInputTest {
                 input.getBytes(java.nio.charset.StandardCharsets.UTF_8)),
             new java.io.ByteArrayOutputStream(),
             java.nio.charset.StandardCharsets.UTF_8)) {
-      terminal.setSize(new org.jline.terminal.Size(120, 30));
+      terminal.setSize(org.jline.terminal.Size.of(120, 30));
       var reader =
           dev.mikoto2000.rei.core.command.ReiLineReaderFactory.create(
               terminal, (org.jline.reader.Completer) (r, line, candidates) -> {});

@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.core.datasource;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.mikoto2000.rei.chatmemory.JdbcConversationMemoryStore;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -11,7 +12,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.core.io.ClassPathResource;
@@ -109,7 +109,7 @@ class SqliteChatMemorySchemaMigrationTest {
 
     var messages = new ArrayList<>(repository.findByConversationId("a"));
     assertThat(messages).extracting(Message::getText).containsExactly("question", "answer");
-    assertThat(messages.getFirst().getMetadata().get(JdbcChatMemoryRepository.CONVERSATION_TS))
+    assertThat(messages.getFirst().getMetadata().get(JdbcConversationMemoryStore.CONVERSATION_TS))
         .isEqualTo(Instant.ofEpochMilli(1000L));
     messages.add(new UserMessage("follow-up"));
     repository.saveAll("a", messages);
@@ -223,8 +223,7 @@ class SqliteChatMemorySchemaMigrationTest {
   /** {@code initializeSpringAiSchema} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void initializeSpringAiSchema() {
     new ResourceDatabasePopulator(
-            new ClassPathResource(
-                "org/springframework/ai/chat/memory/repository/jdbc/schema-sqlite.sql"))
+            new ClassPathResource("dev/mikoto2000/rei/conversation/schema-sqlite.sql"))
         .execute(dataSource);
   }
 
@@ -247,8 +246,8 @@ class SqliteChatMemorySchemaMigrationTest {
   }
 
   /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
-  private JdbcChatMemoryRepository repository() {
-    return JdbcChatMemoryRepository.builder().dataSource(dataSource).build();
+  private JdbcConversationMemoryStore repository() {
+    return new JdbcConversationMemoryStore(dataSource);
   }
 
   /** 複数の検証で共通する期待結果を確認し、要件に合わない状態を検出する。 */

@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.core.contextbudget;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunScopedAdvisor;
@@ -23,8 +24,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -98,7 +97,7 @@ class ContextChatIntegrationTest {
                 new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
           }
         };
-    var memory = MessageWindowChatMemory.builder().maxMessages(100).build();
+    var memory = WindowedConversationMemory.builder().maxMessages(100).build();
     var client =
         ChatClient.builder(new StagnationChatModel(model, assembler))
             .defaultSystem("system rules")
@@ -115,7 +114,9 @@ class ContextChatIntegrationTest {
         .prompt(new Prompt(new UserMessage("current request"), options))
         .advisors(a ->
             a.param(AgentRunContext.class.getName(), owner)
-                .param(ChatMemory.CONVERSATION_ID, "chat"))
+                .param(
+                    org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                    "chat"))
         .stream()
         .chatResponse()
         .blockLast();

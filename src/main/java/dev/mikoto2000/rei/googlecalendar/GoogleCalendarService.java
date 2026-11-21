@@ -1,6 +1,5 @@
 package dev.mikoto2000.rei.googlecalendar;
 
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
@@ -14,6 +13,7 @@ import dev.mikoto2000.rei.secretary.SecretaryProvider.Item;
 import dev.mikoto2000.rei.secretary.SecretaryProvider.Outcome;
 import dev.mikoto2000.rei.secretary.SecretaryProvider.Page;
 import dev.mikoto2000.rei.secretary.SecretaryProvider.Service;
+import dev.mikoto2000.rei.transport.GoogleHttpTransportFactory;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -97,7 +97,7 @@ public class GoogleCalendarService {
     if (!properties.calendar().enabled()) {
       throw new IllegalStateException("Google Calendar integration is disabled");
     }
-    NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+    NetHttpTransport httpTransport = GoogleHttpTransportFactory.newTrustedTransport();
     authorizeCredential.authorize(httpTransport, forceReauthorize);
   }
 
@@ -195,7 +195,7 @@ public class GoogleCalendarService {
       throw new IllegalStateException("Google Calendar integration is disabled");
     }
 
-    NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+    NetHttpTransport httpTransport = GoogleHttpTransportFactory.newTrustedTransport();
     return new Calendar.Builder(
             httpTransport, JSON_FACTORY, authorizeCredential.authorize(httpTransport, false))
         .setApplicationName(properties.applicationName())
@@ -256,7 +256,9 @@ public class GoogleCalendarService {
     if (properties.calendar() == null || !properties.calendar().enabled())
       throw new Failure("CALENDAR_DISABLED", 0, false);
     return new Calendar.Builder(
-            GoogleNetHttpTransport.newTrustedTransport(), JSON_FACTORY, secretaryInitializer.get())
+            GoogleHttpTransportFactory.newTrustedTransport(),
+            JSON_FACTORY,
+            secretaryInitializer.get())
         .setApplicationName(properties.applicationName())
         .build();
   }

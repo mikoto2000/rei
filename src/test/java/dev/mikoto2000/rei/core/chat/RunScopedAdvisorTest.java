@@ -17,7 +17,7 @@ class RunScopedAdvisorTest {
   /** 記憶対話の補助について、既定会話を保持することを確認する。 */
   @Test
   void memoryAdvisorRetainsDefaultConversationWithoutRunOwner() {
-    var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
+    var memory = dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build();
     var model =
         new org.springframework.ai.chat.model.ChatModel() {
           /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
@@ -37,8 +37,7 @@ class RunScopedAdvisorTest {
         ChatClient.builder(model)
             .defaultAdvisors(
                 new RunScopedAdvisor(
-                    org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor.builder(
-                            memory)
+                    dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor.builder(memory)
                         .build()))
             .build();
     assertThat(client.prompt("question").call().content()).isEqualTo("answer");

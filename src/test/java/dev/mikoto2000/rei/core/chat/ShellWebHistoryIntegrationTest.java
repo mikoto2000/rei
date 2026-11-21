@@ -16,6 +16,7 @@ import dev.mikoto2000.rei.application.run.SessionRegistry;
 import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.application.session.SessionQueryService;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.conversation.FileSessionRepository;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
@@ -38,7 +39,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -61,7 +61,7 @@ class ShellWebHistoryIntegrationTest {
     var service = new ProjectService(directory, projects);
     var repo = new FileSessionRepository(directory.resolve("sessions.json"));
     var turns = new ConversationTurnStore(directory);
-    var memory = MessageWindowChatMemory.builder().build();
+    var memory = WindowedConversationMemory.builder().build();
     List<Prompt> modelInputs = new ArrayList<>();
     var model =
         new ChatModel() {
@@ -88,8 +88,7 @@ class ShellWebHistoryIntegrationTest {
             .defaultAdvisors(
                 RunScopedAdvisor.wrap(
                     List.of(
-                        org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor.builder(
-                                memory)
+                        dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor.builder(memory)
                             .build())))
             .build();
     var holder = mock(ModelHolderService.class);

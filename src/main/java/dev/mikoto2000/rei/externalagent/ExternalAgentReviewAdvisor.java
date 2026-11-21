@@ -99,7 +99,7 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
   /** 指定された値や利用先を使って、ExternalAgentReviewAdvisorを初期化する。 */
   public ExternalAgentReviewAdvisor(
       ExternalAgentDelegationService service,
-      org.springframework.ai.chat.memory.ChatMemory memory) {
+      dev.mikoto2000.rei.chatmemory.ConversationMemory memory) {
     this.review =
         (owner, request) ->
             request.agent() == null

@@ -4,13 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
 import dev.mikoto2000.rei.core.configuration.CoreProperties;
 import dev.mikoto2000.rei.core.configuration.SystemPromptService;
 import dev.mikoto2000.rei.summarize.SummaryTools;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.ObjectProvider;
@@ -30,7 +30,7 @@ class LlmChatClientProviderTest {
             models,
             new CoreProperties("system", 100),
             system,
-            mock(ChatMemory.class),
+            mock(ConversationMemory.class),
             optional(null),
             optional(null),
             optional(null),
@@ -96,7 +96,7 @@ class LlmChatClientProviderTest {
             models,
             new CoreProperties("system", 100),
             system,
-            mock(ChatMemory.class),
+            mock(ConversationMemory.class),
             optional(null),
             optional(null),
             optional(null),
@@ -173,7 +173,7 @@ class LlmChatClientProviderTest {
             models,
             new CoreProperties("system", 100),
             system,
-            mock(ChatMemory.class),
+            mock(ConversationMemory.class),
             optional(null),
             optional(null),
             optional(null),
@@ -257,7 +257,7 @@ class LlmChatClientProviderTest {
     when(models.subAgentChatModel()).thenReturn(model);
     when(models.chatOptions(LlmFeature.CHAT, null))
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
-    var memory = mock(ChatMemory.class);
+    var memory = mock(ConversationMemory.class);
     var provider =
         new LlmChatClientProvider(
             models,
@@ -338,7 +338,7 @@ class LlmChatClientProviderTest {
             .toolChoice("auto")
             .build();
     when(models.chatOptions(feature, null)).thenReturn(originalOptions);
-    var memory = mock(ChatMemory.class);
+    var memory = mock(ConversationMemory.class);
     var system = mock(SystemPromptService.class);
     var provider =
         new LlmChatClientProvider(
@@ -433,7 +433,7 @@ class LlmChatClientProviderTest {
             models,
             new CoreProperties("system", 100),
             system,
-            org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build(),
+            dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build(),
             optional(null),
             optional(null),
             optional(null),
@@ -510,7 +510,7 @@ class LlmChatClientProviderTest {
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var system = mock(SystemPromptService.class);
     when(system.systemPrompt()).thenReturn("system");
-    var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
+    var memory = dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build();
     var provider =
         new LlmChatClientProvider(
             models,
@@ -549,7 +549,10 @@ class LlmChatClientProviderTest {
         .chatClient(LlmFeature.CHAT)
         .prompt()
         .user("continue")
-        .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "chat:saved"))
+        .advisors(a ->
+            a.param(
+                org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                "chat:saved"))
         .call()
         .content();
     assertThat(prompts.getLast().toString())
@@ -570,7 +573,7 @@ class LlmChatClientProviderTest {
             models,
             new CoreProperties("system prompt", 100),
             systemPrompt,
-            mock(ChatMemory.class),
+            mock(ConversationMemory.class),
             optional(null),
             optional(null),
             optional(null),
@@ -632,7 +635,7 @@ class LlmChatClientProviderTest {
             models,
             new CoreProperties("system prompt", 100),
             systemPrompt,
-            mock(ChatMemory.class),
+            mock(ConversationMemory.class),
             optional(null),
             optional(null),
             optional(null),

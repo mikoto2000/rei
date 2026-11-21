@@ -1,4 +1,5 @@
 use crate::dto::*;
+use crate::ipc::TaskControlCommand;
 use crate::{application::*, domain::*, ports::*};
 use serde::Serialize;
 use std::sync::{
@@ -392,30 +393,18 @@ async fn task_submit(
         .await
 }
 #[tauri::command]
-#[allow(
-    clippy::too_many_arguments,
-    reason = "Preserves the Tauri command argument contract"
-)]
-async fn task_control(
-    app: App<'_>,
-    server_id: String,
-    project_id: String,
-    session_id: Option<String>,
-    task_id: String,
-    expected_run_id: Option<String>,
-    expected_revision: u64,
-    action: TaskAction,
-    message: Option<String>,
-) -> Result<ManagedTask> {
+async fn task_control(app: App<'_>, command: TaskControlCommand) -> Result<ManagedTask> {
     app.task_control(
-        &server_id,
-        &project_id,
-        session_id.as_deref(),
-        &task_id,
-        expected_run_id.as_deref(),
-        expected_revision,
-        action,
-        message.as_deref(),
+        &command.server_id,
+        TaskControl {
+            project: &command.project_id,
+            session: command.session_id.as_deref(),
+            id: &command.task_id,
+            run: command.expected_run_id.as_deref(),
+            revision: command.expected_revision,
+            action: command.action,
+            message: command.message.as_deref(),
+        },
     )
     .await
 }

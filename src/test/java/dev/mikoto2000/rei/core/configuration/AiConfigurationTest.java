@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationHistoryTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.actionplan.ActionPlanAdvisor;
@@ -37,7 +38,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
@@ -129,7 +129,7 @@ class AiConfigurationTest {
     return new AiConfiguration(
         systemPromptService(),
         Mockito.mock(ChatModel.class),
-        Mockito.mock(ChatMemory.class),
+        Mockito.mock(ConversationMemory.class),
         new Tools(),
         Mockito.mock(GoogleCalendarTools.class),
         Mockito.mock(TaskTools.class),
@@ -186,7 +186,7 @@ class AiConfigurationTest {
         new AiConfiguration(
             systemPromptService(),
             Mockito.mock(ChatModel.class),
-            Mockito.mock(ChatMemory.class),
+            Mockito.mock(ConversationMemory.class),
             new Tools(),
             Mockito.mock(GoogleCalendarTools.class),
             Mockito.mock(TaskTools.class),
@@ -277,7 +277,7 @@ class AiConfigurationTest {
         new AiConfiguration(
             systemPromptService(),
             Mockito.mock(ChatModel.class),
-            Mockito.mock(ChatMemory.class),
+            Mockito.mock(ConversationMemory.class),
             new Tools(),
             Mockito.mock(GoogleCalendarTools.class),
             Mockito.mock(TaskTools.class),
@@ -323,7 +323,7 @@ class AiConfigurationTest {
         new AiConfiguration(
             systemPromptService(),
             Mockito.mock(ChatModel.class),
-            Mockito.mock(ChatMemory.class),
+            Mockito.mock(ConversationMemory.class),
             new Tools(),
             Mockito.mock(GoogleCalendarTools.class),
             Mockito.mock(TaskTools.class),
@@ -386,7 +386,7 @@ class AiConfigurationTest {
         new AiConfiguration(
             systemPromptService(),
             model,
-            Mockito.mock(ChatMemory.class),
+            Mockito.mock(ConversationMemory.class),
             new Tools(),
             Mockito.mock(GoogleCalendarTools.class),
             Mockito.mock(TaskTools.class),

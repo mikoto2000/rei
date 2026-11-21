@@ -181,3 +181,14 @@ pub enum TaskAction {
     Resume,
     Input,
 }
+
+#[derive(Clone, Copy)]
+pub struct TaskControl<'a> {
+    pub project: &'a str,
+    pub session: Option<&'a str>,
+    pub id: &'a str,
+    pub run: Option<&'a str>,
+    pub revision: u64,
+    pub action: TaskAction,
+    pub message: Option<&'a str>,
+}

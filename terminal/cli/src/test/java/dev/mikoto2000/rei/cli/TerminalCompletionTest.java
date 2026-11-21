@@ -155,7 +155,7 @@ class TerminalCompletionTest {
             new ByteArrayInputStream(new byte[0]),
             new ByteArrayOutputStream(),
             java.nio.charset.StandardCharsets.UTF_8);
-    terminal.setSize(new Size(120, 30));
+    terminal.setSize(Size.of(120, 30));
     return terminal;
   }
 }

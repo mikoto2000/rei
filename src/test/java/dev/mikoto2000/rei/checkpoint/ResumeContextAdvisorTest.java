@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.checkpoint;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
@@ -19,8 +20,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClientRequest;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -80,7 +79,7 @@ class ResumeContextAdvisorTest {
               amended,
               current);
       var turns = ConversationTurnStore.inMemory();
-      var memory = MessageWindowChatMemory.builder().maxMessages(30).build();
+      var memory = WindowedConversationMemory.builder().maxMessages(30).build();
       var logs =
           new ConversationLogStore(
               root.resolve("logs"),
@@ -103,7 +102,7 @@ class ResumeContextAdvisorTest {
               .prompt(new Prompt(new UserMessage(current)))
               .context(
                   Map.of(
-                      ChatMemory.CONVERSATION_ID,
+                      org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
                       "chat",
                       AgentRunContext.class.getName(),
                       new AgentRunContext("current", "chat", root, "A")))

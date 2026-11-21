@@ -159,6 +159,9 @@ dev.mikoto2000.rei.core.checkpoint.CheckpointConfiguration -> dev.mikoto2000.rei
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.bluesky.BlueskyPostTools
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.bluesky.BlueskyProperties
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.briefing.BriefingTools
+dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.chatmemory.ConversationMemory
+dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor
+dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor$Builder
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.checkpoint.CheckpointTools
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.computeruse.ComputerUseTools
@@ -224,6 +227,9 @@ dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.webs
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.websearch.WebSearchTools
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.workcontext.WorkContextAdvisor
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.workcontext.WorkContextTools
+dev.mikoto2000.rei.core.configuration.DataSourceConfiguration -> dev.mikoto2000.rei.chatmemory.ConversationMemory
+dev.mikoto2000.rei.core.configuration.DataSourceConfiguration -> dev.mikoto2000.rei.chatmemory.JdbcConversationMemoryStore
+dev.mikoto2000.rei.core.configuration.DataSourceConfiguration -> dev.mikoto2000.rei.chatmemory.WindowedConversationMemory
 dev.mikoto2000.rei.core.configuration.DataSourceConfiguration -> dev.mikoto2000.rei.core.datasource.ReiPaths
 dev.mikoto2000.rei.core.configuration.DataSourceConfiguration -> dev.mikoto2000.rei.core.datasource.SqliteChatMemorySchemaMigration
 dev.mikoto2000.rei.core.configuration.DataSourceConfiguration -> dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource
@@ -231,6 +237,7 @@ dev.mikoto2000.rei.core.configuration.DataSourceConfiguration -> dev.mikoto2000.
 dev.mikoto2000.rei.core.configuration.VectorStoreConfiguration -> dev.mikoto2000.rei.vectorstore.DisabledVectorStore
 dev.mikoto2000.rei.core.configuration.VectorStoreConfiguration -> dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties
 dev.mikoto2000.rei.core.configuration.VectorStoreConfiguration -> dev.mikoto2000.rei.vectorstore.LazySqliteVectorStore
+dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.chatmemory.ConversationMemory
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.conversation.ConversationLogStore
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.conversation.ConversationTurnStore
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.core.Tools

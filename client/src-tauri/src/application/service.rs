@@ -109,21 +109,20 @@ impl Application {
         }
         Ok(task)
     }
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "Forwards the task-control command fields"
-    )]
     pub async fn task_control(
         &self,
         server: &str,
-        project: &str,
-        session: Option<&str>,
-        id: &str,
-        run: Option<&str>,
-        revision: u64,
-        action: TaskAction,
-        message: Option<&str>,
+        control: TaskControl<'_>,
     ) -> Result<ManagedTask> {
+        let TaskControl {
+            project,
+            session,
+            id,
+            run,
+            revision,
+            action,
+            ..
+        } = control;
         let api = self.api(server, true)?;
         let current = api.get_task(project, session, id).await?;
         current.owned(project, session, Some(id))?;
@@ -139,9 +138,7 @@ impl Application {
         if !supported {
             return Err(AppError::Conflict);
         }
-        let task = api
-            .control_task(project, session, id, run, revision, action, message)
-            .await?;
+        let task = api.control_task(control).await?;
         task.owned(project, session, Some(id))?;
         Ok(task)
     }

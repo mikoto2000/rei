@@ -73,7 +73,8 @@ Windows 実行ファイル: `src-tauri/target/debug/rei-client.exe`。通常の 
 
 Playwright はインストール済み Chrome を使います。`e2e/fixture.html` は command/event 境界を置き換えた UI テスト専用の入口で、production bundle に含みません。HTTP/SSE の結合テストは Rust の Axum mock server で行います。UI テストを実サーバーとの E2E とみなさないでください。
 
-Windows の制限付き環境で Cargo の incremental cache rename が拒否される場合は、そのプロセスのみ `$env:CARGO_INCREMENTAL='0'` として再実行できます。Playwright の子プロセス終了には通常のローカル実行権限が必要です。
+Windows の制限付き環境で incremental cache の確定処理が失敗するため、Cargo の dev / test profile は incremental compilation を使いません。コンパイル結果と実行時の挙動は同じで、再コンパイル時間は増える場合があります。
+`npm run test:e2e` は Playwright の起動前に `NO_COLOR` を対応する `FORCE_COLOR` 設定へ正規化し、色指定の競合を解消します。Playwright の子プロセス終了には通常のローカル実行権限が必要です。
 
 ## 接続と操作
 

@@ -45,7 +45,16 @@ tauri-build = { version = "2", features = [] }
 
 [dev-dependencies]
 axum = "0.8"
+tauri = { version = "2", features = ["test"] }
 
 [patch.crates-io]
 # GTK3 still requires glib 0.18. This crate carries the upstream VariantStrIter fix.
 glib = { path = "vendor/glib-0.18.5" }
+
+# Windows can deny the final rename of an incremental session. Build complete
+# artifacts instead of retaining a cache that the compiler cannot finalize.
+[profile.dev]
+incremental = false
+
+[profile.test]
+incremental = false

@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.core.contextbudget;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.conversation.SqliteConversationTurnStore;
@@ -18,8 +19,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.client.ChatClientRequest;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
@@ -63,7 +62,7 @@ class CancelledTaskProjectionTest {
         new ConversationSummary("cancelled tool observations", 1, Instant.now()));
     var advisor =
         new ContextHistoryAdvisor(
-            turns, MessageWindowChatMemory.builder().build(), summaries, logs);
+            turns, WindowedConversationMemory.builder().build(), summaries, logs);
     for (String input :
         List.of("hello again", "another subject", "please resume the earlier task")) {
       var current = owner(input);
@@ -96,7 +95,7 @@ class CancelledTaskProjectionTest {
         "chat",
         new ConversationSummary("stale summary: resume abandoned task", 100, Instant.now()));
     var projected =
-        new ContextHistoryAdvisor(turns, MessageWindowChatMemory.builder().build(), summaries)
+        new ContextHistoryAdvisor(turns, WindowedConversationMemory.builder().build(), summaries)
             .before(request(current, "new question"), null)
             .prompt();
     var props = new ContextCompressionProperties();
@@ -156,7 +155,12 @@ class CancelledTaskProjectionTest {
   private ChatClientRequest request(AgentRunContext owner, String text) {
     return ChatClientRequest.builder()
         .prompt(new Prompt(new UserMessage(text), OpenAiChatOptions.builder().build()))
-        .context(Map.of(ChatMemory.CONVERSATION_ID, "chat", AgentRunContext.class.getName(), owner))
+        .context(
+            Map.of(
+                org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                "chat",
+                AgentRunContext.class.getName(),
+                owner))
         .build();
   }
 }

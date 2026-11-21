@@ -21,7 +21,7 @@ class SecretaryMeetingOutputTest {
             new MeetingSelectionMenu.Candidate("b", "同じ名前"));
     try (var terminal =
         new DumbTerminal(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())) {
-      terminal.setSize(new Size(40, 3));
+      terminal.setSize(Size.of(40, 3));
       var reader = LineReaderBuilder.builder().terminal(terminal).build();
       reader.runMacro("\033[B \r");
       assertEquals("b", MeetingSelectionMenu.chooseOne(reader, candidates).orElseThrow());
@@ -47,7 +47,7 @@ class SecretaryMeetingOutputTest {
             new MeetingSelectionMenu.Candidate("p::d", "作業D"));
     try (var terminal =
         new DumbTerminal(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())) {
-      terminal.setSize(new Size(80, 10));
+      terminal.setSize(Size.of(80, 10));
       var reader = LineReaderBuilder.builder().terminal(terminal).build();
       var attributes = terminal.getAttributes();
       var keymap = reader.getKeyMaps().get("main");

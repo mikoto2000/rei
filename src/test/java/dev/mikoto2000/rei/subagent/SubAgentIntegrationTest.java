@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.working.WorkingSet;
@@ -16,7 +17,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
@@ -62,7 +62,7 @@ class SubAgentIntegrationTest {
   @Autowired SubAgentRegistry registry;
 
   /** 検証に使う履歴。 */
-  @Autowired ChatMemory history;
+  @Autowired ConversationMemory history;
 
   /** 検証に使う作業中集合。 */
   @Autowired WorkingSet workingSet;
@@ -170,7 +170,10 @@ class SubAgentIntegrationTest {
           .chatClient(LlmFeature.CHAT)
           .prompt()
           .user("review")
-          .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, main))
+          .advisors(a ->
+              a.param(
+                  org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                  main))
           .call()
           .content();
     } finally {

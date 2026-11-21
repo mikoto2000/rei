@@ -93,20 +93,16 @@ impl HttpReiClient {
         }
         Ok(task)
     }
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "Mirrors the task-control wire fields"
-    )]
-    pub(super) async fn task_control(
-        &self,
-        project: &str,
-        session: Option<&str>,
-        id: &str,
-        run: Option<&str>,
-        revision: u64,
-        action: TaskAction,
-        message: Option<&str>,
-    ) -> Result<ManagedTask> {
+    pub(super) async fn task_control(&self, control: TaskControl<'_>) -> Result<ManagedTask> {
+        let TaskControl {
+            project,
+            session,
+            id,
+            run,
+            revision,
+            action,
+            message,
+        } = control;
         Self::task_owner(project, session)?;
         if revision > 9_007_199_254_740_991 {
             return Err(AppError::InvalidInput);

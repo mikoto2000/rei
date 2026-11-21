@@ -120,16 +120,18 @@ public final class RunScopedAdvisor implements BaseAdvisor {
       if (!(delegate instanceof BaseChatMemoryAdvisor)
           || request
               .context()
-              .containsKey(org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID))
+              .containsKey(
+                  org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID))
         return request;
       // Preserve the former PromptChatMemoryAdvisor fallback for legacy non-run callers.
       var defaults = new java.util.HashMap<>(request.context());
-      defaults.put(org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, "default");
+      defaults.put(
+          org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID, "default");
       return request.mutate().context(defaults).build();
     }
     var context = new java.util.HashMap<>(request.context());
     context.put(AgentRunContext.class.getName(), current);
-    String memoryKey = org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID;
+    String memoryKey = org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID;
     if (!context.containsKey(memoryKey)) context.put(memoryKey, current.conversationId());
     else if (current.projectId() != null
         && context.get(memoryKey) instanceof String id

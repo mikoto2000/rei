@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.core.contextbudget;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import java.nio.file.Path;
@@ -9,8 +10,6 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClientRequest;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -46,7 +45,7 @@ class ContextHistoryAdvisorTest {
         new ConversationSummary("observations", 1, time));
     var advisor =
         new ContextHistoryAdvisor(
-            turns, MessageWindowChatMemory.builder().build(), summaries, logs);
+            turns, WindowedConversationMemory.builder().build(), summaries, logs);
     var result =
         advisor.before(
             ChatClientRequest.builder()
@@ -54,7 +53,11 @@ class ContextHistoryAdvisorTest {
                     new Prompt(
                         java.util.List.of(new UserMessage("current")),
                         org.springframework.ai.openai.OpenAiChatOptions.builder().build()))
-                .context(Map.of(ChatMemory.CONVERSATION_ID, "chat"))
+                .context(
+                    Map.of(
+                        org.springframework.ai.chat.client.advisor.api.MemoryAdvisor
+                            .CONVERSATION_ID,
+                        "chat"))
                 .build(),
             null);
     var text =
@@ -88,12 +91,15 @@ class ContextHistoryAdvisorTest {
     var advisor =
         new ContextHistoryAdvisor(
             turns,
-            MessageWindowChatMemory.builder().build(),
+            WindowedConversationMemory.builder().build(),
             new ConversationSummaryRepository(dir));
     advisor.before(
         ChatClientRequest.builder()
             .prompt(new Prompt(new UserMessage("current")))
-            .context(Map.of(ChatMemory.CONVERSATION_ID, "chat"))
+            .context(
+                Map.of(
+                    org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                    "chat"))
             .build(),
         null);
     assertThat(reads).hasValue(1);
@@ -135,13 +141,17 @@ class ContextHistoryAdvisorTest {
           new ConversationSummary(row.runId() + " observations", 1, start));
     var advisor =
         new ContextHistoryAdvisor(
-            turns, MessageWindowChatMemory.builder().build(), summaries, logs);
+            turns, WindowedConversationMemory.builder().build(), summaries, logs);
     var result =
         advisor
             .before(
                 ChatClientRequest.builder()
                     .prompt(new Prompt(new UserMessage("current")))
-                    .context(Map.of(ChatMemory.CONVERSATION_ID, "chat"))
+                    .context(
+                        Map.of(
+                            org.springframework.ai.chat.client.advisor.api.MemoryAdvisor
+                                .CONVERSATION_ID,
+                            "chat"))
                     .build(),
                 null)
             .prompt();
@@ -162,7 +172,7 @@ class ContextHistoryAdvisorTest {
     logs.append("chat", "user", "intervention: keep API unchanged");
     logs.append("chat", "assistant", "auxiliary URL summary");
     logs.append("chat", "user", "current request");
-    var memory = MessageWindowChatMemory.builder().maxMessages(2).build();
+    var memory = WindowedConversationMemory.builder().maxMessages(2).build();
     var advisor =
         new ContextHistoryAdvisor(
             new ConversationTurnStore(dir), memory, new ConversationSummaryRepository(dir), logs);
@@ -175,7 +185,11 @@ class ContextHistoryAdvisorTest {
             .before(
                 ChatClientRequest.builder()
                     .prompt(prompt)
-                    .context(Map.of(ChatMemory.CONVERSATION_ID, "chat"))
+                    .context(
+                        Map.of(
+                            org.springframework.ai.chat.client.advisor.api.MemoryAdvisor
+                                .CONVERSATION_ID,
+                            "chat"))
                     .build(),
                 null)
             .prompt();
@@ -212,7 +226,7 @@ class ContextHistoryAdvisorTest {
   @Test
   void historyBeyondMemoryWindowSurvivesCompressionAndRestart() {
     var turns = new ConversationTurnStore(dir);
-    var memory = MessageWindowChatMemory.builder().maxMessages(2).build();
+    var memory = WindowedConversationMemory.builder().maxMessages(2).build();
     for (int i = 0; i < 5; i++) {
       var owner = new AgentRunContext("run" + i, "chat", dir);
       turns.start(owner, "requirement " + i + " details".repeat(100));
@@ -229,7 +243,10 @@ class ContextHistoryAdvisorTest {
             .prompt(new Prompt(new UserMessage("next request")))
             .context(
                 Map.of(
-                    ChatMemory.CONVERSATION_ID, "chat", AgentRunContext.class.getName(), current))
+                    org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                    "chat",
+                    AgentRunContext.class.getName(),
+                    current))
             .build();
     var assembled = advisor.before(request, null).prompt();
     assertThat(assembled.getContents()).contains("requirement 0", "requirement 4", "next request");

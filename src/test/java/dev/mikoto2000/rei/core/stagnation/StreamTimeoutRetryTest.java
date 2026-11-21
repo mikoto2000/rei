@@ -160,9 +160,8 @@ class StreamTimeoutRetryTest {
                 ? Flux.concat(Flux.just(text("discard")), Flux.error(new SocketTimeoutException()))
                 : Flux.just(text("success")));
     var context = context(new OutputLimitRunBudget(2, 10));
-    var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
-    var advisor =
-        org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor.builder(memory).build();
+    var memory = dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build();
+    var advisor = dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor.builder(memory).build();
     var client =
         org.springframework.ai.chat.client.ChatClient.builder(
                 new StagnationChatModel(model, null, 2))
@@ -176,7 +175,9 @@ class StreamTimeoutRetryTest {
       client
           .prompt(new Prompt("work", options))
           .advisors(a ->
-              a.param(org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, "session"))
+              a.param(
+                  org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                  "session"))
           .stream()
           .chatResponse()
           .blockLast();

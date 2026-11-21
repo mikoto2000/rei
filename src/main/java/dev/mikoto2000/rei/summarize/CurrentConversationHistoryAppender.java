@@ -1,11 +1,11 @@
 package dev.mikoto2000.rei.summarize;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.llm.ConversationIds;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BiConsumer;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -23,7 +23,7 @@ public class CurrentConversationHistoryAppender implements ConversationHistoryAp
 
   /** 指定された値や利用先を使って、CurrentConversationHistoryAppenderを初期化する。 */
   public CurrentConversationHistoryAppender(
-      ChatMemory chatMemory, Optional<ConversationLogStore> conversationLogStore) {
+      ConversationMemory chatMemory, Optional<ConversationLogStore> conversationLogStore) {
     this.addToMemory = (id, message) -> chatMemory.add(id, List.of(message));
     this.conversationLogStore = conversationLogStore;
   }

@@ -15,7 +15,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -214,7 +213,10 @@ public class BlueskyReplyTextGenerator {
     return replyChatClient
         .get()
         .prompt(prompt)
-        .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId))
+        .advisors(advisor ->
+            advisor.param(
+                org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                conversationId))
         .stream()
         .chatResponse()
         .map(this::answerText)

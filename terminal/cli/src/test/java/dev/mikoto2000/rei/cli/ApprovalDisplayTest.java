@@ -159,7 +159,7 @@ class ApprovalDisplayTest {
                         new ByteArrayOutputStream(),
                         StandardCharsets.UTF_8);
                 var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
-              terminal.setSize(new org.jline.terminal.Size(90, 24));
+              terminal.setSize(org.jline.terminal.Size.of(90, 24));
               var reader = new ApprovalMenuLineReader(terminal, true);
               try (var menu =
                   new ApprovalActionMenu(reader, () -> new ApprovalActionMenu.Owner("p", "s"))) {

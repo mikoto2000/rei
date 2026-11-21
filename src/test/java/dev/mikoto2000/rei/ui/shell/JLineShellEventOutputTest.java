@@ -74,7 +74,7 @@ class JLineShellEventOutputTest {
     Terminal terminal = mock(Terminal.class);
     when(reader.getTerminal()).thenReturn(terminal);
     when(terminal.writer()).thenReturn(new java.io.PrintWriter(System.out));
-    when(terminal.getWidth()).thenReturn(120);
+    when(terminal.getColumns()).thenReturn(120);
     when(reader.isReading()).thenReturn(true);
     var output = new JLineShellEventOutput(reader);
     output.print("## 直前の話題\n\n**embed");
@@ -97,7 +97,7 @@ class JLineShellEventOutputTest {
     Terminal terminal = mock(Terminal.class);
     when(reader.getTerminal()).thenReturn(terminal);
     when(terminal.writer()).thenReturn(new java.io.PrintWriter(System.out));
-    when(terminal.getWidth()).thenReturn(8);
+    when(terminal.getColumns()).thenReturn(8);
     when(reader.isReading()).thenReturn(true);
     var output = new JLineShellEventOutput(reader);
     output.print("日本語の続き\n次");
@@ -133,7 +133,7 @@ class JLineShellEventOutputTest {
     var terminal = mock(Terminal.class);
     when(reader.getTerminal()).thenReturn(terminal);
     when(terminal.writer()).thenReturn(new java.io.PrintWriter(System.out));
-    when(terminal.getWidth()).thenReturn(8);
+    when(terminal.getColumns()).thenReturn(8);
     when(reader.isReading()).thenReturn(true);
     var output = new JLineShellEventOutput(reader);
     var frame = UserInputFrame.format("音声入力のテスト\n2行目", java.time.LocalTime.of(1, 37, 16));

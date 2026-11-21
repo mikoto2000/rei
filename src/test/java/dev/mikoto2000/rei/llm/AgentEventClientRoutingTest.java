@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.application.run.RunRegistry;
 import dev.mikoto2000.rei.application.run.RunService;
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
@@ -32,7 +33,6 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -74,7 +74,7 @@ class AgentEventClientRoutingTest {
               new dev.mikoto2000.rei.event.ProjectAgentEventStore(root),
               new ProjectRunStateStore(root),
               new WorkingSet(),
-              mock(ChatMemory.class));
+              mock(ConversationMemory.class));
       activity.attach(shellOutput);
       clearInvocations(shellOutput);
       bus.subscribe(activity);

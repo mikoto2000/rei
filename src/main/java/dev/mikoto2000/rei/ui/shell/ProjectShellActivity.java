@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.ui.shell;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
 import dev.mikoto2000.rei.core.project.ProjectClient;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRunStateStore;
@@ -14,7 +15,6 @@ import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.IntSupplier;
 import java.util.function.ToIntFunction;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -115,7 +115,7 @@ public class ProjectShellActivity implements AgentEventListener {
       ProjectAgentEventStore store,
       ProjectRunStateStore states,
       WorkingSet workingSet,
-      ChatMemory memory) {
+      ConversationMemory memory) {
     this.currentClient = () -> projects.currentClient();
     this.currentProject = () -> projects.currentContext();
     this.currentSessionId = () -> projects.currentSessionId();

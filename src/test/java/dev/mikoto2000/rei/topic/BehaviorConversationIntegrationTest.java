@@ -14,6 +14,7 @@ import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.application.session.SessionQueryService;
 import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import dev.mikoto2000.rei.conversation.BehaviorConversationHistoryAppender;
 import dev.mikoto2000.rei.conversation.ConversationLogEntry;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
@@ -49,8 +50,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClientRequest;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -295,7 +294,7 @@ class BehaviorConversationIntegrationTest {
     var advisor =
         new ContextHistoryAdvisor(
             new ConversationTurnStore(dir),
-            MessageWindowChatMemory.builder().maxMessages(2).build(),
+            WindowedConversationMemory.builder().maxMessages(2).build(),
             summaries,
             restored);
     var request =
@@ -304,7 +303,10 @@ class BehaviorConversationIntegrationTest {
                 new Prompt(
                     new UserMessage("わかった。"),
                     org.springframework.ai.openai.OpenAiChatOptions.builder().build()))
-            .context(Map.of(ChatMemory.CONVERSATION_ID, id))
+            .context(
+                Map.of(
+                    org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                    id))
             .build();
     var assembled = advisor.before(request, null).prompt();
     assertThat(assembled.getInstructions())

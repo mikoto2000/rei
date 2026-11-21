@@ -3,6 +3,7 @@ pub mod application;
 pub mod domain;
 pub mod dto;
 pub mod infrastructure;
+pub mod ipc;
 #[cfg(feature = "native")]
 mod native;
 pub mod ports;

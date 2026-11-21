@@ -26,7 +26,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -166,7 +165,9 @@ public class SearchCommand implements Runnable {
               .prompt(
                   new Prompt(buildPrompt(query, vectorResults, webContext), searchOptions.get()))
               .advisors(advisor ->
-                  advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("search")));
+                  advisor.param(
+                      org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                      ConversationIds.tool("search")));
 
       if (result.webSearchSkippedMessage() != null) {
         println("[web search skipped] " + result.webSearchSkippedMessage());

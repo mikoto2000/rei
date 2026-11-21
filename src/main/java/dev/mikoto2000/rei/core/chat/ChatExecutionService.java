@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.chat;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.actionplan.ActionPlan;
@@ -50,7 +51,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
 import org.springframework.ai.chat.metadata.Usage;
@@ -249,7 +249,7 @@ public class ChatExecutionService {
   }
 
   /** チャット記憶。 */
-  private ChatMemory chatMemory;
+  private ConversationMemory chatMemory;
 
   /** やり取り一覧。 */
   private ConversationTurnStore turns = ConversationTurnStore.inMemory();
@@ -262,7 +262,7 @@ public class ChatExecutionService {
 
   /** 会話の実行で使用するチャット記憶を設定する。 */
   @Autowired
-  void setChatMemory(ChatMemory chatMemory) {
+  void setChatMemory(ConversationMemory chatMemory) {
     this.chatMemory = chatMemory;
   }
 
@@ -1254,7 +1254,10 @@ public class ChatExecutionService {
                         new ConversationLifecycleAdvisor(
                             turns, execution.runContext().conversationId()))
                     .param(AgentRunContext.class.getName(), execution.runContext())
-                    .param(ChatMemory.CONVERSATION_ID, execution.runContext().conversationId())
+                    .param(
+                        org.springframework.ai.chat.client.advisor.api.MemoryAdvisor
+                            .CONVERSATION_ID,
+                        execution.runContext().conversationId())
                     .param(
                         dev.mikoto2000.rei.context.CancelledTaskHistory.KEY,
                         turns.promptHistory(execution.runContext().conversationId()))

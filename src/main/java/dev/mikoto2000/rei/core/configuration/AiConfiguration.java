@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.core.configuration;
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.bluesky.BlueskyProperties;
 import dev.mikoto2000.rei.briefing.BriefingTools;
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
+import dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor;
 import dev.mikoto2000.rei.conversation.ConversationHistoryTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.actionplan.ActionPlanAdvisor;
@@ -40,10 +42,8 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
@@ -263,7 +263,7 @@ public class AiConfiguration {
   private final ChatModel chatModel;
 
   /** チャット記憶。 */
-  private final ChatMemory chatMemory;
+  private final ConversationMemory chatMemory;
 
   /** ツール一覧。 */
   private final Tools tools;
@@ -371,7 +371,7 @@ public class AiConfiguration {
     if (contextHistory != null) advisors.add(contextHistory);
     else
       advisors.add(
-          MessageChatMemoryAdvisor.builder(chatMemory)
+          ConversationMemoryAdvisor.builder(chatMemory)
               .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
               .build());
     advisors.add(runtimeContextAdvisor);

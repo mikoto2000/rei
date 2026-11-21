@@ -6,6 +6,8 @@ import static org.mockito.Mockito.calls;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor;
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationLogEntry;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
@@ -31,8 +33,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -137,13 +137,13 @@ class ProjectRunSwitchIntegrationTest
               return call(input);
             }
           };
-      var memory = MessageWindowChatMemory.builder().maxMessages(100).build();
+      var memory = WindowedConversationMemory.builder().maxMessages(100).build();
       var client =
           ChatClient.builder(new StagnationChatModel(model))
               .defaultAdvisors(new RunAwareToolCallingAdvisor())
               .defaultTools(new ToolEventCallbackDecorator(tool, events, bus))
               .defaultAdvisors(
-                  RunScopedAdvisor.wrap(List.of(MessageChatMemoryAdvisor.builder(memory).build())))
+                  RunScopedAdvisor.wrap(List.of(ConversationMemoryAdvisor.builder(memory).build())))
               .build();
       var holder = mock(ModelHolderService.class);
       when(holder.get()).thenReturn("test");

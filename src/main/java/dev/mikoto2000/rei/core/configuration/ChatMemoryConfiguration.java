@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.core.configuration;
 
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import lombok.RequiredArgsConstructor;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
@@ -19,8 +19,8 @@ public class ChatMemoryConfiguration {
 
   /** 機能の組み立てで用いるメッセージ範囲チャット記憶を返す。 */
   @Bean
-  public MessageWindowChatMemory messageWindowChatMemory() {
-    return MessageWindowChatMemory.builder()
+  public WindowedConversationMemory messageWindowChatMemory() {
+    return WindowedConversationMemory.builder()
         .maxMessages(coreProperties.chatMemoryMaxMessages())
         .build();
   }

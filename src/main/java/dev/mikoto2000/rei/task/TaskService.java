@@ -1,6 +1,5 @@
 package dev.mikoto2000.rei.task;
 
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.gson.GsonFactory;
@@ -8,6 +7,7 @@ import com.google.api.client.util.DateTime;
 import com.google.api.services.tasks.Tasks;
 import dev.mikoto2000.rei.google.GoogleOAuthService;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
+import dev.mikoto2000.rei.transport.GoogleHttpTransportFactory;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -191,7 +191,7 @@ public class TaskService {
     if (!googleCalendarProperties.task().enabled()) {
       throw new IllegalStateException("Google Task integration is disabled");
     }
-    authorizeCredential.authorize(GoogleNetHttpTransport.newTrustedTransport(), true);
+    authorizeCredential.authorize(GoogleHttpTransportFactory.newTrustedTransport(), true);
   }
 
   /** 外部の情報を利用できるよう、別ハッシュ値識別子を取得する。 */
@@ -249,7 +249,7 @@ public class TaskService {
     if (!googleCalendarProperties.task().enabled()) {
       throw new IllegalStateException("Google Task integration is disabled");
     }
-    NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
+    NetHttpTransport httpTransport = GoogleHttpTransportFactory.newTrustedTransport();
     return new Tasks.Builder(
             httpTransport, JSON_FACTORY, authorizeCredential.authorize(httpTransport, false))
         .setApplicationName(googleCalendarProperties.applicationName())

@@ -1,0 +1,16 @@
+Rei compatibility implementations
+
+The classes in dev.mikoto2000.rei.chatmemory adapt the bounded message-memory
+contract of Spring AI 2.1.0 (org.springframework.ai:spring-ai-model and
+spring-ai-client-chat). The SQLite store adapts the SQLite behavior of
+spring-ai-model-chat-memory-repository-jdbc 2.1.0.
+Copyright 2023-present the original author or authors.
+
+GoogleHttpTransportFactory adapts certificate-store and mTLS selection from
+google-api-client 2.9.2 GoogleNetHttpTransport and GoogleUtils.
+Copyright 2013 Google Inc.
+
+These adaptations retain the existing behavior and data formats while removing
+dependencies on retired APIs. Modified files identify the adaptations.
+The original code is licensed under the Apache License, Version 2.0; its terms
+are included in META-INF/LICENSE-spring-ai-memory.txt.

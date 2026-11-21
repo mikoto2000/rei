@@ -75,15 +75,15 @@ async fn task_control_sends_exact_owner_run_and_revision_without_chat_fallback()
         (StatusCode::ACCEPTED,Json(task(&id,"p","s")))
     }))).await;
     let receipt = api
-        .control_task(
-            "p",
-            Some("s"),
-            "run:r",
-            Some("r"),
-            7,
-            TaskAction::Cancel,
-            None,
-        )
+        .control_task(TaskControl {
+            project: "p",
+            session: Some("s"),
+            id: "run:r",
+            run: Some("r"),
+            revision: 7,
+            action: TaskAction::Cancel,
+            message: None,
+        })
         .await
         .unwrap();
     assert_eq!(receipt.id, "run:r");
@@ -107,15 +107,15 @@ async fn task_suspend_uses_the_checkpoint_control_endpoint_and_preserves_capabil
     ))
     .await;
     let receipt = api
-        .control_task(
-            "p",
-            Some("s"),
-            "run:r",
-            Some("r"),
-            7,
-            TaskAction::Suspend,
-            None,
-        )
+        .control_task(TaskControl {
+            project: "p",
+            session: Some("s"),
+            id: "run:r",
+            run: Some("r"),
+            revision: 7,
+            action: TaskAction::Suspend,
+            message: None,
+        })
         .await
         .unwrap();
     assert!(receipt.resume_supported);

@@ -42,7 +42,7 @@ class VoiceTypingProtectionTest {
         });
     try (var terminal =
         new DumbTerminal("voice-fixture", "xterm", input, display, StandardCharsets.UTF_8)) {
-      terminal.setSize(new Size(80, 24));
+      terminal.setSize(Size.of(80, 24));
       var reader = LineReaderBuilder.builder().terminal(terminal).build();
       var result = worker.submit(() -> reader.readLine("rei> "));
       await(reader::isReading);

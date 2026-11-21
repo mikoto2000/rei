@@ -3,8 +3,8 @@ package dev.mikoto2000.rei.llm;
 /**
  * 用途ごとの conversation ID を生成する共通ヘルパー。
  *
- * <p>Spring AI の ChatMemory は conversation ID をキーとして履歴を管理するため、 用途ごとに prefix を分離して混在を防ぐ。同じ論理会話には常に同じ
- * ID を返す。
+ * <p>Rei の ConversationMemory は conversation ID をキーとして履歴を管理するため、 用途ごとに prefix
+ * を分離して混在を防ぐ。同じ論理会話には常に同じ ID を返す。
  */
 public final class ConversationIds {
 

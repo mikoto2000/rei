@@ -19,6 +19,34 @@ google-java-format 2.0.0 の新しい書式は Java ソース全体へ適用し�
 
 永続 DB のスキーマ変更は追加していません。既存のストレージ移行テストも全件回帰の対象です。
 
+### 警告への互換対応（2026-11-21）
+
+非推奨の ChatMemory / MessageChatMemoryAdvisor / JDBC memory repository への参照を取り除き、
+既存の bounded memory の契約を `dev.mikoto2000.rei.chatmemory` に保持しています。
+Spring AI の新しい Session API は保存形式と保持規則が異なるため、その API への切り替えは行いません。
+既存の `SPRING_AI_CHAT_MEMORY`、timestamp metadata、sequence、system message と turn 単位の
+切り詰め、stream 集約を維持します。既存の JDBC schema 初期化プロパティと classpath も維持し、
+非推奨の自動構成への依存を外しています。適用元の Apache 2.0 ライセンスと変更通知を同梱します。
+
+Google HTTP transport は保守されている builder API を使い、JDK 証明書の優先・同梱証明書への
+fallback・mTLS の選択を維持します。独立した transport パッケージに置き、業務間の循環依存を増やしません。
+構成クラスから新しい memory 型への7本の明示的な接続のみ、アーキテクチャの基準へ追加しています。
+アプリの共有メモリは、旧自動構成と同じ JDBC 保存・既定20メッセージで明示的に生成します。
+JLine は columns / rows と Size.of、Jackson 3 は asString を使用します。
+
+Maven とアプリ起動、テスト JVM はネイティブライブラリ利用を明示します。
+Mockito は動的 attach ではなく起動時 agent を使用します。agent が bootstrap classpath を
+変更するテスト JVM では CDS を使用しません。コンパイラは deprecation / unchecked を表示し、警告をビルド失敗にします。
+警告のフィルター、`@SuppressWarnings`、Clippy の `allow` は追加していません。
+異常系テストで仕様どおり出力する WARN ログと、環境条件によるテスト skip は維持します。
+
+警告対応後の全件回帰は7,548件、failures / errors = 0、想定 skip = 12 です。
+skip の ID と理由も既存の `config/test-expected-skips.json` と一致しています。
+最後の生成境界・null 判定の整理後は、起動・履歴・会話文脈を含む169件を追加検証しました。
+最終コードの Checkstyle / SpotBugs / Spotless は指摘0件です。
+軽量 CLI 179件、Rust native 132件、Frontend 103件、ブラウザ E2E 38件も成功し、
+Clippy の `-D warnings` と Tauri debug assets 埋込みビルドでも警告は出ていません。
+
 2026-11-21、Windows / JDK 25 で Backend の full 分類7,540件と、最後の修正に関係する
 結合テストを含む201件を検証しました。再検証後の Surefire XML 1,293ファイルの集計は
 failures / errors = 0、環境条件による skip = 12 です。
@@ -47,7 +75,7 @@ Spring AI 2 の JDBC chat memory は `sequence_id` と対応する index を必�
 既存の `SPRING_AI_CHAT_MEMORY` が旧 schema の場合、Rei は Spring AI の schema initializer より先に、transaction 内で column と index を追加します。
 
 履歴の content、type、timestamp は書き換えません。conversation ごとに timestamp、同時刻の場合は SQLite rowid の順で sequence を設定します。
-すでに sequence がある DB は再採番しません。新規 DB の table 作成は Spring AI の initializer が担当します。
+すでに sequence がある DB は再採番しません。新規 DB の table 作成は Rei の互換 initializer が担当します。
 
 アプリの更新前には通常どおり Rei data directory のバックアップを取ってください。
 
@@ -55,7 +83,7 @@ Spring AI 2 の JDBC chat memory は `sequence_id` と対応する index を必�
 
 標準の全検証コマンドは `./mvnw verify -Pintegration` です。ネットワークを必要とする依存取得と sqlite-vec 初回準備を除き、OpenAI 互換 API のテストはローカル fixture または in-memory SDK transport を使用します。
 
-テスト環境で Mockito の動的 agent attach が利用できない場合は、Mockito の推奨する起動時 `-javaagent` 設定を Surefire の `argLine` に渡します。システム設定の変更は不要です。
+Mockito の推奨する起動時 `-javaagent` は Surefire の `argLine` に設定済みです。システム設定の変更は不要です。
 
 ## main 更新分の再確認（2026-10-07）
 

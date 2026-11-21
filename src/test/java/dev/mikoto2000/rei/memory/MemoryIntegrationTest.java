@@ -9,6 +9,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunScopedAdvisor;
@@ -47,8 +48,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -132,7 +131,7 @@ class MemoryIntegrationTest {
           sent.set(a.getArgument(0));
           return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
         });
-    var history = MessageWindowChatMemory.builder().maxMessages(100).build();
+    var history = WindowedConversationMemory.builder().maxMessages(100).build();
     var retriever = spy(new MemoryRetriever(repository, properties));
     var client =
         ChatClient.builder(new StagnationChatModel(model, assembler))
@@ -153,7 +152,7 @@ class MemoryIntegrationTest {
         .advisors(a ->
             a.param(AgentRunContext.class.getName(), owner)
                 .param(
-                    ChatMemory.CONVERSATION_ID,
+                    org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
                     "project:00000000-0000-0000-0000-000000000001:chat"))
         .stream()
         .chatResponse()

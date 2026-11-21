@@ -49,7 +49,7 @@ public final class JLineShellEventOutput implements ShellEventOutput {
         () ->
             dev.mikoto2000.rei.core.completion.ApprovalDisplayState.interactive(
                 reader.getTerminal());
-    this.terminalWidth = () -> reader.getTerminal().getWidth();
+    this.terminalWidth = () -> reader.getTerminal().getColumns();
     this.displayBlock = value -> reader.printAbove(value);
     this.displayLine = value -> reader.printAbove(value);
     this.writer = reader.getTerminal().writer();

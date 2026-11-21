@@ -104,9 +104,9 @@ public final class MeetingSelectionMenu {
     var original = terminal.enterRawMode();
     try {
       while (true) {
-        int columns = Math.max(1, terminal.getWidth());
-        int rows = Math.max(3, terminal.getHeight());
-        display.resize(rows, columns);
+        int columns = Math.max(1, terminal.getColumns());
+        int rows = Math.max(3, terminal.getRows());
+        display.resize(org.jline.terminal.Size.of(columns, rows));
         var lines = new ArrayList<AttributedString>();
         lines.add(
             new AttributedString(

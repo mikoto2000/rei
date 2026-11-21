@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -232,7 +231,9 @@ public class MemoryConsolidatorService {
               .get()
               .prompt(prompt)
               .advisors(advisor ->
-                  advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool(conversation)));
+                  advisor.param(
+                      org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                      ConversationIds.tool(conversation)));
       if (!budget.tokenLimitEnabled()) {
         invoked = true;
         var text = request.call().content();

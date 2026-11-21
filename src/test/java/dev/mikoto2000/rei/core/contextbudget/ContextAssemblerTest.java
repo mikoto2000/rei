@@ -337,7 +337,7 @@ class ContextAssemblerTest {
     repository.save(
         ConversationSummaryRepository.runKey("conversation", "run"),
         new ConversationSummary("saved decision", 1, java.time.Instant.now()));
-    var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
+    var memory = dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build();
     memory.add("conversation", new UserMessage("earlier request"));
     memory.add("conversation", new AssistantMessage("covered reply"));
     memory.add("conversation", new UserMessage("past request"));
@@ -350,7 +350,8 @@ class ContextAssemblerTest {
             .prompt(new Prompt(List.of(new SystemMessage("system"), new UserMessage("request"))))
             .context(
                 Map.of(
-                    org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, "conversation"))
+                    org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                    "conversation"))
             .build();
     var raw = advisor.before(request, null).prompt();
 

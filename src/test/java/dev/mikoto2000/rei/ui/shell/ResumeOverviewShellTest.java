@@ -11,6 +11,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
 import dev.mikoto2000.rei.checkpoint.ResumeOverview;
 import dev.mikoto2000.rei.checkpoint.ResumeOverviewService;
 import dev.mikoto2000.rei.core.project.ProjectClientTestSupport;
@@ -26,7 +27,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ai.chat.memory.ChatMemory;
 
 /** 再開概要シェルの結果と状態の契約を検証するテスト。 */
 class ResumeOverviewShellTest extends ProjectClientTestSupport {
@@ -56,7 +56,7 @@ class ResumeOverviewShellTest extends ProjectClientTestSupport {
             "task-a", 1, 1, Instant.EPOCH, "INTERRUPTED", "request-a", "未記録", "test", "要照合", false);
     when(service.overview(a.id())).thenReturn(new ResumeOverview(a.id(), "A", 2, ca, "a1"));
     when(service.overview(b.id())).thenReturn(new ResumeOverview(b.id(), "B", 0, null, "b0"));
-    var memory = mock(ChatMemory.class);
+    var memory = mock(ConversationMemory.class);
     when(memory.get(anyString())).thenReturn(List.of());
     var shell =
         new ProjectShellActivity(

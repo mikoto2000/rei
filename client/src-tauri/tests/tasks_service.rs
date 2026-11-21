@@ -71,13 +71,15 @@ async fn stale_task_revision_is_rejected_before_any_write() {
     assert_eq!(
         app.task_control(
             &server,
-            "p",
-            Some("s"),
-            "run:r",
-            Some("r"),
-            7,
-            TaskAction::Cancel,
-            None
+            TaskControl {
+                project: "p",
+                session: Some("s"),
+                id: "run:r",
+                run: Some("r"),
+                revision: 7,
+                action: TaskAction::Cancel,
+                message: None,
+            }
         )
         .await
         .unwrap_err(),

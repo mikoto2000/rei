@@ -7,13 +7,13 @@ import com.google.api.client.extensions.java6.auth.oauth2.AuthorizationCodeInsta
 import com.google.api.client.extensions.jetty.auth.oauth2.LocalServerReceiver;
 import com.google.api.client.googleapis.auth.oauth2.GoogleAuthorizationCodeFlow;
 import com.google.api.client.googleapis.auth.oauth2.GoogleClientSecrets;
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.util.store.FileDataStoreFactory;
 import com.google.api.services.calendar.CalendarScopes;
 import com.google.api.services.tasks.TasksScopes;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
+import dev.mikoto2000.rei.transport.GoogleHttpTransportFactory;
 import java.awt.Desktop;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -104,7 +104,7 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
 
   /** Googleサービスの認証に関する認証を更新するトークンを処理する。 */
   public synchronized void refreshToken() throws IOException, GeneralSecurityException {
-    refresh(authorize(GoogleNetHttpTransport.newTrustedTransport(), false));
+    refresh(authorize(GoogleHttpTransportFactory.newTrustedTransport(), false));
   }
 
   /**
@@ -125,7 +125,7 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
         return false;
       }
       Credential stored =
-          createFlow(GoogleNetHttpTransport.newTrustedTransport()).loadCredential(USER_ID);
+          createFlow(GoogleHttpTransportFactory.newTrustedTransport()).loadCredential(USER_ID);
       if (stored == null
           || stored.getRefreshToken() == null
           || stored.getRefreshToken().isBlank()) {
@@ -259,7 +259,7 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
     try {
       if (credential == null)
         credential =
-            createFlow(GoogleNetHttpTransport.newTrustedTransport()).loadCredential(USER_ID);
+            createFlow(GoogleHttpTransportFactory.newTrustedTransport()).loadCredential(USER_ID);
       if (credential == null || credential.getRefreshToken() == null)
         throw new Failure("AUTH_REQUIRED", 0, false);
       Long expires = credential.getExpiresInSeconds();
@@ -347,7 +347,7 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
 
   protected com.google.api.client.http.HttpTransport secretaryHttp()
       throws java.io.IOException, java.security.GeneralSecurityException {
-    return GoogleNetHttpTransport.newTrustedTransport();
+    return GoogleHttpTransportFactory.newTrustedTransport();
   }
 
   /** Noninteractive initializer shared by the existing Calendar SDK. */
@@ -483,7 +483,7 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
   public Auth authorizeConnection(Service service, boolean force) {
     if (service == Service.GMAIL && !gmail.enabled()) throw new Failure("GMAIL_DISABLED", 0, false);
     try {
-      authorize(GoogleNetHttpTransport.newTrustedTransport(), force || !secretaryScopesMatch());
+      authorize(GoogleHttpTransportFactory.newTrustedTransport(), force || !secretaryScopesMatch());
       return secretaryGoogleStatus(true);
     } catch (IOException | GeneralSecurityException | RuntimeException failure) {
       throw new Failure("AUTH_REQUIRED", 0, false);

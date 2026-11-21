@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.llm.ConversationIds;
 import java.util.List;
@@ -11,8 +13,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.Message;
 
 /** 現在会話履歴Appenderの結果と状態の契約を検証するテスト。 */
@@ -20,7 +20,7 @@ class CurrentConversationHistoryAppenderTest {
   /** バックグラウンド要約について、取得済み会話を書き込むことを確認する。 */
   @Test
   void backgroundSummaryWritesCapturedConversationAfterShellSwitch() throws Exception {
-    var memory = MessageWindowChatMemory.builder().maxMessages(10).build();
+    var memory = WindowedConversationMemory.builder().maxMessages(10).build();
     var logs = Mockito.mock(ConversationLogStore.class);
     var appender = new CurrentConversationHistoryAppender(memory, Optional.of(logs));
     var id = java.util.UUID.randomUUID().toString();
@@ -48,7 +48,7 @@ class CurrentConversationHistoryAppenderTest {
   /** 情報の要約で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void appendsSlashCommandConversationToChatMemoryAndConversationLogInOrder() {
-    ChatMemory chatMemory = Mockito.mock(ChatMemory.class);
+    ConversationMemory chatMemory = Mockito.mock(ConversationMemory.class);
     ConversationLogStore logStore = Mockito.mock(ConversationLogStore.class);
     CurrentConversationHistoryAppender appender =
         new CurrentConversationHistoryAppender(chatMemory, Optional.of(logStore));
@@ -75,7 +75,8 @@ class CurrentConversationHistoryAppenderTest {
   /** 情報の要約で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void appendedMessagesAreAvailableToTheCurrentChatConversation() {
-    MessageWindowChatMemory chatMemory = MessageWindowChatMemory.builder().maxMessages(10).build();
+    WindowedConversationMemory chatMemory =
+        WindowedConversationMemory.builder().maxMessages(10).build();
     CurrentConversationHistoryAppender appender =
         new CurrentConversationHistoryAppender(chatMemory, Optional.empty());
 

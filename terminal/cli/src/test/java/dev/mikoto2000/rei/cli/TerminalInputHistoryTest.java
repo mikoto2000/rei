@@ -79,7 +79,7 @@ class TerminalInputHistoryTest {
             new ByteArrayInputStream(new byte[0]),
             new ByteArrayOutputStream(),
             StandardCharsets.UTF_8);
-    terminal.setSize(new Size(120, 30));
+    terminal.setSize(Size.of(120, 30));
     return new TerminalClient(backend, directory, false, terminal);
   }
 

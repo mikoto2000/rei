@@ -59,20 +59,7 @@ pub trait ReiClient: Send + Sync {
     ) -> Result<ManagedTask> {
         Err(AppError::EndpointNotFound)
     }
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "Mirrors the task-control port contract"
-    )]
-    async fn control_task(
-        &self,
-        _project: &str,
-        _session: Option<&str>,
-        _id: &str,
-        _run: Option<&str>,
-        _revision: u64,
-        _action: TaskAction,
-        _message: Option<&str>,
-    ) -> Result<ManagedTask> {
+    async fn control_task(&self, _control: TaskControl<'_>) -> Result<ManagedTask> {
         Err(AppError::EndpointNotFound)
     }
     async fn schedule_snapshot(&self, _project: &str, _schedule: &str) -> Result<RunSnapshot> {

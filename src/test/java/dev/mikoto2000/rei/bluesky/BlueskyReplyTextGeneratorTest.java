@@ -23,7 +23,6 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClient.AdvisorSpec;
 import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
 import org.springframework.ai.chat.client.ChatClient.StreamResponseSpec;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -169,7 +168,10 @@ class BlueskyReplyTextGeneratorTest {
     verify(requestSpec).advisors(consumerCaptor.capture());
     AdvisorSpec spec = Mockito.mock(AdvisorSpec.class);
     consumerCaptor.getValue().accept(spec);
-    verify(spec).param(ChatMemory.CONVERSATION_ID, "bluesky-reply:alice.bsky.social");
+    verify(spec)
+        .param(
+            org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+            "bluesky-reply:alice.bsky.social");
   }
 
   /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
@@ -199,7 +201,8 @@ class BlueskyReplyTextGeneratorTest {
     consumerCaptor.getValue().accept(spec);
     verify(spec)
         .param(
-            ChatMemory.CONVERSATION_ID, "bluesky-manual:at://did:plc:xxx/app.bsky.feed.post/abc");
+            org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+            "bluesky-manual:at://did:plc:xxx/app.bsky.feed.post/abc");
   }
 
   /** モデルへ対話を依頼する窓口を利用することを確認する。 */

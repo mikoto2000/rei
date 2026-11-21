@@ -15,6 +15,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
 import dev.mikoto2000.rei.core.command.InlineFileAttachmentResolver;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
@@ -24,7 +25,6 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -221,7 +221,7 @@ class ChatExecutionInterventionTest {
     var requests = new ArrayList<Prompt>();
     var workingSet = new dev.mikoto2000.rei.core.working.WorkingSet();
     workingSet.recordRead(Path.of("network.md"));
-    var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
+    var memory = dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build();
     ChatModel model =
         new ChatModel() {
           /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
@@ -304,7 +304,7 @@ class ChatExecutionInterventionTest {
             holder,
             new CommandCancellationService(),
             Optional.empty());
-    var memory = mock(ChatMemory.class);
+    var memory = mock(ConversationMemory.class);
     service.setChatMemory(memory);
     var queue = new UserInterventionQueue();
     queue.offer("secret pending guidance");
@@ -347,7 +347,7 @@ class ChatExecutionInterventionTest {
     var service =
         new ChatExecutionService(
             ChatClient.builder(model).build(), holder, cancellation, Optional.empty());
-    var memory = mock(ChatMemory.class);
+    var memory = mock(ConversationMemory.class);
     doThrow(new IllegalStateException("memory unavailable"))
         .when(memory)
         .add(anyString(), anyList());
@@ -393,7 +393,7 @@ class ChatExecutionInterventionTest {
             holder,
             new CommandCancellationService(),
             Optional.empty());
-    var memory = mock(ChatMemory.class);
+    var memory = mock(ConversationMemory.class);
     service.setChatMemory(memory);
     assertThat(
             service

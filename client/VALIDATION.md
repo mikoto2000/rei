@@ -9,7 +9,7 @@ Vite 8.3.8、Vitest 5.1.1、jsdom 31.0.1、reqwest 0.13.5、Argon2 0.6 を含む
 | 検証                                   | 結果                                                     |
 | -------------------------------------- | -------------------------------------------------------- |
 | Vitest                                 | 26 files / 103 tests、全成功                             |
-| Rust `cargo test`                      | 130 tests、全成功                                        |
+| Rust `cargo test --features native`    | 132 tests、全成功（flat IPC の互換性2件を含む）          |
 | Playwright Desktop / Mobile Chrome     | 38 tests、全成功                                         |
 | typecheck / build / lint / Prettier    | 成功                                                     |
 | `cargo fmt -- --check` / 厳格な Clippy | 成功                                                     |
@@ -21,7 +21,13 @@ Vite の通常の依存事前バンドルがこの環境で停止するため、
 Vitest の `test` mode では無効にし、E2E は fixture 専用のエントリーと起動待ち URL を使います。
 本番 bundle に fixture の会話データが混入しないことも確認しました。
 
-タスク制御の引数契約を維持する4箇所には、理由付きの `too_many_arguments` 例外を限定して付けています。
+警告対応では4箇所の `too_many_arguments` 例外を撤去し、タスク制御の引数を構造体へまとめました。
+Tauri の `CommandArg` で既存の flat IPC 引数を読み取り、必須・省略可能な引数とエラーの互換性を実 IPC テストで確認します。
+Windows の mock IPC テストにも Common Controls v6 の manifest を埋め込み、通常のアプリと同じ DLL 選択を使います。
+Cargo の dev / test profile は、確定処理が失敗する incremental cache を使用しません。
+Playwright の色指定は起動前に正規化し、警告をフィルターせずに競合を解消しています。
+警告対応後の native 有効時132件、Vitest103件、E2E38件は全成功です。
+Clippy / ESLint / 型検査 / 書式検査 / Tauri debug assets 埋込みビルドも警告なしで成功しました。
 GUI 実操作、Android / iOS 実機、実モデルへの外部接続は今回の検証に含みません。
 
 ## Web API Phase 1〜4 対応（2026-10-03）

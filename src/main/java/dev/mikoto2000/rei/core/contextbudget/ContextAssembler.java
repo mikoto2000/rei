@@ -460,7 +460,9 @@ public class ContextAssembler {
                   : compressor.summarizeResult(
                       segment.summary.summary(), messages, settings.summaryTokens(), raw, budget);
       check.run();
-      String text = result == null ? null : result.text();
+      if (result == null)
+        throw new ContextCompressionException(ContextCompressionException.Reason.EMPTY_SUMMARY);
+      String text = result.text();
       if (text == null || text.isBlank())
         throw new ContextCompressionException(ContextCompressionException.Reason.EMPTY_SUMMARY);
       after = estimator.text(text);

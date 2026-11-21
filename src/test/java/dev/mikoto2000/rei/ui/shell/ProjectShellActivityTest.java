@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
@@ -24,7 +25,6 @@ import java.nio.file.Path;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ai.chat.memory.ChatMemory;
 
 /** プロジェクトシェル作業状況の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
@@ -48,7 +48,7 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
             store,
             new ProjectRunStateStore(temp),
             new WorkingSet(),
-            mock(ChatMemory.class));
+            mock(ConversationMemory.class));
     activity.attach(output);
     clearInvocations(output);
     activity.onEvent(events.thinkingStarted("cli-thinking").withOwnership(foreign));
@@ -99,7 +99,7 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
             new ProjectAgentEventStore(temp),
             new ProjectRunStateStore(temp),
             new WorkingSet(),
-            mock(ChatMemory.class));
+            mock(ConversationMemory.class));
     activity.attach(output);
     clearInvocations(output);
     var event =
@@ -147,7 +147,7 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
             new ProjectAgentEventStore(temp),
             new ProjectRunStateStore(temp),
             new WorkingSet(),
-            mock(ChatMemory.class));
+            mock(ConversationMemory.class));
     activity.attach(
         new ShellEventOutput() {
           /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
@@ -205,7 +205,7 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
             new ProjectAgentEventStore(temp),
             new ProjectRunStateStore(temp),
             new WorkingSet(),
-            mock(ChatMemory.class));
+            mock(ConversationMemory.class));
     activity.setActiveRuns(new ActiveRunDisplay(router, projects, Clock.systemUTC()));
     var out = mock(ShellEventOutput.class);
     activity.attach(out);
@@ -251,7 +251,7 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
             new ProjectAgentEventStore(temp),
             new ProjectRunStateStore(temp),
             new WorkingSet(),
-            mock(ChatMemory.class));
+            mock(ConversationMemory.class));
     activity.setActiveRuns(new ActiveRunDisplay(runs, projects, Clock.systemUTC()));
     var out = mock(ShellEventOutput.class);
     activity.attach(out);
@@ -290,7 +290,7 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
             store,
             new ProjectRunStateStore(temp),
             new WorkingSet(),
-            mock(ChatMemory.class));
+            mock(ConversationMemory.class));
     var text = new StringBuilder();
     activity.attach(
         new ShellEventOutput() {

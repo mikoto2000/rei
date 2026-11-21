@@ -6,7 +6,6 @@ import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -41,7 +40,9 @@ public class LlmFeedSummaryGenerator implements FeedSummaryGenerator {
         .prompt()
         .user(prompt)
         .advisors(advisor ->
-            advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("feed-summary")))
+            advisor.param(
+                org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                ConversationIds.tool("feed-summary")))
         .call()
         .content();
   }

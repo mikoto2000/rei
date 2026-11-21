@@ -2,6 +2,9 @@ package dev.mikoto2000.rei.core.chat;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor;
+import dev.mikoto2000.rei.chatmemory.JdbcConversationMemoryStore;
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -10,9 +13,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
-import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
@@ -54,12 +54,10 @@ class RunScopedChatMemoryTest {
     var ds = new SQLiteDataSource();
     ds.setUrl("jdbc:sqlite:" + temp.resolve("memory.db"));
     new ResourceDatabasePopulator(
-            new ClassPathResource(
-                "org/springframework/ai/chat/memory/repository/jdbc/schema-sqlite.sql"))
+            new ClassPathResource("dev/mikoto2000/rei/conversation/schema-sqlite.sql"))
         .execute(ds);
-    var repository = JdbcChatMemoryRepository.builder().dataSource(ds).build();
-    var memory =
-        MessageWindowChatMemory.builder().chatMemoryRepository(repository).maxMessages(20).build();
+    var repository = new JdbcConversationMemoryStore(ds);
+    var memory = WindowedConversationMemory.withStore(repository, 20);
     var run = new AgentRunContext("run-a", "project:" + UUID.randomUUID() + ":chat:main", temp);
     String other = "project:" + UUID.randomUUID() + ":chat:main";
     memory.add(run.conversationId(), new AssistantMessage("earlier answer"));
@@ -79,7 +77,7 @@ class RunScopedChatMemoryTest {
     var client =
         ChatClient.builder(model)
             .defaultAdvisors(
-                RunScopedAdvisor.wrap(List.of(MessageChatMemoryAdvisor.builder(memory).build())))
+                RunScopedAdvisor.wrap(List.of(ConversationMemoryAdvisor.builder(memory).build())))
             .build();
     List<ChatResponse> delivered;
     var ignored = AgentRunScope.open(run);

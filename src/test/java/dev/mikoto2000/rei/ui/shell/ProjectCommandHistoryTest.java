@@ -52,7 +52,7 @@ class ProjectCommandHistoryTest {
             new ByteArrayInputStream(new byte[0]),
             new ByteArrayOutputStream(),
             StandardCharsets.UTF_8);
-    terminal.setSize(new Size(100, 30));
+    terminal.setSize(Size.of(100, 30));
     reader =
         (LineReaderImpl)
             ReiLineReaderFactory.create(terminal, new CommandLine(CommandSpec.create()));

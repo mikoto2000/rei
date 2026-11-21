@@ -68,7 +68,7 @@ public final class ToolSchemaArguments {
 
   private static boolean objectContract(JsonNode schema) {
     return schema != null
-        && ("object".equals(schema.path("type").asText())
+        && ("object".equals(schema.path("type").asString())
             || schema.path("properties").isObject()
             || schema.path("required").isArray());
   }

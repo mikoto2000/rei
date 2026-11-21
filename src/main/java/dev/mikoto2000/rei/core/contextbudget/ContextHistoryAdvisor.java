@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationLogEntry;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
@@ -14,7 +15,6 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseChatMemoryAdvisor;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -50,14 +50,16 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
 
   /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ContextHistoryAdvisor(
-      ConversationTurnStore turns, ChatMemory memory, ConversationSummaryRepository summaries) {
+      ConversationTurnStore turns,
+      ConversationMemory memory,
+      ConversationSummaryRepository summaries) {
     this(turns, memory, summaries, null);
   }
 
   /** 指定された値や利用先を使って、ContextHistoryAdvisorを初期化する。 */
   public ContextHistoryAdvisor(
       ConversationTurnStore turns,
-      ChatMemory memory,
+      ConversationMemory memory,
       ConversationSummaryRepository summaries,
       dev.mikoto2000.rei.conversation.ConversationLogStore logs) {
     this.readTurns = conversation -> turns.read(conversation);
@@ -78,7 +80,11 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     String id =
-        java.util.Objects.toString(request.context().get(ChatMemory.CONVERSATION_ID), "default");
+        java.util.Objects.toString(
+            request
+                .context()
+                .get(org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID),
+            "default");
     var owner = (AgentRunContext) request.context().get(AgentRunContext.class.getName());
     List<Message> messages = new ArrayList<>();
     request.prompt().getInstructions().stream()
@@ -236,7 +242,12 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     var output = generation == null ? null : generation.getOutput();
     if (output != null)
       rememberOutput.accept(
-          java.util.Objects.toString(response.context().get(ChatMemory.CONVERSATION_ID), "default"),
+          java.util.Objects.toString(
+              response
+                  .context()
+                  .get(
+                      org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID),
+              "default"),
           output);
     return response;
   }

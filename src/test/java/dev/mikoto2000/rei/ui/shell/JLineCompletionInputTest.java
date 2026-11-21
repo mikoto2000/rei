@@ -46,7 +46,7 @@ class JLineCompletionInputTest {
             new ByteArrayInputStream(new byte[0]),
             new ByteArrayOutputStream(),
             java.nio.charset.StandardCharsets.UTF_8)) {
-      terminal.setSize(new Size(100, 30));
+      terminal.setSize(Size.of(100, 30));
       var reader =
           ReiLineReaderFactory.create(
               terminal,
@@ -160,7 +160,7 @@ class JLineCompletionInputTest {
             new ByteArrayInputStream(new byte[0]),
             new ByteArrayOutputStream(),
             java.nio.charset.StandardCharsets.UTF_8)) {
-      terminal.setSize(new Size(100, 30));
+      terminal.setSize(Size.of(100, 30));
       var reader = new dev.mikoto2000.rei.core.completion.ApprovalMenuLineReader(terminal);
       reader.setParser(new ShellCompletionParser(root));
       reader.setCompleter(

@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.llm;
 
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
+import dev.mikoto2000.rei.chatmemory.ConversationMemory;
+import dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.configuration.CoreProperties;
 import dev.mikoto2000.rei.core.configuration.SystemPromptService;
@@ -31,10 +33,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
@@ -348,7 +348,7 @@ public class LlmChatClientProvider {
       LlmModelProvider modelProvider,
       CoreProperties coreProperties,
       SystemPromptService systemPromptService,
-      ChatMemory chatMemory,
+      ConversationMemory chatMemory,
       ObjectProvider<Tools> tools,
       ObjectProvider<GoogleCalendarTools> googleCalendarTools,
       ObjectProvider<TaskTools> taskTools,
@@ -377,7 +377,7 @@ public class LlmChatClientProvider {
     this.systemPromptService = systemPromptService;
     this.newMemoryAdvisor =
         () ->
-            MessageChatMemoryAdvisor.builder(chatMemory)
+            ConversationMemoryAdvisor.builder(chatMemory)
                 .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
                 .build();
     this.newReviewAdvisor =
