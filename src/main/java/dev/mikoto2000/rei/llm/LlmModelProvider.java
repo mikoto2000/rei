@@ -256,7 +256,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     if (streamUsage) {
       options.streamUsage(true);
     }
-    return options.build();
+    // Rei owns retry admission and Run/Goal accounting; an SDK-internal replay is invisible.
+    return options.maxRetries(0).build();
   }
 
   @Override
@@ -342,6 +343,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   private ChatModel createOpenAiCompatibleChatModel(LlmProperties.Server server) {
     OpenAiChatOptions options =
         chatOptionsBuilder(server, modelForServer(server))
+            .maxRetries(0)
             .baseUrl(OpenAiCompatibleEndpoint.baseUrl(server.getBaseUrl()))
             .apiKey(
                 server.getApiKey() == null || server.getApiKey().isBlank()

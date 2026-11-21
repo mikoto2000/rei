@@ -45,6 +45,8 @@ final class StreamTimeoutRetry {
       return new MessageAggregator()
           .aggregate(
               Flux.defer(() -> model.stream(prompt))
+                  .contextWrite(values ->
+                      attempt > 0 ? values.put("rei.modelAdmission.waitForRecovery", true) : values)
                   .doOnNext(response -> {
                     var generation = response.getResult();
                     String text = generation == null ? null : generation.getOutput().getText();

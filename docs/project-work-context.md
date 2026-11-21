@@ -125,7 +125,7 @@ Native Workspaceの「Work Context / 引き継ぎ」「Work Context 更新履歴
 | `max-timeout-retries` | 0 | `REI_WORK_CONTEXT_MAX_TIMEOUT_RETRIES` |
 | `enable-thinking` | 未指定（提供元の設定を維持） | `REI_WORK_CONTEXT_ENABLE_THINKING` |
 
-1バッチの60秒にはモデル枠の待機も含み、残りの更新期限より長く待ちません。出力上限は `maxTokens` と `maxCompletionTokens` の両形式に対応し、機能別設定の上限が小さければそれを維持します。出力が上限で途切れた場合は不完全なJSONを採用しません。
+1バッチの60秒にはモデル枠と障害後の復旧枠の待機も含み、残りの更新期限より長く待ちません。出力上限は `maxTokens` と `maxCompletionTokens` の両形式に対応し、機能別設定の上限が小さければそれを維持します。出力が上限で途切れた場合は不完全なJSONを採用しません。
 
 思考型モデルは、JSON本文を出す前の reasoning に時間と生成トークンを使います。ストリームの開始だけでは、抽出結果が生成されたとは限りません。`chat_template_kwargs.enable_thinking` に対応する提供元では、次の設定で Work Context 抽出だけ思考モードを無効にできます。未指定なら追加パラメータを送らず、既存の提供元設定を維持します。通常会話・Sleepや共用モデルの設定を変更しません。対応しない提供元には指定しないでください。
 

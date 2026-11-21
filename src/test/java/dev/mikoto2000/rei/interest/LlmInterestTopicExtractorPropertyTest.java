@@ -57,8 +57,10 @@ class LlmInterestTopicExtractorPropertyTest {
         new LlmInterestTopicExtractor(chatModel, modelHolderService, new JsonMapper());
 
     when(modelHolderService.get()).thenReturn("test-model");
-    when(chatModel.call(any(Prompt.class)))
-        .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("[]")))));
+    when(chatModel.stream(any(Prompt.class)))
+        .thenReturn(
+            reactor.core.publisher.Flux.just(
+                new ChatResponse(List.of(new Generation(new AssistantMessage("[]"))))));
 
     extractor.extract(
         List.of(new ConversationSnippet("c1", "テスト会話", OffsetDateTime.now(ZoneOffset.UTC))),
@@ -66,7 +68,7 @@ class LlmInterestTopicExtractorPropertyTest {
         pastQueries);
 
     ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
-    verify(chatModel).call(promptCaptor.capture());
+    verify(chatModel).stream(promptCaptor.capture());
     String prompt = promptCaptor.getValue().getContents();
 
     // すべての過去クエリがプロンプトに含まれること

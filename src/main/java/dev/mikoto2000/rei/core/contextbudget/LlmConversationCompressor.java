@@ -34,6 +34,8 @@ public class LlmConversationCompressor implements ConversationCompressor {
 
   private final java.util.function.Supplier<String> summaryModelFeature;
 
+  private final java.util.function.Supplier<Boolean> summaryEnableThinking;
+
   /** 指定された値や利用先を使って、LlmConversationCompressorを初期化する。 */
   public LlmConversationCompressor(
       ObjectProvider<LlmModelProvider> models, ContextCompressionProperties properties) {
@@ -42,6 +44,7 @@ public class LlmConversationCompressor implements ConversationCompressor {
     this.summaryGenerationReserve = () -> properties.getSummaryGenerationReserve();
     this.standaloneBudget = () -> StandaloneSummaryBudget.create(properties);
     this.summaryModelFeature = () -> properties.getSummaryModelFeature();
+    this.summaryEnableThinking = () -> properties.getSummaryEnableThinking();
   }
 
   @Override
@@ -129,6 +132,26 @@ public class LlmConversationCompressor implements ConversationCompressor {
                   ? null
                   : ownerOptions.getModel());
       var optionsBuilder = baseOptions.mutate().toolCallbacks(List.of()).toolChoice("none");
+      Boolean thinking = summaryEnableThinking.get();
+      if (thinking != null) {
+        // Override only this summary request, preserving shared chat and template defaults.
+        var extra = new LinkedHashMap<String, Object>();
+        if (baseOptions.getExtraBody() != null) extra.putAll(baseOptions.getExtraBody());
+        var template = new LinkedHashMap<String, Object>();
+        var configured = extra.get("chat_template_kwargs");
+        if (configured != null) {
+          if (!(configured instanceof java.util.Map<?, ?> values))
+            throw new IllegalArgumentException("chat_template_kwargs must be an object");
+          values.forEach((key, value) -> {
+            if (!(key instanceof String name))
+              throw new IllegalArgumentException("chat_template_kwargs keys must be strings");
+            template.put(name, value);
+          });
+        }
+        template.put("enable_thinking", thinking);
+        extra.put("chat_template_kwargs", template);
+        optionsBuilder.extraBody(extra);
+      }
       // The API limit includes reasoning on some providers. It is not the saved text budget.
       int generationTokens = generationTokens(maxTokens);
       if (baseOptions.getMaxCompletionTokens() != null)

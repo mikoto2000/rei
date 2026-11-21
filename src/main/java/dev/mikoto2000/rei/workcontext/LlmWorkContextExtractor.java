@@ -167,6 +167,9 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
       WorkContextRepository.checkCancellation();
       WorkContextExtractionDeadline.remaining(Duration.ofSeconds(properties.batchTimeoutSeconds()));
       model.stream(new Prompt(List.of(new SystemMessage(system), new UserMessage(data)), options))
+          // A parent transport failure may have just opened the shared endpoint cooldown.
+          // Waiting is part of this batch's existing deadline, not a replay of the parent Run.
+          .contextWrite(context -> context.put("rei.modelAdmission.waitForRecovery", true))
           .doOnNext(r -> {
             WorkContextRepository.checkCancellation();
             if (OutputLimitDetector.isOutputLimitReached(r))

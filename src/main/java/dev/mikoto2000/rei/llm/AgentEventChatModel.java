@@ -105,12 +105,12 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     String requestId = UUID.randomUUID().toString();
     var measured = measurement(prompt, runId, requestId, null);
     long startedAtNanos = System.nanoTime();
-    requestEventPublisher.publish(
-        eventFactory.llmRequestStarted(runId, requestId, observedFeature(prompt)));
     ModelOutageGuard.Permit permit = null;
     try {
       if (cancelled(prompt, runId)) throw new java.util.concurrent.CancellationException();
       permit = outageGuard.acquire();
+      requestEventPublisher.publish(
+          eventFactory.llmRequestStarted(runId, requestId, observedFeature(prompt)));
       ChatResponse response = delegate.call(prompt);
       outageGuard.completed(permit);
       var metrics = new ResponseMetrics();
@@ -154,16 +154,32 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
       var metrics = new ResponseMetrics();
       java.util.concurrent.atomic.AtomicBoolean firstTokenPublished =
           new java.util.concurrent.atomic.AtomicBoolean();
-      requestEventPublisher.publish(
-          eventFactory.llmRequestStarted(runId, requestId, observedFeature(prompt)));
-      var permit = new java.util.concurrent.atomic.AtomicReference<ModelOutageGuard.Permit>();
-      return Flux.defer(
-              () -> {
-                if (cancelled(prompt, runId))
-                  throw new java.util.concurrent.CancellationException();
-                permit.set(outageGuard.acquire());
+      Runnable checkActive =
+          () -> {
+            if (cancelled(prompt, runId)) throw new java.util.concurrent.CancellationException();
+          };
+      var admission =
+          Boolean.TRUE.equals(context.getOrDefault("rei.modelAdmission.waitForRecovery", false))
+              ? outageGuard.acquireAfterCooldown(checkActive)
+              : reactor.core.publisher.Mono.fromCallable(() -> {
+                checkActive.run();
+                return outageGuard.acquire();
+              });
+      return Flux.usingWhen(
+              admission.doOnDiscard(ModelOutageGuard.Permit.class, outageGuard::cancelled),
+              acquired -> {
+                checkActive.run();
+                requestEventPublisher.publish(
+                    eventFactory.llmRequestStarted(runId, requestId, observedFeature(prompt)));
                 return delegate.stream(prompt);
-              })
+              },
+              acquired ->
+                  reactor.core.publisher.Mono.fromRunnable(() -> outageGuard.completed(acquired)),
+              (acquired, error) ->
+                  reactor.core.publisher.Mono.fromRunnable(
+                      () -> outageGuard.failed(acquired, error)),
+              acquired ->
+                  reactor.core.publisher.Mono.fromRunnable(() -> outageGuard.cancelled(acquired)))
           .doOnNext(response -> {
             metrics.observe(response);
             observeChunk(runId, measured, response);
@@ -176,7 +192,6 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
             }
           })
           .doOnComplete(() -> {
-            outageGuard.completed(permit.get());
             if (measured != null)
               measured.finish(dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS);
             requestEventPublisher.publish(
@@ -189,7 +204,6 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
                     metrics.completionTokens));
           })
           .doOnError(error -> {
-            if (permit.get() != null) outageGuard.failed(permit.get(), error);
             if (measured != null)
               measured.finish(dev.mikoto2000.rei.timing.TimingExecution.status(error));
             requestEventPublisher.publish(
@@ -197,7 +211,6 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
                     runId, requestId, elapsedMillis(startedAtNanos), error));
           })
           .doOnCancel(() -> {
-            if (permit.get() != null) outageGuard.cancelled(permit.get());
             if (measured != null)
               measured.finish(
                   cancelled(prompt, runId)
