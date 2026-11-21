@@ -30,6 +30,7 @@ final class ModelOutageGuard {
 
   synchronized void completed(Permit permit) {
     if (permit.generation() != generation) return;
+    if (permit.probe()) generation++;
     retryAt = null;
     probing = false;
   }
@@ -77,7 +78,10 @@ final class ModelOutageGuard {
   }
 
   synchronized void cancelled(Permit permit) {
-    if (permit.generation() == generation && permit.probe()) probing = false;
+    if (permit.generation() == generation && permit.probe()) {
+      generation++;
+      probing = false;
+    }
   }
 
   /** Await admission without blocking a worker or issuing a model request. */

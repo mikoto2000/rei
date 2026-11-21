@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,42 @@ import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
 class ModelOutageGuardTest {
+  @Test
+  void cancelledProbeCallbacksCannotCloseOrReleaseItsReplacement() {
+    var now = new java.util.concurrent.atomic.AtomicReference<>(Instant.EPOCH);
+    var clock = mock(Clock.class);
+    when(clock.instant()).thenAnswer(call -> now.get());
+    var guard = new ModelOutageGuard(clock, Duration.ofMillis(1));
+    guard.failed(guard.acquire(), new java.net.ConnectException());
+    now.set(Instant.EPOCH.plusMillis(1));
+    var old = guard.acquire();
+    guard.cancelled(old);
+    guard.completed(old);
+    var replacement = guard.acquire();
+    assertTrue(replacement.probe());
+    guard.cancelled(old);
+    guard.completed(old);
+    guard.failed(old, new java.net.ConnectException());
+    assertThrows(ModelOutageGuard.CoolingDown.class, guard::acquire);
+    guard.completed(replacement);
+    assertFalse(guard.acquire().probe());
+  }
+
+  @Test
+  void completedProbeCannotReopenCooldownWithLateFailure() {
+    var now = new java.util.concurrent.atomic.AtomicReference<>(Instant.EPOCH);
+    var clock = mock(Clock.class);
+    when(clock.instant()).thenAnswer(call -> now.get());
+    var guard = new ModelOutageGuard(clock, Duration.ofMillis(1));
+    guard.failed(guard.acquire(), new java.net.ConnectException());
+    now.set(Instant.EPOCH.plusMillis(1));
+    var probe = guard.acquire();
+    guard.completed(probe);
+    guard.failed(probe, new java.net.ConnectException());
+    guard.cancelled(probe);
+    assertFalse(guard.acquire().probe());
+  }
+
   @Test
   void socketAndProviderTimeoutsAlsoStartCooldown() {
     for (var failure :
