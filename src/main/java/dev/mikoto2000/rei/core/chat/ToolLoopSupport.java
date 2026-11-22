@@ -225,12 +225,16 @@ public final class ToolLoopSupport {
                 "readReviewPages",
                 "readReviewWorkItem",
                 "claimReviewWorkItem",
-                "readNextReviewWorkItem")
+                "readNextReviewWorkItem",
+                "readNextReviewWorkItems")
             .contains(response.name())
         || !declaredRejection(response)) return false;
     var result =
         tools.jackson.databind.json.JsonMapper.builder().build().readTree(response.responseData());
-    return java.util.Set.of("CONTEXT_BUDGET_INSUFFICIENT", "REVIEW_PAGE_BUDGET_TOO_SMALL")
+    return java.util.Set.of(
+            "CONTEXT_BUDGET_INSUFFICIENT",
+            "REVIEW_PAGE_BUDGET_TOO_SMALL",
+            "REVIEW_BATCH_BUDGET_TOO_SMALL")
         .contains(result.path("error").asString());
   }
 

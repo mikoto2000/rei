@@ -14,8 +14,10 @@ class ReviewResultValidationHintTest {
     assertThat(WorkItemStore.resultValidationHint("valid", null, false)).contains("findings", "[]");
     var noCoordinates =
         new WorkItemStore.Finding("PRIVATE-ID", "warning", null, null, "PRIVATE-QUOTE", "reason");
-    assertThat(WorkItemStore.resultValidationHint("valid", List.of(noCoordinates), false))
-        .contains("findings[0].start/end", "UTF-16")
+    var partialCoordinates =
+        new WorkItemStore.Finding("PRIVATE-ID", "warning", 0, null, "PRIVATE-QUOTE", "reason");
+    assertThat(WorkItemStore.resultValidationHint("valid", List.of(partialCoordinates), false))
+        .contains("findings[0].start/end", "both be omitted", "UTF-16")
         .doesNotContain("PRIVATE");
     assertThat(
             WorkItemStore.resultValidationHint(
@@ -23,6 +25,8 @@ class ReviewResultValidationHintTest {
         .contains("findings[1].id", "unique")
         .doesNotContain("PRIVATE");
     assertThat(WorkItemStore.resultValidationHint("valid", List.of(noCoordinates), true))
+        .doesNotContain("findings[0].start/end");
+    assertThat(WorkItemStore.resultValidationHint("valid", List.of(noCoordinates), false))
         .doesNotContain("findings[0].start/end");
   }
 }

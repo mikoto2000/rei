@@ -119,6 +119,7 @@ public class ProgressEvaluator {
         || name.equals("readReviewPages")
         || name.equals("readReviewWorkItem")
         || name.equals("readNextReviewWorkItem")
+        || name.equals("readNextReviewWorkItems")
         || name.equals("readRawToolResult");
   }
 
@@ -358,7 +359,9 @@ public class ProgressEvaluator {
       String name, String arguments, String result, Snapshot before) {
     readObservations.clear();
     readContentObserved = false;
-    if (name.equals("readReviewPages") || name.equals("submitReviewPages")) {
+    if (name.equals("readReviewPages")
+        || name.equals("submitReviewPages")
+        || name.equals("readNextReviewWorkItems")) {
       var batch = parse(result);
       if (batch != null && batch.isArray() && !batch.isEmpty() && batch.size() <= 4) {
         var combined = new ArrayList<ProgressEvidence>();
@@ -366,7 +369,7 @@ public class ProgressEvaluator {
         for (var page : batch) {
           combined.addAll(
               afterTool(
-                  name.equals("readReviewPages") ? "readReviewFile" : "submitReviewPage",
+                  name.equals("submitReviewPages") ? "submitReviewPage" : "readReviewFile",
                   arguments,
                   page.toString(),
                   before));

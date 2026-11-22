@@ -63,7 +63,11 @@ public class RunExecutionContext {
 
   private static final java.util.Set<String> RESUME_REVIEW_READ_TOOLS =
       java.util.Set.of(
-          "readReviewFile", "readReviewPages", "readReviewWorkItem", "readNextReviewWorkItem");
+          "readReviewFile",
+          "readReviewPages",
+          "readReviewWorkItem",
+          "readNextReviewWorkItem",
+          "readNextReviewWorkItems");
 
   /** Bound text-only outcome responses separately from already counted duplicate reads. */
   static final int RESUME_BATCH_COMMIT_LIMIT = 4;

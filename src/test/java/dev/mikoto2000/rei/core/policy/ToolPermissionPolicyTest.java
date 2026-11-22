@@ -30,6 +30,7 @@ class ToolPermissionPolicyTest {
             "readRawToolResult",
             "diagnoseTestReports",
             "listReviewTasks",
+            "readNextReviewWorkItems",
             "fetchUrlContent")) {
       assertEquals(PermissionDecision.AUTO_APPROVE, policy.evaluate(name), name);
       assertTrue(ToolPermissionPolicy.intrinsicallyReadOnly(name), name);

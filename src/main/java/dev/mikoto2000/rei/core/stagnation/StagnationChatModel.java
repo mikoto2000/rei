@@ -174,10 +174,12 @@ public final class StagnationChatModel implements ChatModel {
       if (hasReviewProtocol(prompt)) {
         reviewGuidance +=
             " For a new whole-repository review prefer beginRepositoryReview, scanReviewSnapshot"
-                + " until SEALED, then readNextReviewWorkItem with tokenBudget omitted. It claims and reads"
+                + " until SEALED, then prefer readNextReviewWorkItems with tokenBudget omitted to batch up to 4 small files in one shared budget. readNextReviewWorkItem remains available for one unit. It claims and reads"
                 + " one semantic unit with a host-selected budget up to 100000 estimated tokens, bounded"
                 + " by 1/8 of effective model input capacity and current free context. Assess the whole"
                 + " delivered unit with submitReviewWorkItem(workItemId,attempt,assessment,findings)."
+                + " Omit finding start/end and cite unique exact evidence; the host computes coordinates."
+                + " Submit each page of a batch separately in the same response, before requesting the next batch."
                 + " When continuing an existing durable task in a new Run, call resumeRepositoryReview"
                 + " with that taskId before acquiring or submitting work. Use listReviewTasks if the"
                 + " taskId is unknown. Reading status or saved results does not bind the task."
