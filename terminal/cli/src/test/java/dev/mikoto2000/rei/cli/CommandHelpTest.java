@@ -18,6 +18,16 @@ class CommandHelpTest {
   @TempDir Path directory;
 
   @Test
+  void runHistoryHelpListsScopeStatusAndLimit() {
+    var cache = new CachedCatalog(new CliCatalog(List.of()));
+    var text = cache.requestedHelp(List.of("/runs", "history", "--help"));
+    assertNotNull(text);
+    assertTrue(text.contains("--all"), text);
+    assertTrue(text.contains("--status"), text);
+    assertTrue(text.contains("--limit"), text);
+  }
+
+  @Test
   void everyClientLocalCommandAndSubcommandHasRoleAndUsageWithoutBackendAccess() throws Exception {
     var paths = new ArrayList<List<String>>();
     collect(ClientHelpCatalog.create(new CliCatalog(List.of())), List.of(), paths);

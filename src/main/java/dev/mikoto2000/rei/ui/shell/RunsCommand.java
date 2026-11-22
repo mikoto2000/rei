@@ -8,7 +8,10 @@ import picocli.CommandLine.Spec;
 
 /** 全プロジェクトの実行中AgentRunを表示しますを行うための利用者コマンド。 */
 @Component
-@Command(name = "runs", description = "全プロジェクトの実行中AgentRunを表示します")
+@Command(
+    name = "runs",
+    description = "全プロジェクトの実行中AgentRunを表示します",
+    subcommands = RunsCommand.History.class)
 public class RunsCommand implements Runnable {
   /** 表示。 */
   private final ActiveRunDisplay display;
@@ -22,7 +25,7 @@ public class RunsCommand implements Runnable {
   @picocli.CommandLine.Parameters(arity = "0..1", paramLabel = "manage")
   private String action;
 
-  private dev.mikoto2000.rei.runmanagement.RunCheckpointMenu.Access management;
+  private dev.mikoto2000.rei.runmanagement.RunManagement management;
   private java.util.function.Function<String, String> input;
 
   @org.springframework.beans.factory.annotation.Autowired
@@ -60,6 +63,65 @@ public class RunsCommand implements Runnable {
    */
   public void setShellOutput(java.io.PrintWriter output) {
     this.shellOutput = CommandOutput.from(output);
+  }
+
+  @Command(name = "history", description = "保存された Run 履歴を新しい順に表示")
+  public static class History implements java.util.concurrent.Callable<Integer> {
+    @picocli.CommandLine.ParentCommand RunsCommand parent;
+
+    @picocli.CommandLine.Option(
+        names = "--status",
+        description =
+            "queued, running, waiting, waiting_approval, completed, failed, cancelled, unknown")
+    String status;
+
+    @picocli.CommandLine.Option(names = "--all", description = "全プロジェクトを対象にする")
+    boolean all;
+
+    @picocli.CommandLine.Option(
+        names = "--limit",
+        defaultValue = "20",
+        description = "最大表示件数（正の整数）")
+    int limit;
+
+    public Integer call() {
+      var out =
+          parent.shellOutput == null
+              ? CommandOutput.from(parent.spec.commandLine().getOut())
+              : parent.shellOutput;
+      try {
+        var management = parent.management;
+        if (management == null) throw new IllegalStateException("Run management unavailable");
+        var rows = management.history(all ? null : management.currentProjectId(), status, limit);
+        out.println("PROJECT  RUN_ID  STATUS  STARTED  COMPLETED  REQUEST  FAILURE");
+        if (rows.isEmpty()) out.println("No matching runs.");
+        for (var row : rows)
+          out.println(
+              row.projectName()
+                  + "  "
+                  + row.runId()
+                  + "  "
+                  + row.status()
+                  + "  "
+                  + row.startedAt()
+                  + "  "
+                  + row.completedAt()
+                  + "  "
+                  + row.request()
+                  + "  "
+                  + row.failure());
+        return 0;
+      } catch (RuntimeException error) {
+        out.println(
+            "[error] "
+                + (error instanceof IllegalArgumentException
+                    ? error.getMessage()
+                    : "Run history unavailable"));
+        return 2;
+      } finally {
+        out.flush();
+      }
+    }
   }
 
   /** 全プロジェクトの実行中AgentRunを表示しますを行う。 */

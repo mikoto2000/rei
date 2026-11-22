@@ -27,6 +27,98 @@ class ResumeSessionCommandTest {
   @TempDir Path root;
 
   @Test
+  void failedCandidatesAcrossProjectsRetainTheirOwner() {
+    var service = mock(PersistentCheckpointService.class);
+    var projects = mock(ProjectService.class);
+    var one =
+        new dev.mikoto2000.rei.core.project.ProjectContext(
+            "00000000-0000-0000-0000-000000000001", "One", root);
+    var two =
+        new dev.mikoto2000.rei.core.project.ProjectContext(
+            "00000000-0000-0000-0000-000000000002",
+            "Two",
+            root.resolve("00000000-0000-0000-0000-000000000002"));
+    when(projects.currentContext()).thenReturn(one);
+    when(projects.registeredProjects()).thenReturn(java.util.List.of(one, two));
+    var failed = mock(PersistentCheckpoint.class);
+    when(failed.taskId()).thenReturn("failed-task");
+    when(failed.projectId()).thenReturn("00000000-0000-0000-0000-000000000002");
+    when(failed.status()).thenReturn("FAILED");
+    when(failed.createdAt()).thenReturn(java.time.Instant.EPOCH);
+    var cancelled = mock(PersistentCheckpoint.class);
+    when(cancelled.status()).thenReturn("CANCELLED");
+    when(service.list("00000000-0000-0000-0000-000000000001"))
+        .thenReturn(java.util.List.of(cancelled));
+    when(service.list("00000000-0000-0000-0000-000000000002"))
+        .thenReturn(java.util.List.of(failed));
+    var resume = new ResumeCommand(service, projects);
+    resume.setTaskSelection(items -> {
+      assertEquals(java.util.List.of(failed), items);
+      return java.util.Optional.of("failed-task");
+    });
+    var command = new picocli.CommandLine(resume).setOut(new PrintWriter(new StringWriter()));
+    assertEquals(0, command.execute("--status", "failed", "--all"));
+    verify(service)
+        .resumeForShell(eq("00000000-0000-0000-0000-000000000002"), eq("failed-task"), any());
+  }
+
+  @Test
+  void crossProjectSubmissionSelectsOwnerAndRollsBackOnRejection() throws Exception {
+    var repository = new FileSessionRepository(root.resolve("cross-sessions.json"));
+    var projects =
+        new ProjectService(
+            root, new ProjectRegistry(root.resolve("cross-projects.json")), repository);
+    var conversations =
+        new ShellConversationService(
+            projects, new SessionLifecycle(repository, Clock.systemUTC()), (context, prompt) -> {});
+    try (var scope = projects.newClient().open()) {
+      var original = projects.currentContext();
+      String previous = conversations.newConversation("original").sessionId();
+      var targetDirectory = java.nio.file.Files.createDirectory(root.resolve("target"));
+      projects.cd(targetDirectory.toString());
+      var targetProject = projects.currentContext();
+      String targetSession = conversations.newConversation("target").sessionId();
+      projects.cd(original.root().toString());
+      projects.selectSession(previous);
+      for (boolean rejected : new boolean[] {false, true}) {
+        var service = mock(PersistentCheckpointService.class);
+        var candidate = mock(PersistentCheckpoint.class);
+        when(candidate.taskId()).thenReturn("task");
+        when(candidate.projectId()).thenReturn(targetProject.id());
+        when(candidate.status()).thenReturn("FAILED");
+        when(candidate.createdAt()).thenReturn(java.time.Instant.EPOCH);
+        when(service.list(targetProject.id())).thenReturn(java.util.List.of(candidate));
+        when(service.resumeForShell(eq(targetProject.id()), eq("task"), any()))
+            .thenAnswer(invocation -> {
+              Consumer<String> select = invocation.getArgument(2);
+              select.accept(targetSession);
+              assertEquals(targetProject.id(), projects.currentContext().id());
+              assertEquals(targetSession, projects.currentSessionId());
+              if (rejected) throw new IllegalStateException("Rejected");
+              return null;
+            });
+        var resume = new ResumeCommand(service, projects);
+        resume.setTaskSelection(items -> java.util.Optional.of("task"));
+        var command = new picocli.CommandLine(resume).setOut(new PrintWriter(new StringWriter()));
+        assertEquals(rejected ? 2 : 0, command.execute("--status", "failed", "--all"));
+        assertEquals(rejected ? original.id() : targetProject.id(), projects.currentContext().id());
+        assertEquals(rejected ? previous : targetSession, projects.currentSessionId());
+        projects.cd(original.root().toString());
+        projects.selectSession(previous);
+      }
+    }
+  }
+
+  @Test
+  void invalidResumeStatusDoesNotReadOrResumeCheckpoints() {
+    var service = mock(PersistentCheckpointService.class);
+    var resume = new ResumeCommand(service, mock(ProjectService.class));
+    var command = new picocli.CommandLine(resume).setErr(new PrintWriter(new StringWriter()));
+    assertEquals(2, command.execute("--status", "faild", "--all"));
+    org.mockito.Mockito.verifyNoInteractions(service);
+  }
+
+  @Test
   void interactiveSelectionResumesOnlyTheChosenTaskAndCancelDoesNothing() {
     var service = mock(PersistentCheckpointService.class);
     var projects = mock(ProjectService.class);

@@ -31,6 +31,14 @@ public class RunManagementController {
     return service.runs();
   }
 
+  @GetMapping("/history")
+  public List<dev.mikoto2000.rei.runmanagement.RunHistoryEntry> history(
+      @org.springframework.web.bind.annotation.RequestParam(required = false) String projectId,
+      @org.springframework.web.bind.annotation.RequestParam(required = false) String status,
+      @org.springframework.web.bind.annotation.RequestParam(defaultValue = "20") int limit) {
+    return service.history(projectId, status, limit);
+  }
+
   @GetMapping("/{projectId}/{runId}/checkpoints")
   public List<Checkpoint> checkpoints(@PathVariable String projectId, @PathVariable String runId) {
     return service.checkpoints(projectId, runId);

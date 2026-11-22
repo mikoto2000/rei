@@ -378,7 +378,9 @@
     "allPublicMethods" : true,
     "fields" : [
       { "name" : "spec" },
-      { "name" : "task" }
+      { "name" : "task" },
+      { "name" : "status" },
+      { "name" : "all" }
     ]
   },
   {
@@ -2121,13 +2123,25 @@
     "allPublicMethods" : true
   },
   {
+    "name" : "dev.mikoto2000.rei.ui.shell.RunsCommand$History",
+    "allDeclaredConstructors" : true,
+    "allPublicMethods" : true,
+    "fields" : [
+      { "name" : "parent" },
+      { "name" : "status" },
+      { "name" : "all" },
+      { "name" : "limit" }
+    ]
+  },
+  {
     "name" : "dev.mikoto2000.rei.ui.shell.RunsCommand",
     "allDeclaredConstructors" : true,
     "allPublicConstructors" : true,
     "allDeclaredMethods" : true,
     "allPublicMethods" : true,
     "fields" : [
-      { "name" : "spec" }
+      { "name" : "spec" },
+      { "name" : "action" }
     ]
   },
   {

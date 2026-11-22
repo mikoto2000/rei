@@ -124,6 +124,8 @@ Rei の入力プロンプトが表示されたら、文章をそのまま入力�
 | 会話履歴を検索する | `/history search 検索したい言葉` |
 | 現在のプロジェクトの再開候補を再表示する | `/resume overview` |
 | 実行中の処理を確認する | `/runs` |
+| 全プロジェクトの直近3件の正常終了 Run を確認する | `/runs history --status completed --limit 3 --all` |
+| 全プロジェクトの失敗した保存タスクから再開する | `/resume --status failed --all` |
 | 選択中プロジェクトの実行に停止を要求する | `/cancel` |
 | 特定の Run に停止を要求する | `/cancel RUN_ID` |
 | テキスト Run の時間計測を見る | `/timing last --details` または `/timing RUN_ID --details` |

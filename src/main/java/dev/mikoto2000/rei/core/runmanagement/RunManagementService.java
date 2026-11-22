@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.core.runmanagement;
 import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
 import dev.mikoto2000.rei.application.run.RunNotFoundException;
 import dev.mikoto2000.rei.application.run.RunRegistry;
+import dev.mikoto2000.rei.application.run.RunSnapshot;
 import dev.mikoto2000.rei.application.state.OperationConflictException;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpointService;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
@@ -17,8 +18,10 @@ import dev.mikoto2000.rei.event.AgentRunFailedPayload;
 import dev.mikoto2000.rei.event.BackgroundExecutionPayload;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.event.ProjectAgentEventStore;
+import dev.mikoto2000.rei.runmanagement.ListingRequest;
 import dev.mikoto2000.rei.runmanagement.RunCheckpointMenu.Checkpoint;
 import dev.mikoto2000.rei.runmanagement.RunCheckpointMenu.Run;
+import dev.mikoto2000.rei.runmanagement.RunHistoryEntry;
 import dev.mikoto2000.rei.runmanagement.RunManagement;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -145,6 +148,147 @@ final class RunManagementService implements RunManagement {
                         : java.time.Instant.parse(row.startedAt()))
                 .reversed()
                 .thenComparing(Run::runId))
+        .toList();
+  }
+
+  @Override
+  public List<RunHistoryEntry> history(String projectId, String status, int limit) {
+    String selected = ListingRequest.status(status, true);
+    ListingRequest.limit(limit);
+    if (projectId != null) requireProject(projectId);
+    var rows = new HashMap<String, RunHistoryEntry>();
+    for (var project : projects.registeredProjects()) {
+      if (projectId != null && !projectId.equals(project.id())) continue;
+      var starts = new HashMap<String, AgentEvent>();
+      for (var event : events.runLifecycle(project.id())) {
+        if (event.runId() == null) continue;
+        String key = project.id() + ":" + event.runId();
+        if (event.type() == AgentEventType.AGENT_RUN_STARTED
+            || event.type() == AgentEventType.EXECUTION_STARTED) {
+          starts.putIfAbsent(event.runId(), event);
+          continue;
+        }
+        String outcome =
+            switch (event.type()) {
+              case AGENT_RUN_COMPLETED, EXECUTION_COMPLETED -> "COMPLETED";
+              case AGENT_RUN_FAILED, EXECUTION_FAILED -> "FAILED";
+              case AGENT_RUN_CANCELLED, EXECUTION_CANCELLED -> "CANCELLED";
+              default -> null;
+            };
+        if (outcome == null) continue;
+        var start = starts.get(event.runId());
+        var turn =
+            event.sessionId() == null
+                ? null
+                : turns.findRun(event.sessionId(), event.runId()).orElse(null);
+        String request = turn == null ? "" : turn.request();
+        String failure = "";
+        if (event.payload() instanceof BackgroundExecutionPayload background) {
+          request = background.request();
+          if (!outcome.equals("COMPLETED")) failure = background.output();
+        } else if (event.payload() instanceof AgentRunFailedPayload failed
+            && failed.error() != null) {
+          failure = failed.error().message();
+          if ("cancelled".equals(failed.error().code())) outcome = "CANCELLED";
+        }
+        rows.put(
+            key,
+            new RunHistoryEntry(
+                project.id(),
+                summary(project.name()),
+                event.runId(),
+                summary(request),
+                outcome,
+                start != null ? start.timestamp() : turn == null ? null : turn.createdAt(),
+                event.timestamp(),
+                summary(failure)));
+      }
+      var current = registry.getIfAvailable();
+      if (current != null)
+        for (String id : current.runIds()) {
+          RunSnapshot run;
+          try {
+            run = current.get(id);
+          } catch (RunNotFoundException absent) {
+            continue;
+          }
+          if (!project.id().equals(run.context().projectId())) continue;
+          String key = project.id() + ":" + id;
+          var existing = rows.get(key);
+          if (existing != null && run.status().isTerminal()) continue;
+          var turn = turns.findRun(run.context().conversationId(), id).orElse(null);
+          rows.put(
+              key,
+              new RunHistoryEntry(
+                  project.id(),
+                  summary(project.name()),
+                  id,
+                  turn == null ? "" : summary(turn.request()),
+                  run.status().name(),
+                  run.startedAt(),
+                  run.completedAt(),
+                  run.failure() == null ? "" : summary(run.failure().message())));
+        }
+    }
+    for (var run : router.activeExecutions()) {
+      if (projectId != null && !projectId.equals(run.projectId())) continue;
+      var project =
+          projects.registeredProjects().stream()
+              .filter(p -> p.id().equals(run.projectId()))
+              .findFirst();
+      if (project.isEmpty()) continue;
+      rows.putIfAbsent(
+          run.projectId() + ":" + run.id(),
+          new RunHistoryEntry(
+              run.projectId(),
+              summary(project.get().name()),
+              run.id(),
+              summary(run.summary()),
+              run.status(),
+              run.startedAt(),
+              null,
+              ""));
+    }
+    return rows.values().stream()
+        .filter(row -> selected == null || row.status().equalsIgnoreCase(selected))
+        .sorted(
+            Comparator.comparing(RunHistoryEntry::orderTime)
+                .reversed()
+                .thenComparing(RunHistoryEntry::projectId)
+                .thenComparing(RunHistoryEntry::runId))
+        .limit(limit)
+        .toList();
+  }
+
+  @Override
+  public String currentProjectId() {
+    return projects.currentContext().id();
+  }
+
+  @Override
+  public List<dev.mikoto2000.rei.runmanagement.CheckpointCandidate> candidates(
+      String projectId, String status) {
+    String selected = ListingRequest.status(status, false);
+    if (projectId != null) requireProject(projectId);
+    return projects.registeredProjects().stream()
+        .filter(p -> projectId == null || p.id().equals(projectId))
+        .flatMap(p ->
+            checkpoints.list(p.id()).stream()
+                .filter(c -> selected == null || c.status().equalsIgnoreCase(selected))
+                .map(c ->
+                    new dev.mikoto2000.rei.runmanagement.CheckpointCandidate(
+                        p.id(),
+                        summary(p.name()),
+                        c.taskId(),
+                        c.status(),
+                        summary(c.request()),
+                        c.revision(),
+                        c.createdAt())))
+        .sorted(
+            Comparator.comparing(dev.mikoto2000.rei.runmanagement.CheckpointCandidate::savedAt)
+                .reversed()
+                .thenComparing(dev.mikoto2000.rei.runmanagement.CheckpointCandidate::projectId)
+                .thenComparing(dev.mikoto2000.rei.runmanagement.CheckpointCandidate::taskId))
         .toList();
   }
 

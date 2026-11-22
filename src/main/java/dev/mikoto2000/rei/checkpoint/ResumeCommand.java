@@ -57,6 +57,18 @@ public class ResumeCommand implements Callable<Integer> {
   @Parameters(index = "0", arity = "0..1", paramLabel = "taskId")
   String task;
 
+  @picocli.CommandLine.Option(
+      names = "--status",
+      description = "running, waiting, waiting_approval, completed, failed, cancelled, interrupted")
+  String status;
+
+  @picocli.CommandLine.Option(names = "--all", description = "全プロジェクトの再開候補を表示")
+  boolean all;
+
+  private java.util.function.Supplier<java.util.List<String>> registeredProjects;
+  private java.util.function.Consumer<String> selectProject;
+  private java.util.function.Function<String, String> projectName;
+
   /** 出力。 */
   private CommandOutput output;
 
@@ -81,11 +93,20 @@ public class ResumeCommand implements Callable<Integer> {
           menu) {
     setTaskSelection(items ->
         menu.apply(
-            items.stream().map(PersistentCheckpoint::taskId).toList(),
+            items.stream()
+                .map(item -> all ? item.projectId() + ":" + item.taskId() : item.taskId())
+                .toList(),
             items.stream()
                 .map(item ->
                     ResumeOverview.safe(
-                        "[" + item.status() + "] " + item.request() + " (" + item.taskId() + ")",
+                        (all ? projectName.apply(item.projectId()) + " / " : "")
+                            + "["
+                            + item.status()
+                            + "] "
+                            + item.request()
+                            + " ("
+                            + item.taskId()
+                            + ")",
                         240))
                 .toList()));
   }
@@ -117,6 +138,24 @@ public class ResumeCommand implements Callable<Integer> {
     this.inspectCheckpoint = (project, task) -> service.inspect(project, task);
     this.abandonCheckpoint = (project, task) -> service.abandon(project, task);
     this.resumeFromShell = (project, task, before) -> service.resumeForShell(project, task, before);
+    this.registeredProjects =
+        () -> projects.registeredProjects().stream().map(p -> p.id()).toList();
+    this.projectName =
+        id ->
+            projects.registeredProjects().stream()
+                .filter(p -> p.id().equals(id))
+                .map(p -> p.name())
+                .findFirst()
+                .orElse(id);
+    this.selectProject =
+        id -> {
+          var project =
+              projects.registeredProjects().stream()
+                  .filter(p -> p.id().equals(id))
+                  .findFirst()
+                  .orElseThrow(() -> new IllegalArgumentException("Unknown project"));
+          projects.cd(project.root().toString());
+        };
     this.currentProjectId = () -> projects.currentContext().id();
     this.currentSessionId = () -> projects.currentSessionId();
     this.selectSession = session -> projects.selectSession(session);
@@ -158,29 +197,86 @@ public class ResumeCommand implements Callable<Integer> {
   @Override
   public Integer call() {
     return print(() -> {
-      if (task != null) return resumeTask(task);
-      var candidates = listCheckpoints.apply(project());
-      if (taskSelection == null) return candidates;
+      String selectedStatus = dev.mikoto2000.rei.runmanagement.ListingRequest.status(status, false);
+      if (task != null) {
+        if (all || status != null)
+          throw new IllegalArgumentException(
+              "Use --status and --all with the candidate list, not a task ID");
+        return resumeTask(project(), task);
+      }
+      var candidates = candidates(selectedStatus);
+      if (taskSelection == null) {
+        if (!all && status == null) return candidates;
+        if (candidates.isEmpty()) return "再開候補はありません。";
+        return candidates.stream()
+            .map(item ->
+                ResumeOverview.safe(
+                    projectName.apply(item.projectId())
+                        + " / "
+                        + item.taskId()
+                        + " ["
+                        + item.status()
+                        + "] rev "
+                        + item.revision()
+                        + " / "
+                        + item.createdAt()
+                        + " / "
+                        + item.request(),
+                    400))
+            .collect(java.util.stream.Collectors.joining("\n"));
+      }
       if (candidates.isEmpty()) return "再開候補はありません。";
       var selected = taskSelection.apply(candidates);
-      return selected.isPresent() ? resumeTask(selected.get()) : "再開せずに閉じました。";
+      if (selected.isEmpty()) return "再開せずに閉じました。";
+      var matches =
+          candidates.stream()
+              .filter(c ->
+                  (all ? c.projectId() + ":" + c.taskId() : c.taskId()).equals(selected.get())
+                      || c.taskId().equals(selected.get()))
+              .toList();
+      if (matches.size() != 1) throw new IllegalArgumentException("Unknown or ambiguous candidate");
+      var owner = matches.getFirst();
+      return resumeTask(all ? owner.projectId() : project(), owner.taskId());
     });
   }
 
   /** 再開した実行の出力と後続の入力を同じ会話へ向ける。 */
-  private PersistentCheckpointService.ResumeResult resumeTask(String selectedTask) {
+  private java.util.List<PersistentCheckpoint> candidates(String selectedStatus) {
+    var candidates =
+        all
+            ? registeredProjects.get().stream()
+                .flatMap(p -> listCheckpoints.apply(p).stream())
+                .toList()
+            : listCheckpoints.apply(project());
+    if (!all && selectedStatus == null) return candidates;
+    return candidates.stream()
+        .filter(c -> selectedStatus == null || c.status().equalsIgnoreCase(selectedStatus))
+        .sorted(
+            java.util.Comparator.comparing(PersistentCheckpoint::createdAt)
+                .reversed()
+                .thenComparing(PersistentCheckpoint::taskId))
+        .toList();
+  }
+
+  private PersistentCheckpointService.ResumeResult resumeTask(
+      String targetProject, String selectedTask) {
     String previousSession = currentSessionId.get();
+    String previousProject = project();
     boolean[] selected = {false};
     try {
       return resumeFromShell.resume(
-          project(),
+          targetProject,
           selectedTask,
           sessionId -> {
-            selectSession.accept(sessionId);
             selected[0] = true;
+            if (!targetProject.equals(previousProject)) selectProject.accept(targetProject);
+            selectSession.accept(sessionId);
           });
     } catch (RuntimeException | Error error) {
-      if (selected[0]) selectSession.accept(previousSession);
+      if (selected[0]) {
+        if (!targetProject.equals(previousProject)) selectProject.accept(previousProject);
+        selectSession.accept(previousSession);
+      }
       throw error;
     }
   }
