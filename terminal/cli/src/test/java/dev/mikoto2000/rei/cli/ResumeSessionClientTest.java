@@ -36,16 +36,39 @@ class ResumeSessionClientTest {
     verifyResume(false, "\033[B\r");
   }
 
+  @Test
+  void filteredCrossProjectSelectionUsesCheckpointOwner() throws Exception {
+    verifyResume(false, "\r", true);
+  }
+
+  @Test
+  void filteredBatchListsWithoutResuming() throws Exception {
+    verifyResume(false, null, true);
+  }
+
   /** HTTP と SSE を使って再開と後続の送信先を確認する。 */
   private void verifyResume(boolean fail) throws Exception {
     verifyResume(fail, null);
   }
 
   private void verifyResume(boolean fail, String keys) throws Exception {
+    verifyResume(fail, keys, false);
+  }
+
+  private void verifyResume(boolean fail, String keys, boolean across) throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     var submittedSession = new AtomicReference<String>();
     var output = new ByteArrayOutputStream();
     var resumedTask = new AtomicReference<String>();
+    var resumedProject = new AtomicReference<String>();
+    server.createContext(
+        "/api/v1/checkpoints/candidates",
+        e -> {
+          assertEquals("status=failed", e.getRequestURI().getQuery());
+          reply(
+              e,
+              "[{\"projectId\":\"two\",\"projectName\":\"Two\",\"taskId\":\"second\",\"status\":\"FAILED\",\"request\":\"Cross project request\"}]");
+        });
     server.createContext("/api/v1/cli/catalog", e -> reply(e, "{\"commands\":[]}"));
     server.createContext("/api/v1/models/current", e -> reply(e, "{}"));
     server.createContext("/api/v1/resume-overview", e -> reply(e, "{\"enabled\":false}"));
@@ -61,6 +84,7 @@ class ResumeSessionClientTest {
         "/api/v1/projects",
         e -> {
           if (e.getRequestURI().getPath().endsWith("/resume")) {
+            resumedProject.set(e.getRequestURI().getPath().split("/")[4]);
             resumedTask.set(e.getRequestURI().getPath().split("/")[6]);
             if (fail) {
               e.sendResponseHeaders(409, -1);
@@ -71,7 +95,7 @@ class ResumeSessionClientTest {
                 e,
                 "[{\"taskId\":\"first\",\"status\":\"INTERRUPTED\",\"request\":\"First\"},"
                     + "{\"taskId\":\"second\",\"status\":\"INTERRUPTED\",\"request\":\"Second\"}]");
-          } else reply(e, "[{\"id\":\"one\",\"name\":\"One\"}]");
+          } else reply(e, "[{\"id\":\"one\",\"name\":\"One\"},{\"id\":\"two\",\"name\":\"Two\"}]");
         });
     server.createContext(
         "/api/v1/chat",
@@ -108,10 +132,22 @@ class ResumeSessionClientTest {
                     : interactiveTerminal(keys, output))) {
       client.command("/project select one");
       client.command("/session switch previous");
+      if (across && keys == null) {
+        client.command("/resume --status failed --all");
+        assertNull(resumedTask.get());
+        assertTrue(
+            output
+                .toString(StandardCharsets.UTF_8)
+                .contains("Two / [FAILED] Cross project request"));
+        assertEquals("previous", client.sessionId());
+        return;
+      }
       if (fail)
         assertThrows(BackendClient.ApiException.class, () -> client.command("/resume task"));
       else {
-        client.command(keys == null ? "/resume task" : "/resume");
+        client.command(
+            across ? "/resume --status failed --all" : keys == null ? "/resume task" : "/resume");
+        assertEquals(across ? "two" : "one", resumedProject.get());
         assertEquals(keys == null ? "task" : "second", resumedTask.get());
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (!output.toString(StandardCharsets.UTF_8).contains("resumed output")

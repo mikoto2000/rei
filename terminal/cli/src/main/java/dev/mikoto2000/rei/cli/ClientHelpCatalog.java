@@ -36,6 +36,24 @@ final class ClientHelpCatalog {
             "会話の実行モードを設定します。exclusive は通常実行、read-only は読取り専用、conversation は会話用です。",
             "exclusive|read-only|conversation",
             "1"));
+    var runs = root.getSubcommands().get("runs");
+    put(runs, spec("manage", "実行中・失敗・停止済み Run の checkpoint を対話操作します。"));
+    var runHistory = spec("history", "選択中 Project の Run 履歴を新しい順に表示します。");
+    runHistory.addOption(
+        OptionSpec.builder("--all").type(boolean.class).description("全 Project を対象にします。").build());
+    runHistory.addOption(
+        OptionSpec.builder("--status")
+            .type(String.class)
+            .description(
+                "queued, running, waiting, waiting_approval, completed, failed, cancelled, unknown")
+            .build());
+    runHistory.addOption(
+        OptionSpec.builder("--limit")
+            .type(int.class)
+            .defaultValue("20")
+            .description("最大表示件数（正の整数）。")
+            .build());
+    put(runs, runHistory);
     var chat =
         positional(
             "chat", "メッセージを送信します。--run は実行中 Run への追加指示です。-- 以降はメッセージとして扱います。", "MESSAGE", "1..*");

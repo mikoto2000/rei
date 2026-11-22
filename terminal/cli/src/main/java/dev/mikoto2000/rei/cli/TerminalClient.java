@@ -139,7 +139,7 @@ public final class TerminalClient implements AutoCloseable {
       Map.of(
           "/project", List.of("select", "register"),
           "/session", List.of("select"),
-          "/runs", List.of("manage"),
+          "/runs", List.of("manage", "history"),
           "/history", List.of("off", "on"),
           "/input-history", List.of("off", "on"),
           "/run-mode", List.of("exclusive", "read-only", "conversation"));
@@ -680,6 +680,75 @@ public final class TerminalClient implements AutoCloseable {
         this::out);
   }
 
+  private void resumeCandidates(List<String> words) throws IOException, InterruptedException {
+    boolean filtered = words.size() > 1;
+    String path;
+    if (filtered) path = RemoteCommands.route(words, project, session).path();
+    else {
+      requireProject();
+      path = "/api/v1/projects/" + BackendClient.segment(project) + "/checkpoints";
+    }
+    var rows = backend.get(path);
+    if (rows.isEmpty()) {
+      out("再開候補はありません。");
+      return;
+    }
+    var candidates = new ArrayList<MeetingSelectionMenu.Candidate>();
+    var owners = new LinkedHashMap<String, JsonNode>();
+    for (var row : rows) {
+      String task = row.path("taskId").asText();
+      if (task.isBlank()) throw new IOException("Candidate has no task ID");
+      String owner = row.path("projectId").asText(project);
+      if (owner == null || owner.isBlank()) throw new IOException("Candidate has no project ID");
+      String key = owner + ":" + task;
+      if (owners.putIfAbsent(key, row) != null) throw new IOException("Duplicate candidate");
+      String label =
+          (filtered ? row.path("projectName").asText(owner) + " / " : "")
+              + "["
+              + row.path("status").asText()
+              + "] "
+              + row.path("request").asText()
+              + " ("
+              + task
+              + ")";
+      candidates.add(new MeetingSelectionMenu.Candidate(key, safeOutput(label)));
+      if (!ApprovalDisplayState.interactive(terminal))
+        out(
+            label
+                + " / rev "
+                + row.path("revision").asText()
+                + " / "
+                + row.path("savedAt").asText());
+    }
+    if (!ApprovalDisplayState.interactive(terminal)) return;
+    var selected = MeetingSelectionMenu.chooseOne(reader, candidates);
+    if (selected.isEmpty()) {
+      out("再開せずに閉じました。");
+      return;
+    }
+    var row = owners.get(selected.get());
+    if (row == null) throw new IOException("Unknown candidate");
+    String owner = row.path("projectId").asText(project);
+    var response =
+        backend.post(
+            "/api/v1/projects/"
+                + BackendClient.segment(owner)
+                + "/checkpoints/"
+                + BackendClient.segment(row.path("taskId").asText())
+                + "/resume",
+            Map.of());
+    String resumedSession = response.path("sessionId").asText();
+    String resumedRun = response.path("runId").asText();
+    if (resumedSession.isBlank() || resumedRun.isBlank())
+      throw new IOException("Invalid resume response");
+    if (!owner.equals(project)) selectProject(owner);
+    session = resumedSession;
+    run = resumedRun;
+    out("Current session: " + session);
+    out("Run: " + run);
+    watch(run);
+  }
+
   void command(String line) throws IOException, InterruptedException {
     var rawWords = commandWords(line);
     String requestedHelp = catalog.requestedHelp(rawWords);
@@ -690,37 +759,33 @@ public final class TerminalClient implements AutoCloseable {
     var words = catalog.normalize(rawWords);
     String name = words.getFirst();
     String action = words.size() > 1 ? words.get(1) : "list";
-    if (name.equals("/resume") && words.size() == 1 && ApprovalDisplayState.interactive(terminal)) {
-      requireProject();
-      var checkpoints =
-          backend.get("/api/v1/projects/" + BackendClient.segment(project) + "/checkpoints");
-      var candidates = new ArrayList<MeetingSelectionMenu.Candidate>();
-      for (var checkpoint : checkpoints) {
-        String taskId = checkpoint.path("taskId").asText();
-        if (!taskId.isBlank())
-          candidates.add(
-              new MeetingSelectionMenu.Candidate(
-                  taskId,
-                  safeOutput(
-                      "["
-                          + checkpoint.path("status").asText()
-                          + "] "
-                          + checkpoint.path("request").asText()
-                          + " ("
-                          + taskId
-                          + ")")));
-      }
-      if (candidates.isEmpty()) {
-        out("再開候補はありません。");
-        return;
-      }
-      var selected = MeetingSelectionMenu.chooseOne(reader, candidates);
-      if (selected.isEmpty()) {
-        out("再開せずに閉じました。");
-        return;
-      }
-      words = List.of("/resume", selected.get());
-      action = selected.get();
+    if (name.equals("/runs") && action.equals("history")) {
+      var request = RemoteCommands.route(words, project, session);
+      var rows = backend.get(request.path());
+      out("PROJECT  RUN_ID  STATUS  STARTED  COMPLETED  REQUEST  FAILURE");
+      if (rows.isEmpty()) out("No matching runs.");
+      for (var row : rows)
+        out(
+            row.path("projectName").asText()
+                + "  "
+                + row.path("runId").asText()
+                + "  "
+                + row.path("status").asText()
+                + "  "
+                + row.path("startedAt").asText()
+                + "  "
+                + row.path("completedAt").asText()
+                + "  "
+                + row.path("request").asText()
+                + "  "
+                + row.path("failure").asText());
+      return;
+    }
+    if (name.equals("/resume")
+        && (words.size() > 1 && words.get(1).startsWith("--")
+            || words.size() == 1 && ApprovalDisplayState.interactive(terminal))) {
+      resumeCandidates(words);
+      return;
     }
     if (name.equals("/resume") && action.equals("overview") && words.size() == 2) {
       requireProject();

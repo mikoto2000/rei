@@ -9,6 +9,13 @@ public interface RunManagement extends RunCheckpointMenu.Access {
   @Override
   List<Run> runs();
 
+  List<RunHistoryEntry> history(
+      String project, String status, int limit);
+
+  String currentProjectId();
+
+  List<CheckpointCandidate> candidates(String project, String status);
+
   List<Checkpoint> checkpoints(String project, String run);
 
   void discard(String project, String run, String task, long revision);

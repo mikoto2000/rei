@@ -122,6 +122,29 @@ public final class RemoteCommands {
   private static Request routeDirect(
       List<String> words, String project, String session, java.nio.file.Path localBase) {
     String name = words.getFirst(), action = words.size() > 1 ? words.get(1) : "list";
+    if (name.equals("/runs") && action.equals("history")) {
+      var query =
+          dev.mikoto2000.rei.runmanagement.ListingRequest.parse(
+              words.subList(2, words.size()), true);
+      if (!query.all() && project == null)
+        throw new IllegalArgumentException("Select a Project first");
+      String path = "/api/v1/run-management/history?limit=" + query.limit();
+      if (!query.all()) path += "&projectId=" + id(project);
+      if (query.status() != null) path += "&status=" + query.status();
+      return get(path);
+    }
+    if (name.equals("/resume") && words.size() > 1 && words.get(1).startsWith("--")) {
+      var query =
+          dev.mikoto2000.rei.runmanagement.ListingRequest.parse(
+              words.subList(1, words.size()), false);
+      if (!query.all() && project == null)
+        throw new IllegalArgumentException("Select a Project first");
+      String path = "/api/v1/checkpoints/candidates?";
+      if (!query.all()) path += "projectId=" + id(project) + "&";
+      if (query.status() != null) path += "status=" + query.status();
+      return get(
+          path.endsWith("&") || path.endsWith("?") ? path.substring(0, path.length() - 1) : path);
+    }
     if (name.equals("/secretary")) return secretary(words, project, session);
     if (name.equals("/dot")) {
       var command = dev.mikoto2000.rei.dot.DotCommandRequest.parse(words.subList(1, words.size()));
