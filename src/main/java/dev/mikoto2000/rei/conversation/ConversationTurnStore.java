@@ -297,23 +297,25 @@ public class ConversationTurnStore implements ConversationHistory {
     }
   }
 
-  /** 会話履歴と受付記録の管理で用いるキャンセル済み文脈を返す。 */
+  /** Failed/cancelled attempts stay archived; retain this historical API name for callers. */
   public String cancelledContext(String conversationId) {
     synchronized (turnLock) {
       if (!hasCancelled(conversationId)) return "";
       return """
-      Conversation lifecycle: CANCELLED task attempts are archived, not active work.
+      Conversation lifecycle: CANCELLED and FAILED task attempts are archived, not active work.
       Respond to the current user input. Do not retrieve or resume archived tasks automatically.
       Only if the user explicitly requests resumption or a retrospective, retrieve the original
       conversation with getConversationHistory/searchConversationHistory and, when needed,
       workContextGet. Check actual files and running processes before repeating an operation.
-      Historical records and side effects have been retained; cancellation did not undo them.
+      Historical records and side effects have been retained; failure/cancellation did not undo them.
       """;
     }
   }
 
+  /** Historical helper name; includes both terminal statuses excluded from automatic context. */
   protected boolean hasCancelled(String conversationId) {
-    return read(conversationId).stream().anyMatch(t -> t.status() == Status.CANCELLED);
+    return read(conversationId).stream()
+        .anyMatch(t -> t.status() == Status.CANCELLED || t.status() == Status.FAILED);
   }
 
   /** Builds an immutable model-context policy without changing the persistent conversation. */
@@ -326,6 +328,8 @@ public class ConversationTurnStore implements ConversationHistory {
       List<Turn> history) {
     return dev.mikoto2000.rei.context.CancelledTaskHistory.from(
         history.stream()
+            // Notifications are complete messages, never boundaries of a user-run interval.
+            .filter(t -> !ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(t.source()))
             .map(t ->
                 new dev.mikoto2000.rei.context.CancelledTaskHistory.Attempt(
                     t.runId(), t.status().name(), t.createdAt()))

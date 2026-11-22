@@ -262,7 +262,7 @@ public class ContextAssembler {
     String runKey = ConversationSummaryRepository.runKey(conversation, run);
     String historyKey = conversation;
     if ("log".equals(toolContext(raw).get("rei.historySource"))) historyKey += "/log";
-    // Never reuse a rolling summary that may still contain an archived cancelled task.
+    // Never reuse a rolling summary that may still contain an archived cancelled or failed task.
     var generation =
         raw.getInstructions().stream()
             .map(m ->
@@ -270,7 +270,9 @@ public class ContextAssembler {
             .filter(String.class::isInstance)
             .map(String.class::cast)
             .findFirst();
-    if (generation.isPresent()) historyKey += "/after-cancel/" + generation.get();
+    if (generation.isPresent())
+      historyKey =
+          dev.mikoto2000.rei.context.CancelledTaskHistory.summaryKey(historyKey, generation.get());
     ConversationSummary conversationSummary = summaries.read(historyKey);
     ConversationSummary runSummary = summaries.read(runKey);
     history.removeIf(e -> e.sequence() <= conversationSummary.throughSequence());

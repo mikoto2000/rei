@@ -14,14 +14,17 @@ import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
 class CancelledActiveStateTest {
-  @Test
-  void oldTaskPlanAndResumeHintAreRetainedButNotInjectedIntoLaterRuns() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = ConversationTurnStore.Status.class,
+      names = {"CANCELLED", "FAILED"})
+  void oldTaskPlanAndResumeHintAreRetainedButNotInjectedIntoLaterRuns(
+      ConversationTurnStore.Status status) {
     var turns = ConversationTurnStore.inMemory();
     var old = new AgentRunContext("old", "chat", Path.of("."));
     var current = new AgentRunContext("current", "chat", Path.of("."));
@@ -50,7 +53,7 @@ class CancelledActiveStateTest {
       }
     }
     turns.start(old, "abandoned goal");
-    turns.finish(old, ConversationTurnStore.Status.CANCELLED);
+    turns.finish(old, status);
     turns.start(current, "hello");
     var policy = turns.promptHistory("chat");
     var input =

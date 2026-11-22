@@ -6,7 +6,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Immutable automatic-context policy; archived records remain available for explicit retrieval. */
+/**
+ * Immutable automatic-context policy for cancelled and failed attempts. Archived records remain
+ * available for explicit retrieval; the historical name and context keys are kept for compatibility.
+ */
 public record CancelledTaskHistory(
     Set<String> runIds, String generation, Set<String> laterRunIds, List<Attempt> attempts) {
   public static final String KEY = "rei.cancelledTaskHistory";
@@ -25,24 +28,23 @@ public record CancelledTaskHistory(
     var hidden = new HashSet<String>();
     var later = new HashSet<String>();
     String generation = "";
-    for (int i = 0; i < attempts.size(); i++) {
-      var attempt = attempts.get(i);
-      if (!"CANCELLED".equals(attempt.status())) {
+    for (var attempt : attempts) {
+      if (!"CANCELLED".equals(attempt.status()) && !"FAILED".equals(attempt.status())) {
         later.add(attempt.runId());
         continue;
       }
       later.clear();
       generation = attempt.runId();
       hidden.add(attempt.runId());
-      // Include a failed request incorrectly continued by a later greeting. Do not cross a
-      // completed turn or an independent running turn.
-      for (int j = i - 1; j >= 0; j--) {
-        var previous = attempts.get(j);
-        if (!"FAILED".equals(previous.status())) break;
-        hidden.add(previous.runId());
-      }
     }
     return new CancelledTaskHistory(hidden, generation, later, attempts);
+  }
+
+  /** Version the summary projection so older cancellation-only summaries cannot restore failures. */
+  public static String summaryKey(String key, String generation) {
+    return generation == null || generation.isEmpty()
+        ? key
+        : key + "/after-archive-v2/" + generation;
   }
 
   public boolean allowsState(String ownerRunId) {

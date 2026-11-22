@@ -96,7 +96,8 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       messages.add(
           SystemMessage.builder()
               .text(
-                  "Cancelled task history is archived. Retrieve it only at the user's explicit request.")
+                  "Cancelled and failed task history is archived. Answer only the current user"
+                      + " request; retrieve archived attempts only at the user's explicit request.")
               .metadata(
                   Map.of(
                       dev.mikoto2000.rei.context.CancelledTaskHistory.GENERATION,
@@ -107,13 +108,16 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       String historyKey = id;
       if (request.prompt().getOptions()
           instanceof org.springframework.ai.model.tool.ToolCallingChatOptions) historyKey += "/log";
-      if (!cancelled.generation().isEmpty())
-        historyKey += "/after-cancel/" + cancelled.generation();
+      historyKey =
+          dev.mikoto2000.rei.context.CancelledTaskHistory.summaryKey(
+              historyKey, cancelled.generation());
       long through = summaries.read(historyKey).throughSequence();
       var hiddenAt = cancelled.indexedTimestampFilter();
       var timeline = new java.util.TreeMap<java.time.Instant, ConversationTurnStore.Turn>();
       for (var turn : history)
-        if (turn.createdAt() != null) timeline.putIfAbsent(turn.createdAt(), turn);
+        if (turn.createdAt() != null
+            && !dev.mikoto2000.rei.conversation.ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(
+                turn.source())) timeline.putIfAbsent(turn.createdAt(), turn);
       var currentTurn =
           owner == null
               ? Optional.<ConversationTurnStore.Turn>empty()
@@ -129,7 +133,11 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                 && (entry.content().equals(request.prompt().getUserMessage().getText())
                     || currentTurn.map(t -> entry.content().equals(t.request())).orElse(false));
         if (currentInput) continue;
-        if (hiddenAt.test(entry.timestamp() == null ? null : entry.timestamp().toInstant()))
+        // Notifications are independent history entries, not boundaries of an executing attempt.
+        // Keep the notification itself without letting it make later failed-run logs visible.
+        if (!dev.mikoto2000.rei.conversation.ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(
+                entry.source())
+            && hiddenAt.test(entry.timestamp() == null ? null : entry.timestamp().toInstant()))
           continue;
         long sequence = entry.sequence() * 3L + 1;
         // One covered entry anchors the existing assembler's summary insertion; it is removed
@@ -150,11 +158,16 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         }
         // Carry completed run observations alongside the original final answer without rewriting
         // it.
-        if ("assistant".equals(entry.speaker()) && sequence + 1 > through) {
+        if ("assistant".equals(entry.speaker())
+            && !dev.mikoto2000.rei.conversation.ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(
+                entry.source())
+            && sequence + 1 > through) {
           var previous =
               entry.timestamp() == null ? null : timeline.floorEntry(entry.timestamp().toInstant());
           var turn = previous == null ? null : previous.getValue();
-          if (turn != null && entry.content().equals(turn.assistantMessage())) {
+          if (turn != null
+              && turn.status() == ConversationTurnStore.Status.COMPLETED
+              && entry.content().equals(turn.assistantMessage())) {
             var summary = summaries.read(ConversationSummaryRepository.runKey(id, turn.runId()));
             if (!summary.summary().isBlank())
               messages.add(
