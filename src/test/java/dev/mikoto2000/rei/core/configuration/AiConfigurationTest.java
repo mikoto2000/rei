@@ -123,7 +123,8 @@ class AiConfigurationTest {
       when(delegate.after(Mockito.any(), Mockito.any())).thenAnswer(invocation -> invocation.getArgument(0));
     }
     var execution = new RunExecutionContext(
-        "current", new OutputLimitRunBudget(0, 10), new ProgressEvaluator(root), null, null);
+        "current", new OutputLimitRunBudget(0, 10), new ProgressEvaluator(root),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), event -> {});
     execution.setRunContext(current);
     var options = OpenAiChatOptions.builder()
         .toolContext(Map.of(RunExecutionContext.KEY, execution)).build();
