@@ -7,14 +7,28 @@ import static org.mockito.Mockito.when;
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.chatmemory.ConversationMemory;
+import dev.mikoto2000.rei.chatmemory.WindowedConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationHistoryTools;
+import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.actionplan.ActionPlanAdvisor;
 import dev.mikoto2000.rei.core.checkpoint.CheckpointAdvisor;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.RunScopedAdvisor;
+import dev.mikoto2000.rei.core.contextbudget.ContextAssembler;
+import dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties;
+import dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor;
+import dev.mikoto2000.rei.core.contextbudget.ConversationCompressor;
+import dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository;
+import dev.mikoto2000.rei.core.contextbudget.RawToolResultStore;
+import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
+import dev.mikoto2000.rei.core.contextbudget.ToolResultCompressor;
 import dev.mikoto2000.rei.core.filesummary.FileSummaryAdvisor;
 import dev.mikoto2000.rei.core.recentchanges.RecentChangesAdvisor;
 import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraphAdvisor;
 import dev.mikoto2000.rei.core.stagnation.StagnationAdvisor;
+import dev.mikoto2000.rei.core.stagnation.ProgressEvaluator;
+import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
@@ -22,6 +36,7 @@ import dev.mikoto2000.rei.event.ToolEventCallbackProvider;
 import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.llm.LlmProperties;
+import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import dev.mikoto2000.rei.reminder.ReminderTools;
 import dev.mikoto2000.rei.search.SearchTools;
 import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
@@ -34,16 +49,102 @@ import dev.mikoto2000.rei.text.TextTools;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
 import java.lang.reflect.Field;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
+import org.springframework.ai.chat.client.advisor.api.MemoryAdvisor;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
+import reactor.core.publisher.Flux;
 
 /** AI機能の構成の結果と状態の契約を検証するテスト。 */
 class AiConfigurationTest {
+
+  @Test
+  @Tag("integration")
+  void disabledCompressionStillFiltersFailedHistoryThroughConfiguredClient(@TempDir Path root)
+      throws Exception {
+    var turns = ConversationTurnStore.inMemory();
+    var completed = new AgentRunContext("completed", "chat", root);
+    var failed = new AgentRunContext("failed", "chat", root);
+    var current = new AgentRunContext("current", "chat", root);
+    turns.start(completed, "completed configuration request");
+    turns.finish(completed, ConversationTurnStore.Status.COMPLETED, "verified completed response");
+    turns.start(failed, "ARCHIVED-FAILED-TASK");
+    turns.finish(failed, ConversationTurnStore.Status.FAILED, "ABANDONED-DRAFT");
+    turns.start(current, "current independent question");
+    var savedTurns = turns.read("chat");
+    var memory = WindowedConversationMemory.builder().build();
+    memory.add("chat", List.of(
+        new UserMessage("ARCHIVED-FAILED-TASK"),
+        new AssistantMessage("ABANDONED-DRAFT; LEGACY-POLLUTED-NOTE")));
+    var properties = new ContextCompressionProperties();
+    properties.setEnabled(false);
+    var summaries = new ConversationSummaryRepository(root);
+    var compressor = Mockito.mock(ConversationCompressor.class);
+    var estimator = TokenEstimator.conservative();
+    var assembler = new ContextAssembler(
+        properties, estimator, summaries,
+        new ToolResultCompressor(new RawToolResultStore(root), estimator, 8000, 2000),
+        compressor, null, null);
+    var history = new ContextHistoryAdvisor(turns, memory, summaries);
+    var sent = new AtomicReference<Prompt>();
+    var model = Mockito.mock(ChatModel.class);
+    when(model.getOptions()).thenReturn(OpenAiChatOptions.builder().build());
+    when(model.stream(Mockito.any(Prompt.class))).thenAnswer(invocation -> {
+      sent.set(invocation.getArgument(0));
+      return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("current answer")))));
+    });
+    var configuration = subAgentConfiguration(model, memory);
+    configuration.setContextCompression(assembler, history, null, properties);
+    var client = configuration.chatClient();
+    // Keep unrelated configured advisors inert while retaining the actual history/model chain.
+    for (var advisor : getDefaultAdvisors(client)) {
+      if (!(advisor instanceof RunScopedAdvisor scoped) || scoped.delegate() == history) continue;
+      var delegate = scoped.delegate();
+      if (!Mockito.mockingDetails(delegate).isMock()) continue;
+      when(delegate.getName()).thenReturn(delegate.getClass().getSimpleName());
+      when(delegate.getScheduler()).thenReturn(BaseAdvisor.DEFAULT_SCHEDULER);
+      when(delegate.before(Mockito.any(), Mockito.any())).thenAnswer(invocation -> invocation.getArgument(0));
+      when(delegate.after(Mockito.any(), Mockito.any())).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+    var execution = new RunExecutionContext(
+        "current", new OutputLimitRunBudget(0, 10), new ProgressEvaluator(root),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), event -> {});
+    execution.setRunContext(current);
+    var options = OpenAiChatOptions.builder()
+        .toolContext(Map.of(RunExecutionContext.KEY, execution)).build();
+    var response = client.prompt(new Prompt(new UserMessage("current independent question"), options))
+        .advisors(a -> a.param(AgentRunContext.class.getName(), current)
+            .param(MemoryAdvisor.CONVERSATION_ID, "chat"))
+        .stream().chatResponse().blockLast();
+
+    assertEquals("current answer", response.getResult().getOutput().getText());
+    org.assertj.core.api.Assertions.assertThat(sent.get().getContents())
+        .contains("completed configuration request", "verified completed response", "current independent question")
+        .doesNotContain("ARCHIVED-FAILED-TASK", "ABANDONED-DRAFT", "LEGACY-POLLUTED-NOTE");
+    assertEquals("current independent question", sent.get().getInstructions().getLast().getText());
+    org.assertj.core.api.Assertions.assertThat(turns.read("chat")).containsExactlyElementsOf(savedTurns);
+    org.assertj.core.api.Assertions.assertThat(memory.get("chat"))
+        .extracting(org.springframework.ai.chat.messages.Message::getText)
+        .contains("ARCHIVED-FAILED-TASK", "ABANDONED-DRAFT; LEGACY-POLLUTED-NOTE");
+    Mockito.verify(model, Mockito.times(1)).stream(Mockito.any(Prompt.class));
+    Mockito.verifyNoInteractions(compressor);
+  }
 
   @Test
   void exposesHolidayToolsInDefaultClient() throws Exception {
@@ -126,10 +227,14 @@ class AiConfigurationTest {
 
   /** {@code subAgentConfiguration} の条件を再現するための補助情報を返す。 */
   private AiConfiguration subAgentConfiguration() {
+    return subAgentConfiguration(Mockito.mock(ChatModel.class), Mockito.mock(ConversationMemory.class));
+  }
+
+  private AiConfiguration subAgentConfiguration(ChatModel model, ConversationMemory memory) {
     return new AiConfiguration(
         systemPromptService(),
-        Mockito.mock(ChatModel.class),
-        Mockito.mock(ConversationMemory.class),
+        model,
+        memory,
         new Tools(),
         Mockito.mock(GoogleCalendarTools.class),
         Mockito.mock(TaskTools.class),

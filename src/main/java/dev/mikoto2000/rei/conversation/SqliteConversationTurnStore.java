@@ -87,7 +87,7 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
     return database.read(connection -> {
       try (var query =
           connection.prepareStatement(
-              "SELECT EXISTS(SELECT 1 FROM turns WHERE project_id=? AND conversation_key=? AND status='CANCELLED')")) {
+              "SELECT EXISTS(SELECT 1 FROM turns WHERE project_id=? AND conversation_key=? AND status IN ('CANCELLED','FAILED'))")) {
         query.setString(1, scope(conversation));
         query.setString(2, key(conversation));
         try (var rows = query.executeQuery()) {
@@ -102,9 +102,10 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
     return database.read(connection -> {
       try (var query =
           connection.prepareStatement(
-              "SELECT run_id,status,created_seconds,created_nanos FROM turns WHERE project_id=? AND conversation_key=? ORDER BY ordinal")) {
+              "SELECT run_id,status,created_seconds,created_nanos FROM turns WHERE project_id=? AND conversation_key=? AND (source IS NULL OR source<>?) ORDER BY ordinal")) {
         query.setString(1, scope(conversation));
         query.setString(2, key(conversation));
+        query.setString(3, ConversationLogStore.BEHAVIOR_NOTIFICATION);
         var attempts = new ArrayList<dev.mikoto2000.rei.context.CancelledTaskHistory.Attempt>();
         try (var rows = query.executeQuery()) {
           while (rows.next())

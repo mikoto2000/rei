@@ -207,7 +207,8 @@ public class AiConfiguration {
       dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties properties) {
     contextAssembler = assembler;
     rawResultTools = rawTools;
-    if (properties.isEnabled()) contextHistory = history;
+    // Durable history filtering is independent of whether summary generation is enabled.
+    contextHistory = history;
   }
 
   /** 状態表示ツール一覧。 */

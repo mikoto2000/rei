@@ -12,6 +12,8 @@ import dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Tag;
@@ -92,7 +94,10 @@ class ResumeContextAdvisorTest {
               new AgentRunContext(
                   i == texts.size() - 1 ? "current" : "old-" + i, "chat", root, "A");
           turns.start(owner, texts.get(i));
-          turns.finish(owner, ConversationTurnStore.Status.FAILED, null);
+          // Keep historical requirements and controls eligible for this advisor's text policy.
+          // The final owner is the active resumed attempt, not an already failed turn.
+          if (i < texts.size() - 1)
+            turns.finish(owner, ConversationTurnStore.Status.COMPLETED, null);
         } else if (i < texts.size() - 1) memory.add("chat", new UserMessage(texts.get(i)));
       }
       var beforeLogs = logs.readConversation("chat");
@@ -129,6 +134,73 @@ class ResumeContextAdvisorTest {
           .anyMatch(m -> Boolean.TRUE.equals(m.getMetadata().get("rei.resumeContext")));
       assertThat(logs.readConversation("chat")).isEqualTo(beforeLogs);
       assertThat(turns.read("chat")).isEqualTo(beforeTurns);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void explicitResumeUsesCheckpointRequirementsWithoutReplayingFailedRawHistory(boolean useLogs)
+      throws Exception {
+    String originalRequest = "review the synthetic API documentation";
+    String requirement = "Keep the API unchanged";
+    var json = new com.fasterxml.jackson.databind.ObjectMapper()
+        .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+    var tree = json.valueToTree(
+        PersistentCheckpoint.initial("task", "A", "chat", "failed", root, originalRequest));
+    ((com.fasterxml.jackson.databind.node.ObjectNode) tree)
+        .putArray("instructions").add(requirement);
+    var state = json.treeToValue(tree, PersistentCheckpoint.class).resume("current");
+    try (var service = service(state)) {
+      String control = ReflectionTestUtils.invokeMethod(service, "resumePrompt", "task");
+      var failed = new AgentRunContext("failed", "chat", root, "A");
+      var current = new AgentRunContext("current", "chat", root, "A");
+      var turns = new ConversationTurnStore(root);
+      turns.start(failed, originalRequest, Instant.EPOCH.plusSeconds(1));
+      turns.finish(failed, ConversationTurnStore.Status.FAILED, "FAILED-RAW-DRAFT-ONLY");
+      turns.start(current, control, Instant.EPOCH.plusSeconds(5));
+      var logs = new ConversationLogStore(root.resolve("logs"),
+          Clock.fixed(Instant.EPOCH.plusSeconds(2), ZoneOffset.UTC), json);
+      if (useLogs) {
+        logs.append("chat", "user", originalRequest);
+        logs.append("chat", "user", "FAILED-RAW-INTERVENTION-ONLY");
+        logs.append("chat", "assistant", "FAILED-RAW-DRAFT-ONLY");
+        new ConversationLogStore(root.resolve("logs"),
+            Clock.fixed(Instant.EPOCH.plusSeconds(6), ZoneOffset.UTC), json)
+            .append("chat", "user", control);
+      }
+      var beforeTurns = turns.read("chat");
+      var beforeLogs = logs.readConversation("chat");
+      var request = ChatClientRequest.builder()
+          .prompt(new Prompt(new UserMessage(control)))
+          .context(Map.of(
+              org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID, "chat",
+              AgentRunContext.class.getName(), current))
+          .build();
+      var history = new ContextHistoryAdvisor(turns,
+          WindowedConversationMemory.builder().build(), new ConversationSummaryRepository(root),
+          useLogs ? logs : null).before(request, null);
+      assertThat(history.prompt().getContents())
+          .doesNotContain(originalRequest, requirement, "FAILED-RAW-DRAFT-ONLY", "FAILED-RAW-INTERVENTION-ONLY");
+
+      Prompt sent;
+      var scope = AgentRunScope.open(current);
+      try (scope) {
+        sent = new ResumeContextAdvisor(service).before(history, null).prompt();
+      }
+      assertThat(sent.getInstructions().stream()
+          .filter(UserMessage.class::isInstance).map(Message::getText))
+          .containsExactly(control);
+      assertThat(sent.getInstructions())
+          .filteredOn(m -> Boolean.TRUE.equals(m.getMetadata().get("rei.resumeContext")))
+          .singleElement().satisfies(m -> assertThat(m.getText())
+              .contains("originalRequest: " + originalRequest,
+                  "additionalUserInstructions: [\"" + requirement + "\"]"));
+      assertThat(sent.getContents())
+          .doesNotContain("FAILED-RAW-DRAFT-ONLY", "FAILED-RAW-INTERVENTION-ONLY");
+      assertThat(sent.getInstructions().getLast().getText()).isEqualTo(control);
+      assertThat(turns.read("chat")).containsExactlyElementsOf(beforeTurns);
+      assertThat(logs.readConversation("chat")).containsExactlyElementsOf(beforeLogs);
+      assertThat(state.instructions()).containsExactly(requirement);
     }
   }
 

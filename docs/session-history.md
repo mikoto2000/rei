@@ -98,6 +98,10 @@ Shell は最初の送信時に `project:<project UUID>:chat:<UUID>` を新規作
 - `/project cd`: project が変わった場合は移動先で最後に更新された Session を選択し、次の入力からその会話を継続します。Session がない場合は未選択となり、次の入力で新規作成します。元の Session の projectId は変更しません。同じ project の再選択では現在の選択を保持します。
 - `/history` / `/history show <sessionId>`: Shell / Web 共通の台帳・Turn を参照します。
 
+会話を復元しても、`FAILED` / `CANCELLED` のターンは次の回答生成用の履歴から除外します。失敗した質問・途中の回答・作業状態を自動で再開せず、今回の入力に回答します。成功した会話の履歴は引き継ぎ、失敗したターンの保存記録は履歴参照や明示的な再開のために保持します。同じ文面を新しく送信した場合は、今回の要求としてそのまま受け付けます。文脈圧縮が無効でも同じ除外方針を使います。
+
+失敗・キャンセルの最新世代ごとに要約を分け、旧来のキャンセル専用要約から失敗内容が戻ることも防ぎます。旧要約・元履歴は削除せず、新しい方針の世代で要約し直します。途中の自動通知は独立した履歴として保持し、実行の開始境界にはしません。失敗・キャンセルしても、すでに確定した変更や副作用を取り消すものではありません。
+
 `ChatCommand` と `/agent` は ShellConversationService に委譲し、Web ChatSubmitService と共通の SessionLifecycle を利用します。初回入力の先頭80 Unicode code points を既存 SessionTitle で採用し、継続時は title / createdAt / projectId を保って updatedAt のみ更新します。保存または touch が失敗すれば Run を enqueue せずエラーにします。同期 enqueue 失敗は metadata を元に戻し、Shell の選択も変えません。
 
 Shell の実行中追加入力は同一 Run への介入ではなく、同一 Session の次の Run として project FIFO に入ります。`1 Run = 1 Turn` です。SessionLifecycle は Repository の monitor 内で検証・保存・enqueue を行い、Shell / Web の競合でも受付順と queue 順を一致させます。実行は monitor 外で行います。実行開始時に共通 ChatExecutionService → ConversationTurnStore へ保存し、ConversationLogStore と ChatMemory も同じ conversationId を使います。モデル文脈は既存の ContextHistoryAdvisor が conversationId に対応する永続ログ／Turn から復元します。圧縮の有効・無効と履歴の読み込みを分離し、圧縮を無効にしても Session を継続できます。

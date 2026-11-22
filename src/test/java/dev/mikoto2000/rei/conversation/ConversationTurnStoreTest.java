@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 /** 会話一回のやり取り保存先の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
@@ -31,26 +33,36 @@ class ConversationTurnStoreTest {
   }
 
   /** 会話履歴と受付記録の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
-  @Test
-  void cancellationSurvivesRestartAndUnrelatedCompletedTurnsWithoutCrossConversationLeak() {
+  @ParameterizedTest
+  @EnumSource(value = ConversationTurnStore.Status.class, names = {"CANCELLED", "FAILED"})
+  void archivedAttemptSurvivesRestartAndUnrelatedCompletedTurnsWithoutCrossConversationLeak(
+      ConversationTurnStore.Status status) {
     var store = new ConversationTurnStore(temp);
     var a = new AgentRunContext("a", "chat:main", temp);
     store.start(a, "write network.md");
-    store.finish(a, ConversationTurnStore.Status.CANCELLED);
+    store.finish(a, status);
     var greeting = new AgentRunContext("b", "chat:main", temp);
     store.start(greeting, "hello");
     store.finish(greeting, ConversationTurnStore.Status.COMPLETED);
     var restored = new ConversationTurnStore(temp);
     assertThat(restored.read("chat:main"))
         .extracting(ConversationTurnStore.Turn::status)
-        .containsExactly(
-            ConversationTurnStore.Status.CANCELLED, ConversationTurnStore.Status.COMPLETED);
+        .containsExactly(status, ConversationTurnStore.Status.COMPLETED);
     assertThat(restored.cancelledContext("chat:main"))
-        .contains("archived", "getConversationHistory")
+        .contains("archived", "getConversationHistory", "CANCELLED", "FAILED")
         .doesNotContain("write network.md");
     assertThat(restored.cancelledContext("chat:other")).isEmpty();
     restored.finish(a, ConversationTurnStore.Status.FAILED);
-    assertThat(restored.read("chat:main").getFirst().status())
-        .isEqualTo(ConversationTurnStore.Status.CANCELLED);
+    assertThat(restored.read("chat:main").getFirst().status()).isEqualTo(status);
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = ConversationTurnStore.Status.class, names = {"RUNNING", "COMPLETED"})
+  void runningAndCompletedTurnsDoNotAddArchiveGuidance(ConversationTurnStore.Status status) {
+    var store = new ConversationTurnStore(temp);
+    var owner = new AgentRunContext("live", "chat", temp);
+    store.start(owner, "current synthetic request");
+    if (status != ConversationTurnStore.Status.RUNNING) store.finish(owner, status);
+    assertThat(new ConversationTurnStore(temp).cancelledContext("chat")).isEmpty();
   }
 }
