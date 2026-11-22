@@ -15,6 +15,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @param pid プロセス識別子
  * @param timedOut timed出力先
  * @param errorMessage エラーメッセージ
+ * @param execution 起動環境と出力取得の観測事実
  */
 public record RunCommandResult(
     String status,
@@ -26,11 +27,52 @@ public record RunCommandResult(
     String processId,
     Long pid,
     boolean timedOut,
-    String errorMessage) {
+    String errorMessage,
+    dev.mikoto2000.rei.shellautomation.ShellExecutionObservation execution) {
+  public RunCommandResult {
+    errorMessage = BuildTestFailureDiagnosis.redactDiagnostic(errorMessage);
+  }
+
+  public void recordTerminal() {
+    if (execution == null) return;
+    var diagnosis = diagnosis();
+    dev.mikoto2000.rei.shellautomation.ShellExecutionTelemetry.terminal(
+        executionMode,
+        execution.environment().shell(),
+        diagnosis.outcome(),
+        diagnosis.category(),
+        diagnosis.evidence().stream().anyMatch(e -> e.source().equals("execution")));
+  }
+
+  public RunCommandResult(
+      String status,
+      String executionMode,
+      String resolvedExecutionMode,
+      Integer exitCode,
+      String stdout,
+      String stderr,
+      String processId,
+      Long pid,
+      boolean timedOut,
+      String errorMessage) {
+    this(
+        status,
+        executionMode,
+        resolvedExecutionMode,
+        exitCode,
+        stdout,
+        stderr,
+        processId,
+        pid,
+        timedOut,
+        errorMessage,
+        null);
+  }
+
   /** 終了状態と出力から診断を組み立てる。 */
   @JsonProperty(value = "diagnosis", access = JsonProperty.Access.READ_ONLY)
   public BuildTestFailureDiagnosis diagnosis() {
     return BuildTestFailureDiagnosis.command(
-        status, exitCode, timedOut, stdout, stderr, errorMessage);
+        status, exitCode, timedOut, stdout, stderr, errorMessage, execution);
   }
 }

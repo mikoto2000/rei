@@ -40,6 +40,7 @@ class SystemShellServiceTest {
             List.of(
                 "powershell",
                 "-NoProfile",
+                "-NonInteractive",
                 "-EncodedCommand",
                 Base64.getEncoder()
                     .encodeToString("Write-Output hello".getBytes(StandardCharsets.UTF_16LE))));

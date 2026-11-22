@@ -108,6 +108,56 @@ Windows と Ubuntu のジョブの成功後、`test` ジョブがクラスの割
 
 別の Java 静的解析ワークフローは Checkstyle と SpotBugs を実行し、両方の指摘が 0 件であることを確認します。レポートの欠落・形式不正や SpotBugs の解析エラーも失敗として扱います。[ローカル実行と CI レポート](docs/static-analysis.md)
 
+## Windows のエージェント用シェル実行
+
+`runCommand` の `foreground` / `auto` / `background` は共通の起動設定を使用します。
+`SHELL` 指定を優先し、未指定時の Windows の既定値は引き続き `powershell` です。
+PowerShell はプロファイル無効・非対話モードで起動し、スクリプトは UTF-16LE の
+`-EncodedCommand` で渡します。入出力を UTF-8 にそろえ、cmdlet のエラーで停止します。
+構文エラーも UTF-8 で受け取れるよう、元スクリプトの解析は文字コードの設定後に行います。
+外部コマンドは各ステップ直後の `$LASTEXITCODE` を確認し、予期しないコードなら
+明示的に `exit` してください。最後の外部コマンドの非ゼロ終了は伝播しますが、
+途中の失敗後に成功した複合スクリプトの失敗までは自動検出できません。
+対話用 `/sh` は別の起動設定です。
+
+モデルには要求に捕捉された Project の作業ディレクトリと、選択されたシェルの
+絶対パス・種類・バージョン・検出状態を通知します。バージョンの検査は最大2秒待機し、
+出力取得にも上限を設けています。成功結果は10分、失敗結果は30秒キャッシュし、
+シェル指定や PATH が変われば再検査します。環境変数全体は通知しません。
+`getShellEnvironment` は必要な実行ファイル名を最大16件、実行せず PATH 上で確認できます。
+
+実行結果の `execution` に起動状態・環境・出力打切り・読取エラーを返します。
+前面出力はストリームごとに48 Ki文字まで保持し、その後も読み捨ててパイプを排出します。
+管理実行は既存の行数・文字数上限を維持し、打切りを診断の `partial` に反映します。
+UTF-8 として読めない出力は `OUTPUT_READ_FAILURE` とし、終了コード0でも診断結果は
+`UNKNOWN` です。UTF-8 を出力しない外部プログラムにはプログラム側の出力設定が必要です。
+
+診断の `execution` 根拠は Rei が観測した起動・出力取得の事実です。
+`stdout` / `stderr` 根拠の構文エラー・コマンド未検出・アクセス拒否はログからの推定で、
+終了コード0のログだけを理由に処理の失敗とは判定しません。
+`rei.shell.executions` は終端結果を一度だけ集計し、mode / shell / outcome / category /
+certainty を低カーディナリティのラベルとして使います。
+権限ガードで検出した実行前の拒否は `rei.shell.rejections` に分け、コマンド本文・パス・
+環境変数値をメトリクスのラベルに含めません。
+
+実機回帰は `WindowsShellExecutionTest`（`integration` タグ）です。
+`-Pfull` で Windows PowerShell と PowerShell 7 をそれぞれ明示指定して検証し、
+どちらかが見つからない場合もテスト失敗として扱います。構造化起動、失敗後の自動再試行、
+PowerShell 7 の既定化は含みません。
+
+クラッシュ復旧の `CrashConsistencyRecoveryTest` はシェルを介さず子 JVM を起動し、
+永続 claim の公開を最大20秒待ってから強制終了・復旧・再実行拒否を検証します。
+review / repair の JSON は必要な `JavaTimeModule` を明示登録し、起動時の
+Jackson SPI 探索に依存させません。テストには、その SPI 探索だけを60秒停止する
+子クラスローダーを使った2ケースも含め、同じ20秒上限で実際の claim と復旧を確認します。
+review の保存 JSON・SHA-256 は従来のモジュール自動検出との互換性も検証します。
+
+claim の公開に失敗した場合は、子ログと、取得可能なら最大3秒で採取したスレッドダンプを
+`target/crash-recovery-diagnostics/<mode>-<pid>/` に残します。
+当初の全回帰で発生した2件は一時ログが削除されていたため、過去の停止箇所は未確定です。
+制御した再現では両サービスのコンストラクタ内の `findAndRegisterModules()` で停止し、
+明示登録後はその依存がなくなることを確認しています。待機上限の延長や自動再試行は行いません。
+
 ## ローカルデータ
 
 OS 標準の Rei Data Directory に保存します。Windows は `%LOCALAPPDATA%\Rei`、他 OS と移行方法は [設計メモ](docs/agent-run-project-state.md) を参照してください。`REI_DATA_DIR` で上書きできます。

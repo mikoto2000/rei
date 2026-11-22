@@ -7,6 +7,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** 外部プロセスの管理に必要な管理対象バックグラウンドプロセスを扱う。 */
 class ManagedBackgroundProcess {
+  volatile dev.mikoto2000.rei.shellautomation.ShellExecutionObservation execution;
+  String executionMode = "background";
+
   /** プロセス識別子。 */
   final String processId;
 

@@ -99,12 +99,18 @@ public class BackgroundProcessManager {
 
   /** 外部プロセスの管理で用いるspawnシェルを返す。 */
   public BackgroundProcessSnapshot spawnShell(String command, Path workingDirectory) {
+    return spawnShell(command, workingDirectory, "background");
+  }
+
+  public BackgroundProcessSnapshot spawnShell(String command, Path workingDirectory, String mode) {
+    if (!List.of("auto", "background").contains(mode))
+      throw new IllegalArgumentException("Invalid managed execution mode");
     if (command == null || command.isBlank()) {
       throw new IllegalArgumentException("command は空にできません");
     }
-    String shell = systemShellService.resolveShell(System.getenv(), System.getProperty("os.name"));
+    var launch = systemShellService.automation().prepare(command, workingDirectory);
     return spawnCommandLine(
-        systemShellService.shellCommandLine(shell, command), workingDirectory, command);
+        launch.builder().command(), workingDirectory, command, launch.observation(), mode);
   }
 
   /** 外部プロセスの管理で用いるspawnコマンド行を返す。 */
@@ -115,10 +121,22 @@ public class BackgroundProcessManager {
   /** 実行用に符号化した引数と、マスク対象の元コマンドを分けて扱う。 */
   private BackgroundProcessSnapshot spawnCommandLine(
       List<String> commandLine, Path workingDirectory, String eventCommand) {
+    return spawnCommandLine(commandLine, workingDirectory, eventCommand, null, "background");
+  }
+
+  private BackgroundProcessSnapshot spawnCommandLine(
+      List<String> commandLine,
+      Path workingDirectory,
+      String eventCommand,
+      dev.mikoto2000.rei.shellautomation.ShellExecutionObservation execution,
+      String mode) {
     String processId = "proc-" + UUID.randomUUID().toString().substring(0, 8);
+    if (Thread.currentThread().isInterrupted())
+      throw new java.util.concurrent.CancellationException("Run cancelled before process start");
     try {
       Process process =
           new ProcessBuilder(commandLine).directory(workingDirectory.toFile()).start();
+      dev.mikoto2000.rei.shellautomation.ProcessLaunchService.closeInput(process);
       ManagedBackgroundProcess managedProcess =
           new ManagedBackgroundProcess(
               processId,
@@ -127,6 +145,11 @@ public class BackgroundProcessManager {
               Instant.now(clock),
               monotonicTimeSource.nanoTime());
       processes.put(processId, managedProcess);
+      managedProcess.executionMode = mode;
+      if (execution != null)
+        managedProcess.execution =
+            new dev.mikoto2000.rei.shellautomation.ShellExecutionObservation(
+                execution.environment(), "started", false, null);
       managedProcess.status.set(BackgroundProcessStatus.RUNNING);
       eventPublisher.publish(
           eventFactory.backgroundProcessStarted(
@@ -142,18 +165,28 @@ public class BackgroundProcessManager {
       return snapshot(managedProcess, DEFAULT_TAIL_LINES, "started");
     } catch (IOException e) {
       eventPublisher.publish(eventFactory.backgroundProcessFailed(processId, eventCommand, e));
-      return new BackgroundProcessSnapshot(
-          processId,
-          -1,
-          BackgroundProcessStatus.FAILED,
-          null,
-          null,
-          null,
-          0.0d,
-          List.of(),
-          List.of(),
-          false,
-          e.getMessage());
+      var failed =
+          execution == null
+              ? null
+              : new dev.mikoto2000.rei.shellautomation.ShellExecutionObservation(
+                  execution.environment(), "failed", false, null);
+      var snapshot =
+          new BackgroundProcessSnapshot(
+              processId,
+              -1,
+              BackgroundProcessStatus.FAILED,
+              null,
+              null,
+              null,
+              0.0d,
+              List.of(),
+              List.of(),
+              false,
+              e.getMessage(),
+              null,
+              failed);
+      snapshot.recordTerminal(mode);
+      return snapshot;
     }
   }
 
@@ -184,8 +217,8 @@ public class BackgroundProcessManager {
           managedProcess.endedAt == null ? Instant.now(clock) : managedProcess.endedAt;
       managedProcess.status.compareAndSet(
           BackgroundProcessStatus.RUNNING, BackgroundProcessStatus.EXITED);
-      awaitReader(managedProcess.stdoutReader);
-      awaitReader(managedProcess.stderrReader);
+      awaitReader(managedProcess.stdoutReader, managedProcess.stdout);
+      awaitReader(managedProcess.stderrReader, managedProcess.stderr);
       publishTerminalEvent(managedProcess);
       return snapshot(managedProcess, DEFAULT_TAIL_LINES, "completed");
     }
@@ -199,12 +232,13 @@ public class BackgroundProcessManager {
   }
 
   /** 必要な状態が整ってから先へ進むため、読み取り元を待つ。 */
-  private void awaitReader(java.util.concurrent.Future<?> reader) {
+  private void awaitReader(java.util.concurrent.Future<?> reader, BoundedLineBuffer buffer) {
     if (reader == null) return;
     try {
       reader.get(1, TimeUnit.SECONDS);
     } catch (java.util.concurrent.ExecutionException
-        | java.util.concurrent.TimeoutException ignored) {
+        | java.util.concurrent.TimeoutException failure) {
+      buffer.readFailed(failure.getClass().getSimpleName());
     } catch (InterruptedException exception) {
       // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
@@ -416,7 +450,13 @@ public class BackgroundProcessManager {
   /** 必要な内容を参照できるよう、行一覧を読み取る。 */
   static void readLines(InputStream stream, BoundedLineBuffer buffer) {
     try (BufferedReader reader =
-        new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+        new BufferedReader(
+            new InputStreamReader(
+                stream,
+                StandardCharsets.UTF_8
+                    .newDecoder()
+                    .onMalformedInput(java.nio.charset.CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(java.nio.charset.CodingErrorAction.REPORT)))) {
       char[] chunk = new char[4096];
       StringBuilder line = new StringBuilder();
       boolean previousCr = false;
@@ -440,6 +480,7 @@ public class BackgroundProcessManager {
       }
       if (!line.isEmpty()) buffer.add(line.toString());
     } catch (IOException e) {
+      buffer.readFailed(e.getClass().getSimpleName());
       buffer.add("[read error] " + e.getMessage());
     }
   }
@@ -447,6 +488,15 @@ public class BackgroundProcessManager {
   /** 現在の状態を、後から参照できる記録として取り出す。 */
   private BackgroundProcessSnapshot snapshot(
       ManagedBackgroundProcess managedProcess, int tailLines, String message) {
+    var stdout = managedProcess.stdout.tail(tailLines);
+    var stderr = managedProcess.stderr.tail(tailLines);
+    var execution = outputObservation(managedProcess);
+    if (execution != null)
+      execution =
+          execution.output(
+              managedProcess.stdout.truncatedFor(tailLines)
+                  || managedProcess.stderr.truncatedFor(tailLines),
+              execution.outputReadError());
     return new BackgroundProcessSnapshot(
         managedProcess.processId,
         managedProcess.process.pid(),
@@ -455,33 +505,52 @@ public class BackgroundProcessManager {
         managedProcess.startedAt,
         managedProcess.endedAt,
         elapsedSeconds(managedProcess),
-        managedProcess.stdout.tail(tailLines),
-        managedProcess.stderr.tail(tailLines),
+        stdout,
+        stderr,
         true,
-        message);
+        message,
+        null,
+        execution);
+  }
+
+  private dev.mikoto2000.rei.shellautomation.ShellExecutionObservation outputObservation(
+      ManagedBackgroundProcess process) {
+    return process.execution == null
+        ? null
+        : process.execution.output(
+            process.stdout.truncated() || process.stderr.truncated(),
+            process.stdout.readError() != null
+                ? process.stdout.readError()
+                : process.stderr.readError());
   }
 
   /** 実行状況を利用先で把握できるよう、終端イベントを通知する。 */
   private void publishTerminalEvent(ManagedBackgroundProcess managedProcess) {
-    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
-    if (!managedProcess.terminalEventPublished.compareAndSet(false, true)) {
-      return;
-    }
-    if (managedProcess.status.get() == BackgroundProcessStatus.KILLED) {
+    synchronized (managedProcess) {
+      // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
+      if (!managedProcess.terminalEventPublished.compareAndSet(false, true)) {
+        return;
+      }
+      awaitReader(managedProcess.stdoutReader, managedProcess.stdout);
+      awaitReader(managedProcess.stderrReader, managedProcess.stderr);
+      snapshot(managedProcess, LOG_LINE_CAPACITY, "completed")
+          .recordTerminal(managedProcess.executionMode);
+      if (managedProcess.status.get() == BackgroundProcessStatus.KILLED) {
+        eventPublisher.publish(
+            eventFactory.backgroundProcessKilled(
+                managedProcess.processId,
+                managedProcess.process.pid(),
+                managedProcess.exitCode.get(),
+                elapsedSeconds(managedProcess)));
+        return;
+      }
       eventPublisher.publish(
-          eventFactory.backgroundProcessKilled(
+          eventFactory.backgroundProcessCompleted(
               managedProcess.processId,
               managedProcess.process.pid(),
               managedProcess.exitCode.get(),
               elapsedSeconds(managedProcess)));
-      return;
     }
-    eventPublisher.publish(
-        eventFactory.backgroundProcessCompleted(
-            managedProcess.processId,
-            managedProcess.process.pid(),
-            managedProcess.exitCode.get(),
-            elapsedSeconds(managedProcess)));
   }
 
   /** 外部プロセスの管理で用いる経過時間秒数を返す。 */

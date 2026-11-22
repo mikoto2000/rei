@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
@@ -279,7 +280,9 @@ public final class SemanticPatchReviewService {
   private final SemanticReviewer reviewer;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
-  private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
+  // Receipt DTOs are Java records with Instant fields. Unrelated classpath modules must not
+  // participate in durable-claim startup or change the stored representation.
+  private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
 
   /** 利用権一覧。 */
   private final PersistedReceiptLease leases;

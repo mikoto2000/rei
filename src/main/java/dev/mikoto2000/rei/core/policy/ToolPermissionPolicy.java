@@ -108,6 +108,7 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
           "readTextChangeSetBase",
           "inspectTextChangeSet",
           "getShellProcessStatus",
+          "getShellEnvironment",
           "waitForShellProcess",
           "waitForFile",
           "dependencyStatus",

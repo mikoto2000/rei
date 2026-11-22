@@ -20,6 +20,7 @@ import java.util.List;
  * @param found 見つかった
  * @param message メッセージ
  * @param diagnosis 診断
+ * @param execution 起動環境と出力取得の観測事実
  */
 public record BackgroundProcessSnapshot(
     String processId,
@@ -33,7 +34,37 @@ public record BackgroundProcessSnapshot(
     List<String> stderr,
     boolean found,
     String message,
-    BuildTestFailureDiagnosis diagnosis) {
+    BuildTestFailureDiagnosis diagnosis,
+    dev.mikoto2000.rei.shellautomation.ShellExecutionObservation execution) {
+  public BackgroundProcessSnapshot(
+      String processId,
+      long pid,
+      BackgroundProcessStatus status,
+      Integer exitCode,
+      Instant startedAt,
+      Instant endedAt,
+      double elapsedSeconds,
+      List<String> stdout,
+      List<String> stderr,
+      boolean found,
+      String message,
+      BuildTestFailureDiagnosis diagnosis) {
+    this(
+        processId,
+        pid,
+        status,
+        exitCode,
+        startedAt,
+        endedAt,
+        elapsedSeconds,
+        stdout,
+        stderr,
+        found,
+        message,
+        diagnosis,
+        null);
+  }
+
   /** 外部プロセスの管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public BackgroundProcessSnapshot(
       String processId,
@@ -64,8 +95,21 @@ public record BackgroundProcessSnapshot(
 
   /** 受け取った情報からBackgroundProcessSnapshotを作成する。 */
   public BackgroundProcessSnapshot {
+    message = BuildTestFailureDiagnosis.redactDiagnostic(message);
     stdout = stdout == null ? null : Collections.unmodifiableList(new ArrayList<>(stdout));
     stderr = stderr == null ? null : Collections.unmodifiableList(new ArrayList<>(stderr));
-    diagnosis = BuildTestFailureDiagnosis.process(status, exitCode, found, stdout, stderr, message);
+    diagnosis =
+        BuildTestFailureDiagnosis.process(
+            status, exitCode, found, stdout, stderr, message, execution);
+  }
+
+  public void recordTerminal(String mode) {
+    if (execution == null) return;
+    dev.mikoto2000.rei.shellautomation.ShellExecutionTelemetry.terminal(
+        mode,
+        execution.environment().shell(),
+        diagnosis.outcome(),
+        diagnosis.category(),
+        diagnosis.evidence().stream().anyMatch(e -> e.source().equals("execution")));
   }
 }
