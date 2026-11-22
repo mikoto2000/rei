@@ -230,7 +230,7 @@ public class ResumeCommand implements Callable<Integer> {
     });
   }
 
-  /** 再開した実行の出力と後続の入力を同じ会話へ向ける。 */
+  /** 同じプロジェクトの再開だけ入力先の Session を切り替える。 */
   private java.util.List<PersistentCheckpoint> candidates(String selectedStatus) {
     var candidates =
         all
