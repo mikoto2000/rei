@@ -129,9 +129,12 @@ public class ExternalConfigFileService {
         claim-lease: 30m
         result-retention-days: 30
         request-retention-days: 90
+      tool-permission:
+        enabled: ${REI_TOOL_PERMISSION_ENABLED:true}
       mcp-server:
         enabled: ${REI_MCP_SERVER_ENABLED:false}
         port: ${REI_MCP_SERVER_PORT:8091}
+        token: ${REI_MCP_SERVER_TOKEN:}
         allowed-projects: ${REI_MCP_SERVER_ALLOWED_PROJECTS:}
         receipt-retention-days: ${REI_MCP_RECEIPT_RETENTION_DAYS:90}
         result-retention-days: ${REI_MCP_RESULT_RETENTION_DAYS:30}
