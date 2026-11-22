@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
@@ -38,9 +40,10 @@ import reactor.core.publisher.Flux;
 
 /** 文脈要約トークン予算の結果と状態の契約を検証するテスト。 */
 class ContextSummaryTokenBudgetTest {
-  @Test
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
   @org.junit.jupiter.api.Tag("integration")
-  void oversizedPageAndItsRepairBothChargeUsageToTheOriginalRun() {
+  void oversizedPageAndItsRepairBothChargeUsageToTheOriginalRun(boolean outputLimited) {
     var properties = compressionConfig();
     properties.setSummaryInputTokens(1024);
     properties.setHardLimit(100000);
@@ -59,7 +62,10 @@ class ContextSummaryTokenBudgetTest {
                   List.of(
                       new Generation(
                           new AssistantMessage(
-                              first ? "too verbose draft" : "compact decision; pending test"))),
+                              first ? "too verbose draft" : "compact decision; pending test"),
+                          ChatGenerationMetadata.builder()
+                              .finishReason(first && outputLimited ? "length" : "stop")
+                              .build())),
                   ChatResponseMetadata.builder()
                       .usage(new DefaultUsage(10, first ? 200 : 10))
                       .build()));
@@ -80,9 +86,48 @@ class ContextSummaryTokenBudgetTest {
     assembler(properties, compressor(model, properties), summaries)
         .assemble(raw, "chat", "run", execution::checkActive);
     assertThat(calls.get()).isGreaterThan(2);
-    assertThat(targets).startsWith(8292, 8242);
+    assertThat(targets).startsWith(8292, 8292);
     assertThat(budget.totalTokens()).isEqualTo(210L + (calls.get() - 1L) * 20);
     assertThat(summaries.read("chat").throughSequence()).isEqualTo(1);
+  }
+
+  @Test
+  @org.junit.jupiter.api.Tag("integration")
+  void twoOutputLimitedPagesKeepDurableCursorAndOriginalHistoryUnchanged() {
+    var properties = compressionConfig();
+    properties.setSummaryInputTokens(1024);
+    properties.setHardLimit(100000);
+    var model = mock(ChatModel.class);
+    when(model.stream(any(Prompt.class)))
+        .thenReturn(Flux.just(new ChatResponse(
+            List.of(new Generation(new AssistantMessage("partial draft must not be stored"),
+                ChatGenerationMetadata.builder().finishReason("length").build())),
+            ChatResponseMetadata.builder().usage(new DefaultUsage(10, 200)).build())));
+    var budget = new OutputLimitRunBudget(0, 100, null, 10000);
+    var execution = new RunExecutionContext("run", budget, null, null, null);
+    var summaries = new ConversationSummaryRepository(dir);
+    var previous = new ConversationSummary(
+        "durable decision; pending verification", 0, java.time.Instant.now());
+    summaries.save("chat", previous);
+    var originalText = "synthetic complete source facts ".repeat(1000);
+    var original = ContextHistoryAdvisor.historical(new UserMessage(originalText), 1);
+    var raw = new Prompt(
+        List.of(original,
+            ContextHistoryAdvisor.historical(new AssistantMessage("recent"), 2),
+            new UserMessage("current")),
+        ToolCallingChatOptions.builder()
+            .toolContext(Map.of(RunExecutionContext.KEY, execution)).build());
+    var rawBefore = raw.getContents();
+    var projected = assembler(properties, compressor(model, properties), summaries)
+        .assemble(raw, "chat", "run", execution::checkActive);
+    verify(model, times(2)).stream(any(Prompt.class));
+    assertThat(budget.totalTokens()).isEqualTo(420);
+    assertThat(summaries.read("chat")).isEqualTo(previous);
+    assertThat(summaries.read(ConversationSummaryRepository.runKey("chat", "run"))
+        .throughSequence()).isZero();
+    assertThat(original.getText()).isEqualTo(originalText);
+    assertThat(raw.getContents()).isEqualTo(rawBefore);
+    assertThat(projected.getContents()).contains("current").doesNotContain("partial draft");
   }
 
   /** 検証に使うディレクトリ。 */

@@ -34,6 +34,7 @@ class ContextAssemblerTest {
     saved.save(
         "conversation", new ConversationSummary("prior decision", 1, java.time.Instant.now()));
     var targets = new ArrayList<Integer>();
+    var goals = new ArrayList<Integer>();
     ConversationCompressor compressor =
         new ConversationCompressor() {
           public String summarize(
@@ -48,9 +49,11 @@ class ContextAssemblerTest {
               int target,
               Prompt owner,
               dev.mikoto2000.rei.llm.ModelCallBudget budget,
-              java.time.Duration timeout) {
+              java.time.Duration timeout,
+              int targetTokens) {
             assertThat(saved.read("conversation").throughSequence()).isEqualTo(1);
             targets.add(target);
+            goals.add(targetTokens);
             if (targets.size() == 1 || failLater && targets.size() >= 3)
               return new Summary("oversized draft", 4000);
             return new Summary("prior decision; pending tests; reference retained", 20);
@@ -87,7 +90,8 @@ class ContextAssemblerTest {
             null,
             null)
         .assemble(raw, "conversation", "run", () -> {});
-    assertThat(targets).startsWith(256, 128).hasSizeGreaterThan(2);
+    assertThat(targets).startsWith(256, 256).hasSizeGreaterThan(2);
+    assertThat(goals).startsWith(64, 32);
     assertThat(saved.read("conversation").throughSequence()).isEqualTo(failLater ? 1 : 3);
     assertThat(raw.getInstructions()).hasSize(5);
     assertThat(response.getResponses().getFirst().responseData())

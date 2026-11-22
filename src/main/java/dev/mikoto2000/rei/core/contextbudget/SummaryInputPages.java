@@ -15,7 +15,7 @@ final class SummaryInputPages {
   @FunctionalInterface
   interface SummaryCall {
     ConversationCompressor.Summary summarize(
-        String previous, List<Message> messages, int target, Duration timeout);
+        String previous, List<Message> messages, int hardLimit, int targetTokens, Duration timeout);
   }
 
   static String history(Message message) {
@@ -52,9 +52,10 @@ final class SummaryInputPages {
     messages.forEach(message -> data.append(history(message)));
     String source = data.toString();
     String rolling = "";
-    int target = (int) Math.min(summaryTokens, Math.min(3000, inputLimit / 4));
-    if (target < 1)
+    int hardLimit = (int) Math.min(summaryTokens, Math.min(3000, inputLimit / 4));
+    if (hardLimit < 1)
       throw new ContextCompressionException(ContextCompressionException.Reason.INPUT_BUDGET);
+    int target = Math.max(1, Math.min(1000, hardLimit / 4));
     long started = System.nanoTime();
     ConversationCompressor.Summary result = null;
     for (int offset = 0, page = 0; offset < source.length(); page++) {
@@ -80,23 +81,32 @@ final class SummaryInputPages {
       var fragment = new UserMessage(header + source.substring(offset, offset + length));
       for (int attempt = 0; ; attempt++) {
         check.run();
-        // Re-read the same complete input once with a tighter target. Never crop a draft or
-        // advance the source offset on failure; both calls share the page/update deadline.
-        result =
-            summarize.summarize(
-                rolling,
-                List.of(fragment),
-                attempt == 0 ? target : Math.max(1, target / 2),
-                remaining(started, timeout));
-        check.run();
-        remaining(started, timeout);
-        if (result == null || result.text() == null || result.text().isBlank())
-          throw new ContextCompressionException(ContextCompressionException.Reason.EMPTY_SUMMARY);
-        long tokens = result.textTokens(estimator);
-        if (tokens <= target) break;
-        if (attempt == 1)
+        int writingTarget = attempt == 0 ? target : Math.max(1, target / 2);
+        // Re-read the same complete input once with a tighter writing target, retaining the
+        // hard cap so a repair can finish naturally. Never crop a draft or advance its cursor.
+        try {
+          result =
+              summarize.summarize(
+                  rolling,
+                  List.of(fragment),
+                  hardLimit,
+                  writingTarget,
+                  remaining(started, timeout));
+          check.run();
+          remaining(started, timeout);
+          if (result == null || result.text() == null || result.text().isBlank())
+            throw new ContextCompressionException(ContextCompressionException.Reason.EMPTY_SUMMARY);
+          long tokens = result.textTokens(estimator);
+          if (tokens <= hardLimit) break;
           throw new ContextCompressionException(
-              ContextCompressionException.Reason.SUMMARY_TOO_LONG, tokens, target);
+              ContextCompressionException.Reason.SUMMARY_TOO_LONG, tokens, hardLimit);
+        } catch (ContextCompressionException error) {
+          boolean repairable =
+              error.reason() == ContextCompressionException.Reason.OUTPUT_LIMIT
+                  || error.reason() == ContextCompressionException.Reason.SUMMARY_TOO_LONG;
+          if (!repairable || attempt == 1)
+            throw error.atPage(page + 1, attempt + 1, hardLimit, writingTarget);
+        }
       }
       rolling = result.text();
       offset += length;

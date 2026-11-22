@@ -65,6 +65,19 @@ public interface ConversationCompressor {
         : summarizeResult(previousSummary, newlyCompressible, maxTokens, ownerRequest, budget);
   }
 
+  /** A tighter writing target must not lower the hard limit of a repair request. */
+  default Summary summarizeResult(
+      String previousSummary,
+      List<Message> newlyCompressible,
+      int maxTokens,
+      Prompt ownerRequest,
+      dev.mikoto2000.rei.llm.ModelCallBudget budget,
+      java.time.Duration timeout,
+      int targetTokens) {
+    return summarizeResult(
+        previousSummary, newlyCompressible, maxTokens, ownerRequest, budget, timeout);
+  }
+
   default Summary summarizeResult(
       String previousSummary,
       List<Message> newlyCompressible,
