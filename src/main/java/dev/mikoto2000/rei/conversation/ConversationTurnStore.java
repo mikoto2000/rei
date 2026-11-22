@@ -104,8 +104,11 @@ public class ConversationTurnStore implements ConversationHistory {
       this(runId, request, status, assistantMessage, createdAt, null, null, Map.of());
     }
 
-    /** Only completed attempts can contribute their saved observations to later answers. */
-    public boolean isCompleted() {
+    /**
+     * Only completed attempts contribute saved observations. The plain predicate name preserves
+     * the existing durable JSON fields.
+     */
+    public boolean completed() {
       return status == Status.COMPLETED;
     }
   }
