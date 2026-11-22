@@ -67,6 +67,7 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
   private static final Set<String> READ =
       Set.of(
           "restartReview",
+          "setReviewToolProfile",
           "reviewPending",
           "beginReview",
           "beginRepositoryReview",

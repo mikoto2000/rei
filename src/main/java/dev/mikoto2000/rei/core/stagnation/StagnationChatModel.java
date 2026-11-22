@@ -172,6 +172,17 @@ public final class StagnationChatModel implements ChatModel {
       String feedback = context.progressFeedback() + context.resumeBatchFeedback();
       String reviewGuidance = "";
       if (hasReviewProtocol(prompt)) {
+        if (prompt.getOptions() instanceof ToolCallingChatOptions reviewOptions
+            && java.util.Objects.requireNonNullElse(
+                    reviewOptions.getToolCallbacks(), List.<ToolCallback>of())
+                .stream()
+                .anyMatch(t -> t.getToolDefinition().name().equals(ReviewToolProfile.TOOL)))
+          reviewGuidance +=
+              " Before repository review, call setReviewToolProfile(enabled=true) to reduce tool"
+                  + " definitions on subsequent turns. Keep the review profile during assessment."
+                  + " Before repairs, commands, external research or other work, call"
+                  + " setReviewToolProfile(enabled=false) to restore the original tools."
+                  + " Switching does not grant permissions or count as review progress.";
         reviewGuidance +=
             " For a new whole-repository review prefer beginRepositoryReview, scanReviewSnapshot"
                 + " until SEALED, then prefer readNextReviewWorkItems with tokenBudget omitted to batch up to 4 small files in one shared budget. readNextReviewWorkItem remains available for one unit. It claims and reads"
@@ -258,7 +269,8 @@ public final class StagnationChatModel implements ChatModel {
                 .text(feedback)
                 .metadata(java.util.Map.of("rei.progressFeedback", true))
                 .build());
-      Prompt invocationPrompt = new Prompt(invocationMessages, actionPrompt.getOptions());
+      Prompt invocationPrompt =
+          ReviewToolProfile.select(new Prompt(invocationMessages, actionPrompt.getOptions()));
       context.beginIteration();
       AtomicReference<ChatResponse> aggregate = new AtomicReference<>();
       AtomicReference<Prompt> sent = new AtomicReference<>();
@@ -340,7 +352,7 @@ public final class StagnationChatModel implements ChatModel {
                                   tools.executeResumable(
                                       dev.mikoto2000.rei.tooldelivery.FileReadContext
                                           .withProjection(
-                                              actionPrompt,
+                                              ReviewToolProfile.select(actionPrompt),
                                               sent.get() == null ? invocationPrompt : sent.get()),
                                       result,
                                       context);
@@ -555,6 +567,7 @@ public final class StagnationChatModel implements ChatModel {
 
   /** 実行の停滞への対処で用いる準備を返す。 */
   private Prompt prepare(Prompt prompt, RunExecutionContext context) {
+    prompt = ReviewToolProfile.install(prompt);
     if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
       throw new IllegalArgumentException("Missing tool options for the controlled model");
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);

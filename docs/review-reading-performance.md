@@ -1,5 +1,7 @@
 # レビューの取得単位と性能計測
 
+モデルへ渡すツール定義の絞り込みは [レビュー用ツール一覧](review-tool-profile.md) を参照。
+
 リポジトリ全体の新規レビューは既存のdurable TaskとWorkItemのID指定経路を優先する。
 `beginRepositoryReview` → `scanReviewSnapshot`（SEALEDまで）→
 `readNextReviewWorkItem(taskId)` → `submitReviewWorkItem(workItemId, attempt, ...)` の順に進める。
