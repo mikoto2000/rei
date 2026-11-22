@@ -107,13 +107,13 @@ class ContextSummaryTokenBudgetTest {
     var execution = new RunExecutionContext("run", budget, null, null, null);
     var summaries = new ConversationSummaryRepository(dir);
     var previous = new ConversationSummary(
-        "durable decision; pending verification", 0, java.time.Instant.now());
+        "durable decision; pending verification", 1, java.time.Instant.now());
     summaries.save("chat", previous);
     var originalText = "synthetic complete source facts ".repeat(1000);
-    var original = ContextHistoryAdvisor.historical(new UserMessage(originalText), 1);
+    var original = ContextHistoryAdvisor.historical(new UserMessage(originalText), 2);
     var raw = new Prompt(
         List.of(original,
-            ContextHistoryAdvisor.historical(new AssistantMessage("recent"), 2),
+            ContextHistoryAdvisor.historical(new AssistantMessage("recent"), 3),
             new UserMessage("current")),
         ToolCallingChatOptions.builder()
             .toolContext(Map.of(RunExecutionContext.KEY, execution)).build());
