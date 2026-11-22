@@ -9,8 +9,7 @@ public interface RunManagement extends RunCheckpointMenu.Access {
   @Override
   List<Run> runs();
 
-  List<RunHistoryEntry> history(
-      String project, String status, int limit);
+  List<RunHistoryEntry> history(String project, String status, int limit);
 
   String currentProjectId();
 

@@ -90,9 +90,9 @@ public class RunsCommand implements Runnable {
               ? CommandOutput.from(parent.spec.commandLine().getOut())
               : parent.shellOutput;
       try {
-        var rows =
-            parent.management.history(
-                all ? null : parent.management.currentProjectId(), status, limit);
+        var management = parent.management;
+        if (management == null) throw new IllegalStateException("Run management unavailable");
+        var rows = management.history(all ? null : management.currentProjectId(), status, limit);
         out.println("PROJECT  RUN_ID  STATUS  STARTED  COMPLETED  REQUEST  FAILURE");
         if (rows.isEmpty()) out.println("No matching runs.");
         for (var row : rows)

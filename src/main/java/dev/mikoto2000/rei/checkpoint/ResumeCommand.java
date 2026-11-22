@@ -327,7 +327,6 @@ public class ResumeCommand implements Callable<Integer> {
     @Parameters(index = "0")
     String task;
 
-
     /** 作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       return parent.print(() ->
@@ -346,7 +345,6 @@ public class ResumeCommand implements Callable<Integer> {
     /** タスク。 */
     @Parameters(index = "0")
     String task;
-
 
     /** 作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
