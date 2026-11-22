@@ -1052,30 +1052,101 @@ public class Tools {
     }
 
     int effectiveTimeoutSeconds = normalizeShellTimeout(timeoutSeconds);
-    String shell = resolveShell(System.getenv(), System.getProperty("os.name"));
-    List<String> commandLine = shellCommandLine(shell, command);
-    IO.println(String.format("%s でシェルコマンドを実行するよ: %s", shell, command));
-
-    ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
-    processBuilder.directory(workingDirectory.toFile());
-    Process process = startProcess(processBuilder);
-
-    CompletableFuture<String> stdout = readStreamAsync(process.getInputStream());
-    CompletableFuture<String> stderr = readStreamAsync(process.getErrorStream());
+    var launch = systemShellService.automation().prepare(command, workingDirectory);
+    Process process;
+    try {
+      process = startProcess(launch.builder());
+      dev.mikoto2000.rei.shellautomation.ProcessLaunchService.closeInput(process);
+    } catch (IOException failure) {
+      var execution =
+          new dev.mikoto2000.rei.shellautomation.ShellExecutionObservation(
+              launch.observation().environment(), "failed", false, null);
+      recordShellTerminal("failed", -1, false, "", "", execution);
+      return new ShellCommandResult(-1, "", "", false, execution, failure.getMessage());
+    }
+    var execution =
+        new dev.mikoto2000.rei.shellautomation.ShellExecutionObservation(
+            launch.observation().environment(), "started", false, null);
+    var stdout =
+        CompletableFuture.supplyAsync(() ->
+            dev.mikoto2000.rei.shellautomation.ProcessOutputCapture.read(
+                process.getInputStream(),
+                dev.mikoto2000.rei.shellautomation.ProcessOutputCapture.LIMIT));
+    var stderr =
+        CompletableFuture.supplyAsync(() ->
+            dev.mikoto2000.rei.shellautomation.ProcessOutputCapture.read(
+                process.getErrorStream(),
+                dev.mikoto2000.rei.shellautomation.ProcessOutputCapture.LIMIT));
 
     try {
       boolean completed = process.waitFor(effectiveTimeoutSeconds, TimeUnit.SECONDS);
       if (!completed) backgroundProcessManager.terminateOwned(process);
       int exitCode = completed ? process.exitValue() : -1;
-      return new ShellCommandResult(exitCode, awaitOutput(stdout), awaitOutput(stderr), !completed);
+      var out = awaitCapture(stdout);
+      var err = awaitCapture(stderr);
+      execution =
+          execution.output(
+              out.truncated() || err.truncated(),
+              out.readError() != null ? out.readError() : err.readError());
+      recordShellTerminal("completed", exitCode, !completed, out.text(), err.text(), execution);
+      return new ShellCommandResult(
+          exitCode,
+          out.text(),
+          err.text(),
+          !completed,
+          execution,
+          execution.outputReadError() == null ? null : "Process output could not be read");
     } catch (InterruptedException stop) {
+      backgroundProcessManager.terminateOwned(process);
+      recordShellTerminal(
+          "CANCELLED", process.isAlive() ? null : process.exitValue(), false, "", "", execution);
       Thread.currentThread().interrupt();
       throw stop;
     } finally {
       backgroundProcessManager.terminateOwned(process);
       stdout.cancel(true);
       stderr.cancel(true);
+      try {
+        process.getInputStream().close();
+        process.getErrorStream().close();
+      } catch (IOException ignored) {
+        /* The owned command is already terminal. */
+      }
     }
+  }
+
+  private dev.mikoto2000.rei.shellautomation.ProcessOutputCapture awaitCapture(
+      CompletableFuture<dev.mikoto2000.rei.shellautomation.ProcessOutputCapture> output)
+      throws InterruptedException {
+    try {
+      return output.get(2, TimeUnit.SECONDS);
+    } catch (java.util.concurrent.ExecutionException
+        | java.util.concurrent.TimeoutException failure) {
+      return new dev.mikoto2000.rei.shellautomation.ProcessOutputCapture(
+          "", true, failure.getClass().getSimpleName());
+    }
+  }
+
+  private void recordShellTerminal(
+      String status,
+      Integer exitCode,
+      boolean timedOut,
+      String stdout,
+      String stderr,
+      dev.mikoto2000.rei.shellautomation.ShellExecutionObservation execution) {
+    new RunCommandResult(
+            status,
+            "foreground",
+            "foreground",
+            exitCode,
+            stdout,
+            stderr,
+            null,
+            null,
+            timedOut,
+            null,
+            execution)
+        .recordTerminal();
   }
 
   /** 出力待機も割り込み可能にし、読み取り失敗を隠さない。 */
@@ -1098,6 +1169,26 @@ public class Tools {
   /** 指定や設定に応じた対象を利用するため、シェルを確定する。 */
   String resolveShell(Map<String, String> environment, String osName) {
     return systemShellService.resolveShell(environment, osName);
+  }
+
+  public record ShellEnvironmentResult(
+      dev.mikoto2000.rei.shellautomation.ShellEnvironmentService.Environment environment,
+      String workingDirectory,
+      Map<String, String> executables) {
+    public ShellEnvironmentResult {
+      executables = executables == null ? Map.of() : Map.copyOf(executables);
+    }
+  }
+
+  @Tool(
+      name = "getShellEnvironment",
+      description =
+          "Inspect the actual automation shell, version, working directory and UTF-8 contract. Optionally check up to 16 bare executable names (e.g. git, npm.cmd) on PATH without running them. Does not return environment variables or change shell selection.")
+  ShellEnvironmentResult getShellEnvironment(List<String> executables) {
+    var environment = systemShellService.automation().environment();
+    var found = environment.findExecutables(executables);
+    return new ShellEnvironmentResult(
+        environment.current(), currentWorkingDirectory().toString(), found);
   }
 
   /** 共通の実行基盤で用いるシェルコマンド行を返す。 */
@@ -1136,7 +1227,17 @@ public class Tools {
    * @param stderr 標準エラー出力
    * @param timedOut timed出力先
    */
-  public record ShellCommandResult(int exitCode, String stdout, String stderr, boolean timedOut) {}
+  public record ShellCommandResult(
+      int exitCode,
+      String stdout,
+      String stderr,
+      boolean timedOut,
+      dev.mikoto2000.rei.shellautomation.ShellExecutionObservation execution,
+      String errorMessage) {
+    public ShellCommandResult(int exitCode, String stdout, String stderr, boolean timedOut) {
+      this(exitCode, stdout, stderr, timedOut, null, null);
+    }
+  }
 
   /** 依頼された操作を進めるため、コマンドを実行する。 */
   @Tool(
@@ -1155,6 +1256,10 @@ public class Tools {
           Use executionMode=auto for normal commands.
           Use executionMode=foreground when you explicitly need to wait for completion.
           Use executionMode=background when you explicitly want a managed background process.
+          Use the detected shell syntax and working directory from the shell environment context.
+          PowerShell native commands require an immediate $LASTEXITCODE check for each step;
+          explicitly exit on unexpected codes, since later success can hide an earlier failure.
+          PowerShell automation disables profiles, uses non-interactive mode, and configures UTF-8.
           @param request command, optional executionMode (auto/foreground/background), and optional foreground timeoutSeconds
           @return normalized completion or managed-process result, with bounded diagnosis (reported tests/causes/evidence/nextActions). Diagnostic suggestions never execute commands.
           """)
@@ -1183,7 +1288,10 @@ public class Tools {
       throws IOException, InterruptedException {
     ShellCommandResult result =
         executeShellCommand(request.command(), request.timeoutSeconds(), workingDirectory);
-    String status = result.timedOut() || result.exitCode() != 0 ? "failed" : "completed";
+    String status =
+        result.timedOut() || result.exitCode() != 0 || result.errorMessage() != null
+            ? "failed"
+            : "completed";
     return new RunCommandResult(
         status,
         request.mode().name().toLowerCase(Locale.ROOT),
@@ -1194,7 +1302,8 @@ public class Tools {
         null,
         null,
         result.timedOut(),
-        result.timedOut() ? "command timed out" : null);
+        result.timedOut() ? "command timed out" : result.errorMessage(),
+        result.execution());
   }
 
   /** 共通の実行基盤で用いるバックグラウンド結果を返す。 */
@@ -1213,7 +1322,8 @@ public class Tools {
           null,
           null,
           false,
-          snapshot.message());
+          snapshot.message(),
+          snapshot.execution());
     }
     return new RunCommandResult(
         "running",
@@ -1225,7 +1335,8 @@ public class Tools {
         snapshot.processId(),
         snapshot.pid(),
         false,
-        null);
+        null,
+        snapshot.execution());
   }
 
   /** 共通の実行基盤で用いる自動結果を返す。 */
@@ -1233,7 +1344,7 @@ public class Tools {
       RunCommandRequest request, java.nio.file.Path workingDirectory, Duration autoWait)
       throws InterruptedException {
     BackgroundProcessSnapshot started =
-        backgroundProcessManager.spawnShell(request.command(), workingDirectory);
+        backgroundProcessManager.spawnShell(request.command(), workingDirectory, "auto");
     if (started.status() == BackgroundProcessStatus.FAILED) {
       return new RunCommandResult(
           "failed",
@@ -1245,7 +1356,8 @@ public class Tools {
           null,
           null,
           false,
-          started.message());
+          started.message(),
+          started.execution());
     }
     BackgroundProcessSnapshot observed;
     try {
@@ -1266,12 +1378,16 @@ public class Tools {
           observed.processId(),
           observed.pid(),
           false,
-          null);
+          null,
+          observed.execution());
     }
     backgroundProcessManager.forgetCompleted(started.processId());
     int exitCode = observed.exitCode() == null ? -1 : observed.exitCode();
     return new RunCommandResult(
-        exitCode == 0 ? "completed" : "failed",
+        exitCode == 0
+                && (observed.execution() == null || observed.execution().outputReadError() == null)
+            ? "completed"
+            : "failed",
         "auto",
         "foreground",
         exitCode,
@@ -1280,7 +1396,12 @@ public class Tools {
         null,
         null,
         false,
-        exitCode == 0 ? null : "command exited with code " + exitCode);
+        exitCode != 0
+            ? "command exited with code " + exitCode
+            : observed.execution() != null && observed.execution().outputReadError() != null
+                ? "Process output could not be read"
+                : null,
+        observed.execution());
   }
 
   /** 共通の実行基盤で用いる統合行一覧を返す。 */

@@ -68,6 +68,15 @@ import org.springframework.context.annotation.Configuration;
 })
 @RequiredArgsConstructor
 public class AiConfiguration {
+  private BaseAdvisor shellEnvironmentAdvisor;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setShellEnvironmentAdvisor(
+      @org.springframework.beans.factory.annotation.Qualifier("shellEnvironmentAdvisor")
+          BaseAdvisor advisor) {
+    shellEnvironmentAdvisor = advisor;
+  }
+
   /** Structured HTTP tools share the existing callback and permission boundaries. */
   private dev.mikoto2000.rei.httpapi.HttpApiTools httpApiTools;
 
@@ -375,6 +384,7 @@ public class AiConfiguration {
               .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
               .build());
     advisors.add(runtimeContextAdvisor);
+    if (shellEnvironmentAdvisor != null) advisors.add(shellEnvironmentAdvisor);
     advisors.add(workingSetAdvisor);
     advisors.add(taskStateAdvisor);
     advisors.add(recentChangesAdvisor);

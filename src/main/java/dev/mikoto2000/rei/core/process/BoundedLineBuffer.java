@@ -15,6 +15,24 @@ class BoundedLineBuffer {
   private static final String TRUNCATED = "... [truncated]";
 
   private int characters;
+  private boolean truncated;
+  private String readError;
+
+  synchronized boolean truncated() {
+    return truncated;
+  }
+
+  synchronized boolean truncatedFor(int count) {
+    return truncated || count > 0 && lines.size() > Math.min(count, capacity);
+  }
+
+  synchronized String readError() {
+    return readError;
+  }
+
+  synchronized void readFailed(String type) {
+    readError = type;
+  }
 
   /** 許容件数。 */
   private final int capacity;
@@ -33,9 +51,11 @@ class BoundedLineBuffer {
       return;
     }
     if (line.length() > MAX_LINE_CHARACTERS) {
+      truncated = true;
       line = line.substring(0, MAX_LINE_CHARACTERS - TRUNCATED.length()) + TRUNCATED;
     }
     while (lines.size() >= capacity || characters + line.length() > MAX_CHARACTERS) {
+      truncated = true;
       characters -= lines.removeFirst().length();
     }
     lines.addLast(line);

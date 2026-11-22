@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core.service;
 
+import dev.mikoto2000.rei.shellautomation.ProcessLaunchService;
+import dev.mikoto2000.rei.shellautomation.ShellEnvironmentService;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Base64;
@@ -11,6 +13,19 @@ import org.springframework.stereotype.Component;
 /** システムシェルのユースケースを実現する。 */
 @Component
 public class SystemShellService {
+  private ProcessLaunchService automation;
+
+  @org.springframework.context.annotation.Bean
+  public ShellEnvironmentService shellEnvironment() {
+    return automation().environment();
+  }
+
+  /** Shared environment cache and launch contract for automation callers. */
+  public synchronized ProcessLaunchService automation() {
+    if (automation == null)
+      automation = new ProcessLaunchService(this::resolveShell, this::shellCommandLine);
+    return automation;
+  }
 
   /** 指定や設定に応じた対象を利用するため、シェルを確定する。 */
   public String resolveShell(Map<String, String> environment, String osName) {
@@ -37,6 +52,7 @@ public class SystemShellService {
       return List.of(
           shell,
           "-NoProfile",
+          "-NonInteractive",
           "-EncodedCommand",
           Base64.getEncoder().encodeToString(command.getBytes(StandardCharsets.UTF_16LE)));
     }

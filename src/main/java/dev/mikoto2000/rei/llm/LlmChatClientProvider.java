@@ -43,6 +43,15 @@ import org.springframework.stereotype.Component;
 /** 言語モデルモデルへ対話を依頼する窓口を用途や設定に応じて提供する窓口。 */
 @Component
 public class LlmChatClientProvider {
+  private org.springframework.ai.chat.client.advisor.api.BaseAdvisor shellEnvironmentAdvisor;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setShellEnvironmentAdvisor(
+      @org.springframework.beans.factory.annotation.Qualifier("shellEnvironmentAdvisor")
+          org.springframework.ai.chat.client.advisor.api.BaseAdvisor advisor) {
+    shellEnvironmentAdvisor = advisor;
+  }
+
   private int maxStreamTimeoutRetries = 2;
 
   @org.springframework.beans.factory.annotation.Autowired
@@ -496,6 +505,7 @@ public class LlmChatClientProvider {
     if (runtimeContextAdvisorInstance != null) {
       advisors.add(runtimeContextAdvisorInstance);
     }
+    if (shellEnvironmentAdvisor != null) advisors.add(shellEnvironmentAdvisor);
     if (supportsAgentSkills(feature)) {
       AgentSkillAdvisor skillAdvisor = agentSkillAdvisor.getIfAvailable();
       if (skillAdvisor != null) {

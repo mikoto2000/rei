@@ -193,7 +193,9 @@ class BackgroundProcessManagerTest {
           new SystemShellService() {
             @Override
             public List<String> shellCommandLine(String executable, String original) {
-              assertEquals(command, original);
+              if (original.equals("$PSVersionTable.PSVersion.ToString()"))
+                return javaCommand("exit", "0");
+              assertTrue(original.contains("FromBase64String") || original.contains(command));
               return fail
                   ? List.of(
                       tempDir.resolve("missing-executable").toString(), "-EncodedCommand", encoded)

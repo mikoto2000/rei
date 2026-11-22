@@ -19,6 +19,8 @@ class ForegroundProcessCancellationTest {
     var root = mock(ProcessHandle.class);
     var child = mock(ProcessHandle.class);
     var unrelated = mock(ProcessHandle.class);
+    var stdin = mock(java.io.OutputStream.class);
+    when(process.getOutputStream()).thenReturn(stdin);
     when(process.getInputStream()).thenReturn(InputStream.nullInputStream());
     when(process.getErrorStream()).thenReturn(InputStream.nullInputStream());
     when(process.toHandle()).thenReturn(root);
@@ -38,6 +40,7 @@ class ForegroundProcessCancellationTest {
           .isInstanceOf(InterruptedException.class);
       verify(root).destroy();
       verify(child).destroy();
+      verify(stdin).close();
       verifyNoInteractions(unrelated);
       org.assertj.core.api.Assertions.assertThat(Thread.currentThread().isInterrupted()).isTrue();
     } finally {

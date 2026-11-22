@@ -1709,6 +1709,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
         List.of(
             "powershell",
             "-NoProfile",
+            "-NonInteractive",
             "-EncodedCommand",
             java.util.Base64.getEncoder()
                 .encodeToString(

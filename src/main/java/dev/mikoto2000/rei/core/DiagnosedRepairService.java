@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.core.project.ProjectContext;
@@ -129,7 +130,8 @@ public final class DiagnosedRepairService {
   private final SelfPatchRepairService.Cycle cycle;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
-  private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
+  // Keep receipt initialization independent of ServiceLoader and unrelated classpath modules.
+  private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
 
   /** 利用権一覧。 */
   private final PersistedReceiptLease leases;

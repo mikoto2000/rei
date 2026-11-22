@@ -41,6 +41,10 @@ public record BuildTestFailureDiagnosis(
    */
   public record Evidence(String source, String type, String text) {}
 
+  public static String redactDiagnostic(String message) {
+    return Scan.redactDiagnostic(message);
+  }
+
   /** 最大取得元。 */
   private static final int MAX_SOURCE = 65536;
 
@@ -90,6 +94,72 @@ public record BuildTestFailureDiagnosis(
       String stderr,
       String error) {
     return analyze(status, exitCode, timedOut, true, stdout, stderr, error);
+  }
+
+  public static BuildTestFailureDiagnosis command(
+      String status,
+      Integer exitCode,
+      boolean timedOut,
+      String stdout,
+      String stderr,
+      String error,
+      dev.mikoto2000.rei.shellautomation.ShellExecutionObservation execution) {
+    return withExecution(command(status, exitCode, timedOut, stdout, stderr, error), execution);
+  }
+
+  public static BuildTestFailureDiagnosis process(
+      BackgroundProcessStatus status,
+      Integer exitCode,
+      boolean found,
+      List<String> stdout,
+      List<String> stderr,
+      String message,
+      dev.mikoto2000.rei.shellautomation.ShellExecutionObservation execution) {
+    return withExecution(process(status, exitCode, found, stdout, stderr, message), execution);
+  }
+
+  private static BuildTestFailureDiagnosis withExecution(
+      BuildTestFailureDiagnosis diagnosis,
+      dev.mikoto2000.rei.shellautomation.ShellExecutionObservation execution) {
+    if (execution == null) return diagnosis;
+    String fact =
+        execution.launchStatus().equals("failed")
+            ? "PROCESS_START_FAILURE"
+            : execution.outputReadError() != null ? "OUTPUT_READ_FAILURE" : null;
+    var evidence = new ArrayList<>(diagnosis.evidence());
+    var warnings = new ArrayList<>(diagnosis.warnings());
+    if (execution.outputTruncated())
+      warnings.add("Output was truncated by Rei; diagnosis is partial");
+    if (fact != null)
+      evidence.add(
+          new Evidence(
+              "execution",
+              fact,
+              fact.equals("OUTPUT_READ_FAILURE")
+                  ? execution.outputReadError()
+                  : "Operating system did not start the command"));
+    String outcome =
+        execution.launchStatus().equals("failed")
+            ? "FAILED"
+            : execution.outputReadError() != null
+                    && !java.util.Set.of("TIMED_OUT", "CANCELLED", "RUNNING")
+                        .contains(diagnosis.outcome())
+                ? "UNKNOWN"
+                : diagnosis.outcome();
+    return new BuildTestFailureDiagnosis(
+        outcome,
+        fact == null ? diagnosis.category() : fact,
+        diagnosis.partial() || execution.outputTruncated() || execution.outputReadError() != null,
+        diagnosis.failedTests(),
+        diagnosis.causes(),
+        evidence,
+        fact == null
+            ? diagnosis.nextActions()
+            : List.of(
+                fact.equals("PROCESS_START_FAILURE")
+                    ? "Verify the selected shell executable and working directory before retrying"
+                    : "Inspect output encoding and pipe read failure; do not assume the command did not run"),
+        warnings);
   }
 
   /** 外部プロセスの管理で用いるプロセスを返す。 */
@@ -148,15 +218,17 @@ public record BuildTestFailureDiagnosis(
     scan.read("stderr", err);
     scan.read("message", message);
     String category =
-        scan.test
-            ? "TEST_FAILURE"
-            : scan.compile
-                ? "COMPILATION_FAILURE"
-                : scan.dependency
-                    ? "DEPENDENCY_FAILURE"
-                    : scan.exception
-                        ? "EXCEPTION_REPORTED"
-                        : outcome.equals("SUCCEEDED") ? "NONE" : "UNKNOWN";
+        scan.shellCategory != null
+            ? scan.shellCategory
+            : scan.test
+                ? "TEST_FAILURE"
+                : scan.compile
+                    ? "COMPILATION_FAILURE"
+                    : scan.dependency
+                        ? "DEPENDENCY_FAILURE"
+                        : scan.exception
+                            ? "EXCEPTION_REPORTED"
+                            : outcome.equals("SUCCEEDED") ? "NONE" : "UNKNOWN";
     if (!category.equals("NONE") && !category.equals("UNKNOWN") && outcome.equals("SUCCEEDED"))
       scan.warnings.add(
           "Failure text was reported with exit code 0; verify whether this was an expected negative test");
@@ -179,6 +251,13 @@ public record BuildTestFailureDiagnosis(
               List.of("Confirm whether cancellation was intended before requesting a restart");
           default ->
               switch (category) {
+                case "SHELL_PARSE_ERROR" ->
+                    List.of("Correct syntax for the detected shell before retrying");
+                case "COMMAND_NOT_FOUND" ->
+                    List.of("Verify the required executable and PATH before retrying");
+                case "ACCESS_DENIED" ->
+                    List.of(
+                        "Inspect the reported access restriction; do not switch shells to bypass it");
                 case "TEST_FAILURE" ->
                     List.of(
                         "Inspect the reported failed test and assertion evidence",
@@ -214,8 +293,16 @@ public record BuildTestFailureDiagnosis(
 
   /** 外部プロセスの管理に必要な調査を扱う。 */
   private static final class Scan {
+    static String redactDiagnostic(String message) {
+      if (message == null) return null;
+      String safe = CredentialRedactor.redact(message).replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
+      return safe.substring(0, Math.min(safe.length(), 600));
+    }
+
     /** 部分的な結果／検証／コンパイル／依存条件／例外。 */
     boolean partial, test, compile, dependency, exception;
+
+    String shellCategory;
 
     /** 検証一覧／注意事項。 */
     final Set<String> tests = new LinkedHashSet<>(), warnings = new LinkedHashSet<>();
@@ -250,6 +337,25 @@ public record BuildTestFailureDiagnosis(
           continue;
         }
         String type = null;
+        if (line.contains("ParserError")
+            || line.contains("UnexpectedToken")
+            || line.contains("MissingEndCurlyBrace")
+            || line.contains("syntax error near unexpected token")) {
+          shellCategory = "SHELL_PARSE_ERROR";
+          type = "SHELL_PARSE_ERROR";
+        } else if (line.contains("CommandNotFoundException")
+            || line.contains("command not found")
+            || line.contains("is not recognized as a name of a cmdlet")
+            || line.contains("is not recognized as the name of a cmdlet")
+            || line.contains("is not recognized as an internal or external command")) {
+          shellCategory = "COMMAND_NOT_FOUND";
+          type = "COMMAND_NOT_FOUND";
+        } else if (line.contains("UnauthorizedAccessException")
+            || line.contains("PermissionDenied")
+            || line.contains("Permission denied")) {
+          shellCategory = "ACCESS_DENIED";
+          type = "ACCESS_DENIED";
+        }
         var maven = MAVEN_TEST.matcher(line);
         var gradle = GRADLE_TEST.matcher(line);
         if (maven.find() && !line.contains("Tests run:")) {

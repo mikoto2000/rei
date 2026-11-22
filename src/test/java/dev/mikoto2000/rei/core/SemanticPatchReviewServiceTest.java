@@ -21,6 +21,34 @@ import org.junit.jupiter.api.io.TempDir;
 
 /** 意味による変更差分レビューサービスの結果と状態の契約を検証するテスト。 */
 class SemanticPatchReviewServiceTest {
+  @Test
+  void receiptJsonAndHashRemainCompatibleWithPreviouslyDiscoveredModules() throws Exception {
+    var receipt = service(true, false, "value", "class A {}").review(owner(), request(true), run());
+    var source =
+        new org.springframework.jdbc.datasource.DriverManagerDataSource(
+            "jdbc:sqlite:" + root.resolve("review.db"));
+    String stored =
+        org.springframework.jdbc.core.simple.JdbcClient.create(source)
+            .sql("SELECT payload FROM patch_requirement_reviews WHERE id=?")
+            .param(receipt.id())
+            .query(String.class)
+            .single();
+    String previous =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .findAndRegisterModules()
+            .writeValueAsString(receipt.detail());
+    assertEquals(previous, stored);
+    assertEquals(
+        java.util.HexFormat.of()
+            .formatHex(
+                java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(previous.getBytes(java.nio.charset.StandardCharsets.UTF_8))),
+        receipt.sha256());
+    assertEquals(
+        receipt,
+        service(false, false, "ignored", "ignored").get(owner(), receipt.id(), receipt.sha256()));
+  }
+
   /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void lostStartedReviewCanBeInspectedWithoutReplayOrProof() throws Exception {

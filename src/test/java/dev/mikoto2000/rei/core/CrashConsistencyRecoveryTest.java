@@ -31,9 +31,19 @@ class CrashConsistencyRecoveryTest {
 
   /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @ParameterizedTest
-  @ValueSource(strings = {"review", "repair", "notification", "single", "document"})
+  @ValueSource(
+      strings = {
+        "review",
+        "repair",
+        "notification",
+        "single",
+        "document",
+        "review-module-probe",
+        "repair-module-probe"
+      })
   void hardKilledJvmLeavesUnknownWithoutReplayAndLiveProcessIsPreserved(String mode)
       throws Exception {
+    String operation = mode.split("-")[0];
     Path root = Files.createDirectory(directory.resolve("project")),
         db = directory.resolve("receipts.db"),
         ready = directory.resolve("ready");
@@ -56,11 +66,11 @@ class CrashConsistencyRecoveryTest {
       long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
       while (!Files.exists(ready) && process.isAlive() && System.nanoTime() < deadline)
         Thread.sleep(20);
-      assertTrue(Files.exists(ready), "Child did not publish its durable claim");
+      assertTrue(Files.exists(ready), () -> childFailure(process, mode));
       String id = Files.readString(ready);
       var source = new DriverManagerDataSource("jdbc:sqlite:" + db);
       var owner = new AgentRunContext("run", "session", root, project);
-      if (mode.equals("review")) {
+      if (operation.equals("review")) {
         var service = review(source, root, null);
         assertEquals("STARTED", service.inspect(owner, id).status());
         process.destroyForcibly();
@@ -71,7 +81,7 @@ class CrashConsistencyRecoveryTest {
         assertNull(state.sha256());
         assertThrows(
             IllegalStateException.class, () -> service.review(owner, reviewRequest(), null));
-      } else if (mode.equals("repair")) {
+      } else if (operation.equals("repair")) {
         var service = repair(source, root, null);
         assertEquals("STARTED", service.inspect(owner, id).status());
         process.destroyForcibly();
@@ -87,7 +97,7 @@ class CrashConsistencyRecoveryTest {
                     state.receiptSha256(),
                     "/repair apply " + id + " " + state.receiptSha256(),
                     (p, o, n) -> fail("No crash replay")));
-      } else if (mode.equals("document")) {
+      } else if (operation.equals("document")) {
         var service =
             new TextDocumentChangeSetService(
                 new TextChangeSetRepository(source), Clock.systemUTC());
@@ -115,7 +125,7 @@ class CrashConsistencyRecoveryTest {
         assertEquals("ROLLED_BACK", restored.status());
         assertTrue(restored.staging().isEmpty());
         assertEquals("old", Files.readString(root.resolve("B.java")));
-      } else if (mode.equals("single")) {
+      } else if (operation.equals("single")) {
         var service = new TextChangeSetService(new TextChangeSetRepository(source));
         var projectContext =
             new dev.mikoto2000.rei.core.project.ProjectContext(project, "anonymous", root);
@@ -160,6 +170,59 @@ class CrashConsistencyRecoveryTest {
     } finally {
       if (process.isAlive()) process.destroyForcibly();
       assertTrue(process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS));
+    }
+  }
+
+  private String childFailure(Process process, String mode) {
+    Path evidence = Path.of("target", "crash-recovery-diagnostics", mode + "-" + process.pid());
+    try {
+      Files.createDirectories(evidence);
+      Files.copy(
+          directory.resolve("child.log"),
+          evidence.resolve("child.log"),
+          StandardCopyOption.REPLACE_EXISTING);
+      String attachStatus = "not running";
+      if (process.isAlive()) {
+        try {
+          String executable =
+              System.getProperty("os.name").startsWith("Windows") ? "jcmd.exe" : "jcmd";
+          var diagnostic =
+              new ProcessBuilder(
+                      Path.of(System.getProperty("java.home"), "bin", executable).toString(),
+                      Long.toString(process.pid()),
+                      "Thread.print",
+                      "-l")
+                  .redirectErrorStream(true)
+                  .redirectOutput(evidence.resolve("threads.txt").toFile())
+                  .start();
+          if (!diagnostic.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) {
+            diagnostic.destroyForcibly();
+            diagnostic.waitFor(1, java.util.concurrent.TimeUnit.SECONDS);
+            attachStatus = "diagnostic deadline";
+          } else attachStatus = "exit " + diagnostic.exitValue();
+        } catch (java.io.IOException unavailable) {
+          attachStatus = unavailable.getClass().getSimpleName();
+        }
+      }
+      try (var log = Files.newInputStream(evidence.resolve("child.log"))) {
+        String excerpt =
+            new String(
+                log.readNBytes(16384),
+                java.nio.charset.Charset.forName(System.getProperty("native.encoding", "UTF-8")));
+        return "Child did not publish its durable claim: mode="
+            + mode
+            + ", alive="
+            + process.isAlive()
+            + ", dump="
+            + attachStatus
+            + ", evidence="
+            + evidence.toAbsolutePath()
+            + "\n"
+            + excerpt;
+      }
+    } catch (Exception failure) {
+      if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
+      return "Child did not publish its durable claim: mode=" + mode + ", diagnostic=" + failure;
     }
   }
 
@@ -244,17 +307,48 @@ class CrashConsistencyRecoveryTest {
   public static final class Worker {
     /** 検証用に、共通の実行基盤の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] arguments) throws Exception {
-      String mode = arguments[0];
+      String mode = arguments[0].split("-")[0];
+      if (arguments[0].endsWith("-module-probe")) {
+        // Only external Jackson SPI discovery is delayed. Receipt startup must not consult it;
+        // the original 20-second readiness deadline and all real crash/lease assertions stay
+        // intact.
+        Thread.currentThread()
+            .setContextClassLoader(
+                new ClassLoader(Thread.currentThread().getContextClassLoader()) {
+                  @Override
+                  public java.util.Enumeration<java.net.URL> getResources(String name)
+                      throws java.io.IOException {
+                    if (name.equals("META-INF/services/com.fasterxml.jackson.databind.Module")) {
+                      System.err.println("phase=unrelated-jackson-module-lookup");
+                      try {
+                        Thread.sleep(60000);
+                      } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new java.io.InterruptedIOException("Module discovery interrupted");
+                      }
+                    }
+                    return super.getResources(name);
+                  }
+                });
+      }
+      System.err.println(
+          "phase=worker-start mode=" + mode + " pid=" + ProcessHandle.current().pid());
       Path root = Path.of(arguments[1]), ready = Path.of(arguments[3]);
       var source = new DriverManagerDataSource("jdbc:sqlite:" + arguments[2]);
       var owner = new AgentRunContext("run", "session", root, arguments[4]);
-      if (mode.equals("review")) review(source, root, ready).review(owner, reviewRequest(), null);
-      else if (mode.equals("repair")) {
+      if (mode.equals("review")) {
+        System.err.println("phase=construct-review");
+        var service = review(source, root, ready);
+        System.err.println("phase=invoke-review");
+        service.review(owner, reviewRequest(), null);
+      } else if (mode.equals("repair")) {
+        System.err.println("phase=construct-repair");
         Files.createDirectories(root.resolve("target"));
         Files.writeString(
             root.resolve("target/TEST.xml"),
             "<testsuite tests=\"1\" failures=\"1\" errors=\"0\" skipped=\"0\"><testcase classname=\"ATest\" name=\"value\"><failure message=\"anonymous failure\">assertion</failure></testcase></testsuite>");
         var service = repair(source, root, ready);
+        System.err.println("phase=propose-repair");
         var proposal =
             service.propose(
                 owner,
@@ -263,6 +357,7 @@ class CrashConsistencyRecoveryTest {
                     new TextChangeSetService.Request("A.java", "old", "new"),
                     "fixture",
                     10));
+        System.err.println("phase=apply-repair");
         service.apply(
             owner,
             proposal.id(),

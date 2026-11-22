@@ -10,6 +10,56 @@ import org.junit.jupiter.api.Test;
 
 /** 構築検証失敗情報診断の結果と状態の契約を検証するテスト。 */
 class BuildTestFailureDiagnosisTest {
+  @Test
+  void separatesExecutionFactsFromReportedShellErrorsAndZeroExitWarnings() {
+    var environment =
+        new dev.mikoto2000.rei.shellautomation.ShellEnvironmentService.Environment(
+            "Windows", "powershell", "powershell.exe", "5.1", "available", "UTF-8");
+    var start =
+        new dev.mikoto2000.rei.shellautomation.ShellExecutionObservation(
+            environment, "failed", false, null);
+    var failed = BuildTestFailureDiagnosis.command("failed", -1, false, "", "", null, start);
+    assertEquals("PROCESS_START_FAILURE", failed.category());
+    assertEquals("FAILED", failed.outcome());
+    assertEquals("execution", failed.evidence().getFirst().source());
+    var unreadable =
+        BuildTestFailureDiagnosis.command(
+            "completed",
+            0,
+            false,
+            "",
+            "",
+            null,
+            new dev.mikoto2000.rei.shellautomation.ShellExecutionObservation(
+                environment, "started", true, "MalformedInputException"));
+    assertEquals("OUTPUT_READ_FAILURE", unreadable.category());
+    assertEquals("UNKNOWN", unreadable.outcome());
+    assertTrue(unreadable.partial());
+    var reported =
+        result("completed", 0, "", "CommandNotFoundException: expected negative test", false)
+            .diagnosis();
+    assertEquals("SUCCEEDED", reported.outcome());
+    assertEquals("COMMAND_NOT_FOUND", reported.category());
+    assertEquals(
+        "COMMAND_NOT_FOUND",
+        result(
+                "failed",
+                1,
+                "",
+                "missing: The term 'missing' is not recognized as a name of a cmdlet, function, script file, or executable program.",
+                false)
+            .diagnosis()
+            .category());
+    assertTrue(reported.warnings().stream().anyMatch(w -> w.contains("exit code 0")));
+    assertFalse(reported.evidence().stream().anyMatch(e -> e.source().equals("execution")));
+    assertEquals(
+        "SHELL_PARSE_ERROR",
+        result("failed", 1, "", "ParserError: UnexpectedToken", false).diagnosis().category());
+    assertEquals(
+        "ACCESS_DENIED",
+        result("failed", 1, "", "Permission denied", false).diagnosis().category());
+  }
+
   /** 検証に使う検証条件作業ルート。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path fixtureRoot;
 

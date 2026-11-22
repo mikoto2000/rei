@@ -84,7 +84,12 @@ public class ToolPermissionGuard {
 
   /** 利用条件に合わない指定を受け付けないよう、引数を検証する。 */
   public void validateArguments(String tool, String input) {
-    validatePolicyArguments.accept(tool, input);
+    try {
+      validatePolicyArguments.accept(tool, input);
+    } catch (InvalidToolArgumentsException invalid) {
+      shellRejection(tool, "invalid_arguments");
+      throw invalid;
+    }
   }
 
   /** 利用条件に合わない指定を受け付けないよう、引数を検証する。 */
@@ -92,6 +97,7 @@ public class ToolPermissionGuard {
     try {
       validatePolicyArguments.accept(tool, input);
     } catch (InvalidToolArgumentsException invalid) {
+      shellRejection(tool, "invalid_arguments");
       // A model selection error must not turn an actual capability/ownership DENY into retries.
       if (invalid.kind() == InvalidToolArgumentsException.Kind.MODEL_SELECTION
           && (restricted(tool, input, owner)
@@ -181,7 +187,7 @@ public class ToolPermissionGuard {
         restricted(tool, input, owner)
             ? PermissionDecision.DENY
             : evaluatePolicy.apply(tool, input);
-    if (decision != PermissionDecision.DENY) validatePolicyArguments.accept(tool, input);
+    if (decision != PermissionDecision.DENY) validateArguments(tool, input);
     // Speech requires exact-input approval unless startup explicitly opted into common full auto.
     if (decision == PermissionDecision.AUTO_APPROVE
         && !fullAuto.getAsBoolean()
@@ -215,7 +221,14 @@ public class ToolPermissionGuard {
                             + "; approve explicitly, then resume or retry the task.",
                     decision.name()))
             .withOwnership(owner));
+    shellRejection(tool, decision == PermissionDecision.DENY ? "denied" : "approval_required");
     throw error.withApprovalId(request);
+  }
+
+  private static void shellRejection(String tool, String reason) {
+    if ("runCommand".equals(tool))
+      io.micrometer.core.instrument.Metrics.counter("rei.shell.rejections", "reason", reason)
+          .increment();
   }
 
   private record ApprovalInvocation(String tool, String input) {}
