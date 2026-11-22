@@ -92,9 +92,15 @@ public final class MeetingSelectionMenu {
     var keys = new KeyMap<Binding>();
     keys.setNomatch(new Reference("ignore"));
     keys.setUnicode(new Reference("ignore"));
-    keys.setAmbiguousTimeout(100);
+    // A menu must tolerate fragmented console escape sequences, including under rendering load.
+    keys.setAmbiguousTimeout(
+        org.jline.reader.impl.ReaderUtils.getLong(reader, LineReader.AMBIGUOUS_BINDING, 1000));
     keys.bind(new Reference("up"), "\033[A", "\033OA");
     keys.bind(new Reference("down"), "\033[B", "\033OB");
+    String up = KeyMap.key(terminal, org.jline.utils.InfoCmp.Capability.key_up);
+    String down = KeyMap.key(terminal, org.jline.utils.InfoCmp.Capability.key_down);
+    if (up != null && !up.isEmpty()) keys.bind(new Reference("up"), up);
+    if (down != null && !down.isEmpty()) keys.bind(new Reference("down"), down);
     keys.bind(new Reference("toggle"), " ");
     keys.bind(new Reference("confirm"), "\r", "\n");
     keys.bind(new Reference("cancel"), "\033", KeyMap.ctrl('C'), KeyMap.ctrl('D'));
@@ -103,6 +109,8 @@ public final class MeetingSelectionMenu {
     var display = new Display(terminal, false);
     var original = terminal.enterRawMode();
     try {
+      terminal.puts(org.jline.utils.InfoCmp.Capability.keypad_xmit);
+      terminal.flush();
       while (true) {
         int columns = Math.max(1, terminal.getColumns());
         int rows = Math.max(3, terminal.getRows());
@@ -159,7 +167,12 @@ public final class MeetingSelectionMenu {
         display.update(List.of(), 0);
         terminal.flush();
       } finally {
-        terminal.setAttributes(original);
+        try {
+          terminal.puts(org.jline.utils.InfoCmp.Capability.keypad_local);
+          terminal.flush();
+        } finally {
+          terminal.setAttributes(original);
+        }
       }
     }
   }

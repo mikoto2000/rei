@@ -66,7 +66,6 @@ public class ResumeCommand implements Callable<Integer> {
   boolean all;
 
   private java.util.function.Supplier<java.util.List<String>> registeredProjects;
-  private java.util.function.Consumer<String> selectProject;
   private java.util.function.Function<String, String> projectName;
 
   /** 出力。 */
@@ -147,15 +146,6 @@ public class ResumeCommand implements Callable<Integer> {
                 .map(p -> p.name())
                 .findFirst()
                 .orElse(id);
-    this.selectProject =
-        id -> {
-          var project =
-              projects.registeredProjects().stream()
-                  .filter(p -> p.id().equals(id))
-                  .findFirst()
-                  .orElseThrow(() -> new IllegalArgumentException("Unknown project"));
-          projects.cd(project.root().toString());
-        };
     this.currentProjectId = () -> projects.currentContext().id();
     this.currentSessionId = () -> projects.currentSessionId();
     this.selectSession = session -> projects.selectSession(session);
@@ -240,7 +230,7 @@ public class ResumeCommand implements Callable<Integer> {
     });
   }
 
-  /** 再開した実行の出力と後続の入力を同じ会話へ向ける。 */
+  /** 同じプロジェクトの再開だけ入力先の Session を切り替える。 */
   private java.util.List<PersistentCheckpoint> candidates(String selectedStatus) {
     var candidates =
         all
@@ -268,13 +258,13 @@ public class ResumeCommand implements Callable<Integer> {
           targetProject,
           selectedTask,
           sessionId -> {
-            selected[0] = true;
-            if (!targetProject.equals(previousProject)) selectProject.accept(targetProject);
-            selectSession.accept(sessionId);
+            if (targetProject.equals(previousProject)) {
+              selected[0] = true;
+              selectSession.accept(sessionId);
+            }
           });
     } catch (RuntimeException | Error error) {
       if (selected[0]) {
-        if (!targetProject.equals(previousProject)) selectProject.accept(previousProject);
         selectSession.accept(previousSession);
       }
       throw error;
