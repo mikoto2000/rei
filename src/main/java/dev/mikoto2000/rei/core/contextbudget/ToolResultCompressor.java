@@ -88,6 +88,7 @@ public class ToolResultCompressor {
             && receipts.containsKey(response.id())) {
           int reviewLimit =
               response.name().equals("readNextReviewWorkItem")
+                      || response.name().equals("readNextReviewWorkItems")
                       || response.name().equals("readReviewWorkItem")
                   ? limits.reviewMax()
                   : limits.pageMax();

@@ -311,7 +311,7 @@ public final class ReviewTools {
               code,
               "Use the current workItemId and attempt, or read the"
                   + " pending work again. For completed work, inspect listReviewTaskResults.");
-      case "REVIEW_PAGE_BUDGET_TOO_SMALL" ->
+      case "REVIEW_PAGE_BUDGET_TOO_SMALL", "REVIEW_BATCH_BUDGET_TOO_SMALL" ->
           new ToolReadRejectedException(
               code,
               "Omit tokenBudget for the host-selected budget, or free space in the active prompt.");
@@ -369,25 +369,30 @@ public final class ReviewTools {
             taskScope(owner),
             taskId,
             owner.runId(),
-            (item, source, attempt) -> {
-              var positions = new SourcePositions(source);
-              int low = item.start(), high = Math.min(item.end(), item.start() + budget * 4);
-              while (low < high) {
-                int middle = low + (high - low + 1) / 2;
-                if (estimate(durablePage(item, attempt, source, middle, positions)) <= budget)
-                  low = middle;
-                else high = middle - 1;
-              }
-              if (low > item.start()
-                  && low < source.length()
-                  && Character.isHighSurrogate(source.charAt(low - 1))
-                  && Character.isLowSurrogate(source.charAt(low))) low--;
-              low = SemanticReviewSplitter.end(source, item.start(), low, item.end());
-              if (low == item.start() && low < item.end()
-                  || estimate(durablePage(item, attempt, source, low, positions)) > budget)
-                throw new IllegalArgumentException("REVIEW_PAGE_BUDGET_TOO_SMALL");
-              return low;
-            });
+            (item, source, attempt) -> claimEnd(item, source, attempt, budget));
+  }
+
+  private int claimEnd(
+      dev.mikoto2000.rei.durable.WorkItemStore.Item item,
+      String source,
+      String attempt,
+      int budget) {
+    var positions = new SourcePositions(source);
+    int low = item.start(), high = Math.min(item.end(), item.start() + budget * 4);
+    while (low < high) {
+      int middle = low + (high - low + 1) / 2;
+      if (estimate(durablePage(item, attempt, source, middle, positions)) <= budget) low = middle;
+      else high = middle - 1;
+    }
+    if (low > item.start()
+        && low < source.length()
+        && Character.isHighSurrogate(source.charAt(low - 1))
+        && Character.isLowSurrogate(source.charAt(low))) low--;
+    low = SemanticReviewSplitter.end(source, item.start(), low, item.end());
+    if (low == item.start() && low < item.end()
+        || estimate(durablePage(item, attempt, source, low, positions)) > budget)
+      throw new IllegalArgumentException("REVIEW_PAGE_BUDGET_TOO_SMALL");
+    return low;
   }
 
   @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
@@ -416,6 +421,62 @@ public final class ReviewTools {
     }
     if (claim == null) return null;
     return readReviewWorkItem(claim.item().id(), claim.attempt(), budget);
+  }
+
+  @ResultDelivery(value = ResultDelivery.Kind.FILE_CONTENT, reviewPages = true)
+  @Tool(
+      description =
+          "Claim and read up to 4 small frozen files in ONE call using one shared token budget. Durable tasks only: resumeRepositoryReview first in a new Run, and scan until SEALED. Omit maxItems (default 4) and tokenBudget for automatic sizing. A long first file returns one semantic chunk. Each page has its own workItemId/attempt: assess every delivered page with submitReviewWorkItem, omitting finding start/end for unique exact evidence quotes. Submit all assessments first and request the next batch in the same response. Unsubmitted claims are redelivered before new work; [] means no pending work, not proof of completion (check reviewTaskStatus). Reading is not assessment.")
+  public List<Page> readNextReviewWorkItems(
+      String taskId,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxItems,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer tokenBudget) {
+    int limit = maxItems == null ? 4 : maxItems;
+    if (taskId == null || taskId.startsWith("legacy:") || limit < 1 || limit > 4)
+      throw new ToolReadRejectedException(
+          "INVALID_REVIEW_BATCH_ARGUMENTS",
+          "Use a durable taskId and maxItems=null or 1..4. Legacy jobs use readNextReviewWorkItem.");
+    int budget = readingBudget(tokenBudget);
+    if (budget < 256)
+      throw new ToolReadRejectedException(
+          "CONTEXT_BUDGET_INSUFFICIENT",
+          "No work was claimed. Free prompt space before reading a batch.");
+    var pages = new ArrayList<Page>();
+    var owner = AgentRunScope.current();
+    try {
+      workItems()
+          .claimBatch(
+              taskScope(owner),
+              taskId,
+              owner.runId(),
+              limit,
+              (item, source, attempt) -> {
+                boolean recovery = item.state().equals("RUNNING");
+                int end =
+                    !recovery && pages.isEmpty()
+                        ? claimEnd(item, source, attempt, Math.max(1, budget - 32))
+                        : item.end();
+                var page = durablePage(item, attempt, source, end);
+                if (estimatePages(pages, page) > budget) {
+                  if (pages.isEmpty() && !recovery) throw insufficientReviewPage();
+                  return -1;
+                }
+                pages.add(page);
+                return end;
+              });
+    } catch (IllegalArgumentException rejected) {
+      throw workReadFailure(rejected);
+    }
+    for (var page : pages)
+      METRICS.info(
+          "review_read run={} task={} work={} attempt={} chars={} estimatedTokens={}",
+          owner.runId(),
+          taskId,
+          page.workItemId(),
+          page.attempt(),
+          page.content().length(),
+          estimate(page));
+    return List.copyOf(pages);
   }
 
   private static String legacyWorkId(String job, Range range) {
@@ -588,7 +649,7 @@ public final class ReviewTools {
 
   @Tool(
       description =
-          "Commit an assessment and optional structured findings using the workItemId/attempt returned by a review read. Durable claims and legacy continuation IDs are supported; legacy attempts bind the source version and keep the original ledger. For legacy IDs omit finding start/end: the server locates each unique exact evidence quote inside the delivered unit. Durable claims require absolute UTF-16 start/end and exact evidence quotes. Saves atomically, rejects conflicting replay, and never equates reading with reviewing.")
+          "Commit an assessment and optional structured findings using the workItemId/attempt returned by a review read. Omit finding start/end: the host locates each unique exact evidence quote inside the delivered frozen unit. If a quote repeats, extend it until unique or provide both absolute UTF-16 coordinates. Durable claims and legacy continuation IDs keep their original ledger. Saves atomically, rejects conflicting replay, and never equates reading with reviewing.")
   public dev.mikoto2000.rei.durable.WorkItemStore.Result submitReviewWorkItem(
       String workItemId,
       String attempt,
@@ -598,7 +659,7 @@ public final class ReviewTools {
           String assessment,
       @org.springframework.ai.tool.annotation.ToolParam(
               description =
-                  "Required array; use [] when there are no findings. At most 100 findings with unique IDs. Legacy work IDs accept exact evidence quotes without coordinates; durable IDs require absolute UTF-16 start/end from the delivered source.")
+                  "Required array; use [] when there are no findings. At most 100 findings with unique IDs. Supply an exact evidence quote and omit start/end for host location. For repeated quotes, extend the quote or provide both absolute UTF-16 coordinates.")
           List<dev.mikoto2000.rei.durable.WorkItemStore.Finding> findings) {
     var owner = AgentRunScope.current();
     var work = workItems();
@@ -631,6 +692,13 @@ public final class ReviewTools {
       if (invalid instanceof RunNotBoundException unbound)
         throw new ReviewResultRejectedException(
             unbound.getMessage(), "No assessment was accepted. " + resumeWorkGuidance(unbound));
+      if ("REVIEW_EVIDENCE_AMBIGUOUS".equals(invalid.getMessage())
+          || "REVIEW_EVIDENCE_NOT_FOUND".equals(invalid.getMessage()))
+        throw new ReviewResultRejectedException(
+            invalid.getMessage(),
+            "No assessment was accepted. Use a unique exact quote inside this delivered frozen unit. "
+                + "Extend repeated evidence with surrounding source, or provide both absolute UTF-16 coordinates. "
+                + "Keep the same workItemId and attempt; do not reread or recount the whole file.");
       if ("SOURCE_NOT_DELIVERED".equals(invalid.getMessage()))
         throw new ReviewResultRejectedException(
             "SOURCE_NOT_DELIVERED",
@@ -657,7 +725,7 @@ public final class ReviewTools {
                   assessment, findings, workItemId != null && workItemId.startsWith("legacy:"))
               + " No assessment was accepted. Keep the current workItemId and attempt; provide an"
               + " assessment of 1..16384 characters and findings=[] or at most 100 findings with"
-              + " unique IDs, valid absolute UTF-16 coordinates and exact source evidence inside"
+              + " unique IDs and exact source evidence (omit both coordinates for host location) inside"
               + " the delivered claim.");
     }
   }

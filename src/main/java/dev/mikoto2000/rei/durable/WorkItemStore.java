@@ -212,30 +212,76 @@ public final class WorkItemStore {
       String source = source(db, pending);
       String attempt = UUID.randomUUID().toString();
       int end = sizer.end(pending, source, attempt);
-      if (end < pending.start()
-          || end > pending.end()
-          || !boundary(source, end)
-          || end == pending.start() && end < pending.end())
-        throw new IllegalArgumentException("WORK_SPLIT_INVALID");
-      if (end < pending.end()) {
-        DurableTaskStore.execute(
-            db, "UPDATE durable_work SET end=? WHERE id=? AND state='PENDING'", end, pending.id());
-        DurableTaskStore.execute(
-            db,
-            "INSERT INTO durable_work(id,task,snapshot,path,start,end,version,kind,criterion,state,required) VALUES(?,?,?,?,?,?,?,?,?,'PENDING',?)",
-            UUID.randomUUID().toString(),
-            task,
-            pending.snapshot(),
-            pending.path(),
-            end,
-            pending.end(),
-            pending.version(),
-            pending.kind(),
-            pending.criterion(),
-            pending.required());
-      }
-      return activateClaim(db, pending.id(), run, attempt);
+      return splitAndActivate(db, pending, source, run, attempt, end);
     });
+  }
+
+  /** Claim a bounded batch atomically; redeliver unfinished claims before acquiring new work. */
+  public List<Claim> claimBatch(
+      DurableTaskStore.Scope scope, String task, String run, int limit, ClaimSizer sizer) {
+    if (limit < 1 || limit > 4) throw new IllegalArgumentException("INVALID_REVIEW_BATCH_SIZE");
+    return store.write(db -> {
+      requireRun(db, scope, task, run, true);
+      var running = new ArrayList<Claim>();
+      try (var query =
+              DurableTaskStore.statement(
+                  db,
+                  "SELECT w.id,w.active_attempt FROM durable_work w JOIN durable_item_attempts a ON a.id=w.active_attempt WHERE w.task=? AND w.state='RUNNING' AND a.run=? AND a.state='ACTIVE' ORDER BY w.path,w.start,w.id LIMIT ?",
+                  task,
+                  run,
+                  limit);
+          var rows = query.executeQuery()) {
+        while (rows.next())
+          running.add(new Claim(item(db, rows.getString(1)), run, rows.getString(2)));
+      }
+      if (!running.isEmpty()) {
+        for (var claim : running)
+          if (sizer.end(claim.item(), source(db, claim.item()), claim.attempt())
+              != claim.item().end())
+            throw new IllegalArgumentException("REVIEW_BATCH_BUDGET_TOO_SMALL");
+        return List.copyOf(running);
+      }
+      var claims = new ArrayList<Claim>();
+      while (claims.size() < limit) {
+        Item pending = pending(db, task);
+        if (pending == null) break;
+        String source = source(db, pending);
+        String attempt = UUID.randomUUID().toString();
+        int end = sizer.end(pending, source, attempt);
+        if (end < 0) break; // The next complete file does not fit the shared batch budget.
+        claims.add(splitAndActivate(db, pending, source, run, attempt, end));
+        if (end < pending.end()) break; // A long file gets one semantic chunk, never a tiny tail.
+      }
+      return List.copyOf(claims);
+    });
+  }
+
+  private static Claim splitAndActivate(
+      Connection db, Item pending, String source, String run, String attempt, int end)
+      throws SQLException {
+    if (end < pending.start()
+        || end > pending.end()
+        || !boundary(source, end)
+        || end == pending.start() && end < pending.end())
+      throw new IllegalArgumentException("WORK_SPLIT_INVALID");
+    if (end < pending.end()) {
+      DurableTaskStore.execute(
+          db, "UPDATE durable_work SET end=? WHERE id=? AND state='PENDING'", end, pending.id());
+      DurableTaskStore.execute(
+          db,
+          "INSERT INTO durable_work(id,task,snapshot,path,start,end,version,kind,criterion,state,required) VALUES(?,?,?,?,?,?,?,?,?,'PENDING',?)",
+          UUID.randomUUID().toString(),
+          pending.task(),
+          pending.snapshot(),
+          pending.path(),
+          end,
+          pending.end(),
+          pending.version(),
+          pending.kind(),
+          pending.criterion(),
+          pending.required());
+    }
+    return activateClaim(db, pending.id(), run, attempt);
   }
 
   private static Claim activateClaim(Connection db, String work, String run, String attempt)
@@ -412,14 +458,13 @@ public final class WorkItemStore {
           || finding.assessment().length() > 16384)
         return at + ".assessment must contain 1..16384 characters.";
       if (!legacy
-          && (finding.start() == null
-              || finding.end() == null
-              || finding.start() < 0
-              || finding.end() <= finding.start()))
+          && ((finding.start() == null) != (finding.end() == null)
+              || finding.start() != null
+                  && (finding.start() < 0 || finding.end() <= finding.start())))
         return at
-            + ".start/end must be absolute UTF-16 coordinates from the delivered claim, with end > start.";
+            + ".start/end must both be omitted for host location, or both be absolute UTF-16 coordinates with end > start.";
     }
-    return "findings must use exact evidence inside the delivered unit; for durable work, start/end must match its absolute UTF-16 boundaries.";
+    return "findings must use unique exact evidence inside the delivered unit; omit start/end for host location, or supply matching absolute UTF-16 boundaries.";
   }
 
   public Result commit(
@@ -439,7 +484,8 @@ public final class WorkItemStore {
                   .substring(claim.item().start(), claim.item().end())
                   .getBytes(StandardCharsets.UTF_8))))
         throw new IllegalArgumentException("SOURCE_NOT_DELIVERED");
-      validateFindings(claim.item(), source, findings);
+      var located = locateFindings(claim.item(), source, findings);
+      validateFindings(claim.item(), source, located);
       var item = claim.item();
       var body =
           new ReviewResult(
@@ -451,7 +497,7 @@ public final class WorkItemStore {
               item.version(),
               item.criterion(),
               assessment,
-              findings);
+              located);
       String json = encode(body);
       byte[] encoded = json.getBytes(StandardCharsets.UTF_8);
       if (encoded.length > 256 * 1024) throw new IllegalArgumentException("RESULT_BYTE_LIMIT");
@@ -483,7 +529,7 @@ public final class WorkItemStore {
           json,
           hash,
           System.currentTimeMillis());
-      for (var finding : findings)
+      for (var finding : located)
         DurableTaskStore.execute(
             db,
             "INSERT INTO durable_findings(work,id,severity,start,end,evidence,assessment) VALUES(?,?,?,?,?,?,?)",
@@ -510,6 +556,36 @@ public final class WorkItemStore {
             item.task());
       return new Result(body, hash);
     });
+  }
+
+  /** Locate only in this delivered frozen claim; never choose an arbitrary duplicate quote. */
+  private static List<Finding> locateFindings(Item item, String source, List<Finding> findings) {
+    var located = new ArrayList<Finding>();
+    String delivered = null;
+    for (var finding : findings) {
+      if (finding == null) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      if (finding.start() == null && finding.end() == null) {
+        String quote = finding.evidence();
+        if (quote == null || quote.isBlank() || quote.length() > 16384)
+          throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+        if (delivered == null) delivered = source.substring(item.start(), item.end());
+        int relative = delivered.indexOf(quote);
+        if (relative < 0) throw new IllegalArgumentException("REVIEW_EVIDENCE_NOT_FOUND");
+        if (delivered.indexOf(quote, relative + 1) >= 0)
+          throw new IllegalArgumentException("REVIEW_EVIDENCE_AMBIGUOUS");
+        int start = item.start() + relative;
+        finding =
+            new Finding(
+                finding.id(),
+                finding.severity(),
+                start,
+                start + quote.length(),
+                quote,
+                finding.assessment());
+      }
+      located.add(finding);
+    }
+    return List.copyOf(located);
   }
 
   private static void validateFindings(Item item, String source, List<Finding> findings) {

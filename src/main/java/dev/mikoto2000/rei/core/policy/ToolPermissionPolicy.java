@@ -79,6 +79,7 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
           "claimReviewWorkItem",
           "readReviewWorkItem",
           "readNextReviewWorkItem",
+          "readNextReviewWorkItems",
           "submitReviewWorkItem",
           "readReviewFile",
           "readReviewPages",

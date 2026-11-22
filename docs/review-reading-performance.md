@@ -43,6 +43,48 @@ reviewStatus等の状態確認も、結果不明の外部変更を繰り返さ�
 
 ## 計測と比較
 
+### 小さいファイルのまとめ読みと指摘位置の解決
+
+新規 durable レビューでは `readNextReviewWorkItems(taskId)` を優先できる。
+既定で最大4ファイルを、単独取得と同じ共有 token 予算に収めて返す。
+先頭の長いファイルは意味単位の1チャンクとし、後続のファイルは全文が収まる場合だけ追加する。
+`maxItems` は1..4、`tokenBudget` は省略時に自動計算する。既存の単独取得と legacy 経路も利用できる。
+
+各ページの `workItemId` / `attempt` と配送ハッシュは独立して保持する。
+同じ Run の未提出 claim がある間は新しい範囲を取得せず、それらを再配送する。
+取得の途中で失敗すれば、そのバッチの新しい claim はまとめてロールバックする。
+評価は各ページの本文がモデルに配送された後に `submitReviewWorkItem` で保存し、
+1つの応答に複数の提出と次のバッチ取得を並べられる。空配列だけで完了と断定しない。
+
+durable の指摘でも `start` / `end` を両方省略できる。
+ホストが配送済みの凍結範囲内で `evidence` の完全一致を探し、絶対 UTF-16 座標を補う。
+引用が重複する場合は `REVIEW_EVIDENCE_AMBIGUOUS`、見つからない場合は
+`REVIEW_EVIDENCE_NOT_FOUND` とし、指摘は保存しない。
+重複時は引用を周辺の原文まで広げるか、従来どおり両方の座標を指定して区別する。
+片方だけの座標、サロゲートペア途中の境界、範囲外の引用は受け付けない。
+再提出は座標補完後の結果で照合するため、同じ引用の再送でも保存済み結果を増やさない。
+
+比較は `ReviewBatchPerformanceTest` の同一4ファイルを使い、従来プロトコル、
+座標移管のみ、座標移管＋まとめ読みの3条件で行う。
+固定応答テストは取得・提出・網羅性を比較する。実LLM比較は明示実行の
+`ReviewBatchPerformanceLiveTest` を使い、通常のテストではネットワークを使わない。
+実LLM比較は入力を固定した評価ループであり、汎用エージェントの探索・ツール選択時間は含まない。
+
+```powershell
+$env:REI_REVIEW_BATCH_LIVE = 'true'
+$env:REI_REVIEW_EVAL_URL = 'http://<server>/v1/chat/completions'
+$env:REI_REVIEW_EVAL_MODEL = '<model>'
+$env:REI_REVIEW_EVAL_API_KEY = '<key>'
+$env:REI_REVIEW_EVAL_THINKING = 'false' # 両条件で同じ設定。true でも比較可能
+$env:REI_REVIEW_BATCH_TRIALS = '3'
+./mvnw.cmd -Plive-e2e '-Dtest=ReviewBatchPerformanceLiveTest' test
+```
+
+結果は `target/review-batch-live.json` に保存する。実行順序を試行ごとに回し、
+実経過・モデル待ち・呼び出し数・拒否数・入力/出力/キャッシュ token と fixture の検出数を記録する。
+サーバーの他の利用者による負荷は統制しないため、所要時間はその実行条件の観測値として扱う。
+2026-11-22 の条件・結果・制約は [比較記録](../.kiro/docs/review-batch-performance-20261122.md) を参照。
+
 アプリログの `rei.review.metrics` に本文を含まない `review_read` / `review_submit` を記録する。
 run/task/work/attempt、本文UTF-16文字数、serialized推定トークン数、提出の成功・拒否理由を確認できる。
 同じwork IDへの提出の再試行は、集計で重複したレビュー完了として数えない。

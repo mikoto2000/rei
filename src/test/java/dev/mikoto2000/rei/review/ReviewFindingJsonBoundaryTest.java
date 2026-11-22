@@ -246,11 +246,12 @@ class ReviewFindingJsonBoundaryTest {
     "false,null-start",
     "false,null-end"
   })
-  void nullableFindingPositionsLocateLegacyQuotesAndRequireDurableCoordinates(
+  void nullableFindingPositionsLocateUniqueQuotesAndRejectPartialDurableCoordinates(
       boolean legacy, String shape) throws Exception {
     Path root = Files.createDirectory(directory.resolve("repo"));
     String text = "本文🙂\nUnique evidence.\n";
     String quote = "Unique evidence.";
+    boolean needsCorrection = !legacy && (shape.equals("null-start") || shape.equals("null-end"));
     Files.writeString(root.resolve("lesson.md"), text);
     Path data = directory.resolve("data");
     try (var migration = new StorageMigrationCoordinator(data)) {
@@ -310,7 +311,7 @@ class ReviewFindingJsonBoundaryTest {
             if (n == 1) {
               name = "readNextReviewWorkItem";
               arguments = Map.of("taskId", task);
-            } else if (n == 2 || !legacy && n == 3) {
+            } else if (n == 2 || needsCorrection && n == 3) {
               var prompt = (Prompt) invocation.getArgument(0);
               if (n == 2) {
                 var response = lastToolResponse(prompt);
@@ -387,9 +388,9 @@ class ReviewFindingJsonBoundaryTest {
           });
       new StagnationChatModel(model, assembler)
           .stream(new Prompt(new UserMessage("review"), options)).blockLast();
-      assertThat(calls).hasValue(legacy ? 3 : 4);
+      assertThat(calls).hasValue(needsCorrection ? 4 : 3);
       assertThat(execution.progressSnapshot().budget().argumentCorrections())
-          .isEqualTo(legacy ? 0 : 1);
+          .isEqualTo(needsCorrection ? 1 : 0);
       reviews.requireComplete(owner);
     }
   }

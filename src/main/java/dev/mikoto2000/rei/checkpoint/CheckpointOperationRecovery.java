@@ -18,6 +18,7 @@ final class CheckpointOperationRecovery {
           "readReviewPages",
           "readReviewWorkItem",
           "readNextReviewWorkItem",
+          "readNextReviewWorkItems",
           "reviewStatus",
           "reviewPending",
           "reviewFindings",
