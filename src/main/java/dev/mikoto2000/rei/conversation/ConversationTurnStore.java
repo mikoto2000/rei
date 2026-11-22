@@ -103,6 +103,11 @@ public class ConversationTurnStore implements ConversationHistory {
         java.time.Instant createdAt) {
       this(runId, request, status, assistantMessage, createdAt, null, null, Map.of());
     }
+
+    /** Only completed attempts can contribute their saved observations to later answers. */
+    public boolean isCompleted() {
+      return status == Status.COMPLETED;
+    }
   }
 
   /** 既存の記録へ経緯を残すため、アシスタント通知を追記する。 */
