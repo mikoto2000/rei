@@ -37,7 +37,7 @@ class ResumeSessionClientTest {
   }
 
   @Test
-  void filteredCrossProjectSelectionUsesCheckpointOwner() throws Exception {
+  void filteredCrossProjectSelectionUsesOwnerWithoutChangingCurrentProject() throws Exception {
     verifyResume(false, "\r", true);
   }
 
@@ -154,9 +154,10 @@ class ResumeSessionClientTest {
             && System.nanoTime() < deadline) Thread.sleep(10);
         assertTrue(output.toString(StandardCharsets.UTF_8).contains("resumed output"));
       }
-      assertEquals(fail ? "previous" : "target", client.sessionId());
+      assertEquals(across || fail ? "previous" : "target", client.sessionId());
+      assertEquals("one", client.projectId());
       client.command("/chat follow-up");
-      assertEquals(fail ? "previous" : "target", submittedSession.get());
+      assertEquals(across || fail ? "previous" : "target", submittedSession.get());
     } finally {
       server.stop(0);
     }

@@ -63,7 +63,7 @@ class ResumeSessionCommandTest {
   }
 
   @Test
-  void crossProjectSubmissionSelectsOwnerAndRollsBackOnRejection() throws Exception {
+  void crossProjectResumeKeepsTheCurrentProjectAndSessionEvenOnRejection() throws Exception {
     var repository = new FileSessionRepository(root.resolve("cross-sessions.json"));
     var projects =
         new ProjectService(
@@ -92,8 +92,8 @@ class ResumeSessionCommandTest {
             .thenAnswer(invocation -> {
               Consumer<String> select = invocation.getArgument(2);
               select.accept(targetSession);
-              assertEquals(targetProject.id(), projects.currentContext().id());
-              assertEquals(targetSession, projects.currentSessionId());
+              assertEquals(original.id(), projects.currentContext().id());
+              assertEquals(previous, projects.currentSessionId());
               if (rejected) throw new IllegalStateException("Rejected");
               return null;
             });
@@ -101,8 +101,8 @@ class ResumeSessionCommandTest {
         resume.setTaskSelection(items -> java.util.Optional.of("task"));
         var command = new picocli.CommandLine(resume).setOut(new PrintWriter(new StringWriter()));
         assertEquals(rejected ? 2 : 0, command.execute("--status", "failed", "--all"));
-        assertEquals(rejected ? original.id() : targetProject.id(), projects.currentContext().id());
-        assertEquals(rejected ? previous : targetSession, projects.currentSessionId());
+        assertEquals(original.id(), projects.currentContext().id());
+        assertEquals(previous, projects.currentSessionId());
         projects.cd(original.root().toString());
         projects.selectSession(previous);
       }

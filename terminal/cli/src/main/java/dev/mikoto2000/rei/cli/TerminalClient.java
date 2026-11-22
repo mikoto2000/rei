@@ -741,10 +741,11 @@ public final class TerminalClient implements AutoCloseable {
     String resumedRun = response.path("runId").asText();
     if (resumedSession.isBlank() || resumedRun.isBlank())
       throw new IOException("Invalid resume response");
-    if (!owner.equals(project)) selectProject(owner);
-    session = resumedSession;
+    if (owner.equals(project)) {
+      session = resumedSession;
+      out("Current session: " + session);
+    } else out("Resumed project: " + owner + " / session: " + resumedSession);
     run = resumedRun;
-    out("Current session: " + session);
     out("Run: " + run);
     watch(run);
   }
