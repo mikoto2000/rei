@@ -86,6 +86,8 @@ public final class ContextCompressionException extends RuntimeException {
   /** 元の診断情報。 */
   private final dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.Diagnostic underlying;
 
+  private final String pageDetails;
+
   /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ContextCompressionException(Reason reason) {
     this(reason, -1, -1);
@@ -102,11 +104,21 @@ public final class ContextCompressionException extends RuntimeException {
       long actualTokens,
       long limitTokens,
       dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.Diagnostic underlying) {
+    this(reason, actualTokens, limitTokens, underlying, "");
+  }
+
+  private ContextCompressionException(
+      Reason reason,
+      long actualTokens,
+      long limitTokens,
+      dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.Diagnostic underlying,
+      String pageDetails) {
     super(Objects.requireNonNull(reason).code() + ": " + reason.guidance());
     this.reason = reason;
     this.actualTokens = actualTokens;
     this.limitTokens = limitTokens;
     this.underlying = underlying;
+    this.pageDetails = pageDetails;
   }
 
   /** モデルへ渡す文脈の管理で用いる理由を返す。 */
@@ -126,7 +138,16 @@ public final class ContextCompressionException extends RuntimeException {
 
   /** モデルへ渡す文脈の管理で用いる詳細一覧を返す。 */
   public String details() {
-    return reason.guidance() + (underlying == null ? "" : " 原因: " + underlying.display());
+    return reason.guidance()
+        + (underlying == null ? "" : " 原因: " + underlying.display())
+        + pageDetails;
+  }
+
+  ContextCompressionException atPage(int page, int attempt, int hardLimit, int targetTokens) {
+    return new ContextCompressionException(
+        reason, actualTokens, limitTokens, underlying,
+        " ページ=" + page + ", 試行=" + attempt + ", 本文上限=" + hardLimit
+            + ", 本文目標=" + targetTokens + " tokens。");
   }
 
   /** モデルへ渡す文脈の管理で用いる保存失敗情報を返す。 */

@@ -216,6 +216,52 @@ class LlmConversationCompressorTest {
         .isEqualTo(12000);
   }
 
+  @ParameterizedTest
+  @org.junit.jupiter.params.provider.NullSource
+  @ValueSource(booleans = {false, true})
+  void generationReserveIsOmittedOnlyWhenThinkingIsExplicitlyDisabled(Boolean thinking) {
+    var properties = new ContextCompressionProperties();
+    properties.setSummaryEnableThinking(thinking);
+    assertThat(compressor(mock(ChatModel.class), properties).generationTokens(3000))
+        .isEqualTo(Boolean.FALSE.equals(thinking) ? 3000 : 11192);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void disabledThinkingCapsTheCorrectWireParameterWithoutChangingDefaults(
+      boolean completionTokens) {
+    var model = mock(ChatModel.class);
+    var base = completionTokens
+        ? OpenAiChatOptions.builder().maxCompletionTokens(16000).build()
+        : OpenAiChatOptions.builder().maxTokens(16000).build();
+    var provider = mock(LlmModelProvider.class);
+    when(provider.chatModel(LlmFeature.CHAT)).thenReturn(model);
+    when(provider.chatOptions(LlmFeature.CHAT, null)).thenReturn(base);
+    when(model.stream(any(Prompt.class))).thenAnswer(invocation -> {
+      var prompt = (Prompt) invocation.getArgument(0);
+      var options = (OpenAiChatOptions) prompt.getOptions();
+      assertThat(prompt.getSystemMessage().getText()).contains("at most 375 tokens");
+      if (completionTokens) {
+        assertThat(options.getMaxCompletionTokens()).isEqualTo(3000);
+        assertThat(options.getMaxTokens()).isNull();
+      } else {
+        assertThat(options.getMaxTokens()).isEqualTo(3000);
+        assertThat(options.getMaxCompletionTokens()).isNull();
+      }
+      return Flux.just(response("REQ-17 remains pending", "stop"));
+    });
+    var properties = new ContextCompressionProperties();
+    properties.setSummaryEnableThinking(false);
+    ObjectProvider<LlmModelProvider> models = mock();
+    when(models.getObject()).thenReturn(provider);
+    var result = new LlmConversationCompressor(models, properties).summarizeResult(
+        "", List.of(new UserMessage("REQ-17 remains pending")), 3000,
+        new Prompt("owner"), null, java.time.Duration.ofSeconds(5), 375);
+    assertThat(result.text()).contains("REQ-17", "pending");
+    if (completionTokens) assertThat(base.getMaxCompletionTokens()).isEqualTo(16000);
+    else assertThat(base.getMaxTokens()).isEqualTo(16000);
+  }
+
   /** {@code compressor} の条件を再現するための補助情報を返す。 */
   private LlmConversationCompressor compressor(
       ChatModel model, ContextCompressionProperties properties) {

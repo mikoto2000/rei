@@ -445,8 +445,9 @@ public class ContextAssembler {
       var result =
           paged
               ? SummaryInputPages.summarize(
-                  (previous, fragments, target, timeout) ->
-                      compressor.summarizeResult(previous, fragments, target, raw, budget, timeout),
+                  (previous, fragments, limit, target, timeout) ->
+                      compressor.summarizeResult(
+                          previous, fragments, limit, raw, budget, timeout, target),
                   estimator,
                   segment.summary.summary(),
                   messages,
@@ -523,9 +524,9 @@ public class ContextAssembler {
         details +=
             " 要約対象="
                 + before
-                + " 推定tokens、要約上限="
+                + " 推定tokens、設定上の最終要約上限="
                 + settings.summaryTokens()
-                + " tokens、生成上限="
+                + " tokens、最終要約に対応する生成上限="
                 + compressor.generationTokens(settings.summaryTokens())
                 + " tokens、制限時間="
                 + settings.summaryTimeoutSeconds()
