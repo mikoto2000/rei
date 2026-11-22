@@ -3046,7 +3046,7 @@ public class Tools {
     long total = 0;
     for (String requested : paths) {
       try {
-        var path = resolveProjectPath(requested, workingDirectory);
+        var path = FileSnapshots.resolveInventoryPath(workingDirectory, Paths.get(requested));
         if (!Files.isRegularFile(path)) throw new IOException("Not a regular file");
         long count = 0, bytes = 0;
         try (var input = Files.newInputStream(path)) {
@@ -3869,7 +3869,9 @@ public class Tools {
       if (validationError != null) {
         throw new IllegalArgumentException(validationError);
       }
-      String normalized = resolveProjectPath(request.path(), workingDirectory).toString();
+      String normalized =
+          FileSnapshots.resolveInventoryPath(workingDirectory, Paths.get(request.path()))
+              .toString();
       if (!seenPaths.add(normalized)) {
         throw new IllegalArgumentException("duplicate path: " + request.path());
       }
@@ -3918,7 +3920,8 @@ public class Tools {
         Boolean.TRUE.equals(request.append())
             ? new OpenOption[] {StandardOpenOption.CREATE, StandardOpenOption.APPEND}
             : new OpenOption[] {StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING};
-    java.nio.file.Path path = resolveProjectPath(request.path(), workingDirectory);
+    java.nio.file.Path path =
+        FileSnapshots.resolveInventoryPath(workingDirectory, Paths.get(request.path()));
     java.nio.file.Path parent = path.getParent();
     if (parent != null) {
       Files.createDirectories(parent);
@@ -4049,7 +4052,7 @@ public class Tools {
   /** 必要な内容を参照できるよう、テキストファイルを読み取る。 */
   List<String> readTextFile(String pathStr) throws IOException {
     IO.println(String.format("%s のテキストファイルを読むよ", pathStr));
-    java.nio.file.Path path = resolveProjectPath(pathStr);
+    java.nio.file.Path path = resolveFileOperationPath(pathStr);
     List<String> lines = readTextFileLines(path, pathStr, "");
     observeRead.accept(path);
     return lines;
@@ -4065,7 +4068,7 @@ public class Tools {
     }
 
     IO.println(String.format("%s の %d 行目から %d 行目を読むよ", pathStr, startLine, endLine));
-    java.nio.file.Path path = resolveProjectPath(pathStr);
+    java.nio.file.Path path = resolveFileOperationPath(pathStr);
     List<String> lines = readTextFileLines(path, pathStr, "");
     observeRead.accept(path);
     int fromIndex = startLine - 1;
@@ -4197,7 +4200,7 @@ public class Tools {
   /** 必要な内容を参照できるよう、PDFファイルを読み取る。 */
   String readPdfFile(String pathStr) throws IOException {
     IO.println(String.format("%s の PDF ファイルを読むよ", pathStr));
-    java.nio.file.Path path = resolveProjectPath(pathStr);
+    java.nio.file.Path path = resolveFileOperationPath(pathStr);
     TikaDocumentReader documentReader = new TikaDocumentReader(new FileSystemResource(path));
     String extracted =
         documentReader.get().stream()
@@ -4228,7 +4231,7 @@ public class Tools {
       options = new OpenOption[] {StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING};
     }
 
-    java.nio.file.Path path = resolveProjectPath(pathStr);
+    java.nio.file.Path path = resolveFileOperationPath(pathStr);
     java.nio.file.Path parent = path.getParent();
     if (parent != null) {
       Files.createDirectories(parent);
@@ -4281,7 +4284,7 @@ public class Tools {
       throw new IllegalArgumentException("newText は null にできません");
     }
 
-    java.nio.file.Path path = resolveProjectPath(pathStr);
+    java.nio.file.Path path = resolveFileOperationPath(pathStr);
     byte[] baseline = Files.readAllBytes(path);
     ResolvedTextFile original = decodeTextFileContent(baseline, charset);
     String originalContent = original.content();
@@ -4356,7 +4359,7 @@ public class Tools {
       description = "バイナリファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
   byte[] readBinaryFile(String pathStr) throws IOException {
     IO.println(String.format("%s のバイナリファイルを読むよ", pathStr));
-    java.nio.file.Path path = resolveProjectPath(pathStr);
+    java.nio.file.Path path = resolveFileOperationPath(pathStr);
     byte[] bytes = Files.readAllBytes(path);
     observeRead.accept(path);
     return bytes;
@@ -4369,7 +4372,7 @@ public class Tools {
       throw new IllegalArgumentException("pathStr は空にできません");
     }
     IO.println(String.format("%s までのディレクトリを作成するよ", pathStr));
-    java.nio.file.Path createdPath = Files.createDirectories(resolveProjectPath(pathStr));
+    java.nio.file.Path createdPath = Files.createDirectories(resolveFileOperationPath(pathStr));
     return createdPath.toAbsolutePath().normalize().toString();
   }
 
@@ -4385,7 +4388,7 @@ public class Tools {
       options = new OpenOption[] {StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING};
     }
 
-    java.nio.file.Path path = resolveProjectPath(pathStr);
+    java.nio.file.Path path = resolveFileOperationPath(pathStr);
     boolean existed = Files.exists(path);
     Files.write(path, contents, options);
     if (append) {
@@ -4409,7 +4412,7 @@ public class Tools {
   @Tool(name = "deleteFile", description = "ファイルを削除します。ファイルが存在しない場合はエラーになります。")
   void deleteFile(String pathStr) throws IOException {
     IO.println(String.format("%s を削除するよ", pathStr));
-    java.nio.file.Path path = resolveProjectPath(pathStr);
+    java.nio.file.Path path = resolveFileOperationPath(pathStr);
     Files.delete(path);
     forgetFile.accept(path);
     recentChanges.record(path.toString(), RecentChanges.OP_DELETE, "deleted");
@@ -4423,8 +4426,8 @@ public class Tools {
   void copyFile(String sourcePath, String destPath, boolean overwrite) throws IOException {
     IO.println(String.format("%s を %s にコピーするよ。上書き：%s", sourcePath, destPath, overwrite));
 
-    java.nio.file.Path resolvedSourcePath = resolveProjectPath(sourcePath);
-    java.nio.file.Path resolvedDestPath = resolveProjectPath(destPath);
+    java.nio.file.Path resolvedSourcePath = resolveFileOperationPath(sourcePath);
+    java.nio.file.Path resolvedDestPath = resolveFileOperationPath(destPath);
     boolean exists = Files.exists(resolvedDestPath);
     if (exists && !overwrite) {
       throw new IOException(String.format("%s は既に存在します。上書き：%s", destPath, overwrite));
@@ -4449,8 +4452,8 @@ public class Tools {
   void moveFile(String sourcePath, String destPath, boolean overwrite) throws IOException {
     IO.println(String.format("%s を %s に移動するよ。上書き：%s", sourcePath, destPath, overwrite));
 
-    java.nio.file.Path resolvedSourcePath = resolveProjectPath(sourcePath);
-    java.nio.file.Path resolvedDestPath = resolveProjectPath(destPath);
+    java.nio.file.Path resolvedSourcePath = resolveFileOperationPath(sourcePath);
+    java.nio.file.Path resolvedDestPath = resolveFileOperationPath(destPath);
     boolean exists = Files.exists(resolvedDestPath);
     if (exists && !overwrite) {
       throw new IOException(String.format("%s は既に存在します。上書き：%s", destPath, overwrite));
@@ -4488,9 +4491,9 @@ public class Tools {
     return projectDirectory.get();
   }
 
-  /** 指定や設定に応じた対象を利用するため、プロジェクトパスを確定する。 */
-  private java.nio.file.Path resolveProjectPath(String pathStr) {
-    return resolveProjectPath(pathStr, currentWorkingDirectory());
+  /** Apply the shared Project boundary before direct filesystem reads or mutations. */
+  private java.nio.file.Path resolveFileOperationPath(String pathStr) throws IOException {
+    return FileSnapshots.resolveInventoryPath(currentWorkingDirectory(), Paths.get(pathStr));
   }
 
   /** 指定や設定に応じた対象を利用するため、プロジェクトパスを確定する。 */

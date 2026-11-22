@@ -254,6 +254,7 @@ class McpHttpIntegrationTest {
         "--server.address=0.0.0.0",
         "--rei.mcp-server.enabled=" + enabled,
         "--rei.mcp-server.port=" + port,
+        "--rei.mcp-server.token=fixture-mcp-token-with-32-characters",
         "--rei.mcp-server.allowed-projects=" + project,
         "--rei.conversation.concurrent-enabled=true",
         "--spring.ai.mcp.server.enabled=" + enabled,
@@ -299,13 +300,23 @@ class McpHttpIntegrationTest {
       assertEquals(
           403, status("http://127.0.0.1:" + port + "/mcp", "{}", "https://evil.test", null));
       assertEquals(403, status("http://localhost:" + port + "/mcp", "{}", null, null));
-      assertEquals(400, status("http://127.0.0.1:" + port + "/mcp", "{", null, null));
+      assertEquals(401, status("http://127.0.0.1:" + port + "/mcp", "{}", null, null));
+      assertEquals(
+          401, status("http://127.0.0.1:" + port + "/mcp", "{}", null, "Bearer fixture-secret"));
+      assertEquals(
+          400,
+          status(
+              "http://127.0.0.1:" + port + "/mcp",
+              "{",
+              null,
+              "Bearer fixture-mcp-token-with-32-characters"));
       var tunnelInitialize =
           HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/mcp"))
               .timeout(Duration.ofSeconds(5))
               .header("Content-Type", "application/json")
               .header("Accept", "application/json, text/event-stream")
               .header("X-Forwarded-Client-Cert", "untrusted tunnel metadata")
+              .header("Authorization", "Bearer fixture-mcp-token-with-32-characters")
               .POST(
                   HttpRequest.BodyPublishers.ofString(
                       "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-06-18\",\"capabilities\":{},\"clientInfo\":{\"name\":\"tunnel-test\",\"version\":\"1\"}}}"))
@@ -342,6 +353,9 @@ class McpHttpIntegrationTest {
       var transport =
           HttpClientStreamableHttpTransport.builder("http://127.0.0.1:" + port)
               .endpoint("/mcp")
+              .requestBuilder(
+                  HttpRequest.newBuilder()
+                      .header("Authorization", "Bearer fixture-mcp-token-with-32-characters"))
               .build();
       try (var client = McpClient.sync(transport).requestTimeout(Duration.ofSeconds(5)).build()) {
         assertNotNull(client.initialize());

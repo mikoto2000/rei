@@ -57,7 +57,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Path pdf = tempDir.resolve("sample.pdf");
     writePdf(pdf, "PDF reading test");
 
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
     String actual = tools.readPdfFile(pdf.toString());
 
     assertTrue(actual.contains("PDF reading test"));
@@ -71,7 +71,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     bus.subscribe(events::add);
     Tools tools =
         new Tools(
-            null,
+            testProject(),
             new SystemShellService(),
             new BackgroundProcessManager(new SystemShellService()),
             Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZoneId.of("Asia/Tokyo")),
@@ -175,7 +175,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("add", "src");
     runGit("commit", "-m", "example fixtures");
     var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
     for (String name : List.of("readMultiFile", "grepMultiQuery", "writeMultiFile")) {
       String description =
           Tools.class.getDeclaredMethod(name, List.class).getAnnotation(Tool.class).description();
@@ -1528,7 +1528,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void writeMultiFileWritesSingleFile() throws Exception {
     Path text = tempDir.resolve("note.txt");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     List<Tools.WriteFileResult> results =
         tools.writeMultiFile(
@@ -1544,7 +1544,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void writeMultiFileWritesMultipleFilesAndPreservesOrder() throws Exception {
     Path a = tempDir.resolve("a.txt");
     Path b = tempDir.resolve("b.txt");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     List<Tools.WriteFileResult> results =
         tools.writeMultiFile(
@@ -1565,7 +1565,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Path existing = tempDir.resolve("existing.txt");
     Files.writeString(existing, "old");
     Path created = tempDir.resolve("created.txt");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     List<Tools.WriteFileResult> results =
         tools.writeMultiFile(
@@ -1580,7 +1580,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   /** 複数ファイル拒否する空のファイル一覧を書き込むことを確認する。 */
   @Test
   void writeMultiFileRejectsEmptyFiles() throws Exception {
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
     assertThrows(IllegalArgumentException.class, () -> tools.writeMultiFile(List.of()));
   }
 
@@ -1588,7 +1588,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void writeMultiFileRejectsDuplicatePath() throws Exception {
     Path a = tempDir.resolve("a.txt");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     assertThrows(
         IllegalArgumentException.class,
@@ -1602,7 +1602,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   /** 複数ファイル拒否する空白のパスを書き込むことを確認する。 */
   @Test
   void writeMultiFileRejectsBlankPath() throws Exception {
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     assertThrows(
         IllegalArgumentException.class,
@@ -1613,7 +1613,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void writeMultiFileRejectsTooManyFiles() throws Exception {
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
     List<Tools.WriteFileRequest> requests = new java.util.ArrayList<>();
     for (int i = 0; i < Tools.MAX_WRITE_FILES + 1; i++) {
       requests.add(new Tools.WriteFileRequest("a" + i + ".txt", "content", false, null));
@@ -1624,7 +1624,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   /** 複数ファイル拒否するごとのファイル大きさ上限を書き込むことを確認する。 */
   @Test
   void writeMultiFileRejectsPerFileSizeLimit() throws Exception {
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
     String big = "x".repeat(Tools.MAX_WRITE_CHARS_PER_FILE + 1);
 
     assertThrows(
@@ -1635,7 +1635,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   /** 複数ファイル拒否する集計結果大きさ上限を書き込むことを確認する。 */
   @Test
   void writeMultiFileRejectsAggregateSizeLimit() throws Exception {
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
     String big = "x".repeat(Tools.MAX_WRITE_TOTAL_CHARS);
 
     assertThrows(
@@ -1647,7 +1647,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void writeMultiFilePerFileIoFailureKeepsOthers() throws Exception {
     Path a = tempDir.resolve("a.txt");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     // 親ディレクトリは自動作成されるため、両方成功する
     List<Tools.WriteFileResult> results =
@@ -1668,16 +1668,14 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void writeMultiFileMaintainsPathSecurity() throws Exception {
-    Path outside = tempDir.getParent().resolve("outside.txt");
-    Tools tools = new Tools();
-
-    // 既存 writeTextFile と同じく、絶対パスはそのまま解決される（workspace 制約は既存設計に合わせる）
-    List<Tools.WriteFileResult> results =
-        tools.writeMultiFile(
-            List.of(new Tools.WriteFileRequest(outside.toString(), "outside", false, null)));
-
-    assertTrue(results.get(0).success());
-    assertEquals("outside", Files.readString(outside));
+    Path outside = tempDir.resolveSibling(tempDir.getFileName() + "-outside.txt");
+    Tools tools = new Tools(testProject());
+    assertThrows(
+        IOException.class,
+        () ->
+            tools.writeMultiFile(
+                List.of(new Tools.WriteFileRequest(outside.toString(), "outside", false, null))));
+    assertFalse(Files.exists(outside));
   }
 
   /** 対象の解決シェルについて、シェル実行環境可変値を利用することを確認する。 */
@@ -2022,7 +2020,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Path csv = tempDir.resolve("gantt.csv");
     Files.write(csv, List.of("タスク,開始日", "設計,2026-08-07"), Charset.forName("windows-31j"));
 
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     assertEquals(List.of("タスク,開始日", "設計,2026-08-07"), tools.readTextFile(csv.toString()));
   }
@@ -2032,7 +2030,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void readTextFileRangeReadsInclusiveLineRange() throws Exception {
     Path text = tempDir.resolve("note.txt");
     Files.write(text, List.of("line1", "line2", "line3", "line4"));
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     List<String> lines = tools.readTextFileRange(text.toString(), 2, 3);
 
@@ -2044,7 +2042,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void readTextFileRangeClampsEndLineToFileEnd() throws Exception {
     Path text = tempDir.resolve("note.txt");
     Files.write(text, List.of("line1", "line2"));
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     List<String> lines = tools.readTextFileRange(text.toString(), 2, 99);
 
@@ -2057,7 +2055,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Path csv = tempDir.resolve("gantt.csv");
     Files.write(
         csv, List.of("タスク,開始日", "設計,2026-08-07", "実装,2026-08-08"), Charset.forName("windows-31j"));
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     List<String> lines = tools.readTextFileRange(csv.toString(), 2, 2);
 
@@ -2068,7 +2066,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void writeTextFileUsesSpecifiedCharset() throws Exception {
     Path csv = tempDir.resolve("gantt.csv");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     tools.writeTextFile(csv.toString(), "タスク,開始日", false, "windows-31j");
 
@@ -2081,7 +2079,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void writeTextFileDefaultsToUtf8WhenCharsetIsBlank() throws Exception {
     Path text = tempDir.resolve("note.txt");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     tools.writeTextFile(text.toString(), "メモ", false, "");
 
@@ -2092,7 +2090,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void writeTextFileCreatesParentDirectories() throws Exception {
     Path text = tempDir.resolve("missing").resolve("nested").resolve("note.txt");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     tools.writeTextFile(text.toString(), "メモ", false, "UTF-8");
 
@@ -2103,7 +2101,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void createDirectoriesCreatesNestedDirectories() throws Exception {
     Path nested = tempDir.resolve("a").resolve("b").resolve("c");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     String createdPath = tools.createDirectories(nested.toString());
 
@@ -2133,7 +2131,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void applyTextDiffReplacesExpectedText() throws Exception {
     Path text = tempDir.resolve("note.txt");
     Files.writeString(text, "hello\nworld\n");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     Tools.TextDiffApplyResult result = tools.applyTextDiff(text.toString(), "world", "rei", "");
 
@@ -2147,7 +2145,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void applyTextDiffDoesNotChangeFileWhenExpectedTextIsMissing() throws Exception {
     Path text = tempDir.resolve("note.txt");
     Files.writeString(text, "hello\nworld\n");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     Tools.TextDiffApplyResult result = tools.applyTextDiff(text.toString(), "missing", "rei", "");
 
@@ -2161,7 +2159,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void applyTextDiffPrintsExecutionMessageEvenWhenTextIsMissing() throws Exception {
     Path text = tempDir.resolve("note.txt");
     Files.writeString(text, "hello\nworld\n");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
 
     java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
     java.io.PrintStream originalOut = System.out;
@@ -2181,7 +2179,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void editInvalidatesFileSummary() throws Exception {
     Path text = tempDir.resolve("note.txt");
     Files.writeString(text, "hello\nworld\n");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
     tools.fileSummaryCache().save(new FileSummary(text.toString(), "v1", "summary", null));
 
     tools.applyTextDiff(text.toString(), "world", "rei", "");
@@ -2194,7 +2192,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void writeInvalidatesFileSummary() throws Exception {
     Path text = tempDir.resolve("note.txt");
     Files.writeString(text, "hello\n");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
     tools.fileSummaryCache().save(new FileSummary(text.toString(), "v1", "summary", null));
 
     tools.writeTextFile(text.toString(), "new content", false, "");
@@ -2207,7 +2205,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void deleteInvalidatesFileSummary() throws Exception {
     Path text = tempDir.resolve("note.txt");
     Files.writeString(text, "hello\n");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
     tools.fileSummaryCache().save(new FileSummary(text.toString(), "v1", "summary", null));
 
     tools.deleteFile(text.toString());
@@ -2220,7 +2218,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void failedEditDoesNotInvalidateFileSummary() throws Exception {
     Path text = tempDir.resolve("note.txt");
     Files.writeString(text, "hello\nworld\n");
-    Tools tools = new Tools();
+    Tools tools = new Tools(testProject());
     tools.fileSummaryCache().save(new FileSummary(text.toString(), "v1", "summary", null));
 
     tools.applyTextDiff(text.toString(), "missing", "rei", "");
@@ -2341,10 +2339,17 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(cache.isEmpty());
   }
 
+  /** Give direct file-operation fixtures an explicit Project instead of outside absolute paths. */
+  private ProjectService testProject() {
+    var project = org.mockito.Mockito.mock(ProjectService.class);
+    org.mockito.Mockito.when(project.currentProject()).thenReturn(tempDir);
+    return project;
+  }
+
   private Tools toolsWithSearchState(SearchResultCache cache, RelatedFileGraph graph) {
     var shell = new SystemShellService();
     return new Tools(
-        null,
+        testProject(),
         shell,
         new BackgroundProcessManager(shell),
         Clock.systemDefaultZone(),

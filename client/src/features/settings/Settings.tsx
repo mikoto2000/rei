@@ -72,7 +72,10 @@ export function Settings(props: Props) {
       <div className="settings-grid">
         <section className="card">
           <h2>Rei Servers</h2>
-          <p>HTTP / HTTPS でサーバーへ接続できます。</p>
+          <p>
+            リモートサーバーには HTTPS で接続してください。HTTP は 127.0.0.1 /
+            [::1] のみ使用できます。
+          </p>
           {props.servers.map((s) => (
             <div className="server-card" key={s.id}>
               <div>

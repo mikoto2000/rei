@@ -28,6 +28,9 @@ public class SensitiveInfoDetector implements dev.mikoto2000.rei.secretary.Secre
   /** BAREキー。 */
   private static final Pattern BARE_KEY = Pattern.compile("\\bsk-[A-Za-z0-9_-]{16,}\\b");
 
+  private static final Pattern PROVIDER_TOKEN =
+      Pattern.compile(dev.mikoto2000.rei.toolcontract.CredentialMask.PROVIDER_TOKEN_REGEX);
+
   /** 秘密鍵などのPEM情報を検出する規則。 */
   private static final Pattern PEM =
       Pattern.compile("-----BEGIN (?:CERTIFICATE|[A-Z ]*PRIVATE KEY)-----");
@@ -37,6 +40,7 @@ public class SensitiveInfoDetector implements dev.mikoto2000.rei.secretary.Secre
     String value = content == null ? "" : content;
     if (SECRET_KEY.matcher(value).find()
         || BARE_KEY.matcher(value).find()
+        || PROVIDER_TOKEN.matcher(value).find()
         || PEM.matcher(value).find())
       throw new IllegalArgumentException("Sensitive external evidence requires manual handling");
     value = EMAIL.matcher(value).replaceAll("[email]");
@@ -62,7 +66,9 @@ public class SensitiveInfoDetector implements dev.mikoto2000.rei.secretary.Secre
     if (PHONE_INTL.matcher(value).find()) {
       matched.add("PHONE_INTL");
     }
-    if (SECRET_KEY.matcher(value).find() || BARE_KEY.matcher(value).find()) {
+    if (SECRET_KEY.matcher(value).find()
+        || BARE_KEY.matcher(value).find()
+        || PROVIDER_TOKEN.matcher(value).find()) {
       matched.add("SECRET_KEY");
     }
     if (PEM.matcher(value).find()) {

@@ -395,7 +395,10 @@ public class MemoryCommand {
         }
         for (Memory candidate : candidates) {
           if (sensitiveInfoDetector.containsSensitiveInfo(candidate.content())) {
-            out().println("[warn] 機微情報を含むためスキップ: " + candidate.content());
+            out()
+                .println(
+                    "[warn] 機微情報を含むためスキップ: "
+                        + sensitiveInfoDetector.detectPatterns(candidate.content()));
             skipped++;
             continue;
           }

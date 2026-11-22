@@ -2,11 +2,11 @@
 
 ## 信頼境界
 
-このMVPは本人専用・認証なしである。127.0.0.1は利用者認証ではない。同じPCのプロセスはMCPを呼び出せる。Host/Originも悪意あるローカルプロセスを認証しない。利用PC・tunnel-client・OpenAI側のアカウントと権限を管理者が信頼できることが前提。
+このMVPは本人専用で、専用 Bearer トークンを必須とする。127.0.0.1 や Host/Origin 検証だけを利用者認証には使わない。未認証のローカルプロセスは401で拒否する。トークンを読める同権限プロセスからの完全隔離は保証しない。利用PC・tunnel-client・OpenAI側のアカウントと権限を管理者が信頼できることが前提。
 
 専用Tomcat connectorをIPv4 127.0.0.1に固定する。接続元・接続先・接続先ポート・Hostを検証する。Hostは127.0.0.1:<専用ポート>のみ。Originは欠落または同じhttp originのみ。null/外部origin/重複Host/Origin/Forwarded/X-Forwarded-*を拒否する。ただしSecure MCP Tunnelが送るX-Forwarded-Client-Certだけは認証情報として信用せず、SDKや後続フィルターへ渡す前に破棄する。このヘッダーによって接続元・Host・Originの検査を省略しない。DNS rebindingと通常WebポートへのMCP要求を拒否し、MCP専用ポートには通常APIを公開しない。servlet decoded pathも検証する。
 
-tunnel-clientは上記URLへ直接接続する。Originを転送する構成なら許可originと一致することを実接続で確認する。Origin検証を解除して解決しない。
+tunnel-clientは上記URLへ直接接続し、専用トークンの Authorization ヘッダーを付与する。Originを転送する構成なら許可originと一致することを実接続で確認する。Origin検証を解除して解決しない。
 
 ## 認可
 
@@ -28,5 +28,5 @@ MCPのfile-openはcaptured Project rootに束縛する。設定されたRei data
 
 取消受付・Run最終状態・実プロセスcleanup・rollbackを区別する。既存RunServiceで状態競合を解決する。cleanup_status=UNKNOWN、rollback_status=NOT_GUARANTEEDであり、停止・巻き戻し完了を保証しない。承認は既存人間向け手段で行う。承認だけでRunが再開するとは限らない。
 
-OAuth2、トンネル導入、ChatGPT登録は実装範囲外。公開ネットワーク向けにこの認証なし構成を転用しない。
+OAuth2、トンネル導入、ChatGPT登録は実装範囲外。このローカル専用構成を公開ネットワーク向けに転用しない。
 

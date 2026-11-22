@@ -192,6 +192,12 @@ impl ServerProfile {
         {
             return Err(AppError::InvalidServerUrl);
         }
+        if url.scheme() == "http"
+            && !matches!(url.host(), Some(url::Host::Ipv4(ip)) if ip.is_loopback())
+            && !matches!(url.host(), Some(url::Host::Ipv6(ip)) if ip.is_loopback())
+        {
+            return Err(AppError::InvalidServerUrl);
+        }
         let id = uuid::Uuid::new_v4().to_string();
         Ok(Self {
             credential_ref: id.clone(),

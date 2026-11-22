@@ -3,8 +3,9 @@
 起動引数 `--fullauto`（または `--fullauto=true`）は共通承認設定です。Chat / SubAgent の Tool 承認待ちと音声入力由来の追加承認を自動承認します。Computer Use 内部の `CONFIRM_REQUIRED` 操作にも適用します。省略時と `--fullauto=false` は従来の承認設定を使用します。YAML / 環境変数では有効化できません。
 設定上の `DENY`、READ_ONLY / CONVERSATION / MCP の実行制限、SubAgent allowlist、Computer Use の `PROHIBITED` は維持します。共通 Policy 有効時の既定 `denied: [DESTRUCTIVE]` も維持するため、全能力に分類される `runCommand` / `computerUse` などはこの禁止設定により拒否されます。外部バックエンド独自の資料・送信条件やモデル取得などの明示操作条件は変更しません。
 
-`rei.tool-permission.enabled=true` で、Chat と SubAgent の Tool callback 実行直前に共通 Policy を適用します。
-既定では無効で、既存 SubAgent allowlist / Computer Use SafetyPolicy / 外部 review の明示要求条件は引き続き適用されます。
+共通 Policy は既定で有効です（`rei.tool-permission.enabled=true`）。Chat と SubAgent の Tool callback 実行直前に適用します。
+既定の自動承認は READ のみで、書き込みやネットワーク操作は承認が必要です。DESTRUCTIVE は拒否され、全能力に分類される `runCommand` なども拒否されます。必要な能力を管理者が明示的に設定してください。
+互換動作を明示選択する場合に限り `REI_TOOL_PERMISSION_ENABLED=false` または `rei.tool-permission.enabled=false` を指定できます。通常のツール操作が自動承認されるため、信頼できない入力を扱う環境では推奨しません。既存 SubAgent allowlist / Computer Use SafetyPolicy / 外部 review の明示要求条件、HTTP 書き込みの確認、音声入力と実行モードの追加制限は引き続き適用されます。
 
 ```yaml
 rei:
