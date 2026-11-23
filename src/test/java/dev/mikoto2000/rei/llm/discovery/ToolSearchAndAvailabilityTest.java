@@ -64,10 +64,9 @@ class ToolSearchAndAvailabilityTest {
   void unreadableLedgerFailsClosedWithoutAdvancingVersionOrLru() {
     var state = new RunToolAvailability(catalog(), 4, 24);
     var before = state.saved();
-    state.setRetention(
-        () -> {
-          throw new IllegalStateException("storage unavailable");
-        });
+    state.setRetention(() -> {
+      throw new IllegalStateException("storage unavailable");
+    });
     assertThat(state.add(Set.of("other")).status()).isEqualTo("retention_unavailable");
     assertThat(state.saved()).isEqualTo(before);
   }

@@ -34,7 +34,9 @@ class ConversationTurnStoreTest {
 
   /** 会話履歴と受付記録の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @ParameterizedTest
-  @EnumSource(value = ConversationTurnStore.Status.class, names = {"CANCELLED", "FAILED"})
+  @EnumSource(
+      value = ConversationTurnStore.Status.class,
+      names = {"CANCELLED", "FAILED"})
   void archivedAttemptSurvivesRestartAndUnrelatedCompletedTurnsWithoutCrossConversationLeak(
       ConversationTurnStore.Status status) {
     var store = new ConversationTurnStore(temp);
@@ -57,7 +59,9 @@ class ConversationTurnStoreTest {
   }
 
   @ParameterizedTest
-  @EnumSource(value = ConversationTurnStore.Status.class, names = {"RUNNING", "COMPLETED"})
+  @EnumSource(
+      value = ConversationTurnStore.Status.class,
+      names = {"RUNNING", "COMPLETED"})
   void runningAndCompletedTurnsDoNotAddArchiveGuidance(ConversationTurnStore.Status status) {
     var store = new ConversationTurnStore(temp);
     var owner = new AgentRunContext("live", "chat", temp);

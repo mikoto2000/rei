@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.llm;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -14,10 +14,12 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 class LlmProtocolSelectionTest {
   @Test
   void privateSecretaryCannotSilentlyIgnoreAnExplicitResponsesSelection() {
-    var source = new MapConfigurationPropertySource(Map.of(
-        "rei.llm.features.secretary-reply.api", "responses",
-        "rei.llm.features.secretary-reply.base-url", "https://private.invalid",
-        "rei.llm.features.secretary-reply.model", "private-model"));
+    var source =
+        new MapConfigurationPropertySource(
+            Map.of(
+                "rei.llm.features.secretary-reply.api", "responses",
+                "rei.llm.features.secretary-reply.base-url", "https://private.invalid",
+                "rei.llm.features.secretary-reply.model", "private-model"));
     var properties = new Binder(source).bindOrCreate("rei.llm", LlmProperties.class);
     var provider = new LlmModelProvider(Mockito.mock(ChatModel.class), properties);
     assertThat(provider.privateSecretaryDescriptor()).isNull();
@@ -26,9 +28,11 @@ class LlmProtocolSelectionTest {
   @Test
   void legacyCustomEndpointCannotFallBackToUnverifiedResponsesDefault() {
     var defaults = Mockito.mock(ChatModel.class);
-    Mockito.when(defaults.getOptions()).thenReturn(
-        org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
-            .model("responses-model").build());
+    Mockito.when(defaults.getOptions())
+        .thenReturn(
+            org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+                .model("responses-model")
+                .build());
     var properties = new LlmProperties();
     var server = new LlmProperties.Server();
     server.setBaseUrl("https://legacy.invalid");
@@ -37,7 +41,8 @@ class LlmProtocolSelectionTest {
     properties.setFeature("chat", server);
     var provider = new LlmModelProvider(defaults, properties);
     assertThatThrownBy(() -> provider.chatModel("chat"))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("Responses");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Responses");
   }
 
   @Test
@@ -63,8 +68,8 @@ class LlmProtocolSelectionTest {
 
   @Test
   void explicitResponsesIsUnavailableUntilDurableAgentIntegrationIsVerified() {
-    var source = new MapConfigurationPropertySource(
-        Map.of("rei.llm.features.chat.api", "responses"));
+    var source =
+        new MapConfigurationPropertySource(Map.of("rei.llm.features.chat.api", "responses"));
     var properties = new Binder(source).bindOrCreate("rei.llm", LlmProperties.class);
     var provider = new LlmModelProvider(Mockito.mock(ChatModel.class), properties);
 

@@ -70,14 +70,13 @@ public class ToolDiscoveryStore {
         .params(owner.runId(), owner.projectId(), root(owner), owner.conversationId())
         .query(String.class)
         .optional()
-        .map(
-            s -> {
-              try {
-                return json.readValue(s, Saved.class);
-              } catch (java.io.IOException invalid) {
-                throw new IllegalStateException("Invalid saved tool availability", invalid);
-              }
-            });
+        .map(s -> {
+          try {
+            return json.readValue(s, Saved.class);
+          } catch (java.io.IOException invalid) {
+            throw new IllegalStateException("Invalid saved tool availability", invalid);
+          }
+        });
   }
 
   public void save(AgentRunContext owner, Saved saved) {

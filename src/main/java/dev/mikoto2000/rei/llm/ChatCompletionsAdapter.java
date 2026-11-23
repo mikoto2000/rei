@@ -25,13 +25,14 @@ final class ChatCompletionsAdapter implements LlmProtocolAdapter {
     return options.maxRetries(0).build();
   }
 
-  OpenAiChatOptions.Builder withDefaults(
-      ResolvedLlmEndpoint endpoint, ChatOptions defaults) {
+  OpenAiChatOptions.Builder withDefaults(ResolvedLlmEndpoint endpoint, ChatOptions defaults) {
     var options = options(endpoint).mutate();
     if (defaults == null) return options;
     options = OpenAiChatOptions.builder().combineWith(defaults.mutate()).combineWith(options);
     if (defaults instanceof OpenAiChatOptions openAi && openAi.getMaxCompletionTokens() != null)
-      options.maxCompletionTokens(null).maxTokens(null)
+      options
+          .maxCompletionTokens(null)
+          .maxTokens(null)
           .maxCompletionTokens(endpoint.maxOutputTokens());
     return options;
   }

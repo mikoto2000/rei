@@ -62,7 +62,8 @@ class FailedTurnHistoryTest {
     }
     var saved = turns.read("chat");
     var summaries = new ConversationSummaryRepository(root);
-    var oldSummary = new ConversationSummary("stale summary: archived fixture request", 100, Instant.EPOCH);
+    var oldSummary =
+        new ConversationSummary("stale summary: archived fixture request", 100, Instant.EPOCH);
     String base = "chat" + (useLogs ? "/log" : "");
     summaries.save(base, oldSummary);
     summaries.save(
@@ -75,10 +76,16 @@ class FailedTurnHistoryTest {
     var request = request(current, "current fixture request");
     var projected = advisor.before(request, null).prompt();
     assertThat(projected.getContents())
-        .contains("earlier completed question", "earlier completed answer",
-            "later completed question", "later completed answer", "current fixture request")
-        .doesNotContain("archived fixture request", "partial failed answer", "failed task observations");
-    assertThat(projected.getInstructions().getLast().getText()).isEqualTo("current fixture request");
+        .contains(
+            "earlier completed question",
+            "earlier completed answer",
+            "later completed question",
+            "later completed answer",
+            "current fixture request")
+        .doesNotContain(
+            "archived fixture request", "partial failed answer", "failed task observations");
+    assertThat(projected.getInstructions().getLast().getText())
+        .isEqualTo("current fixture request");
     assertThat(projected.getInstructions())
         .extracting(m -> m.getMetadata().get(CancelledTaskHistory.GENERATION))
         .contains("failed");
@@ -86,12 +93,19 @@ class FailedTurnHistoryTest {
     assertThat(restored.promptHistory("chat").hides("failed")).isTrue();
     assertThat(restored.promptHistory("other").runIds()).isEmpty();
 
-    var assembled = assembler(new ContextCompressionProperties(), summaries,
-        (previous, messages, budget, raw) -> "compressed history")
-        .assemble(projected, "chat", "current", () -> {});
+    var assembled =
+        assembler(
+                new ContextCompressionProperties(),
+                summaries,
+                (previous, messages, budget, raw) -> "compressed history")
+            .assemble(projected, "chat", "current", () -> {});
     assertThat(assembled.getContents())
-        .contains("earlier completed question", "earlier completed answer",
-            "later completed question", "later completed answer", "current fixture request")
+        .contains(
+            "earlier completed question",
+            "earlier completed answer",
+            "later completed question",
+            "later completed answer",
+            "current fixture request")
         .doesNotContain("stale summary", "archived fixture request", "partial failed answer");
     assertThat(summaries.read(base)).isEqualTo(oldSummary);
 
@@ -139,15 +153,19 @@ class FailedTurnHistoryTest {
     var summaries = new ConversationSummaryRepository(root);
     String base = "chat" + (useLogs ? "/log" : "");
     String legacyKey = base + "/after-cancel/cancelled";
-    var contaminated = new ConversationSummary(
-        "legacy contaminated summary: archived failed fixture", 100, Instant.EPOCH);
+    var contaminated =
+        new ConversationSummary(
+            "legacy contaminated summary: archived failed fixture", 100, Instant.EPOCH);
     summaries.save(legacyKey, contaminated);
     var advisor = advisor(new ConversationTurnStore(root), summaries, useLogs);
     var live = request(current, "current fixture request");
     var projected = advisor.before(live, null).prompt();
     assertThat(projected.getContents())
-        .contains(oldCompletedQuestion, oldCompletedAnswer,
-            "recent completed question", "recent completed answer")
+        .contains(
+            oldCompletedQuestion,
+            oldCompletedAnswer,
+            "recent completed question",
+            "recent completed answer")
         .doesNotContain("archived failed fixture", "cancelled fixture request");
 
     var properties = new ContextCompressionProperties();
@@ -156,16 +174,26 @@ class FailedTurnHistoryTest {
     properties.setRecentTokens(40);
     properties.setSummaryTokens(100);
     var calls = new AtomicInteger();
-    var assembled = assembler(properties, summaries, (previous, messages, budget, raw) -> {
-      calls.incrementAndGet();
-      assertThat(previous).doesNotContain("legacy contaminated", "archived failed");
-      assertThat(messages).allSatisfy(m -> assertThat(m.getText())
-          .doesNotContain("archived failed fixture", "cancelled fixture request"));
-      return "safe compact completed context";
-    }).assemble(projected, "chat", "current", () -> {});
+    var assembled =
+        assembler(
+                properties,
+                summaries,
+                (previous, messages, budget, raw) -> {
+                  calls.incrementAndGet();
+                  assertThat(previous).doesNotContain("legacy contaminated", "archived failed");
+                  assertThat(messages)
+                      .allSatisfy(m ->
+                          assertThat(m.getText())
+                              .doesNotContain(
+                                  "archived failed fixture", "cancelled fixture request"));
+                  return "safe compact completed context";
+                })
+            .assemble(projected, "chat", "current", () -> {});
     assertThat(calls.get()).isEqualTo(1);
-    assertThat(assembled.getContents()).contains("safe compact completed context", "current fixture request")
-        .doesNotContain("legacy contaminated", "archived failed fixture", "cancelled fixture request");
+    assertThat(assembled.getContents())
+        .contains("safe compact completed context", "current fixture request")
+        .doesNotContain(
+            "legacy contaminated", "archived failed fixture", "cancelled fixture request");
     String freshKey = CancelledTaskHistory.summaryKey(base, "cancelled");
     var fresh = summaries.read(freshKey);
     assertThat(fresh.summary()).isEqualTo("safe compact completed context");
@@ -174,12 +202,21 @@ class FailedTurnHistoryTest {
 
     // A subsequent projection must read the same fresh namespace that assembly wrote.
     var next = advisor.before(live, null).prompt();
-    var nextAssembled = assembler(new ContextCompressionProperties(), summaries,
-        (previous, messages, budget, raw) -> { throw new AssertionError("No further compression needed"); })
-        .assemble(next, "chat", "current", () -> {});
+    var nextAssembled =
+        assembler(
+                new ContextCompressionProperties(),
+                summaries,
+                (previous, messages, budget, raw) -> {
+                  throw new AssertionError("No further compression needed");
+                })
+            .assemble(next, "chat", "current", () -> {});
     assertThat(nextAssembled.getContents())
-        .contains("safe compact completed context", "recent completed question", "current fixture request")
-        .doesNotContain("legacy contaminated", "archived failed fixture", "cancelled fixture request");
+        .contains(
+            "safe compact completed context",
+            "recent completed question",
+            "current fixture request")
+        .doesNotContain(
+            "legacy contaminated", "archived failed fixture", "cancelled fixture request");
     assertThat(turns.read("chat")).containsExactlyElementsOf(savedTurns);
     assertThat(summaries.read(legacyKey)).isEqualTo(contaminated);
   }
@@ -199,15 +236,21 @@ class FailedTurnHistoryTest {
     var later = owner("later");
     var current = owner("current");
     turns.start(earlier, "earlier completed fixture question", Instant.EPOCH);
-    turns.finish(earlier, ConversationTurnStore.Status.COMPLETED, "earlier completed fixture answer");
+    turns.finish(
+        earlier, ConversationTurnStore.Status.COMPLETED, "earlier completed fixture answer");
     append(1, "user", "earlier completed fixture question");
     append(1, "assistant", "earlier completed fixture answer");
     turns.start(archived, "archived fixture request", Instant.EPOCH.plusSeconds(2));
     append(3, "user", "archived fixture request");
     String notificationText = "independent reminder fixture";
-    var notification = logsAt(4).appendNotification(
-        "chat", "notice-fixture", notificationText, Instant.EPOCH.plusSeconds(4),
-        Map.of("fixture", "true"));
+    var notification =
+        logsAt(4)
+            .appendNotification(
+                "chat",
+                "notice-fixture",
+                notificationText,
+                Instant.EPOCH.plusSeconds(4),
+                Map.of("fixture", "true"));
     turns.appendAssistantNotification(notification);
     append(5, "user", "archived fixture intervention");
     append(6, "assistant", "archived fixture partial answer");
@@ -226,7 +269,8 @@ class FailedTurnHistoryTest {
     assertThat(policy).isEqualTo(ConversationTurnStore.promptHistoryFor(savedTurns));
     assertThat(policy.hides("archived")).isTrue();
     assertThat(policy.generation()).isEqualTo("archived");
-    assertThat(policy.attempts()).extracting(CancelledTaskHistory.Attempt::runId)
+    assertThat(policy.attempts())
+        .extracting(CancelledTaskHistory.Attempt::runId)
         .doesNotContain("behavior:notice-fixture");
     assertThat(policy.indexedTimestampFilter().test(Instant.EPOCH.plusSeconds(5))).isTrue();
     assertThat(policy.indexedTimestampFilter().test(Instant.EPOCH.plusSeconds(6))).isTrue();
@@ -237,22 +281,36 @@ class FailedTurnHistoryTest {
     for (boolean useLogs : new boolean[] {false, true}) {
       var projected = advisor(restored, summaries, useLogs).before(live, null).prompt();
       assertThat(projected.getContents())
-          .contains("earlier completed fixture question", "earlier completed fixture answer",
-              "later completed fixture question", "later completed fixture answer", notificationText)
-          .doesNotContain("archived fixture request", "archived fixture intervention",
+          .contains(
+              "earlier completed fixture question",
+              "earlier completed fixture answer",
+              "later completed fixture question",
+              "later completed fixture answer",
+              notificationText)
+          .doesNotContain(
+              "archived fixture request",
+              "archived fixture intervention",
               "archived fixture partial answer");
-      assertThat(projected.getInstructions()).filteredOn(m -> notificationText.equals(m.getText()))
-          .singleElement().satisfies(m -> assertThat(m.getMetadata())
-              .containsEntry("source", ConversationLogStore.BEHAVIOR_NOTIFICATION)
-              .containsEntry("sourceId", "notice-fixture"));
-      assertThat(projected.getInstructions()).filteredOn(m -> m instanceof UserMessage
-          && "current fixture request".equals(m.getText())).hasSize(1);
-      assertThat(projected.getInstructions().getLast().getText()).isEqualTo("current fixture request");
+      assertThat(projected.getInstructions())
+          .filteredOn(m -> notificationText.equals(m.getText()))
+          .singleElement()
+          .satisfies(m ->
+              assertThat(m.getMetadata())
+                  .containsEntry("source", ConversationLogStore.BEHAVIOR_NOTIFICATION)
+                  .containsEntry("sourceId", "notice-fixture"));
+      assertThat(projected.getInstructions())
+          .filteredOn(
+              m -> m instanceof UserMessage && "current fixture request".equals(m.getText()))
+          .hasSize(1);
+      assertThat(projected.getInstructions().getLast().getText())
+          .isEqualTo("current fixture request");
     }
     assertThat(restored.read("chat")).containsExactlyElementsOf(savedTurns);
     assertThat(logsAt(12).readConversation("chat")).containsExactlyElementsOf(savedLogs);
-    assertThat(savedLogs).extracting(e -> e.content())
-        .contains(notificationText, "archived fixture intervention", "archived fixture partial answer");
+    assertThat(savedLogs)
+        .extracting(e -> e.content())
+        .contains(
+            notificationText, "archived fixture intervention", "archived fixture partial answer");
   }
 
   @ParameterizedTest
@@ -270,9 +328,14 @@ class FailedTurnHistoryTest {
     String sharedBody = "independent notification fixture body";
     turns.start(failed, "archived parent fixture request", Instant.EPOCH);
     append(1, "user", "archived parent fixture request");
-    var notification = logsAt(2).appendNotification(
-        "chat", "matching-fixture", sharedBody, Instant.EPOCH.plusSeconds(2),
-        Map.of("fixture", "true"));
+    var notification =
+        logsAt(2)
+            .appendNotification(
+                "chat",
+                "matching-fixture",
+                sharedBody,
+                Instant.EPOCH.plusSeconds(2),
+                Map.of("fixture", "true"));
     turns.appendAssistantNotification(notification);
     append(3, "assistant", sharedBody);
     turns.finish(failed, ConversationTurnStore.Status.FAILED, sharedBody);
@@ -283,23 +346,29 @@ class FailedTurnHistoryTest {
     assertThat(savedLogs).filteredOn(e -> sharedBody.equals(e.content())).hasSize(2);
     var summaries = new ConversationSummaryRepository(root);
     String summaryKey = ConversationSummaryRepository.runKey("chat", "failed");
-    var archivedSummary = new ConversationSummary(
-        "archived hidden observations", 1, Instant.EPOCH);
+    var archivedSummary = new ConversationSummary("archived hidden observations", 1, Instant.EPOCH);
     summaries.save(summaryKey, archivedSummary);
 
     var restored = store(sqlite);
     for (boolean useLogs : new boolean[] {false, true}) {
-      var projected = advisor(restored, summaries, useLogs)
-          .before(request(current, "current fixture request"), null).prompt();
+      var projected =
+          advisor(restored, summaries, useLogs)
+              .before(request(current, "current fixture request"), null)
+              .prompt();
       assertThat(projected.getContents())
           .contains(sharedBody, "current fixture request")
           .doesNotContain("archived parent fixture request", "archived hidden observations");
-      assertThat(projected.getInstructions()).filteredOn(m -> sharedBody.equals(m.getText()))
-          .singleElement().satisfies(m -> assertThat(m.getMetadata())
-              .containsEntry("source", ConversationLogStore.BEHAVIOR_NOTIFICATION)
-              .containsEntry("sourceId", "matching-fixture"));
-      assertThat(projected.getInstructions()).filteredOn(m -> m instanceof UserMessage
-          && "current fixture request".equals(m.getText())).hasSize(1);
+      assertThat(projected.getInstructions())
+          .filteredOn(m -> sharedBody.equals(m.getText()))
+          .singleElement()
+          .satisfies(m ->
+              assertThat(m.getMetadata())
+                  .containsEntry("source", ConversationLogStore.BEHAVIOR_NOTIFICATION)
+                  .containsEntry("sourceId", "matching-fixture"));
+      assertThat(projected.getInstructions())
+          .filteredOn(
+              m -> m instanceof UserMessage && "current fixture request".equals(m.getText()))
+          .hasSize(1);
     }
     assertThat(restored.read("chat")).containsExactlyElementsOf(savedTurns);
     assertThat(logsAt(6).readConversation("chat")).containsExactlyElementsOf(savedLogs);
@@ -317,23 +386,30 @@ class FailedTurnHistoryTest {
   private ChatClientRequest request(AgentRunContext current, String input) {
     return ChatClientRequest.builder()
         .prompt(new Prompt(new UserMessage(input), OpenAiChatOptions.builder().build()))
-        .context(Map.of(MemoryAdvisor.CONVERSATION_ID, "chat", AgentRunContext.class.getName(), current))
+        .context(
+            Map.of(MemoryAdvisor.CONVERSATION_ID, "chat", AgentRunContext.class.getName(), current))
         .build();
   }
 
   private ContextHistoryAdvisor advisor(
       ConversationTurnStore turns, ConversationSummaryRepository summaries, boolean useLogs) {
-    return new ContextHistoryAdvisor(turns, WindowedConversationMemory.builder().build(),
-        summaries, useLogs ? logsAt(9) : null);
+    return new ContextHistoryAdvisor(
+        turns, WindowedConversationMemory.builder().build(), summaries, useLogs ? logsAt(9) : null);
   }
 
   private ContextAssembler assembler(
-      ContextCompressionProperties properties, ConversationSummaryRepository summaries,
+      ContextCompressionProperties properties,
+      ConversationSummaryRepository summaries,
       ConversationCompressor compressor) {
     var tokens = TokenEstimator.conservative();
-    return new ContextAssembler(properties, tokens, summaries,
+    return new ContextAssembler(
+        properties,
+        tokens,
+        summaries,
         new ToolResultCompressor(new RawToolResultStore(root), tokens, 100, 70),
-        compressor, null, null);
+        compressor,
+        null,
+        null);
   }
 
   private void append(long seconds, String speaker, String text) {
@@ -341,7 +417,8 @@ class FailedTurnHistoryTest {
   }
 
   private ConversationLogStore logsAt(long seconds) {
-    return new ConversationLogStore(root.resolve("logs"),
+    return new ConversationLogStore(
+        root.resolve("logs"),
         Clock.fixed(Instant.EPOCH.plusSeconds(seconds), ZoneOffset.UTC),
         new com.fasterxml.jackson.databind.ObjectMapper()
             .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));

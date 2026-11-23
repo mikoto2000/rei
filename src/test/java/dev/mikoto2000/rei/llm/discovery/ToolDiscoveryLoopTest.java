@@ -44,11 +44,10 @@ class ToolDiscoveryLoopTest {
         new Prompt(
             initial.getInstructions(),
             ((OpenAiChatOptions) initial.getOptions()).mutate().toolContext(Map.of()).build());
-    assertThatThrownBy(
-            () ->
-                new StagnationChatModel(mock(ChatModel.class))
-                    .withToolDiscovery(disabled)
-                    .call(unowned))
+    assertThatThrownBy(() ->
+            new StagnationChatModel(mock(ChatModel.class))
+                .withToolDiscovery(disabled)
+                .call(unowned))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("184");
   }
@@ -97,28 +96,26 @@ class ToolDiscoveryLoopTest {
     var turn = new AtomicInteger();
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              Prompt p = invocation.getArgument(0);
-              seen.add(p);
-              if (turn.getAndIncrement() == 0)
-                return Flux.just(
-                    new ChatResponse(
-                        List.of(
-                            new Generation(
-                                AssistantMessage.builder()
-                                    .content("")
-                                    .toolCalls(
-                                        List.of(
-                                            new AssistantMessage.ToolCall(
-                                                "find",
-                                                "function",
-                                                "searchTools",
-                                                "{\"query\":\"googleCalendarListEventsForDate\",\"maxResults\":1}")))
-                                    .build()))));
-              return Flux.just(
-                  new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
-            });
+        .thenAnswer(invocation -> {
+          Prompt p = invocation.getArgument(0);
+          seen.add(p);
+          if (turn.getAndIncrement() == 0)
+            return Flux.just(
+                new ChatResponse(
+                    List.of(
+                        new Generation(
+                            AssistantMessage.builder()
+                                .content("")
+                                .toolCalls(
+                                    List.of(
+                                        new AssistantMessage.ToolCall(
+                                            "find",
+                                            "function",
+                                            "searchTools",
+                                            "{\"query\":\"googleCalendarListEventsForDate\",\"maxResults\":1}")))
+                                .build()))));
+          return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
+        });
     new StagnationChatModel(model)
         .withToolDiscovery(discovery()).stream(prompt(execution("run"))).blockLast();
     assertThat(seen).hasSize(2);
@@ -136,33 +133,31 @@ class ToolDiscoveryLoopTest {
     var turn = new AtomicInteger();
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class)))
-        .thenAnswer(
-            invocation -> {
-              Prompt p = invocation.getArgument(0);
-              seen.add(p);
-              if (turn.getAndIncrement() == 0)
-                return Flux.just(
-                    new ChatResponse(
-                        List.of(
-                            new Generation(
-                                AssistantMessage.builder()
-                                    .content("")
-                                    .toolCalls(
-                                        List.of(
-                                            new AssistantMessage.ToolCall(
-                                                "find",
-                                                "function",
-                                                "searchTools",
-                                                "{\"query\":\"googleCalendarListEventsForDate\"}"),
-                                            new AssistantMessage.ToolCall(
-                                                "bad",
-                                                "function",
-                                                "googleCalendarListEventsForDate",
-                                                "{}")))
-                                    .build()))));
-              return Flux.just(
-                  new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
-            });
+        .thenAnswer(invocation -> {
+          Prompt p = invocation.getArgument(0);
+          seen.add(p);
+          if (turn.getAndIncrement() == 0)
+            return Flux.just(
+                new ChatResponse(
+                    List.of(
+                        new Generation(
+                            AssistantMessage.builder()
+                                .content("")
+                                .toolCalls(
+                                    List.of(
+                                        new AssistantMessage.ToolCall(
+                                            "find",
+                                            "function",
+                                            "searchTools",
+                                            "{\"query\":\"googleCalendarListEventsForDate\"}"),
+                                        new AssistantMessage.ToolCall(
+                                            "bad",
+                                            "function",
+                                            "googleCalendarListEventsForDate",
+                                            "{}")))
+                                .build()))));
+          return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
+        });
     new StagnationChatModel(model)
         .withToolDiscovery(discovery()).stream(prompt(execution("run"))).blockLast();
     assertThat(seen).hasSize(2);

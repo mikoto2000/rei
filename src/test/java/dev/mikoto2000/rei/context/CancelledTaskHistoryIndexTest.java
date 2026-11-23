@@ -43,11 +43,15 @@ class CancelledTaskHistoryIndexTest {
 
   @Test
   void standaloneFailedAttemptIsArchivedWithoutACancellation() {
-    var policy = CancelledTaskHistory.from(List.of(
-        new CancelledTaskHistory.Attempt("before", "COMPLETED", Instant.EPOCH),
-        new CancelledTaskHistory.Attempt("failed", "FAILED", Instant.EPOCH.plusSeconds(2)),
-        new CancelledTaskHistory.Attempt("after", "COMPLETED", Instant.EPOCH.plusSeconds(4)),
-        new CancelledTaskHistory.Attempt("current", "RUNNING", Instant.EPOCH.plusSeconds(6))));
+    var policy =
+        CancelledTaskHistory.from(
+            List.of(
+                new CancelledTaskHistory.Attempt("before", "COMPLETED", Instant.EPOCH),
+                new CancelledTaskHistory.Attempt("failed", "FAILED", Instant.EPOCH.plusSeconds(2)),
+                new CancelledTaskHistory.Attempt(
+                    "after", "COMPLETED", Instant.EPOCH.plusSeconds(4)),
+                new CancelledTaskHistory.Attempt(
+                    "current", "RUNNING", Instant.EPOCH.plusSeconds(6))));
     assertThat(policy.runIds()).containsExactly("failed");
     assertThat(policy.generation()).isEqualTo("failed");
     assertThat(policy.laterRunIds()).containsExactlyInAnyOrder("after", "current");
@@ -63,13 +67,20 @@ class CancelledTaskHistoryIndexTest {
 
   @Test
   void lastArchivedAttemptControlsStateButEveryFailureStaysHidden() {
-    var policy = CancelledTaskHistory.from(List.of(
-        new CancelledTaskHistory.Attempt("first-failure", "FAILED", Instant.EPOCH),
-        new CancelledTaskHistory.Attempt("success-between", "COMPLETED", Instant.EPOCH.plusSeconds(2)),
-        new CancelledTaskHistory.Attempt("cancelled", "CANCELLED", Instant.EPOCH.plusSeconds(4)),
-        new CancelledTaskHistory.Attempt("second-failure", "FAILED", Instant.EPOCH.plusSeconds(6)),
-        new CancelledTaskHistory.Attempt("current", "RUNNING", Instant.EPOCH.plusSeconds(8))));
-    assertThat(policy.runIds()).containsExactlyInAnyOrder("first-failure", "cancelled", "second-failure");
+    var policy =
+        CancelledTaskHistory.from(
+            List.of(
+                new CancelledTaskHistory.Attempt("first-failure", "FAILED", Instant.EPOCH),
+                new CancelledTaskHistory.Attempt(
+                    "success-between", "COMPLETED", Instant.EPOCH.plusSeconds(2)),
+                new CancelledTaskHistory.Attempt(
+                    "cancelled", "CANCELLED", Instant.EPOCH.plusSeconds(4)),
+                new CancelledTaskHistory.Attempt(
+                    "second-failure", "FAILED", Instant.EPOCH.plusSeconds(6)),
+                new CancelledTaskHistory.Attempt(
+                    "current", "RUNNING", Instant.EPOCH.plusSeconds(8))));
+    assertThat(policy.runIds())
+        .containsExactlyInAnyOrder("first-failure", "cancelled", "second-failure");
     assertThat(policy.generation()).isEqualTo("second-failure");
     assertThat(policy.laterRunIds()).containsExactly("current");
     assertThat(policy.hides("success-between")).isFalse();
@@ -83,11 +94,16 @@ class CancelledTaskHistoryIndexTest {
 
   @Test
   void cancelledGenerationStillExcludesEarlierNonAdjacentFailure() {
-    var policy = CancelledTaskHistory.from(List.of(
-        new CancelledTaskHistory.Attempt("failed", "FAILED", Instant.EPOCH),
-        new CancelledTaskHistory.Attempt("completed", "COMPLETED", Instant.EPOCH.plusSeconds(2)),
-        new CancelledTaskHistory.Attempt("cancelled", "CANCELLED", Instant.EPOCH.plusSeconds(4)),
-        new CancelledTaskHistory.Attempt("current", "RUNNING", Instant.EPOCH.plusSeconds(6))));
+    var policy =
+        CancelledTaskHistory.from(
+            List.of(
+                new CancelledTaskHistory.Attempt("failed", "FAILED", Instant.EPOCH),
+                new CancelledTaskHistory.Attempt(
+                    "completed", "COMPLETED", Instant.EPOCH.plusSeconds(2)),
+                new CancelledTaskHistory.Attempt(
+                    "cancelled", "CANCELLED", Instant.EPOCH.plusSeconds(4)),
+                new CancelledTaskHistory.Attempt(
+                    "current", "RUNNING", Instant.EPOCH.plusSeconds(6))));
     assertThat(policy.runIds()).containsExactlyInAnyOrder("failed", "cancelled");
     assertThat(policy.generation()).isEqualTo("cancelled");
     assertThat(policy.hides("completed")).isFalse();
@@ -98,5 +114,4 @@ class CancelledTaskHistoryIndexTest {
         .isEqualTo("chat/log/after-archive-v2/cancelled");
     assertThat(CancelledTaskHistory.summaryKey("chat", "")).isEqualTo("chat");
   }
-
 }

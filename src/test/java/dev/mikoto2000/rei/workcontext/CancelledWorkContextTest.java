@@ -12,13 +12,17 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 class CancelledWorkContextTest {
   @ParameterizedTest
-  @EnumSource(value = ConversationTurnStore.Status.class, names = {"FAILED", "CANCELLED"})
+  @EnumSource(
+      value = ConversationTurnStore.Status.class,
+      names = {"FAILED", "CANCELLED"})
   void promptOmitsOldIntentAndRetainsEffectsAndFreshWorkWithoutChangingSavedContext(
       ConversationTurnStore.Status status) {
     var now = Instant.parse("2026-10-26T12:00:00Z");
-    var archived = CancelledTaskHistory.from(List.of(
-        new CancelledTaskHistory.Attempt("old", status.name(), now),
-        new CancelledTaskHistory.Attempt("new", "RUNNING", now.plusSeconds(1))));
+    var archived =
+        CancelledTaskHistory.from(
+            List.of(
+                new CancelledTaskHistory.Attempt("old", status.name(), now),
+                new CancelledTaskHistory.Attempt("new", "RUNNING", now.plusSeconds(1))));
     var saved =
         new WorkContext(
             "project",

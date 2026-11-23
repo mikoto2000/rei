@@ -158,10 +158,9 @@ public class ToolPermissionGuard {
             && parent.requestSource() == child.requestSource()
             && parent.voiceInput() == child.voiceInput()
             && capabilities.apply(tool).stream()
-                .allMatch(
-                    capability ->
-                        capability == ActionCapability.READ
-                            || capability == ActionCapability.NETWORK_READ);
+                .allMatch(capability ->
+                    capability == ActionCapability.READ
+                        || capability == ActionCapability.NETWORK_READ);
     check(tool, input, child, matching ? parent : null);
   }
 

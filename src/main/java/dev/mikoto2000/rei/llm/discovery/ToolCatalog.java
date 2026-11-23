@@ -39,11 +39,10 @@ public final class ToolCatalog {
         throw new IllegalArgumentException("Duplicate tool: " + definition.name());
     }
     var metadata = new TreeMap<String, Entry>();
-    definitions.forEach(
-        e -> {
-          if (metadata.putIfAbsent(e.name(), e) != null)
-            throw new IllegalArgumentException("Duplicate catalog entry: " + e.name());
-        });
+    definitions.forEach(e -> {
+      if (metadata.putIfAbsent(e.name(), e) != null)
+        throw new IllegalArgumentException("Duplicate catalog entry: " + e.name());
+    });
     var declaredSets =
         definitions.stream().map(Entry::set).collect(java.util.stream.Collectors.toSet());
     for (var definition : definitions)

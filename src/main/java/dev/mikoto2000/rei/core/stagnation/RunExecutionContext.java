@@ -1107,11 +1107,10 @@ public class RunExecutionContext {
 
   private static List<ArgumentIssue> redactIssues(List<ArgumentIssue> issues) {
     return issues.stream()
-        .map(
-            issue ->
-                new ArgumentIssue(
-                    CredentialRedactor.redact(issue.path()),
-                    CredentialRedactor.redact(issue.requirement())))
+        .map(issue ->
+            new ArgumentIssue(
+                CredentialRedactor.redact(issue.path()),
+                CredentialRedactor.redact(issue.requirement())))
         .toList();
   }
 
@@ -1419,17 +1418,16 @@ public class RunExecutionContext {
     if (interventions == null) return List.of();
     var onApplied = interventionApplied;
     return interventions.drainEntries().stream()
-        .map(
-            entry -> {
-              setUserRequest(entry.text());
-              onApplied.accept(entry.text());
-              publisher.publish(
-                  factory
-                      .intervention(runId, entry.id(), entry.text(), true)
-                      .withOwnership(runContext));
-              return (org.springframework.ai.chat.messages.Message)
-                  new org.springframework.ai.chat.messages.UserMessage(entry.text());
-            })
+        .map(entry -> {
+          setUserRequest(entry.text());
+          onApplied.accept(entry.text());
+          publisher.publish(
+              factory
+                  .intervention(runId, entry.id(), entry.text(), true)
+                  .withOwnership(runContext));
+          return (org.springframework.ai.chat.messages.Message)
+              new org.springframework.ai.chat.messages.UserMessage(entry.text());
+        })
         .toList();
   }
 
@@ -1668,10 +1666,9 @@ public class RunExecutionContext {
     pending.addAll(observed);
     if (!(resumeReviewPagePending && name.equals("submitReviewWorkItem"))
         && observed.stream()
-            .anyMatch(
-                e ->
-                    e.kind() == ProgressEvent.STATE_CHANGED
-                        || e.kind() == ProgressEvent.SUBGOAL_COMPLETED)) finishResumeBatch();
+            .anyMatch(e ->
+                e.kind() == ProgressEvent.STATE_CHANGED
+                    || e.kind() == ProgressEvent.SUBGOAL_COMPLETED)) finishResumeBatch();
     else if (observed.stream().anyMatch(e -> e.kind() == ProgressEvent.NEW_INFORMATION)) {
       // Useful, verified preparation (e.g. an exact edit baseline/diff) repairs the
       // response protocol without falsely confirming the still-pending work unit.
@@ -1749,11 +1746,10 @@ public class RunExecutionContext {
         evaluator.restoringContext() || "CONTEXT_RESTORATION_FAILED".equals(stagnationReason);
     boolean work =
         pending.stream()
-            .anyMatch(
-                e ->
-                    e.kind() == ProgressEvent.SUBGOAL_COMPLETED
-                        || e.kind() == ProgressEvent.STATE_CHANGED
-                        || e.kind() == ProgressEvent.STEP_CHANGED);
+            .anyMatch(e ->
+                e.kind() == ProgressEvent.SUBGOAL_COMPLETED
+                    || e.kind() == ProgressEvent.STATE_CHANGED
+                    || e.kind() == ProgressEvent.STEP_CHANGED);
     // Preparatory observations do not prove restoration finished. Keep the bounded targets
     // available until work advances; ordinary no-progress iterations still count below.
     if (work) {
@@ -1764,10 +1760,9 @@ public class RunExecutionContext {
     boolean acquisitionProgress = pending.stream().anyMatch(ProgressEvidence::acquisitionProgress);
     boolean known =
         pending.stream()
-            .anyMatch(
-                e ->
-                    e.kind() != ProgressEvent.INFORMATION_UNKNOWN
-                        && e.kind() != ProgressEvent.CONTEXT_RESTORED);
+            .anyMatch(e ->
+                e.kind() != ProgressEvent.INFORMATION_UNKNOWN
+                    && e.kind() != ProgressEvent.CONTEXT_RESTORED);
     boolean unknown = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.INFORMATION_UNKNOWN);
     // 作業状態の変化と情報収集の進展を区別し、読み取りだけで成果が完成したと見なさない。
     if (work) acquisitionOnlyIterations = 0;

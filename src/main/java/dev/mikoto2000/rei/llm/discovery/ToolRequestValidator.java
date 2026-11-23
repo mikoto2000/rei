@@ -18,11 +18,9 @@ public final class ToolRequestValidator {
       throw new IllegalStateException(
           "Tool count " + callbacks.size() + " exceeds endpoint limit " + maximum);
     var names = new HashSet<String>();
-    callbacks.forEach(
-        c -> {
-          if (!names.add(c.getToolDefinition().name()))
-            throw new IllegalStateException(
-                "Duplicate outbound tool: " + c.getToolDefinition().name());
-        });
+    callbacks.forEach(c -> {
+      if (!names.add(c.getToolDefinition().name()))
+        throw new IllegalStateException("Duplicate outbound tool: " + c.getToolDefinition().name());
+    });
   }
 }

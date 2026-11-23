@@ -193,24 +193,23 @@ class ToolDiscoveryStoreTest {
         new java.util.ArrayList<>(
             ((org.springframework.ai.model.tool.ToolCallingChatOptions) initial.getOptions())
                 .getToolCallbacks());
-    callbacks.replaceAll(
-        c ->
-            c.getToolDefinition().name().equals("now")
-                ? new org.springframework.ai.tool.ToolCallback() {
-                  public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
-                    return org.springframework.ai.tool.definition.ToolDefinition.builder()
-                        .name("now")
-                        .description("changed")
-                        .inputSchema(
-                            "{\"type\":\"object\",\"properties\":{\"newField\":{\"type\":\"string\"}}}")
-                        .build();
-                  }
+    callbacks.replaceAll(c ->
+        c.getToolDefinition().name().equals("now")
+            ? new org.springframework.ai.tool.ToolCallback() {
+              public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
+                return org.springframework.ai.tool.definition.ToolDefinition.builder()
+                    .name("now")
+                    .description("changed")
+                    .inputSchema(
+                        "{\"type\":\"object\",\"properties\":{\"newField\":{\"type\":\"string\"}}}")
+                    .build();
+              }
 
-                  public String call(String input) {
-                    throw new AssertionError("Must not execute changed tool");
-                  }
-                }
-                : c);
+              public String call(String input) {
+                throw new AssertionError("Must not execute changed tool");
+              }
+            }
+            : c);
     var changed =
         new org.springframework.ai.chat.prompt.Prompt(
             "continue",

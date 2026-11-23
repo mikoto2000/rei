@@ -104,7 +104,12 @@ public class LlmConversationCompressor implements ConversationCompressor {
       ModelCallBudget supplied,
       Duration timeout) {
     return summarizeResult(
-        previous, messages, maxTokens, owner, supplied, timeout,
+        previous,
+        messages,
+        maxTokens,
+        owner,
+        supplied,
+        timeout,
         Math.max(1, Math.min(2000, maxTokens / 2)));
   }
 

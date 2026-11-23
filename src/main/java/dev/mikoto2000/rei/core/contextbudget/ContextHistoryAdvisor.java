@@ -165,9 +165,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
           var previous =
               entry.timestamp() == null ? null : timeline.floorEntry(entry.timestamp().toInstant());
           var turn = previous == null ? null : previous.getValue();
-          if (turn != null
-              && turn.completed()
-              && entry.content().equals(turn.assistantMessage())) {
+          if (turn != null && turn.completed() && entry.content().equals(turn.assistantMessage())) {
             var summary = summaries.read(ConversationSummaryRepository.runKey(id, turn.runId()));
             if (!summary.summary().isBlank())
               messages.add(

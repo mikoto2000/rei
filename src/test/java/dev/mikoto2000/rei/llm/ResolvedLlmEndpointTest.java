@@ -12,10 +12,18 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 class ResolvedLlmEndpointTest {
   @Test
   void endpointDiagnosticsDoNotExposeCredentialsEmbeddedInLegacyUrls() {
-    var endpoint = new ResolvedLlmEndpoint("endpoint", 1, LlmApiType.CHAT_COMPLETIONS,
-        "https://user:url-password@endpoint.invalid/v1?api_key=url-secret",
-        "credential-reference", "model", new LlmCapabilities(ReasoningReplayMode.NONE, null),
-        1024, null, java.time.Duration.ofMinutes(5));
+    var endpoint =
+        new ResolvedLlmEndpoint(
+            "endpoint",
+            1,
+            LlmApiType.CHAT_COMPLETIONS,
+            "https://user:url-password@endpoint.invalid/v1?api_key=url-secret",
+            "credential-reference",
+            "model",
+            new LlmCapabilities(ReasoningReplayMode.NONE, null),
+            1024,
+            null,
+            java.time.Duration.ofMinutes(5));
     assertThat(endpoint.toString()).doesNotContain("url-password", "url-secret");
   }
 
@@ -41,9 +49,15 @@ class ResolvedLlmEndpointTest {
   @Test
   void defaultConnectionAndGenerationOptionsAreResolvedTogether() {
     var defaults = Mockito.mock(ChatModel.class);
-    Mockito.when(defaults.getOptions()).thenReturn(OpenAiChatOptions.builder()
-        .baseUrl("https://shared.invalid/v1").apiKey("secret")
-        .model("shared-model").temperature(0.4).maxCompletionTokens(1024).build());
+    Mockito.when(defaults.getOptions())
+        .thenReturn(
+            OpenAiChatOptions.builder()
+                .baseUrl("https://shared.invalid/v1")
+                .apiKey("secret")
+                .model("shared-model")
+                .temperature(0.4)
+                .maxCompletionTokens(1024)
+                .build());
     var properties = new LlmProperties();
     properties.setMaxOutputTokens(2048);
     var provider = new LlmModelProvider(defaults, properties);
@@ -60,14 +74,30 @@ class ResolvedLlmEndpointTest {
 
   @Test
   void protocolAndReplayModeAreDistinctCompatibilityBoundaries() {
-    var legacy = new ResolvedLlmEndpoint("endpoint", 1, LlmApiType.CHAT_COMPLETIONS,
-        "https://endpoint.invalid/v1", "credential", "model",
-        new LlmCapabilities(ReasoningReplayMode.NONE, 128), 1024, null,
-        java.time.Duration.ofMinutes(5));
-    var responses = new ResolvedLlmEndpoint("endpoint", 1, LlmApiType.RESPONSES,
-        legacy.baseUrl(), legacy.credentialRef(), legacy.model(),
-        new LlmCapabilities(ReasoningReplayMode.ENCRYPTED, 128), 1024, null,
-        legacy.readTimeout());
+    var legacy =
+        new ResolvedLlmEndpoint(
+            "endpoint",
+            1,
+            LlmApiType.CHAT_COMPLETIONS,
+            "https://endpoint.invalid/v1",
+            "credential",
+            "model",
+            new LlmCapabilities(ReasoningReplayMode.NONE, 128),
+            1024,
+            null,
+            java.time.Duration.ofMinutes(5));
+    var responses =
+        new ResolvedLlmEndpoint(
+            "endpoint",
+            1,
+            LlmApiType.RESPONSES,
+            legacy.baseUrl(),
+            legacy.credentialRef(),
+            legacy.model(),
+            new LlmCapabilities(ReasoningReplayMode.ENCRYPTED, 128),
+            1024,
+            null,
+            legacy.readTimeout());
     assertThat(responses.fingerprint()).isNotEqualTo(legacy.fingerprint());
     assertThatThrownBy(() -> new ChatCompletionsAdapter().options(responses))
         .isInstanceOf(IllegalArgumentException.class);

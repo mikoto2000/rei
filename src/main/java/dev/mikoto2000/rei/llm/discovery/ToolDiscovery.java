@@ -144,11 +144,10 @@ public final class ToolDiscovery {
       var supplied =
           Objects.requireNonNull(options.getToolCallbacks(), "Explicit callbacks required").stream()
               .filter(callback -> featureAvailable(callback.getToolDefinition().name()))
-              .filter(
-                  callback ->
-                      owner.mode() != AgentRunContext.Mode.READ_ONLY
-                          || dev.mikoto2000.rei.core.policy.ToolPermissionPolicy
-                              .intrinsicallyReadOnly(callback.getToolDefinition().name()))
+              .filter(callback ->
+                  owner.mode() != AgentRunContext.Mode.READ_ONLY
+                      || dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.intrinsicallyReadOnly(
+                          callback.getToolDefinition().name()))
               .toList();
       this.catalog = ToolCatalog.standard(supplied);
       if (owner.mode() == AgentRunContext.Mode.EXCLUSIVE && catalog.basicNames().size() != 31)
@@ -172,14 +171,13 @@ public final class ToolDiscovery {
                 + " configuration");
       saved
           .definitions()
-          .forEach(
-              (name, digest) -> {
-                if (!name.equals("searchTools") && !catalog.names().contains(name))
-                  throw new IllegalStateException(
-                      "Saved tool unavailable after feature or permission change: " + name);
-                if (!definitionHash(name).equals(digest))
-                  throw new IllegalStateException("Saved tool definition is incompatible: " + name);
-              });
+          .forEach((name, digest) -> {
+            if (!name.equals("searchTools") && !catalog.names().contains(name))
+              throw new IllegalStateException(
+                  "Saved tool unavailable after feature or permission change: " + name);
+            if (!definitionHash(name).equals(digest))
+              throw new IllegalStateException("Saved tool definition is incompatible: " + name);
+          });
       references.putAll(saved.references());
       unresolved.addAll(saved.unresolved());
       requestDefinitions = saved.requestDefinitions();
@@ -244,15 +242,14 @@ public final class ToolDiscovery {
       unresolved.forEach(reference -> sets.add(reference.split("@", 2)[0]));
       if (store != null) {
         var required = new TreeMap<String, Set<String>>();
-        references.forEach(
-            (set, ids) -> {
-              var pending = new TreeSet<String>();
-              for (String id : ids) if (store.required(owner, set, id)) pending.add(id);
-              if (!pending.isEmpty()) {
-                required.put(set, Set.copyOf(pending));
-                sets.add(set);
-              }
-            });
+        references.forEach((set, ids) -> {
+          var pending = new TreeSet<String>();
+          for (String id : ids) if (store.required(owner, set, id)) pending.add(id);
+          if (!pending.isEmpty()) {
+            required.put(set, Set.copyOf(pending));
+            sets.add(set);
+          }
+        });
         // Commit the projection only after all reads succeed. The original ledgers remain
         // authoritative.
         references.clear();
@@ -302,16 +299,15 @@ public final class ToolDiscovery {
       result = new Prompt(result.getInstructions(), opts.mutate().toolContext(context).build());
       var sentDefinitions = new TreeMap<String, String>();
       Objects.requireNonNull(opts.getToolCallbacks(), "Explicit callbacks required")
-          .forEach(
-              c ->
-                  sentDefinitions.put(
-                      c.getToolDefinition().name(),
-                      hash(
-                          c.getToolDefinition().name()
-                              + "\n"
-                              + c.getToolDefinition().description()
-                              + "\n"
-                              + c.getToolDefinition().inputSchema())));
+          .forEach(c ->
+              sentDefinitions.put(
+                  c.getToolDefinition().name(),
+                  hash(
+                      c.getToolDefinition().name()
+                          + "\n"
+                          + c.getToolDefinition().description()
+                          + "\n"
+                          + c.getToolDefinition().inputSchema())));
       requestDefinitions = Map.copyOf(sentDefinitions);
       save();
       return result;

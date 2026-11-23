@@ -145,9 +145,19 @@ public final class ContextCompressionException extends RuntimeException {
 
   ContextCompressionException atPage(int page, int attempt, int hardLimit, int targetTokens) {
     return new ContextCompressionException(
-        reason, actualTokens, limitTokens, underlying,
-        " ページ=" + page + ", 試行=" + attempt + ", 本文上限=" + hardLimit
-            + ", 本文目標=" + targetTokens + " tokens。");
+        reason,
+        actualTokens,
+        limitTokens,
+        underlying,
+        " ページ="
+            + page
+            + ", 試行="
+            + attempt
+            + ", 本文上限="
+            + hardLimit
+            + ", 本文目標="
+            + targetTokens
+            + " tokens。");
   }
 
   /** モデルへ渡す文脈の管理で用いる保存失敗情報を返す。 */

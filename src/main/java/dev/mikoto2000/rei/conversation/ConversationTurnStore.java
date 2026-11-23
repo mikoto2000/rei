@@ -105,8 +105,8 @@ public class ConversationTurnStore implements ConversationHistory {
     }
 
     /**
-     * Only completed attempts contribute saved observations. The plain predicate name preserves
-     * the existing durable JSON fields.
+     * Only completed attempts contribute saved observations. The plain predicate name preserves the
+     * existing durable JSON fields.
      */
     public boolean completed() {
       return status == Status.COMPLETED;

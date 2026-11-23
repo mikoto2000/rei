@@ -12,9 +12,9 @@ import dev.mikoto2000.rei.conversation.ConversationHistoryTools;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.actionplan.ActionPlanAdvisor;
-import dev.mikoto2000.rei.core.checkpoint.CheckpointAdvisor;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunScopedAdvisor;
+import dev.mikoto2000.rei.core.checkpoint.CheckpointAdvisor;
 import dev.mikoto2000.rei.core.contextbudget.ContextAssembler;
 import dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties;
 import dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor;
@@ -26,9 +26,9 @@ import dev.mikoto2000.rei.core.contextbudget.ToolResultCompressor;
 import dev.mikoto2000.rei.core.filesummary.FileSummaryAdvisor;
 import dev.mikoto2000.rei.core.recentchanges.RecentChangesAdvisor;
 import dev.mikoto2000.rei.core.relatedgraph.RelatedFileGraphAdvisor;
-import dev.mikoto2000.rei.core.stagnation.StagnationAdvisor;
 import dev.mikoto2000.rei.core.stagnation.ProgressEvaluator;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import dev.mikoto2000.rei.core.stagnation.StagnationAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
@@ -76,14 +76,16 @@ class AiConfigurationTest {
   @Test
   void directChatClientAlsoRejectsUnverifiedResponsesTransport() {
     var model = Mockito.mock(ChatModel.class);
-    when(model.getOptions()).thenReturn(
-        org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
-            .model("fixture-model").build());
+    when(model.getOptions())
+        .thenReturn(
+            org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+                .model("fixture-model")
+                .build());
     var configuration = subAgentConfiguration(model, Mockito.mock(ConversationMemory.class));
     org.assertj.core.api.Assertions.assertThatThrownBy(configuration::chatClient)
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("Responses");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Responses");
   }
-
 
   @Test
   @Tag("integration")
@@ -100,26 +102,35 @@ class AiConfigurationTest {
     turns.start(current, "current independent question");
     var savedTurns = turns.read("chat");
     var memory = WindowedConversationMemory.builder().build();
-    memory.add("chat", List.of(
-        new UserMessage("ARCHIVED-FAILED-TASK"),
-        new AssistantMessage("ABANDONED-DRAFT; LEGACY-POLLUTED-NOTE")));
+    memory.add(
+        "chat",
+        List.of(
+            new UserMessage("ARCHIVED-FAILED-TASK"),
+            new AssistantMessage("ABANDONED-DRAFT; LEGACY-POLLUTED-NOTE")));
     var properties = new ContextCompressionProperties();
     properties.setEnabled(false);
     var summaries = new ConversationSummaryRepository(root);
     var compressor = Mockito.mock(ConversationCompressor.class);
     var estimator = TokenEstimator.conservative();
-    var assembler = new ContextAssembler(
-        properties, estimator, summaries,
-        new ToolResultCompressor(new RawToolResultStore(root), estimator, 8000, 2000),
-        compressor, null, null);
+    var assembler =
+        new ContextAssembler(
+            properties,
+            estimator,
+            summaries,
+            new ToolResultCompressor(new RawToolResultStore(root), estimator, 8000, 2000),
+            compressor,
+            null,
+            null);
     var history = new ContextHistoryAdvisor(turns, memory, summaries);
     var sent = new AtomicReference<Prompt>();
     var model = Mockito.mock(ChatModel.class);
     when(model.getOptions()).thenReturn(OpenAiChatOptions.builder().build());
-    when(model.stream(Mockito.any(Prompt.class))).thenAnswer(invocation -> {
-      sent.set(invocation.getArgument(0));
-      return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("current answer")))));
-    });
+    when(model.stream(Mockito.any(Prompt.class)))
+        .thenAnswer(invocation -> {
+          sent.set(invocation.getArgument(0));
+          return Flux.just(
+              new ChatResponse(List.of(new Generation(new AssistantMessage("current answer")))));
+        });
     var configuration = subAgentConfiguration(model, memory);
     configuration.setContextCompression(assembler, history, null, properties);
     var client = configuration.chatClient();
@@ -130,26 +141,41 @@ class AiConfigurationTest {
       if (!Mockito.mockingDetails(delegate).isMock()) continue;
       when(delegate.getName()).thenReturn(delegate.getClass().getSimpleName());
       when(delegate.getScheduler()).thenReturn(BaseAdvisor.DEFAULT_SCHEDULER);
-      when(delegate.before(Mockito.any(), Mockito.any())).thenAnswer(invocation -> invocation.getArgument(0));
-      when(delegate.after(Mockito.any(), Mockito.any())).thenAnswer(invocation -> invocation.getArgument(0));
+      when(delegate.before(Mockito.any(), Mockito.any()))
+          .thenAnswer(invocation -> invocation.getArgument(0));
+      when(delegate.after(Mockito.any(), Mockito.any()))
+          .thenAnswer(invocation -> invocation.getArgument(0));
     }
-    var execution = new RunExecutionContext(
-        "current", new OutputLimitRunBudget(0, 10), new ProgressEvaluator(root),
-        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), event -> {});
+    var execution =
+        new RunExecutionContext(
+            "current",
+            new OutputLimitRunBudget(0, 10),
+            new ProgressEvaluator(root),
+            new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+            event -> {});
     execution.setRunContext(current);
-    var options = OpenAiChatOptions.builder()
-        .toolContext(Map.of(RunExecutionContext.KEY, execution)).build();
-    var response = client.prompt(new Prompt(new UserMessage("current independent question"), options))
-        .advisors(a -> a.param(AgentRunContext.class.getName(), current)
-            .param(MemoryAdvisor.CONVERSATION_ID, "chat"))
-        .stream().chatResponse().blockLast();
+    var options =
+        OpenAiChatOptions.builder().toolContext(Map.of(RunExecutionContext.KEY, execution)).build();
+    var response =
+        client
+            .prompt(new Prompt(new UserMessage("current independent question"), options))
+            .advisors(a ->
+                a.param(AgentRunContext.class.getName(), current)
+                    .param(MemoryAdvisor.CONVERSATION_ID, "chat"))
+            .stream()
+            .chatResponse()
+            .blockLast();
 
     assertEquals("current answer", response.getResult().getOutput().getText());
     org.assertj.core.api.Assertions.assertThat(sent.get().getContents())
-        .contains("completed configuration request", "verified completed response", "current independent question")
+        .contains(
+            "completed configuration request",
+            "verified completed response",
+            "current independent question")
         .doesNotContain("ARCHIVED-FAILED-TASK", "ABANDONED-DRAFT", "LEGACY-POLLUTED-NOTE");
     assertEquals("current independent question", sent.get().getInstructions().getLast().getText());
-    org.assertj.core.api.Assertions.assertThat(turns.read("chat")).containsExactlyElementsOf(savedTurns);
+    org.assertj.core.api.Assertions.assertThat(turns.read("chat"))
+        .containsExactlyElementsOf(savedTurns);
     org.assertj.core.api.Assertions.assertThat(memory.get("chat"))
         .extracting(org.springframework.ai.chat.messages.Message::getText)
         .contains("ARCHIVED-FAILED-TASK", "ABANDONED-DRAFT; LEGACY-POLLUTED-NOTE");
@@ -238,7 +264,8 @@ class AiConfigurationTest {
 
   /** {@code subAgentConfiguration} の条件を再現するための補助情報を返す。 */
   private AiConfiguration subAgentConfiguration() {
-    return subAgentConfiguration(Mockito.mock(ChatModel.class), Mockito.mock(ConversationMemory.class));
+    return subAgentConfiguration(
+        Mockito.mock(ChatModel.class), Mockito.mock(ConversationMemory.class));
   }
 
   private AiConfiguration subAgentConfiguration(ChatModel model, ConversationMemory memory) {

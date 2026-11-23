@@ -111,11 +111,10 @@ public final class ReviewToolProfile {
       var basic = run.toolDiscovery().basicNames();
       selected =
           callbacks.stream()
-              .filter(
-                  c ->
-                      REVIEW.contains(c.getToolDefinition().name())
-                          || basic.contains(c.getToolDefinition().name())
-                          || c.getToolDefinition().name().equals("searchTools"))
+              .filter(c ->
+                  REVIEW.contains(c.getToolDefinition().name())
+                      || basic.contains(c.getToolDefinition().name())
+                      || c.getToolDefinition().name().equals("searchTools"))
               .toList();
     }
     return new Prompt(prompt.getInstructions(), options.mutate().toolCallbacks(selected).build());

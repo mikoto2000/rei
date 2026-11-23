@@ -60,23 +60,22 @@ public final class SearchToolsCallback implements ToolCallback {
       result.put(
           "matches",
           sets.stream()
-              .map(
-                  set -> {
-                    var entry =
-                        catalog.searchable().stream()
-                            .filter(e -> !e.basic() && e.set().equals(set))
-                            .min(java.util.Comparator.comparing(ToolCatalog.Entry::name))
-                            .orElseThrow();
-                    String description =
-                        catalog.callback(entry.name()).getToolDefinition().description();
-                    return Map.of(
-                        "operationSet",
-                        set,
-                        "tool",
-                        entry.name(),
-                        "purpose",
-                        description.substring(0, Math.min(description.length(), 160)));
-                  })
+              .map(set -> {
+                var entry =
+                    catalog.searchable().stream()
+                        .filter(e -> !e.basic() && e.set().equals(set))
+                        .min(java.util.Comparator.comparing(ToolCatalog.Entry::name))
+                        .orElseThrow();
+                String description =
+                    catalog.callback(entry.name()).getToolDefinition().description();
+                return Map.of(
+                    "operationSet",
+                    set,
+                    "tool",
+                    entry.name(),
+                    "purpose",
+                    description.substring(0, Math.min(description.length(), 160)));
+              })
               .toList());
       result.put("added", change.added());
       result.put("removed", change.removed());
