@@ -68,16 +68,7 @@
 
 ---
 
-### —vŒ 5: model ƒRƒ}ƒ“ƒh‚Å‚Ìƒ‚ƒfƒ‹ƒAƒ“ƒ[ƒh
+### è¦ä»¶ 5: ãƒ¢ãƒ‡ãƒ«åˆ‡ã‚Šæ›¿ãˆæ™‚ã®ãƒªã‚½ãƒ¼ã‚¹ç®¡ç†
 
-**ƒ†[ƒU[ƒXƒg[ƒŠ[:** ƒ†[ƒU[‚Æ‚µ‚ÄA`model` ƒRƒ}ƒ“ƒh‚Åƒ‚ƒfƒ‹‚ðØ‚è‘Ö‚¦‚é‚Æ‚«‚ÉØ‘Ö‘Oƒ‚ƒfƒ‹‚ðƒAƒ“ƒ[ƒh‚µ‚½‚¢B‚»‚¤‚·‚é‚±‚Æ‚ÅA•s—v‚Èƒ‚ƒfƒ‹‚Ìƒƒ‚ƒŠè—L‚ð—}‚¦‚½‚¢B
-
-#### Žó‚¯“ü‚êŠî€
-
-1. WHEN ƒ†[ƒU[‚ª `model <ƒ‚ƒfƒ‹–¼>` ‚ðŽÀs‚µAŒ»Ýƒ‚ƒfƒ‹‚ÆŽw’èƒ‚ƒfƒ‹‚ªˆÙ‚È‚é‚Æ‚«ATHE ModelCommand SHALL Ø‘Ö‘Oƒ‚ƒfƒ‹‚É‘Î‚·‚éƒAƒ“ƒ[ƒh—v‹‚ð‘—M‚·‚éB
-2. THE OpenAiCompatibleModelUnloadService SHALL `spring.ai.openai.base-url` ‚ðŠî‚É `/api/generate` ‚Ö HTTP POST ‚ð‘—M‚·‚éB
-3. THE OpenAiCompatibleModelUnloadService SHALL ƒŠƒNƒGƒXƒgƒ{ƒfƒB‚É `model` ‚Æ `keep_alive: 0` ‚ðŠÜ‚ß‚éB
-4. WHEN `spring.ai.openai.base-url` ‚ª `/v1` ‚ÅI‚í‚é‚Æ‚«ATHE OpenAiCompatibleModelUnloadService SHALL `/v1` ‚ðœ‹Ž‚µ‚Ä `/api/generate` ‚ð•t‰Á‚µ‚½ URL ‚ðŽg—p‚·‚éB
-5. WHEN `spring.ai.openai.base-url` ‚ª `/v1` ‚ÅI‚í‚ç‚È‚¢‚Æ‚«ATHE OpenAiCompatibleModelUnloadService SHALL ––”ö‚É `/api/generate` ‚ð•t‰Á‚µ‚½ URL ‚ðŽg—p‚·‚éB
-6. WHEN API ƒL[‚ªÝ’è‚³‚ê‚Ä‚¢‚é‚Æ‚«ATHE OpenAiCompatibleModelUnloadService SHALL `Authorization: Bearer <apiKey>` ƒwƒbƒ_[‚ð•t—^‚·‚éB
-7. WHEN ƒAƒ“ƒ[ƒh—v‹‚ªŽ¸”s‚µ‚½‚Æ‚«ATHE ModelCommand SHALL ƒ‚ƒfƒ‹Ø‘Öˆ—‚ðŒp‘±‚µAŽ¸”s‚ðƒƒOo—Í‚·‚éB
+1. WHEN Shell ã¾ãŸã¯ Web API ã§ãƒ¢ãƒ‡ãƒ«ã‚’åˆ‡ã‚Šæ›¿ãˆã‚‹ã¨ãã€THE ã‚·ã‚¹ãƒ†ãƒ  SHALL æ—§ãƒ¢ãƒ‡ãƒ«ã¸ã®è§£æ”¾ãƒªã‚¯ã‚¨ã‚¹ãƒˆã‚’é€ä¿¡ã›ãšã€é¸æŠžã™ã‚‹ãƒ¢ãƒ‡ãƒ«åã‚’æ›´æ–°ã™ã‚‹ã€‚
+2. THE ã‚·ã‚¹ãƒ†ãƒ  SHALL ãƒ¢ãƒ‡ãƒ«ã®ãƒ­ãƒ¼ãƒ‰ãƒ»è§£æ”¾ã‚’æŽ¥ç¶šå…ˆã‚µãƒ¼ãƒãƒ¼ã«å§”ã­ã‚‹ã€‚

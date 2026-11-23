@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService;
 import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelsService;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -19,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * モデルをWeb APIの操作として受け付ける。
  *
- * <p>Named model controls using the same holder and unload behavior as the existing Shell.
+ * <p>Named model controls using the same holder as the existing Shell.
  */
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
@@ -34,22 +33,11 @@ public class ModelController {
 
   private final Consumer<String> selectModel;
 
-  /** 使用を終えたモデルの解放を依頼する窓口。 */
-  private final OpenAiCompatibleModelUnloadService unload;
-
-  /** 処理状況と問題の調査に使うログの出力先。 */
-  private static final org.slf4j.Logger log =
-      org.slf4j.LoggerFactory.getLogger(ModelController.class);
-
   /** 指定された値や利用先を使って、ModelControllerを初期化する。 */
-  public ModelController(
-      OpenAiCompatibleModelsService models,
-      ModelHolderService holder,
-      OpenAiCompatibleModelUnloadService unload) {
+  public ModelController(OpenAiCompatibleModelsService models, ModelHolderService holder) {
     this.models = models;
     this.selectedModel = () -> holder.get();
     this.selectModel = model -> holder.set(model);
-    this.unload = unload;
   }
 
   /**
@@ -96,14 +84,6 @@ public class ModelController {
   @PutMapping("/current")
   public synchronized Selection select(@RequestBody Selection request) {
     if (request == null) throw new IllegalArgumentException("Model required");
-    String previous = selectedModel.get();
-    if (!request.model().equals(previous)) {
-      try {
-        unload.unload(previous);
-      } catch (RuntimeException failure) {
-        log.warn("Previous model unload failed while selecting a new model");
-      }
-    }
     selectModel.accept(request.model());
     return current();
   }
