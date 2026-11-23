@@ -73,6 +73,17 @@ import reactor.core.publisher.Flux;
 
 /** AI機能の構成の結果と状態の契約を検証するテスト。 */
 class AiConfigurationTest {
+  @Test
+  void directChatClientAlsoRejectsUnverifiedResponsesTransport() {
+    var model = Mockito.mock(ChatModel.class);
+    when(model.getOptions()).thenReturn(
+        org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+            .model("fixture-model").build());
+    var configuration = subAgentConfiguration(model, Mockito.mock(ConversationMemory.class));
+    org.assertj.core.api.Assertions.assertThatThrownBy(configuration::chatClient)
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("Responses");
+  }
+
 
   @Test
   @Tag("integration")
