@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.llm;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,17 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 
 /** Effective configuration and compatibility identity are independent of credential rotation. */
 class ResolvedLlmEndpointTest {
+  @Test
+  void legacyVoiceCorrectionCanKeepItsUnspecifiedOutputLimit() {
+    var model = Mockito.mock(ChatModel.class);
+    Mockito.when(model.getOptions()).thenReturn(OpenAiChatOptions.builder().model("voice").build());
+    var provider = new LlmModelProvider(model, new LlmProperties());
+    assertThatCode(() -> provider.resolvedEndpoint(LlmFeature.VOICE_CORRECTION))
+        .doesNotThrowAnyException();
+    assertThat(provider.resolvedEndpoint(LlmFeature.VOICE_CORRECTION).maxOutputTokens()).isNull();
+    assertThat(provider.chatOptions(LlmFeature.VOICE_CORRECTION, null).getMaxTokens()).isNull();
+  }
+
   @Test
   void independentEndpointsDoNotInheritTheDefaultCapabilityAndFallbackUsesTheMinimum() {
     var properties = new LlmProperties();
