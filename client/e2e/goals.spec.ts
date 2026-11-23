@@ -1,9 +1,10 @@
+import { openNavigation } from "./navigation";
 import { test, expect } from "@playwright/test";
 test("Goal explicit execution reviews budgets and attaches its actual Run", async ({
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html");
-  await page.getByRole("button", { name: "復旧・再開", exact: true }).click();
+  await openNavigation(page, "復旧・再開");
   const panel = page.getByRole("region", { name: "Goalの管理", exact: true });
   await panel.getByRole("button", { name: "Goalを確認" }).click();
   await expect(panel.getByText("saved_attempt_history")).toBeVisible();
@@ -30,7 +31,7 @@ test("uncertain Goal reconciliation needs acknowledgement and never dispatches a
   page,
 }) => {
   await page.goto("/e2e/fixture.html?goal=uncertain");
-  await page.getByRole("button", { name: "復旧・再開", exact: true }).click();
+  await openNavigation(page, "復旧・再開");
   const panel = page.getByRole("region", { name: "Goalの管理", exact: true });
   await panel.getByRole("button", { name: "Goalを確認" }).click();
   await panel

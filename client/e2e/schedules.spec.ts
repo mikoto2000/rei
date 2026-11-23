@@ -1,9 +1,10 @@
+import { openNavigation } from "./navigation";
 import { test, expect } from "@playwright/test";
 test("schedule activation reviews timing and attaches its actual Run", async ({
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html");
-  await page.getByRole("button", { name: "復旧・再開", exact: true }).click();
+  await openNavigation(page, "復旧・再開");
   const panel = page.getByRole("region", { name: "予約の管理", exact: true });
   await panel.getByRole("button", { name: "予約を確認" }).click();
   await expect(panel.getByText("saved_schedule_history")).toBeVisible();
@@ -30,7 +31,7 @@ test("uncertain schedule reconciliation requires acknowledgement and never start
   page,
 }) => {
   await page.goto("/e2e/fixture.html?schedule=uncertain");
-  await page.getByRole("button", { name: "復旧・再開", exact: true }).click();
+  await openNavigation(page, "復旧・再開");
   const panel = page.getByRole("region", { name: "予約の管理", exact: true });
   await panel.getByRole("button", { name: "予約を確認" }).click();
   await panel
