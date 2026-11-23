@@ -302,7 +302,7 @@ it("invalidates a successful connection check after editing its server", async (
   await screen.findByText("接続未確認");
   fireEvent.click(screen.getByRole("button", { name: "接続を確認" }));
   await screen.findByText("接続確認済み");
-  fireEvent.click(screen.getByRole("button", { name: /Settings/ }));
+  fireEvent.click(screen.getByRole("button", { name: /設定/ }));
   fireEvent.click(screen.getByRole("button", { name: "編集" }));
   fireEvent.change(screen.getByLabelText("URL"), {
     target: { value: "https://other.example" },
