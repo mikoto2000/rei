@@ -14,7 +14,11 @@ export function Recovery({
   serverId,
   projects,
   onAccepted,
+  sessionId,
+  onOpenRun,
 }: {
+  sessionId?: string;
+  onOpenRun?: (run: Run) => void;
   call: Command;
   serverId: string | null;
   projects: Project[];
@@ -36,11 +40,11 @@ export function Recovery({
   const [error, setError] = useState<string | null>(null);
   const [accepted, setAccepted] = useState<{
     owner: string;
-    run: string;
+    run: Run;
   } | null>(null);
   const generation = useRef(0);
   const busy = useRef(false);
-  const owner = JSON.stringify([serverId, project]);
+  const owner = JSON.stringify([serverId, project, sessionId]);
   useEffect(() => {
     generation.current++;
     setProject(projects[0]?.id ?? "");
@@ -68,7 +72,10 @@ export function Recovery({
           setRows({
             owner,
             items: result.items.filter(
-              (i) => i.id && field(i, "Project") === project,
+              (i) =>
+                i.id &&
+                field(i, "Project") === project &&
+                (!sessionId || field(i, "Session") === sessionId),
             ),
           });
       })
@@ -81,7 +88,7 @@ export function Recovery({
     return () => {
       generation.current++;
     };
-  }, [call, serverId, project, projects, owner, refresh]);
+  }, [call, serverId, project, projects, owner, refresh, sessionId]);
   const visible =
     serverId && projects.some((p) => p.id === project) && rows?.owner === owner
       ? rows
@@ -168,8 +175,7 @@ export function Recovery({
           { serverId, projectId: project, taskId: task },
         );
         onAccepted(run);
-        if (revision === generation.current)
-          setAccepted({ owner, run: run.runId });
+        if (revision === generation.current) setAccepted({ owner, run });
       }
       if (revision === generation.current) {
         setConfirm(null);
@@ -224,7 +230,14 @@ export function Recovery({
       {pending && <p role="status">処理中…</p>}
       {error && <p role="alert">{error}</p>}
       {accepted?.owner === owner && (
-        <p>接続したRun: {accepted.run}。実行一覧から状態を確認できます。</p>
+        <p>
+          接続したRun: {accepted.run.runId}。実行一覧から状態を確認できます。
+          {onOpenRun && (
+            <button onClick={() => onOpenRun(accepted.run)}>
+              再開した作業を開く
+            </button>
+          )}
+        </p>
       )}
       {visible?.items.length === 0 && <p>保存されたCheckpointはありません。</p>}
       {visible?.items.map((item) => (
@@ -297,6 +310,7 @@ export function Recovery({
         </article>
       )}
       <HumanAnswers
+        sessionId={sessionId}
         call={call}
         serverId={serverId}
         projectId={projects.some((p) => p.id === project) ? project : ""}
