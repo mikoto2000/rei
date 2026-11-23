@@ -128,7 +128,19 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   /** 用途に応じたモデル利用で用いる応答生成に使うモデルを返す。 */
   public ChatModel chatModel(String feature) {
+    requireAvailableProtocol(feature);
     return cache.computeIfAbsent(feature, this::createFeatureModel);
+  }
+
+  private void requireAvailableProtocol(String feature) {
+    var server = featureSettings.apply(feature);
+    if ((server != null && server.getApi() == LlmApiType.RESPONSES)
+        || ((server == null || !server.hasCustomServer())
+            && defaultChatModel != null
+            && defaultChatModel.getOptions()
+                instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions))
+      throw new IllegalStateException(
+          "Responses is unavailable until durable agent integration is verified");
   }
 
   /**
@@ -252,6 +264,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   /** 用途に応じたモデル利用で用いるチャット選択可能な設定を返す。 */
   public OpenAiChatOptions chatOptions(String feature, String defaultModel, boolean streamUsage) {
+    requireAvailableProtocol(feature);
     OpenAiChatOptions.Builder options = chatOptionsBuilder(feature, defaultModel);
     if (streamUsage) {
       options.streamUsage(true);

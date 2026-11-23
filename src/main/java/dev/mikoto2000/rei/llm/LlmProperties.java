@@ -128,11 +128,22 @@ public class LlmProperties {
       copy.model = model;
       copy.temperature = temperature;
       copy.fallbackToDefault = fallbackToDefault;
+      copy.api = api;
       return copy;
     }
 
     /** 最大出力トークン数。 */
     private Integer maxOutputTokens;
+
+    private LlmApiType api;
+
+    public LlmApiType getApi() {
+      return api;
+    }
+
+    public void setApi(LlmApiType api) {
+      this.api = api;
+    }
 
     /** 用途に応じたモデル利用で参照する最大出力トークン数を返す。 */
     public Integer getMaxOutputTokens() {
