@@ -68,6 +68,13 @@ import org.springframework.context.annotation.Configuration;
 })
 @RequiredArgsConstructor
 public class AiConfiguration {
+  private dev.mikoto2000.rei.llm.discovery.ToolDiscovery toolDiscovery;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setToolDiscovery(dev.mikoto2000.rei.llm.discovery.ToolDiscovery value) {
+    toolDiscovery = value;
+  }
+
   private BaseAdvisor shellEnvironmentAdvisor;
 
   @org.springframework.beans.factory.annotation.Autowired
@@ -406,7 +413,8 @@ public class AiConfiguration {
     ChatClient.Builder builder =
         ChatClient.builder(
                 new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-                    chatModel, contextAssembler, llmProperties.getMaxStreamTimeoutRetries()))
+                        chatModel, contextAssembler, llmProperties.getMaxStreamTimeoutRetries())
+                    .withToolDiscovery(toolDiscovery))
             .defaultSystem(systemPromptService.systemPrompt())
             // Run-owned tools use Rei's loop; legacy non-run requests retain SDK tool handling.
             .defaultAdvisors(new dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor())

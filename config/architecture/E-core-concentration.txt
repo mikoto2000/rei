@@ -493,6 +493,16 @@ business: dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor -> dev.mikoto2000.re
 business: dev.mikoto2000.rei.llm.StableToolDefinitions -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
 business: dev.mikoto2000.rei.llm.capture.LlmCaptureCommand -> dev.mikoto2000.rei.core.project.ProjectService
 business: dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$ActionCandidates -> dev.mikoto2000.rei.core.completion.FirstArgumentCandidates
+business: dev.mikoto2000.rei.llm.discovery.ToolCatalog -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
+business: dev.mikoto2000.rei.llm.discovery.ToolDiscovery -> dev.mikoto2000.rei.core.chat.AgentRunContext
+business: dev.mikoto2000.rei.llm.discovery.ToolDiscovery -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
+business: dev.mikoto2000.rei.llm.discovery.ToolDiscovery -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
+business: dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session -> dev.mikoto2000.rei.core.chat.AgentRunContext
+business: dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
+business: dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session -> dev.mikoto2000.rei.core.policy.ToolPermissionPolicy
+business: dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
+business: dev.mikoto2000.rei.llm.discovery.ToolDiscoveryStore -> dev.mikoto2000.rei.core.chat.AgentRunContext
+business: dev.mikoto2000.rei.llm.discovery.ToolRequestValidator -> dev.mikoto2000.rei.core.chat.ToolLoopSupport
 business: dev.mikoto2000.rei.mcp.McpTools -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.mcp.McpTools -> dev.mikoto2000.rei.core.policy.ToolApprovalRepository
 business: dev.mikoto2000.rei.mcp.McpTools -> dev.mikoto2000.rei.core.policy.ToolApprovalRepository$Request

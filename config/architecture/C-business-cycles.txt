@@ -431,6 +431,7 @@ dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.
 dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.event.ToolFailedPayload
 dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.event.ToolStartedPayload
 dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.event.UserInterventionPayload
+dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.llm.discovery.ToolDiscovery
 dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.review.ReviewCoverageLedger
 dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.review.ReviewCoverageLedger$Scope
 dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.review.ReviewTools
@@ -1106,6 +1107,7 @@ dev.mikoto2000.rei.core.stagnation.ProgressEvaluator -> dev.mikoto2000.rei.core.
 dev.mikoto2000.rei.core.stagnation.ProgressEvaluator -> dev.mikoto2000.rei.core.contextbudget.RawResultPage
 dev.mikoto2000.rei.core.stagnation.ProgressEvaluator -> dev.mikoto2000.rei.goal.FileGoalVerifier
 dev.mikoto2000.rei.core.stagnation.ProgressEvaluator -> dev.mikoto2000.rei.goal.FileGoalVerifier$Fingerprint
+dev.mikoto2000.rei.core.stagnation.ReviewToolProfile -> dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.chatgpt.ChatGptException
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.chatgpt.ChatGptRunFailure
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.core.chat.AgentRunContext
@@ -1138,6 +1140,7 @@ dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm.OutputLimitRunBudget
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$LlmCallReservation
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
+dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.websearch.WebSearchProperties
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext$1 -> dev.mikoto2000.rei.llm.OutputLimitRunBudget
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext$1 -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$LlmCallReservation
@@ -1152,10 +1155,13 @@ dev.mikoto2000.rei.core.stagnation.StagnationChatModel -> dev.mikoto2000.rei.cor
 dev.mikoto2000.rei.core.stagnation.StagnationChatModel -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
 dev.mikoto2000.rei.core.stagnation.StagnationChatModel -> dev.mikoto2000.rei.llm.OutputLimitDetector
 dev.mikoto2000.rei.core.stagnation.StagnationChatModel -> dev.mikoto2000.rei.llm.StableToolDefinitions
+dev.mikoto2000.rei.core.stagnation.StagnationChatModel -> dev.mikoto2000.rei.llm.discovery.ToolDiscovery
+dev.mikoto2000.rei.core.stagnation.StagnationChatModel -> dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session
 dev.mikoto2000.rei.core.stagnation.StagnationChatModel$1 -> dev.mikoto2000.rei.core.chat.AgentRunScope
 dev.mikoto2000.rei.core.stagnation.StagnationChatModel$1 -> dev.mikoto2000.rei.dot.DotToolCallback
 dev.mikoto2000.rei.core.stagnation.StagnationChatModel$1 -> dev.mikoto2000.rei.event.ToolEventCallbackDecorator
 dev.mikoto2000.rei.core.stagnation.StagnationChatModel$1 -> dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback
+dev.mikoto2000.rei.core.stagnation.StagnationChatModel$1 -> dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session
 dev.mikoto2000.rei.core.stagnation.StagnationChatModel$1 -> dev.mikoto2000.rei.slack.SlackAgentToolCallback
 dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor -> dev.mikoto2000.rei.event.AgentEventFactory
 dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor -> dev.mikoto2000.rei.event.AgentEventPublisher
@@ -1782,6 +1788,19 @@ dev.mikoto2000.rei.llm.capture.LlmCaptureCommand -> dev.mikoto2000.rei.applicati
 dev.mikoto2000.rei.llm.capture.LlmCaptureCommand -> dev.mikoto2000.rei.core.project.ProjectService
 dev.mikoto2000.rei.llm.capture.LlmCaptureCommand -> dev.mikoto2000.rei.event.FailureMessages
 dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$ActionCandidates -> dev.mikoto2000.rei.core.completion.FirstArgumentCandidates
+dev.mikoto2000.rei.llm.discovery.ToolCatalog -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
+dev.mikoto2000.rei.llm.discovery.ToolDiscovery -> dev.mikoto2000.rei.core.chat.AgentRunContext
+dev.mikoto2000.rei.llm.discovery.ToolDiscovery -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
+dev.mikoto2000.rei.llm.discovery.ToolDiscovery -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
+dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session -> dev.mikoto2000.rei.core.chat.AgentRunContext
+dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
+dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session -> dev.mikoto2000.rei.core.policy.ToolPermissionPolicy
+dev.mikoto2000.rei.llm.discovery.ToolDiscovery$Session -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
+dev.mikoto2000.rei.llm.discovery.ToolDiscoveryStore -> dev.mikoto2000.rei.core.chat.AgentRunContext
+dev.mikoto2000.rei.llm.discovery.ToolDiscoveryStore -> dev.mikoto2000.rei.review.ReviewCoverageLedger
+dev.mikoto2000.rei.llm.discovery.ToolDiscoveryStore -> dev.mikoto2000.rei.review.ReviewCoverageLedger$Job
+dev.mikoto2000.rei.llm.discovery.ToolDiscoveryStore -> dev.mikoto2000.rei.review.ReviewCoverageLedger$Scope
+dev.mikoto2000.rei.llm.discovery.ToolRequestValidator -> dev.mikoto2000.rei.core.chat.ToolLoopSupport
 dev.mikoto2000.rei.mcp.McpCompletionEvidence -> dev.mikoto2000.rei.application.session.HistoryPage
 dev.mikoto2000.rei.mcp.McpCompletionEvidence -> dev.mikoto2000.rei.artifact.Artifact
 dev.mikoto2000.rei.mcp.McpCompletionEvidence -> dev.mikoto2000.rei.artifact.ArtifactStore

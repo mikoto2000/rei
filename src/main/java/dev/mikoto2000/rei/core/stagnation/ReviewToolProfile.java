@@ -100,11 +100,25 @@ public final class ReviewToolProfile {
     var callbacks = options.getToolCallbacks();
     if (context == null
         || callbacks == null
-        || !(context.get(KEY) instanceof ReviewToolProfile state)
-        || !state.enabled) return prompt;
-    return new Prompt(
-        prompt.getInstructions(),
-        options.mutate().toolCallbacks(reviewCallbacks(callbacks)).build());
+        || !(context.get(KEY) instanceof ReviewToolProfile state)) return prompt;
+    if (context.get(RunExecutionContext.KEY) instanceof RunExecutionContext run
+        && run.toolDiscovery() != null)
+      run.toolDiscovery().retainView(() -> state.enabled ? Set.of(TOOL) : Set.of());
+    if (!state.enabled) return prompt;
+    var selected = reviewCallbacks(callbacks);
+    if (context.get(RunExecutionContext.KEY) instanceof RunExecutionContext run
+        && run.toolDiscovery() != null) {
+      var basic = run.toolDiscovery().basicNames();
+      selected =
+          callbacks.stream()
+              .filter(
+                  c ->
+                      REVIEW.contains(c.getToolDefinition().name())
+                          || basic.contains(c.getToolDefinition().name())
+                          || c.getToolDefinition().name().equals("searchTools"))
+              .toList();
+    }
+    return new Prompt(prompt.getInstructions(), options.mutate().toolCallbacks(selected).build());
   }
 
   /** Stable explicit allowlist, shared with the reproducible schema comparison. */
@@ -117,7 +131,13 @@ public final class ReviewToolProfile {
         ToolDefinition.builder()
             .name(TOOL)
             .description(
-                "Before repository review, call with enabled=true to show only review, source-reading and recovery tools on subsequent turns. Call with enabled=false before repairs, commands, web research or other work to restore the original authorized tools. This changes visibility only, not permissions or progress. The switch lasts only for this run.")
+                "Before repository review, call with enabled=true to show only review,"
+                    + " source-reading and recovery tools on subsequent turns. Call with"
+                    + " enabled=false before repairs, commands, web research or other work to"
+                    + " restore the authorized tools already available to this run. Where tool"
+                    + " discovery is enabled, unpublished specialist tools still require"
+                    + " searchTools. This changes visibility only, not permissions or progress. The"
+                    + " switch lasts only for this run.")
             .inputSchema(
                 "{\"type\":\"object\",\"properties\":{\"enabled\":{\"type\":\"boolean\"}},\"required\":[\"enabled\"],\"additionalProperties\":false}")
             .build();

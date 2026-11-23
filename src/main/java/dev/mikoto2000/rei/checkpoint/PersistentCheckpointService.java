@@ -54,6 +54,13 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class PersistentCheckpointService implements AutoCloseable {
+  private dev.mikoto2000.rei.llm.discovery.ToolDiscovery toolDiscovery;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setToolDiscovery(dev.mikoto2000.rei.llm.discovery.ToolDiscovery value) {
+    toolDiscovery = value;
+  }
+
   /** 保存と検索の窓口。 */
   private final PersistentCheckpointRepository.LifecycleAccess repository;
 
@@ -161,10 +168,11 @@ public class PersistentCheckpointService implements AutoCloseable {
           || operation.status() != OperationStatus.SUCCEEDED) continue;
       var reference =
           saved.evidence().stream()
-              .filter(e ->
-                  e.origin().equals("RAW_RESULT_REFERENCE")
-                      && Objects.equals(e.toolCallId(), operation.toolCallId())
-                      && Objects.equals(e.runId(), operation.runId()))
+              .filter(
+                  e ->
+                      e.origin().equals("RAW_RESULT_REFERENCE")
+                          && Objects.equals(e.toolCallId(), operation.toolCallId())
+                          && Objects.equals(e.runId(), operation.runId()))
               .findFirst();
       if (reference.isEmpty()) continue;
       try {
@@ -282,21 +290,23 @@ public class PersistentCheckpointService implements AutoCloseable {
       if (state == null) {
         var waiting =
             repository.list(context.projectId()).stream()
-                .filter(s ->
-                    s.runId().equals(context.runId())
-                        && Set.of("WAITING", "WAITING_APPROVAL").contains(s.status())
-                        && s.sessionId().equals(context.conversationId())
-                        && s.projectRoot().equals(context.projectRoot().toString()))
+                .filter(
+                    s ->
+                        s.runId().equals(context.runId())
+                            && Set.of("WAITING", "WAITING_APPROVAL").contains(s.status())
+                            && s.sessionId().equals(context.conversationId())
+                            && s.projectRoot().equals(context.projectRoot().toString()))
                 .findFirst();
         state =
-            waiting.orElseGet(() ->
-                PersistentCheckpoint.initial(
-                    UUID.randomUUID().toString(),
-                    context.projectId(),
-                    context.conversationId(),
-                    context.runId(),
-                    context.projectRoot(),
-                    request));
+            waiting.orElseGet(
+                () ->
+                    PersistentCheckpoint.initial(
+                        UUID.randomUUID().toString(),
+                        context.projectId(),
+                        context.conversationId(),
+                        context.runId(),
+                        context.projectRoot(),
+                        request));
         var initial = repository.fields(state);
         initial.put("mode", context.mode());
         initial.put("voiceInput", context.voiceInput());
@@ -316,6 +326,7 @@ public class PersistentCheckpointService implements AutoCloseable {
               new dev.mikoto2000.rei.review.ReviewCoverageLedger.Scope(
                   state.projectId(), state.sessionId(), state.resumedFromRunId()),
               dev.mikoto2000.rei.review.ReviewTools.scope(context));
+    if (toolDiscovery != null) toolDiscovery.inherit(context, state.resumedFromRunId());
     executing.add(context.runId());
     if (context.mode() != AgentRunContext.Mode.EXCLUSIVE) return;
     var plan = plans.getIfAvailable();
@@ -326,13 +337,14 @@ public class PersistentCheckpointService implements AutoCloseable {
       else
         plan.restore(
             state.plan().stream()
-                .map(p ->
-                    new dev.mikoto2000.rei.core.actionplan.PlanStep(
-                        (String) p.get("id"),
-                        (String) p.get("description"),
-                        (String) p.get("status"),
-                        ((Number) p.get("order")).intValue(),
-                        ((Number) p.get("failureCount")).intValue()))
+                .map(
+                    p ->
+                        new dev.mikoto2000.rei.core.actionplan.PlanStep(
+                            (String) p.get("id"),
+                            (String) p.get("description"),
+                            (String) p.get("status"),
+                            ((Number) p.get("order")).intValue(),
+                            ((Number) p.get("failureCount")).intValue()))
                 .toList());
     }
     var task = tasks.getIfAvailable();
@@ -411,11 +423,12 @@ public class PersistentCheckpointService implements AutoCloseable {
   public List<PersistentCheckpoint> list(String project) {
     return repository.list(project).stream()
         .map(this::recoverView)
-        .filter(s ->
-            !"ABANDONED".equals(s.status())
-                && (!"COMPLETED".equals(s.status())
-                    || s.operations().stream()
-                        .anyMatch(o -> o.status() == OperationStatus.UNKNOWN)))
+        .filter(
+            s ->
+                !"ABANDONED".equals(s.status())
+                    && (!"COMPLETED".equals(s.status())
+                        || s.operations().stream()
+                            .anyMatch(o -> o.status() == OperationStatus.UNKNOWN)))
         .sorted(Comparator.comparing(PersistentCheckpoint::createdAt).reversed())
         .toList();
   }
@@ -892,8 +905,10 @@ public class PersistentCheckpointService implements AutoCloseable {
           var evidence = new ArrayList<>(state.evidence());
           var operations = new ArrayList<>(state.operations());
           if (event.payload() instanceof ToolStartedPayload p) {
-            operations.removeIf(o ->
-                o.toolCallId().equals(p.toolCallId()) && Objects.equals(o.runId(), event.runId()));
+            operations.removeIf(
+                o ->
+                    o.toolCallId().equals(p.toolCallId())
+                        && Objects.equals(o.runId(), event.runId()));
             operations.add(
                 new Operation(
                     p.toolCallId(),
@@ -904,8 +919,10 @@ public class PersistentCheckpointService implements AutoCloseable {
                     event.id(),
                     event.runId()));
           } else if (event.payload() instanceof ToolCompletedPayload p) {
-            operations.removeIf(o ->
-                o.toolCallId().equals(p.toolCallId()) && Objects.equals(o.runId(), event.runId()));
+            operations.removeIf(
+                o ->
+                    o.toolCallId().equals(p.toolCallId())
+                        && Objects.equals(o.runId(), event.runId()));
             operations.add(
                 new Operation(
                     p.toolCallId(),
@@ -921,8 +938,10 @@ public class PersistentCheckpointService implements AutoCloseable {
                     event.runId(),
                     p.toolCallId()));
           } else if (event.payload() instanceof ToolFailedPayload p) {
-            operations.removeIf(o ->
-                o.toolCallId().equals(p.toolCallId()) && Objects.equals(o.runId(), event.runId()));
+            operations.removeIf(
+                o ->
+                    o.toolCallId().equals(p.toolCallId())
+                        && Objects.equals(o.runId(), event.runId()));
             // Failure may have happened after partial side effects; retain it as an explicit failed
             // result requiring inspection.
             operations.add(
@@ -1059,16 +1078,18 @@ public class PersistentCheckpointService implements AutoCloseable {
     if (checkpoint != null)
       checkpoint
           .latest()
-          .ifPresent(c -> {
-            if (c.workingFiles() != null)
-              for (String path : c.workingFiles()) {
-                Path resolved = context.projectRoot().resolve(path).normalize();
-                if (capturedFiles.add(resolved.toAbsolutePath().normalize()))
-                  files.put(resolved.toString(), CheckpointReconciler.fingerprint(resolved));
-              }
-            if (c.resumeHint() != null && Objects.equals(checkpoint.ownerRunId(), context.runId()))
-              fields.put("nextAction", c.resumeHint());
-          });
+          .ifPresent(
+              c -> {
+                if (c.workingFiles() != null)
+                  for (String path : c.workingFiles()) {
+                    Path resolved = context.projectRoot().resolve(path).normalize();
+                    if (capturedFiles.add(resolved.toAbsolutePath().normalize()))
+                      files.put(resolved.toString(), CheckpointReconciler.fingerprint(resolved));
+                  }
+                if (c.resumeHint() != null
+                    && Objects.equals(checkpoint.ownerRunId(), context.runId()))
+                  fields.put("nextAction", c.resumeHint());
+              });
     fields.put("files", files);
     fields.put("git", CheckpointReconciler.git(context.projectRoot()));
   }
@@ -1189,7 +1210,8 @@ public class PersistentCheckpointService implements AutoCloseable {
             + " operations MUST NOT be replayed. Host reconciliation is complete; use the bounded"
             + " handoff below and inspect only specific missing evidence. Use recent artifact"
             + " outcomes and gaps to select the next unfinished unit, rather than rereading an"
-            + " accumulated report from its beginning. Verify artifact claims against source before repairs.\n";
+            + " accumulated report from its beginning. Verify artifact claims against source before"
+            + " repairs.\n";
     // Budget each section independently; a large request/evidence list cannot push safety
     // information out.
     var essentials = new LinkedHashMap<String, Object>();
@@ -1254,7 +1276,8 @@ public class PersistentCheckpointService implements AutoCloseable {
         .append('\n');
     int outcomeBudget = Math.max(2, Math.min(budget / 4, budget - text.length() - 64));
     text.append(
-            "recentWorkArtifacts (current tails; saved claims are not proof of review completion): ")
+            "recentWorkArtifacts (current tails; saved claims are not proof of review completion):"
+                + " ")
         .append(
             RecentWorkArtifacts.describe(
                 state, rawResults == null ? null : rawResults::read, outcomeBudget))
@@ -1303,10 +1326,11 @@ public class PersistentCheckpointService implements AutoCloseable {
       inspected++;
       var reference =
           state.evidence().stream()
-              .filter(e ->
-                  e.origin().equals("RAW_RESULT_REFERENCE")
-                      && Objects.equals(e.runId(), op.runId())
-                      && Objects.equals(e.toolCallId(), op.toolCallId()))
+              .filter(
+                  e ->
+                      e.origin().equals("RAW_RESULT_REFERENCE")
+                          && Objects.equals(e.runId(), op.runId())
+                          && Objects.equals(e.toolCallId(), op.toolCallId()))
               .findFirst();
       if (reference.isEmpty()) continue;
       try {
@@ -1370,10 +1394,11 @@ public class PersistentCheckpointService implements AutoCloseable {
       inspected++;
       var reference =
           state.evidence().stream()
-              .filter(e ->
-                  e.origin().equals("RAW_RESULT_REFERENCE")
-                      && Objects.equals(e.toolCallId(), operation.toolCallId())
-                      && Objects.equals(e.runId(), operation.runId()))
+              .filter(
+                  e ->
+                      e.origin().equals("RAW_RESULT_REFERENCE")
+                          && Objects.equals(e.toolCallId(), operation.toolCallId())
+                          && Objects.equals(e.runId(), operation.runId()))
               .findFirst();
       if (reference.isEmpty()) continue;
       try {
@@ -1504,18 +1529,22 @@ public class PersistentCheckpointService implements AutoCloseable {
     try {
       state = get(project, task);
       if (state.operations().stream()
-          .noneMatch(o ->
-              o.operationKey().equals(callId)
-                  && Set.of(OperationStatus.UNKNOWN, OperationStatus.STARTED).contains(o.status())))
+          .noneMatch(
+              o ->
+                  o.operationKey().equals(callId)
+                      && Set.of(OperationStatus.UNKNOWN, OperationStatus.STARTED)
+                          .contains(o.status())))
         throw new IllegalArgumentException("Unknown operation not found; use runId:toolCallId");
       var fields = repository.fields(state);
       fields.put(
           "operations",
           state.operations().stream()
-              .map(o ->
-                  o.operationKey().equals(callId)
-                      ? new Operation(o.toolCallId(), o.toolName(), outcome, o.eventId(), o.runId())
-                      : o)
+              .map(
+                  o ->
+                      o.operationKey().equals(callId)
+                          ? new Operation(
+                              o.toolCallId(), o.toolName(), outcome, o.eventId(), o.runId())
+                          : o)
               .toList());
       var next = repository.save(repository.fields(fields), state.revision(), claim);
       active.computeIfPresent(state.runId(), (id, s) -> next);

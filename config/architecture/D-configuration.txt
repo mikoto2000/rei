@@ -203,6 +203,7 @@ dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.imag
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.interest.InterestProperties
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.llm.LlmProperties
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor
+dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.llm.discovery.ToolDiscovery
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.paper.PaperTools
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.reminder.ReminderTools
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.review.ReviewTools
