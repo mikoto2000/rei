@@ -552,6 +552,12 @@ export function App({
             )}
             {page === "settings" && (
               <Settings
+                onStart={(serverId) =>
+                  void perform(async () => {
+                    await call("server_select", { serverId });
+                    navigate("new");
+                  })
+                }
                 userAvatar={userAvatar}
                 onUserAvatar={setUserAvatar}
                 servers={data.servers}
