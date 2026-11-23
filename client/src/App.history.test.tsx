@@ -235,3 +235,20 @@ it("submit 404 preserves the draft and never forks automatically", async () => {
   );
   expect(call.mock.calls.filter((c) => c[0] === "chat_submit")).toHaveLength(1);
 });
+it("opens approval and recovery controls inside the selected conversation", async () => {
+  fixture({ workspace_execute: { title: "Controls", items: [] } });
+  fireEvent.click(await main().findByRole("button", { name: /別端末の会話/ }));
+  await screen.findByText("過去の回答");
+  fireEvent.click(
+    screen.getByRole("button", { name: "この会話の承認・回答待ち" }),
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Inbox・承認" }),
+  ).toBeTruthy();
+  expect(screen.getByLabelText("メッセージ")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "この会話の復旧・再開" }));
+  expect(
+    await screen.findByRole("heading", { name: "復旧・再開" }),
+  ).toBeTruthy();
+  expect(screen.getByLabelText("メッセージ")).toBeTruthy();
+});
