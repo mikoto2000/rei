@@ -37,6 +37,7 @@ base64 = "0.23"
 
 tauri = { version = "2", features = [] }
 tauri-plugin-notification = { version = "2" }
+tauri-plugin-opener = "2"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-window-state = "2"

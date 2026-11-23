@@ -250,3 +250,41 @@ it("distinguishes an unchecked connection from a successful connection test", as
   await screen.findByText("接続確認済み");
   expect(call).toHaveBeenCalledWith("server_test", { serverId: "s" });
 });
+it("opens approval and recovery controls inside the selected conversation", async () => {
+  fixture({ workspace_execute: { title: "Controls", items: [] } });
+  fireEvent.click(await main().findByRole("button", { name: /別端末の会話/ }));
+  await screen.findByText("過去の回答");
+  fireEvent.click(
+    screen.getByRole("button", { name: "この会話の承認・回答待ち" }),
+  );
+  expect(
+    await screen.findByRole("heading", { name: "Inbox・承認" }),
+  ).toBeTruthy();
+  expect(screen.getByLabelText("メッセージ")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "この会話の復旧・再開" }));
+  expect(
+    await screen.findByRole("heading", { name: "復旧・再開" }),
+  ).toBeTruthy();
+  expect(screen.getByLabelText("メッセージ")).toBeTruthy();
+});
+it("retains a conversation draft and mode when visiting settings", async () => {
+  fixture();
+  fireEvent.click(await main().findByRole("button", { name: /別端末の会話/ }));
+  await screen.findByText("過去の回答");
+  fireEvent.change(screen.getByLabelText("メッセージ"), {
+    target: { value: "未送信の調査依頼" },
+  });
+  fireEvent.change(screen.getByLabelText("送信方法"), {
+    target: { value: "READ_ONLY" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Settings/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Conversations/ }));
+  fireEvent.click(await main().findByRole("button", { name: /別端末の会話/ }));
+  await screen.findByText("過去の回答");
+  expect(
+    (screen.getByLabelText("メッセージ") as HTMLTextAreaElement).value,
+  ).toBe("未送信の調査依頼");
+  expect((screen.getByLabelText("送信方法") as HTMLSelectElement).value).toBe(
+    "READ_ONLY",
+  );
+});

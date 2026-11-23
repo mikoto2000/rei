@@ -202,7 +202,7 @@ it("interleaves text and event snapshots in native output order", () => {
   expect(rows.map((row) => row.textContent)).toEqual([
     "before",
     expect.stringContaining("→ searchFiles"),
-    " after",
+    "after",
     expect.stringContaining("✓ searchFiles"),
   ]);
   expect(screen.queryByText("before after")).toBeNull();
@@ -454,4 +454,40 @@ it("shows the stored final answer when a replay gap left only events", () => {
     />,
   );
   expect(screen.getByText("Recovered final answer")).toBeTruthy();
+});
+it("renders usable Markdown and copies answers and code", async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true,
+    value: { writeText },
+  });
+  render(
+    <Chat
+      conversation={conversation}
+      projectName="rei"
+      runs={[
+        {
+          ...run,
+          status: "COMPLETED",
+          assistantText:
+            "# 調査結果\n\n[資料](https://example.com)\n\n```ts\nconst answer = 42;\n```",
+        },
+      ]}
+      pending={false}
+      error={null}
+      onSend={vi.fn()}
+      onStop={vi.fn()}
+      onContinue={vi.fn()}
+      onRefresh={vi.fn()}
+      onSubscribe={vi.fn()}
+    />,
+  );
+  expect(screen.getByRole("heading", { name: "調査結果" })).toBeTruthy();
+  expect(screen.getByRole("link", { name: "資料" }).getAttribute("href")).toBe(
+    "https://example.com",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "コードをコピー" }));
+  expect(writeText).toHaveBeenCalledWith("const answer = 42;\n");
+  fireEvent.click(screen.getByRole("button", { name: "回答をコピー" }));
+  expect(writeText).toHaveBeenCalledWith(expect.stringContaining("# 調査結果"));
 });
