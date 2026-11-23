@@ -95,6 +95,12 @@ export function App({
   const [connections, setConnections] = useState<Record<string, Connection>>(
     {},
   );
+  const forgetConnection = (serverId: string) =>
+    setConnections((current) => {
+      const next = { ...current };
+      delete next[serverId];
+      return next;
+    });
   const [projects, setProjects] = useState<Record<string, Project[]>>({});
   const [project, setProject] = useState("");
   const [loadingProjects, setLoadingProjects] = useState(false);
@@ -619,6 +625,7 @@ export function App({
                       name,
                       baseUrl,
                     });
+                    forgetConnection(serverId);
                     if (key)
                       await call("credential_set", {
                         serverId,
@@ -627,10 +634,16 @@ export function App({
                   })
                 }
                 onRemove={(serverId) =>
-                  void perform(() => call("server_remove", { serverId }))
+                  void perform(async () => {
+                    await call("server_remove", { serverId });
+                    forgetConnection(serverId);
+                  })
                 }
                 onDeleteKey={(serverId) =>
-                  void perform(() => call("credential_delete", { serverId }))
+                  void perform(async () => {
+                    await call("credential_delete", { serverId });
+                    forgetConnection(serverId);
+                  })
                 }
                 onTest={(serverId) =>
                   void perform(async () => {
