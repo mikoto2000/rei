@@ -9,12 +9,14 @@ export function HumanAnswers({
   call,
   serverId,
   projectId,
+  sessionId,
 }: {
+  sessionId?: string;
   call: Command;
   serverId: string | null;
   projectId: string;
 }) {
-  const owner = JSON.stringify([serverId, projectId]);
+  const owner = JSON.stringify([serverId, projectId, sessionId]);
   const [snapshot, setSnapshot] = useState<{
     owner: string;
     items: Item[];
@@ -55,7 +57,8 @@ export function HumanAnswers({
               (item) =>
                 item.id &&
                 field(item, "Project") === projectId &&
-                field(item, "Kind") === "USER_ANSWER",
+                field(item, "Kind") === "USER_ANSWER" &&
+                (!sessionId || field(item, "Session") === sessionId),
             ),
           });
       })
@@ -68,7 +71,7 @@ export function HumanAnswers({
     return () => {
       generation.current++;
     };
-  }, [call, serverId, projectId, owner, refresh]);
+  }, [call, serverId, projectId, owner, refresh, sessionId]);
   const visible = snapshot?.owner === owner ? snapshot : null;
   const selected = review?.owner === owner ? review : null;
   const save = async () => {

@@ -12,7 +12,9 @@ export function Attention({
   call,
   serverId,
   projects,
+  sessionId,
 }: {
+  sessionId?: string;
   call: Command;
   serverId: string | null;
   projects: Project[];
@@ -30,7 +32,7 @@ export function Attention({
   const [refresh, setRefresh] = useState(0);
   const generation = useRef(0);
   const busy = useRef(false);
-  const owner = JSON.stringify([serverId, project]);
+  const owner = JSON.stringify([serverId, project, sessionId]);
   useEffect(() => {
     generation.current++;
     setProject(projects[0]?.id ?? "");
@@ -63,7 +65,11 @@ export function Attention({
       const read = (index: number) => {
         const result = results[index];
         return result.status === "fulfilled"
-          ? result.value.items.filter((i) => field(i, "Project") === project)
+          ? result.value.items.filter(
+              (i) =>
+                field(i, "Project") === project &&
+                (!sessionId || field(i, "Session") === sessionId),
+            )
           : [];
       };
       setSnapshot({ owner, notices: read(0), approvals: read(1) });
@@ -74,7 +80,7 @@ export function Attention({
     return () => {
       generation.current++;
     };
-  }, [call, serverId, project, projects, owner, refresh]);
+  }, [call, serverId, project, projects, owner, refresh, sessionId]);
   const mutate = async (operation: WorkspaceOperation) => {
     if (
       !serverId ||

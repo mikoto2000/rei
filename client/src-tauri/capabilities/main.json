@@ -1,1 +1,20 @@
-{"identifier":"main","description":"Local Rei UI: events only; all API and credentials handled in Rust","windows":["main"],"permissions":["core:event:allow-listen","core:event:allow-unlisten"]}
+{
+  "identifier": "main",
+  "description": "Local Rei UI: events only; all API and credentials handled in Rust",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://*"
+        },
+        {
+          "url": "http://*"
+        }
+      ]
+    }
+  ]
+}

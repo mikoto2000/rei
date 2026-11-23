@@ -63,8 +63,42 @@ it("searches loaded titles and lets users pin, archive, and restore a conversati
 });
 
 it("keeps conversation organization isolated by server", () => {
- localStorage.setItem("rei:history:first", JSON.stringify({a:{archived:true}}));
- const state: HistoryState<SessionSummary>={status:"LOADED",items:[{sessionId:"a",projectId:"p",title:"別サーバーの会話",createdAt:"2026-11-24",updatedAt:"2026-11-24"}],nextCursor:null,loadingInitial:false,loadingMore:false,refreshing:false,error:null,stale:false};
- render(<SessionList serverId="second" state={state} projects={[]} projectId={null} onProject={vi.fn()} onMore={vi.fn()} onRefresh={vi.fn()} onRetry={vi.fn()} onOpen={vi.fn()} onNew={vi.fn()} enabled />);
- expect(screen.getByText("別サーバーの会話")).toBeTruthy();
+  localStorage.setItem(
+    "rei:history:first",
+    JSON.stringify({ a: { archived: true } }),
+  );
+  const state: HistoryState<SessionSummary> = {
+    status: "LOADED",
+    items: [
+      {
+        sessionId: "a",
+        projectId: "p",
+        title: "別サーバーの会話",
+        createdAt: "2026-11-24",
+        updatedAt: "2026-11-24",
+      },
+    ],
+    nextCursor: null,
+    loadingInitial: false,
+    loadingMore: false,
+    refreshing: false,
+    error: null,
+    stale: false,
+  };
+  render(
+    <SessionList
+      serverId="second"
+      state={state}
+      projects={[]}
+      projectId={null}
+      onProject={vi.fn()}
+      onMore={vi.fn()}
+      onRefresh={vi.fn()}
+      onRetry={vi.fn()}
+      onOpen={vi.fn()}
+      onNew={vi.fn()}
+      enabled
+    />,
+  );
+  expect(screen.getByText("別サーバーの会話")).toBeTruthy();
 });

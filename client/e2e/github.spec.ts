@@ -1,9 +1,10 @@
+import { openNavigation } from "./navigation";
 import { test, expect } from "@playwright/test";
 test("GitHub facts appear in Inbox and Task results without granting execution", async ({
   page,
 }) => {
   await page.goto("/e2e/fixture.html?github=1");
-  await page.getByRole("button", { name: "Inbox・承認", exact: true }).click();
+  await openNavigation(page, "Inbox・承認");
   await expect(
     page.getByText("GITHUB_REVIEW_SUBMITTED", { exact: true }),
   ).toBeVisible();
@@ -13,7 +14,7 @@ test("GitHub facts appear in Inbox and Task results without granting execution",
   await expect(page.getByText(/Run: なし/)).toBeVisible();
   await page.getByRole("button", { name: "通知を確認済みにする" }).click();
   await expect(page.getByText("未確認の通知はありません。")).toBeVisible();
-  await page.getByRole("button", { name: "Task Manager", exact: true }).click();
+  await openNavigation(page, "Task Manager");
   await expect(page.getByText("QUEUED", { exact: true })).toBeVisible();
   await expect(
     page.getByText("GITHUB_EVENT: github-fact", { exact: true }),
