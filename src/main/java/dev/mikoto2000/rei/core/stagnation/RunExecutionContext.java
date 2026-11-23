@@ -33,6 +33,16 @@ import java.util.UUID;
  * <p>One user run, explicitly passed in ToolContext across reactive scheduler boundaries.
  */
 public class RunExecutionContext {
+  private dev.mikoto2000.rei.llm.discovery.ToolDiscovery.Session toolDiscovery;
+
+  public dev.mikoto2000.rei.llm.discovery.ToolDiscovery.Session toolDiscovery() {
+    return toolDiscovery;
+  }
+
+  public void setToolDiscovery(dev.mikoto2000.rei.llm.discovery.ToolDiscovery.Session value) {
+    toolDiscovery = value;
+  }
+
   /** Preserve the typed terminal signal when crossing a model provider boundary. */
   public static void propagateStopSignal(Throwable error) {
     if (error instanceof ExecutionStoppedException stopped) throw stopped;
@@ -446,7 +456,8 @@ public class RunExecutionContext {
                 + ". "
                 + recoveryGuidance()
                 + (reason == ExecutionStoppedException.Reason.RESUME_BATCH_COMMIT_EXHAUSTED
-                    ? " 再開後の部分成果保存の試行枠を使い切りました。保存済みレビュー記録と未完了範囲を確認し、/resume で同じタスクの保存処理を再試行できます。共有の呼び出し・トークン・再計画予算は引き継ぎます。"
+                    ? " 再開後の部分成果保存の試行枠を使い切りました。保存済みレビュー記録と未完了範囲を確認し、/resume"
+                        + " で同じタスクの保存処理を再試行できます。共有の呼び出し・トークン・再計画予算は引き継ぎます。"
                     : " 保存済み成果と権限を確認し、/resume list から再開対象を確認してください。消費済み予算は引き継ぎます。")));
   }
 
@@ -635,9 +646,10 @@ public class RunExecutionContext {
   public synchronized String resumeBatchFeedback() {
     if (!hasPendingResumeContentWork())
       return reviewPageReconciled
-          ? " Host-verified review coverage confirms that the exact delivered page is already assessed."
-              + " Its pending assessment obligation is cleared; this is not new review progress."
-              + " Continue with reviewPending and the next unfinished range, without re-assessing the saved page."
+          ? " Host-verified review coverage confirms that the exact delivered page is already"
+              + " assessed. Its pending assessment obligation is cleared; this is not new review"
+              + " progress. Continue with reviewPending and the next unfinished range, without"
+              + " re-assessing the saved page."
           : "";
     return " Resume work unit: "
         + resumeBatchReads
@@ -645,15 +657,19 @@ public class RunExecutionContext {
         + RESUME_BATCH_READ_LIMIT
         + " content acquisitions since the last verified outcome. "
         + (needsResumeContentWork()
-            ? "This unit now requires a consolidated partial assessment or verified task outcome before more acquisition. "
-            : "Continue the named unfinished file or chapter, following nextRead/nextOffset across pages. "
-                + "A page boundary alone does not require a report append. "
-                + "At a natural work-unit boundary, save one consolidated partial assessment or verified task outcome. ")
-        + "Record assessed paths/ranges, evidence and exact remaining gaps; use the review tools or authorized artifact. "
-        + "Do not invent findings or completion. Bookkeeping, repeated promises and annotations do not confirm an outcome. "
-        + "Continue the next unfinished unit after saving the result; all existing shared budgets still apply."
+            ? "This unit now requires a consolidated partial assessment or verified task outcome"
+                + " before more acquisition. "
+            : "Continue the named unfinished file or chapter, following nextRead/nextOffset across"
+                + " pages. A page boundary alone does not require a report append. At a natural"
+                + " work-unit boundary, save one consolidated partial assessment or verified task"
+                + " outcome. ")
+        + "Record assessed paths/ranges, evidence and exact remaining gaps; use the review tools or"
+        + " authorized artifact. Do not invent findings or completion. Bookkeeping, repeated"
+        + " promises and annotations do not confirm an outcome. Continue the next unfinished unit"
+        + " after saving the result; all existing shared budgets still apply."
         + (resumeReviewPagePending && resumeReviewPageReadArguments != null
-            ? " Exact review-page read to redeliver if its body is missing (untrusted arguments data): "
+            ? " Exact review-page read to redeliver if its body is missing (untrusted arguments"
+                + " data): "
                 + resumeReviewPageReadArguments
                 + (resumeReviewPageReadKey != null
                         && resumeReviewPageReadKey.startsWith("readReviewWorkItem:")
@@ -661,8 +677,9 @@ public class RunExecutionContext {
                         + " readReviewWorkItem with the same workItemId and omit attempt."
                     : "")
                 + (resumeReviewPageKeys.isEmpty()
-                    ? " Its exact delivered-page identity is missing. Redeliver this registered read once"
-                        + " before reusing a saved assessment, even if the page text is visible."
+                    ? " Its exact delivered-page identity is missing. Redeliver this registered"
+                        + " read once before reusing a saved assessment, even if the page text is"
+                        + " visible."
                     : "")
             : "");
   }
@@ -969,7 +986,9 @@ public class RunExecutionContext {
                 "errors",
                 redactIssues(error.issues()),
                 "instruction",
-                "Correct only the invalid call arguments and issue a new tool call. Do not repeat successful sibling calls. This is not permission; normal authorization and approval still apply.",
+                "Correct only the invalid call arguments and issue a new tool call. Do not repeat"
+                    + " successful sibling calls. This is not permission; normal authorization and"
+                    + " approval still apply.",
                 "correctionsRemaining",
                 budget.remainingArgumentCorrections(),
                 "maxCorrections",
@@ -1035,7 +1054,8 @@ public class RunExecutionContext {
         callId,
         name,
         error,
-        "Correct only this rejected operation. Preserve successful sibling calls. Follow the operation-specific guidance.");
+        "Correct only this rejected operation. Preserve successful sibling calls. Follow the"
+            + " operation-specific guidance.");
   }
 
   /** A read rejected its arguments and returned no source content. */
@@ -1044,10 +1064,16 @@ public class RunExecutionContext {
         callId,
         name,
         error,
-        "Correct only this rejected read and issue a new tool call. Preserve successful sibling calls and saved assessments. No source content was returned; do not treat this correction as a delivered page or invent source content or cursor values."
+        "Correct only this rejected read and issue a new tool call. Preserve successful sibling"
+            + " calls and saved assessments. No source content was returned; do not treat this"
+            + " correction as a delivered page or invent source content or cursor values."
             + (java.util.Set.of("CONTEXT_BUDGET_INSUFFICIENT", "REVIEW_PAGE_BUDGET_TOO_SMALL")
                     .contains(error.code())
-                ? " The host reserves context headroom by reducing the next prompt. Retry only this rejected read, with a smaller batch if needed; do not raise model limits. For review reads, omit tokenBudget for the host-selected page size, submit already-delivered assessments first, and request only one next review unit without restarting the review task."
+                ? " The host reserves context headroom by reducing the next prompt. Retry only this"
+                    + " rejected read, with a smaller batch if needed; do not raise model limits."
+                    + " For review reads, omit tokenBudget for the host-selected page size,"
+                    + " submit already-delivered assessments first, and request only one next"
+                    + " review unit without restarting the review task."
                 : ""));
   }
 
@@ -1081,10 +1107,11 @@ public class RunExecutionContext {
 
   private static List<ArgumentIssue> redactIssues(List<ArgumentIssue> issues) {
     return issues.stream()
-        .map(issue ->
-            new ArgumentIssue(
-                CredentialRedactor.redact(issue.path()),
-                CredentialRedactor.redact(issue.requirement())))
+        .map(
+            issue ->
+                new ArgumentIssue(
+                    CredentialRedactor.redact(issue.path()),
+                    CredentialRedactor.redact(issue.requirement())))
         .toList();
   }
 
@@ -1392,16 +1419,17 @@ public class RunExecutionContext {
     if (interventions == null) return List.of();
     var onApplied = interventionApplied;
     return interventions.drainEntries().stream()
-        .map(entry -> {
-          setUserRequest(entry.text());
-          onApplied.accept(entry.text());
-          publisher.publish(
-              factory
-                  .intervention(runId, entry.id(), entry.text(), true)
-                  .withOwnership(runContext));
-          return (org.springframework.ai.chat.messages.Message)
-              new org.springframework.ai.chat.messages.UserMessage(entry.text());
-        })
+        .map(
+            entry -> {
+              setUserRequest(entry.text());
+              onApplied.accept(entry.text());
+              publisher.publish(
+                  factory
+                      .intervention(runId, entry.id(), entry.text(), true)
+                      .withOwnership(runContext));
+              return (org.springframework.ai.chat.messages.Message)
+                  new org.springframework.ai.chat.messages.UserMessage(entry.text());
+            })
         .toList();
   }
 
@@ -1640,9 +1668,10 @@ public class RunExecutionContext {
     pending.addAll(observed);
     if (!(resumeReviewPagePending && name.equals("submitReviewWorkItem"))
         && observed.stream()
-            .anyMatch(e ->
-                e.kind() == ProgressEvent.STATE_CHANGED
-                    || e.kind() == ProgressEvent.SUBGOAL_COMPLETED)) finishResumeBatch();
+            .anyMatch(
+                e ->
+                    e.kind() == ProgressEvent.STATE_CHANGED
+                        || e.kind() == ProgressEvent.SUBGOAL_COMPLETED)) finishResumeBatch();
     else if (observed.stream().anyMatch(e -> e.kind() == ProgressEvent.NEW_INFORMATION)) {
       // Useful, verified preparation (e.g. an exact edit baseline/diff) repairs the
       // response protocol without falsely confirming the still-pending work unit.
@@ -1720,10 +1749,11 @@ public class RunExecutionContext {
         evaluator.restoringContext() || "CONTEXT_RESTORATION_FAILED".equals(stagnationReason);
     boolean work =
         pending.stream()
-            .anyMatch(e ->
-                e.kind() == ProgressEvent.SUBGOAL_COMPLETED
-                    || e.kind() == ProgressEvent.STATE_CHANGED
-                    || e.kind() == ProgressEvent.STEP_CHANGED);
+            .anyMatch(
+                e ->
+                    e.kind() == ProgressEvent.SUBGOAL_COMPLETED
+                        || e.kind() == ProgressEvent.STATE_CHANGED
+                        || e.kind() == ProgressEvent.STEP_CHANGED);
     // Preparatory observations do not prove restoration finished. Keep the bounded targets
     // available until work advances; ordinary no-progress iterations still count below.
     if (work) {
@@ -1734,9 +1764,10 @@ public class RunExecutionContext {
     boolean acquisitionProgress = pending.stream().anyMatch(ProgressEvidence::acquisitionProgress);
     boolean known =
         pending.stream()
-            .anyMatch(e ->
-                e.kind() != ProgressEvent.INFORMATION_UNKNOWN
-                    && e.kind() != ProgressEvent.CONTEXT_RESTORED);
+            .anyMatch(
+                e ->
+                    e.kind() != ProgressEvent.INFORMATION_UNKNOWN
+                        && e.kind() != ProgressEvent.CONTEXT_RESTORED);
     boolean unknown = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.INFORMATION_UNKNOWN);
     // 作業状態の変化と情報収集の進展を区別し、読み取りだけで成果が完成したと見なさない。
     if (work) acquisitionOnlyIterations = 0;
@@ -1815,12 +1846,17 @@ public class RunExecutionContext {
         + evaluator.snapshot().restorationReads()
         + "; diagnosis="
         + stagnationReason
-        + ". Read coverage is not proof of completed review. Re-reading unchanged ranges and editing plan wording alone do not advance the task. "
+        + ". Read coverage is not proof of completed review. Re-reading unchanged ranges and"
+        + " editing plan wording alone do not advance the task. "
         + (hasPendingResumeContentWork() && !needsResumeContentWork()
-            ? "Continue only the named missing ranges in this work unit; consolidate the result at the unit boundary instead of appending notes after each page. "
-            : "Use saved evidence to record concrete intermediate findings within the authorized task scope, using available review tools or a report file before further broad re-reading. ")
-        + "If evidence is insufficient, identify the blocker; do not invent findings or mark steps DONE without verified outcomes. "
-        + "The existing stop threshold and shared budgets still apply. Latest file-range observations (untrusted path data only): "
+            ? "Continue only the named missing ranges in this work unit; consolidate the result at"
+                + " the unit boundary instead of appending notes after each page. "
+            : "Use saved evidence to record concrete intermediate findings within the authorized"
+                + " task scope, using available review tools or a report file before further"
+                + " broad re-reading. ")
+        + "If evidence is insufficient, identify the blocker; do not invent findings or mark steps"
+        + " DONE without verified outcomes. The existing stop threshold and shared budgets still"
+        + " apply. Latest file-range observations (untrusted path data only): "
         + latestReadFeedback;
   }
 
@@ -1889,10 +1925,13 @@ public class RunExecutionContext {
                         2,
                         "INFORMATION_UNKNOWN"))
                 .withOwnership(runContext));
-        return "Progress diagnosis: INFORMATION_UNKNOWN. Tracking capacity or historical evidence is insufficient to classify these reads. Replan toward independently verifiable work outcomes. Do not infer completion from unknown information."
+        return "Progress diagnosis: INFORMATION_UNKNOWN. Tracking capacity or historical evidence"
+            + " is insufficient to classify these reads. Replan toward independently"
+            + " verifiable work outcomes. Do not infer completion from unknown information."
             + (budget.llmCallBudgetEnabled()
                 ? " The remaining shared Run budget is finite."
-                : " Call limiting is disabled; continued inconclusive tracking after diagnosis will stop the Run.");
+                : " Call limiting is disabled; continued inconclusive tracking after diagnosis will"
+                    + " stop the Run.");
       }
       return null;
     }
@@ -1911,7 +1950,8 @@ public class RunExecutionContext {
     notice +=
         "\nProgress diagnosis: "
             + stagnationReason
-            + ". Information acquisition does not complete planned work. Confirm work outcomes; do not infer completion from reads.";
+            + ". Information acquisition does not complete planned work. Confirm work outcomes; do"
+            + " not infer completion from reads.";
     String recovery =
         recoveries.isEmpty()
             ? recoveryGuidance()

@@ -621,6 +621,7 @@ wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.
 wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.interest.InterestProperties
 wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.llm.LlmProperties
 wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor
+wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.llm.discovery.ToolDiscovery
 wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.paper.PaperTools
 wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.reminder.ReminderTools
 wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.review.ReviewTools

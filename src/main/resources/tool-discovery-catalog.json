@@ -1,0 +1,1320 @@
+[
+  {
+    "name": "activityBetween",
+    "basic": false,
+    "set": "activityBetween",
+    "aliases": "活動履歴 活動履歴 activity timeline",
+    "dependencies": []
+  },
+  {
+    "name": "activitySummary",
+    "basic": false,
+    "set": "activitySummary",
+    "aliases": "活動履歴 活動履歴 activity timeline",
+    "dependencies": []
+  },
+  {
+    "name": "activityTimeline",
+    "basic": false,
+    "set": "activityTimeline",
+    "aliases": "活動履歴 活動履歴 activity timeline",
+    "dependencies": []
+  },
+  {
+    "name": "activityWorkInferences",
+    "basic": false,
+    "set": "activityWorkInferences",
+    "aliases": "活動履歴 活動履歴 activity timeline",
+    "dependencies": []
+  },
+  {
+    "name": "applyDiagnosedRepair",
+    "basic": false,
+    "set": "diagnosed-repair",
+    "aliases": "テスト診断・修復 テスト 失敗 診断 修復 test diagnosis repair",
+    "dependencies": [
+      "text-change"
+    ]
+  },
+  {
+    "name": "applyTextChangeSet",
+    "basic": false,
+    "set": "text-change",
+    "aliases": "変更セット 変更 提案 差分 修正 change set patch",
+    "dependencies": []
+  },
+  {
+    "name": "applyTextDiff",
+    "basic": true,
+    "set": "applyTextDiff",
+    "aliases": "日常的な編集 ",
+    "dependencies": []
+  },
+  {
+    "name": "applyTextDocumentChangeSet",
+    "basic": false,
+    "set": "document-change",
+    "aliases": "文書変更・描画検証 文書 描画 document render",
+    "dependencies": []
+  },
+  {
+    "name": "attachGoalCompletionEvidence",
+    "basic": false,
+    "set": "attachGoalCompletionEvidence",
+    "aliases": "Goalの証拠・工程管理 ",
+    "dependencies": []
+  },
+  {
+    "name": "attachGoalStageEvidence",
+    "basic": false,
+    "set": "attachGoalStageEvidence",
+    "aliases": "Goalの証拠・工程管理 ",
+    "dependencies": []
+  },
+  {
+    "name": "beginRepositoryReview",
+    "basic": false,
+    "set": "review-durable",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": [
+      "review-legacy"
+    ]
+  },
+  {
+    "name": "beginReview",
+    "basic": false,
+    "set": "review-legacy",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": []
+  },
+  {
+    "name": "blueskyPost",
+    "basic": false,
+    "set": "blueskyPost",
+    "aliases": "Bluesky投稿 ",
+    "dependencies": []
+  },
+  {
+    "name": "cancelDependency",
+    "basic": false,
+    "set": "dependency",
+    "aliases": "依存条件・待機 依存 待機 dependency wait",
+    "dependencies": []
+  },
+  {
+    "name": "cancelScheduledAction",
+    "basic": false,
+    "set": "cancelScheduledAction",
+    "aliases": "実行スケジュール ",
+    "dependencies": []
+  },
+  {
+    "name": "changeTestImpact",
+    "basic": false,
+    "set": "changeTestImpact",
+    "aliases": "テスト診断・修復 テスト 失敗 診断 修復 test diagnosis repair",
+    "dependencies": []
+  },
+  {
+    "name": "checkDependency",
+    "basic": false,
+    "set": "dependency",
+    "aliases": "依存条件・待機 依存 待機 dependency wait",
+    "dependencies": []
+  },
+  {
+    "name": "checkHttpDependency",
+    "basic": false,
+    "set": "dependency",
+    "aliases": "依存条件・待機 依存 待機 dependency wait",
+    "dependencies": []
+  },
+  {
+    "name": "checkpointAbandon",
+    "basic": false,
+    "set": "checkpoint",
+    "aliases": "チェックポイント・復旧 チェックポイント 再開 復旧 checkpoint resume",
+    "dependencies": []
+  },
+  {
+    "name": "checkpointAnnotate",
+    "basic": false,
+    "set": "checkpoint",
+    "aliases": "チェックポイント・復旧 チェックポイント 再開 復旧 checkpoint resume",
+    "dependencies": []
+  },
+  {
+    "name": "checkpointConfirm",
+    "basic": false,
+    "set": "checkpoint",
+    "aliases": "チェックポイント・復旧 チェックポイント 再開 復旧 checkpoint resume",
+    "dependencies": []
+  },
+  {
+    "name": "checkpointInspect",
+    "basic": false,
+    "set": "checkpoint",
+    "aliases": "チェックポイント・復旧 チェックポイント 再開 復旧 checkpoint resume",
+    "dependencies": []
+  },
+  {
+    "name": "checkpointList",
+    "basic": false,
+    "set": "checkpoint",
+    "aliases": "チェックポイント・復旧 チェックポイント 再開 復旧 checkpoint resume",
+    "dependencies": []
+  },
+  {
+    "name": "checkpointPlan",
+    "basic": false,
+    "set": "checkpoint",
+    "aliases": "チェックポイント・復旧 チェックポイント 再開 復旧 checkpoint resume",
+    "dependencies": []
+  },
+  {
+    "name": "checkpointResume",
+    "basic": false,
+    "set": "checkpoint",
+    "aliases": "チェックポイント・復旧 チェックポイント 再開 復旧 checkpoint resume",
+    "dependencies": []
+  },
+  {
+    "name": "checkpointSave",
+    "basic": false,
+    "set": "checkpoint",
+    "aliases": "チェックポイント・復旧 チェックポイント 再開 復旧 checkpoint resume",
+    "dependencies": []
+  },
+  {
+    "name": "checkpointShow",
+    "basic": false,
+    "set": "checkpoint",
+    "aliases": "チェックポイント・復旧 チェックポイント 再開 復旧 checkpoint resume",
+    "dependencies": []
+  },
+  {
+    "name": "claimReviewWorkItem",
+    "basic": false,
+    "set": "review-durable",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": [
+      "review-legacy"
+    ]
+  },
+  {
+    "name": "cleanTextDocumentStaging",
+    "basic": false,
+    "set": "document-change",
+    "aliases": "文書変更・描画検証 文書 描画 document render",
+    "dependencies": []
+  },
+  {
+    "name": "copyFile",
+    "basic": true,
+    "set": "copyFile",
+    "aliases": "日常的な編集 ",
+    "dependencies": []
+  },
+  {
+    "name": "countCharacters",
+    "basic": false,
+    "set": "countCharacters",
+    "aliases": "文字数計算 ",
+    "dependencies": []
+  },
+  {
+    "name": "countFileLines",
+    "basic": true,
+    "set": "countFileLines",
+    "aliases": "ファイル探索・読取 ",
+    "dependencies": []
+  },
+  {
+    "name": "createDirectories",
+    "basic": true,
+    "set": "createDirectories",
+    "aliases": "日常的な編集 ",
+    "dependencies": []
+  },
+  {
+    "name": "dailyBriefing",
+    "basic": false,
+    "set": "dailyBriefing",
+    "aliases": "ブリーフィング ",
+    "dependencies": []
+  },
+  {
+    "name": "delegateTask",
+    "basic": false,
+    "set": "subagent",
+    "aliases": "サブエージェント 委譲 サブエージェント delegate subagent",
+    "dependencies": []
+  },
+  {
+    "name": "delegateTasks",
+    "basic": false,
+    "set": "subagent",
+    "aliases": "サブエージェント 委譲 サブエージェント delegate subagent",
+    "dependencies": []
+  },
+  {
+    "name": "deleteFile",
+    "basic": true,
+    "set": "deleteFile",
+    "aliases": "日常的な編集 ",
+    "dependencies": []
+  },
+  {
+    "name": "dependencyHistory",
+    "basic": false,
+    "set": "dependency",
+    "aliases": "依存条件・待機 依存 待機 dependency wait",
+    "dependencies": []
+  },
+  {
+    "name": "dependencyStatus",
+    "basic": false,
+    "set": "dependency",
+    "aliases": "依存条件・待機 依存 待機 dependency wait",
+    "dependencies": []
+  },
+  {
+    "name": "diagnoseTestReport",
+    "basic": false,
+    "set": "diagnoseTestReport",
+    "aliases": "テスト診断・修復 テスト 失敗 診断 修復 test diagnosis repair",
+    "dependencies": []
+  },
+  {
+    "name": "diagnoseTestReports",
+    "basic": false,
+    "set": "diagnoseTestReports",
+    "aliases": "テスト診断・修復 テスト 失敗 診断 修復 test diagnosis repair",
+    "dependencies": []
+  },
+  {
+    "name": "discardTextChangeSet",
+    "basic": false,
+    "set": "text-change",
+    "aliases": "変更セット 変更 提案 差分 修正 change set patch",
+    "dependencies": []
+  },
+  {
+    "name": "discardTextDocumentChangeSet",
+    "basic": false,
+    "set": "document-change",
+    "aliases": "文書変更・描画検証 文書 描画 document render",
+    "dependencies": []
+  },
+  {
+    "name": "dismissReviewFinding",
+    "basic": false,
+    "set": "review-legacy",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": []
+  },
+  {
+    "name": "episodeGet",
+    "basic": false,
+    "set": "episodeGet",
+    "aliases": "記憶の詳細・診断 ",
+    "dependencies": []
+  },
+  {
+    "name": "episodeProcessingStatus",
+    "basic": false,
+    "set": "episodeProcessingStatus",
+    "aliases": "記憶の詳細・診断 ",
+    "dependencies": []
+  },
+  {
+    "name": "episodeSources",
+    "basic": false,
+    "set": "episodeSources",
+    "aliases": "記憶の詳細・診断 ",
+    "dependencies": []
+  },
+  {
+    "name": "executeExternalProgram",
+    "basic": false,
+    "set": "executeExternalProgram",
+    "aliases": "外部プログラム実行 ",
+    "dependencies": []
+  },
+  {
+    "name": "feedAdd",
+    "basic": false,
+    "set": "feedAdd",
+    "aliases": "フィード フィード ニュース feed rss",
+    "dependencies": []
+  },
+  {
+    "name": "feedDelete",
+    "basic": false,
+    "set": "feedDelete",
+    "aliases": "フィード フィード ニュース feed rss",
+    "dependencies": []
+  },
+  {
+    "name": "feedList",
+    "basic": false,
+    "set": "feedList",
+    "aliases": "フィード フィード ニュース feed rss",
+    "dependencies": []
+  },
+  {
+    "name": "feedSummarizeBriefing",
+    "basic": false,
+    "set": "feedSummarizeBriefing",
+    "aliases": "フィード フィード ニュース feed rss",
+    "dependencies": []
+  },
+  {
+    "name": "feedSummarizeItem",
+    "basic": false,
+    "set": "feedSummarizeItem",
+    "aliases": "フィード フィード ニュース feed rss",
+    "dependencies": []
+  },
+  {
+    "name": "feedUpdate",
+    "basic": false,
+    "set": "feedUpdate",
+    "aliases": "フィード フィード ニュース feed rss",
+    "dependencies": []
+  },
+  {
+    "name": "fetchUrlContent",
+    "basic": true,
+    "set": "fetchUrlContent",
+    "aliases": "Web調査 ",
+    "dependencies": []
+  },
+  {
+    "name": "findFile",
+    "basic": true,
+    "set": "findFile",
+    "aliases": "ファイル探索・読取 ",
+    "dependencies": []
+  },
+  {
+    "name": "getClaudeCodeReview",
+    "basic": false,
+    "set": "external-claude-review",
+    "aliases": "外部レビュー Claudeレビュー Claudeでレビュー Claudecodereview Claude review",
+    "dependencies": []
+  },
+  {
+    "name": "getCodexImplementationRequest",
+    "basic": false,
+    "set": "external-implementation",
+    "aliases": "外部実装 Codex実装 Codexで実装 実装依頼 実装修正 実装 Codex implementation",
+    "dependencies": []
+  },
+  {
+    "name": "getCodexReview",
+    "basic": false,
+    "set": "external-codex-review",
+    "aliases": "外部レビュー Codexレビュー Codexでレビュー Codexcodereview Codex review",
+    "dependencies": []
+  },
+  {
+    "name": "getDurableSubAgent",
+    "basic": false,
+    "set": "subagent",
+    "aliases": "サブエージェント 委譲 サブエージェント delegate subagent",
+    "dependencies": []
+  },
+  {
+    "name": "getExternalImplementation",
+    "basic": false,
+    "set": "external-implementation",
+    "aliases": "外部実装 Codex実装 Codexで実装 実装依頼 実装修正 実装 Codex implementation",
+    "dependencies": []
+  },
+  {
+    "name": "getGoalCompletionDefinition",
+    "basic": false,
+    "set": "getGoalCompletionDefinition",
+    "aliases": "Goalの証拠・工程管理 ",
+    "dependencies": []
+  },
+  {
+    "name": "getHolidayInfo",
+    "basic": false,
+    "set": "getHolidayInfo",
+    "aliases": "祝日 祝日 holiday",
+    "dependencies": []
+  },
+  {
+    "name": "getLastSummary",
+    "basic": true,
+    "set": "getLastSummary",
+    "aliases": "知識・作業文脈 ",
+    "dependencies": []
+  },
+  {
+    "name": "getPaper",
+    "basic": false,
+    "set": "getPaper",
+    "aliases": "論文情報 書誌情報 メタデータ DOI paperdetails metadata",
+    "dependencies": []
+  },
+  {
+    "name": "getPaperContent",
+    "basic": false,
+    "set": "paper-content",
+    "aliases": "論文本文 論文の本文 本文取得 papercontent",
+    "dependencies": []
+  },
+  {
+    "name": "getPaperSection",
+    "basic": false,
+    "set": "paper-content",
+    "aliases": "論文章節 論文の章 論文の節 セクション papersection",
+    "dependencies": []
+  },
+  {
+    "name": "getPaperTranslationChunk",
+    "basic": false,
+    "set": "paper-translation",
+    "aliases": "翻訳結果 翻訳の続き 翻訳チャンク translationchunk",
+    "dependencies": []
+  },
+  {
+    "name": "getPatchRequirementReview",
+    "basic": false,
+    "set": "getPatchRequirementReview",
+    "aliases": "要件レビュー ",
+    "dependencies": []
+  },
+  {
+    "name": "getShellEnvironment",
+    "basic": true,
+    "set": "getShellEnvironment",
+    "aliases": "コマンド・プロセス管理 ",
+    "dependencies": []
+  },
+  {
+    "name": "getShellProcessStatus",
+    "basic": true,
+    "set": "getShellProcessStatus",
+    "aliases": "コマンド・プロセス管理 ",
+    "dependencies": []
+  },
+  {
+    "name": "getTextChangeSetDiff",
+    "basic": false,
+    "set": "text-change",
+    "aliases": "変更セット 変更 提案 差分 修正 change set patch",
+    "dependencies": []
+  },
+  {
+    "name": "getTextDocumentChangeSetDiff",
+    "basic": false,
+    "set": "document-change",
+    "aliases": "文書変更・描画検証 文書 描画 document render",
+    "dependencies": []
+  },
+  {
+    "name": "googleCalendarCreateEvent",
+    "basic": false,
+    "set": "googleCalendarCreateEvent",
+    "aliases": "カレンダー 予定作成 予定を作成 予定を追加 予定登録 createcalendarevent",
+    "dependencies": []
+  },
+  {
+    "name": "googleCalendarListEvents",
+    "basic": false,
+    "set": "googleCalendarListEvents",
+    "aliases": "カレンダー 期間の予定 予定一覧 予定を一覧 予定の一覧 listcalendarevents calendarrange",
+    "dependencies": []
+  },
+  {
+    "name": "googleCalendarListEventsForDate",
+    "basic": false,
+    "set": "googleCalendarListEventsForDate",
+    "aliases": "カレンダー 指定日の予定 明日の予定 明日 今日 予定確認 予定を確認 予定を見る listcalendareventsfordate",
+    "dependencies": []
+  },
+  {
+    "name": "grepMultiQuery",
+    "basic": true,
+    "set": "grepMultiQuery",
+    "aliases": "ファイル探索・読取 ",
+    "dependencies": []
+  },
+  {
+    "name": "inspectDiagnosedRepair",
+    "basic": false,
+    "set": "diagnosed-repair",
+    "aliases": "テスト診断・修復 テスト 失敗 診断 修復 test diagnosis repair",
+    "dependencies": [
+      "text-change"
+    ]
+  },
+  {
+    "name": "inspectDocumentRender",
+    "basic": false,
+    "set": "document-renderer",
+    "aliases": "文書変更・描画検証 文書 描画 document render",
+    "dependencies": []
+  },
+  {
+    "name": "inspectExternalImplementation",
+    "basic": false,
+    "set": "external-implementation",
+    "aliases": "外部実装 Codex実装 Codexで実装 実装依頼 実装修正 実装 Codex implementation",
+    "dependencies": []
+  },
+  {
+    "name": "inspectPatchRequirementReview",
+    "basic": false,
+    "set": "inspectPatchRequirementReview",
+    "aliases": "要件レビュー ",
+    "dependencies": []
+  },
+  {
+    "name": "inspectTextChangeSet",
+    "basic": false,
+    "set": "text-change",
+    "aliases": "変更セット 変更 提案 差分 修正 change set patch",
+    "dependencies": []
+  },
+  {
+    "name": "inspectTextDocumentChangeSet",
+    "basic": false,
+    "set": "document-change",
+    "aliases": "文書変更・描画検証 文書 描画 document render",
+    "dependencies": []
+  },
+  {
+    "name": "killShellProcess",
+    "basic": true,
+    "set": "killShellProcess",
+    "aliases": "コマンド・プロセス管理 ",
+    "dependencies": []
+  },
+  {
+    "name": "listClaudeCodeReviews",
+    "basic": false,
+    "set": "external-claude-review",
+    "aliases": "外部レビュー Claudeレビュー Claudeでレビュー Claudecodereview Claude review",
+    "dependencies": []
+  },
+  {
+    "name": "listCodexReviews",
+    "basic": false,
+    "set": "external-codex-review",
+    "aliases": "外部レビュー Codexレビュー Codexでレビュー Codexcodereview Codex review",
+    "dependencies": []
+  },
+  {
+    "name": "listDurableSubAgents",
+    "basic": false,
+    "set": "subagent",
+    "aliases": "サブエージェント 委譲 サブエージェント delegate subagent",
+    "dependencies": []
+  },
+  {
+    "name": "listFile",
+    "basic": true,
+    "set": "listFile",
+    "aliases": "ファイル探索・読取 ",
+    "dependencies": []
+  },
+  {
+    "name": "listHolidays",
+    "basic": false,
+    "set": "listHolidays",
+    "aliases": "祝日 祝日 holiday",
+    "dependencies": []
+  },
+  {
+    "name": "listPatchRequirementReviews",
+    "basic": false,
+    "set": "listPatchRequirementReviews",
+    "aliases": "要件レビュー ",
+    "dependencies": []
+  },
+  {
+    "name": "listReviewTargets",
+    "basic": false,
+    "set": "review-durable",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": [
+      "review-legacy"
+    ]
+  },
+  {
+    "name": "listReviewTaskResults",
+    "basic": false,
+    "set": "review-durable",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": [
+      "review-legacy"
+    ]
+  },
+  {
+    "name": "listReviewTasks",
+    "basic": false,
+    "set": "review-durable",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": [
+      "review-legacy"
+    ]
+  },
+  {
+    "name": "listScheduledActions",
+    "basic": false,
+    "set": "listScheduledActions",
+    "aliases": "実行スケジュール ",
+    "dependencies": []
+  },
+  {
+    "name": "moveFile",
+    "basic": true,
+    "set": "moveFile",
+    "aliases": "日常的な編集 ",
+    "dependencies": []
+  },
+  {
+    "name": "now",
+    "basic": true,
+    "set": "now",
+    "aliases": "日時 ",
+    "dependencies": []
+  },
+  {
+    "name": "prepareCodexImplementation",
+    "basic": false,
+    "set": "external-implementation",
+    "aliases": "外部実装 Codex実装 Codexで実装 実装依頼 実装修正 実装 Codex implementation",
+    "dependencies": []
+  },
+  {
+    "name": "proposeDiagnosedRepair",
+    "basic": false,
+    "set": "diagnosed-repair",
+    "aliases": "テスト診断・修復 テスト 失敗 診断 修復 test diagnosis repair",
+    "dependencies": [
+      "text-change"
+    ]
+  },
+  {
+    "name": "proposeGoalStageSplit",
+    "basic": false,
+    "set": "proposeGoalStageSplit",
+    "aliases": "Goalの証拠・工程管理 ",
+    "dependencies": []
+  },
+  {
+    "name": "proposeTextChangeSet",
+    "basic": false,
+    "set": "text-change",
+    "aliases": "変更セット 変更 提案 差分 修正 change set patch",
+    "dependencies": []
+  },
+  {
+    "name": "proposeTextDocumentChangeSet",
+    "basic": false,
+    "set": "document-change",
+    "aliases": "文書変更・描画検証 文書 描画 document render",
+    "dependencies": []
+  },
+  {
+    "name": "readBinaryFile",
+    "basic": false,
+    "set": "readBinaryFile",
+    "aliases": "特殊ファイル入出力 ",
+    "dependencies": []
+  },
+  {
+    "name": "readMultiFile",
+    "basic": true,
+    "set": "readMultiFile",
+    "aliases": "ファイル探索・読取 ",
+    "dependencies": []
+  },
+  {
+    "name": "readNextReviewWorkItem",
+    "basic": false,
+    "set": "review-durable",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": [
+      "review-legacy"
+    ]
+  },
+  {
+    "name": "readNextReviewWorkItems",
+    "basic": false,
+    "set": "review-durable",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": [
+      "review-legacy"
+    ]
+  },
+  {
+    "name": "readPdfFile",
+    "basic": false,
+    "set": "readPdfFile",
+    "aliases": "特殊ファイル入出力 ",
+    "dependencies": []
+  },
+  {
+    "name": "readRawToolResult",
+    "basic": true,
+    "set": "readRawToolResult",
+    "aliases": "実行継続・結果読取 ",
+    "dependencies": []
+  },
+  {
+    "name": "readReviewFile",
+    "basic": false,
+    "set": "review-legacy",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": []
+  },
+  {
+    "name": "readReviewPages",
+    "basic": false,
+    "set": "review-legacy",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": []
+  },
+  {
+    "name": "readReviewWorkItem",
+    "basic": false,
+    "set": "review-durable",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": [
+      "review-legacy"
+    ]
+  },
+  {
+    "name": "readSkillResource",
+    "basic": true,
+    "set": "readSkillResource",
+    "aliases": "実行継続・結果読取 ",
+    "dependencies": []
+  },
+  {
+    "name": "readTextChangeSetBase",
+    "basic": false,
+    "set": "text-change",
+    "aliases": "変更セット 変更 提案 差分 修正 change set patch",
+    "dependencies": []
+  },
+  {
+    "name": "reconcileSubAgent",
+    "basic": false,
+    "set": "subagent",
+    "aliases": "サブエージェント 委譲 サブエージェント delegate subagent",
+    "dependencies": []
+  },
+  {
+    "name": "reconcileTextChangeSet",
+    "basic": false,
+    "set": "text-change",
+    "aliases": "変更セット 変更 提案 差分 修正 change set patch",
+    "dependencies": []
+  },
+  {
+    "name": "recordCodexAcceptanceEvaluation",
+    "basic": false,
+    "set": "external-implementation",
+    "aliases": "外部実装 Codex実装 Codexで実装 実装依頼 実装修正 実装 Codex implementation",
+    "dependencies": []
+  },
+  {
+    "name": "registerDependency",
+    "basic": false,
+    "set": "dependency",
+    "aliases": "依存条件・待機 依存 待機 dependency wait",
+    "dependencies": []
+  },
+  {
+    "name": "reminderCreate",
+    "basic": false,
+    "set": "reminderCreate",
+    "aliases": "リマインダー 通知 リマインダー reminder",
+    "dependencies": []
+  },
+  {
+    "name": "reminderList",
+    "basic": false,
+    "set": "reminderList",
+    "aliases": "リマインダー 通知 リマインダー reminder",
+    "dependencies": []
+  },
+  {
+    "name": "repositoryMap",
+    "basic": true,
+    "set": "repositoryMap",
+    "aliases": "ファイル探索・読取 ",
+    "dependencies": []
+  },
+  {
+    "name": "requestClaudeCodeContinueReview",
+    "basic": false,
+    "set": "external-claude-review",
+    "aliases": "外部レビュー Claudeレビュー Claudeでレビュー Claudecodereview Claude review",
+    "dependencies": []
+  },
+  {
+    "name": "requestClaudeCodeFixProposal",
+    "basic": false,
+    "set": "external-claude-review",
+    "aliases": "外部レビュー Claudeレビュー Claudeでレビュー Claudecodereview Claude review",
+    "dependencies": []
+  },
+  {
+    "name": "requestClaudeCodeReview",
+    "basic": false,
+    "set": "external-claude-review",
+    "aliases": "外部レビュー Claudeレビュー Claudeでレビュー Claudecodereview Claude review",
+    "dependencies": []
+  },
+  {
+    "name": "requestCodexContinueReview",
+    "basic": false,
+    "set": "external-codex-review",
+    "aliases": "外部レビュー Codexレビュー Codexでレビュー Codexcodereview Codex review",
+    "dependencies": []
+  },
+  {
+    "name": "requestCodexFixProposal",
+    "basic": false,
+    "set": "external-codex-review",
+    "aliases": "外部レビュー Codexレビュー Codexでレビュー Codexcodereview Codex review",
+    "dependencies": []
+  },
+  {
+    "name": "requestCodexImplementation",
+    "basic": false,
+    "set": "external-implementation",
+    "aliases": "外部実装 Codex実装 Codexで実装 実装依頼 実装修正 実装 Codex implementation",
+    "dependencies": []
+  },
+  {
+    "name": "requestCodexReReview",
+    "basic": false,
+    "set": "external-codex-review",
+    "aliases": "外部レビュー Codexレビュー Codexでレビュー Codexcodereview Codex review",
+    "dependencies": []
+  },
+  {
+    "name": "requestCodexReview",
+    "basic": false,
+    "set": "external-codex-review",
+    "aliases": "外部レビュー Codexレビュー Codexでレビュー Codexcodereview Codex review",
+    "dependencies": []
+  },
+  {
+    "name": "requestDotResearch",
+    "basic": false,
+    "set": "requestDotResearch",
+    "aliases": "Dot連携 ",
+    "dependencies": []
+  },
+  {
+    "name": "requestParallelClaudeCodeReviews",
+    "basic": false,
+    "set": "external-claude-review",
+    "aliases": "外部レビュー Claudeレビュー Claudeでレビュー Claudecodereview Claude review",
+    "dependencies": []
+  },
+  {
+    "name": "requestParallelCodexReviews",
+    "basic": false,
+    "set": "external-codex-review",
+    "aliases": "外部レビュー Codexレビュー Codexでレビュー Codexcodereview Codex review",
+    "dependencies": []
+  },
+  {
+    "name": "restartReview",
+    "basic": false,
+    "set": "review-legacy",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": []
+  },
+  {
+    "name": "resumeRepositoryReview",
+    "basic": false,
+    "set": "review-durable",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": [
+      "review-legacy"
+    ]
+  },
+  {
+    "name": "resumeSubAgent",
+    "basic": false,
+    "set": "subagent",
+    "aliases": "サブエージェント 委譲 サブエージェント delegate subagent",
+    "dependencies": []
+  },
+  {
+    "name": "reviewFindings",
+    "basic": false,
+    "set": "review-legacy",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": []
+  },
+  {
+    "name": "reviewPatchRequirements",
+    "basic": false,
+    "set": "reviewPatchRequirements",
+    "aliases": "要件レビュー ",
+    "dependencies": []
+  },
+  {
+    "name": "reviewPending",
+    "basic": false,
+    "set": "review-legacy",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": []
+  },
+  {
+    "name": "reviewStatus",
+    "basic": false,
+    "set": "review-legacy",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": []
+  },
+  {
+    "name": "reviewTaskStatus",
+    "basic": false,
+    "set": "review-durable",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": [
+      "review-legacy"
+    ]
+  },
+  {
+    "name": "rollbackTextDocumentChangeSet",
+    "basic": false,
+    "set": "document-change",
+    "aliases": "文書変更・描画検証 文書 描画 document render",
+    "dependencies": []
+  },
+  {
+    "name": "runCommand",
+    "basic": true,
+    "set": "runCommand",
+    "aliases": "コマンド・プロセス管理 ",
+    "dependencies": []
+  },
+  {
+    "name": "scanReviewSnapshot",
+    "basic": false,
+    "set": "review-durable",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": [
+      "review-legacy"
+    ]
+  },
+  {
+    "name": "scheduleAfter",
+    "basic": false,
+    "set": "scheduleAfter",
+    "aliases": "実行スケジュール ",
+    "dependencies": []
+  },
+  {
+    "name": "scheduleAt",
+    "basic": false,
+    "set": "scheduleAt",
+    "aliases": "実行スケジュール ",
+    "dependencies": []
+  },
+  {
+    "name": "scheduleCron",
+    "basic": false,
+    "set": "scheduleCron",
+    "aliases": "実行スケジュール ",
+    "dependencies": []
+  },
+  {
+    "name": "scheduleInterval",
+    "basic": false,
+    "set": "scheduleInterval",
+    "aliases": "実行スケジュール ",
+    "dependencies": []
+  },
+  {
+    "name": "scheduleOnEvent",
+    "basic": false,
+    "set": "scheduleOnEvent",
+    "aliases": "実行スケジュール ",
+    "dependencies": []
+  },
+  {
+    "name": "searchAndRead",
+    "basic": true,
+    "set": "searchAndRead",
+    "aliases": "ファイル探索・読取 ",
+    "dependencies": []
+  },
+  {
+    "name": "searchFilePage",
+    "basic": true,
+    "set": "searchFilePage",
+    "aliases": "ファイル探索・読取 ",
+    "dependencies": []
+  },
+  {
+    "name": "searchKnowledge",
+    "basic": true,
+    "set": "searchKnowledge",
+    "aliases": "知識・作業文脈 ",
+    "dependencies": []
+  },
+  {
+    "name": "searchMemoryHistory",
+    "basic": true,
+    "set": "searchMemoryHistory",
+    "aliases": "知識・作業文脈 ",
+    "dependencies": []
+  },
+  {
+    "name": "searchPaperLibrary",
+    "basic": false,
+    "set": "searchPaperLibrary",
+    "aliases": "保存済み論文 ライブラリ検索 保存論文を探す librarysearch",
+    "dependencies": []
+  },
+  {
+    "name": "searchPapers",
+    "basic": false,
+    "set": "searchPapers",
+    "aliases": "論文検索 論文を検索 論文を探す 論文探索 papersearch searchpapers",
+    "dependencies": []
+  },
+  {
+    "name": "selfRepairPatch",
+    "basic": false,
+    "set": "selfRepairPatch",
+    "aliases": "テスト診断・修復 テスト 失敗 診断 修復 test diagnosis repair",
+    "dependencies": []
+  },
+  {
+    "name": "selfReviewPatch",
+    "basic": false,
+    "set": "selfReviewPatch",
+    "aliases": "テスト診断・修復 テスト 失敗 診断 修復 test diagnosis repair",
+    "dependencies": []
+  },
+  {
+    "name": "setReviewToolProfile",
+    "basic": false,
+    "set": "review-profile",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": []
+  },
+  {
+    "name": "soundNotify",
+    "basic": false,
+    "set": "soundNotify",
+    "aliases": "音声通知 ",
+    "dependencies": []
+  },
+  {
+    "name": "submitReviewPage",
+    "basic": false,
+    "set": "review-legacy",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": []
+  },
+  {
+    "name": "submitReviewPages",
+    "basic": false,
+    "set": "review-legacy",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": []
+  },
+  {
+    "name": "submitReviewResult",
+    "basic": false,
+    "set": "review-legacy",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": []
+  },
+  {
+    "name": "submitReviewWorkItem",
+    "basic": false,
+    "set": "review-durable",
+    "aliases": "リポジトリレビュー レビュー コードレビュー review repository",
+    "dependencies": [
+      "review-legacy"
+    ]
+  },
+  {
+    "name": "summarizePaper",
+    "basic": false,
+    "set": "summarizePaper",
+    "aliases": "論文要約 論文を要約 要約する 論文の要点 要約 summarizepaper",
+    "dependencies": []
+  },
+  {
+    "name": "taskComplete",
+    "basic": false,
+    "set": "taskComplete",
+    "aliases": "タスク管理 タスク todo task",
+    "dependencies": []
+  },
+  {
+    "name": "taskCreate",
+    "basic": false,
+    "set": "taskCreate",
+    "aliases": "タスク管理 タスク todo task",
+    "dependencies": []
+  },
+  {
+    "name": "taskDelete",
+    "basic": false,
+    "set": "taskDelete",
+    "aliases": "タスク管理 タスク todo task",
+    "dependencies": []
+  },
+  {
+    "name": "taskList",
+    "basic": false,
+    "set": "taskList",
+    "aliases": "タスク管理 タスク todo task",
+    "dependencies": []
+  },
+  {
+    "name": "taskUpdate",
+    "basic": false,
+    "set": "taskUpdate",
+    "aliases": "タスク管理 タスク todo task",
+    "dependencies": []
+  },
+  {
+    "name": "taskUpdateDeadline",
+    "basic": false,
+    "set": "taskUpdateDeadline",
+    "aliases": "タスク管理 タスク todo task",
+    "dependencies": []
+  },
+  {
+    "name": "today",
+    "basic": true,
+    "set": "today",
+    "aliases": "日時 ",
+    "dependencies": []
+  },
+  {
+    "name": "translatePaper",
+    "basic": false,
+    "set": "paper-translation",
+    "aliases": "論文翻訳 論文を翻訳 翻訳する 日本語訳 翻訳 translatepaper",
+    "dependencies": []
+  },
+  {
+    "name": "updateTaskState",
+    "basic": true,
+    "set": "updateTaskState",
+    "aliases": "実行継続・結果読取 ",
+    "dependencies": []
+  },
+  {
+    "name": "validateDocumentRender",
+    "basic": false,
+    "set": "document-renderer",
+    "aliases": "文書変更・描画検証 文書 描画 document render",
+    "dependencies": []
+  },
+  {
+    "name": "waitForDependency",
+    "basic": false,
+    "set": "dependency",
+    "aliases": "依存条件・待機 依存 待機 dependency wait",
+    "dependencies": []
+  },
+  {
+    "name": "waitForFile",
+    "basic": false,
+    "set": "dependency",
+    "aliases": "依存条件・待機 依存 待機 dependency wait",
+    "dependencies": []
+  },
+  {
+    "name": "waitForHttpDependency",
+    "basic": false,
+    "set": "dependency",
+    "aliases": "依存条件・待機 依存 待機 dependency wait",
+    "dependencies": []
+  },
+  {
+    "name": "waitForShellProcess",
+    "basic": true,
+    "set": "waitForShellProcess",
+    "aliases": "コマンド・プロセス管理 ",
+    "dependencies": []
+  },
+  {
+    "name": "webSearch",
+    "basic": true,
+    "set": "webSearch",
+    "aliases": "Web調査 ",
+    "dependencies": []
+  },
+  {
+    "name": "webSearchAndRead",
+    "basic": true,
+    "set": "webSearchAndRead",
+    "aliases": "Web調査 ",
+    "dependencies": []
+  },
+  {
+    "name": "workContextEdit",
+    "basic": false,
+    "set": "workContextEdit",
+    "aliases": "作業文脈の詳細・更新 ",
+    "dependencies": []
+  },
+  {
+    "name": "workContextGet",
+    "basic": true,
+    "set": "workContextGet",
+    "aliases": "知識・作業文脈 ",
+    "dependencies": []
+  },
+  {
+    "name": "workContextHistory",
+    "basic": false,
+    "set": "workContextHistory",
+    "aliases": "作業文脈の詳細・更新 ",
+    "dependencies": []
+  },
+  {
+    "name": "workContextRevision",
+    "basic": false,
+    "set": "workContextRevision",
+    "aliases": "作業文脈の詳細・更新 ",
+    "dependencies": []
+  },
+  {
+    "name": "workContextUpdate",
+    "basic": false,
+    "set": "workContextUpdate",
+    "aliases": "作業文脈の詳細・更新 ",
+    "dependencies": []
+  },
+  {
+    "name": "writeBinaryFile",
+    "basic": false,
+    "set": "writeBinaryFile",
+    "aliases": "特殊ファイル入出力 ",
+    "dependencies": []
+  },
+  {
+    "name": "writeMultiFile",
+    "basic": true,
+    "set": "writeMultiFile",
+    "aliases": "日常的な編集 ",
+    "dependencies": []
+  }
+]

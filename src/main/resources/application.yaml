@@ -224,6 +224,11 @@ rei:
     system-prompt: ${REI_AI_SYSTEM_PROMPT:classpath:/system-prompt.md}
     chat-memory-max-messages: ${REI_CHAT_MEMORY_MAX_MESSAGES:100}
   llm:
+    tool-discovery:
+      enabled: ${REI_LLM_TOOL_DISCOVERY_ENABLED:false}
+      max-active-tools: ${REI_LLM_TOOL_DISCOVERY_MAX_ACTIVE_TOOLS:128}
+      search-max-results: ${REI_LLM_TOOL_DISCOVERY_SEARCH_MAX_RESULTS:3}
+      max-added-tools-per-search: ${REI_LLM_TOOL_DISCOVERY_MAX_ADDED_TOOLS:24}
     read-timeout: ${REI_LLM_READ_TIMEOUT:5m}
     outage-cooldown: ${REI_LLM_OUTAGE_COOLDOWN:30s}
     max-stream-timeout-retries: ${REI_LLM_MAX_STREAM_TIMEOUT_RETRIES:2}
