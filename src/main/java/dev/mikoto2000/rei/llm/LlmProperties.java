@@ -129,6 +129,7 @@ public class LlmProperties {
       copy.temperature = temperature;
       copy.fallbackToDefault = fallbackToDefault;
       copy.api = api;
+      copy.endpointGeneration = endpointGeneration;
       return copy;
     }
 
@@ -136,6 +137,19 @@ public class LlmProperties {
     private Integer maxOutputTokens;
 
     private LlmApiType api;
+
+    private long endpointGeneration = 1;
+
+    public long getEndpointGeneration() {
+      return endpointGeneration;
+    }
+
+    /** Change when endpoint ownership or replay compatibility changes, not on key rotation. */
+    public void setEndpointGeneration(long endpointGeneration) {
+      if (endpointGeneration < 1)
+        throw new IllegalArgumentException("Endpoint generation must be positive");
+      this.endpointGeneration = endpointGeneration;
+    }
 
     public LlmApiType getApi() {
       return api;
