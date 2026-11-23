@@ -1,3 +1,4 @@
+import { Answer } from "../../shared/Answer";
 import { useEffect, useRef, useState } from "react";
 import type { Command } from "../../tauri/commands";
 import {
@@ -230,9 +231,9 @@ export function Workspace({
             {activeRuns([run]).length ? (
               <RunTimeline run={run} />
             ) : (
-              <div className="answer" style={{ whiteSpace: "pre-wrap" }}>
-                {run.assistantText || "結果テキストはありません。"}
-              </div>
+              <Answer
+                text={run.assistantText || "結果テキストはありません。"}
+              />
             )}
             {!run.timeline?.length && activeRuns([run]).length > 0 && (
               <RunActivity run={run} />

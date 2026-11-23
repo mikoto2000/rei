@@ -907,3 +907,31 @@ main {
     scroll-margin-bottom: calc(200px + env(safe-area-inset-bottom));
   }
 }
+
+.markdown-answer {
+  white-space: normal;
+}
+.markdown-answer a {
+  color: var(--mint);
+  text-decoration: underline;
+}
+.markdown-answer pre {
+  white-space: pre;
+  overflow: auto;
+  padding: 16px;
+  background: #0e151f;
+  border-radius: 8px;
+}
+.markdown-answer table {
+  display: block;
+  overflow: auto;
+  border-collapse: collapse;
+}
+.markdown-answer th,
+.markdown-answer td {
+  border: 1px solid var(--line);
+  padding: 6px 10px;
+}
+.markdown-answer img {
+  max-width: 100%;
+}

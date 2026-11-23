@@ -1,3 +1,4 @@
+import { Answer, CopyText } from "../../shared/Answer";
 import { RunActivity, RunTimeline } from "./RunActivity";
 import { timeline } from "../history/timeline";
 import { useState } from "react";
@@ -53,6 +54,7 @@ export function Chat({
   onRefreshHistory,
   onArtifacts,
 }: Props) {
+  const [showEvents, setShowEvents] = useState(true);
   const [message, setMessage] = useState("");
   const [mode, setMode] = useState<RunMode | "INTERVENTION">("EXCLUSIVE");
   const [targetRun, setTargetRun] = useState("");
@@ -156,28 +158,40 @@ export function Chat({
                 )}
                 {run.timeline?.length ? (
                   <>
-                    <RunTimeline run={run} />
+                    <button
+                      className="quiet"
+                      onClick={() => setShowEvents((current) => !current)}
+                    >
+                      {showEvents ? "作業ログを隠す" : "作業ログを表示"}
+                    </button>
+                    <RunTimeline run={run} showEvents={showEvents} />
+                    <CopyText
+                      text={turn?.assistantMessage ?? run.assistantText}
+                      label="回答をコピー"
+                    />
                     {run.incomplete &&
                       !activeRuns([run]).length &&
                       turn?.assistantMessage &&
                       turn.assistantMessage !== run.assistantText && (
                         <div className="answer">
                           <small>保存済みの最終回答</small>
-                          <p>{turn.assistantMessage}</p>
+                          <Answer text={turn.assistantMessage} />
                         </div>
                       )}
                   </>
                 ) : (
                   <>
-                    <div className="answer">
-                      {(turn?.assistantMessage != null &&
-                      !activeRuns([run]).length
-                        ? turn.assistantMessage
-                        : run.assistantText) ||
+                    <Answer
+                      text={
+                        (turn?.assistantMessage != null &&
+                        !activeRuns([run]).length
+                          ? turn.assistantMessage
+                          : run.assistantText) ||
                         (!activeRuns([run]).length
                           ? "回答テキストはありません。"
-                          : "れいが作業しています…")}
-                    </div>
+                          : "れいが作業しています…")
+                      }
+                    />
                     <RunActivity run={run} />
                   </>
                 )}
@@ -255,9 +269,11 @@ export function Chat({
                   <Avatar role="assistant" />
                   REI
                 </span>
-                <div className="answer">
-                  {turn.assistantMessage ?? "応答はまだ記録されていません。"}
-                </div>
+                <Answer
+                  text={
+                    turn.assistantMessage ?? "応答はまだ記録されていません。"
+                  }
+                />
                 {onArtifacts && (
                   <button
                     onClick={() =>
