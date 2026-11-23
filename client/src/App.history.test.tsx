@@ -235,3 +235,18 @@ it("submit 404 preserves the draft and never forks automatically", async () => {
   );
   expect(call.mock.calls.filter((c) => c[0] === "chat_submit")).toHaveLength(1);
 });
+it("distinguishes an unchecked connection from a successful connection test", async () => {
+  const { call } = fixture({
+    server_test: {
+      serverId: "s",
+      state: "CONNECTED",
+      reachable: true,
+      authenticated: true,
+      error: null,
+    },
+  });
+  await screen.findByText("接続未確認");
+  fireEvent.click(screen.getByRole("button", { name: "接続を確認" }));
+  await screen.findByText("接続確認済み");
+  expect(call).toHaveBeenCalledWith("server_test", { serverId: "s" });
+});

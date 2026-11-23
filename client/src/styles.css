@@ -907,3 +907,16 @@ main {
     scroll-margin-bottom: calc(200px + env(safe-area-inset-bottom));
   }
 }
+
+.connection-status[data-state="unknown"] .connection-dot {
+  background: var(--muted);
+}
+.connection-status[data-state="pending"] .connection-dot {
+  background: #f2d8a2;
+}
+.connection-status[data-state="error"] .connection-dot {
+  background: #ffb0a9;
+}
+.connection-status[data-state="success"] .connection-dot {
+  background: var(--mint);
+}

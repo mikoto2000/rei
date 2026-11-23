@@ -39,9 +39,9 @@ test("Task result opens its artifact and explicit preview/save fit the viewport"
     }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Downloadsへ保存" }).click();
-  await expect(page.getByRole("status")).toContainText(
-    "Downloads/Rei/生成結果.txt",
-  );
+  await expect(
+    page.getByRole("status").filter({ hasText: "保存先:" }),
+  ).toContainText("Downloads/Rei/生成結果.txt");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

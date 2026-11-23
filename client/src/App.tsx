@@ -12,6 +12,7 @@ import {
   type Project,
   type Conversation,
 } from "./entities/models";
+import { ConnectionStatus } from "./shared/ConnectionStatus";
 import { Chat } from "./features/chat/Chat";
 import { Settings } from "./features/settings/Settings";
 import { useUserAvatar } from "./features/settings/userAvatar";
@@ -422,12 +423,29 @@ export function App({
               ))}
             </select>
           </label>
-          <small>
-            <span className="connection-dot" />
-            {data.selectedServer
-              ? (connections[data.selectedServer]?.state ?? "DISCONNECTED")
-              : "未設定"}
-          </small>
+          <ConnectionStatus
+            connection={connections[data.selectedServer ?? ""]}
+            configured={Boolean(data.selectedServer)}
+            unlocked={data.unlocked}
+          />
+          {data.selectedServer && data.unlocked && (
+            <button
+              className="quiet"
+              disabled={pending}
+              onClick={() => {
+                const serverId = data.selectedServer!;
+                void perform(async () => {
+                  const result = await call("server_test", { serverId });
+                  setConnections((current) => ({
+                    ...current,
+                    [serverId]: result,
+                  }));
+                });
+              }}
+            >
+              接続を確認
+            </button>
+          )}
         </div>
       </aside>
       <main>
