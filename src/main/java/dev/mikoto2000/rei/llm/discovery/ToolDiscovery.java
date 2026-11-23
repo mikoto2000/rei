@@ -90,7 +90,24 @@ public final class ToolDiscovery {
   }
 
   public void validateOutbound(Prompt prompt) {
-    ToolRequestValidator.validate(prompt, maxActiveTools);
+    ToolRequestValidator.validate(prompt, maximum(prompt));
+  }
+
+  private int maximum(Prompt prompt) {
+    int maximum = maxActiveTools;
+    if (prompt.getOptions() instanceof ToolCallingChatOptions options
+        && options.getToolContext() != null) {
+      var configured =
+          options
+              .getToolContext()
+              .get(dev.mikoto2000.rei.llm.LlmCapabilities.MAX_TOOLS_CONTEXT_KEY);
+      if (configured != null) {
+        if (!(configured instanceof Integer bound) || bound < 1)
+          throw new IllegalArgumentException("Invalid explicit endpoint tool limit");
+        maximum = discoveryEnabled ? Math.min(maxActiveTools, bound) : bound;
+      }
+    }
+    return maximum;
   }
 
   public void inherit(AgentRunContext owner, String previous) {
@@ -139,7 +156,7 @@ public final class ToolDiscovery {
       this.execution = execution;
       this.owner = Objects.requireNonNull(execution.runContext(), "Run owner required");
       this.store = store;
-      this.maximum = maxActiveTools;
+      this.maximum = maximum(initial);
       var options = explicitOptions(initial);
       var supplied =
           Objects.requireNonNull(options.getToolCallbacks(), "Explicit callbacks required").stream()

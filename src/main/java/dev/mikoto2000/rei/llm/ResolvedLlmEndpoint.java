@@ -31,12 +31,29 @@ public record ResolvedLlmEndpoint(
       throw new IllegalArgumentException("Generation and output limit must be positive");
   }
 
+  @Override
+  public String toString() {
+    return "ResolvedLlmEndpoint[endpointId="
+        + endpointId
+        + ", generation="
+        + generation
+        + ", apiType="
+        + apiType
+        + "]";
+  }
+
   /** Replay compatibility identity. Key rotation deliberately does not change this identity. */
   public String fingerprint() {
     try {
       var digest = MessageDigest.getInstance("SHA-256");
-      for (var field : List.of(endpointId, Long.toString(generation), apiType.name(),
-          Objects.toString(baseUrl, ""), Objects.toString(model, ""), capabilities.toString())) {
+      for (var field :
+          List.of(
+              endpointId,
+              Long.toString(generation),
+              apiType.name(),
+              Objects.toString(baseUrl, ""),
+              Objects.toString(model, ""),
+              capabilities.toString())) {
         byte[] bytes = field.getBytes(StandardCharsets.UTF_8);
         digest.update(ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
         digest.update(bytes);

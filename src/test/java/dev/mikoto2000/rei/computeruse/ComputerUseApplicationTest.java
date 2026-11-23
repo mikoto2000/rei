@@ -18,7 +18,12 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /** 画面操作利用アプリケーションの結果と状態の契約を検証するテスト。 */
-@SpringBootTest(properties = {"spring.ai.openai.api-key=test-key", "rei.computer-use.enabled=true"})
+@SpringBootTest(
+    properties = {
+      "spring.ai.openai.api-key=test-key",
+      "rei.computer-use.enabled=true",
+      "rei.llm.max-tools=256"
+    })
 @org.junit.jupiter.api.Tag("integration")
 class ComputerUseApplicationTest {
   /** 検証に使う応答生成に使うモデル。 */

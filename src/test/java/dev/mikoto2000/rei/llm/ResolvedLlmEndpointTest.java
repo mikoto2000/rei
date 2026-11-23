@@ -11,6 +11,42 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 /** Effective configuration and compatibility identity are independent of credential rotation. */
 class ResolvedLlmEndpointTest {
   @Test
+  void independentEndpointsDoNotInheritTheDefaultCapabilityAndFallbackUsesTheMinimum() {
+    var properties = new LlmProperties();
+    properties.setMaxTools(256);
+    var server = new LlmProperties.Server();
+    server.setBaseUrl("https://independent.invalid");
+    server.setModel("fixture");
+    properties.setFeature("chat", server);
+    assertThat(
+            new LlmModelProvider(null, properties)
+                .resolvedEndpoint("chat")
+                .capabilities()
+                .maxTools())
+        .isNull();
+    server.setMaxTools(64);
+    properties.setFeature("chat", server);
+    assertThat(
+            new LlmModelProvider(null, properties)
+                .resolvedEndpoint("chat")
+                .capabilities()
+                .maxTools())
+        .isEqualTo(64);
+    properties.setMaxTools(32);
+    server.setFallbackToDefault(true);
+    properties.setFeature("chat", server);
+    assertThat(
+            new LlmModelProvider(null, properties)
+                .resolvedEndpoint("chat")
+                .capabilities()
+                .maxTools())
+        .isEqualTo(32);
+    assertThatThrownBy(() -> properties.setMaxTools(0))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> server.setMaxTools(-1)).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
   void endpointDiagnosticsDoNotExposeCredentialsEmbeddedInLegacyUrls() {
     var endpoint =
         new ResolvedLlmEndpoint(
