@@ -11,6 +11,15 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 /** Effective configuration and compatibility identity are independent of credential rotation. */
 class ResolvedLlmEndpointTest {
   @Test
+  void endpointDiagnosticsDoNotExposeCredentialsEmbeddedInLegacyUrls() {
+    var endpoint = new ResolvedLlmEndpoint("endpoint", 1, LlmApiType.CHAT_COMPLETIONS,
+        "https://user:url-password@endpoint.invalid/v1?api_key=url-secret",
+        "credential-reference", "model", new LlmCapabilities(ReasoningReplayMode.NONE, null),
+        1024, null, java.time.Duration.ofMinutes(5));
+    assertThat(endpoint.toString()).doesNotContain("url-password", "url-secret");
+  }
+
+  @Test
   void keyRotationPreservesCompatibilityButGenerationChangeDoesNot() {
     var server = new LlmProperties.Server();
     server.setBaseUrl("https://endpoint.invalid/");

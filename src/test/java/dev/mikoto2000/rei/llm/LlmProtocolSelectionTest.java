@@ -13,6 +13,34 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 /** Protocol selection must never silently use the legacy transport. */
 class LlmProtocolSelectionTest {
   @Test
+  void privateSecretaryCannotSilentlyIgnoreAnExplicitResponsesSelection() {
+    var source = new MapConfigurationPropertySource(Map.of(
+        "rei.llm.features.secretary-reply.api", "responses",
+        "rei.llm.features.secretary-reply.base-url", "https://private.invalid",
+        "rei.llm.features.secretary-reply.model", "private-model"));
+    var properties = new Binder(source).bindOrCreate("rei.llm", LlmProperties.class);
+    var provider = new LlmModelProvider(Mockito.mock(ChatModel.class), properties);
+    assertThat(provider.privateSecretaryDescriptor()).isNull();
+  }
+
+  @Test
+  void legacyCustomEndpointCannotFallBackToUnverifiedResponsesDefault() {
+    var defaults = Mockito.mock(ChatModel.class);
+    Mockito.when(defaults.getOptions()).thenReturn(
+        org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+            .model("responses-model").build());
+    var properties = new LlmProperties();
+    var server = new LlmProperties.Server();
+    server.setBaseUrl("https://legacy.invalid");
+    server.setModel("legacy-model");
+    server.setFallbackToDefault(true);
+    properties.setFeature("chat", server);
+    var provider = new LlmModelProvider(defaults, properties);
+    assertThatThrownBy(() -> provider.chatModel("chat"))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("Responses");
+  }
+
+  @Test
   void cachedModelAndRequestOptionsUseTheSameConfigurationSnapshot() {
     var properties = new LlmProperties();
     var server = new LlmProperties.Server();
