@@ -12,6 +12,7 @@ import {
   type Project,
   type Conversation,
 } from "./entities/models";
+import { ConversationControls } from "./features/chat/ConversationControls";
 import { emptyDraft, type Draft } from "./features/chat/drafts";
 import { Chat } from "./features/chat/Chat";
 import { Settings } from "./features/settings/Settings";
@@ -777,6 +778,41 @@ export function App({
                 >
                   会話一覧へ戻る
                 </button>
+                {selectedConversation.sessionId && (
+                  <ConversationControls
+                    key={`controls-${selectedConversation.localId}`}
+                    call={call}
+                    conversation={selectedConversation}
+                    projects={
+                      projects[selectedConversation.serverProfileId] ??
+                      noProjects
+                    }
+                    runs={data.runs}
+                    onAccepted={(run) =>
+                      setData((d) => ({ ...d, runs: mergeRun(d.runs, run) }))
+                    }
+                    onOpenRun={(run) => {
+                      void (async () => {
+                        const conversation = await call("session_open", {
+                          serverId: run.serverId,
+                          sessionId: run.sessionId!,
+                        });
+                        setData((d) => ({
+                          ...d,
+                          conversations: [
+                            ...d.conversations.filter(
+                              (c) => c.localId !== conversation.localId,
+                            ),
+                            conversation,
+                          ],
+                        }));
+                        openConversation(conversation, run.runId);
+                      })().catch((e) =>
+                        setError(typeof e === "string" ? e : "Unknown"),
+                      );
+                    }}
+                  />
+                )}
                 <Chat
                   onArtifacts={(selection) => {
                     setArtifactSelection(selection);

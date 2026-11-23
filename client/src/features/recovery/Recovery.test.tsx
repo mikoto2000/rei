@@ -17,6 +17,7 @@ const item = {
 };
 it("inspects before explicit resume and attaches the accepted run", async () => {
   const accepted = vi.fn();
+  const openRun = vi.fn();
   const call = vi.fn().mockImplementation((name, args) =>
     name === "checkpoint_resume"
       ? Promise.resolve({
@@ -49,6 +50,7 @@ it("inspects before explicit resume and attaches the accepted run", async () => 
       serverId="s"
       projects={[{ id: "p", name: "rei", path: "/project" }]}
       onAccepted={accepted}
+      onOpenRun={openRun}
     />,
   );
   await userEvent.click(
@@ -68,6 +70,12 @@ it("inspects before explicit resume and attaches the accepted run", async () => 
     }),
   );
   expect(accepted).toHaveBeenCalled();
+  await userEvent.click(
+    await screen.findByRole("button", { name: "再開した作業を開く" }),
+  );
+  expect(openRun).toHaveBeenCalledWith(
+    expect.objectContaining({ runId: "new", sessionId: "session" }),
+  );
 });
 it("does not resume a blocked checkpoint", async () => {
   const call = vi.fn().mockImplementation((_name, args) =>
