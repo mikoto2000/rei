@@ -4,21 +4,19 @@ import { SessionPreview } from "./SessionPreview";
 import type { Command } from "../../tauri/commands";
 afterEach(cleanup);
 it("reads forward to the latest turn only when requested", async () => {
-  const call = vi
-    .fn()
-    .mockImplementation((_name, args) =>
-      Promise.resolve(
-        args.cursor
-          ? {
-              items: [{ assistantMessage: "最新の回答", userMessage: "質問" }],
-              nextCursor: null,
-            }
-          : {
-              items: [{ assistantMessage: "古い回答", userMessage: "質問" }],
-              nextCursor: "next",
-            },
-      ),
-    );
+  const call = vi.fn().mockImplementation((_name, args) =>
+    Promise.resolve(
+      args.cursor
+        ? {
+            items: [{ assistantMessage: "最新の回答", userMessage: "質問" }],
+            nextCursor: null,
+          }
+        : {
+            items: [{ assistantMessage: "古い回答", userMessage: "質問" }],
+            nextCursor: "next",
+          },
+    ),
+  );
   render(
     <SessionPreview
       call={call as Command}
