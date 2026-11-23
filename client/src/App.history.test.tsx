@@ -235,6 +235,21 @@ it("submit 404 preserves the draft and never forks automatically", async () => {
   );
   expect(call.mock.calls.filter((c) => c[0] === "chat_submit")).toHaveLength(1);
 });
+it("distinguishes an unchecked connection from a successful connection test", async () => {
+  const { call } = fixture({
+    server_test: {
+      serverId: "s",
+      state: "CONNECTED",
+      reachable: true,
+      authenticated: true,
+      error: null,
+    },
+  });
+  await screen.findByText("接続未確認");
+  fireEvent.click(screen.getByRole("button", { name: "接続を確認" }));
+  await screen.findByText("接続確認済み");
+  expect(call).toHaveBeenCalledWith("server_test", { serverId: "s" });
+});
 it("opens approval and recovery controls inside the selected conversation", async () => {
   fixture({ workspace_execute: { title: "Controls", items: [] } });
   fireEvent.click(await main().findByRole("button", { name: /別端末の会話/ }));
@@ -272,4 +287,36 @@ it("retains a conversation draft and mode when visiting settings", async () => {
   expect((screen.getByLabelText("送信方法") as HTMLSelectElement).value).toBe(
     "READ_ONLY",
   );
+});
+it("invalidates a successful connection check after editing its server", async () => {
+  const { call } = fixture({
+    server_test: {
+      serverId: "s",
+      state: "CONNECTED",
+      reachable: true,
+      authenticated: true,
+      error: null,
+    },
+    server_save: "s",
+  });
+  await screen.findByText("接続未確認");
+  fireEvent.click(screen.getByRole("button", { name: "接続を確認" }));
+  await screen.findByText("接続確認済み");
+  fireEvent.click(screen.getByRole("button", { name: /Settings/ }));
+  fireEvent.click(screen.getByRole("button", { name: "編集" }));
+  fireEvent.change(screen.getByLabelText("URL"), {
+    target: { value: "https://other.example" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() =>
+    expect(call).toHaveBeenCalledWith("server_save", {
+      id: "s",
+      name: "Home",
+      baseUrl: "https://other.example",
+    }),
+  );
+  await screen.findByText("接続未確認");
+  expect(
+    screen.queryByRole("button", { name: "このサーバーで会話を始める" }),
+  ).toBeNull();
 });

@@ -12,6 +12,7 @@ import {
   type Project,
   type Conversation,
 } from "./entities/models";
+import { ConnectionStatus } from "./shared/ConnectionStatus";
 import { ConversationControls } from "./features/chat/ConversationControls";
 import { emptyDraft, type Draft } from "./features/chat/drafts";
 import { Chat } from "./features/chat/Chat";
@@ -93,6 +94,12 @@ export function App({
   const [connections, setConnections] = useState<Record<string, Connection>>(
     {},
   );
+  const forgetConnection = (serverId: string) =>
+    setConnections((current) => {
+      const next = { ...current };
+      delete next[serverId];
+      return next;
+    });
   const [projects, setProjects] = useState<Record<string, Project[]>>({});
   const [project, setProject] = useState("");
   const [loadingProjects, setLoadingProjects] = useState(false);
@@ -452,12 +459,29 @@ export function App({
               ))}
             </select>
           </label>
-          <small>
-            <span className="connection-dot" />
-            {data.selectedServer
-              ? (connections[data.selectedServer]?.state ?? "DISCONNECTED")
-              : "未設定"}
-          </small>
+          <ConnectionStatus
+            connection={connections[data.selectedServer ?? ""]}
+            configured={Boolean(data.selectedServer)}
+            unlocked={data.unlocked}
+          />
+          {data.selectedServer && data.unlocked && (
+            <button
+              className="quiet"
+              disabled={pending}
+              onClick={() => {
+                const serverId = data.selectedServer!;
+                void perform(async () => {
+                  const result = await call("server_test", { serverId });
+                  setConnections((current) => ({
+                    ...current,
+                    [serverId]: result,
+                  }));
+                });
+              }}
+            >
+              接続を確認
+            </button>
+          )}
         </div>
       </aside>
       <main>
@@ -585,6 +609,7 @@ export function App({
                       name,
                       baseUrl,
                     });
+                    forgetConnection(serverId);
                     if (key)
                       await call("credential_set", {
                         serverId,
@@ -593,10 +618,16 @@ export function App({
                   })
                 }
                 onRemove={(serverId) =>
-                  void perform(() => call("server_remove", { serverId }))
+                  void perform(async () => {
+                    await call("server_remove", { serverId });
+                    forgetConnection(serverId);
+                  })
                 }
                 onDeleteKey={(serverId) =>
-                  void perform(() => call("credential_delete", { serverId }))
+                  void perform(async () => {
+                    await call("credential_delete", { serverId });
+                    forgetConnection(serverId);
+                  })
                 }
                 onTest={(serverId) =>
                   void perform(async () => {
