@@ -67,6 +67,12 @@ public class LlmProperties {
     return maxOutputTokens;
   }
 
+  /** Compatibility entry point for the legacy root ChatClient composition. */
+  public org.springframework.ai.openai.OpenAiChatOptions.Builder defaultChatOptions(
+      org.springframework.ai.chat.prompt.ChatOptions modelDefaults) {
+    return ChatCompletionsAdapter.defaultOutputOptions(modelDefaults, getMaxOutputTokens());
+  }
+
   /** 用途に応じたモデル利用で使用する最大出力トークン数を設定する。 */
   public void setMaxOutputTokens(Integer maxOutputTokens) {
     this.maxOutputTokens = maxOutputTokens;

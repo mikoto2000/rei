@@ -371,12 +371,7 @@ public class AiConfiguration {
 
   /** 機能の組み立てで用いる既定チャット選択可能な設定を返す。 */
   private OpenAiChatOptions.Builder defaultChatOptions() {
-    var options = OpenAiChatOptions.builder();
-    if (chatModel.getOptions() instanceof OpenAiChatOptions defaults
-        && defaults.getMaxCompletionTokens() != null)
-      options.maxCompletionTokens(llmProperties.getMaxOutputTokens());
-    else options.maxTokens(llmProperties.getMaxOutputTokens());
-    return options;
+    return llmProperties.defaultChatOptions(chatModel.getOptions());
   }
 
   /** 機能の組み立てで用いるモデルへ対話を依頼する窓口を返す。 */

@@ -5,6 +5,16 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 
 /** Native Chat Completions options and the pinned Spring AI merge contract. */
 final class ChatCompletionsAdapter implements LlmProtocolAdapter {
+  static OpenAiChatOptions.Builder defaultOutputOptions(ChatOptions defaults, int outputTokens) {
+    if (defaults instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)
+      throw new IllegalStateException(
+          "Responses is unavailable until durable agent integration is verified");
+    var options = OpenAiChatOptions.builder();
+    if (defaults instanceof OpenAiChatOptions openAi && openAi.getMaxCompletionTokens() != null)
+      return options.maxCompletionTokens(outputTokens);
+    return options.maxTokens(outputTokens);
+  }
+
   @Override
   public OpenAiChatOptions options(ResolvedLlmEndpoint endpoint) {
     if (endpoint.apiType() != LlmApiType.CHAT_COMPLETIONS)
