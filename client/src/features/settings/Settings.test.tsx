@@ -106,3 +106,53 @@ it("clears credential input immediately and does not retain it in UI state", () 
   );
   expect(screen.getByLabelText("API Key")).toHaveProperty("value", "");
 });
+it("guides first setup in order and only offers conversation after connection succeeds", () => {
+  const start = vi.fn();
+  const props = {
+    servers: [],
+    connections: {},
+    unlocked: false,
+    notifications: false,
+    pending: false,
+    onUnlock: vi.fn(),
+    onSave: vi.fn(),
+    onRemove: vi.fn(),
+    onDeleteKey: vi.fn(),
+    onTest: vi.fn(),
+    onNotifications: vi.fn(),
+    onStart: start,
+  };
+  const view = render(<Settings {...props} />);
+  expect(screen.getByRole("heading", { name: "Reiを使い始める" })).toBeTruthy();
+  expect(screen.getByLabelText("Name")).toHaveProperty("disabled", true);
+  expect(
+    screen.queryByRole("button", { name: "このサーバーで会話を始める" }),
+  ).toBeNull();
+  view.rerender(
+    <Settings
+      {...props}
+      unlocked
+      servers={[
+        {
+          id: "s",
+          name: "Home",
+          baseUrl: "https://rei.example",
+          hasCredential: true,
+        },
+      ]}
+      connections={{
+        s: {
+          serverId: "s",
+          state: "CONNECTED",
+          reachable: true,
+          authenticated: true,
+          error: null,
+        },
+      }}
+    />,
+  );
+  fireEvent.click(
+    screen.getByRole("button", { name: "このサーバーで会話を始める" }),
+  );
+  expect(start).toHaveBeenCalledWith("s");
+});

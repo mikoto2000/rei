@@ -151,7 +151,9 @@ it("opens Web API workspace through the existing navigation and command boundary
 it("starts with native vault setup when unconfigured", async () => {
   const call = vi.fn(async () => empty) as unknown as Command;
   render(<App call={call} subscriptions={events} />);
-  expect(await screen.findByText("Credential Vault")).toBeTruthy();
+  expect(
+    await screen.findByRole("heading", { name: "接続情報の保存領域を作る" }),
+  ).toBeTruthy();
   expect(screen.getByLabelText("API Key")).toHaveProperty("disabled", true);
 });
 it("creates a conversation using project id and navigates to chat", async () => {
