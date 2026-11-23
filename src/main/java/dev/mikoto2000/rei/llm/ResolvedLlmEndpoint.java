@@ -18,7 +18,7 @@ public record ResolvedLlmEndpoint(
     String credentialRef,
     String model,
     LlmCapabilities capabilities,
-    int maxOutputTokens,
+    Integer maxOutputTokens,
     Double temperature,
     Duration readTimeout) {
   public ResolvedLlmEndpoint {
@@ -27,8 +27,8 @@ public record ResolvedLlmEndpoint(
     Objects.requireNonNull(credentialRef, "credentialRef");
     Objects.requireNonNull(capabilities, "capabilities");
     Objects.requireNonNull(readTimeout, "readTimeout");
-    if (generation < 1 || maxOutputTokens < 1)
-      throw new IllegalArgumentException("Generation and output limit must be positive");
+    if (generation < 1 || (maxOutputTokens != null && maxOutputTokens < 1))
+      throw new IllegalArgumentException("Generation and explicit output limit must be positive");
   }
 
   @Override
