@@ -4,9 +4,9 @@
 
 1. 既存BackendのREI_API_KEYと起動方法を確認する。実データをバックアップする。
 2. 既存登録済みProject IDからMCP許可対象を選ぶ。ファイルパスを許可設定に渡さない。
-3. rei.mcp-server.enabled=true、専用port、allowed-projectsを設定する。READ_ONLY受付にはrei.conversation.concurrent-enabled=trueが必要。
+3. rei.mcp-server.enabled=true、専用port、allowed-projects、専用のランダムな `REI_MCP_SERVER_TOKEN`（32文字以上）を設定する。READ_ONLY受付にはrei.conversation.concurrent-enabled=trueが必要。
 4. Backendを一度だけ起動する。既存Migrationはschema v7へ更新する。別Backendを重複起動しない。
-5. 同じPCから `http://127.0.0.1:8091/mcp` をSDKでinitializeし、6ツールだけが列挙されることを確認する。
+5. 同じPCから `http://127.0.0.1:8091/mcp` に専用 Bearer トークンを付けてSDKでinitializeし、6ツールだけが列挙されることを確認する。
 6. 許可Projectを使った調査依頼でrequest_idを記録し、status→resultを照会する。APIのBearer認証維持も確認する。
 
 ビルド後、既存REI_API_KEYを維持したPowerShellから foreground server を起動する例:
@@ -15,7 +15,7 @@
 .\start.bat --mode=server --rei.conversation.concurrent-enabled=true
 ```
 
-MCP用のenabled/port/allowed-projectsは上記環境変数またはrei.mcp-server.*設定で指定する。起動中のBackendに重ねてこのコマンドを実行しない。
+MCP用のenabled/port/token/allowed-projectsは上記環境変数またはrei.mcp-server.*設定で指定する。起動中のBackendに重ねてこのコマンドを実行しない。
 
 `start.bat`は端末にBackendの寿命を連動させる。通常Shellと`--mode=server`のどちらもCtrl+D/Ctrl+Cで終了し、同じJVMのWeb/MCP listenerとストレージ所有権を解放する。サーバーモードでは入力ストリームのEOFでも終了する。終了処理中は既存のgraceful shutdownの待ち時間がかかる場合がある。
 
@@ -43,7 +43,7 @@ SSEイベントは復旧の正本ではない。通信断後は同じrequest_id�
 
 ## 将来のSecure MCP Tunnel接続
 
-`tunnel-client`のHTTP server URLには `http://127.0.0.1:8091/mcp` を指定する。transportはStreamable HTTP、MCP側はNo authentication。OpenAI側のtunnel ID・runtime key・workspace権限は別途必要。公式 [Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) に従う。
+`tunnel-client`のHTTP server URLには `http://127.0.0.1:8091/mcp` を指定する。transportはStreamable HTTP。MCP側は専用 Bearer トークンを要求するため、トンネルの接続設定で Authorization ヘッダーを渡せることを確認する。OpenAI側のtunnel ID・runtime key・workspace権限は別途必要。公式 [Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels) に従う。
 
 トンネルのインストール・アカウント設定・ChatGPTプラグイン登録・外部接続確認はこの実装の検証に含めていない。
 

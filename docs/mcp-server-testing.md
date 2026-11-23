@@ -25,9 +25,9 @@
 
 ## 検証範囲
 
-- initialize、6ツール一覧と6ツール呼び出し、No authentication入口。
+- initialize、6ツール一覧と6ツール呼び出し、専用 Bearer トークンによる認証。
 - 無効時listenerなし、通常Web portのMCP拒否、専用portのAPI隔離、Origin拒否、接続元/接続先/Host/転送ヘッダー拒否、本文64KiB、decoded path。
-- 既存Web Bearerの401/認証成功200、既存ConversationAdmissionとStorageMigration回帰。
+- MCPのトークン欠落・不一致・重複の401、無効なトークン設定時の起動拒否、既存Web Bearerの401/認証成功200、既存ConversationAdmissionとStorageMigration回帰。
 - Project ACL・Session/Run所有権、Shell Session拒否、権限指定拒否、READ_ONLY選択通知抑止、子Run mode継承。
 - 同一要求replay、payload競合、並列重複、response/SSEに依存しない照会、期限切れtombstone。
 - 永続Run状態、実子JVM強制終了と再起動owner喪失UNKNOWN、immutable結果、秘密形式redaction、ページ分割、cursor改ざん/別Run/別Project、結果期限切れ。

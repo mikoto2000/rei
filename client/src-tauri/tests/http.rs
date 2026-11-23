@@ -56,16 +56,22 @@ async fn empty_projects_is_success_and_redirects_are_not_followed() {
 }
 
 #[test]
-fn transport_accepts_http_and_https_for_any_host() {
+fn transport_requires_https_except_for_loopback_ip_addresses() {
     for url in [
-        "http://192.168.1.2:8080",
-        "http://mnmain-1.tail034fd.ts.net:18080",
-        "http://example.com",
+        "http://127.0.0.1:8080",
+        "http://[::1]:8080",
         "https://rei.example",
     ] {
         assert!(HttpReiClient::new(url, None).is_ok());
     }
-    assert!(HttpReiClient::new("file:///tmp/file", None).is_err());
+    for url in [
+        "http://192.168.1.2:8080",
+        "http://mnmain-1.tail034fd.ts.net:18080",
+        "http://example.com",
+        "file:///tmp/file",
+    ] {
+        assert!(HttpReiClient::new(url, None).is_err());
+    }
 }
 #[tokio::test]
 async fn reachable_and_authentication_are_independent() {

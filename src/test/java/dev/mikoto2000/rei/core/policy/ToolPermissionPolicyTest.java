@@ -19,6 +19,21 @@ import org.junit.jupiter.api.Test;
 /** ツール権限判断基準の結果と状態の契約を検証するテスト。 */
 class ToolPermissionPolicyTest {
   @Test
+  void omittedEnabledSettingRequiresExplicitWriteApprovalAndDeniesExecution() {
+    var binder =
+        new org.springframework.boot.context.properties.bind.Binder(
+            new org.springframework.boot.context.properties.source
+                .MapConfigurationPropertySource());
+    var properties = binder.bindOrCreate("rei.tool-permission", ToolPermissionProperties.class);
+    assertTrue(properties.enabled());
+    var policy = new ToolPermissionPolicy(properties);
+    assertEquals(PermissionDecision.AUTO_APPROVE, policy.evaluate("readMultiFile"));
+    assertEquals(PermissionDecision.REQUIRE_APPROVAL, policy.evaluate("writeMultiFile"));
+    assertEquals(PermissionDecision.DENY, policy.evaluate("runCommand"));
+    assertEquals(PermissionDecision.DENY, policy.evaluate("deleteFile"));
+  }
+
+  @Test
   void historicalReadFailuresUseReadCapabilitiesWithoutGrantingWrites() {
     var policy =
         policy(

@@ -196,7 +196,7 @@ const errors: Record<string, string> = {
   Busy: "実行中の処理があります。終了後に操作してください。",
   InvalidInput: "入力内容と必須項目を確認してください。",
   InvalidServerUrl:
-    "接続先 URL が無効です。http:// または https:// で始まる URL を指定してください。認証情報・クエリ・フラグメントは指定できません。",
+    "接続先 URL が無効です。リモート接続には https:// を指定してください。http:// は loopback IP（127.0.0.1 / [::1]）のみ使用できます。認証情報・クエリ・フラグメントは指定できません。",
   InvalidCredential:
     "API Key の形式が無効です。空白のみの値や改行は使用できません。",
   InvalidPassphrase: "Vault パスフレーズは12文字以上で入力してください。",

@@ -12,6 +12,35 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 /** MCPIngress絞り込み条件の結果と状態の契約を検証するテスト。 */
 class McpIngressFilterTest {
+  @Test
+  void unauthenticatedWrongAndDuplicateTokensNeverReachSdk() throws Exception {
+    for (String invalid : java.util.List.of("missing", "wrong", "duplicate")) {
+      var request = localRequest();
+      request.removeHeader("Authorization");
+      if (!invalid.equals("missing")) request.addHeader("Authorization", "Bearer incorrect");
+      if (invalid.equals("duplicate"))
+        request.addHeader("Authorization", "Bearer fixture-mcp-token-with-32-characters");
+      var response = new MockHttpServletResponse();
+      new McpIngressFilter(8091, "fixture-mcp-token-with-32-characters")
+          .doFilter(request, response, (a, b) -> fail("Unauthorized MCP request reached SDK"));
+      assertEquals(401, response.getStatus());
+      assertEquals("Bearer", response.getHeader("WWW-Authenticate"));
+    }
+  }
+
+  @Test
+  void enablingServerWithoutStrongTokenFailsClosed() {
+    for (String token : java.util.List.of("", "short", "a".repeat(32) + "\n", "a".repeat(4097))) {
+      var env =
+          new org.springframework.mock.env.MockEnvironment()
+              .withProperty("rei.mcp-server.enabled", "true")
+              .withProperty("spring.ai.mcp.server.enabled", "true")
+              .withProperty("rei.mcp-server.token", token);
+      org.junit.jupiter.api.Assertions.assertThrows(
+          IllegalStateException.class, () -> new McpConfiguration().mcpIngress(env));
+    }
+  }
+
   /** MCPによる機能の提供で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void tunnelClientCertificateIsDiscardedWithoutEstablishingIdentity() throws Exception {
@@ -19,7 +48,7 @@ class McpIngressFilterTest {
     request.addHeader("x-forwarded-client-cert", "untrusted certificate metadata");
     var response = new MockHttpServletResponse();
     boolean[] reached = {false};
-    new McpIngressFilter(8091)
+    new McpIngressFilter(8091, "fixture-mcp-token-with-32-characters")
         .doFilter(
             request,
             response,
@@ -51,7 +80,7 @@ class McpIngressFilterTest {
       request.addHeader("X-Forwarded-Client-Cert", "metadata");
       request.addHeader(name, "127.0.0.1");
       var response = new MockHttpServletResponse();
-      new McpIngressFilter(8091)
+      new McpIngressFilter(8091, "fixture-mcp-token-with-32-characters")
           .doFilter(request, response, (a, b) -> fail("Routing header reached SDK: " + name));
       assertEquals(403, response.getStatus());
     }
@@ -64,6 +93,7 @@ class McpIngressFilterTest {
     request.setRemoteAddr("127.0.0.1");
     request.setLocalPort(8091);
     request.addHeader("Host", "127.0.0.1:8091");
+    request.addHeader("Authorization", "Bearer fixture-mcp-token-with-32-characters");
     return request;
   }
 
@@ -84,7 +114,7 @@ class McpIngressFilterTest {
         case "origin" -> request.addHeader("Origin", "https://evil.test");
       }
       var response = new MockHttpServletResponse();
-      new McpIngressFilter(8091)
+      new McpIngressFilter(8091, "fixture-mcp-token-with-32-characters")
           .doFilter(request, response, (a, b) -> fail("Certificate bypassed " + invalid));
       assertEquals(403, response.getStatus());
     }
@@ -98,9 +128,11 @@ class McpIngressFilterTest {
     request.setLocalPort(8080);
     request.setRemoteAddr("127.0.0.1");
     request.addHeader("Host", "127.0.0.1:8091");
+    request.addHeader("Authorization", "Bearer fixture-mcp-token-with-32-characters");
     request.addHeader("X-Forwarded-For", "127.0.0.1");
     var response = new MockHttpServletResponse();
-    new McpIngressFilter(8091).doFilter(request, response, (a, b) -> fail("Reached MCP"));
+    new McpIngressFilter(8091, "fixture-mcp-token-with-32-characters")
+        .doFilter(request, response, (a, b) -> fail("Reached MCP"));
     assertEquals(403, response.getStatus());
   }
 
@@ -110,7 +142,8 @@ class McpIngressFilterTest {
     var request = new MockHttpServletRequest("GET", "/api/v1/projects");
     request.setLocalPort(8091);
     var response = new MockHttpServletResponse();
-    new McpIngressFilter(8091).doFilter(request, response, (a, b) -> fail("Reached web API"));
+    new McpIngressFilter(8091, "fixture-mcp-token-with-32-characters")
+        .doFilter(request, response, (a, b) -> fail("Reached web API"));
     assertEquals(404, response.getStatus());
   }
 
@@ -121,7 +154,7 @@ class McpIngressFilterTest {
     request.setServletPath("/mcp");
     request.setLocalPort(8080);
     var response = new MockHttpServletResponse();
-    new McpIngressFilter(8091)
+    new McpIngressFilter(8091, "fixture-mcp-token-with-32-characters")
         .doFilter(request, response, (a, b) -> fail("Decoded MCP path escaped boundary"));
     assertEquals(403, response.getStatus());
   }
@@ -134,9 +167,10 @@ class McpIngressFilterTest {
     request.setRemoteAddr("127.0.0.1");
     request.setLocalPort(8091);
     request.addHeader("Host", "127.0.0.1:8091");
+    request.addHeader("Authorization", "Bearer fixture-mcp-token-with-32-characters");
     request.setContent(new byte[65537]);
     var response = new MockHttpServletResponse();
-    new McpIngressFilter(8091)
+    new McpIngressFilter(8091, "fixture-mcp-token-with-32-characters")
         .doFilter(request, response, (a, b) -> fail("Oversized body reached SDK"));
     assertEquals(413, response.getStatus());
   }

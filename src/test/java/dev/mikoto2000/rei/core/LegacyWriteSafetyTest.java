@@ -14,6 +14,19 @@ import org.junit.jupiter.api.io.TempDir;
 /** Legacy compatibility and overlapping-match regressions. */
 class LegacyWriteSafetyTest {
   @TempDir Path root;
+  private dev.mikoto2000.rei.core.chat.AgentRunScope scope;
+
+  @org.junit.jupiter.api.BeforeEach
+  void useFixtureProject() {
+    scope =
+        dev.mikoto2000.rei.core.chat.AgentRunScope.open(
+            new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", root));
+  }
+
+  @org.junit.jupiter.api.AfterEach
+  void closeFixtureProject() {
+    scope.close();
+  }
 
   @Test
   void overlappingOccurrencesAreAmbiguousAndNeverWritten() throws Exception {

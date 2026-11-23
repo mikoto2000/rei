@@ -1,9 +1,9 @@
 # Dot委譲のセキュリティ境界
-MCPは127.0.0.1限定、既存Host/Origin検証、OAuth2なし、Secure MCP Tunnel想定、principal local-mcp固定。Web APIは既存Bearer認証を維持。Tunnel設定やキーは変更しない。
+MCPは127.0.0.1限定、既存Host/Origin検証、専用Bearerトークン必須、OAuth2なし、Secure MCP Tunnel想定、principal local-mcp固定。Web APIは既存Bearer認証を維持。Tunnel設定やキーは変更しない。
 
 INBOX_READ/INBOX_CLAIM/INBOX_RESULT_WRITEは固定4ツールだけの業務Capability。任意ファイル編集、Shell、Git、設定変更、Run再開の許可ではない。既存READ_ONLYへの特例を追加しない。requestDotResearchにはNETWORK_WRITEとEXTERNAL_SIDE_EFFECTが必須で、管理者がREADへ再分類しても弱められない。登録済みDotToolCallbackのみが専用snapshot権限検査を利用できる。
 
-認証なしのローカル入口では、ローカルプロセスが許可Projectの依頼を読んだり、先にclaimして偽の結果を送れる。Tunnelやclaim_idは本人の署名を証明しない。このMVPはこれを排除できない。結果保存を完了扱いにせず、人間の独立検証を必須にし、MCPからverify/resumeを提供しない。端末上の悪意ある同権限プロセスからの完全隔離は保証しない。
+未認証のローカルプロセスはMCP入口で拒否する。専用トークンを持つプロセスは許可Projectの依頼を読んだり、先にclaimして結果を送れる。Tunnelやclaim_idは本人の署名を証明しない。共通トークンは接続資格を確認するが、個別の結果提供者を識別するものではない。結果保存を完了扱いにせず、人間の独立検証を必須にし、MCPからverify/resumeを提供しない。端末上の悪意ある同権限プロセスからの完全隔離は保証しない。
 
 公開snapshotは必要なinstruction、context summary、期待成果、制約、criteriaのみ。会話全文、内部checkpoint、root絶対パス、プロンプト/推論履歴、トークン、Bearer、環境変数を自動添付しない。共有CredentialRedactorとローカル絶対パス除去を使い、未知のstructured reasoningフィールドを拒否する。自由文に未知の秘密・推論を書くことを完全には検出できないため、依頼者・結果提供者は公開内容を確認する。識別子やfingerprintだけを監査し、依頼本文・秘密をログに出さない。
 

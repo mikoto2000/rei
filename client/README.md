@@ -193,3 +193,7 @@ Android は全接続先への HTTP を許可します。`src-tauri/gen/android/a
 limit は既定50、1〜100。cursor は解釈せず URL encode して送信します。一覧はサーバー順、Turn は createdAt 昇順を保持して下へ追加します。重複は sessionId / runId で排除し、警告は件数だけです。server / project / session 切替は generation を進め、古い応答を捨てます。refresh は cursor をリセットし、失敗時は既存表示を未同期と明示して保持します。
 
 既存会話の送信前に Session 詳細を再取得し、その projectId / sessionId で POST します。新規会話は sessionId を送らず、サーバーの採番結果を使います。受理後と terminal 時に一覧・履歴を更新し、delta ごとの再取得はしません。保存済み Turn とライブ Run は runId で統合し、terminal の保存済み回答を優先しながら Tool Activity を残します。
+
+## 接続先の通信方式
+
+リモート Backend の接続先には HTTPS が必要です。HTTP は `127.0.0.1` 等の IPv4 loopback アドレスと `[::1]` に限ります。`localhost` を含むホスト名や LAN IP への HTTP は受け付けません。保存済みプロファイルも HTTP クライアント生成時に再検査し、API キーを送信する前に拒否します。既存の LAN HTTP 接続は HTTPS へ移行してください。Android の平文通信設定も loopback のみを許可します。

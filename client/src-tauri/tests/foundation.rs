@@ -1,6 +1,30 @@
 use rei_client_lib::domain::*;
 
 #[test]
+fn remote_servers_require_https_before_any_credentials_can_be_sent() {
+    for url in [
+        "http://rei.example",
+        "http://192.168.1.1:8080",
+        "http://[fe80::1]",
+        "http://127.0.0.1.evil.test",
+        "http://localhost",
+    ] {
+        assert!(ServerProfile::new("home", url).is_err());
+        assert!(
+            rei_client_lib::api::HttpReiClient::new(url, Some(Secret::new("secret".into())))
+                .is_err()
+        );
+    }
+    for url in [
+        "https://rei.example",
+        "http://127.0.0.1:8080",
+        "http://[::1]:8080",
+    ] {
+        assert!(ServerProfile::new("home", url).is_ok());
+    }
+}
+
+#[test]
 fn profile_rejects_credentials_in_url() {
     for url in [
         "https://user:secret@rei.example",

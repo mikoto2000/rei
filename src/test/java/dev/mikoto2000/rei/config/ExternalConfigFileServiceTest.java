@@ -206,6 +206,9 @@ class ExternalConfigFileServiceTest {
       expected.add(key);
       assertEquals(true, template.get(key), key);
     }
+    for (String key : List.of("rei.tool-permission.enabled", "rei.mcp-server.token")) {
+      assertEquals(defaults.get(key), template.get(key), key);
+    }
     expected.remove("rei.web.enabled");
 
     assertEquals(expected, enabledKeys(template));

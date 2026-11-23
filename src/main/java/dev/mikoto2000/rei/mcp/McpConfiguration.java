@@ -42,7 +42,12 @@ public class McpConfiguration {
     boolean enabled = env.getProperty("rei.mcp-server.enabled", Boolean.class, false);
     if (env.getProperty("spring.ai.mcp.server.enabled", Boolean.class, false) != enabled)
       throw new IllegalStateException("MCP enable flags must agree");
+    String token = env.getProperty("rei.mcp-server.token", "");
     if (enabled) {
+      if (token.length() < 32
+          || token.length() > 4096
+          || token.chars().anyMatch(c -> c <= 32 || c >= 127))
+        throw new IllegalStateException("MCP requires a 32-4096 character bearer token");
       if (!env.getProperty("rei.web.enabled", Boolean.class, false))
         throw new IllegalStateException("MCP requires the existing web Backend");
       if (!env.getProperty("server.servlet.context-path", "").isEmpty()
@@ -61,7 +66,8 @@ public class McpConfiguration {
         throw new IllegalStateException(
             "Unsafe MCP transport or automatic tool exposure configuration");
     }
-    var registration = new FilterRegistrationBean<>(new McpIngressFilter(port));
+    var registration =
+        new FilterRegistrationBean<>(new McpIngressFilter(port, enabled ? token : ""));
     registration.setOrder(Ordered.HIGHEST_PRECEDENCE);
     return registration;
   }

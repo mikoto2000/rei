@@ -26,9 +26,15 @@ public final class McpIngressFilter extends OncePerRequestFilter {
   /** 判断基準。 */
   private final McpIngressPolicy policy;
 
+  private final byte[] expectedAuthorization;
+
   /** 指定された値や利用先を使って、McpIngressFilterを初期化する。 */
-  public McpIngressFilter(int port) {
+  public McpIngressFilter(int port, String token) {
     policy = new McpIngressPolicy(port);
+    expectedAuthorization =
+        token == null || token.isBlank()
+            ? new byte[0]
+            : ("Bearer " + token).getBytes(java.nio.charset.StandardCharsets.UTF_8);
   }
 
   /** MCPによる機能の提供に関するdo絞り込み条件内部を処理する。 */
@@ -59,6 +65,17 @@ public final class McpIngressFilter extends OncePerRequestFilter {
             request.getHeader("Host"),
             request.getHeader("Origin"))) {
       response.setStatus(403);
+      return;
+    }
+    String authorization = request.getHeader("Authorization");
+    if (expectedAuthorization.length == 0
+        || Collections.list(request.getHeaders("Authorization")).size() != 1
+        || authorization == null
+        || !java.security.MessageDigest.isEqual(
+            expectedAuthorization,
+            authorization.getBytes(java.nio.charset.StandardCharsets.UTF_8))) {
+      response.setHeader("WWW-Authenticate", "Bearer");
+      response.setStatus(401);
       return;
     }
     if (request.getContentLengthLong() > 65536) {

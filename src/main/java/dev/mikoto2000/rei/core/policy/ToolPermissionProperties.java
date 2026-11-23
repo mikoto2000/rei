@@ -15,7 +15,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties("rei.tool-permission")
 public record ToolPermissionProperties(
-    boolean enabled,
+    @org.springframework.boot.context.properties.bind.DefaultValue("true") boolean enabled,
     Set<ActionCapability> autoApprove,
     Set<ActionCapability> denied,
     Map<String, Set<ActionCapability>> capabilities) {

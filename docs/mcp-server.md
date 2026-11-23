@@ -4,11 +4,12 @@
 
 ## 接続と設定
 
-既存 Backend の Web 起動には `REI_API_KEY` が必要。既存 API の Bearer 認証はそのまま使用する。MCP 自体は No authentication、固定 principal `local-mcp`。
+既存 Backend の Web 起動には `REI_API_KEY` が必要。既存 API の Bearer 認証はそのまま使用する。MCP は専用 Bearer トークンを必須とし、固定 principal `local-mcp` で動作する。通常 Web の API キーとは別のランダムな秘密値を使用する。
 
 ```powershell
 $env:REI_MCP_SERVER_ENABLED = 'true'
 $env:REI_MCP_SERVER_PORT = '8091'
+$env:REI_MCP_SERVER_TOKEN = '<32文字以上のランダムな専用トークン>'
 $env:REI_MCP_SERVER_ALLOWED_PROJECTS = '<登録済みProject ID>,<別の許可Project ID>'
 $env:REI_CONVERSATION_CONCURRENT_ENABLED = 'true'
 ```
@@ -16,6 +17,10 @@ $env:REI_CONVERSATION_CONCURRENT_ENABLED = 'true'
 - URL: `http://127.0.0.1:8091/mcp`
 - transport: Streamable HTTP、Spring AI の SYNC MCP Server
 - MCP は既定で無効。許可 Project は既定でゼロ。
+- 有効化には `REI_MCP_SERVER_TOKEN`（`rei.mcp-server.token`）が必要。空白・制御文字を含まない ASCII 32〜4096文字で、未設定や不正な値では起動しない。
+- MCP クライアントはすべての `/mcp` リクエストに `Authorization: Bearer <専用トークン>` を付与する。欠落・不一致・重複は SDK 呼び出し前に401で拒否する。
+- Tunnel を使用する場合も、接続設定でこの Authorization ヘッダを渡せることが必要。証明書メタデータだけでは認証されない。
+- loopback・Host・Origin 検証と READ_ONLY の制限は認証成功後も維持する。
 - READ_ONLY 並列会話が無効なら新規依頼を `FEATURE_DISABLED` で拒否する。EXCLUSIVE に格上げしない。
 - MCP ポートは通常 Web ポートと異なる番号を指定する。MCP は root servlet mapping を必要とする。
 - Spring AI の内部 ToolCallback 自動変換と annotation scanner は無効。MCP client tools を転送公開しない。
