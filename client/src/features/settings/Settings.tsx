@@ -25,7 +25,7 @@ export function Settings(props: Props) {
       <header className="page-heading">
         <div>
           <p className="eyebrow">PREFERENCES</p>
-          <h1>Settings</h1>
+          <h1>設定</h1>
         </div>
         <span className="pill">Rei Client · 0.1</span>
       </header>

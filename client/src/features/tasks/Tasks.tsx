@@ -241,7 +241,7 @@ export function Tasks({
                     })
                   }
                 >
-                  このRunの生成物
+                  この作業の生成物
                 </button>
               )}
               {t.cancelSupported && (

@@ -13,7 +13,7 @@ test("GitHub facts appear in Inbox and Task results without granting execution",
   await expect(page.getByText(/Run: なし/)).toBeVisible();
   await page.getByRole("button", { name: "通知を確認済みにする" }).click();
   await expect(page.getByText("未確認の通知はありません。")).toBeVisible();
-  await page.getByRole("button", { name: "Task Manager", exact: true }).click();
+  await page.getByRole("button", { name: "作業一覧", exact: true }).click();
   await expect(page.getByText("QUEUED", { exact: true })).toBeVisible();
   await expect(
     page.getByText("GITHUB_EVENT: github-fact", { exact: true }),

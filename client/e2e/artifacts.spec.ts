@@ -3,7 +3,7 @@ test("a bounded PNG artifact decodes in the browser preview", async ({
   page,
 }) => {
   await page.goto("/e2e/fixture.html?artifact=image");
-  await page.getByRole("button", { name: "Artifact", exact: true }).click();
+  await page.getByRole("button", { name: "生成物", exact: true }).click();
   await page.getByRole("button", { name: "preview", exact: true }).click();
   const image = page.getByRole("img", { name: "生成画像.png" });
   await expect(image).toBeVisible();
@@ -17,7 +17,7 @@ test("conversation Run results open the server artifact list", async ({
   await page.goto("/e2e/fixture.html");
   await page.locator(".conversation-card button").click();
   await page
-    .getByRole("button", { name: "このRunの生成物", exact: true })
+    .getByRole("button", { name: "この作業の生成物", exact: true })
     .first()
     .click();
   await expect(page.getByText("生成結果.txt", { exact: true })).toBeVisible();
@@ -27,7 +27,7 @@ test("Task result opens its artifact and explicit preview/save fit the viewport"
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html");
-  await page.getByRole("button", { name: "Task Manager", exact: true }).click();
+  await page.getByRole("button", { name: "作業一覧", exact: true }).click();
   await page
     .getByRole("button", { name: "Artifactを開く", exact: true })
     .click();

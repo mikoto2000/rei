@@ -11,7 +11,7 @@ export default async function globalSetup(config: FullConfig) {
     await page.goto(new URL("/e2e/fixture.html", baseURL).href, {
       timeout: 120_000,
     });
-    await page.getByRole("button", { name: "Artifact", exact: true }).waitFor({
+    await page.getByRole("button", { name: "生成物", exact: true }).waitFor({
       state: "visible",
       timeout: 30_000,
     });

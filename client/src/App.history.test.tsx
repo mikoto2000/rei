@@ -184,7 +184,7 @@ it("opens server turns, appends next chronological page and resumes with locked 
   fireEvent.change(screen.getByLabelText("メッセージ"), {
     target: { value: "続けて" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Send ↗" }));
+  fireEvent.click(screen.getByRole("button", { name: "送信" }));
   await waitFor(() =>
     expect(call).toHaveBeenCalledWith("chat_submit", {
       conversationId: "c",
@@ -227,7 +227,7 @@ it("submit 404 preserves the draft and never forks automatically", async () => {
   fireEvent.change(screen.getByLabelText("メッセージ"), {
     target: { value: "消さない" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Send ↗" }));
+  fireEvent.click(screen.getByRole("button", { name: "送信" }));
   await screen.findByText(/サーバー上でこの会話セッションが存在しません/);
   expect(screen.getByLabelText("メッセージ")).toHaveProperty(
     "value",

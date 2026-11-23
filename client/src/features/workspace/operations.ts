@@ -46,7 +46,7 @@ export const operations: Operation[] = [
     id: "workContextUpdate",
     label: "会話から引き継ぎを保存",
     button: "更新",
-    fields: [{ key: "sessionId", label: "Session ID" }],
+    fields: [{ key: "sessionId", label: "会話の識別子" }],
   },
   read("feeds", "Feed 一覧"),
   read("feed", "Feed 詳細", [id]),

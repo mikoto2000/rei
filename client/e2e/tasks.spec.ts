@@ -3,7 +3,7 @@ test("Task Manager restores the server list and targets explicit resume without 
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html");
-  await page.getByRole("button", { name: "Task Manager", exact: true }).click();
+  await page.getByRole("button", { name: "作業一覧", exact: true }).click();
   await expect(page.getByText("SUSPENDED", { exact: true })).toBeVisible();
   const resume = page.getByRole("button", { name: "再開", exact: true });
   await resume.scrollIntoViewIfNeeded();

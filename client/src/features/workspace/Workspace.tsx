@@ -85,7 +85,7 @@ export function Workspace({
   return (
     <section className="page narrow">
       <p className="eyebrow">SERVER OPERATIONS</p>
-      <h1>Workspace</h1>
+      <h1>ツール</h1>
       <form
         className="card"
         onSubmit={(e) => {
@@ -219,7 +219,7 @@ export function Workspace({
                   })
                 }
               >
-                このRunの生成物
+                この作業の生成物
               </button>
             )}
             {run.incomplete && (
@@ -258,7 +258,7 @@ export function Workspace({
                   }).catch(setError)
                 }
               >
-                {run.cancelRequested ? "キャンセル要求済み" : "Stop"}
+                {run.cancelRequested ? "キャンセル要求済み" : "停止"}
               </button>
             )}
             {run.error && <p role="alert">{errorText(run.error)}</p>}

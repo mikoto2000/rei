@@ -38,7 +38,7 @@ it("opens Activity analysis without starting a Run or an automatic observation q
       };
   });
   render(<App call={call as Command} subscriptions={events} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Activity分析" }));
+  fireEvent.click(await screen.findByRole("button", { name: "活動の分析" }));
   expect(
     call.mock.calls.filter(([name]) => name === "workspace_execute"),
   ).toHaveLength(0);
@@ -98,7 +98,7 @@ it("opens a background run from Active Runs and retains cancellation-requested U
     if (name === "session_list") return { items: [], nextCursor: null };
   });
   render(<App call={call as Command} subscriptions={events} />);
-  fireEvent.click(await screen.findByRole("button", { name: /Active Runs/ }));
+  fireEvent.click(await screen.findByRole("button", { name: /実行中の作業/ }));
   expect(
     screen.getByRole("button", { name: "キャンセル要求済み" }),
   ).toHaveProperty("disabled", true);
@@ -139,7 +139,7 @@ it("opens Web API workspace through the existing navigation and command boundary
     if (name === "workspace_execute") return { title: "Feed", items: [] };
   });
   render(<App call={call as Command} subscriptions={events} />);
-  fireEvent.click(await screen.findByRole("button", { name: "Workspace" }));
+  fireEvent.click(await screen.findByRole("button", { name: "ツール" }));
   fireEvent.click(screen.getByRole("button", { name: "取得" }));
   await waitFor(() =>
     expect(call).toHaveBeenCalledWith("workspace_execute", {
