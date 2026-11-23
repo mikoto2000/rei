@@ -935,3 +935,31 @@ main {
 .markdown-answer img {
   max-width: 100%;
 }
+
+/* Mobile navigation and the composer share the measured navigation height. */
+.mobile-more {
+  display: none !important;
+}
+@media (max-width: 700px) {
+  .sidebar nav {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .sidebar nav > button:nth-child(-n + 6) {
+    display: none;
+  }
+  .sidebar nav.expanded > button:nth-child(-n + 6) {
+    display: flex;
+  }
+  .sidebar nav .mobile-more {
+    display: flex !important;
+  }
+  .app-shell {
+    padding-bottom: var(--navigation-height, 150px);
+  }
+  .composer-area {
+    bottom: var(--navigation-height, 150px);
+  }
+  html {
+    scroll-padding-bottom: var(--navigation-height, 150px);
+  }
+}
