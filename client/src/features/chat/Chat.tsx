@@ -13,7 +13,10 @@ import {
 } from "../../entities/models";
 import type { HistoryState } from "../history/pagination";
 import type { ArtifactSelection } from "../../entities/artifacts";
+import { emptyDraft, type Draft } from "./drafts";
 interface Props {
+  draft?: Draft;
+  onDraft?: (draft: Draft) => void;
   onArtifacts?: (selection: ArtifactSelection) => void;
   userAvatar?: string | null;
   conversation: Conversation;
@@ -34,6 +37,8 @@ interface Props {
   onRefreshHistory?: () => void;
 }
 export function Chat({
+  draft,
+  onDraft,
   userAvatar,
   conversation,
   projectName,
@@ -53,9 +58,17 @@ export function Chat({
   onRefreshHistory,
   onArtifacts,
 }: Props) {
-  const [message, setMessage] = useState("");
-  const [mode, setMode] = useState<RunMode | "INTERVENTION">("EXCLUSIVE");
-  const [targetRun, setTargetRun] = useState("");
+  const [localDraft, setLocalDraft] = useState<Draft>(emptyDraft);
+  const currentDraft = draft ?? localDraft;
+  const { message, mode, targetRun } = currentDraft;
+  const updateDraft = (patch: Partial<Draft>) => {
+    const next = { ...currentDraft, ...patch };
+    setLocalDraft(next);
+    onDraft?.(next);
+  };
+  const setMessage = (message: string) => updateDraft({ message });
+  const setMode = (mode: Draft["mode"]) => updateDraft({ mode });
+  const setTargetRun = (targetRun: string) => updateDraft({ targetRun });
   const inputTargets = runs.filter(
     (r) => r.conversationId === conversation.localId && r.status === "RUNNING",
   );
