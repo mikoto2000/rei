@@ -252,3 +252,24 @@ it("opens approval and recovery controls inside the selected conversation", asyn
   ).toBeTruthy();
   expect(screen.getByLabelText("メッセージ")).toBeTruthy();
 });
+it("retains a conversation draft and mode when visiting settings", async () => {
+  fixture();
+  fireEvent.click(await main().findByRole("button", { name: /別端末の会話/ }));
+  await screen.findByText("過去の回答");
+  fireEvent.change(screen.getByLabelText("メッセージ"), {
+    target: { value: "未送信の調査依頼" },
+  });
+  fireEvent.change(screen.getByLabelText("送信方法"), {
+    target: { value: "READ_ONLY" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: /Settings/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Conversations/ }));
+  fireEvent.click(await main().findByRole("button", { name: /別端末の会話/ }));
+  await screen.findByText("過去の回答");
+  expect(
+    (screen.getByLabelText("メッセージ") as HTMLTextAreaElement).value,
+  ).toBe("未送信の調査依頼");
+  expect((screen.getByLabelText("送信方法") as HTMLSelectElement).value).toBe(
+    "READ_ONLY",
+  );
+});

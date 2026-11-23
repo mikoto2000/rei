@@ -1,9 +1,10 @@
+import { openNavigation } from "./navigation";
 import { test, expect } from "@playwright/test";
 test("Inbox reviews notifications and explicitly confirms one-time approval", async ({
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html");
-  await page.getByRole("button", { name: "Inbox・承認", exact: true }).click();
+  await openNavigation(page, "Inbox・承認");
   await expect(page.getByText("Fixture failure requires review")).toBeVisible();
   await page.getByRole("button", { name: "通知を確認済みにする" }).click();
   await expect(page.getByText("未確認の通知はありません。")).toBeVisible();

@@ -13,6 +13,7 @@ import {
   type Conversation,
 } from "./entities/models";
 import { ConversationControls } from "./features/chat/ConversationControls";
+import { emptyDraft, type Draft } from "./features/chat/drafts";
 import { Chat } from "./features/chat/Chat";
 import { Settings } from "./features/settings/Settings";
 import { useUserAvatar } from "./features/settings/userAvatar";
@@ -62,6 +63,19 @@ export function App({
   subscriptions?: Events;
 }) {
   const [data, setData] = useState(initial);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const [navigationHeight, setNavigationHeight] = useState(0);
+  const [moreNavigation, setMoreNavigation] = useState(false);
+  useEffect(() => {
+    const element = sidebarRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() =>
+      setNavigationHeight(element.getBoundingClientRect().height),
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const workContextSeen = useRef(new Set<string>());
   const [userAvatar, setUserAvatar] = useUserAvatar();
   const [page, setPage] = useState<Page>("conversations");
@@ -87,6 +101,7 @@ export function App({
   const navigate = (destination: Page) => {
     opening.selection.clear();
     setPage(destination);
+    setMoreNavigation(false);
   };
   const accept = useCallback(
     (snapshot: Snapshot) =>
@@ -291,8 +306,15 @@ export function App({
     }
   };
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div
+      className="app-shell"
+      style={
+        {
+          "--navigation-height": `${navigationHeight}px`,
+        } as React.CSSProperties
+      }
+    >
+      <aside className="sidebar" ref={sidebarRef}>
         <a
           className="brand"
           href="#"
@@ -316,7 +338,7 @@ export function App({
         >
           ＋ 新しい会話
         </button>
-        <nav aria-label="メイン">
+        <nav aria-label="メイン" className={moreNavigation ? "expanded" : ""}>
           <button
             className={page === "artifacts" ? "selected" : ""}
             onClick={() => {
@@ -375,6 +397,13 @@ export function App({
             onClick={() => navigate("settings")}
           >
             ⚙ Settings
+          </button>
+          <button
+            className="mobile-more"
+            aria-expanded={moreNavigation}
+            onClick={() => setMoreNavigation((current) => !current)}
+          >
+            その他
           </button>
         </nav>
         <div className="sidebar-recent">
@@ -789,6 +818,25 @@ export function App({
                     setArtifactSelection(selection);
                     navigate("artifacts");
                   }}
+                  draft={
+                    drafts[
+                      JSON.stringify([
+                        selectedConversation.serverProfileId,
+                        selectedConversation.sessionId ??
+                          selectedConversation.localId,
+                      ])
+                    ] ?? emptyDraft
+                  }
+                  onDraft={(draft) =>
+                    setDrafts((current) => ({
+                      ...current,
+                      [JSON.stringify([
+                        selectedConversation.serverProfileId,
+                        selectedConversation.sessionId ??
+                          selectedConversation.localId,
+                      ])]: draft,
+                    }))
+                  }
                   userAvatar={userAvatar}
                   key={selectedConversation.localId}
                   conversation={selectedConversation}
