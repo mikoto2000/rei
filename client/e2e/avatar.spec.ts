@@ -21,7 +21,7 @@ test("user icon persists, appears in history and live chat, and resets", async (
   await expect(page.getByRole("alert")).toContainText("有効な画像");
   await expect(page.locator(".avatar-settings img")).toBeVisible();
   await page.reload();
-  await page.locator(".conversation-card button").click();
+  await page.locator(".conversation-card > button:first-child").click();
   const users = page.locator(".message.user img");
   await expect(users).toHaveCount(2);
   await expect(users.first()).toHaveAttribute(

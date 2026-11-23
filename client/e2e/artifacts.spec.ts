@@ -15,7 +15,7 @@ test("conversation Run results open the server artifact list", async ({
   page,
 }) => {
   await page.goto("/e2e/fixture.html");
-  await page.locator(".conversation-card button").click();
+  await page.locator(".conversation-card > button:first-child").click();
   await page
     .getByRole("button", { name: "このRunの生成物", exact: true })
     .first()

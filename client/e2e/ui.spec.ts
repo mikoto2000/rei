@@ -3,7 +3,7 @@ test("text and events are visible inline in output order", async ({
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html?timeline=1");
-  await page.locator(".conversation-card button").click();
+  await page.locator(".conversation-card > button:first-child").click();
   const rows = page.locator(".run-timeline > *");
   await expect(rows).toHaveCount(5);
   await expect(rows.nth(0)).toHaveText("ファイルを調べます。");
@@ -40,7 +40,7 @@ test("server history opens, pages forward and returns to list", async ({
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html");
-  await page.locator(".conversation-card button").click();
+  await page.locator(".conversation-card > button:first-child").click();
   await expect(page.getByText("保存済みの質問", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "次のメッセージを読み込む" }).click();
   await expect(
@@ -97,7 +97,7 @@ test("live activity collapses on desktop and mobile and retains completed update
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html");
-  await page.locator(".conversation-card button").click();
+  await page.locator(".conversation-card > button:first-child").click();
   const summary = page.getByText("Activity · 5", { exact: true });
   const activity = page.locator(".live-activity");
   await expect(activity).not.toHaveAttribute("open", "");
