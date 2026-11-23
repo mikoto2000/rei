@@ -1,9 +1,10 @@
+import { openNavigation } from "./navigation";
 import { test, expect } from "@playwright/test";
 test("a bounded PNG artifact decodes in the browser preview", async ({
   page,
 }) => {
   await page.goto("/e2e/fixture.html?artifact=image");
-  await page.getByRole("button", { name: "生成物", exact: true }).click();
+  await openNavigation(page, "生成物");
   await page.getByRole("button", { name: "preview", exact: true }).click();
   const image = page.getByRole("img", { name: "生成画像.png" });
   await expect(image).toBeVisible();
@@ -15,7 +16,7 @@ test("conversation Run results open the server artifact list", async ({
   page,
 }) => {
   await page.goto("/e2e/fixture.html");
-  await page.locator(".conversation-card button").click();
+  await page.locator(".conversation-card > button:first-child").click();
   await page
     .getByRole("button", { name: "この作業の生成物", exact: true })
     .first()
@@ -27,7 +28,7 @@ test("Task result opens its artifact and explicit preview/save fit the viewport"
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html");
-  await page.getByRole("button", { name: "作業一覧", exact: true }).click();
+  await openNavigation(page, "作業一覧");
   await page
     .getByRole("button", { name: "Artifactを開く", exact: true })
     .click();
@@ -39,9 +40,9 @@ test("Task result opens its artifact and explicit preview/save fit the viewport"
     }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Downloadsへ保存" }).click();
-  await expect(page.getByRole("status")).toContainText(
-    "Downloads/Rei/生成結果.txt",
-  );
+  await expect(
+    page.getByRole("status").filter({ hasText: "保存先:" }),
+  ).toContainText("Downloads/Rei/生成結果.txt");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

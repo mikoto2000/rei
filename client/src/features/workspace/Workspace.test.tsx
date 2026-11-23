@@ -132,3 +132,47 @@ it("shows safe conflict errors and does not submit missing input", async () => {
   fireEvent.click(screen.getByRole("button", { name: "作成" }));
   expect((await screen.findByRole("alert")).textContent).toContain("競合");
 });
+it("selects an item from the list instead of copying its ID", async () => {
+  const call = vi.fn().mockResolvedValue({
+    title: "Feeds",
+    items: [
+      { id: "42", title: "News", fields: [["URL", "https://example.com"]] },
+    ],
+  });
+  render(
+    <Workspace
+      call={call}
+      serverId="s"
+      projects={[{ id: "p", name: "Project", path: "/p" }]}
+      runs={[]}
+      onAccepted={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "取得" }));
+  fireEvent.click(await screen.findByRole("button", { name: "詳細を開く" }));
+  await screen.findByRole("option", { name: "News" });
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "取得" })).toHaveProperty(
+      "disabled",
+      false,
+    ),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "取得" }));
+  await waitFor(() =>
+    expect(call).toHaveBeenLastCalledWith("workspace_execute", {
+      serverId: "s",
+      operation: { operation: "feed", id: 42 },
+    }),
+  );
+  fireEvent.change(screen.getByLabelText("操作"), {
+    target: { value: "workContext" },
+  });
+  expect(screen.getByLabelText("Project ID").tagName).toBe("SELECT");
+  fireEvent.click(screen.getByRole("button", { name: "取得" }));
+  await waitFor(() =>
+    expect(call).toHaveBeenLastCalledWith("workspace_execute", {
+      serverId: "s",
+      operation: { operation: "workContext", projectId: "p" },
+    }),
+  );
+});

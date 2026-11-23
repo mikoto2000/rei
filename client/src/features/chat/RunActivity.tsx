@@ -1,3 +1,4 @@
+import { Answer } from "../../shared/Answer";
 import type { Activity, Run, ToolExecution } from "../../entities/models";
 
 // Presentation formatting only: all lifecycle interpretation stays in Rust.
@@ -91,20 +92,26 @@ export function RunActivity({ run }: { run: Run }) {
     </details>
   );
 }
-export function RunTimeline({ run }: { run: Run }) {
+export function RunTimeline({
+  run,
+  showEvents = true,
+}: {
+  run: Run;
+  showEvents?: boolean;
+}) {
   return (
     <div className="run-timeline">
-      {run.timeline?.map((entry) =>
-        entry.kind === "text" ? (
-          <div className="answer" key={entry.id}>
-            {entry.text}
-          </div>
-        ) : entry.kind === "tool" ? (
-          <ToolRow key={entry.id} tool={entry.tool} />
-        ) : (
-          <ActivityRow key={entry.id} activity={entry.activity} />
-        ),
-      )}
+      {run.timeline
+        ?.filter((entry) => showEvents || entry.kind === "text")
+        .map((entry) =>
+          entry.kind === "text" ? (
+            <Answer key={entry.id} text={entry.text} copy={false} />
+          ) : entry.kind === "tool" ? (
+            <ToolRow key={entry.id} tool={entry.tool} />
+          ) : (
+            <ActivityRow key={entry.id} activity={entry.activity} />
+          ),
+        )}
     </div>
   );
 }

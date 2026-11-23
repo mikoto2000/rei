@@ -1,4 +1,5 @@
 import { runStatusLabel, modeLabel, streamLabel } from "../../shared/labels";
+import { Answer, CopyText } from "../../shared/Answer";
 import { RunActivity, RunTimeline } from "./RunActivity";
 import { timeline } from "../history/timeline";
 import { useRef, useState } from "react";
@@ -14,7 +15,10 @@ import {
 } from "../../entities/models";
 import type { HistoryState } from "../history/pagination";
 import type { ArtifactSelection } from "../../entities/artifacts";
+import { emptyDraft, type Draft } from "./drafts";
 interface Props {
+  draft?: Draft;
+  onDraft?: (draft: Draft) => void;
   onArtifacts?: (selection: ArtifactSelection) => void;
   userAvatar?: string | null;
   conversation: Conversation;
@@ -35,6 +39,8 @@ interface Props {
   onRefreshHistory?: () => void;
 }
 export function Chat({
+  draft,
+  onDraft,
   userAvatar,
   conversation,
   projectName,
@@ -55,10 +61,19 @@ export function Chat({
   onArtifacts,
 }: Props) {
   const messageRef = useRef<HTMLTextAreaElement>(null);
-  const [advanced, setAdvanced] = useState(false);
-  const [message, setMessage] = useState("");
-  const [mode, setMode] = useState<RunMode | "INTERVENTION">("EXCLUSIVE");
-  const [targetRun, setTargetRun] = useState("");
+  const [advanced, setAdvanced] = useState(draft?.mode === "INTERVENTION");
+  const [showEvents, setShowEvents] = useState(true);
+  const [localDraft, setLocalDraft] = useState<Draft>(emptyDraft);
+  const currentDraft = draft ?? localDraft;
+  const { message, mode, targetRun } = currentDraft;
+  const updateDraft = (patch: Partial<Draft>) => {
+    const next = { ...currentDraft, ...patch };
+    setLocalDraft(next);
+    onDraft?.(next);
+  };
+  const setMessage = (message: string) => updateDraft({ message });
+  const setMode = (mode: Draft["mode"]) => updateDraft({ mode });
+  const setTargetRun = (targetRun: string) => updateDraft({ targetRun });
   const inputTargets = runs.filter(
     (r) => r.conversationId === conversation.localId && r.status === "RUNNING",
   );
@@ -161,28 +176,40 @@ export function Chat({
                 )}
                 {run.timeline?.length ? (
                   <>
-                    <RunTimeline run={run} />
+                    <button
+                      className="quiet"
+                      onClick={() => setShowEvents((current) => !current)}
+                    >
+                      {showEvents ? "作業ログを隠す" : "作業ログを表示"}
+                    </button>
+                    <RunTimeline run={run} showEvents={showEvents} />
+                    <CopyText
+                      text={turn?.assistantMessage ?? run.assistantText}
+                      label="回答をコピー"
+                    />
                     {run.incomplete &&
                       !activeRuns([run]).length &&
                       turn?.assistantMessage &&
                       turn.assistantMessage !== run.assistantText && (
                         <div className="answer">
                           <small>保存済みの最終回答</small>
-                          <p>{turn.assistantMessage}</p>
+                          <Answer text={turn.assistantMessage} />
                         </div>
                       )}
                   </>
                 ) : (
                   <>
-                    <div className="answer">
-                      {(turn?.assistantMessage != null &&
-                      !activeRuns([run]).length
-                        ? turn.assistantMessage
-                        : run.assistantText) ||
+                    <Answer
+                      text={
+                        (turn?.assistantMessage != null &&
+                        !activeRuns([run]).length
+                          ? turn.assistantMessage
+                          : run.assistantText) ||
                         (!activeRuns([run]).length
                           ? "回答テキストはありません。"
-                          : "れいが作業しています…")}
-                    </div>
+                          : "れいが作業しています…")
+                      }
+                    />
                     <RunActivity run={run} />
                   </>
                 )}
@@ -213,8 +240,10 @@ export function Chat({
                     <button
                       type="button"
                       onClick={() => {
-                        setMode("INTERVENTION");
-                        setTargetRun(run.runId);
+                        updateDraft({
+                          mode: "INTERVENTION",
+                          targetRun: run.runId,
+                        });
                         setAdvanced(true);
                         messageRef.current?.focus();
                       }}
@@ -275,9 +304,11 @@ export function Chat({
                   <Avatar role="assistant" />
                   REI
                 </span>
-                <div className="answer">
-                  {turn.assistantMessage ?? "応答はまだ記録されていません。"}
-                </div>
+                <Answer
+                  text={
+                    turn.assistantMessage ?? "応答はまだ記録されていません。"
+                  }
+                />
                 {onArtifacts && (
                   <button
                     onClick={() =>

@@ -1,9 +1,10 @@
+import { openNavigation } from "./navigation";
 import { test, expect } from "@playwright/test";
 test("Workspace read/write/background forms use the shared UI on desktop and mobile", async ({
   page,
 }) => {
   await page.goto("/e2e/fixture.html");
-  await page.getByRole("button", { name: "ツール", exact: true }).click();
+  await openNavigation(page, "ツール");
   await page.getByRole("button", { name: "取得", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Fixture feed" }),

@@ -1,9 +1,10 @@
+import { openNavigation } from "./navigation";
 import { test, expect } from "@playwright/test";
 test("Checkpoint inspection and explicit resume retain session and attach run", async ({
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html");
-  await page.getByRole("button", { name: "復旧・再開", exact: true }).click();
+  await openNavigation(page, "復旧・再開");
   await page.getByRole("button", { name: "状態を照合" }).click();
   await expect(page.getByText("Fixture file changed")).toBeVisible();
   await expect(

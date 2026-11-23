@@ -1,9 +1,10 @@
+import { openNavigation } from "./navigation";
 import { test, expect } from "@playwright/test";
 test("human answer is reviewed explicitly and saved without starting another run", async ({
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html");
-  await page.getByRole("button", { name: "復旧・再開", exact: true }).click();
+  await openNavigation(page, "復旧・再開");
   const panel = page.getByRole("region", { name: "人間回答待ち", exact: true });
   await expect(
     panel.getByText("Fixture question: choose A or B"),

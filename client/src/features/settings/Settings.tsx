@@ -10,6 +10,7 @@ interface Props {
   pending: boolean;
   userAvatar?: string | null;
   onUserAvatar?: (value: string | null) => void;
+  onStart?: (serverId: string) => void;
   onUnlock: (password: string) => void;
   onSave: (id: string | null, name: string, url: string, key: string) => void;
   onRemove: (id: string) => void;
@@ -18,6 +19,10 @@ interface Props {
   onNotifications: (enabled: boolean) => void;
 }
 export function Settings(props: Props) {
+  const [vaultMode, setVaultMode] = useState(
+    props.servers.length ? "unlock" : "create",
+  );
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const server = props.servers.find((s) => s.id === editing);
   return (
@@ -25,19 +30,46 @@ export function Settings(props: Props) {
       <header className="page-heading">
         <div>
           <p className="eyebrow">PREFERENCES</p>
-          <h1>設定</h1>
+          <h1>
+            {!props.servers.length
+              ? "Reiを使い始める"
+              : !props.unlocked
+                ? "接続設定を開く"
+                : "設定"}
+          </h1>
         </div>
         <span className="pill">Rei Client · 0.1</span>
       </header>
-      {props.onUserAvatar && (
-        <AvatarSettings
-          avatar={props.userAvatar ?? null}
-          onChange={props.onUserAvatar}
-        />
-      )}
+      <ol aria-label="接続設定の手順">
+        <li>{props.unlocked ? "✓ " : "1. "}接続情報を保護する</li>
+        <li>{props.servers.length ? "✓ " : "2. "}サーバーを登録する</li>
+        <li>
+          {Object.values(props.connections).some((c) => c.authenticated)
+            ? "✓ "
+            : "3. "}
+          接続を確認して会話を始める
+        </li>
+      </ol>
       {!props.unlocked && (
         <section className="card">
-          <h2>Credential Vault</h2>
+          <h2>
+            {vaultMode === "create"
+              ? "接続情報の保存領域を作る"
+              : "保存済みの接続情報を開く"}
+          </h2>
+          <label>
+            利用方法
+            <select
+              value={vaultMode}
+              onChange={(e) => {
+                setVaultMode(e.target.value);
+                setPasswordError(null);
+              }}
+            >
+              <option value="create">初めて設定する</option>
+              <option value="unlock">保存済みの設定を開く</option>
+            </select>
+          </label>
           <p>
             起動ごとに解錠します。初回は12文字以上のパスフレーズを設定してください。
           </p>
@@ -49,6 +81,15 @@ export function Settings(props: Props) {
                 "password",
               ) as HTMLInputElement;
               const password = input.value;
+              const confirmation = form.elements.namedItem(
+                "confirmation",
+              ) as HTMLInputElement | null;
+              if (confirmation && password !== confirmation.value) {
+                setPasswordError("パスフレーズが一致しません。");
+                return;
+              }
+              setPasswordError(null);
+              if (confirmation) confirmation.value = "";
               input.value = "";
               props.onUnlock(password);
             }}
@@ -63,8 +104,25 @@ export function Settings(props: Props) {
                 required
               />
             </label>
+            {vaultMode === "create" && (
+              <label>
+                パスフレーズを再入力
+                <input
+                  name="confirmation"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={12}
+                  required
+                />
+              </label>
+            )}
+            {passwordError && <p role="alert">{passwordError}</p>}
             <button className="primary" disabled={props.pending}>
-              解錠 / 作成
+              {props.pending
+                ? "処理中…"
+                : vaultMode === "create"
+                  ? "保存領域を作成"
+                  : "接続情報を開く"}
             </button>
           </form>
         </section>
@@ -92,7 +150,7 @@ export function Settings(props: Props) {
               <div className="button-row">
                 <button onClick={() => setEditing(s.id)}>編集</button>
                 <button
-                  disabled={props.pending}
+                  disabled={!props.unlocked || props.pending}
                   onClick={() => props.onTest(s.id)}
                 >
                   Test Connection
@@ -105,6 +163,16 @@ export function Settings(props: Props) {
                   削除
                 </button>
               </div>
+              {props.unlocked &&
+                props.connections[s.id]?.authenticated &&
+                props.onStart && (
+                  <button
+                    className="primary"
+                    onClick={() => props.onStart?.(s.id)}
+                  >
+                    このサーバーで会話を始める
+                  </button>
+                )}
               {props.connections[s.id] && (
                 <div className="connection-result">
                   <span>
@@ -159,6 +227,7 @@ export function Settings(props: Props) {
               Name
               <input
                 name="name"
+                disabled={!props.unlocked}
                 defaultValue={server?.name ?? ""}
                 placeholder="Home Rei"
                 required
@@ -168,6 +237,7 @@ export function Settings(props: Props) {
               URL
               <input
                 name="url"
+                disabled={!props.unlocked}
                 type="url"
                 defaultValue={server?.baseUrl ?? ""}
                 placeholder="https://rei.example"
@@ -186,9 +256,14 @@ export function Settings(props: Props) {
                 }
               />
             </label>
-            <small>入力後は Rust の暗号化 Vault に保存します。</small>
+            <small>
+              APIキーは、この端末の暗号化された保存領域に保存します。
+            </small>
             <div className="button-row">
-              <button className="primary" disabled={props.pending}>
+              <button
+                className="primary"
+                disabled={!props.unlocked || props.pending}
+              >
                 Save
               </button>
               {server && (
@@ -209,6 +284,12 @@ export function Settings(props: Props) {
           </form>
         </section>
       </div>
+      {props.unlocked && props.servers.length > 0 && props.onUserAvatar && (
+        <AvatarSettings
+          avatar={props.userAvatar ?? null}
+          onChange={props.onUserAvatar}
+        />
+      )}
       <section className="card">
         <h2>Notifications</h2>
         <label className="checkbox">
@@ -225,7 +306,7 @@ export function Settings(props: Props) {
       <section className="card about">
         <h2>About Rei Client</h2>
         <p>Run と Conversation のためのネイティブクライアント。</p>
-        <small>React → Tauri / Rust → Rei Server · Phase 1–2</small>
+        <small>会話・作業・生成物をまとめて管理できます。</small>
       </section>
     </section>
   );

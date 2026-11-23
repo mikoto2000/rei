@@ -1,3 +1,6 @@
+import { useState } from "react";
+import type { Command } from "../../tauri/commands";
+import { SessionPreview } from "./SessionPreview";
 import {
   errorText,
   type Project,
@@ -5,6 +8,8 @@ import {
 } from "../../entities/models";
 import type { HistoryState } from "./pagination";
 interface Props {
+  serverId?: string | null;
+  call?: Command;
   state: HistoryState<SessionSummary>;
   projects: Project[];
   projectId: string | null;
@@ -17,6 +22,8 @@ interface Props {
   enabled: boolean;
 }
 export function SessionList({
+  serverId,
+  call,
   state,
   projects,
   projectId,
@@ -28,6 +35,46 @@ export function SessionList({
   onNew,
   enabled,
 }: Props) {
+  const [query, setQuery] = useState("");
+  const [archived, setArchived] = useState(false);
+  const storageKey = `rei:history:${serverId ?? "local"}`;
+  const [preferences, setPreferences] = useState<
+    Record<string, { pinned?: boolean; archived?: boolean }>
+  >(() => {
+    try {
+      const value = JSON.parse(localStorage.getItem(storageKey) ?? "{}");
+      return value && typeof value === "object" && !Array.isArray(value)
+        ? value
+        : {};
+    } catch {
+      return {};
+    }
+  });
+  const update = (
+    id: string,
+    patch: { pinned?: boolean; archived?: boolean },
+  ) => {
+    const next = { ...preferences, [id]: { ...preferences[id], ...patch } };
+    setPreferences(next);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(next));
+    } catch {
+      /* preferences still work for this launch */
+    }
+  };
+  const visible = state.items
+    .filter(
+      (session) =>
+        Boolean(preferences[session.sessionId]?.archived) === archived &&
+        session.title
+          .toLocaleLowerCase()
+          .includes(query.toLocaleLowerCase().trim()),
+    )
+    .sort(
+      (a, b) =>
+        Number(Boolean(preferences[b.sessionId]?.pinned)) -
+        Number(Boolean(preferences[a.sessionId]?.pinned)),
+    );
   return (
     <section className="page">
       <header className="page-heading">
@@ -40,6 +87,26 @@ export function SessionList({
           会話を追加
         </button>
       </header>
+      <label>
+        会話を検索
+        <input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="読み込み済みの会話のタイトルを検索"
+        />
+      </label>
+      <label className="checkbox">
+        <input
+          type="checkbox"
+          checked={archived}
+          onChange={(event) => setArchived(event.target.checked)}
+        />
+        アーカイブした会話を表示
+      </label>
+      <p className="muted">
+        ピン留めとアーカイブはこの端末だけに保存します。サーバーの会話は削除しません。
+      </p>
       <div className="history-toolbar">
         <label>
           会話のプロジェクト
@@ -84,8 +151,16 @@ export function SessionList({
           <button onClick={onNew}>新しい会話を開始</button>
         </div>
       )}
+      {enabled &&
+        !state.loadingInitial &&
+        visible.length === 0 &&
+        state.items.length > 0 && (
+          <p role="status">
+            一致する会話はありません。未読込の会話は追加で読み込んでください。
+          </p>
+        )}
       <div className="conversation-grid">
-        {state.items.map((session) => (
+        {visible.map((session) => (
           <article className="conversation-card" key={session.sessionId}>
             <button onClick={() => onOpen(session.sessionId)}>
               <span className="eyebrow">
@@ -97,6 +172,34 @@ export function SessionList({
                 {new Date(session.updatedAt).toLocaleString()}
               </time>
             </button>
+            <div className="button-row">
+              <button
+                onClick={() =>
+                  update(session.sessionId, {
+                    pinned: !preferences[session.sessionId]?.pinned,
+                  })
+                }
+              >
+                {preferences[session.sessionId]?.pinned
+                  ? "ピン留めを解除"
+                  : "ピン留め"}
+              </button>
+              <button
+                onClick={() =>
+                  update(session.sessionId, { archived: !archived })
+                }
+              >
+                {archived ? "アーカイブから戻す" : "アーカイブ"}
+              </button>
+            </div>
+            {call && serverId && (
+              <SessionPreview
+                call={call}
+                serverId={serverId}
+                sessionId={session.sessionId}
+                updatedAt={session.updatedAt}
+              />
+            )}
           </article>
         ))}
       </div>
