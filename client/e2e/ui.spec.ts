@@ -67,7 +67,7 @@ test("conversation, run selection, explicit cancel and responsive layout", async
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html");
-  await page.getByRole("button", { name: /Active Runs/ }).click();
+  await page.getByRole("button", { name: /実行中の作業/ }).click();
   await page.getByRole("button", { name: /SSE の再接続と認証/ }).click();
   await expect(page.getByText("rei 🔒")).toBeVisible();
   await page.getByText("Activity · 5", { exact: true }).click();
@@ -84,9 +84,9 @@ test("conversation, run selection, explicit cancel and responsive layout", async
     path: `test-results/${info.project.name}-chat.png`,
     fullPage: true,
   });
-  await page.getByRole("button", { name: "Stop", exact: true }).click();
-  await expect(page.getByText("CANCELLED", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: /Conversations/ }).click();
+  await page.getByRole("button", { name: "停止", exact: true }).click();
+  await expect(page.getByText("停止済み", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /▤ 会話/ }).click();
   await page.getByRole("button", { name: "会話を追加", exact: true }).click();
   await expect(page.getByRole("button", { name: "会話を開始" })).toBeEnabled();
   await page.getByRole("button", { name: "会話を開始" }).click();
@@ -114,7 +114,7 @@ test("live activity collapses on desktop and mobile and retains completed update
     page.getByText("確認が完了しました。", { exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Stop", exact: true }),
+    page.getByRole("button", { name: "停止", exact: true }),
   ).toHaveCount(0);
   expect(
     await page.evaluate(
@@ -142,7 +142,7 @@ test("settings renders connection dimensions separately", async ({
   page,
 }, info) => {
   await page.goto("/e2e/fixture.html");
-  await page.getByRole("button", { name: /Settings/ }).click();
+  await page.getByRole("button", { name: /設定/ }).click();
   await page.getByRole("button", { name: "Test Connection" }).click();
   await expect(page.getByText("Server reachable: Yes")).toBeVisible();
   await expect(page.getByText("Authentication OK: Yes")).toBeVisible();

@@ -184,7 +184,7 @@ it("opens server turns, appends next chronological page and resumes with locked 
   fireEvent.change(screen.getByLabelText("メッセージ"), {
     target: { value: "続けて" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Send ↗" }));
+  fireEvent.click(screen.getByRole("button", { name: "送信" }));
   await waitFor(() =>
     expect(call).toHaveBeenCalledWith("chat_submit", {
       conversationId: "c",
@@ -227,7 +227,7 @@ it("submit 404 preserves the draft and never forks automatically", async () => {
   fireEvent.change(screen.getByLabelText("メッセージ"), {
     target: { value: "消さない" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "Send ↗" }));
+  fireEvent.click(screen.getByRole("button", { name: "送信" }));
   await screen.findByText(/サーバー上でこの会話セッションが存在しません/);
   expect(screen.getByLabelText("メッセージ")).toHaveProperty(
     "value",
@@ -277,8 +277,8 @@ it("retains a conversation draft and mode when visiting settings", async () => {
   fireEvent.change(screen.getByLabelText("送信方法"), {
     target: { value: "READ_ONLY" },
   });
-  fireEvent.click(screen.getByRole("button", { name: /Settings/ }));
-  fireEvent.click(screen.getByRole("button", { name: /Conversations/ }));
+  fireEvent.click(screen.getByRole("button", { name: /設定/ }));
+  fireEvent.click(screen.getByRole("button", { name: /▤ 会話/ }));
   fireEvent.click(await main().findByRole("button", { name: /別端末の会話/ }));
   await screen.findByText("過去の回答");
   expect(
@@ -302,7 +302,7 @@ it("invalidates a successful connection check after editing its server", async (
   await screen.findByText("接続未確認");
   fireEvent.click(screen.getByRole("button", { name: "接続を確認" }));
   await screen.findByText("接続確認済み");
-  fireEvent.click(screen.getByRole("button", { name: /Settings/ }));
+  fireEvent.click(screen.getByRole("button", { name: /設定/ }));
   fireEvent.click(screen.getByRole("button", { name: "編集" }));
   fireEvent.change(screen.getByLabelText("URL"), {
     target: { value: "https://other.example" },

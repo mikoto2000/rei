@@ -4,7 +4,7 @@ test("Workspace read/write/background forms use the shared UI on desktop and mob
   page,
 }) => {
   await page.goto("/e2e/fixture.html");
-  await openNavigation(page, "Workspace");
+  await openNavigation(page, "ツール");
   await page.getByRole("button", { name: "取得", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Fixture feed" }),

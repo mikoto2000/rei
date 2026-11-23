@@ -34,7 +34,7 @@ it("opens generated artifacts using the background Run ownership rather than res
       onArtifacts={open}
     />,
   );
-  fireEvent.click(screen.getByRole("button", { name: "このRunの生成物" }));
+  fireEvent.click(screen.getByRole("button", { name: "この作業の生成物" }));
   expect(open).toHaveBeenCalledWith({
     projectId: "p",
     sessionId: null,

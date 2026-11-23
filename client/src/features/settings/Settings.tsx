@@ -35,7 +35,7 @@ export function Settings(props: Props) {
               ? "Reiを使い始める"
               : !props.unlocked
                 ? "接続設定を開く"
-                : "Settings"}
+                : "設定"}
           </h1>
         </div>
         <span className="pill">Rei Client · 0.1</span>

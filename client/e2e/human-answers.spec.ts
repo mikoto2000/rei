@@ -29,7 +29,7 @@ test("human answer is reviewed explicitly and saved without starting another run
   await confirm.click();
   await expect(panel.getByText("保存済み回答: Choice A")).toBeVisible();
   await expect(panel.getByText(/回答を保存しました/)).toBeVisible();
-  await page.getByRole("button", { name: /Active Runs/ }).click();
+  await page.getByRole("button", { name: /実行中の作業/ }).click();
   await expect(page.getByText("checkpoint-run", { exact: true })).toHaveCount(
     0,
   );

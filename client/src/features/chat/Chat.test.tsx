@@ -20,7 +20,7 @@ it("explains unknown results after restart without offering a stop button", () =
     />,
   );
   expect(screen.getByText(/実行結果が不明/)).toBeTruthy();
-  expect(screen.getByText("READ_ONLY")).toBeTruthy();
+  expect(screen.getByText("読み取り")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "停止" })).toBeNull();
 });
 it("sends guidance to an explicitly selected run without creating a run", async () => {
@@ -44,7 +44,7 @@ it("sends guidance to an explicitly selected run without creating a run", async 
   fireEvent.change(screen.getByLabelText("送信方法"), {
     target: { value: "INTERVENTION" },
   });
-  fireEvent.change(screen.getByLabelText("追加指示の対象Run"), {
+  fireEvent.change(screen.getByLabelText("追加指示の対象作業"), {
     target: { value: run.runId },
   });
   fireEvent.change(screen.getByRole("textbox", { name: "メッセージ" }), {
@@ -98,7 +98,7 @@ it("keeps a requested cancellation distinct from a terminal run", () => {
       onSubscribe={vi.fn()}
     />,
   );
-  expect(screen.getByText("RUNNING")).toBeTruthy();
+  expect(screen.getByText("作業中")).toBeTruthy();
   expect(
     screen.getByRole("button", { name: "キャンセル要求済み" }),
   ).toHaveProperty("disabled", true);
@@ -258,9 +258,9 @@ it("shows a locked project, partial history, reconnect and an explicit run stop"
   );
   expect(screen.getByText("rei 🔒")).toBeTruthy();
   expect(screen.getByText(/イベント履歴の一部/)).toBeTruthy();
-  expect(screen.getByText("RECONNECTING")).toBeTruthy();
+  expect(screen.getByText("再接続中")).toBeTruthy();
   expect(screen.getByText("readFile")).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+  fireEvent.click(screen.getByRole("button", { name: "停止" }));
   expect(stop).toHaveBeenCalledWith(run);
 });
 it("requires an explicit action to continue an expired session", () => {
@@ -351,7 +351,7 @@ it("renders live projection activity, collapses it, and updates tool lifecycle a
   expect(screen.getByText("18 ms")).toBeTruthy();
   expect(screen.getByText("210 ms")).toBeTruthy();
   expect(screen.getByText("hello world")).toBeTruthy();
-  expect(screen.queryByRole("button", { name: "Stop" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "停止" })).toBeNull();
   rerender(
     <Chat
       {...props}
@@ -455,6 +455,32 @@ it("shows the stored final answer when a replay gap left only events", () => {
   );
   expect(screen.getByText("Recovered final answer")).toBeTruthy();
 });
+it("guides the selected running task directly from its action", async () => {
+  const input = vi.fn().mockResolvedValue(true);
+  render(
+    <Chat
+      conversation={conversation}
+      projectName="rei"
+      runs={[run]}
+      pending={false}
+      error={null}
+      onSend={vi.fn()}
+      onInput={input}
+      onStop={vi.fn()}
+      onContinue={vi.fn()}
+      onRefresh={vi.fn()}
+      onSubscribe={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "この作業に追加指示" }));
+  expect(screen.getByLabelText("メッセージ")).toBe(document.activeElement);
+  fireEvent.change(screen.getByLabelText("メッセージ"), {
+    target: { value: "追加で調査して" },
+  });
+  fireEvent.submit(screen.getByLabelText("メッセージ").closest("form")!);
+  expect(input).toHaveBeenCalledWith(run, "追加で調査して");
+});
+
 it("renders usable Markdown and copies answers and code", async () => {
   const writeText = vi.fn().mockResolvedValue(undefined);
   Object.defineProperty(navigator, "clipboard", {

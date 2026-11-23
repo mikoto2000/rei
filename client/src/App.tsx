@@ -12,6 +12,7 @@ import {
   type Project,
   type Conversation,
 } from "./entities/models";
+import { runStatusLabel, streamLabel } from "./shared/labels";
 import { ConnectionStatus } from "./shared/ConnectionStatus";
 import { ConversationControls } from "./features/chat/ConversationControls";
 import { emptyDraft, type Draft } from "./features/chat/drafts";
@@ -353,19 +354,19 @@ export function App({
               navigate("artifacts");
             }}
           >
-            Artifact
+            生成物
           </button>
           <button
             className={page === "tasks" ? "selected" : ""}
             onClick={() => navigate("tasks")}
           >
-            Task Manager
+            作業一覧
           </button>
           <button
             className={page === "activity" ? "selected" : ""}
             onClick={() => navigate("activity")}
           >
-            Activity分析
+            活動の分析
           </button>
           <button
             className={page === "recovery" ? "selected" : ""}
@@ -383,7 +384,7 @@ export function App({
             className={page === "workspace" ? "selected" : ""}
             onClick={() => navigate("workspace")}
           >
-            Workspace
+            ツール
           </button>
           <button
             className={
@@ -391,19 +392,19 @@ export function App({
             }
             onClick={() => navigate("conversations")}
           >
-            ▤ Conversations <span>{history.state.items.length}</span>
+            ▤ 会話 <span>{history.state.items.length}</span>
           </button>
           <button
             className={page === "runs" ? "selected" : ""}
             onClick={() => navigate("runs")}
           >
-            ◉ Active Runs <span>{active.length}</span>
+            ◉ 実行中の作業 <span>{active.length}</span>
           </button>
           <button
             className={page === "settings" ? "selected" : ""}
             onClick={() => navigate("settings")}
           >
-            ⚙ Settings
+            ⚙ 設定
           </button>
           <button
             className="mobile-more"
@@ -487,15 +488,30 @@ export function App({
       <main>
         <div className="topbar">
           <span>
-            Workspace{" "}
+            Rei{" "}
             <span className="muted">
-              / {page === "chat" ? "Conversation" : page}
+              /{" "}
+              {
+                {
+                  conversations: "会話",
+                  new: "新しい会話",
+                  chat: "会話",
+                  runs: "実行中の作業",
+                  settings: "設定",
+                  workspace: "ツール",
+                  attention: "通知・承認",
+                  activity: "活動の分析",
+                  recovery: "復旧・再開",
+                  tasks: "作業一覧",
+                  artifacts: "生成物",
+                }[page]
+              }
             </span>
           </span>
           <span className="muted">
             {active.length
-              ? `${active.length} runs in progress`
-              : "Ready when you are"}
+              ? `${active.length}件の作業が実行中`
+              : "依頼を受け付けています"}
           </span>
         </div>
         {error && (
@@ -753,7 +769,7 @@ export function App({
                 <header className="page-heading">
                   <div>
                     <p className="eyebrow">LIVE ACTIVITY</p>
-                    <h1>Active Runs</h1>
+                    <h1>実行中の作業</h1>
                   </div>
                   <span className="pill">{active.length} active</span>
                 </header>
@@ -793,11 +809,13 @@ export function App({
                             }
                           }}
                         >
-                          <span className="status running">{r.status}</span>
+                          <span className="status running">
+                            {runStatusLabel(r.status)}
+                          </span>
                           <h2>{r.prompt}</h2>
                           <p>
                             {projectName(r.serverId, r.projectId)} ·{" "}
-                            {r.streamState}
+                            {streamLabel(r.streamState)}
                           </p>
                         </button>
                         <button
@@ -805,7 +823,7 @@ export function App({
                           disabled={r.cancelRequested}
                           onClick={() => runAction("run_cancel", r)}
                         >
-                          {r.cancelRequested ? "キャンセル要求済み" : "Stop"}
+                          {r.cancelRequested ? "キャンセル要求済み" : "停止"}
                         </button>
                       </article>
                     ))}

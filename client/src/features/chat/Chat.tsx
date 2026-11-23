@@ -1,7 +1,8 @@
+import { runStatusLabel, modeLabel, streamLabel } from "../../shared/labels";
 import { Answer, CopyText } from "../../shared/Answer";
 import { RunActivity, RunTimeline } from "./RunActivity";
 import { timeline } from "../history/timeline";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Avatar } from "../../shared/Avatar";
 import {
   activeRuns,
@@ -59,6 +60,8 @@ export function Chat({
   onRefreshHistory,
   onArtifacts,
 }: Props) {
+  const messageRef = useRef<HTMLTextAreaElement>(null);
+  const [advanced, setAdvanced] = useState(draft?.mode === "INTERVENTION");
   const [showEvents, setShowEvents] = useState(true);
   const [localDraft, setLocalDraft] = useState<Draft>(emptyDraft);
   const currentDraft = draft ?? localDraft;
@@ -89,11 +92,11 @@ export function Chat({
           {conversation.sessionId && (
             <>
               <small>
-                Updated:{" "}
+                更新日時:{" "}
                 {new Date(conversation.lastAccessedAt).toLocaleString()}
               </small>
               <details className="session-identity">
-                <summary>Session ID</summary>
+                <summary>会話の識別子</summary>
                 <code>{conversation.sessionId}</code>
               </details>
             </>
@@ -159,10 +162,12 @@ export function Chat({
                     REI
                   </span>
                   <span className={`status ${run.status.toLowerCase()}`}>
-                    {run.status}
+                    {runStatusLabel(run.status)}
                   </span>
-                  {run.mode && <span className="pill">{run.mode}</span>}
-                  <span className="muted">{run.streamState}</span>
+                  {run.mode && (
+                    <span className="pill">{modeLabel(run.mode)}</span>
+                  )}
+                  <span className="muted">{streamLabel(run.streamState)}</span>
                 </div>
                 {run.incomplete && (
                   <p className="notice">
@@ -210,7 +215,9 @@ export function Chat({
                 )}
                 {!!run.workingSet.length && (
                   <details className="activity">
-                    <summary>Working set · {run.workingSet.length}</summary>
+                    <summary>
+                      参照中のファイル · {run.workingSet.length}
+                    </summary>
                     {run.workingSet.map((item) => (
                       <p key={item.id} className="file-path">
                         {item.path || item.identifier}{" "}
@@ -229,6 +236,21 @@ export function Chat({
                 )}
                 {run.error && <p className="muted">{errorText(run.error)}</p>}
                 <div className="run-actions">
+                  {onInput && run.status === "RUNNING" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updateDraft({
+                          mode: "INTERVENTION",
+                          targetRun: run.runId,
+                        });
+                        setAdvanced(true);
+                        messageRef.current?.focus();
+                      }}
+                    >
+                      この作業に追加指示
+                    </button>
+                  )}
                   <small>Run {run.runId.slice(0, 8)}</small>
                   {onArtifacts && (
                     <button
@@ -240,7 +262,7 @@ export function Chat({
                         })
                       }
                     >
-                      このRunの生成物
+                      この作業の生成物
                     </button>
                   )}
                   <button className="quiet" onClick={() => onRefresh(run)}>
@@ -253,7 +275,7 @@ export function Chat({
                         disabled={run.cancelRequested}
                         onClick={() => onStop(run)}
                       >
-                        {run.cancelRequested ? "キャンセル要求済み" : "Stop"}
+                        {run.cancelRequested ? "キャンセル要求済み" : "停止"}
                       </button>
                       {run.streamState === "CLOSED" && (
                         <button onClick={() => onSubscribe(run)}>再接続</button>
@@ -297,7 +319,7 @@ export function Chat({
                       })
                     }
                   >
-                    このRunの生成物
+                    この作業の生成物
                   </button>
                 )}
               </div>
@@ -341,47 +363,65 @@ export function Chat({
               setMessage("");
           }}
         >
-          <label htmlFor="run-mode">送信方法</label>
-          <select
-            id="run-mode"
-            value={mode}
-            onChange={(e) =>
-              setMode(e.target.value as RunMode | "INTERVENTION")
-            }
+          <details
+            open={advanced}
+            onToggle={(event) => setAdvanced(event.currentTarget.open)}
           >
-            <option value="EXCLUSIVE">作業（同じProjectでは順番に実行）</option>
-            <option value="CONVERSATION">
-              相談（Toolを使わず並行して回答）
-            </option>
-            <option value="READ_ONLY">
-              読み取り（書き込みせず並行して調査）
-            </option>
-            {onInput && (
-              <option value="INTERVENTION">実行中Runへの追加指示</option>
+            <summary>
+              送信オプション ·{" "}
+              {mode === "INTERVENTION"
+                ? "追加指示"
+                : mode === "EXCLUSIVE"
+                  ? "作業を依頼"
+                  : mode === "CONVERSATION"
+                    ? "相談"
+                    : "読み取り調査"}
+            </summary>
+            <label htmlFor="run-mode">送信方法</label>
+            <select
+              id="run-mode"
+              value={mode}
+              onChange={(e) =>
+                setMode(e.target.value as RunMode | "INTERVENTION")
+              }
+            >
+              <option value="EXCLUSIVE">
+                作業（同じProjectでは順番に実行）
+              </option>
+              <option value="CONVERSATION">
+                相談（Toolを使わず並行して回答）
+              </option>
+              <option value="READ_ONLY">
+                読み取り（書き込みせず並行して調査）
+              </option>
+              {onInput && (
+                <option value="INTERVENTION">実行中の作業への追加指示</option>
+              )}
+            </select>
+            {mode === "INTERVENTION" && (
+              <>
+                <label htmlFor="input-run">追加指示の対象作業</label>
+                <select
+                  id="input-run"
+                  value={targetRun}
+                  onChange={(e) => setTargetRun(e.target.value)}
+                >
+                  <option value="">対象Runを選択</option>
+                  {inputTargets.map((r) => (
+                    <option key={r.runId} value={r.runId}>
+                      {r.runId} — {r.prompt.slice(0, 80)}
+                    </option>
+                  ))}
+                </select>
+              </>
             )}
-          </select>
-          {mode === "INTERVENTION" && (
-            <>
-              <label htmlFor="input-run">追加指示の対象Run</label>
-              <select
-                id="input-run"
-                value={targetRun}
-                onChange={(e) => setTargetRun(e.target.value)}
-              >
-                <option value="">対象Runを選択</option>
-                {inputTargets.map((r) => (
-                  <option key={r.runId} value={r.runId}>
-                    {r.runId} — {r.prompt.slice(0, 80)}
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
+          </details>
           <label className="sr-only" htmlFor="message">
             メッセージ
           </label>
           <textarea
             id="message"
+            ref={messageRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={(e) => {
@@ -401,12 +441,14 @@ export function Chat({
           />
           <div className="composer-footer">
             <small>
+              Enterで送信・Shift+Enterで改行
+              <br />
               {conversation.sessionId
-                ? "同じセッションで続けます"
-                : "最初の送信でセッションを作成します"}
+                ? "同じ会話で続けます"
+                : "最初の送信で会話を作成します"}
             </small>
             <button className="primary" disabled={submitDisabled}>
-              {pending ? "送信中…" : "Send ↗"}
+              {pending ? "送信中…" : "送信"}
             </button>
           </div>
         </form>

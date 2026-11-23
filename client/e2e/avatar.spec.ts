@@ -6,7 +6,7 @@ test("user icon persists, appears in history and live chat, and resets", async (
   // Includes three page loads and decoding/persisting a full-size image.
   test.setTimeout(60_000);
   await page.goto("/e2e/fixture.html");
-  await page.getByRole("button", { name: "⚙ Settings" }).click();
+  await page.getByRole("button", { name: "⚙ 設定" }).click();
   const input = page.getByLabel("アイコン画像を選択");
   await input.setInputFiles("public/rei-avatar.png");
   await expect(page.locator(".avatar-settings img")).toHaveAttribute(
@@ -40,7 +40,7 @@ test("user icon persists, appears in history and live chat, and resets", async (
     path: `test-results/${info.project.name}-avatars-chat.png`,
     fullPage: true,
   });
-  await page.getByRole("button", { name: "⚙ Settings" }).click();
+  await page.getByRole("button", { name: "⚙ 設定" }).click();
   await page.screenshot({
     path: `test-results/${info.project.name}-avatars-settings.png`,
     fullPage: true,
@@ -52,7 +52,7 @@ test("user icon persists, appears in history and live chat, and resets", async (
   ).toBe(true);
   await page.getByRole("button", { name: "標準に戻す" }).click();
   await page.reload();
-  await page.getByRole("button", { name: "⚙ Settings" }).click();
+  await page.getByRole("button", { name: "⚙ 設定" }).click();
   await expect(page.locator(".avatar-settings img")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "標準に戻す" })).toBeDisabled();
 });

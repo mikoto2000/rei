@@ -80,7 +80,7 @@ export function SessionList({
       <header className="page-heading">
         <div>
           <p className="eyebrow">YOUR WORKSPACE</p>
-          <h1>Conversations</h1>
+          <h1>会話</h1>
           <p className="muted">れいと進める、プロジェクトの続き。</p>
         </div>
         <button className="primary" onClick={onNew}>
