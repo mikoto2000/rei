@@ -271,7 +271,6 @@ business: dev.mikoto2000.rei.web.MemoryResponse -> dev.mikoto2000.rei.memory.mod
 business: dev.mikoto2000.rei.web.MemoryResponse -> dev.mikoto2000.rei.memory.model.MemoryStatus
 business: dev.mikoto2000.rei.web.MemoryResponse -> dev.mikoto2000.rei.memory.model.MemoryType
 business: dev.mikoto2000.rei.web.ModelController -> dev.mikoto2000.rei.core.service.ModelHolderService
-business: dev.mikoto2000.rei.web.ModelController -> dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService
 business: dev.mikoto2000.rei.web.ModelController -> dev.mikoto2000.rei.core.service.OpenAiCompatibleModelsService
 business: dev.mikoto2000.rei.web.ProfileReportController -> dev.mikoto2000.rei.core.command.ProfileCommand
 business: dev.mikoto2000.rei.web.ProfileReportController -> dev.mikoto2000.rei.event.ProfileEventLogStore

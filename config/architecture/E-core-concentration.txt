@@ -876,7 +876,6 @@ business: dev.mikoto2000.rei.web.HistoryReportController -> dev.mikoto2000.rei.c
 business: dev.mikoto2000.rei.web.HistoryReportController -> dev.mikoto2000.rei.core.project.ProjectRegistry
 business: dev.mikoto2000.rei.web.HistoryReportController -> dev.mikoto2000.rei.core.project.ProjectService
 business: dev.mikoto2000.rei.web.ModelController -> dev.mikoto2000.rei.core.service.ModelHolderService
-business: dev.mikoto2000.rei.web.ModelController -> dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService
 business: dev.mikoto2000.rei.web.ModelController -> dev.mikoto2000.rei.core.service.OpenAiCompatibleModelsService
 business: dev.mikoto2000.rei.web.ProfileReportController -> dev.mikoto2000.rei.core.command.ProfileCommand
 business: dev.mikoto2000.rei.web.ProjectController -> dev.mikoto2000.rei.core.project.ProjectContext

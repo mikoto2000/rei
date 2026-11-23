@@ -787,8 +787,6 @@ dev.mikoto2000.rei.core.command.EmbedCommand$ListCommand -> dev.mikoto2000.rei.v
 dev.mikoto2000.rei.core.command.EmbedCommand$SearchCommand -> dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult
 dev.mikoto2000.rei.core.command.EmbedCommand$SearchCommand -> dev.mikoto2000.rei.vectordocument.VectorDocumentService
 dev.mikoto2000.rei.core.command.ModelCommand -> dev.mikoto2000.rei.core.service.ModelHolderService
-dev.mikoto2000.rei.core.command.ModelCommand -> dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService
-dev.mikoto2000.rei.core.command.ModelCommand -> dev.mikoto2000.rei.event.FailureMessages
 dev.mikoto2000.rei.core.command.ModelsCommand -> dev.mikoto2000.rei.core.service.ModelHolderService
 dev.mikoto2000.rei.core.command.ModelsCommand -> dev.mikoto2000.rei.core.service.OpenAiCompatibleModelsService
 dev.mikoto2000.rei.core.command.ProfileCommand -> dev.mikoto2000.rei.application.read.ProfileQueryService
