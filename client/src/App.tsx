@@ -537,6 +537,16 @@ export function App({
             )}
             {page === "workspace" && (
               <Workspace
+                initialProjectId={
+                  selectedConversation?.serverProfileId === data.selectedServer
+                    ? selectedConversation.projectId
+                    : undefined
+                }
+                initialSessionId={
+                  selectedConversation?.serverProfileId === data.selectedServer
+                    ? (selectedConversation.sessionId ?? undefined)
+                    : undefined
+                }
                 onArtifacts={(selection) => {
                   setArtifactSelection(selection);
                   navigate("artifacts");

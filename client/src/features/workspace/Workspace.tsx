@@ -22,7 +22,11 @@ export function Workspace({
   runs,
   onAccepted,
   onArtifacts,
+  initialProjectId,
+  initialSessionId,
 }: {
+  initialProjectId?: string;
+  initialSessionId?: string;
   call: Command;
   serverId: string | null;
   projects: Project[];
@@ -32,7 +36,9 @@ export function Workspace({
 }) {
   const [action, setAction] = useState("feeds");
   const [values, setValues] = useState<Record<string, string>>({});
-  const [project, setProject] = useState(projects[0]?.id ?? "");
+  const [project, setProject] = useState(
+    initialProjectId ?? projects[0]?.id ?? "",
+  );
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [result, setResult] = useState<WorkspaceResult | null>(null);
@@ -42,14 +48,65 @@ export function Workspace({
     setResult(null);
     setError(null);
     setPending(false);
-    setProject(projects[0]?.id ?? "");
+    setProject(initialProjectId ?? projects[0]?.id ?? "");
+    setValues({});
     return () => {
       generation.current++;
     };
-  }, [serverId, projects]);
+  }, [serverId, projects, initialProjectId]);
   const spec = operations.find((s) => s.id === action)!;
-  const input = {
+  const [targets, setTargets] = useState<WorkspaceResult["items"]>([]);
+  const [sessions, setSessions] = useState<
+    { sessionId: string; title: string }[]
+  >([]);
+  const [targetError, setTargetError] = useState(false);
+  const collection = ["feed", "updateFeed", "deleteFeed"].includes(action)
+    ? "feeds"
+    : ["memory", "deleteMemory"].includes(action)
+      ? "memories"
+      : ["reminder", "deleteReminder"].includes(action)
+        ? "reminders"
+        : action === "skill"
+          ? "skills"
+          : null;
+  useEffect(() => {
+    let disposed = false;
+    setTargets([]);
+    setSessions([]);
+    setTargetError(false);
+    if (!serverId) return;
+    if (collection)
+      void call("workspace_execute", {
+        serverId,
+        operation: { operation: collection },
+      })
+        .then((result) => {
+          if (!disposed) setTargets(result.items);
+        })
+        .catch(() => {
+          if (!disposed) setTargetError(true);
+        });
+    if (action === "workContextUpdate")
+      void call("session_list", {
+        serverId,
+        projectId: project || null,
+        limit: 100,
+        cursor: null,
+      })
+        .then((result) => {
+          if (!disposed) setSessions(result.items);
+        })
+        .catch(() => {
+          if (!disposed) setTargetError(true);
+        });
+    return () => {
+      disposed = true;
+    };
+  }, [call, serverId, collection, action, project]);
+  const input: Record<string, string> = {
     ...Object.fromEntries(spec.fields.map((f) => [f.key, f.default ?? ""])),
+    projectId: project,
+    sessionId: initialSessionId ?? "",
     ...values,
   };
   const background = action === "summary" || action === "image";
@@ -59,7 +116,13 @@ export function Workspace({
     setError(null);
     try {
       if (!serverId) throw "InvalidInput";
-      const operation = buildOperation(action, input);
+      const operation = buildOperation(action, {
+        ...input,
+        at:
+          input.at && !/Z$|[+-]\d\d:\d\d$/.test(input.at)
+            ? new Date(input.at).toISOString()
+            : input.at,
+      });
       if (background) {
         if (!projects.some((p) => p.id === project)) throw "ProjectNotFound";
         const run = await call("background_submit", {
@@ -113,7 +176,7 @@ export function Workspace({
             ))}
           </select>
         </label>
-        {background && (
+        {(background || action === "workContextUpdate") && (
           <label>
             プロジェクト
             <select
@@ -131,7 +194,53 @@ export function Workspace({
         {spec.fields.map((f) => (
           <label key={f.key}>
             {f.label}
-            {f.options ? (
+            {f.key === "projectId" ? (
+              <select
+                value={input.projectId}
+                required
+                onChange={(e) => setProject(e.target.value)}
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            ) : f.key === "sessionId" ? (
+              <select
+                value={input.sessionId}
+                required
+                onChange={(e) =>
+                  setValues((v) => ({ ...v, sessionId: e.target.value }))
+                }
+              >
+                <option value="">会話を選択</option>
+                {sessions.map((session) => (
+                  <option key={session.sessionId} value={session.sessionId}>
+                    {session.title}
+                  </option>
+                ))}
+              </select>
+            ) : f.key === "id" ||
+              (f.key === "name" && collection === "skills") ? (
+              <select
+                value={input[f.key]}
+                required
+                onChange={(e) =>
+                  setValues((v) => ({ ...v, [f.key]: e.target.value }))
+                }
+              >
+                <option value="">対象を選択</option>
+                {targets.map((item) => (
+                  <option
+                    key={item.id ?? item.title}
+                    value={item.id ?? item.title}
+                  >
+                    {item.title}
+                  </option>
+                ))}
+              </select>
+            ) : f.options ? (
               <select
                 value={input[f.key]}
                 onChange={(e) =>
@@ -144,6 +253,35 @@ export function Workspace({
                   </option>
                 ))}
               </select>
+            ) : [
+                "url",
+                "at",
+                "vectorTopK",
+                "webTopK",
+                "threshold",
+                "hours",
+                "minutesBefore",
+                "confidence",
+                "size",
+                "displayName",
+              ].includes(f.key) ? (
+              <input
+                type={
+                  f.key === "url"
+                    ? "url"
+                    : f.key === "at"
+                      ? "datetime-local"
+                      : ["size", "displayName"].includes(f.key)
+                        ? "text"
+                        : "number"
+                }
+                step="any"
+                value={input[f.key]}
+                required={!f.optional}
+                onChange={(e) =>
+                  setValues((v) => ({ ...v, [f.key]: e.target.value }))
+                }
+              />
             ) : (
               <textarea
                 value={input[f.key]}
@@ -154,6 +292,11 @@ export function Workspace({
             )}
           </label>
         ))}
+        {targetError && (
+          <p role="alert">
+            対象を取得できませんでした。操作を選び直して再試行してください。
+          </p>
+        )}
         {spec.button === "削除" && (
           <p className="notice">この操作はサーバー上のリソースを削除します。</p>
         )}
@@ -179,6 +322,64 @@ export function Workspace({
             <article className="card" key={item.id ?? i}>
               <h3>{item.title}</h3>
               {item.id && <small>ID: {item.id}</small>}
+              {["feeds", "memories", "reminders", "skills"].includes(
+                action,
+              ) && (
+                <div className="button-row">
+                  <button
+                    onClick={() => {
+                      setValues({
+                        [action === "skills" ? "name" : "id"]:
+                          item.id ?? item.title,
+                      });
+                      setAction(
+                        (
+                          {
+                            feeds: "feed",
+                            memories: "memory",
+                            reminders: "reminder",
+                            skills: "skill",
+                          } as Record<string, string>
+                        )[action],
+                      );
+                      setResult(null);
+                    }}
+                  >
+                    詳細を開く
+                  </button>
+                  {action === "feeds" && (
+                    <button
+                      onClick={() => {
+                        setValues({ id: item.id!, displayName: item.title });
+                        setAction("updateFeed");
+                        setResult(null);
+                      }}
+                    >
+                      編集する
+                    </button>
+                  )}
+                  {action !== "skills" && (
+                    <button
+                      className="danger"
+                      onClick={() => {
+                        setValues({ id: item.id! });
+                        setAction(
+                          (
+                            {
+                              feeds: "deleteFeed",
+                              memories: "deleteMemory",
+                              reminders: "deleteReminder",
+                            } as Record<string, string>
+                          )[action],
+                        );
+                        setResult(null);
+                      }}
+                    >
+                      削除内容を確認
+                    </button>
+                  )}
+                </div>
+              )}
               <dl>
                 {item.fields.map(([label, value], j) => (
                   <div key={j}>
