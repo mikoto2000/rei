@@ -908,6 +908,17 @@ main {
   }
 }
 
+.conversation-card > .button-row,
+.session-preview {
+  padding: 0 16px 12px;
+  margin-top: 0;
+}
+.session-preview p {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-top: 12px;
+}
+
 .markdown-answer {
   white-space: normal;
 }

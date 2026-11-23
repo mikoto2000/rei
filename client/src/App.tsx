@@ -702,6 +702,9 @@ export function App({
             )}
             {page === "conversations" && (
               <SessionList
+                key={data.selectedServer}
+                serverId={data.selectedServer}
+                call={call}
                 state={history.state}
                 projects={projects[data.selectedServer ?? ""] ?? []}
                 projectId={history.projectId}
