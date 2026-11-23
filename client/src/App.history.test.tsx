@@ -288,3 +288,35 @@ it("retains a conversation draft and mode when visiting settings", async () => {
     "READ_ONLY",
   );
 });
+it("invalidates a successful connection check after editing its server", async () => {
+  const { call } = fixture({
+    server_test: {
+      serverId: "s",
+      state: "CONNECTED",
+      reachable: true,
+      authenticated: true,
+      error: null,
+    },
+    server_save: "s",
+  });
+  await screen.findByText("接続未確認");
+  fireEvent.click(screen.getByRole("button", { name: "接続を確認" }));
+  await screen.findByText("接続確認済み");
+  fireEvent.click(screen.getByRole("button", { name: /Settings/ }));
+  fireEvent.click(screen.getByRole("button", { name: "編集" }));
+  fireEvent.change(screen.getByLabelText("URL"), {
+    target: { value: "https://other.example" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() =>
+    expect(call).toHaveBeenCalledWith("server_save", {
+      id: "s",
+      name: "Home",
+      baseUrl: "https://other.example",
+    }),
+  );
+  await screen.findByText("接続未確認");
+  expect(
+    screen.queryByRole("button", { name: "このサーバーで会話を始める" }),
+  ).toBeNull();
+});
