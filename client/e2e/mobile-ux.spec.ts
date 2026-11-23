@@ -5,7 +5,7 @@ test("mobile navigation leaves the composer usable in both send modes", async ({
 }, info) => {
   test.skip(info.project.name !== "mobile");
   await page.goto("/e2e/fixture.html");
-  await page.locator(".conversation-card button").click();
+  await page.locator(".conversation-card > button:first-child").click();
   for (const mode of ["EXCLUSIVE", "INTERVENTION"]) {
     await page.locator("#run-mode").selectOption(mode);
     if (mode === "INTERVENTION")
