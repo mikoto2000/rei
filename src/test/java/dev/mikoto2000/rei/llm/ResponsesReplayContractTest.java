@@ -306,6 +306,21 @@ class ResponsesReplayContractTest {
   }
 
   @Test
+  void explicitlyConfiguredPlaintextFixtureUsesTheAcceptedOwnerAndEndpoint() {
+    var properties = nativeProperties();
+    var server = properties.feature(LlmFeature.CHAT);
+    server.setReasoningReplay(ReasoningReplayMode.PLAINTEXT);
+    properties.setFeature(LlmFeature.CHAT, server);
+    var provider = nativeProvider(properties);
+    var run = new dev.mikoto2000.rei.core.chat.AgentRunContext(
+        "plain-run", "chat", protocolDirectory, "project");
+    var options = provider.requestOptions(LlmFeature.CHAT, null, true, run);
+    assertThat(provider.chatModel(LlmFeature.CHAT).call(new Prompt("fixture", options))
+        .getResult().getOutput().getText()).isEqualTo("done");
+    assertThat(requests).hasSize(1);
+  }
+
+  @Test
   void nativeExplicitSettingsWithoutDeclaredCapabilityFailBeforeHttp() {
     var properties = nativeProperties();
     var server = properties.feature(LlmFeature.CHAT);
