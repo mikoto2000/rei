@@ -269,6 +269,7 @@ class CapturingChatModelHttpTest {
               new ToolResultCompressor(new RawToolResultStore(dir), estimate, 100, 70),
               (previous, messages, budget, request) -> {
                 compressed.incrementAndGet();
+                assertThat(messages).extracting(org.springframework.ai.chat.messages.Message::getText).contains("recent");
                 return "decided API X";
               },
               null,
@@ -286,8 +287,8 @@ class CapturingChatModelHttpTest {
       model.call(projected);
       fixture.assertMatches(3);
       assertThat(new String(fixture.received.get(2), java.nio.charset.StandardCharsets.UTF_8))
-          .contains("decided API X", "recent", "current request")
-          .doesNotContain("old old old");
+          .contains("decided API X", "current request")
+          .doesNotContain("old old old", "\"content\":\"recent\"");
       assertThat(fixture.store.attempts("run-a"))
           .extracting(CaptureStore.AttemptInfo::logicalCallId)
           .doesNotHaveDuplicates();
