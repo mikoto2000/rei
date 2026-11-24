@@ -59,7 +59,9 @@ class ContextTrimmingCostTest {
     for (int i = 0; i < 200; i++) {
       history.add(
           ContextHistoryAdvisor.historical(
-              new AssistantMessage("answer-" + i + "x".repeat(80)), i * 2L + 1));
+              AssistantMessage.builder().content("answer-" + i + "x".repeat(80))
+                  .toolCalls(List.of(new AssistantMessage.ToolCall("call-" + i, "function", "lookup", "{}")))
+                  .build(), i * 2L + 1));
       history.add(
           ToolResponseMessage.builder()
               .responses(

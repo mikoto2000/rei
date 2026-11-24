@@ -88,7 +88,7 @@ class ContextSummaryTokenBudgetTest {
     assertThat(calls.get()).isGreaterThan(2);
     assertThat(targets).startsWith(8292, 8292);
     assertThat(budget.totalTokens()).isEqualTo(210L + (calls.get() - 1L) * 20);
-    assertThat(summaries.read("chat").throughSequence()).isEqualTo(1);
+    assertThat(summaries.read("chat").throughSequence()).isEqualTo(2);
   }
 
   @Test
@@ -163,7 +163,7 @@ class ContextSummaryTokenBudgetTest {
         assembler(compressionConfig(), compressor(model), summaries)
             .assemble(historical(execution), "chat", "run", execution::checkActive);
     assertThat(projected.getContents()).contains("compact summary", "current");
-    assertThat(summaries.read("chat").throughSequence()).isEqualTo(1);
+    assertThat(summaries.read("chat").throughSequence()).isEqualTo(2);
     assertThat(budget.totalTokens()).isEqualTo(1023);
     verify(model, times(1)).stream(any(Prompt.class));
   }
@@ -417,7 +417,7 @@ class ContextSummaryTokenBudgetTest {
                   .assemble(standaloneHistorical(), "chat", "run", () -> {}))
           .hasMessageContaining(callsOnly ? "LLM_CALL_BUDGET_EXCEEDED" : "TOKEN_BUDGET_EXCEEDED");
       verify(model, times(callsOnly ? 1 : 2)).stream(any(Prompt.class));
-      assertThat(summaries.read("chat").throughSequence()).isEqualTo(1);
+      assertThat(summaries.read("chat").throughSequence()).isEqualTo(2);
       assertThat(
               summaries.read(ConversationSummaryRepository.runKey("chat", "run")).throughSequence())
           .isZero();
@@ -600,7 +600,7 @@ class ContextSummaryTokenBudgetTest {
       assertThat(reopened.get("project", goal.id()).llmCallsUsed()).isEqualTo(2);
       assertThat(reopened.get("project", goal.id()).tokenUsageUnknown()).isEqualTo(usage == null);
       assertThat(summaries.read("chat").throughSequence())
-          .isEqualTo(Objects.equals(usage, 5) ? 1 : 0);
+          .isEqualTo(Objects.equals(usage, 5) ? 2 : 0);
     }
   }
 
