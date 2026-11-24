@@ -71,15 +71,17 @@ final class ResponsesReasoningReplay {
           throw new IllegalArgumentException("Responses reasoning replay mode is incompatible");
         var payload = reasoning.payload();
         if (endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT) {
+          var text = reasoning.text();
+          var summary = reasoning.summary();
           if (!java.util.Set.of(
                       OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE,
                       OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE)
                   .containsAll(reasoning.attributes().keySet())
               || payload != null
-              || reasoning.text() == null
-              || reasoning.text().isBlank()
-              || reasoning.text().length() > 4_194_304
-              || reasoning.summary() != null && !reasoning.summary().isBlank())
+              || text == null
+              || text.isBlank()
+              || text.length() > 4_194_304
+              || summary != null && !summary.isBlank())
             throw new IllegalArgumentException("Responses plaintext reasoning is incompatible");
         } else {
           if (payload == null || payload.data().isBlank())
