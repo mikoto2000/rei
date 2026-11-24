@@ -495,3 +495,20 @@ A/BのUI境界は追加なし。config/architecture の既存ペアを残し、�
 | 音声通知 | 1 | `soundNotify` |
 | タスク管理 | 6 | `taskComplete`、`taskCreate`、`taskDelete`、`taskList`、`taskUpdate`、`taskUpdateDeadline` |
 | 作業文脈の詳細・更新 | 4 | `workContextEdit`、`workContextHistory`、`workContextRevision`、`workContextUpdate` |
+
+### 接続先能力と公開枠の分離（Responses Phase 0）
+
+`rei.llm.max-tools` は既定接続先の明示能力、
+`rei.llm.features.<feature>.max-tools` はその機能の接続先の明示能力とする。
+独立custom serverには既定接続先の能力を暗黙継承しない。
+能力未指定時の既存の保守的な送信上限は変更しない。
+明示fallbackがある場合は候補の小さい上限を実効構成に取り込む。
+
+`max-active-tools` は動的公開枠で、従来どおり1〜128とする。
+動的選択時は公開枠と接続先能力の小さい方をRun開始・送信直前の双方で使う。
+動的選択が無効でも件数・重複検証を省略しない。上限が128を超えるfake/local接続先を
+利用する場合は、その能力を明示する。HTTPエラーやホスト名から上限を推測しない。
+
+全回帰のComputerUseApplicationTestは、機能無効の全callback登録を検証するfakeモデルに
+能力256件を明示した。未指定の184件送信を拒否する既存テスト、動的公開128件、
+基本31件＋検索、権限・LRU・要求snapshotの契約は維持する。
