@@ -5,7 +5,7 @@
 | Phase | 状態 | ブランチ / worktree | PR | マージコミット | 検証 |
 | --- | --- | --- | --- | --- | --- |
 | 0 | MERGED | codex/responses-api-phase-0-foundation / 削除済み | [#628](https://github.com/mikoto2000/rei/pull/628) | d0e3626f9565035cab20cc045dd3ba070985d3fe | PR・マージ後CI成功。全件7,718、成功7,706、skip12、failure/error0 |
-| 1 | IN_PROGRESS | codex/responses-api-phase-1-transport / .worktrees/responses-api-phase-1 | 未作成 | 未マージ | 対象100件成功、全回帰・品質ゲート実行中 |
+| 1 | IN_PROGRESS | codex/responses-api-phase-1-transport / .worktrees/responses-api-phase-1 | [#629](https://github.com/mikoto2000/rei/pull/629) | 未マージ | 最終関連376件/対象104件成功、品質ゲート成功、全件CI待ち |
 | 2 | NOT_STARTED | — | — | — | 未実施 |
 | 3 | NOT_STARTED | — | — | — | 未実施 |
 | 4 | NOT_STARTED | — | — | — | 未実施 |
@@ -109,8 +109,8 @@ Windowsで通常削除後に残った自作のignored build artifactsだけは�
 ## Phase 1: 基本通信（進行中）
 
 基準main: d0e3626f。Spring AI2.1.0/OpenAI SDK4.101.0を引き続き使用する。
-TDDで実JSON・native SSE・loopback HTTPのfixtureを追加し、現在100件が成功、skip/failure/error0。
-全回帰、Checkstyle、SpotBugs、architecture、packageを実行中。PRと最終検証結果は確定後に記録する。
+TDDで実JSON・native SSE・loopback HTTPのfixtureを追加し、最終対象104件が成功、skip/failure/error0。
+PRは[#629](https://github.com/mikoto2000/rei/pull/629)。最終headの全件CI確認後に通常mergeする。
 
 | 境界 | Redで検出した問題 | Greenと契約 |
 | --- | --- | --- |
@@ -143,3 +143,23 @@ SDK response本文やcauseを保持せず、失敗時にも提供済みのinput/
 ローカル全回帰はsource snapshot45fcd42dで開始し、レビュー追加分は独立出力先のJUnitで継続した。
 進行中のMaven classesを上書きしていない。全回帰の結果と最終sourceの対象/品質ゲートの結果を分けて記録し、
 最終PR headの全件CIが成功するまでマージしない。
+
+### Phase 1 の検証結果
+
+| 検証 | 結果 |
+| --- | --- |
+| 全回帰snapshot45fcd42d | 7,791件、成功7,779、failure/error0、既存期待skip12 |
+| 初回品質ゲート | Spotless/Checkstyle成功、SpotBugs6件を検出。未成功として記録し修正 |
+| 静的指摘修正後の関連回帰 | 372件、failure/error/skip0、全品質ゲート成功 |
+| HTTP層再送修正後の最終関連回帰 | 376件、failure/error/skip0。LLM全域・discovery・capture・architecture・AiConfiguration |
+| 最終対象の独立検証 | 104件、failure/error/skip0 |
+| 最終Checkstyle / SpotBugs | 指摘0 / 指摘0・解析error0 |
+| 最終Spotless / architecture / package | すべて成功。既存ゲート・予算・除外の変更なし |
+| 最終headのPR CI | 確認中。全件の成否・期待skip・対象SHAを照合してからmerge |
+| 実API・本番操作・長時間性能 | 未実施。production Responsesは引き続き拒否 |
+
+SpotBugsのnullable getter再取得3件と広いRuntimeException投げ直し3件は、値の一度取得と
+具体的な安全例外型で解消した。全回帰snapshotの報告を最終sourceの全回帰成功に読み替えていない。
+実loopbackではSDK retry:0でも408/503が2回届くRedを4ケースで確認し、本文をnon-replayableと宣言して
+同期/非同期とも1回へ修正した。受信JSONは元のSDK JSONと一致する。共有5秒timeoutよりresolved150msが優先する。
+通常ログへprovider本文や推論を出さないログ捕捉テストも維持する。
