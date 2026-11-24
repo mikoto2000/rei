@@ -189,6 +189,21 @@ public final class ModelOptions {
         ? capOutputLimit(options, tokens) : withOutputLimit(options, tokens);
   }
 
+  /** Grounding's legacy token parameter remains explicit while native requests retain their bound. */
+  public static ToolCallingChatOptions withTokenLimit(ToolCallingChatOptions options,int tokens) {
+    if(tokens<1) throw new IllegalArgumentException("Output limit must be positive");
+    if(options instanceof OpenAiChatOptions chat) {
+      var builder=chat.mutate();builder.maxCompletionTokens(null);builder.maxTokens(tokens);return builder.build();
+    }
+    return capOutputLimit(options,tokens);
+  }
+
+  /** A protocol-specific feature setting must never silently disappear on another API. */
+  public static ToolCallingChatOptions withFrequencyPenalty(ToolCallingChatOptions options,double penalty) {
+    if(options instanceof OpenAiResponsesChatOptions) throw new IllegalArgumentException("Frequency penalty is unavailable for Responses");
+    return options.mutate().frequencyPenalty(penalty).build();
+  }
+
   /** Set an explicitly selected native tool-choice value, including clearing the choice. */
   public static ToolCallingChatOptions withToolChoice(ToolCallingChatOptions options, String choice) {
     if (options instanceof OpenAiResponsesChatOptions responses) {

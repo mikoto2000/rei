@@ -90,25 +90,25 @@ public class ComputerUseConfiguration {
       var planner =
           new SpringAiComputerVisionModel(
               provider.chatModel(LlmFeature.COMPUTER_USE_PLANNER),
-              () -> provider.chatOptions(LlmFeature.COMPUTER_USE_PLANNER, current.get()).mutate(),
+              () -> provider.requestOptions(LlmFeature.COMPUTER_USE_PLANNER, current.get(),false).mutate(),
               cancellation::isCancellationRequested,
               properties.repairs());
       return new ShowUiComputerVisionModel(
           planner::decideOverview,
           provider.computerUseChatModel(),
-          () -> provider.chatOptions(LlmFeature.COMPUTER_USE, current.get()).mutate(),
+          () -> provider.requestOptions(LlmFeature.COMPUTER_USE, current.get(),false).mutate(),
           cancellation::isCancellationRequested,
           "uitars".equals(grounding) ? GroundingProtocol.UITARS : GroundingProtocol.SHOWUI,
           new PlannerGroundingVerifier(
               provider.chatModel(LlmFeature.COMPUTER_USE_PLANNER),
-              () -> provider.chatOptions(LlmFeature.COMPUTER_USE_PLANNER, current.get()).mutate(),
+              () -> provider.requestOptions(LlmFeature.COMPUTER_USE_PLANNER, current.get(),false).mutate(),
               cancellation::isCancellationRequested));
     }
     if (!"generic".equals(grounding))
       throw new IllegalArgumentException("Unknown computer-use grounding: " + grounding);
     return new SpringAiComputerVisionModel(
         provider.computerUseChatModel(),
-        () -> provider.chatOptions(LlmFeature.COMPUTER_USE, current.get()).mutate(),
+        () -> provider.requestOptions(LlmFeature.COMPUTER_USE, current.get(),false).mutate(),
         cancellation::isCancellationRequested,
         properties.repairs());
   }

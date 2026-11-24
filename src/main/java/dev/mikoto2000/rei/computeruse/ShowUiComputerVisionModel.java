@@ -15,7 +15,8 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.MimeTypeUtils;
 
@@ -39,7 +40,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
   private final ChatModel grounding;
 
   /** 選択可能な設定。 */
-  private final Supplier<OpenAiChatOptions.Builder> options;
+  private final Supplier<? extends ToolCallingChatOptions.Builder<?>> options;
 
   /** キャンセル済み。 */
   private final BooleanSupplier cancelled;
@@ -54,7 +55,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
   public ShowUiComputerVisionModel(
       ComputerVisionModel planner,
       ChatModel grounding,
-      Supplier<OpenAiChatOptions.Builder> options,
+      Supplier<? extends ToolCallingChatOptions.Builder<?>> options,
       BooleanSupplier cancelled) {
     this(planner, grounding, options, cancelled, GroundingProtocol.SHOWUI);
   }
@@ -63,7 +64,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
   ShowUiComputerVisionModel(
       ComputerVisionModel planner,
       ChatModel grounding,
-      Supplier<OpenAiChatOptions.Builder> options,
+      Supplier<? extends ToolCallingChatOptions.Builder<?>> options,
       BooleanSupplier cancelled,
       GroundingProtocol protocol) {
     this(
@@ -81,7 +82,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
   ShowUiComputerVisionModel(
       ComputerVisionModel planner,
       ChatModel grounding,
-      Supplier<OpenAiChatOptions.Builder> options,
+      Supplier<? extends ToolCallingChatOptions.Builder<?>> options,
       BooleanSupplier cancelled,
       GroundingProtocol protocol,
       GroundingVerifier verifier) {
@@ -193,16 +194,11 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
             .text(protocol.prompt(target.description()))
             .media(new Media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(bytes.toByteArray())))
             .build();
-    var requestBuilder =
-        options
-            .get()
-            .maxCompletionTokens(null)
-            .maxTokens(128)
-            .responseFormat(null)
-            .toolChoice(null)
-            .toolCallbacks(List.of());
-    if (protocol == GroundingProtocol.UITARS) requestBuilder.frequencyPenalty(1.0);
-    var requestOptions = requestBuilder.build();
+    var isolated=ModelOptions.singleRequest(options.get().build());
+    var bounded=ModelOptions.withTokenLimit(isolated,128);
+    var plain=ModelOptions.withResponseFormat(ModelOptions.withToolChoice(bounded,null),null);
+    var requestOptions=protocol==GroundingProtocol.UITARS
+        ? ModelOptions.withFrequencyPenalty(plain,1.0) : plain;
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(requestOptions);
     saveDiagnostics(
         observation,
@@ -251,7 +247,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
           // Preserve model text before validation, including malformed coordinates or truncated
           // output.
           var details = new java.util.LinkedHashMap<String, Object>();
-          details.put("response", response == null ? null : response.toString());
+          details.put("response", ComputerDiagnostics.responseText(response));
           details.put(
               "texts",
               response == null
@@ -266,7 +262,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
         prefix,
         observation.step(),
         target.displayId(),
-        response);
+        ComputerDiagnostics.responseText(response));
     checkCancelled();
     if (response == null
         || response.getResults().size() != 1
