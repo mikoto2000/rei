@@ -51,21 +51,36 @@ public final class StorageMaintenance {
 
   private final StorageDatabase.WorkRunner read;
   private final StorageDatabase.WorkRunner maintenance;
-  private final java.util.function.IntSupplier collectModelMessages;
+  private java.util.function.IntSupplier collectModelMessages;
 
   /** 指定された値や利用先を使って、StorageMaintenanceを初期化する。 */
   public StorageMaintenance(StorageObjectRegistry registry) {
-    this(registry, () -> { throw new IllegalStateException("Model message maintenance is unavailable"); });
+    this(
+        registry,
+        () -> {
+          throw new IllegalStateException("Model message maintenance is unavailable");
+        });
   }
 
-  public StorageMaintenance(StorageObjectRegistry registry, java.util.function.IntSupplier collectModelMessages) {
+  public StorageMaintenance(
+      StorageObjectRegistry registry, java.util.function.IntSupplier collectModelMessages) {
     this.root = registry.root;
     this.read = registry.database::read;
     this.maintenance = registry.database::maintenance;
     this.collectModelMessages = java.util.Objects.requireNonNull(collectModelMessages);
   }
 
-  public int collectModelMessageOrphans() { return collectModelMessages.getAsInt(); }
+  public int collectModelMessageOrphans() {
+    return collectModelMessages.getAsInt();
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private void configureModelMessagePayloads(
+      org.springframework.beans.factory.ObjectProvider<
+              dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore>
+          payloads) {
+    this.collectModelMessages = () -> payloads.getObject().collectExpired();
+  }
 
   /** データ保存の共通処理で用いる大きさを返す。 */
   private long size(String name) throws IOException {

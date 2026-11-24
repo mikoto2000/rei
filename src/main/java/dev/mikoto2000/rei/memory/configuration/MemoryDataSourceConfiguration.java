@@ -14,14 +14,6 @@ import org.sqlite.SQLiteDataSource;
 @EnableConfigurationProperties(MemoryProperties.class)
 public class MemoryDataSourceConfiguration {
 
-  /** Initialize protocol storage only when its explicit persistence or maintenance path is used. */
-  @Bean
-  @org.springframework.context.annotation.Lazy
-  public dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore modelMessagePayloadStore(
-      @Qualifier("memoryConsolidationDataSource") DataSource source) {
-    return new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
-  }
-
   /** 長期記憶の準備で用いる記憶統合データ取得元を返す。 */
   @Bean
   @Qualifier("memoryConsolidationDataSource")

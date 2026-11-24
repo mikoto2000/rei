@@ -141,9 +141,8 @@ public class ContextCompressionConfiguration {
       ConversationTurnStore turns,
       ConversationMemory memory,
       ConversationSummaryRepository summaries,
-      dev.mikoto2000.rei.conversation.ConversationLogStore logs,
-      ObjectProvider<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> payloads) {
-    return new ContextHistoryAdvisor(turns, memory, summaries, logs, payloads::getObject);
+      dev.mikoto2000.rei.conversation.ConversationLogStore logs) {
+    return new ContextHistoryAdvisor(turns, memory, summaries, logs);
   }
 
   /** モデルへ渡す文脈の管理で用いる文脈文脈の組み立てを返す。 */

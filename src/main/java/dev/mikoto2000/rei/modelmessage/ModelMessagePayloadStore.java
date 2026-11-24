@@ -9,6 +9,8 @@ import javax.sql.DataSource;
 import org.springframework.ai.chat.messages.Message;
 
 /** Durable protocol messages; callers publish references before making them visible. */
+@org.springframework.stereotype.Component
+@org.springframework.context.annotation.Lazy
 public final class ModelMessagePayloadStore {
   public static final String EXCHANGE_CONTEXT_KEY = "rei.modelMessageExchange";
   public static final String HISTORY_ID = "rei.modelMessage.id";
@@ -21,11 +23,14 @@ public final class ModelMessagePayloadStore {
   }
 
   public static boolean hasHistoryReference(java.util.Map<String, String> metadata) {
-    return metadata != null && (metadata.containsKey(HISTORY_ID) || metadata.containsKey(HISTORY_HASH)
-        || metadata.containsKey(HISTORY_OWNER));
+    return metadata != null
+        && (metadata.containsKey(HISTORY_ID)
+            || metadata.containsKey(HISTORY_HASH)
+            || metadata.containsKey(HISTORY_OWNER));
   }
 
-  public java.util.Optional<Message> restoreHistory(Scope scope, java.util.Map<String, String> metadata) {
+  public java.util.Optional<Message> restoreHistory(
+      Scope scope, java.util.Map<String, String> metadata) {
     if (!hasHistoryReference(metadata)) return java.util.Optional.empty();
     validate(scope);
     String owner = metadata.get(HISTORY_OWNER);
@@ -33,23 +38,34 @@ public final class ModelMessagePayloadStore {
     var ref = new Ref(metadata.get(HISTORY_ID), metadata.get(HISTORY_HASH));
     return transaction(db -> {
       byte[] bytes = read(db, scope, ref);
-      if (scalar(db, "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='HISTORY' AND owner=?", ref.id(), owner) != 1) throw rejected();
+      if (scalar(
+              db,
+              "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='HISTORY' AND owner=?",
+              ref.id(),
+              owner)
+          != 1) throw rejected();
       return java.util.Optional.of(codec.decode(bytes));
     });
   }
 
-  /** One existing tool-loop iteration, with its immutable persistence identity supplied by the caller. */
+  /**
+   * One existing tool-loop iteration, with its immutable persistence identity supplied by the
+   * caller.
+   */
   public record Exchange(ModelMessagePayloadStore store, Scope scope, String run, String key) {
     public void persist(Message message) {
       var ref = store.save(scope, run, key + "/" + message.getMessageType().name(), message);
       store.publish(scope, ref, ReferenceKind.RUN, run);
     }
   }
+
   public record Scope(String project, String root, String conversation) {
     public static Scope forOwner(dev.mikoto2000.rei.tooldelivery.ReadingRun owner) {
       if (owner == null || owner.projectRoot() == null) throw rejected();
-      return new Scope(owner.projectId() == null ? "default" : "project:" + owner.projectId(),
-          owner.projectRoot().toAbsolutePath().normalize().toString(), owner.conversationId());
+      return new Scope(
+          owner.projectId() == null ? "default" : "project:" + owner.projectId(),
+          owner.projectRoot().toAbsolutePath().normalize().toString(),
+          owner.conversationId());
     }
   }
 
@@ -138,7 +154,10 @@ public final class ModelMessagePayloadStore {
   private final java.time.Clock clock;
   private final Limits limits;
 
-  public ModelMessagePayloadStore(DataSource source) {
+  @org.springframework.beans.factory.annotation.Autowired
+  public ModelMessagePayloadStore(
+      @org.springframework.beans.factory.annotation.Qualifier("memoryConsolidationDataSource")
+          DataSource source) {
     this(
         source,
         java.time.Clock.systemUTC(),
