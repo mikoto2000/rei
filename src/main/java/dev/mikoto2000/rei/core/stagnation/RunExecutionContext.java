@@ -759,6 +759,11 @@ public class RunExecutionContext {
   }
 
   /** 保存済みの状態を引き継ぐため、進捗を復元する。 */
+  public synchronized void restoreProgress(ProgressState saved,
+      List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference> references) {
+    restoreProgress(saved);
+  }
+
   public synchronized void restoreProgress(ProgressState saved) {
     finishResumeBatch();
     reviewPageReconciled = false;
