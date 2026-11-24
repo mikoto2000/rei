@@ -19,6 +19,13 @@ final class ResponsesReasoningReplay {
     for (var message : prompt.getInstructions()) {
       if (!(message instanceof AssistantMessage assistant)) continue;
       for (var part : assistant.getParts()) {
+        if (!(part instanceof org.springframework.ai.chat.messages.part.TextPart
+            || part instanceof ReasoningPart || part instanceof org.springframework.ai.chat.messages.part.ToolCallPart)
+            || org.springframework.ai.chat.messages.part.StreamingParts.isPartial(part))
+          throw new IllegalArgumentException("Responses replay part is not supported or complete");
+        var status = part.attributes().get(OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE);
+        if (status != null && !"completed".equals(status))
+          throw new IllegalArgumentException("Responses replay part is not complete");
         if (!(part instanceof ReasoningPart reasoning)) continue;
         if (endpoint.capabilities().reasoningReplay() != ReasoningReplayMode.ENCRYPTED)
           throw new IllegalArgumentException("Responses reasoning replay mode is incompatible");
