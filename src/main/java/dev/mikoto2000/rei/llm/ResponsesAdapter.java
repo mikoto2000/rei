@@ -1,0 +1,380 @@
+package dev.mikoto2000.rei.llm;
+
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.StreamReadConstraints;
+import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.observation.ObservationRegistry;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer;
+import org.springframework.ai.openai.responses.OpenAiResponsesChatModel;
+import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
+import org.springframework.ai.openai.responses.OpenAiResponsesMetadata;
+import org.springframework.ai.openai.setup.OpenAiSetup;
+import org.springframework.ai.tool.ToolCallback;
+import reactor.core.publisher.Flux;
+
+/** Responses wire boundary. Not registered for production before durable integration. */
+final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
+  private static final Set<String> PROTECTED_FIELDS =
+      Set.of(
+          "model",
+          "input",
+          "instructions",
+          "tools",
+          "tool_choice",
+          "store",
+          "previous_response_id",
+          "conversation",
+          "max_tokens",
+          "max_completion_tokens",
+          "max_output_tokens",
+          "reasoning",
+          "text",
+          "stream",
+          "include",
+          "parallel_tool_calls",
+          "response_format",
+          "messages",
+          "functions",
+          "function_call",
+          "chat_template_kwargs",
+          "background",
+          "context_management",
+          "truncation",
+          "temperature",
+          "top_p",
+          "verbosity");
+
+  private final ResolvedLlmEndpoint endpoint;
+  private final OpenAiResponsesChatModel delegate;
+  private static final ObjectMapper JSON =
+      new ObjectMapper(
+              JsonFactory.builder()
+                  .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+                  .streamReadConstraints(
+                      StreamReadConstraints.builder()
+                          .maxNestingDepth(64)
+                          .maxStringLength(4_194_304)
+                          .maxNumberLength(1000)
+                          .build())
+                  .build())
+          .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+
+  static ResponsesAdapter create(
+      ResolvedLlmEndpoint endpoint,
+      OpenAiResponsesChatOptions options,
+      List<OpenAiHttpClientBuilderCustomizer> customizers) {
+    if (endpoint.apiType() != LlmApiType.RESPONSES
+        || options.getDeploymentName() != null
+        || options.isMicrosoftFoundry()
+        || !Objects.equals(endpoint.baseUrl(), options.getBaseUrl())
+        || !Objects.equals(endpoint.model(), options.getModel())
+        || !Objects.equals(endpoint.maxOutputTokens(), options.getMaxOutputTokens())
+        || !Objects.equals(endpoint.temperature(), options.getTemperature()))
+      throw new IllegalArgumentException("Responses client must match the resolved endpoint");
+    if (options.getMaxRetries() != 0)
+      throw new IllegalArgumentException(
+          "Responses SDK retries must stay zero at client construction");
+    options = options.mutate().timeout(endpoint.readTimeout()).build();
+    var transportCustomizers = new ArrayList<OpenAiHttpClientBuilderCustomizer>();
+    transportCustomizers.addAll(customizers);
+    transportCustomizers.add(builder ->
+        builder
+            .interceptor(chain -> {
+              var request = chain.request();
+              var body = request.body();
+              if (body != null)
+                request =
+                    request.newBuilder().method(request.method(), nonReplayable(body)).build();
+              return chain.proceed(request);
+            })
+            .interceptor(new ChatStreamTimeoutInterceptor(endpoint.readTimeout())));
+    var client =
+        OpenAiSetup.setupAsyncClient(
+            options.getBaseUrl(),
+            options.getApiKey(),
+            options.getCredential(),
+            options.getMicrosoftDeploymentName(),
+            options.getMicrosoftFoundryServiceVersion(),
+            options.getOrganizationId(),
+            options.isMicrosoftFoundry(),
+            false,
+            options.getModel(),
+            options.getTimeout() == null ? endpoint.readTimeout() : options.getTimeout(),
+            0,
+            options.getProxy(),
+            options.getCustomHeaders(),
+            ObservationRegistry.NOOP,
+            null,
+            transportCustomizers);
+    var model =
+        OpenAiResponsesChatModel.builder()
+            .options(options)
+            .openAiClient(
+                ResponsesSdkBoundary.safe(
+                    OpenAiSetup.setupSyncClient(
+                        options.getBaseUrl(),
+                        options.getApiKey(),
+                        options.getCredential(),
+                        options.getMicrosoftDeploymentName(),
+                        options.getMicrosoftFoundryServiceVersion(),
+                        options.getOrganizationId(),
+                        options.isMicrosoftFoundry(),
+                        false,
+                        options.getModel(),
+                        options.getTimeout(),
+                        0,
+                        options.getProxy(),
+                        options.getCustomHeaders(),
+                        ObservationRegistry.NOOP,
+                        null,
+                        transportCustomizers)))
+            .openAiClientAsync(ResponsesSdkBoundary.safe(client))
+            .httpClientBuilderCustomizers(transportCustomizers)
+            .build();
+    return new ResponsesAdapter(endpoint, model);
+  }
+
+  private static okhttp3.RequestBody nonReplayable(okhttp3.RequestBody body) {
+    return new okhttp3.RequestBody() {
+      @Override
+      public okhttp3.MediaType contentType() {
+        return body.contentType();
+      }
+
+      @Override
+      public long contentLength() throws java.io.IOException {
+        return body.contentLength();
+      }
+
+      @Override
+      public boolean isOneShot() {
+        return true;
+      }
+
+      @Override
+      public boolean isDuplex() {
+        return body.isDuplex();
+      }
+
+      @Override
+      public void writeTo(okio.BufferedSink sink) throws java.io.IOException {
+        body.writeTo(sink);
+      }
+    };
+  }
+
+  private ResponsesAdapter(ResolvedLlmEndpoint endpoint, OpenAiResponsesChatModel delegate) {
+    this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
+    this.delegate = Objects.requireNonNull(delegate, "delegate");
+    if (endpoint.apiType() != LlmApiType.RESPONSES)
+      throw new IllegalArgumentException("Responses endpoint required");
+  }
+
+  @Override
+  public OpenAiResponsesChatOptions options(ResolvedLlmEndpoint endpoint) {
+    if (!this.endpoint.equals(endpoint))
+      throw new IllegalArgumentException("Responses options must match the bound endpoint");
+    if (endpoint.apiType() != LlmApiType.RESPONSES)
+      throw new IllegalArgumentException("Responses endpoint required");
+    return delegate
+        .getOptions()
+        .mutate()
+        .model(endpoint.model())
+        .maxOutputTokens(endpoint.maxOutputTokens())
+        .temperature(endpoint.temperature())
+        .maxRetries(0)
+        .build();
+  }
+
+  @Override
+  public OpenAiResponsesChatOptions getOptions() {
+    return options(endpoint);
+  }
+
+  private Prompt prepare(Prompt prompt) {
+    var supplied = prompt.getOptions();
+    if (supplied != null && !(supplied instanceof OpenAiResponsesChatOptions))
+      throw new IllegalArgumentException("Responses native options required");
+    var options = supplied == null ? getOptions() : (OpenAiResponsesChatOptions) supplied;
+    requireCapability(options.getVerbosity(), LlmCapabilities.Setting.TEXT_VERBOSITY, "verbosity");
+    var defaults = delegate.getOptions();
+    if (!Objects.equals(defaults.getBaseUrl(), options.getBaseUrl())
+        || !Objects.equals(defaults.getApiKey(), options.getApiKey())
+        || !Objects.equals(defaults.getCredential(), options.getCredential())
+        || !Objects.equals(defaults.getDeploymentName(), options.getDeploymentName())
+        || !Objects.equals(
+            defaults.getMicrosoftFoundryServiceVersion(),
+            options.getMicrosoftFoundryServiceVersion())
+        || defaults.isMicrosoftFoundry() != options.isMicrosoftFoundry()
+        || !Objects.equals(defaults.getProxy(), options.getProxy())
+        || (options.getTimeout() != null && !endpoint.readTimeout().equals(options.getTimeout()))
+        || !Objects.equals(defaults.getOrganizationId(), options.getOrganizationId())
+        || !Objects.equals(defaults.getCustomHeaders(), options.getCustomHeaders()))
+      throw new IllegalArgumentException("Responses connection differs from the bound endpoint");
+    if (!Objects.equals(endpoint.model(), options.getModel()))
+      throw new IllegalArgumentException("Responses model differs from the bound endpoint");
+    if (options.getMaxRetries() != 0)
+      throw new IllegalArgumentException("Responses SDK retries must stay zero");
+    var outputLimit = options.getMaxOutputTokens();
+    var resolvedLimit = endpoint.maxOutputTokens();
+    if (outputLimit == null
+        || outputLimit < 1
+        || (resolvedLimit != null && outputLimit > resolvedLimit))
+      throw new IllegalArgumentException("Responses output limit must respect the resolved bound");
+    requireCapability(options.getTemperature(), LlmCapabilities.Setting.TEMPERATURE, "temperature");
+    requireCapability(options.getTopP(), LlmCapabilities.Setting.TOP_P, "topP");
+    requireCapability(
+        options.getReasoningEffort(), LlmCapabilities.Setting.REASONING_EFFORT, "reasoningEffort");
+    requireCapability(
+        options.getReasoningSummary(),
+        LlmCapabilities.Setting.REASONING_SUMMARY,
+        "reasoningSummary");
+    requireCapability(
+        options.getParallelToolCalls(),
+        LlmCapabilities.Setting.PARALLEL_TOOL_CALLS,
+        "parallelToolCalls");
+    requireCapability(
+        options.getResponseFormat(), LlmCapabilities.Setting.STRUCTURED_OUTPUT, "structuredOutput");
+    for (var message : prompt.getInstructions())
+      if (message instanceof UserMessage user && !user.getMedia().isEmpty())
+        requireCapability(Boolean.TRUE, LlmCapabilities.Setting.IMAGE_INPUT, "imageInput");
+    var hostedTools = options.getHostedTools();
+    if (hostedTools != null && !hostedTools.isEmpty())
+      throw new IllegalArgumentException("Responses hostedTools are not supported");
+    if (options.getTruncation() != null && !"disabled".equals(options.getTruncation()))
+      throw new IllegalArgumentException("Responses truncation must stay disabled");
+    if (options.getMaxToolCalls() != null)
+      throw new IllegalArgumentException("Responses maxToolCalls requires hosted execution");
+    if (Boolean.TRUE.equals(options.getStrict()))
+      throw new IllegalArgumentException("Responses function strict must stay false");
+    var extra = options.getExtraBody();
+    if (extra != null)
+      for (String field : extra.keySet())
+        if (PROTECTED_FIELDS.contains(field))
+          throw new IllegalArgumentException("Protected Responses field: " + field);
+    if (extra != null && !extra.isEmpty())
+      throw new IllegalArgumentException(
+          "Responses extraBody extensions require an explicit typed contract");
+    var callbacks = options.getToolCallbacks();
+    if (callbacks == null || callbacks.isEmpty())
+      options = options.mutate().toolChoice(null).build();
+    else {
+      validateTools(callbacks);
+      validateToolChoice(options.getToolChoice(), callbacks);
+    }
+    return new Prompt(prompt.getInstructions(), options);
+  }
+
+  private static void validateToolChoice(Object choice, List<ToolCallback> callbacks) {
+    if (choice == null
+        || (choice instanceof String value && Set.of("auto", "none", "required").contains(value)))
+      return;
+    String name = null;
+    if (choice instanceof String value) {
+      try {
+        if (value.length() > 4_194_304)
+          throw new IllegalArgumentException("Invalid Responses tool choice");
+        var node = JSON.readTree(value);
+        if (node != null && "function".equals(node.path("type").asText()))
+          name =
+              node.has("name")
+                  ? node.path("name").asText()
+                  : node.path("function").path("name").asText();
+      } catch (JsonProcessingException invalid) {
+        throw new IllegalArgumentException("Invalid Responses tool choice");
+      }
+    }
+    if (name != null)
+      for (var callback : callbacks) if (name.equals(callback.getToolDefinition().name())) return;
+    throw new IllegalArgumentException("Invalid Responses tool choice");
+  }
+
+  private void validateTools(List<ToolCallback> callbacks) {
+    var configuredMaximum = endpoint.capabilities().maxTools();
+    int maximum = configuredMaximum == null ? 128 : configuredMaximum;
+    if (callbacks.size() > maximum)
+      throw new IllegalArgumentException("Responses tool count exceeds endpoint limit");
+    var names = new java.util.HashSet<String>();
+    for (var callback : callbacks) {
+      var definition = callback.getToolDefinition();
+      if (!definition.name().matches("[A-Za-z0-9_-]{1,64}") || !names.add(definition.name()))
+        throw new IllegalArgumentException("Responses tool names must be valid and unique");
+      try {
+        if (definition.inputSchema().length() > 4_194_304)
+          throw new IllegalArgumentException("Responses tool schema exceeds the size limit");
+        var schema = JSON.readTree(definition.inputSchema());
+        if (schema == null || !schema.isObject() || !"object".equals(schema.path("type").asText()))
+          throw new IllegalArgumentException("Responses tool schema must describe an object");
+      } catch (JsonProcessingException error) {
+        throw new IllegalArgumentException("Responses tool schema must be valid JSON");
+      }
+    }
+  }
+
+  private void requireCapability(Object value, LlmCapabilities.Setting setting, String name) {
+    if (value != null && !endpoint.capabilities().supportedSettings().contains(setting))
+      throw new IllegalArgumentException("Responses endpoint does not support " + name);
+  }
+
+  @Override
+  public ChatResponse call(Prompt prompt) {
+    var request = prepare(prompt);
+    try {
+      var response = delegate.call(request);
+      requireCompleted(response);
+      return response;
+    } catch (RuntimeException error) {
+      throw ResponsesTransportException.normalize(error);
+    }
+  }
+
+  private static void requireCompleted(ChatResponse response) {
+    var metadata = response.getMetadata();
+    var status = metadata.get(OpenAiResponsesMetadata.STATUS);
+    if ("completed".equals(status)) return;
+    var category = ResponsesTransportException.Category.INVALID_RESPONSE;
+    if ("incomplete".equals(status))
+      category =
+          "max_output_tokens".equals(metadata.get(OpenAiResponsesMetadata.INCOMPLETE_REASON))
+              ? ResponsesTransportException.Category.OUTPUT_LIMIT
+              : ResponsesTransportException.Category.INCOMPLETE;
+    throw new ResponsesTransportException(
+        category, ResponsesTransportException.usage(metadata.getUsage()));
+  }
+
+  @Override
+  public Flux<ChatResponse> stream(Prompt prompt) {
+    var request = prepare(prompt);
+    return Flux.defer(
+            () -> {
+              var completed = new AtomicBoolean();
+              return delegate.stream(request)
+                  .doOnNext(response -> {
+                    if (response.getMetadata().containsKey(OpenAiResponsesMetadata.STATUS)) {
+                      requireCompleted(response);
+                      completed.set(true);
+                    }
+                  })
+                  .concatWith(
+                      Flux.defer(() ->
+                          completed.get()
+                              ? Flux.empty()
+                              : Flux.error(
+                                  new ResponsesTransportException(
+                                      ResponsesTransportException.Category.INVALID_RESPONSE))));
+            })
+        .onErrorMap(ResponsesTransportException::normalize);
+  }
+}

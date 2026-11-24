@@ -1,7 +1,7 @@
 # Rei の Responses API 対応設計
 
 作成日: 2026-11-24
-状態: Phase 0 の接続構成・API境界を実装中。末尾の改訂契約と進捗台帳を参照。Responses通信・DB移行・本番有効化は未実装。
+状態: Phase 0 はマージ済み。Phase 1 のテスト専用通信境界を検証中。末尾の改訂契約と進捗台帳を参照。DB移行・本番有効化は未実装。
 基準コミット: `18894acb`（Run ごとの動的ツール選択）。
 
 ## 前回調査時点の作業範囲（履歴）
@@ -426,3 +426,48 @@ Responses factoryでも構築時0を保証する。Spring builderには公開の
 既存`/model`の選択はModelHolderServiceが保持し、要求optionsへのモデル引数として維持する。
 接続設定の固定と、受付時に選ぶモデルを混同しない。Runへの統合時は同じ選択済みモデルから
 実効構成を確定し、設定だけのdescriptorを要求モデルの代用にしない。
+
+### Phase 1 の通信境界
+
+`ResponsesAdapter` はSpring AIのnative optionsとモデルを使用する。production providerには登録せず、
+永続化・再開の受入条件が整うまで既存の明示拒否を維持する。HTTP 200のみでは成功と判定しない。
+非stream応答・stream終端の **response metadata** のstatusが明示的にcompletedであることを要求する。
+Generation metadataのstatusはSpring側で欠落時completedを補うため、成功判定の根拠にしない。
+streamのEOFだけでは成功にせず、キャンセルではSDKのボディを閉じる。
+
+接続先の設定対応は不変な`LlmCapabilities.supportedSettings`で明示する。温度、top-p、推論effort、
+summary、parallel制御、structured output、画像入力をモデル名から推定しない。構造化出力はnative
+`text.format`、画像はnative`input_image`で送信する。能力集合は防御コピーしたenum順の集合とし、
+fingerprintの順序を安定させる。この段階では外部YAMLによるResponses本番利用設定は公開しない。
+
+出力上限の欠落・増加、モデル・接続設定・SDK retryのruntime変更、保護フィールドのextraBody上書きを
+送信前に拒否する。native runtime optionsはdefaultsを置換するという依存実装の契約を維持し、
+部分optionsを黙示マージしない。ツールなし要求はtoolsとtool_choiceを両方省略する。
+受け取ったcallback定義の名前・重複・件数・object Schemaを検証し、業務callbackは通信層で実行しない。
+Hosted Tools、server truncation、hosted maxToolCalls、function strict:trueは初期契約の範囲外として拒否する。
+
+Spring AI 2.1.0の内部`MessageAggregator`はstreamの例外をログ出力する。Adapterの下流で例外を
+置換するだけでは、提供元メッセージに含まれ得る秘密情報・推論のログ出力を防げないことをfixtureで確認した。
+`ResponsesSdkBoundary`は公開client注入点でSDKの型付きstreamだけを包み、error/failedイベントと
+異常完了を安全な分類へ置き換えてからSpringのassemblerへ渡す。HTTP/SSE解析と資源解放はSDKが担当する。
+JSONのinterceptor書き換え、独自SSE parser、ログの無効化は採用しない。SDK更新時にはこの境界の
+実SSE・ログ捕捉・キャンセル契約テストを必ず再実行する。
+
+SDK retryは同期・非同期clientの構築時に0とする。既存のread inactivity制御を`/responses`にも適用し、
+読み取りが続く長い応答と無通信timeoutを区別する。認証・rate limit・server/transient・provider・timeoutの
+エラー分類には提供元body・メッセージ・元例外causeを含めない。通常のusageとnative usageの
+cached/reasoning token数は保持する。incomplete/failedでも、提供されたusageの数値だけを安全な例外へ保持する。
+未提供のusageは未取得として扱い、推測で埋めない。既存予算・再開との統合は後続phaseの課題として残す。
+
+raw extraBody拡張は現時点で公開しない。保護フィールドを個別に診断したうえで、その他の拡張も
+型付きの対応契約が追加されるまでは拒否する。SDKが受理できる値を接続先の対応済み機能とみなさない。
+名前付きtool choiceは要求内で公開したfunctionに限定し、hosted tool指定や不正JSONは値を表示せず拒否する。
+deployment alias/Foundry設定は現在のresolved model契約の範囲外として拒否する。
+
+SDK retry:0だけでは物理的な再送を止められないことも、実loopbackで確認した。
+同梱Spring HTTP clientはOkHttpのconnection recoveryを有効にしており、408/503 + Retry-After:0の
+同期・非同期要求はSDK retry:0でも2回届いた。Responses所有のinterceptorで本文をnon-replayableと宣言し、
+4ケースすべて1回だけ届くことと、受信したJSONが元のnative SDK JSONと等しいことを検証した。
+本文のJSONやopaque payloadは書き換えない。共有customizerの後に所有するrequest/timeout方針を適用し、
+共有の5秒read timeoutが解決済み150msのtimeoutを上書きしないことも実clientで検証する。
+この方針はResponses factoryのみに適用し、既存Chat Completions clientの再送動作は変更しない。

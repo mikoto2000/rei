@@ -4,8 +4,8 @@
 
 | Phase | 状態 | ブランチ / worktree | PR | マージコミット | 検証 |
 | --- | --- | --- | --- | --- | --- |
-| 0 | IN_PROGRESS | codex/responses-api-phase-0-foundation / .worktrees/responses-api-phase-0 | 作成・CI待ち | 未マージ | 全回帰snapshot 7,717件成功、最新関連168件成功、品質ゲート成功 |
-| 1 | NOT_STARTED | — | — | — | 未実施 |
+| 0 | MERGED | codex/responses-api-phase-0-foundation / 削除済み | [#628](https://github.com/mikoto2000/rei/pull/628) | d0e3626f9565035cab20cc045dd3ba070985d3fe | PR・マージ後CI成功。全件7,718、成功7,706、skip12、failure/error0 |
+| 1 | IN_PROGRESS | codex/responses-api-phase-1-transport / .worktrees/responses-api-phase-1 | [#629](https://github.com/mikoto2000/rei/pull/629) | 未マージ | 最終関連376件/対象104件成功、品質ゲート成功、全件CI待ち |
 | 2 | NOT_STARTED | — | — | — | 未実施 |
 | 3 | NOT_STARTED | — | — | — | 未実施 |
 | 4 | NOT_STARTED | — | — | — | 未実施 |
@@ -68,12 +68,12 @@ Redの初期セットアップにあったコンパイル/classpath/Binder設定
 | Spotless | 成功。統合基盤を含む既存違反36ファイルは独立コミットで整形 |
 | architecture | 既存guard/source report/package dependency gate成功。予算・除外を変更せず検証 |
 | 最新sourceのpackage/repackage | 成功。専用worktree内のみ |
-| 最新PR headの全件CI | 未実施。マージ前に必ず確認 |
+| 最新PR headの全件CI | 7,718件、成功7,706、failure/error0、期待skip12。Windows A/B・POSIX・集計ゲート成功 |
 | 実API / 性能 / production migration | 未実施。このPhaseでは利用不可 |
 
 全回帰後の最終変更は、既存音声補正の未指定上限の表現とnullable contextの一度取得。
 最新ソースは再コンパイルして上記168件・全品質ゲートで検証済み。
-最新PR headの全回帰CIも成功するまでマージしない。
+最新PR headとマージ後の全回帰CIは成功済み。
 スキップは既存の[期待IDと理由](../config/test-expected-skips.json)でCI照合し、成功件数へ含めない。
 
 全回帰で見つかったComputerUse179件/SubAgent178件のfake全ツール接続先には256件の能力を明示した。
@@ -95,3 +95,71 @@ Responsesは本番利用不可。通信・HTTP/SSE・完全保存・承認/Check
 
 Phase 0のPR・最新head CI・差分レビュー・通常マージ・後片付けを確定する。
 前Phaseのマージ前にPhase 1を開始しない。再開時は実Git/PR/CIを照合し、記録だけで判定しない。
+
+## Phase 0 のマージ後確認
+
+PR #628はhead6b1d7251を通常mergeし、main d0e3626fと検証済みheadのtree一致を確認した。
+PR CI: Java45294837889、Client45294837830、static45294837822はすべて成功。
+main CI: Java45296798561、Client45296798127、static45296798041もすべて成功。
+必須レビュー・active rulesがないことを照合し、管理者bypassは使用していない。
+専用Git worktree登録・元ディレクトリ・local/remote作業branchの削除を確認した。
+Windowsで通常削除後に残った自作のignored build artifactsだけは、検証済みのworkspace内targetへ保存した。
+元worktreeの未追跡設計書・review/を保持するため、元mainは無理に更新せず次phaseをorigin/mainから作成した。
+
+## Phase 1: 基本通信（進行中）
+
+基準main: d0e3626f。Spring AI2.1.0/OpenAI SDK4.101.0を引き続き使用する。
+TDDで実JSON・native SSE・loopback HTTPのfixtureを追加し、最終対象104件が成功、skip/failure/error0。
+PRは[#629](https://github.com/mikoto2000/rei/pull/629)。最終headの全件CI確認後に通常mergeする。
+
+| 境界 | Redで検出した問題 | Greenと契約 |
+| --- | --- | --- |
+| tool-free | tool_choiceが残る | 両toolフィールドを省略。元optionsは不変 |
+| raw body | protocolと能力の上書き | protected fieldsを送信前拒否 |
+| status | 欠落・incomplete・queued等が正常終了 | response metadataの明示completedだけ成功 |
+| SSE | EOF/incompleteが正常終了 | 終端必須。キャンセルではbodyをclose |
+| capability | 宣言なしのsampling/reasoning/parallel送信 | 明示設定を能力に照合 |
+| request identity | native runtimeのモデル・接続指定が変更/無視される | bound設定との差を送信前拒否 |
+| tools | 重複名・不正名・上限超え | 実callback定義を送信前検証。strict:falseを維持 |
+| privacy | Spring内部のログにprovider error本文が漏れる | typed SDK stream境界で先に安全化。ログ捕捉テスト成功 |
+| retry | native runtimeでretry変更可能 | client構築時と要求時に0を要求。異常HTTPは1回のみ |
+| timeout | Responsesだけ既存inactivity制御対象外 | 共通interceptorを拡張。実同期/非同期socket timeoutを分類 |
+
+Structured Outputのtext.format、画像data URL、max_output_tokens/store:false、portable/native usageも
+実SDKを通して検証した。独自HTTP client/SSE parserや別agent loopは追加していない。
+Responses本番agent実行、実API、再送、永続化・再開、長時間性能はこのphaseで利用可能とはしない。
+外部YAML、実運用JAR、本番プロセス・DB、元worktreeの利用者変更は変更していない。
+
+新worktreeでmvnw.cmdが既存の.gitattributesと異なるCRLF indexを持ち、restore後にも差分が残ることを
+確認した。working bytesを維持してindexだけを既存規則どおりに正規化した変更を独立commit1433745dに分離した。
+
+Phase1のレビュー追加分も短いRed/Green履歴で修正した。resolved descriptorとclient既定値の一致、
+別endpoint向けoptions生成拒否、deployment/timeoutによる隠れた変更の拒否、名前付きtool choiceの
+公開範囲照合、Schema重複キーの拒否、verbosity能力、unknown raw拡張の拒否を含む。
+incomplete(max_output_tokens)とfailedでは、数値usageだけを安全な例外へ保持する。
+SDK response本文やcauseを保持せず、失敗時にも提供済みのinput/output/total/cached/reasoningを失わない。
+実接続の未測定値やusage欠落を推測値で埋めない。
+
+ローカル全回帰はsource snapshot45fcd42dで開始し、レビュー追加分は独立出力先のJUnitで継続した。
+進行中のMaven classesを上書きしていない。全回帰の結果と最終sourceの対象/品質ゲートの結果を分けて記録し、
+最終PR headの全件CIが成功するまでマージしない。
+
+### Phase 1 の検証結果
+
+| 検証 | 結果 |
+| --- | --- |
+| 全回帰snapshot45fcd42d | 7,791件、成功7,779、failure/error0、既存期待skip12 |
+| 初回品質ゲート | Spotless/Checkstyle成功、SpotBugs6件を検出。未成功として記録し修正 |
+| 静的指摘修正後の関連回帰 | 372件、failure/error/skip0、全品質ゲート成功 |
+| HTTP層再送修正後の最終関連回帰 | 376件、failure/error/skip0。LLM全域・discovery・capture・architecture・AiConfiguration |
+| 最終対象の独立検証 | 104件、failure/error/skip0 |
+| 最終Checkstyle / SpotBugs | 指摘0 / 指摘0・解析error0 |
+| 最終Spotless / architecture / package | すべて成功。既存ゲート・予算・除外の変更なし |
+| 最終headのPR CI | 確認中。全件の成否・期待skip・対象SHAを照合してからmerge |
+| 実API・本番操作・長時間性能 | 未実施。production Responsesは引き続き拒否 |
+
+SpotBugsのnullable getter再取得3件と広いRuntimeException投げ直し3件は、値の一度取得と
+具体的な安全例外型で解消した。全回帰snapshotの報告を最終sourceの全回帰成功に読み替えていない。
+実loopbackではSDK retry:0でも408/503が2回届くRedを4ケースで確認し、本文をnon-replayableと宣言して
+同期/非同期とも1回へ修正した。受信JSONは元のSDK JSONと一致する。共有5秒timeoutよりresolved150msが優先する。
+通常ログへprovider本文や推論を出さないログ捕捉テストも維持する。

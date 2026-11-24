@@ -36,7 +36,8 @@ final class ChatStreamTimeoutInterceptor implements Interceptor {
   /** 用途に応じたモデル利用で用いるinterceptを返す。 */
   @Override
   public Response intercept(Chain chain) throws IOException {
-    if (!chain.request().url().encodedPath().endsWith("/chat/completions")) {
+    String path = chain.request().url().encodedPath();
+    if (!path.endsWith("/chat/completions") && !path.endsWith("/responses")) {
       return chain.proceed(chain.request());
     }
     // Spring AI supplies a per-request timeout that overrides the client defaults.
