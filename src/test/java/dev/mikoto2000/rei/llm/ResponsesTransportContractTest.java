@@ -24,6 +24,46 @@ class ResponsesTransportContractTest {
   private boolean passThrough;
   private java.time.Duration readTimeout = java.time.Duration.ofMinutes(5);
 
+  @Test
+  void validatesActualCallbackDefinitionAndSendsNonStrictFunctionSchema() {
+    var callback = callback("fixture_tool", "{\"type\":\"object\",\"properties\":{}}");
+    var options = options().toolCallbacks(callback).build();
+    transport(options).call(new Prompt("fixture", options));
+    var tool = requests.getFirst().path("tools").get(0);
+    assertThat(tool.path("type").asText()).isEqualTo("function");
+    assertThat(tool.path("name").asText()).isEqualTo("fixture_tool");
+    assertThat(tool.path("strict").asBoolean(true)).isFalse();
+    assertThat(tool.path("parameters").path("type").asText()).isEqualTo("object");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"duplicate", "name", "schema", "limit"})
+  void invalidActualToolDefinitionsFailBeforeHttp(String invalid) {
+    var normal = callback("fixture_tool", "{\"type\":\"object\",\"properties\":{}}");
+    var callbacks = switch (invalid) {
+      case "duplicate" -> List.of(normal, normal);
+      case "name" -> List.of(callback("invalid name", "{\"type\":\"object\"}"));
+      case "schema" -> List.of(callback("fixture_tool", "[]"));
+      case "limit" -> java.util.stream.IntStream.range(0, 129)
+          .mapToObj(i -> callback("tool_" + i, "{\"type\":\"object\"}")).toList();
+      default -> throw new AssertionError(invalid);
+    };
+    var options = options().toolCallbacks(callbacks).build();
+    assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("tool");
+    assertThat(requests).isEmpty();
+  }
+
+  private org.springframework.ai.tool.ToolCallback callback(String name, String schema) {
+    return new org.springframework.ai.tool.ToolCallback() {
+      @Override public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
+        return org.springframework.ai.tool.definition.ToolDefinition.builder().name(name)
+            .description("fixture").inputSchema(schema).build();
+      }
+      @Override public String call(String input) { throw new AssertionError("Transport must never execute tools"); }
+    };
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void nativeClientsClassifySilentLoopbackConnectionsAsTimeout(boolean streaming) throws Exception {
