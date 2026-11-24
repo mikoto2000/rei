@@ -173,6 +173,93 @@ class ModelMessagePayloadStoreTest {
   }
 
   @Test
+  void aFailedUpgradeRollsBackEverySchemaChangeAndTheOriginalPayloadRemainsReadable() throws Exception {
+    byte[] bytes = new ModelMessageCodec().encode(message());
+    String hash = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+    try (var db = source().getConnection(); var sql = db.createStatement()) {
+      sql.execute("CREATE TABLE model_message_schema(version INTEGER NOT NULL)");
+      sql.execute("INSERT INTO model_message_schema VALUES(1)");
+      sql.execute("CREATE TABLE model_message_payloads(id TEXT PRIMARY KEY,project TEXT NOT NULL,root_path TEXT NOT NULL,conversation TEXT NOT NULL,run TEXT NOT NULL,message_key TEXT NOT NULL,sha256 TEXT NOT NULL,payload BLOB NOT NULL,size INTEGER NOT NULL,UNIQUE(project,root_path,conversation,run,message_key))");
+      try (var insert = db.prepareStatement("INSERT INTO model_message_payloads VALUES('legacy','project','root','conversation','run','one',?,?,?)")) {
+        insert.setString(1, hash);
+        insert.setBytes(2, bytes);
+        insert.setInt(3, bytes.length);
+        insert.executeUpdate();
+      }
+    }
+    assertThatThrownBy(() -> new ModelMessagePayloadStore(failingSource("CREATE TABLE model_message_receipts")))
+        .hasMessage("Model message persistence rejected").hasNoCause();
+    try (var db = source().getConnection(); var sql = db.createStatement()) {
+      try (var row = sql.executeQuery("SELECT version FROM model_message_schema")) {
+        assertThat(row.next()).isTrue();
+        assertThat(row.getInt(1)).isEqualTo(1);
+      }
+      try (var row = sql.executeQuery("SELECT name FROM pragma_table_info('model_message_payloads') WHERE name='staged_until'")) {
+        assertThat(row.next()).isFalse();
+      }
+      try (var row = sql.executeQuery("SELECT name FROM sqlite_master WHERE name='model_message_references'")) {
+        assertThat(row.next()).isFalse();
+      }
+    }
+    var time = new Time();
+    var upgraded = store(time, 100_000, 1_000_000);
+    var ref = new ModelMessagePayloadStore.Ref("legacy", hash);
+    assertThat(new ModelMessageCodec().encode(upgraded.load(owner, ref))).containsExactly(bytes);
+    assertThat(upgraded.save(owner, "run", "one", message())).isEqualTo(ref);
+    time.expire();
+    assertThat(upgraded.collectExpired()).isZero();
+    assertThat(upgraded.usage(owner, "run").runCumulativeBytes()).isEqualTo(bytes.length);
+  }
+
+  @Test
+  void failureAfterBodyAndReceiptInsertionRollsBackBothAndDoesNotConsumeQuota() {
+    var healthy = new ModelMessagePayloadStore(source());
+    var failed = new ModelMessagePayloadStore(failingSource("INSERT INTO model_message_run_usage"));
+    assertThatThrownBy(() -> failed.save(owner, "run", "one", message()))
+        .hasMessage("Model message persistence rejected").hasNoCause();
+    assertThat(healthy.usage(owner, "run")).isEqualTo(new ModelMessagePayloadStore.Usage(0, 0, 0, 0));
+    var ref = healthy.save(owner, "run", "one", message());
+    assertThat(healthy.load(owner, ref)).isInstanceOf(AssistantMessage.class);
+  }
+
+  private javax.sql.DataSource failingSource(String prefix) {
+    var actual = source();
+    return new org.springframework.jdbc.datasource.AbstractDataSource() {
+      @Override public java.sql.Connection getConnection() throws java.sql.SQLException {
+        var connection = actual.getConnection();
+        return (java.sql.Connection) java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+            new Class<?>[] {java.sql.Connection.class}, (proxy, method, args) -> {
+              Object result = invoke(method, connection, args);
+              if (method.getName().equals("createStatement")) {
+                return java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+                    new Class<?>[] {java.sql.Statement.class}, (statement, operation, parameters) -> {
+                      if (operation.getName().equals("execute") && ((String) parameters[0]).startsWith(prefix))
+                        throw new java.sql.SQLException("PRIVATE_FAILURE_FIXTURE");
+                      return invoke(operation, result, parameters);
+                    });
+              }
+              if (method.getName().equals("prepareStatement") && ((String) args[0]).startsWith(prefix)) {
+                return java.lang.reflect.Proxy.newProxyInstance(getClass().getClassLoader(),
+                    new Class<?>[] {java.sql.PreparedStatement.class}, (statement, operation, parameters) -> {
+                      if (operation.getName().equals("executeUpdate")) throw new java.sql.SQLException("PRIVATE_FAILURE_FIXTURE");
+                      return invoke(operation, result, parameters);
+                    });
+              }
+              return result;
+            });
+      }
+      @Override public java.sql.Connection getConnection(String username, String password) throws java.sql.SQLException {
+        return getConnection();
+      }
+    };
+  }
+
+  private static Object invoke(java.lang.reflect.Method method, Object target, Object[] args) throws Throwable {
+    try { return method.invoke(target, args); }
+    catch (java.lang.reflect.InvocationTargetException failure) { throw failure.getCause(); }
+  }
+
+  @Test
   void onlyExpiredUnreferencedPayloadsAreCollectedAndLatePublicationFails() {
     var time = new Time();
     var store = store(time, 100_000, 1_000_000);
