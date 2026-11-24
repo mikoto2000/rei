@@ -306,3 +306,20 @@ API固有処理・DB・ツール実行の分離、所有者/ハッシュ/参照�
 Windows A 3,816件・B 4,144件、期待skip12、failure/error0。集約ゲートで分割・baseline・ID・期待skipを照合した。
 旧 head の停止不能な CI は通常 cancel 後も終了しなかったため公式 force-cancel を使用した。原因は未特定。
 最新 PR head とマージ後の実行は再試行なしで成功し、検証ゲートや制限時間は変更していない。
+
+## Phase 4: 長時間 Run・既存基盤への統合（開発中）
+
+最新 main `b22cf664` から専用 worktree を作成。実 API は未実施で、本番 Responses の生成は引き続き拒否する。
+
+- 共通 usage metadata を親子 Run と補助モデル呼び出しの予算へ接続。未知 usage と上限超過を tool 前に止め、
+  スキル選択の fallback で握り潰さない。既存 Chat のゼロ usage を未知と扱う方針を維持した。
+- 承認履歴の拡張 assistant / media user は payload 参照で保持し、旧テキストの継続データは互換読み込みする。
+  `MODEL_<role>` により、必要な参照が欠落した履歴を旧テキストとして読み替えない。
+- PendingTools に schema 1 の元 assistant 参照を追加（旧形式は schema 0）。RUN / APPROVAL 参照を検証し、
+  成功済み prefix を再実行せず、元の複数 reasoning items と呼び出し順序を復元する。
+- 関連開発選別は予算92件、承認・payload・ToolLoop・Responses replay114件が成功。
+  最新の Maven 関連回帰・全品質ゲートは実行中。これらを全件 CI や Phase 4 完了とは扱わない。
+- 残る主な統合: 全 entrypoint の iteration identity / endpoint snapshot、結果・履歴の参照公開、
+  Checkpoint / Slack 継続、圧縮取引境界、参照解放、機能別 native options / Structured Output の契約試験。
+
+初回 Maven 関連検証は380件が全成功、Checkstyle0件、architecture・build成功。SpotBugs の nullable supplier 5件と繰り返し getter 1件で品質ゲートは失敗した。非null取得契約と getter の一度取得へ修正し、再検証する。抑制やゲート緩和は行わない。
