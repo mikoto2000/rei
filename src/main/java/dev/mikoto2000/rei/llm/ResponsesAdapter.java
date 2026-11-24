@@ -89,14 +89,17 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     options = options.mutate().timeout(endpoint.readTimeout()).build();
     var transportCustomizers = new ArrayList<OpenAiHttpClientBuilderCustomizer>();
     transportCustomizers.addAll(customizers);
-    transportCustomizers.add(
-        builder -> builder.interceptor(chain -> {
-          var request = chain.request();
-          var body = request.body();
-          if (body != null)
-            request = request.newBuilder().method(request.method(), nonReplayable(body)).build();
-          return chain.proceed(request);
-        }).interceptor(new ChatStreamTimeoutInterceptor(endpoint.readTimeout())));
+    transportCustomizers.add(builder ->
+        builder
+            .interceptor(chain -> {
+              var request = chain.request();
+              var body = request.body();
+              if (body != null)
+                request =
+                    request.newBuilder().method(request.method(), nonReplayable(body)).build();
+              return chain.proceed(request);
+            })
+            .interceptor(new ChatStreamTimeoutInterceptor(endpoint.readTimeout())));
     var client =
         OpenAiSetup.setupAsyncClient(
             options.getBaseUrl(),
@@ -145,11 +148,30 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
 
   private static okhttp3.RequestBody nonReplayable(okhttp3.RequestBody body) {
     return new okhttp3.RequestBody() {
-      @Override public okhttp3.MediaType contentType() { return body.contentType(); }
-      @Override public long contentLength() throws java.io.IOException { return body.contentLength(); }
-      @Override public boolean isOneShot() { return true; }
-      @Override public boolean isDuplex() { return body.isDuplex(); }
-      @Override public void writeTo(okio.BufferedSink sink) throws java.io.IOException { body.writeTo(sink); }
+      @Override
+      public okhttp3.MediaType contentType() {
+        return body.contentType();
+      }
+
+      @Override
+      public long contentLength() throws java.io.IOException {
+        return body.contentLength();
+      }
+
+      @Override
+      public boolean isOneShot() {
+        return true;
+      }
+
+      @Override
+      public boolean isDuplex() {
+        return body.isDuplex();
+      }
+
+      @Override
+      public void writeTo(okio.BufferedSink sink) throws java.io.IOException {
+        body.writeTo(sink);
+      }
     };
   }
 
