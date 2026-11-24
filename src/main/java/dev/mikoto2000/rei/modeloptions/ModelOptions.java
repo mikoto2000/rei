@@ -13,6 +13,17 @@ public final class ModelOptions {
 
   private ModelOptions() {}
 
+  /** Host-owned context observations may change while the execution policy stays fixed. */
+  public static boolean isContextData(org.springframework.ai.chat.messages.Message message) {
+    if (!(message instanceof org.springframework.ai.chat.messages.SystemMessage)) return false;
+    var metadata = message.getMetadata();
+    return java.util.List.of("rei.workContext", "rei.longTermMemory", "rei.workingSet", "rei.resumeContext").stream()
+        .anyMatch(key -> Boolean.TRUE.equals(metadata.get(key)))
+        || metadata.get("rei.historyGeneration") instanceof String
+        || metadata.get("rei.historySequence") instanceof Long
+        || metadata.get("rei.historySequence") instanceof Integer;
+  }
+
   /** Stable execution identity, excluding credentials and ordinary conversation input. */
   public static String preparationFingerprint(org.springframework.ai.chat.prompt.Prompt prompt) {
     if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
@@ -71,7 +82,7 @@ public final class ModelOptions {
           add.accept(callback.getToolMetadata().returnDirect());
         });
     for (var message : prompt.getInstructions())
-      if (message instanceof org.springframework.ai.chat.messages.SystemMessage) {
+      if (message instanceof org.springframework.ai.chat.messages.SystemMessage && !isContextData(message)) {
         add.accept(message.getText());
         add.accept(new java.util.TreeMap<>(message.getMetadata()));
       }

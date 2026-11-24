@@ -904,9 +904,12 @@ class ResponsesReplayContractTest {
     }
     model.stream(prompt).blockLast(Duration.ofSeconds(10));
     assertThat(requests).hasSize(2);
-    if (change.equals("context-data")) assertThat(requests.getLast().path("instructions").asText())
-        .contains("original instructions", "previous work context", "updated work context");
-    else assertThat(requests.getLast().path("instructions").asText()).isEqualTo("original instructions");
+    assertThat(requests.getLast().path("instructions").asText()).isEqualTo("original instructions");
+    if (change.equals("context-data")) {
+      assertThat(requests.getLast().path("input").toString()).contains("previous work context", "updated work context");
+      assertThat(java.util.stream.StreamSupport.stream(requests.getLast().path("input").spliterator(), false)
+          .filter(item -> "developer".equals(item.path("role").asText())).count()).isEqualTo(2);
+    }
     assertThat(requests.getLast().path("input").toString())
         .contains("original request")
         .doesNotContain("host resume control");
