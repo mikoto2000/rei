@@ -657,12 +657,21 @@ public final class StorageCommand {
         MaintenanceStatus.class,
         Checkpoint.class,
         IncrementalVacuum.class,
+        ModelMessagesGc.class,
         Vacuum.class
       },
       description = "storage.dbの観測と明示的な容量回収")
   public static final class Maintenance {
     /** 親。 */
     @ParentCommand StorageCommand parent;
+  }
+
+  @Command(name = "model-messages-gc", description = "参照がなく保存猶予期限を過ぎたモデルメッセージだけを回収します")
+  public static final class ModelMessagesGc extends MaintenanceAction {
+    @Override
+    void execute(dev.mikoto2000.rei.storage.StorageMaintenance maintenance, java.io.PrintWriter out) {
+      out.printf("collected_model_messages=%d%n", maintenance.collectModelMessageOrphans());
+    }
   }
 
   /** 共通の実行基盤に必要な保守操作を扱う。 */

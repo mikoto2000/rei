@@ -55,8 +55,9 @@ public class StorageMigrationConfiguration {
 
   /** データ保存の共通処理で用いる保存保守を返す。 */
   @Bean
-  public StorageMaintenance storageMaintenance(StorageObjectRegistry registry) {
-    return new StorageMaintenance(registry);
+  public StorageMaintenance storageMaintenance(StorageObjectRegistry registry,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> payloads) {
+    return new StorageMaintenance(registry, () -> payloads.getObject().collectExpired());
   }
 
   /** データ保存の共通処理で用いる自動保持期間を返す。 */
