@@ -1,5 +1,8 @@
 # Responses API の運用と受入判定
 
+Phase 7〜10 の準備と実接続の状態は [実 API 受入試験](responses-api-live-validation.md) を参照。
+オフライン計画検査の成功は本番 gate の解除条件ではない。
+
 ## 本番利用の判定
 
 本変更の対象はソース・隔離試験・通常 PR マージである。実 OpenAI / DeepSeek への接続、

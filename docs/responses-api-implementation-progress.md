@@ -12,6 +12,20 @@
 | 5 | MERGED | codex/responses-api-phase-5-deepseek / 削除済み | [#633](https://github.com/mikoto2000/rei/pull/633) | f9fd5a5ebbd4fff2fe65781373d9af4f31027276 | PR・マージ後CI8,215件、成功8,203、期待skip12、failure/error0。全品質ゲート成功 |
 | 6 | IN_PROGRESS | codex/responses-api-phase-6-operational-validation / .worktrees/responses-api-phase-6 | [#634](https://github.com/mikoto2000/rei/pull/634) | 未マージ | 関連818件・再検証227件成功、architecture7件成功、最終全compile/package/品質成功。120ラウンド×3方式・native23回圧縮。最新全回帰・PR・マージ後CI待ち |
 
+## Phase 7〜10 開始時の状態確認（2026-11-25）
+
+上表は各実装時点の記録。Phase 6 は実 Git と GitHub で通常 merge
+`38a13f1d38f0759049290e37df40cdd078a58e54` を再確認した。
+exact SHA の [Java](https://github.com/mikoto2000/rei/actions/runs/45492903619)、
+[静的解析](https://github.com/mikoto2000/rei/actions/runs/45492904174)、
+[Client](https://github.com/mikoto2000/rei/actions/runs/45492904245) は全て completed / success。
+Phase 6 の完了を上表の古い IN_PROGRESS 表示だけで判定しない。
+
+Phase 7 専用 worktree を最新 origin/main から作成し、課金前の計画検査・受入試験台帳を準備する。
+詳細は [実接続受入試験](responses-api-live-validation.md)。実 API 呼出し0件、OpenAI / DeepSeek の
+受入は試験条件未確定により BLOCKED。本番 gate は閉じたまま。Phase 8〜10 は未完了であり、
+準備コードや PR の状態を実受入・長時間 Run・本番導入の成功に読み替えない。
+
 ## Phase 0: 接続先管理・API抽象化
 
 ### 基準と前提

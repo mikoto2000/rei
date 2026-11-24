@@ -97,6 +97,8 @@ jobs:
         run: |
           ./scripts/test-test-performance-report.ps1
           ./scripts/test-check-test-partition.ps1
+      - name: Test offline Responses live trial planning
+        run: python -B -m unittest discover -s scripts -p test_responses_live_preflight.py
       - uses: actions/download-artifact@v8
         with:
           pattern: java-regression-*
