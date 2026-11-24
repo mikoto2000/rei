@@ -132,6 +132,46 @@ public final class ModelOptions {
     return clean.mutate().toolContext(null).toolContext(context).build();
   }
 
+  /** Preserve the selected API's output-token parameter family. */
+  public static ToolCallingChatOptions withOutputLimit(ToolCallingChatOptions options, int tokens) {
+    if (tokens < 1) throw new IllegalArgumentException("Output limit must be positive");
+    if (options instanceof OpenAiResponsesChatOptions responses) {
+      var builder = responses.mutate(); builder.maxOutputTokens(tokens); return builder.build();
+    }
+    if (options instanceof OpenAiChatOptions chat && chat.getMaxCompletionTokens() != null)
+      return withCompletionLimit(chat, tokens);
+    return options.mutate().maxTokens(tokens).build();
+  }
+
+  /** Structured extractors explicitly use completion-token budgets on Chat Completions. */
+  public static ToolCallingChatOptions withCompletionLimit(ToolCallingChatOptions options, int tokens) {
+    if (tokens < 1) throw new IllegalArgumentException("Output limit must be positive");
+    if (options instanceof OpenAiChatOptions chat) {
+      var builder=chat.mutate(); builder.maxTokens(null); builder.maxCompletionTokens(tokens); return builder.build();
+    }
+    return withOutputLimit(options, tokens);
+  }
+
+  /** Local chat-template controls have no implicit Responses equivalent. */
+  public static ToolCallingChatOptions withLocalThinking(ToolCallingChatOptions options, Boolean thinking) {
+    if (thinking == null) return options;
+    if (!(options instanceof OpenAiChatOptions chat))
+      throw new IllegalArgumentException("Local thinking template override is unavailable for this protocol");
+    var extra=new java.util.LinkedHashMap<String,Object>();
+    if (chat.getExtraBody()!=null) extra.putAll(chat.getExtraBody());
+    var template=new java.util.LinkedHashMap<String,Object>();
+    var configured=extra.get("chat_template_kwargs");
+    if (configured!=null) {
+      if (!(configured instanceof java.util.Map<?,?> values)) throw new IllegalArgumentException("chat_template_kwargs must be an object");
+      values.forEach((key,value)->{
+        if (!(key instanceof String name)) throw new IllegalArgumentException("chat_template_kwargs keys must be strings");
+        template.put(name,value);
+      });
+    }
+    template.put("enable_thinking",thinking); extra.put("chat_template_kwargs",template);
+    var builder=chat.mutate();builder.extraBody(extra);return builder.build();
+  }
+
   /** Select explicitly published callbacks using the native automatic function-call shape. */
   public static ToolCallingChatOptions withTools(
       ToolCallingChatOptions options, List<org.springframework.ai.tool.ToolCallback> callbacks) {

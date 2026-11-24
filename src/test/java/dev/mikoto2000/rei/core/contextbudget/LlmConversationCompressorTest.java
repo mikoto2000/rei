@@ -67,7 +67,7 @@ class LlmConversationCompressorTest {
     var model = mock(ChatModel.class);
     var models = mock(LlmModelProvider.class);
     when(models.isolatedChatModel("context-summary")).thenReturn(model);
-    when(models.chatOptions("context-summary", null))
+    when(models.requestOptions("context-summary", null, false))
         .thenReturn(OpenAiChatOptions.builder().model("small-summary").build());
     when(model.stream(any(Prompt.class)))
         .thenAnswer(call -> {
@@ -118,7 +118,7 @@ class LlmConversationCompressorTest {
         };
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(model);
-    when(models.chatOptions(LlmFeature.CHAT, "configured")).thenReturn(source);
+    when(models.requestOptions(LlmFeature.CHAT, "configured", false)).thenReturn(source);
     ObjectProvider<LlmModelProvider> provider = mock();
     when(provider.getObject()).thenReturn(models);
     var compressor = new LlmConversationCompressor(provider, new ContextCompressionProperties());
@@ -237,7 +237,7 @@ class LlmConversationCompressorTest {
             : OpenAiChatOptions.builder().maxTokens(16000).build();
     var provider = mock(LlmModelProvider.class);
     when(provider.chatModel(LlmFeature.CHAT)).thenReturn(model);
-    when(provider.chatOptions(LlmFeature.CHAT, null)).thenReturn(base);
+    when(provider.requestOptions(LlmFeature.CHAT, null, false)).thenReturn(base);
     when(model.stream(any(Prompt.class)))
         .thenAnswer(invocation -> {
           var prompt = (Prompt) invocation.getArgument(0);
@@ -276,7 +276,7 @@ class LlmConversationCompressorTest {
       ChatModel model, ContextCompressionProperties properties) {
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(model);
-    when(models.chatOptions(eq(LlmFeature.CHAT), any()))
+    when(models.requestOptions(eq(LlmFeature.CHAT), any(), eq(false)))
         .thenReturn(OpenAiChatOptions.builder().build());
     ObjectProvider<LlmModelProvider> provider = mock();
     when(provider.getObject()).thenReturn(models);
