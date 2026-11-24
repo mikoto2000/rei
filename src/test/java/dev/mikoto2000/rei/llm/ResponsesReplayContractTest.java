@@ -74,6 +74,19 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"ENCRYPTED,owner", "ENCRYPTED,endpoint", "NONE,owner", "NONE,endpoint"})
+  void textOnlyNativeHistoryStillRequiresMatchingOrigin(ReasoningReplayMode replay, String mismatch) {
+    replayMode = replay;
+    var defaults = options();
+    var history = AssistantMessage.builder().content("previous answer").properties(Map.of(
+        ResponsesReasoningReplay.ORIGIN_OWNER, mismatch.equals("owner") ? "foreign-owner" : owner,
+        ResponsesReasoningReplay.ORIGIN_ENDPOINT, mismatch.equals("endpoint") ? "0".repeat(64) : endpoint(defaults).fingerprint())).build();
+    assertThatThrownBy(() -> model(defaults).call(new Prompt(List.of(history, new UserMessage("continue")), defaults)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(mismatch);
+    assertThat(requests).isEmpty();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void existingLoopsPersistDistinctIterationsAndTheFinalAssistant(boolean bounded)
       throws Exception {
