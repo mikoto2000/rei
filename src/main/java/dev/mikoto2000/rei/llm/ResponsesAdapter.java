@@ -86,9 +86,14 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
 
   @Override
   public ChatResponse call(Prompt prompt) {
-    var response = delegate.call(prepare(prompt));
-    requireCompleted(response);
-    return response;
+    var request = prepare(prompt);
+    try {
+      var response = delegate.call(request);
+      requireCompleted(response);
+      return response;
+    } catch (RuntimeException error) {
+      throw ResponsesTransportException.normalize(error);
+    }
   }
 
   private static void requireCompleted(ChatResponse response) {
@@ -109,6 +114,6 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
         }
       }).concatWith(Flux.defer(() -> completed.get() ? Flux.empty()
           : Flux.error(new IllegalStateException("Responses stream ended without completion"))));
-    });
+    }).onErrorMap(ResponsesTransportException::normalize);
   }
 }
