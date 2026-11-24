@@ -113,6 +113,9 @@ class ApprovalProcessRestartTest {
                 .withKey(exchange.key() + "/prefix:1")
                 .reference(ToolResponseMessage.builder().responses(List.of(result)).build());
         Files.writeString(directory.resolve("effects.txt"), "first\n");
+        var systemRef = exchange.withKey("instructions").reference(
+            org.springframework.ai.chat.messages.SystemMessage.builder().text("original fixture context")
+                .metadata(Map.of("rei.workContext", true)).build());
         var history =
             new ModelMessagePayloadStore.History(
                 1,
@@ -123,7 +126,10 @@ class ApprovalProcessRestartTest {
                     new ModelMessagePayloadStore.History.Entry(
                         exchange.key() + "/ASSISTANT", assistantRef),
                     new ModelMessagePayloadStore.History.Entry(
-                        exchange.key() + "/TOOL", prefixRef)));
+                        exchange.key() + "/TOOL", prefixRef)),
+                new ModelMessagePayloadStore.History.Input(List.of(
+                    new ModelMessagePayloadStore.History.Entry("instructions/SYSTEM", systemRef, 7L),
+                    new ModelMessagePayloadStore.History.Entry("input/USER", userRef)), 1));
         approvals.save(
             "approval",
             owner,
@@ -142,6 +148,10 @@ class ApprovalProcessRestartTest {
         return;
       }
       var saved = approvals.saved(approvals.find("approval").orElseThrow());
+      assertThat(saved.messages()).extracting(org.springframework.ai.chat.messages.Message::getText)
+          .containsExactly("original fixture context", "original fixture input");
+      assertThat(saved.messages().getFirst().getMetadata()).containsEntry("rei.workContext", true)
+          .containsEntry("rei.historySequence", 7L);
       var callback =
           new org.springframework.ai.tool.ToolCallback() {
             public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
@@ -209,7 +219,7 @@ class ApprovalProcessRestartTest {
                   new Prompt(saved.messages(), execution.modelOptions()),
                   saved.pendingTools(),
                   execution);
-      assertThat(result.conversationHistory()).hasSize(3);
+      assertThat(result.conversationHistory()).hasSize(4);
       var trace = execution.protocolHistorySnapshot();
       assertThat(trace.entries()).hasSize(3);
       assertThat(trace.entries().get(1)).isEqualTo(saved.protocolHistory().entries().get(1));
