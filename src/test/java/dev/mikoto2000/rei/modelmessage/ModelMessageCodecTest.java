@@ -14,6 +14,31 @@ import org.springframework.ai.chat.messages.part.TextPart;
 import org.springframework.ai.chat.messages.part.ToolCallPart;
 
 class ModelMessageCodecTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void duplicateAssistantCallIdsCannotBeWrittenOrRestored(boolean decoding) {
+    var codec = new ModelMessageCodec();
+    var call = ToolCallPart.of(new AssistantMessage.ToolCall("call_one", "function", "fixture", "{}"));
+    var message = AssistantMessage.builder().parts(List.of(call, call)).build();
+    String document = """
+        {"schemaVersion":1,"role":"assistant","parts":[
+        {"type":"tool_call","call":{"id":"call_one","type":"function","name":"fixture","arguments":"{}"},"attributes":{}},
+        {"type":"tool_call","call":{"id":"call_one","type":"function","name":"fixture","arguments":"{}"},"attributes":{}}],"metadata":{}}
+        """;
+    assertThatThrownBy(() -> { if (decoding) codec.decode(document.getBytes(StandardCharsets.UTF_8)); else codec.encode(message); })
+        .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid model message schema").hasNoCause();
+  }
+
+  @Test
+  void blankAssistantCallIdsAndNamesCannotEnterStorage() {
+    var codec = new ModelMessageCodec();
+    for (var call : List.of(new AssistantMessage.ToolCall(" ", "function", "fixture", "{}"),
+        new AssistantMessage.ToolCall("call_one", "function", " ", "{}"))) {
+      var message = AssistantMessage.builder().parts(List.of(ToolCallPart.of(call))).build();
+      assertThatThrownBy(() -> codec.encode(message)).isInstanceOf(IllegalArgumentException.class)
+          .hasMessage("Invalid model message schema").hasNoCause();
+    }
+  }
   @Test
   void oldStoredMessagesReadWithoutInventingReasoningOrOrigin() {
     var codec = new ModelMessageCodec();
