@@ -68,6 +68,13 @@ import org.springframework.context.annotation.Configuration;
 })
 @RequiredArgsConstructor
 public class AiConfiguration {
+  private dev.mikoto2000.rei.llm.discovery.ToolDiscovery toolDiscovery;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setToolDiscovery(dev.mikoto2000.rei.llm.discovery.ToolDiscovery value) {
+    toolDiscovery = value;
+  }
+
   private BaseAdvisor shellEnvironmentAdvisor;
 
   @org.springframework.beans.factory.annotation.Autowired
@@ -364,12 +371,7 @@ public class AiConfiguration {
 
   /** 機能の組み立てで用いる既定チャット選択可能な設定を返す。 */
   private OpenAiChatOptions.Builder defaultChatOptions() {
-    var options = OpenAiChatOptions.builder();
-    if (chatModel.getOptions() instanceof OpenAiChatOptions defaults
-        && defaults.getMaxCompletionTokens() != null)
-      options.maxCompletionTokens(llmProperties.getMaxOutputTokens());
-    else options.maxTokens(llmProperties.getMaxOutputTokens());
-    return options;
+    return llmProperties.defaultChatOptions(chatModel.getOptions());
   }
 
   /** 機能の組み立てで用いるモデルへ対話を依頼する窓口を返す。 */
@@ -406,7 +408,8 @@ public class AiConfiguration {
     ChatClient.Builder builder =
         ChatClient.builder(
                 new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-                    chatModel, contextAssembler, llmProperties.getMaxStreamTimeoutRetries()))
+                        chatModel, contextAssembler, llmProperties.getMaxStreamTimeoutRetries())
+                    .withToolDiscovery(toolDiscovery))
             .defaultSystem(systemPromptService.systemPrompt())
             // Run-owned tools use Rei's loop; legacy non-run requests retain SDK tool handling.
             .defaultAdvisors(new dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor())

@@ -4,8 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
 import dev.mikoto2000.rei.storage.StorageDatabase;
+import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -43,9 +43,15 @@ class SqliteLifecycleMetadataTest {
       }
       var notification =
           new ConversationLogEntry(
-              "chat", "chat", "assistant", Instant.EPOCH.plusSeconds(3).atOffset(java.time.ZoneOffset.UTC),
-              "generated routine notification", 1, ConversationLogStore.BEHAVIOR_NOTIFICATION,
-              "notification", java.util.Map.of());
+              "chat",
+              "chat",
+              "assistant",
+              Instant.EPOCH.plusSeconds(3).atOffset(java.time.ZoneOffset.UTC),
+              "generated routine notification",
+              1,
+              ConversationLogStore.BEHAVIOR_NOTIFICATION,
+              "notification",
+              java.util.Map.of());
       sql.appendAssistantNotification(notification);
       legacy.appendAssistantNotification(notification);
       var restarted = new SqliteConversationTurnStore(root);
@@ -71,12 +77,13 @@ class SqliteLifecycleMetadataTest {
       if (status != ConversationTurnStore.Status.RUNNING)
         sql.finish(owner, status, "generated answer");
       // Corrupt only this isolated fixture's body. Lifecycle projection must not deserialize it.
-      new StorageDatabase(root).transaction(connection -> {
-        try (var update = connection.prepareStatement("UPDATE turns SET record='not-json'")) {
-          assertThat(update.executeUpdate()).isEqualTo(1);
-        }
-        return null;
-      });
+      new StorageDatabase(root)
+          .transaction(connection -> {
+            try (var update = connection.prepareStatement("UPDATE turns SET record='not-json'")) {
+              assertThat(update.executeUpdate()).isEqualTo(1);
+            }
+            return null;
+          });
       var restarted = new SqliteConversationTurnStore(root);
       boolean archived =
           status == ConversationTurnStore.Status.FAILED

@@ -99,32 +99,42 @@ class ContextSummaryTokenBudgetTest {
     properties.setHardLimit(100000);
     var model = mock(ChatModel.class);
     when(model.stream(any(Prompt.class)))
-        .thenReturn(Flux.just(new ChatResponse(
-            List.of(new Generation(new AssistantMessage("partial draft must not be stored"),
-                ChatGenerationMetadata.builder().finishReason("length").build())),
-            ChatResponseMetadata.builder().usage(new DefaultUsage(10, 200)).build())));
+        .thenReturn(
+            Flux.just(
+                new ChatResponse(
+                    List.of(
+                        new Generation(
+                            new AssistantMessage("partial draft must not be stored"),
+                            ChatGenerationMetadata.builder().finishReason("length").build())),
+                    ChatResponseMetadata.builder().usage(new DefaultUsage(10, 200)).build())));
     var budget = new OutputLimitRunBudget(0, 100, null, 10000);
     var execution = new RunExecutionContext("run", budget, null, null, null);
     var summaries = new ConversationSummaryRepository(dir);
-    var previous = new ConversationSummary(
-        "durable decision; pending verification", 1, java.time.Instant.now());
+    var previous =
+        new ConversationSummary(
+            "durable decision; pending verification", 1, java.time.Instant.now());
     summaries.save("chat", previous);
     var originalText = "synthetic complete source facts ".repeat(1000);
     var original = ContextHistoryAdvisor.historical(new UserMessage(originalText), 2);
-    var raw = new Prompt(
-        List.of(original,
-            ContextHistoryAdvisor.historical(new AssistantMessage("recent"), 3),
-            new UserMessage("current")),
-        ToolCallingChatOptions.builder()
-            .toolContext(Map.of(RunExecutionContext.KEY, execution)).build());
+    var raw =
+        new Prompt(
+            List.of(
+                original,
+                ContextHistoryAdvisor.historical(new AssistantMessage("recent"), 3),
+                new UserMessage("current")),
+            ToolCallingChatOptions.builder()
+                .toolContext(Map.of(RunExecutionContext.KEY, execution))
+                .build());
     var rawBefore = raw.getContents();
-    var projected = assembler(properties, compressor(model, properties), summaries)
-        .assemble(raw, "chat", "run", execution::checkActive);
+    var projected =
+        assembler(properties, compressor(model, properties), summaries)
+            .assemble(raw, "chat", "run", execution::checkActive);
     verify(model, times(2)).stream(any(Prompt.class));
     assertThat(budget.totalTokens()).isEqualTo(420);
     assertThat(summaries.read("chat")).isEqualTo(previous);
-    assertThat(summaries.read(ConversationSummaryRepository.runKey("chat", "run"))
-        .throughSequence()).isZero();
+    assertThat(
+            summaries.read(ConversationSummaryRepository.runKey("chat", "run")).throughSequence())
+        .isZero();
     assertThat(original.getText()).isEqualTo(originalText);
     assertThat(raw.getContents()).isEqualTo(rawBefore);
     assertThat(projected.getContents()).contains("current").doesNotContain("partial draft");

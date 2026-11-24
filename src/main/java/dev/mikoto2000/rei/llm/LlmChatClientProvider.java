@@ -43,6 +43,13 @@ import org.springframework.stereotype.Component;
 /** 言語モデルモデルへ対話を依頼する窓口を用途や設定に応じて提供する窓口。 */
 @Component
 public class LlmChatClientProvider {
+  private dev.mikoto2000.rei.llm.discovery.ToolDiscovery toolDiscovery;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setToolDiscovery(dev.mikoto2000.rei.llm.discovery.ToolDiscovery value) {
+    toolDiscovery = value;
+  }
+
   private org.springframework.ai.chat.client.advisor.api.BaseAdvisor shellEnvironmentAdvisor;
 
   @org.springframework.beans.factory.annotation.Autowired
@@ -457,7 +464,8 @@ public class LlmChatClientProvider {
           var builder =
               ChatClient.builder(
                       new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-                          subAgentModel.get(), contextAssembler, maxStreamTimeoutRetries))
+                              subAgentModel.get(), contextAssembler, maxStreamTimeoutRetries)
+                          .withToolDiscovery(toolDiscovery))
                   .defaultAdvisors(new RunAwareToolCallingAdvisor())
                   .defaultOptions(
                       options
@@ -523,9 +531,10 @@ public class LlmChatClientProvider {
     ChatClient.Builder builder =
         ChatClient.builder(
                 new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-                    featureModel.apply(feature),
-                    LlmFeature.CHAT.equals(feature) ? contextAssembler : null,
-                    LlmFeature.CHAT.equals(feature) ? maxStreamTimeoutRetries : 0))
+                        featureModel.apply(feature),
+                        LlmFeature.CHAT.equals(feature) ? contextAssembler : null,
+                        LlmFeature.CHAT.equals(feature) ? maxStreamTimeoutRetries : 0)
+                    .withToolDiscovery(LlmFeature.CHAT.equals(feature) ? toolDiscovery : null))
             .defaultAdvisors(new RunAwareToolCallingAdvisor())
             .defaultSystem(
                 dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(

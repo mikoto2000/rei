@@ -68,6 +68,7 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
       Set.of(
           "restartReview",
           "setReviewToolProfile",
+          "searchTools",
           "reviewPending",
           "beginReview",
           "beginRepositoryReview",

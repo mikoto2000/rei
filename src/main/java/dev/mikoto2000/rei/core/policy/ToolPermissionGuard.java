@@ -27,6 +27,7 @@ public class ToolPermissionGuard {
           "findFile",
           "listFile",
           "repositoryMap",
+          "searchTools",
           "changeTestImpact",
           "now",
           "webSearch",

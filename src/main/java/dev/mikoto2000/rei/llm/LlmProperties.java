@@ -15,6 +15,18 @@ public class LlmProperties {
   /** 最大出力トークン数。 */
   private Integer maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS;
 
+  private Integer maxTools;
+
+  public Integer getMaxTools() {
+    return maxTools;
+  }
+
+  public void setMaxTools(Integer maxTools) {
+    if (maxTools != null && maxTools < 1)
+      throw new IllegalArgumentException("max-tools must be positive");
+    this.maxTools = maxTools;
+  }
+
   /** チャット通信でデータが届くまでの待ち時間。 */
   private java.time.Duration readTimeout = ChatStreamTimeoutInterceptor.DEFAULT_READ_TIMEOUT;
 
@@ -65,6 +77,13 @@ public class LlmProperties {
       return DEFAULT_MAX_OUTPUT_TOKENS;
     }
     return maxOutputTokens;
+  }
+
+  /** Compatibility entry point for the legacy root ChatClient composition. */
+  public org.springframework.ai.openai.OpenAiChatOptions.Builder defaultChatOptions(
+      org.springframework.ai.chat.prompt.ChatOptions modelDefaults) {
+    return ChatCompletionsAdapter.defaultOutputOptions(
+        modelDefaults, getMaxOutputTokens(), maxTools);
   }
 
   /** 用途に応じたモデル利用で使用する最大出力トークン数を設定する。 */
@@ -128,11 +147,49 @@ public class LlmProperties {
       copy.model = model;
       copy.temperature = temperature;
       copy.fallbackToDefault = fallbackToDefault;
+      copy.api = api;
+      copy.endpointGeneration = endpointGeneration;
+      copy.maxTools = maxTools;
       return copy;
     }
 
     /** 最大出力トークン数。 */
     private Integer maxOutputTokens;
+
+    private LlmApiType api;
+
+    private Integer maxTools;
+
+    public Integer getMaxTools() {
+      return maxTools;
+    }
+
+    public void setMaxTools(Integer maxTools) {
+      if (maxTools != null && maxTools < 1)
+        throw new IllegalArgumentException("max-tools must be positive");
+      this.maxTools = maxTools;
+    }
+
+    private long endpointGeneration = 1;
+
+    public long getEndpointGeneration() {
+      return endpointGeneration;
+    }
+
+    /** Change when endpoint ownership or replay compatibility changes, not on key rotation. */
+    public void setEndpointGeneration(long endpointGeneration) {
+      if (endpointGeneration < 1)
+        throw new IllegalArgumentException("Endpoint generation must be positive");
+      this.endpointGeneration = endpointGeneration;
+    }
+
+    public LlmApiType getApi() {
+      return api;
+    }
+
+    public void setApi(LlmApiType api) {
+      this.api = api;
+    }
 
     /** 用途に応じたモデル利用で参照する最大出力トークン数を返す。 */
     public Integer getMaxOutputTokens() {

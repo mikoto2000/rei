@@ -8,7 +8,8 @@ import java.util.Set;
 
 /**
  * Immutable automatic-context policy for cancelled and failed attempts. Archived records remain
- * available for explicit retrieval; the historical name and context keys are kept for compatibility.
+ * available for explicit retrieval; the historical name and context keys are kept for
+ * compatibility.
  */
 public record CancelledTaskHistory(
     Set<String> runIds, String generation, Set<String> laterRunIds, List<Attempt> attempts) {
@@ -40,7 +41,9 @@ public record CancelledTaskHistory(
     return new CancelledTaskHistory(hidden, generation, later, attempts);
   }
 
-  /** Version the summary projection so older cancellation-only summaries cannot restore failures. */
+  /**
+   * Version the summary projection so older cancellation-only summaries cannot restore failures.
+   */
   public static String summaryKey(String key, String generation) {
     return generation == null || generation.isEmpty()
         ? key

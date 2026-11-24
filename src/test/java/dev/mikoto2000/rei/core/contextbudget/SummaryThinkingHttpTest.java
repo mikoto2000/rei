@@ -172,16 +172,18 @@ class SummaryThinkingHttpTest {
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
-  void sdkOutputLimitRepairKeepsHardCapAndOriginalInputAndChargesBothCalls(
-      boolean completionTokens) throws Exception {
+  void sdkOutputLimitRepairKeepsHardCapAndOriginalInputAndChargesBothCalls(boolean completionTokens)
+      throws Exception {
     var requests = new java.util.concurrent.CopyOnWriteArrayList<String>();
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext(
         "/v1/chat/completions",
         exchange -> {
-          requests.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+          requests.add(
+              new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
           boolean first = requests.size() == 1;
-          String text = first ? "incomplete draft must never be stored" : "REQ-17: migration pending";
+          String text =
+              first ? "incomplete draft must never be stored" : "REQ-17: migration pending";
           int tokens = first ? 3000 : 100;
           String chunks =
               """
@@ -193,7 +195,8 @@ class SummaryThinkingHttpTest {
 
               data: [DONE]
 
-              """.formatted(text, first ? "length" : "stop", tokens, tokens + 10);
+              """
+                  .formatted(text, first ? "length" : "stop", tokens, tokens + 10);
           exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
           exchange.sendResponseHeaders(200, 0);
           try (var body = exchange.getResponseBody()) {
@@ -202,9 +205,12 @@ class SummaryThinkingHttpTest {
         });
     server.start();
     try {
-      var builder = OpenAiChatOptions.builder()
-          .baseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1")
-          .apiKey("test").model("test").maxRetries(0);
+      var builder =
+          OpenAiChatOptions.builder()
+              .baseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1")
+              .apiKey("test")
+              .model("test")
+              .maxRetries(0);
       if (completionTokens) builder.maxCompletionTokens(16000);
       else builder.maxTokens(16000);
       var base = builder.build();
@@ -216,11 +222,18 @@ class SummaryThinkingHttpTest {
       var compressor = compressor(provider, properties);
       var budget = mock(dev.mikoto2000.rei.llm.ModelCallBudget.class);
       var original = new UserMessage("Generated user decision REQ-17: migration remains pending.");
-      var result = SummaryInputPages.summarize(
-          (previous, fragments, hardLimit, target, timeout) -> compressor.summarizeResult(
-              previous, fragments, hardLimit, new Prompt("owner"), budget, timeout, target),
-          TokenEstimator.tokenizerAware(), "existing user constraint", List.of(original),
-          12000, 24000, () -> {}, java.time.Duration.ofSeconds(10));
+      var result =
+          SummaryInputPages.summarize(
+              (previous, fragments, hardLimit, target, timeout) ->
+                  compressor.summarizeResult(
+                      previous, fragments, hardLimit, new Prompt("owner"), budget, timeout, target),
+              TokenEstimator.tokenizerAware(),
+              "existing user constraint",
+              List.of(original),
+              12000,
+              24000,
+              () -> {},
+              java.time.Duration.ofSeconds(10));
       assertEquals("REQ-17: migration pending", result.text());
       assertEquals(100, result.outputTokens());
       assertEquals(2, requests.size());
@@ -228,7 +241,8 @@ class SummaryThinkingHttpTest {
       var first = json.readTree(requests.get(0));
       var repair = json.readTree(requests.get(1));
       for (var request : List.of(first, repair)) {
-        assertEquals(3000, request.get(completionTokens ? "max_completion_tokens" : "max_tokens").asInt());
+        assertEquals(
+            3000, request.get(completionTokens ? "max_completion_tokens" : "max_tokens").asInt());
         assertFalse(request.has(completionTokens ? "max_tokens" : "max_completion_tokens"));
         assertFalse(request.get("chat_template_kwargs").get("enable_thinking").asBoolean());
         assertEquals("none", request.get("tool_choice").asString());
@@ -239,8 +253,10 @@ class SummaryThinkingHttpTest {
       org.junit.jupiter.api.Assertions.assertTrue(
           repair.get("messages").get(0).get("content").asString().contains("at most 375 tokens"));
       assertEquals(first.get("messages").get(1), repair.get("messages").get(1));
-      assertFalse(repair.get("messages").get(1).get("content").asString().contains("incomplete draft"));
-      assertEquals("Generated user decision REQ-17: migration remains pending.", original.getText());
+      assertFalse(
+          repair.get("messages").get(1).get("content").asString().contains("incomplete draft"));
+      assertEquals(
+          "Generated user decision REQ-17: migration remains pending.", original.getText());
       verify(budget, org.mockito.Mockito.times(2)).run();
       verify(budget).recordTotalTokens(3010);
       verify(budget).recordTotalTokens(110);

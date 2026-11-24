@@ -286,6 +286,11 @@ public class ExternalConfigFileService {
           candidate-limit: ${REI_VECTOR_DOCUMENT_RETRIEVAL_CANDIDATE_LIMIT:40}
           rank-constant: ${REI_VECTOR_DOCUMENT_RETRIEVAL_RANK_CONSTANT:60}
       llm:
+        tool-discovery:
+          enabled: ${REI_LLM_TOOL_DISCOVERY_ENABLED:false}
+          max-active-tools: ${REI_LLM_TOOL_DISCOVERY_MAX_ACTIVE_TOOLS:128}
+          search-max-results: ${REI_LLM_TOOL_DISCOVERY_SEARCH_MAX_RESULTS:3}
+          max-added-tools-per-search: ${REI_LLM_TOOL_DISCOVERY_MAX_ADDED_TOOLS:24}
         read-timeout: ${REI_LLM_READ_TIMEOUT:5m}
         max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
         output-limit:

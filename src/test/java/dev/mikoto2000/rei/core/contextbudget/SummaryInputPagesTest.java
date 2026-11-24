@@ -137,9 +137,10 @@ class SummaryInputPagesTest {
       names = {"TIMEOUT", "TRANSPORT", "AUTHENTICATION", "EMPTY_SUMMARY"})
   void otherFailuresAreNotRetriedAsOversizedDrafts(ContextCompressionException.Reason reason) {
     var calls = new AtomicInteger();
-    var failure = reason == ContextCompressionException.Reason.TIMEOUT
-        ? ContextCompressionException.from(new java.net.SocketTimeoutException("private"))
-        : new ContextCompressionException(reason, 17, 10);
+    var failure =
+        reason == ContextCompressionException.Reason.TIMEOUT
+            ? ContextCompressionException.from(new java.net.SocketTimeoutException("private"))
+            : new ContextCompressionException(reason, 17, 10);
     assertThatThrownBy(() ->
             SummaryInputPages.summarize(
                 (previous, messages, hardLimit, target, timeout) -> {
@@ -153,14 +154,17 @@ class SummaryInputPagesTest {
                 24000,
                 () -> {},
                 Duration.ofSeconds(5)))
-        .isInstanceOfSatisfying(ContextCompressionException.class, error -> {
-          assertThat(error.reason()).isEqualTo(failure.reason());
-          assertThat(error.actualTokens()).isEqualTo(failure.actualTokens());
-          assertThat(error.limitTokens()).isEqualTo(failure.limitTokens());
-          assertThat(error.details()).startsWith(failure.details())
-              .contains("ページ=1", "試行=1", "本文上限=3000", "本文目標=750")
-              .doesNotContain("private");
-        });
+        .isInstanceOfSatisfying(
+            ContextCompressionException.class,
+            error -> {
+              assertThat(error.reason()).isEqualTo(failure.reason());
+              assertThat(error.actualTokens()).isEqualTo(failure.actualTokens());
+              assertThat(error.limitTokens()).isEqualTo(failure.limitTokens());
+              assertThat(error.details())
+                  .startsWith(failure.details())
+                  .contains("ページ=1", "試行=1", "本文上限=3000", "本文目標=750")
+                  .doesNotContain("private");
+            });
     assertThat(calls.get()).isEqualTo(1);
   }
 
@@ -221,8 +225,7 @@ class SummaryInputPagesTest {
             ContextCompressionException.class,
             error -> {
               assertThat(error.reason()).isEqualTo(ContextCompressionException.Reason.OUTPUT_LIMIT);
-              assertThat(error.details())
-                  .contains("ページ=1", "試行=2", "本文上限=3000", "本文目標=375");
+              assertThat(error.details()).contains("ページ=1", "試行=2", "本文上限=3000", "本文目標=375");
             });
     assertThat(calls.get()).isEqualTo(2);
   }
@@ -246,8 +249,8 @@ class SummaryInputPagesTest {
                 Duration.ofMillis(50)))
         .isInstanceOfSatisfying(
             ContextCompressionException.class,
-            error -> assertThat(error.reason())
-                .isEqualTo(ContextCompressionException.Reason.TIMEOUT));
+            error ->
+                assertThat(error.reason()).isEqualTo(ContextCompressionException.Reason.TIMEOUT));
     assertThat(calls.get()).isEqualTo(1);
   }
 }

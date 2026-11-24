@@ -92,6 +92,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   private final java.util.function.Supplier<java.time.Duration> readTimeout;
   private final java.util.function.IntSupplier defaultOutputTokens;
+  private final Integer defaultMaxTools;
 
   /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
@@ -101,6 +102,65 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   /** キャッシュ。 */
   private final Map<String, ChatModel> cache = new ConcurrentHashMap<>();
+
+  private final Map<String, java.util.Optional<LlmProperties.Server>> resolvedSettings =
+      new ConcurrentHashMap<>();
+
+  private LlmProperties.Server resolvedServer(String feature) {
+    return resolvedSettings
+        .computeIfAbsent(
+            feature, name -> java.util.Optional.ofNullable(featureSettings.apply(name)))
+        .orElse(null);
+  }
+
+  /** Snapshot shared by model/options construction; contains no API key. */
+  public ResolvedLlmEndpoint resolvedEndpoint(String feature) {
+    requireAvailableProtocol(feature);
+    var server = resolvedServer(feature);
+    if (LlmFeature.VOICE_CORRECTION.equals(feature)
+        && (server == null || !server.hasCustomServer())) {
+      var connection = resolvedServer(LlmFeature.CHAT);
+      var options = chatOptions(feature, null);
+      var resolved = endpoint(connection, options.getModel(), LlmFeature.CHAT);
+      return new ResolvedLlmEndpoint(
+          resolved.endpointId(),
+          resolved.generation(),
+          resolved.apiType(),
+          resolved.baseUrl(),
+          resolved.credentialRef(),
+          resolved.model(),
+          resolved.capabilities(),
+          options.getMaxCompletionTokens() != null
+              ? options.getMaxCompletionTokens()
+              : options.getMaxTokens(),
+          options.getTemperature(),
+          resolved.readTimeout());
+    }
+    return endpoint(server, model(server, null), feature);
+  }
+
+  private ResolvedLlmEndpoint endpoint(LlmProperties.Server server, String model, String feature) {
+    boolean custom = server != null && server.hasCustomServer();
+    String baseUrl = custom ? OpenAiCompatibleEndpoint.baseUrl(server.getBaseUrl()) : null;
+    Double temperature = server == null ? null : server.getTemperature();
+    if (!custom
+        && defaultChatModel != null
+        && defaultChatModel.getOptions() instanceof OpenAiChatOptions defaults) {
+      baseUrl = defaults.getBaseUrl();
+      if (temperature == null) temperature = defaults.getTemperature();
+    }
+    return new ResolvedLlmEndpoint(
+        custom ? feature : "default",
+        server == null ? 1 : server.getEndpointGeneration(),
+        LlmApiType.CHAT_COMPLETIONS,
+        baseUrl,
+        custom ? "feature:" + feature : "default",
+        model,
+        new LlmCapabilities(ReasoningReplayMode.NONE, maxTools(server)),
+        maxOutputTokens(server),
+        temperature,
+        readTimeout.get());
+  }
 
   private final Map<String, ModelOutageGuard> outageGuards = new ConcurrentHashMap<>();
   private final java.time.Duration outageCooldown;
@@ -120,15 +180,36 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     this.outageCooldown = properties.getOutageCooldown();
     this.defaultChatModel = defaultChatModel;
     this.featureSettings = feature -> properties.feature(feature);
-    this.readTimeout = () -> properties.getReadTimeout();
-    this.defaultOutputTokens = () -> properties.getMaxOutputTokens();
+    var configuredTimeout = properties.getReadTimeout();
+    int configuredOutputTokens = properties.getMaxOutputTokens();
+    this.readTimeout = () -> configuredTimeout;
+    this.defaultOutputTokens = () -> configuredOutputTokens;
+    this.defaultMaxTools = properties.getMaxTools();
     this.eventFactory = eventFactory;
     this.eventPublisher = eventPublisher;
   }
 
   /** 用途に応じたモデル利用で用いる応答生成に使うモデルを返す。 */
   public ChatModel chatModel(String feature) {
+    requireAvailableProtocol(feature);
     return cache.computeIfAbsent(feature, this::createFeatureModel);
+  }
+
+  private void requireAvailableProtocol(String feature) {
+    var server = resolvedServer(feature);
+    if (LlmFeature.VOICE_CORRECTION.equals(feature)
+        && (server == null || !server.hasCustomServer())) {
+      if (server != null && server.getApi() == LlmApiType.RESPONSES)
+        throw new IllegalStateException("Responses voice correction is unavailable");
+      server = resolvedServer(LlmFeature.CHAT);
+    }
+    if ((server != null && server.getApi() == LlmApiType.RESPONSES)
+        || ((server == null || !server.hasCustomServer() || server.isFallbackToDefault())
+            && defaultChatModel != null
+            && defaultChatModel.getOptions()
+                instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions))
+      throw new IllegalStateException(
+          "Responses is unavailable until durable agent integration is verified");
   }
 
   /**
@@ -171,9 +252,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       // server.
       // Reuse CHAT connection settings when no correction endpoint is configured, without its
       // capture wrapper.
-      var server = featureSettings.apply(feature);
-      if (server == null || !server.hasCustomServer())
-        server = featureSettings.apply(LlmFeature.CHAT);
+      var server = resolvedServer(feature);
+      if (server == null || !server.hasCustomServer()) server = resolvedServer(LlmFeature.CHAT);
       var model =
           server != null && server.hasCustomServer()
               ? createOpenAiCompatibleChatModel(server)
@@ -186,7 +266,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         || LlmFeature.ACTIVITY.equals(feature)
         || LlmFeature.ACTIVITY_BEHAVIOR.equals(feature))
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
-    LlmProperties.Server server = featureSettings.apply(feature);
+    LlmProperties.Server server = resolvedServer(feature);
     ChatModel model =
         LlmFeature.CHAT.equals(feature) ? captureModel(defaultChatModel, false) : defaultChatModel;
     if (server != null && server.hasCustomServer()) {
@@ -219,7 +299,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   /** 用途に応じたモデル利用で用いるモデルを返す。 */
   public String model(String feature, String defaultModel) {
-    return model(featureSettings.apply(feature), defaultModel);
+    return model(resolvedServer(feature), defaultModel);
   }
 
   private String model(LlmProperties.Server server, String defaultModel) {
@@ -252,6 +332,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   /** 用途に応じたモデル利用で用いるチャット選択可能な設定を返す。 */
   public OpenAiChatOptions chatOptions(String feature, String defaultModel, boolean streamUsage) {
+    requireAvailableProtocol(feature);
     OpenAiChatOptions.Builder options = chatOptionsBuilder(feature, defaultModel);
     if (streamUsage) {
       options.streamUsage(true);
@@ -270,6 +351,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       LlmProperties.Server server) {
     if (server == null
         || !server.hasCustomServer()
+        || server.getApi() == LlmApiType.RESPONSES
         || server.getModel() == null
         || server.getModel().isBlank()) return null;
     try {
@@ -377,11 +459,11 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   /** 用途に応じたモデル利用で用いるチャット選択可能な設定組み立てを返す。 */
   private OpenAiChatOptions.Builder chatOptionsBuilder(String feature, String defaultModel) {
     if (LlmFeature.VOICE_CORRECTION.equals(feature)) {
-      var correction = featureSettings.apply(feature);
+      var correction = resolvedServer(feature);
       var connection =
           correction != null && correction.hasCustomServer()
               ? correction
-              : featureSettings.apply(LlmFeature.CHAT);
+              : resolvedServer(LlmFeature.CHAT);
       var options =
           connection != null && connection.hasCustomServer()
               ? chatOptionsBuilder(connection, modelForServer(connection))
@@ -397,24 +479,13 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         options.temperature(correction.getTemperature());
       return options;
     }
-    LlmProperties.Server server = featureSettings.apply(feature);
-    OpenAiChatOptions.Builder options = chatOptionsBuilder(server, model(server, defaultModel));
-    // AI 2 uses a request's options as-is, rather than merging them with model defaults.
-    if ((server == null || !server.hasCustomServer())
-        && defaultChatModel != null
-        && defaultChatModel.getOptions() != null) {
-      var defaults = defaultChatModel.getOptions();
-      options = OpenAiChatOptions.builder().combineWith(defaults.mutate()).combineWith(options);
-      if (defaults instanceof OpenAiChatOptions openAi && openAi.getMaxCompletionTokens() != null) {
-        // combineWith can retain both token fields, and maxTokens cannot clear itself
-        // while maxCompletionTokens is present. Keep the configured parameter family.
-        options
-            .maxCompletionTokens(null)
-            .maxTokens(null)
-            .maxCompletionTokens(maxOutputTokens(server));
-      }
-    }
-    return options;
+    LlmProperties.Server server = resolvedServer(feature);
+    var defaults =
+        (server == null || !server.hasCustomServer()) && defaultChatModel != null
+            ? defaultChatModel.getOptions()
+            : null;
+    return new ChatCompletionsAdapter()
+        .withDefaults(endpoint(server, model(server, defaultModel), feature), defaults);
   }
 
   /** 用途に応じたモデル利用で用いる最大出力トークン数を返す。 */
@@ -424,16 +495,20 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         : defaultOutputTokens.getAsInt();
   }
 
+  private Integer maxTools(LlmProperties.Server server) {
+    if (server == null || !server.hasCustomServer())
+      return server != null && server.getMaxTools() != null
+          ? server.getMaxTools()
+          : defaultMaxTools;
+    if (!server.isFallbackToDefault()) return server.getMaxTools();
+    // Unknown candidates retain the existing conservative outbound bound.
+    return Math.min(
+        server.getMaxTools() == null ? 128 : server.getMaxTools(),
+        defaultMaxTools == null ? 128 : defaultMaxTools);
+  }
+
   /** 用途に応じたモデル利用で用いるチャット選択可能な設定組み立てを返す。 */
   private OpenAiChatOptions.Builder chatOptionsBuilder(LlmProperties.Server server, String model) {
-    OpenAiChatOptions.Builder options =
-        OpenAiChatOptions.builder().maxTokens(maxOutputTokens(server));
-    if (model != null && !model.isBlank()) {
-      options.model(model);
-    }
-    if (server != null && server.getTemperature() != null) {
-      options.temperature(server.getTemperature());
-    }
-    return options;
+    return new ChatCompletionsAdapter().options(endpoint(server, model, "custom")).mutate();
   }
 }

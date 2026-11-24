@@ -80,6 +80,7 @@ public final class ToolLoopSupport {
 
   private final ToolCallingManager manager =
       ToolCallingManager.builder()
+          .resolutionFallbackEnabled(false)
           .unlimitedCallsPerTool()
           .unlimitedTotalToolCalls()
           .toolExecutionExceptionProcessor(ToolLoopSupport::toolFailure)

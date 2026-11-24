@@ -37,7 +37,11 @@ import reactor.core.publisher.Flux;
 
 /** 補助エージェント外部連携の結果と状態の契約を検証するテスト。 */
 @SpringBootTest(
-    properties = {"spring.ai.openai.api-key=test-key", "rei.tool-permission.enabled=true"})
+    properties = {
+      "spring.ai.openai.api-key=test-key",
+      "rei.tool-permission.enabled=true",
+      "rei.llm.max-tools=256"
+    })
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentIntegrationTest {
   /** 検証に使うモデル。 */
