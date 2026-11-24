@@ -63,7 +63,7 @@ public class RunExecutionContext {
     restoreReplayAuthority();
   }
 
-  private void restoreReplayAuthority() {
+  private synchronized void restoreReplayAuthority() {
     if (resumeReplayReferences.isEmpty()) {
       if (resumeProtocolHistory != null)
         throw new IllegalStateException("Native continuation references unavailable");
