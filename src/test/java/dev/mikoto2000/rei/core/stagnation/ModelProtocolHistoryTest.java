@@ -64,6 +64,39 @@ class ModelProtocolHistoryTest {
     assertThat(((ToolResponseMessage) messages.getLast()).getResponses()).containsExactly(first, second);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void lateOrConflictingPrefixesCannotReplaceAcceptedResults(boolean conflicting) {
+    var fixture = fixture();
+    var exchange = fixture.exchange();
+    exchange.persist(AssistantMessage.builder().content("working")
+        .toolCalls(List.of(new AssistantMessage.ToolCall("one", "function", "fixture", "{}"),
+            new AssistantMessage.ToolCall("two", "function", "fixture", "{}")))
+        .properties(Map.of("rei.llm.replay-origin-owner", exchange.ownerKey(),
+            "rei.llm.replay-origin-endpoint", "endpoint")).build());
+    var first = new ToolResponseMessage.ToolResponse("one", "fixture", "original-result");
+    var prefix = ToolResponseMessage.builder().responses(List.of(first)).build();
+    exchange.withKey(exchange.key() + "/prefix:1").persist(prefix);
+    var second = new ToolResponseMessage.ToolResponse("two", "fixture", "second-result");
+    var complete = ToolResponseMessage.builder().responses(List.of(
+        conflicting ? new ToolResponseMessage.ToolResponse("one", "fixture", "changed-result") : first,
+        second)).build();
+    if (conflicting) {
+      org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+          exchange.withKey(exchange.key() + "/prefix:2").persist(complete))
+          .isInstanceOf(IllegalStateException.class).hasMessageNotContaining("original-result")
+          .hasMessageNotContaining("changed-result");
+    } else {
+      exchange.withKey(exchange.key() + "/prefix:2").persist(complete);
+      exchange.withKey(exchange.key() + "/prefix:1").persist(prefix);
+    }
+    var history = fixture.execution().progressSnapshot().protocolHistory();
+    assertThat(history.entries()).hasSize(2);
+    var last = (ToolResponseMessage) exchange.store().load(exchange.scope(),
+        history.entries().getLast().reference(), ModelMessagePayloadStore.ReferenceKind.RUN, "run");
+    assertThat(last.getResponses()).containsExactlyElementsOf(conflicting ? List.of(first) : List.of(first, second));
+  }
+
   @Test
   void originalMediaBytesRemainRecoverableAfterTheAttachmentChanges() throws Exception {
     var fixture = fixture();
