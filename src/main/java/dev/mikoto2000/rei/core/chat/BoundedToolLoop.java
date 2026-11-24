@@ -74,6 +74,8 @@ public final class BoundedToolLoop {
         && error.getCause() != null) {
       error = error.getCause();
     }
+    if (error instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure failure)
+      return failure.retryAllowed();
     if (error instanceof OpenAIIoException || error instanceof OpenAIRetryableException)
       return true;
     if (error instanceof OpenAIServiceException service) {
