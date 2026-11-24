@@ -39,12 +39,28 @@ class ResponsesTransportContractTest {
 
   @Test
   void sseErrorCannotExposeProviderMessage() {
+    var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(
+        org.springframework.ai.chat.model.MessageAggregator.class);
+    var captured = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    captured.start();
+    logger.addAppender(captured);
+    try {
     contentType = "text/event-stream";
     reply = textDelta() + event("error", "\"code\":\"fixture\",\"message\":\"private-reasoning fixture-secret\",\"param\":null");
     var options = options().build();
     assertThatThrownBy(() -> transport(options).stream(new Prompt("fixture", options)).collectList().block())
         .isInstanceOf(IllegalStateException.class).hasMessageContaining("PROVIDER")
         .hasMessageNotContaining("private-reasoning").hasMessageNotContaining("fixture-secret");
+      for (var logged : captured.list) {
+        assertThat(logged.getFormattedMessage()).doesNotContain("private-reasoning", "fixture-secret");
+        if (logged.getThrowableProxy() != null)
+          assertThat(ch.qos.logback.classic.spi.ThrowableProxyUtil.asString(logged.getThrowableProxy()))
+              .doesNotContain("private-reasoning", "fixture-secret");
+      }
+    } finally {
+      logger.detachAppender(captured);
+      captured.stop();
+    }
   }
 
   @Test
