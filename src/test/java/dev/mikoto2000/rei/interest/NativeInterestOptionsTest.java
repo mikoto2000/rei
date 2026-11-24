@@ -49,4 +49,19 @@ class NativeInterestOptionsTest {
     verify(model).stream(any(Prompt.class));
     assertThat(base.getToolContext()).isNullOrEmpty();
   }
+
+ @org.junit.jupiter.params.ParameterizedTest @org.junit.jupiter.params.provider.ValueSource(strings={"raw","hosted"}) void rawNativeToolsAreRejectedBeforeInvokingTheModel(String kind) {
+  var model=mock(ChatModel.class);var provider=mock(LlmModelProvider.class);
+  var builder=OpenAiResponsesChatOptions.builder().model("native-interest").maxOutputTokens(73);
+  if(kind.equals("raw"))builder.extraBody(java.util.Map.of("tools",List.of(java.util.Map.of("type","web_search"))));
+  else builder.hostedTools(List.of(org.springframework.ai.openai.responses.HostedTool.WebSearch.of()));
+  var base=builder.build();
+  when(provider.requestOptions(LlmFeature.INTEREST_DISCOVERY,null,false)).thenReturn(base);
+  when(provider.isolatedChatModel(LlmFeature.INTEREST_DISCOVERY)).thenReturn(model);
+  when(model.stream(any(Prompt.class))).thenReturn(reactor.core.publisher.Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("[]"))))));
+  var extractor=new LlmInterestTopicExtractor(provider,mock(ModelHolderService.class),tools.jackson.databind.json.JsonMapper.builder().build());
+  org.assertj.core.api.Assertions.assertThatThrownBy(()->extractor.extract(List.of(new ConversationSnippet("fixture","synthetic evidence",OffsetDateTime.now())),3))
+      .isInstanceOf(IllegalArgumentException.class);
+  verifyNoInteractions(model);
+ }
 }
