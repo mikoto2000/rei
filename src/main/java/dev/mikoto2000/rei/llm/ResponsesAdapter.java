@@ -367,6 +367,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                       completed.set(true);
                     }
                   })
+                  .map(response -> ResponsesReasoningReplay.bind(response, request, endpoint))
                   .concatWith(
                       Flux.defer(() ->
                           completed.get()
