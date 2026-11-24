@@ -21,6 +21,7 @@ class ContextHistoryAdvisorTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "COMPLETED,true,ok",
+    "COMPLETED,true,checkpointGrant",
     "COMPLETED,false,ok",
     "FAILED,true,ok",
     "CANCELLED,true,ok",
@@ -116,6 +117,21 @@ class ContextHistoryAdvisorTest {
                     dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
                         origin))
             .build();
+    AssistantMessage checkpointMessage = null;
+    if (scenario.equals("checkpointGrant")) {
+      var sourceRun = payloads.newExchange(new AgentRunContext("checkpoint-source", "chat", dir, "project"));
+      checkpointMessage = AssistantMessage.builder().parts(original.getParts()).properties(Map.of(
+          "rei.llm.replay-origin-owner", sourceRun.ownerKey(), "rei.llm.replay-origin-endpoint", "endpoint-a")).build();
+      var checkpointRef = sourceRun.reference(checkpointMessage);
+      payloads.publish(sourceRun.scope(), checkpointRef,
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint:fixture");
+      var restoredGrant = payloads.restoreReplayGrant(currentExchange, java.util.List.of(
+          new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference(checkpointRef,
+              dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint:fixture")), origin);
+      var context = new java.util.HashMap<>(options.getToolContext());
+      context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY, restoredGrant);
+      options = options.mutate().toolContext(null).toolContext(context).build();
+    }
     var loads = new java.util.concurrent.atomic.AtomicInteger();
     var summaries = new ConversationSummaryRepository(dir);
     if (scenario.equals("legacyApi"))
@@ -195,6 +211,13 @@ class ContextHistoryAdvisorTest {
       return;
     }
     var projected = advisor.before(request, null).prompt();
+    if (checkpointMessage != null) {
+      var grant = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HistoryReplayGrant)
+          ((org.springframework.ai.model.tool.ToolCallingChatOptions) projected.getOptions()).getToolContext()
+              .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY);
+      assertThat(grant.permits(checkpointMessage, origin.owner(), origin.endpoint()))
+          .as("completed history must preserve checkpoint replay authority for the restored prompt").isTrue();
+    }
     if (scenario.startsWith("covered")) {
       assertThat(projected.getContents())
           .doesNotContain("old actual", "old display", "opaque-native-history");
