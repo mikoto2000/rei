@@ -434,6 +434,38 @@ public final class ModelMessagePayloadStore {
     });
   }
 
+  /** Retire one fully summarized history unit without loading a private protocol body. */
+  public int releaseHistory(Scope scope, String owner, java.util.List<Ref> references) {
+    validate(scope);
+    identifier(owner);
+    var refs = java.util.List.copyOf(references);
+    if (refs.isEmpty() || refs.size() > 256) throw rejected();
+    return transaction(db -> {
+      int removed = 0;
+      for (var ref : refs) {
+        if (ref == null) throw rejected();
+        identifier(ref.id());
+        if (ref.sha256() == null || !ref.sha256().matches("[0-9a-f]{64}")) throw rejected();
+        // Receipts survive GC, so repeated retirement cannot resurrect or load old bodies.
+        if (scalar(db,
+                "SELECT COUNT(*) FROM model_message_receipts WHERE project=? AND root_path=? AND conversation=? AND payload_id=? AND sha256=?",
+                scope.project(), scope.root(), scope.conversation(), ref.id(), ref.sha256()) != 1)
+          throw rejected();
+        if (scalar(db, "SELECT COUNT(*) FROM model_message_payloads WHERE id=?", ref.id()) != 0
+            && scalar(db,
+                "SELECT COUNT(*) FROM model_message_payloads WHERE id=? AND project=? AND root_path=? AND conversation=? AND sha256=?",
+                ref.id(), scope.project(), scope.root(), scope.conversation(), ref.sha256()) != 1)
+          throw rejected();
+        try (var delete = db.prepareStatement(
+            "DELETE FROM model_message_references WHERE payload_id=? AND kind='HISTORY' AND owner=?")) {
+          bind(delete, ref.id(), owner);
+          removed += delete.executeUpdate();
+        }
+      }
+      return removed;
+    });
+  }
+
   /** Called only after this scoped approval document has durably completed or been denied. */
   public int releaseApproval(Scope scope, String approval) {
     validate(scope);
