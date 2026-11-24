@@ -14,6 +14,40 @@ import org.springframework.ai.chat.messages.part.TextPart;
 import org.springframework.ai.chat.messages.part.ToolCallPart;
 
 class ModelMessageCodecTest {
+  @Test
+  void oldStoredMessagesReadWithoutInventingReasoningOrOrigin() {
+    var codec = new ModelMessageCodec();
+    var assistant = (AssistantMessage) codec.decode("""
+        {"kind":"ASSISTANT","text":"legacy completed fixture","calls":[],"responses":[]}
+        """.getBytes(StandardCharsets.UTF_8));
+    assertThat(assistant.getText()).isEqualTo("legacy completed fixture");
+    assertThat(assistant.getParts()).allMatch(part -> part instanceof TextPart);
+    assertThat(assistant.getMetadata()).doesNotContainKeys("rei.llm.replay-origin-owner", "rei.llm.replay-origin-endpoint");
+    var user = codec.decode("""
+        {"kind":"USER","text":"legacy request","calls":null,"responses":null,"delivery":null}
+        """.getBytes(StandardCharsets.UTF_8));
+    assertThat(user).isInstanceOf(org.springframework.ai.chat.messages.UserMessage.class);
+    assertThat(user.getText()).isEqualTo("legacy request");
+    assertThat(codec.encode(assistant)).containsExactly(codec.encode(codec.decode(codec.encode(assistant))));
+  }
+
+  @Test
+  void oldToolCallsAndTypedDeliveryReadWithSeparateCallIds() {
+    var codec = new ModelMessageCodec();
+    var assistant = (AssistantMessage) codec.decode("""
+        {"kind":"ASSISTANT","text":"working","calls":[{"id":"call_one","type":"function","name":"fixture","arguments":"{}"}],"responses":[]}
+        """.getBytes(StandardCharsets.UTF_8));
+    assertThat(assistant.getToolCalls()).containsExactly(new AssistantMessage.ToolCall("call_one", "function", "fixture", "{}"));
+    assertThat(assistant.getParts()).noneMatch(part -> part instanceof ReasoningPart);
+    var tool = (org.springframework.ai.chat.messages.ToolResponseMessage) codec.decode("""
+        {"kind":"TOOL","text":"","calls":[],"responses":[{"id":"call_one","name":"fixture","responseData":"fixture result"}],
+        "delivery":{"policies":{"call_one":"GENERAL"},"pages":{},"receipts":{}}}
+        """.getBytes(StandardCharsets.UTF_8));
+    assertThat(tool.getResponses().getFirst().id()).isEqualTo("call_one");
+    assertThat(dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.capture(tool).policies())
+        .containsEntry("call_one", "GENERAL");
+  }
+
   static java.util.stream.Stream<ModelTokenUsage> numericUsage() {
     return java.util.stream.Stream.of(new ModelTokenUsage(3L, 2L, 5L, 1L, 1L),
         new ModelTokenUsage(null, 2L, null, null, 1L), new ModelTokenUsage(null, null, null, null, null));
