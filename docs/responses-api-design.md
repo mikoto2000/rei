@@ -1,7 +1,7 @@
 # Rei の Responses API 対応設計
 
 作成日: 2026-11-24
-状態: Phase 0・1 はマージ済み。Phase 2 の暗号化推論再送・既存ツールループ統合を検証中。末尾の改訂契約と進捗台帳を参照。DB移行・本番有効化は未実装。
+状態: Phase 0〜2 はマージ済み。Phase 3 のモデルメッセージ保存・復元を実装中。末尾の改訂契約と進捗台帳を参照。本番有効化は未実装。
 基準コミット: `18894acb`（Run ごとの動的ツール選択）。
 
 ## 前回調査時点の作業範囲（履歴）
@@ -512,3 +512,97 @@ native usage はそのまま保持し、さらに正規化した5数値だけを
 同じ集約器が保持する metadata から内訳を復元する。本文・opaque payload・提供元の任意フィールドを
 usage に保持しない。標準の集約済み Usage.getNativeUsage() が元のSDK値を返すとは扱わず、Rei側の
 正規化値を検証する。要求 input にこの計測metadataを混ぜない。数値の未提供は null のまま区別する。
+
+## Phase 3 の保存・参照契約
+
+`ModelMessageCodec`、`ModelMessagePayloadStore` は通信・実行ループから分離する。
+Codec は Spring の Message/MessagePart と既存の型付き `ToolResultMetadata` を扱う leaf とし、
+再送可否は引き続き `ResponsesReasoningReplay` が判断する。Store は vendor/model による分岐を持たない。
+
+### Schema と所有者
+
+- 書き込み形式は `schemaVersion: 1`、role、ordered parts、許可された backend metadata。
+  Text/Reasoning/ToolCall、ToolResponse、User/System と画像 media を明示 DTO で表現する。
+  arbitrary class/type 名による復元は行わず、未知フィールド・型・重複 JSON キー・末尾データを拒否する。
+- opaque data は文字列のまま保持し、復号・要約・再生成しない。part の順序、item 属性、call ID を保つ。
+  StreamingParts の partial/index 属性が残る生 chunk は保存しない。
+- 旧 approval StoredMessage の kind/text/calls/responses/delivery だけを互換読み込みする。
+  reasoning、出所、接続先を旧データから推測しない。旧形式の読み込みは未完了 Responses Run の再開許可ではない。
+- numeric usage は共通の `ModelTokenUsage` として5数値だけを保存する。未取得は null のままにし、
+  負値、overflow、input+output と total の矛盾、cached/input・reasoning/output の矛盾を拒否する。
+  SDK の typed JSON field も Spring の mapper より前に検証し、小数の丸め・overflow・型の黙示破棄を防ぐ。
+- 所有者 scope は project ID（default と明示 project を区別）、捕捉済み project root、conversation ID。
+  origin run とメッセージキーは別に保存する。新しい Run に入っただけで同一会話の所有者を変えず、
+  別 project/root/conversation からの取得・参照公開は拒否する。
+
+qualified `memoryConsolidationDataSource` の `memory-consolidation.db` 内へ専用テーブルを追加する。
+`storage.db` の既存 version 22 や既存テーブル、`PRAGMA user_version` を流用・変更しない。
+Store の bean は lazy で、参照の読み込み・明示保存・明示 maintenance が使われるまで初期化しない。
+本番稼働中の DB へ本作業からマイグレーションを実行することはない。
+
+専用 DB schema の version はメッセージ JSON の version と別で、現在は3。
+1 は payload/所有者/ハッシュ/キー、2 は staging 猶予・参照・Run 累積容量、3 は冪等性 receipt。
+初回作成と各 upgrade は SQLite の同一トランザクションで行い、失敗時に DDL を含めて戻す。
+将来 version は受理しない。prototype v1 からの移行で参照の有無が証明できない既存 payload は
+無期限の保守的な猶予で保持する。released main の旧会話はこの prototype schema を持たず、既存形式を維持する。
+切り戻す場合も新しい専用テーブルを自動削除しない。旧コードは既存の会話保存形式を引き続き読む。
+
+### 永続化境界
+
+既存 `ToolLoopSupport` に明示的な `Exchange(store, scope, run, iterationKey)` を渡す。
+一つの既存 iteration の保存識別子であり、実行管理・業務操作の第二の台帳ではない。
+反復ごとに異なるキーを捕捉する。未指定の既存 Chat Completions 経路は従来どおり動作する。
+Responses Adapter は Store にアクセスせず、引き続き完了・整合性の検証までを担当する。
+
+| 境界 | 動作と復旧条件 |
+| --- | --- |
+| 完了応答の保存前 | assistant を保存できなければ callback に進まず失敗する。部分 chunk から実行しない |
+| 保存後、参照の公開前 | staging payload として区別する。公開に失敗すれば callback に進まない |
+| RUN 参照公開後 | 元の assistant parts を保存済みとして既存 permission/approval/ToolCallingManager を通る |
+| callback 後 | 既存の型付き配信 metadata を含む ToolResponse を保存し、参照を公開してから次の履歴を返す |
+| 実行結果の保存・公開失敗 | 例外を上へ返して次の LLM 要求へ進ませない。無条件の再実行を追加しない |
+
+外部副作用の exactly-once を DB で保証したとは扱わない。再開時は既存の操作台帳で成功・未実行・不明を照合し、
+不明状態で自動再実行しない。承認、Checkpoint、親子 Run への実際の参照引き継ぎと、全モデル生成経路への
+iteration identity の供給は Phase 4 の有効化条件である。それまでは本番 Responses factory を閉じたままにする。
+
+ConversationLog/ConversationTurn の metadata に保存するのは id/sha256/historyOwner の3文字列で、
+payload 本文を表示ログへ複製しない。HISTORY 参照を先に確定し、それから既存の保存先へ pointer を渡す。
+複数 DB と JSONL を一つのトランザクションとは扱わない。pointer の外部書き込みに失敗しても保護参照を
+自動解放しない。余分な保持を安全側とし、外部保存先との照合前に回収しない。
+
+metadata 付きの `ConversationLogStore.append` は同期書き込みと force を行い、I/O 失敗を呼び出し元へ返す。
+従来の表示用 append の互換動作と区別する。Turn は既存の `recordMetadata` を再利用する。
+履歴投影は pointer を優先し、同じ表示テキストを二重追加しない。テキストのみの JSONL に対応する完了 Turn が
+pointer を持つ場合もそちらを優先する。pointer があるのに欠損・改ざん・所有者不一致・参照未公開なら停止し、
+表示テキストへの fallback で継続しない。pointer を持たない旧完了会話は従来のテキスト履歴として読む。
+履歴 sequence を加えるときにも ordered parts と ToolResponse の型を維持する。
+
+### 保持・容量・セキュリティ
+
+- 一つのメッセージは JSON の実 UTF-8 バイト数で8 MiB以下。1024 parts、64 attributes/part 等の構造上限も持つ。
+- 初期の Store 上限は Run の生涯累積64 MiB、保存中の payload 本文合計512 MiB。GC 後も Run 累積量を戻さない。
+  同じキー・同じ内容の retry は追加課金せず、別内容への置換は拒否する。GC 後も receipt を残しキーの再利用を拒否する。
+- Usage は現在の全本文バイト数・件数・参照件数と、所有者/Run の累積本文バイト数を返す。
+  この本文量は DB ファイル・WAL・index・receipt・free page の物理サイズとは別である。
+  物理容量・時間・長期増加の計測と運用閾値の確定は Phase 6 で扱い、未測定値を埋めない。
+- 容量判定、保存、receipt、Run 累積量更新は `BEGIN IMMEDIATE` の一つのトランザクションに含める。
+  同時 writer が上限を越えない。巨大 payload を途中で切って保存しない。
+- 保存直後は初期1時間の staging 猶予で保護する。HISTORY/RUN/APPROVAL/CHECKPOINT のどれかが参照する
+  payload は猶予切れ後も削除しない。公開・解放・GC は同じ DB の排他トランザクションを通す。
+  期限切れの孤立 payload への遅い公開は、GC がまだ実行されていなくても拒否する。
+- 明示コマンド `/storage maintenance model-messages-gc` は参照のない期限切れ本文だけを回収する。
+  独立した Scheduler や自動の会話・Checkpoint 削除は追加しない。新しい Store を必要とする明示操作である。
+  会話・圧縮・Run・承認・Checkpoint の各 lifecycle が、外部 pointer を除いた後に対応参照を解放する。
+  全 lifecycle の解放と削除経路への結合は Phase 4 の受入条件とし、未統合経路から本番 Responses を使わせない。
+- 所有者とハッシュは SQL バインドと SHA-256 で照合する。BLOB の実長・宣言長・上限を確認してから取得する。
+  DB/JSON のエラーに本文・URL・認証・任意 provider exception/cause を付けない。
+- DB 内の本文はアプリケーション暗号化されない。暗号化 reasoning も機密なプロトコル情報として扱う。
+  plaintext reasoning、画像 URL、ツール結果は特に DB とバックアップの OS 権限・ディスク暗号化で保護する。
+  通常ログ、イベント、UI への reasoning 本文の展開や Capture の自動有効化は行わない。
+- SQLite の DELETE はファイルからの即時物理消去を保証しない。free page、WAL、journal、バックアップに
+  過去の本文が残り得る。共有 DB の secure_delete/auto_vacuum 等を無断で変更せず、バックアップの保持も別に管理する。
+  既存 `/storage maintenance vacuum` の対象は storage.db であり、memory-consolidation.db の物理消去とは扱わない。
+
+以上はソースと隔離 fixture による検証範囲である。実 API、実データ送信、本番 DB 移行、本番 JAR 更新、
+運用プロセス再起動は行っておらず、Phase 3 の完了と本番利用可能の判定を同一にしない。
