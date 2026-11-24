@@ -213,23 +213,23 @@ public final class ModelMessagePayloadStore {
   /** Publish all pins atomically; callers may write these body-free pointers only afterwards. */
   public java.util.List<java.util.Map<String, String>> historyReferences(
       Scope scope, History history, String owner) {
-    var messages = protectReferences(scope, history, ReferenceKind.HISTORY, owner);
+    var roles = protectReferences(scope, history, ReferenceKind.HISTORY, owner);
     var result = new java.util.ArrayList<java.util.Map<String, String>>();
     for (int i = 0; i < history.entries().size(); i++) {
       var ref = history.entries().get(i).reference();
       result.add(java.util.Map.of(HISTORY_ID, ref.id(), HISTORY_HASH, ref.sha256(),
           HISTORY_OWNER, owner, HISTORY_RUN, history.run(), HISTORY_ROLE,
-          messages.get(i).getMessageType().name().toLowerCase(java.util.Locale.ROOT)));
+          roles.get(i)));
     }
     return java.util.List.copyOf(result);
   }
 
-  private java.util.List<Message> protectReferences(
+  private java.util.List<String> protectReferences(
       Scope scope, History history, ReferenceKind kind, String owner) {
     validate(scope);
     identifier(owner);
     return transaction(db -> {
-      var messages = new java.util.ArrayList<Message>();
+      var roles = new java.util.ArrayList<String>();
       try (var insert = db.prepareStatement(
           "INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,?,?)")) {
         for (var entry : history.entries()) {
@@ -238,13 +238,13 @@ public final class ModelMessagePayloadStore {
               entry.reference().id(), history.run()) != 1) throw rejected();
           if (message instanceof org.springframework.ai.chat.messages.AssistantMessage)
             history.origin().requireMatch(message);
-          messages.add(message);
+          roles.add(message.getMessageType().name().toLowerCase(java.util.Locale.ROOT));
           bind(insert, entry.reference().id(), kind.name(), owner);
           insert.addBatch();
         }
         insert.executeBatch();
       }
-      return java.util.List.copyOf(messages);
+      return java.util.List.copyOf(roles);
     });
   }
 

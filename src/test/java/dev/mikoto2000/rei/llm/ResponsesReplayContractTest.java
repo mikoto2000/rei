@@ -714,8 +714,9 @@ class ResponsesReplayContractTest {
             ignored -> {});
     execution.setRunContext(run);
     execution.setModelOptions(request);
-    var attempted = new java.util.concurrent.atomic.AtomicReference<
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History>();
+    var attempted =
+        new java.util.concurrent.atomic.AtomicReference<
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History>();
     execution.setToolResultsCheckpoint(ignored -> {
       attempted.set(execution.progressSnapshot().protocolHistory());
       throw new IllegalStateException("checkpoint unavailable");
