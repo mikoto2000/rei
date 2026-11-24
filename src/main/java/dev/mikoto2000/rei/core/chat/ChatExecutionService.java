@@ -160,7 +160,8 @@ public class ChatExecutionService {
   /** モデル提供元。 */
   private final Function<String, ChatModel> privateSecretaryModel;
 
-  private final java.util.function.BiFunction<String, AgentRunContext, ToolCallingChatOptions> optionsForModel;
+  private final java.util.function.BiFunction<String, AgentRunContext, ToolCallingChatOptions>
+      optionsForModel;
 
   /** 言語モデル設定。 */
   private final Supplier<LlmProperties.OutputLimit> outputLimits;

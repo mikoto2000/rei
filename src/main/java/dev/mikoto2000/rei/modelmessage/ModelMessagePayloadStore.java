@@ -72,8 +72,9 @@ public final class ModelMessagePayloadStore {
     public String ownerKey() {
       validate(scope);
       identifier(run);
-      return digest(String.join("\0", scope.project(), scope.root(), scope.conversation(), run)
-          .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+      return digest(
+          String.join("\0", scope.project(), scope.root(), scope.conversation(), run)
+              .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     public void persist(Message message) {

@@ -62,7 +62,9 @@ class SubAgentRunnerTest {
     }
     assertThat(result.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
     assertThat(resolved.get()).isNotNull();
-    assertThat(resolved.get().runId()).isEqualTo(result.subAgentRunId()).isNotEqualTo(parent.runId());
+    assertThat(resolved.get().runId())
+        .isEqualTo(result.subAgentRunId())
+        .isNotEqualTo(parent.runId());
     assertThat(resolved.get().conversationId()).isEqualTo("subagent:" + result.subAgentRunId());
     assertThat(resolved.get().projectRoot()).isEqualTo(parent.projectRoot());
     assertThat(resolved.get().projectId()).isEqualTo(parent.projectId());

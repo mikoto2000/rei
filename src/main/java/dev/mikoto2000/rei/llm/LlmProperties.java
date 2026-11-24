@@ -162,9 +162,18 @@ public class LlmProperties {
     private ReasoningReplayMode reasoningReplay;
     private java.util.Set<LlmCapabilities.Setting> supportedSettings = java.util.Set.of();
 
-    public ReasoningReplayMode getReasoningReplay() { return reasoningReplay; }
-    public void setReasoningReplay(ReasoningReplayMode value) { reasoningReplay = value; }
-    public java.util.Set<LlmCapabilities.Setting> getSupportedSettings() { return supportedSettings; }
+    public ReasoningReplayMode getReasoningReplay() {
+      return reasoningReplay;
+    }
+
+    public void setReasoningReplay(ReasoningReplayMode value) {
+      reasoningReplay = value;
+    }
+
+    public java.util.Set<LlmCapabilities.Setting> getSupportedSettings() {
+      return supportedSettings;
+    }
+
     public void setSupportedSettings(java.util.Set<LlmCapabilities.Setting> value) {
       supportedSettings = java.util.Set.copyOf(value);
     }
