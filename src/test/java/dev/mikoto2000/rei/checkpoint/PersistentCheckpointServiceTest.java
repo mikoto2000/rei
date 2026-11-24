@@ -98,6 +98,8 @@ class PersistentCheckpointServiceTest {
                         "rei.llm.replay-origin-endpoint",
                         origin.endpoint()))
                 .build());
+    var systemRef = original.withKey("instructions").reference(
+        new org.springframework.ai.chat.messages.SystemMessage("original instructions"));
     var history =
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
             1,
@@ -107,7 +109,10 @@ class PersistentCheckpointServiceTest {
                 new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
                     "input/USER", input),
                 new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
-                    original.key() + "/ASSISTANT", answer)));
+                    original.key() + "/ASSISTANT", answer)),
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Input(List.of(
+                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("instructions/SYSTEM", systemRef),
+                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("input/USER", input)), 1));
     service.preserveResults(
         owner,
         List.of(),
@@ -117,7 +122,7 @@ class PersistentCheckpointServiceTest {
     var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
     var context = new AgentRunContext(resumed.runId(), "session", root, "A");
     var references = service.protocolReferences(context);
-    assertEquals(2, references.size());
+    assertEquals(3, references.size());
     assertTrue(
         references.stream()
             .allMatch(pointer ->
@@ -147,7 +152,7 @@ class PersistentCheckpointServiceTest {
             .build());
     execution.restoreProgress(service.progress(context), references);
     assertEquals(
-        List.of("original input", "saved answer"),
+        List.of("original instructions", "original input", "saved answer"),
         execution.takeResumeMessages().stream()
             .map(org.springframework.ai.chat.messages.Message::getText)
             .toList());
