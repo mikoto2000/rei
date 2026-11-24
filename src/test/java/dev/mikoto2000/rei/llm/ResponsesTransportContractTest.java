@@ -19,7 +19,33 @@ class ResponsesTransportContractTest {
   private final List<String> urls = new CopyOnWriteArrayList<>();
   private String reply = completed();
   private String contentType = "application/json";
-  private boolean bodyClosed;
+  private volatile boolean bodyClosed;
+  private int httpStatus = 200;
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "401,AUTHENTICATION", "403,AUTHENTICATION", "429,RATE_LIMIT", "500,TRANSIENT", "400,PROVIDER"
+  })
+  void httpFailuresAreClassifiedWithoutLeakingProviderBodyOrRetrying(int status, String category) {
+    httpStatus = status;
+    reply = "{\"error\":{\"message\":\"private-reasoning fixture-secret\",\"type\":\"fixture\",\"code\":\"fixture\"}}";
+    var options = options().build();
+    assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining(category)
+        .hasMessageNotContaining("private-reasoning").hasMessageNotContaining("fixture-secret")
+        .hasNoCause();
+    assertThat(requests).hasSize(1);
+  }
+
+  @Test
+  void sseErrorCannotExposeProviderMessage() {
+    contentType = "text/event-stream";
+    reply = textDelta() + event("error", "\"code\":\"fixture\",\"message\":\"private-reasoning fixture-secret\",\"param\":null");
+    var options = options().build();
+    assertThatThrownBy(() -> transport(options).stream(new Prompt("fixture", options)).collectList().block())
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("PROVIDER")
+        .hasMessageNotContaining("private-reasoning").hasMessageNotContaining("fixture-secret");
+  }
 
   @Test
   void cancellationClosesNativeSseBodyAndDoesNotRequireCompletion() {
@@ -232,7 +258,7 @@ class ResponsesTransportContractTest {
           requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
           urls.add(chain.request().url().toString());
           return new okhttp3.Response.Builder().request(chain.request())
-              .protocol(okhttp3.Protocol.HTTP_1_1).code(200).message("OK")
+              .protocol(okhttp3.Protocol.HTTP_1_1).code(httpStatus).message("fixture")
               .body(responseBody()).build();
         })).build();
     var endpoint = new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES,
