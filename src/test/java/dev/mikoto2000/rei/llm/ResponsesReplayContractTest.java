@@ -432,6 +432,63 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(value = ReasoningReplayMode.class, names = {"ENCRYPTED", "NONE"})
+  void completedHistoryReplayRequiresExactStoredMessagesAndTheTargetRun(ReasoningReplayMode replay) {
+    var properties = nativeProperties();
+    var server = properties.feature(LlmFeature.CHAT);
+    server.setReasoningReplay(replay);
+    properties.setFeature(LlmFeature.CHAT, server);
+    var models = nativeProvider(properties);
+    var previous = new dev.mikoto2000.rei.core.chat.AgentRunContext(
+        "previous", "chat", protocolDirectory, "project");
+    var previousOptions = models.requestOptions(LlmFeature.CHAT, null, true, previous);
+    var previousExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
+        previousOptions.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    replies.add(replay == ReasoningReplayMode.ENCRYPTED ? reasoningDone() : done());
+    var first = models.chatModel(LlmFeature.CHAT).call(new Prompt("first", previousOptions))
+        .getResult().getOutput();
+    var reference = previousExchange.reference(first);
+    var pointer = protocolStore.historyReference(previousExchange.scope(), reference, "completed:previous");
+    var current = new dev.mikoto2000.rei.core.chat.AgentRunContext(
+        "current", "chat", protocolDirectory, "project");
+    var currentOptions = models.requestOptions(LlmFeature.CHAT, null, true, current);
+    var currentExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
+        currentOptions.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var origin = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin) currentOptions.getToolContext()
+        .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
+    var grant = protocolStore.historyReplayGrant(currentExchange, List.of(pointer), origin);
+    var granted = currentOptions.mutate().toolContext(Map.of(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY, grant)).build();
+    var historical = dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(first, 4);
+    var response = models.chatModel(LlmFeature.CHAT).call(new Prompt(
+        List.of(historical, new UserMessage("second")), granted));
+    assertThat(response.getResult().getOutput().getText()).isEqualTo("done");
+    assertThat(requests).hasSize(2);
+    if (replay == ReasoningReplayMode.ENCRYPTED)
+      assertThat(requests.getLast().path("input").toString()).contains("opaque-one+/=", "opaque-two+/=");
+    assertThat(grant.toString()).doesNotContain("opaque-one", "opaque-two");
+
+    var changedParts = new java.util.ArrayList<>(first.getParts());
+    changedParts.add(org.springframework.ai.chat.messages.part.TextPart.of("unapproved addition"));
+    var changed = AssistantMessage.builder().parts(changedParts).properties(first.getMetadata()).build();
+    assertThatThrownBy(() -> models.chatModel(LlmFeature.CHAT).call(new Prompt(
+        List.of(changed, new UserMessage("second")), granted))).isInstanceOf(IllegalArgumentException.class);
+    var other = new dev.mikoto2000.rei.core.chat.AgentRunContext(
+        "other", "chat", protocolDirectory, "project");
+    var wrongTarget = models.requestOptions(LlmFeature.CHAT, null, true, other).mutate()
+        .toolContext(Map.of(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY, grant)).build();
+    assertThatThrownBy(() -> models.chatModel(LlmFeature.CHAT).call(new Prompt(
+        List.of(historical, new UserMessage("second")), wrongTarget))).isInstanceOf(IllegalArgumentException.class);
+    var unpublished = previousExchange.withKey("unpublished").reference(first);
+    var runOnlyPointer = Map.of(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_ID, unpublished.id(),
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_HASH, unpublished.sha256(),
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_OWNER, "completed:previous");
+    assertThatThrownBy(() -> protocolStore.historyReplayGrant(currentExchange, List.of(runOnlyPointer), origin))
+        .isInstanceOf(IllegalStateException.class);
+    assertThat(requests).hasSize(2);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
       dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.class)
   void mainChatExecutionUsesTheAcceptedNativeOptionsWithoutChatCasts(

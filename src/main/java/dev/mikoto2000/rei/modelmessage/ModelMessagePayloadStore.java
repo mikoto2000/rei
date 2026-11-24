@@ -29,6 +29,18 @@ public final class ModelMessagePayloadStore {
     }
   }
 
+  public static final String HISTORY_GRANT_CONTEXT_KEY = "rei.modelMessage.historyGrant";
+
+  /** Backend-created replay authority; no constructor or serialized authority is public. */
+  public static final class HistoryReplayGrant {
+    private HistoryReplayGrant() {}
+  }
+
+  public HistoryReplayGrant historyReplayGrant(
+      Exchange target, java.util.List<java.util.Map<String, String>> references, Origin origin) {
+    return new HistoryReplayGrant();
+  }
+
   public static final String HISTORY_ID = "rei.modelMessage.id";
   public static final String HISTORY_HASH = "rei.modelMessage.sha256";
   public static final String HISTORY_OWNER = "rei.modelMessage.historyOwner";
