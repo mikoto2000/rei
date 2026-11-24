@@ -28,7 +28,7 @@ class NativeClassificationRuleOptionsTest {
             .maxOutputTokens(providerLimit)
             .build();
     String schema =
-        "{\"name\":\"fixture_rule\",\"schema\":{\"type\":\"object\",\"properties\":{\"rule\":{\"type\":\"string\"}},\"required\":[\"rule\"],\"additionalProperties\":false}}";
+        "{\"type\":\"object\",\"properties\":{\"rule\":{\"type\":\"string\"}},\"required\":[\"rule\"],\"additionalProperties\":false}";
     when(model.call(any(Prompt.class)))
         .thenAnswer(invocation -> {
           Prompt prompt = invocation.getArgument(0);

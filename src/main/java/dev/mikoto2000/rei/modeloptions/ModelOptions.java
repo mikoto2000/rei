@@ -120,15 +120,14 @@ public final class ModelOptions {
     } else throw new IllegalArgumentException("Unknown connection option protocol");
     try {
       var digest = java.security.MessageDigest.getInstance("SHA-256");
+      var connectionContext=options.getToolContext();
       for (var value :
           java.util.Arrays.asList(
               options.getClass().getName(),
               baseUrl,
               apiKey,
               options.getModel(),
-              options.getToolContext() == null
-                  ? null
-                  : options.getToolContext().get(ENDPOINT_CONTEXT_KEY))) {
+              connectionContext == null ? null : connectionContext.get(ENDPOINT_CONTEXT_KEY))) {
         digest.update((byte) (value == null ? 0 : 1));
         if (value != null) {
           byte[] bytes = value.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
