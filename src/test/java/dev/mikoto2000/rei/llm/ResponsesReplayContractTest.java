@@ -788,6 +788,64 @@ class ResponsesReplayContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void actualNativeSendPersistsItsCompleteInputBeforeHttp(boolean assembled) throws Exception {
+    contentType = "text/event-stream";
+    replies.add(sse(done()));
+    var models = nativeProvider(nativeProperties());
+    var owner = new dev.mikoto2000.rei.core.chat.AgentRunContext("snapshot", "chat", protocolDirectory, "project");
+    var budget = new OutputLimitRunBudget(2, 8);
+    budget.tryConsumeLlmCall();
+    var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(owner.runId(), budget,
+        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+    execution.setRunContext(owner);
+    var options = models.requestOptions(LlmFeature.CHAT, null, true, owner);
+    var values = new java.util.HashMap<>(options.getToolContext());
+    values.put(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution);
+    execution.setModelOptions(options.mutate().toolContext(null).toolContext(values).build());
+    var user = new org.springframework.ai.chat.messages.UserMessage("original input");
+    execution.preserveUserMessage(user);
+    var capturedBeforeHttp = new java.util.concurrent.atomic.AtomicBoolean();
+    execution.setToolResultsCheckpoint(ignored -> {
+      var history = execution.protocolHistorySnapshot();
+      if (history != null && history.input() != null && capturedBeforeHttp.compareAndSet(false, true))
+        assertThat(requests).as("publish full input before any HTTP side effect").isEmpty();
+    });
+    dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler = null;
+    if (assembled) {
+      assembler = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.contextbudget.ContextAssembler.class);
+      org.mockito.Mockito.when(assembler.assemble(org.mockito.ArgumentMatchers.any(),
+          org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+          .thenAnswer(call -> call.getArgument(0));
+      org.mockito.Mockito.when(assembler.reviewContinuation(org.mockito.ArgumentMatchers.any())).thenReturn("");
+    }
+    new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.CHAT), assembler)
+        .stream(new Prompt(List.of(new org.springframework.ai.chat.messages.SystemMessage("original instructions"), user),
+            execution.modelOptions())).blockLast();
+    assertThat(capturedBeforeHttp).isTrue();
+    var history = execution.protocolHistorySnapshot();
+    assertThat(history.input()).isNotNull();
+    var exchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) execution.modelOptions()
+        .getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    String checkpoint = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner("project", "task", 1);
+    protocolStore.protectCheckpoint(exchange.scope(), history, checkpoint);
+    var references = history.protectedEntries().stream().map(entry ->
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference(entry.reference(),
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, checkpoint)).toList();
+    var next = new dev.mikoto2000.rei.core.chat.AgentRunContext("resumed-snapshot", "chat", protocolDirectory, "project");
+    var restored = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(next.runId(), new OutputLimitRunBudget(2, 8),
+        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+    restored.setRunContext(next);
+    restored.setModelOptions(models.requestOptions(LlmFeature.CHAT, null, true, next));
+    restored.restoreProgress(execution.progressSnapshot(), references);
+    assertThat(restored.takeResumeMessages()).extracting(org.springframework.ai.chat.messages.Message::getText)
+        .containsExactly("original instructions", "original input", "done");
+    assertThat(requests).hasSize(1);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void completedHistoryFlowsThroughRealCoreAdvisorsAndTheNativeSdk(boolean compatible)
       throws Exception {
     contentType = "text/event-stream";
