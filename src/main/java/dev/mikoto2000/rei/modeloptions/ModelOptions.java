@@ -12,6 +12,9 @@ public final class ModelOptions {
 
   private ModelOptions() {}
 
+  public static String preparationFingerprint(org.springframework.ai.chat.prompt.Prompt prompt) { return ""; }
+
+
   /** Select explicitly published callbacks using the native automatic function-call shape. */
   public static ToolCallingChatOptions withTools(
       ToolCallingChatOptions options, List<org.springframework.ai.tool.ToolCallback> callbacks) {
