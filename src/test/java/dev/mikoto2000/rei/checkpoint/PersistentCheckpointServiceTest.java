@@ -98,8 +98,11 @@ class PersistentCheckpointServiceTest {
                         "rei.llm.replay-origin-endpoint",
                         origin.endpoint()))
                 .build());
-    var systemRef = original.withKey("instructions").reference(
-        new org.springframework.ai.chat.messages.SystemMessage("original instructions"));
+    var systemRef =
+        original
+            .withKey("instructions")
+            .reference(
+                new org.springframework.ai.chat.messages.SystemMessage("original instructions"));
     var history =
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
             1,
@@ -110,9 +113,13 @@ class PersistentCheckpointServiceTest {
                     "input/USER", input),
                 new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
                     original.key() + "/ASSISTANT", answer)),
-            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Input(List.of(
-                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("instructions/SYSTEM", systemRef),
-                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("input/USER", input)), 1));
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Input(
+                List.of(
+                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                        "instructions/SYSTEM", systemRef),
+                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                        "input/USER", input)),
+                1));
     service.preserveResults(
         owner,
         List.of(),

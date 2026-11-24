@@ -14,8 +14,14 @@ public final class ModelMessageTransactions {
    */
   public static boolean completeProtocol(List<Message> messages) {
     if (messages.isEmpty()) return false;
-    var first = messages.stream().filter(message -> !(message instanceof org.springframework.ai.chat.messages.SystemMessage)).findFirst();
-    if (first.isEmpty() || !(first.orElseThrow() instanceof org.springframework.ai.chat.messages.UserMessage)) return false;
+    var first =
+        messages.stream()
+            .filter(
+                message -> !(message instanceof org.springframework.ai.chat.messages.SystemMessage))
+            .findFirst();
+    if (first.isEmpty()
+        || !(first.orElseThrow() instanceof org.springframework.ai.chat.messages.UserMessage))
+      return false;
     var boundaries = completePrefixes(messages);
     if (!boundaries.isEmpty() && boundaries.getLast() == messages.size()) return true;
     return messages.getLast() instanceof org.springframework.ai.chat.messages.UserMessage

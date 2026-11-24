@@ -21,33 +21,68 @@ class ModelMessagePayloadStoreTest {
   void legacyInputKeepsTextWithoutTurningUnownedProtocolPartsIntoReplayAuthority(boolean opaque) {
     var store = new ModelMessagePayloadStore(source());
     var exchange = new ModelMessagePayloadStore.Exchange(store, owner, "current", "input");
-    var assistant = opaque
-        ? AssistantMessage.builder().parts(List.of(new ReasoningPart(null, null,
-            new OpaquePayload("openai", "reasoning", "unowned fixture"), Map.of("id", "rs_unowned")))).build()
-        : AssistantMessage.builder().content("historical display text").properties(Map.of(
-            "source", "WEB", "sourceId", "fixture", "rei.modelMessage.endpoint", "old-endpoint")).build();
+    var assistant =
+        opaque
+            ? AssistantMessage.builder()
+                .parts(
+                    List.of(
+                        new ReasoningPart(
+                            null,
+                            null,
+                            new OpaquePayload("openai", "reasoning", "unowned fixture"),
+                            Map.of("id", "rs_unowned"))))
+                .build()
+            : AssistantMessage.builder()
+                .content("historical display text")
+                .properties(
+                    Map.of(
+                        "source",
+                        "WEB",
+                        "sourceId",
+                        "fixture",
+                        "rei.modelMessage.endpoint",
+                        "old-endpoint"))
+                .build();
     if (opaque) {
       var ref = store.save(owner, "previous", "opaque", assistant);
       store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
-      assertThatThrownBy(() -> store.restoreReplayGrant(exchange, List.of(new ModelMessagePayloadStore.ReplayReference(
-          ref, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint")),
-          new ModelMessagePayloadStore.Origin(exchange.ownerKey(), "endpoint")))
+      assertThatThrownBy(() ->
+              store.restoreReplayGrant(
+                  exchange,
+                  List.of(
+                      new ModelMessagePayloadStore.ReplayReference(
+                          ref, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint")),
+                  new ModelMessagePayloadStore.Origin(exchange.ownerKey(), "endpoint")))
           .isInstanceOf(IllegalStateException.class);
       return;
     }
     var ref = store.saveForContinuation(owner, "current", "legacy-input", assistant);
     store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.RUN, "current");
-    store.protectCheckpoint(owner, new ModelMessagePayloadStore.History(1, "current",
-        new ModelMessagePayloadStore.Origin(exchange.ownerKey(), "endpoint"),
-        List.of(new ModelMessagePayloadStore.History.Entry("legacy/ASSISTANT", ref))), "checkpoint");
-    var grant = store.restoreReplayGrant(exchange, List.of(new ModelMessagePayloadStore.ReplayReference(
-        ref, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint")),
-        new ModelMessagePayloadStore.Origin(exchange.ownerKey(), "endpoint"));
+    store.protectCheckpoint(
+        owner,
+        new ModelMessagePayloadStore.History(
+            1,
+            "current",
+            new ModelMessagePayloadStore.Origin(exchange.ownerKey(), "endpoint"),
+            List.of(new ModelMessagePayloadStore.History.Entry("legacy/ASSISTANT", ref))),
+        "checkpoint");
+    var grant =
+        store.restoreReplayGrant(
+            exchange,
+            List.of(
+                new ModelMessagePayloadStore.ReplayReference(
+                    ref, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint")),
+            new ModelMessagePayloadStore.Origin(exchange.ownerKey(), "endpoint"));
     var restored = (AssistantMessage) store.load(owner, ref);
     assertThat(restored.getText()).isEqualTo("historical display text");
     assertThat(restored.getParts()).allMatch(part -> part instanceof TextPart);
-    assertThat(restored.getMetadata()).doesNotContainKeys("source", "sourceId", "rei.modelMessage.endpoint",
-        "rei.llm.replay-origin-owner", "rei.llm.replay-origin-endpoint");
+    assertThat(restored.getMetadata())
+        .doesNotContainKeys(
+            "source",
+            "sourceId",
+            "rei.modelMessage.endpoint",
+            "rei.llm.replay-origin-owner",
+            "rei.llm.replay-origin-endpoint");
     assertThat(grant.permits(restored, exchange.ownerKey(), "endpoint")).isTrue();
   }
 

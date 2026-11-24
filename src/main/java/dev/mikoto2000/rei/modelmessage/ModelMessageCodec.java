@@ -44,9 +44,18 @@ public final class ModelMessageCodec {
           "rei.llm.replay-origin-endpoint",
           "rei.historySequence",
           "JdbcChatMemoryRepository_message_timestamp",
-          "rei.reviewGuidance", "rei.progressFeedback", "rei.resumeWorkReminder", "rei.resumeContext",
-          "rei.knownFileInventory", "rei.workingSet", "rei.workContext", "rei.longTermMemory",
-          "rei.legacyHistory", "rei.outputLimitHandoff", "rei.resumeRunId", "rei.historyGeneration",
+          "rei.reviewGuidance",
+          "rei.progressFeedback",
+          "rei.resumeWorkReminder",
+          "rei.resumeContext",
+          "rei.knownFileInventory",
+          "rei.workingSet",
+          "rei.workContext",
+          "rei.longTermMemory",
+          "rei.legacyHistory",
+          "rei.outputLimitHandoff",
+          "rei.resumeRunId",
+          "rei.historyGeneration",
           "rei.reviewBudgetRecovery",
           "rei.fileBudgetRecovery",
           ModelTokenUsage.METADATA_KEY);
@@ -313,7 +322,10 @@ public final class ModelMessageCodec {
             number(value, "cached"),
             number(value, "reasoning"));
       }
-      case "rei.llm.replay-origin-owner", "rei.llm.replay-origin-endpoint", "rei.resumeRunId", "rei.historyGeneration" -> {
+      case "rei.llm.replay-origin-owner",
+          "rei.llm.replay-origin-endpoint",
+          "rei.resumeRunId",
+          "rei.historyGeneration" -> {
         if (!value.isTextual()) throw invalid();
         yield value.textValue();
       }
@@ -322,9 +334,18 @@ public final class ModelMessageCodec {
           throw invalid();
         yield value.longValue();
       }
-      case "rei.reviewBudgetRecovery", "rei.fileBudgetRecovery", "rei.reviewGuidance", "rei.progressFeedback",
-          "rei.resumeWorkReminder", "rei.resumeContext", "rei.knownFileInventory", "rei.workingSet", "rei.workContext",
-          "rei.longTermMemory", "rei.legacyHistory", "rei.outputLimitHandoff" -> {
+      case "rei.reviewBudgetRecovery",
+          "rei.fileBudgetRecovery",
+          "rei.reviewGuidance",
+          "rei.progressFeedback",
+          "rei.resumeWorkReminder",
+          "rei.resumeContext",
+          "rei.knownFileInventory",
+          "rei.workingSet",
+          "rei.workContext",
+          "rei.longTermMemory",
+          "rei.legacyHistory",
+          "rei.outputLimitHandoff" -> {
         if (!value.isBoolean()) throw invalid();
         yield value.booleanValue();
       }
