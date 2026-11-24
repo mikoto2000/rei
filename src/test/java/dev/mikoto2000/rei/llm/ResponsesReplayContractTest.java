@@ -907,8 +907,10 @@ class ResponsesReplayContractTest {
     assertThat(requests.getLast().path("instructions").asText()).isEqualTo("original instructions");
     if (change.equals("context-data")) {
       assertThat(requests.getLast().path("input").toString()).contains("previous work context", "updated work context");
-      assertThat(java.util.stream.StreamSupport.stream(requests.getLast().path("input").spliterator(), false)
-          .filter(item -> "developer".equals(item.path("role").asText())).count()).isEqualTo(2);
+      for (String expectedContext : List.of("previous work context", "updated work context"))
+        assertThat(java.util.stream.StreamSupport.stream(requests.getLast().path("input").spliterator(), false)
+            .filter(item -> "developer".equals(item.path("role").asText())
+                && item.path("content").toString().contains(expectedContext)).count()).isEqualTo(1);
     }
     assertThat(requests.getLast().path("input").toString())
         .contains("original request")
