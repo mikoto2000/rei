@@ -351,9 +351,9 @@ public final class StagnationChatModel implements ChatModel {
           assemblePrompt == null || context.runContext() == null
               ? Flux.defer(() -> {
                 context.checkModelTokenBudget();
-                invoked.set(true);
                 var outbound = projectTools(invocationPrompt, context);
                 context.captureModelInput(outbound);
+                invoked.set(true);
                 sent.set(outbound);
                 return StreamTimeoutRetry.stream(
                     delegate, outbound, context, maxStreamTimeoutRetries, aggregate::set);
@@ -382,9 +382,9 @@ public final class StagnationChatModel implements ChatModel {
                   .flatMapMany(projected -> {
                     context.checkActive();
                     context.checkModelTokenBudget();
-                    invoked.set(true);
                     var outbound = projectTools(projected, context);
                     context.captureModelInput(outbound);
+                    invoked.set(true);
                     sent.set(outbound);
                     return StreamTimeoutRetry.stream(
                         delegate, outbound, context, maxStreamTimeoutRetries, aggregate::set);
