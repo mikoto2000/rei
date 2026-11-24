@@ -16,10 +16,18 @@ public final class ModelOptions {
   public static ToolCallingChatOptions withTools(
       ToolCallingChatOptions options, List<org.springframework.ai.tool.ToolCallback> callbacks) {
     if (callbacks.isEmpty()) return withoutTools(options);
-    if (options instanceof OpenAiResponsesChatOptions responses)
-      return responses.mutate().toolCallbacks(callbacks).toolChoice("auto").build();
-    if (options instanceof OpenAiChatOptions chat)
-      return chat.mutate().toolCallbacks(callbacks).toolChoice("auto").build();
+    if (options instanceof OpenAiResponsesChatOptions responses) {
+      var builder = responses.mutate();
+      builder.toolCallbacks(callbacks);
+      builder.toolChoice("auto");
+      return builder.build();
+    }
+    if (options instanceof OpenAiChatOptions chat) {
+      var builder = chat.mutate();
+      builder.toolCallbacks(callbacks);
+      builder.toolChoice("auto");
+      return builder.build();
+    }
     return options.mutate().toolCallbacks(callbacks).build();
   }
 

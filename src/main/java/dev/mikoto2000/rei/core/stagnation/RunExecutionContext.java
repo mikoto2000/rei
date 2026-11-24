@@ -33,10 +33,10 @@ import java.util.UUID;
  * <p>One user run, explicitly passed in ToolContext across reactive scheduler boundaries.
  */
 public class RunExecutionContext {
-  private org.springframework.ai.model.tool.ToolCallingChatOptions modelOptions;
-  private List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
+  private volatile org.springframework.ai.model.tool.ToolCallingChatOptions modelOptions;
+  private volatile List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
       resumeReplayReferences = List.of();
-  private dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History resumeProtocolHistory;
+  private volatile dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History resumeProtocolHistory;
 
   /** Capture once at acceptance; each request receives a copy of the same effective options. */
   public void setModelOptions(org.springframework.ai.model.tool.ToolCallingChatOptions options) {
@@ -1811,7 +1811,7 @@ public class RunExecutionContext {
   }
 
   /** 実行文脈。 */
-  private dev.mikoto2000.rei.core.chat.AgentRunContext runContext;
+  private volatile dev.mikoto2000.rei.core.chat.AgentRunContext runContext;
 
   /** 実行の停滞への対処で使用する実行文脈を設定する。 */
   public void setRunContext(dev.mikoto2000.rei.core.chat.AgentRunContext context) {
