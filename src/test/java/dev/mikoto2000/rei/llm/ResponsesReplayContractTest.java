@@ -88,6 +88,58 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(value = ReasoningReplayMode.class, names = {"ENCRYPTED", "NONE"})
+  void acceptedNativeOwnersStayDistinctAcrossRunsAndCredentialRotation(ReasoningReplayMode replay) {
+    var properties = nativeProperties();
+    var server = properties.feature(LlmFeature.CHAT);
+    server.setReasoningReplay(replay);
+    properties.setFeature(LlmFeature.CHAT, server);
+    var provider = nativeProvider(properties);
+    var parent = new dev.mikoto2000.rei.core.chat.AgentRunContext("parent", "chat", protocolDirectory, "project");
+    var child = new dev.mikoto2000.rei.core.chat.AgentRunContext("child", "subagent:child", protocolDirectory, "project");
+    var parentOptions = provider.requestOptions(LlmFeature.CHAT, null, true, parent);
+    var childOptions = provider.requestOptions(LlmFeature.CHAT, null, true, child);
+    var parentExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) parentOptions.getToolContext()
+        .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var childExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) childOptions.getToolContext()
+        .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    assertThat(parentExchange.scope()).isEqualTo(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(parent));
+    assertThat(childExchange.scope()).isEqualTo(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(child));
+    assertThat(parentExchange.ownerKey()).isNotEqualTo(childExchange.ownerKey());
+    var again = provider.requestOptions(LlmFeature.CHAT, null, true, parent);
+    var againExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) again.getToolContext()
+        .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    assertThat(againExchange.ownerKey()).isEqualTo(parentExchange.ownerKey());
+    assertThat(againExchange.key()).isNotEqualTo(parentExchange.key());
+    replies.add(replay == ReasoningReplayMode.ENCRYPTED ? reasoningDone() : done());
+    var first = provider.chatModel(LlmFeature.CHAT).call(new Prompt("fixture", parentOptions)).getResult().getOutput();
+    var ref = parentExchange.reference(first);
+    var saved = protocolStore.load(parentExchange.scope(), ref,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, parent.runId());
+    assertThatThrownBy(() -> protocolStore.load(childExchange.scope(), ref)).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> provider.chatModel(LlmFeature.CHAT).call(new Prompt(List.of(saved, new UserMessage("continue")), childOptions)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("owner");
+    assertThat(requests).hasSize(1);
+    provider.chatModel(LlmFeature.CHAT).call(new Prompt(List.of(saved, new UserMessage("continue")), again));
+    server.setApiKey("rotated-fixture-key");
+    properties.setFeature(LlmFeature.CHAT, server);
+    var rotated = nativeProvider(properties);
+    assertThat(rotated.resolvedEndpoint(LlmFeature.CHAT).fingerprint()).isEqualTo(provider.resolvedEndpoint(LlmFeature.CHAT).fingerprint());
+    rotated.chatModel(LlmFeature.CHAT).call(new Prompt(List.of(saved, new UserMessage("continue")),
+        rotated.requestOptions(LlmFeature.CHAT, null, true, parent)));
+    assertThat(requests).hasSize(3);
+    server.setEndpointGeneration(8);
+    properties.setFeature(LlmFeature.CHAT, server);
+    var changed = nativeProvider(properties);
+    assertThatThrownBy(() -> changed.chatModel(LlmFeature.CHAT).call(new Prompt(List.of(saved, new UserMessage("continue")),
+        changed.requestOptions(LlmFeature.CHAT, null, true, parent))))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("endpoint");
+    assertThat(requests).hasSize(3);
+    assertThat(protocolStore.usage(parentExchange.scope(), parent.runId()).runCumulativeBytes()).isPositive();
+    assertThat(protocolStore.usage(childExchange.scope(), child.runId()).runCumulativeBytes()).isZero();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
       dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.class)
   void mainChatExecutionUsesTheAcceptedNativeOptionsWithoutChatCasts(
@@ -102,10 +154,7 @@ class ResponsesReplayContractTest {
             "fixture-project",
             dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB,
             mode);
-    var models = LlmModelProvider.forResponsesFixture(
-        org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class), nativeProperties(), httpCustomizers());
-    var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory(Map.of("payloads", payloads()));
-    models.configureModelMessagePayloads(beans.getBeanProvider(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class));
+    var models = nativeProvider(nativeProperties());
     var nativeModel = models.chatModel(LlmFeature.CHAT);
     var holder = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
     org.mockito.Mockito.when(holder.get()).thenReturn("fixture-model");
@@ -1126,6 +1175,14 @@ class ResponsesReplayContractTest {
         options.getMaxOutputTokens(),
         null,
         Duration.ofMinutes(5));
+  }
+
+  private LlmModelProvider nativeProvider(LlmProperties properties) {
+    var provider = LlmModelProvider.forResponsesFixture(
+        org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class), properties, httpCustomizers());
+    var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory(Map.of("payloads", payloads()));
+    provider.configureModelMessagePayloads(beans.getBeanProvider(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class));
+    return provider;
   }
 
   private LlmProperties nativeProperties() {
