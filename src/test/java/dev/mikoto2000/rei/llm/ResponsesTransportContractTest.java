@@ -624,6 +624,59 @@ class ResponsesTransportContractTest {
     }
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+      "true,text_done", "true,reasoning_done", "true,function_added", "true,index_done",
+      "true,text_terminal", "true,refusal_terminal", "false,text_terminal", "false,refusal_terminal"})
+  void malformedNestedItemsCannotReachSdkOrAggregatorLogs(boolean streaming, String defect)
+      throws Exception {
+    var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+    var captured = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    captured.start();
+    logger.addAppender(captured);
+    try {
+      var mapper = new ObjectMapper();
+      var response = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(completed());
+      var item = (com.fasterxml.jackson.databind.node.ObjectNode) response.path("output").get(0);
+      var secret = mapper.createObjectNode().put("PRIVATE-nested-canary", "PRIVATE-value");
+      if (defect.equals("reasoning_done")) {
+        item = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree("{\"type\":\"reasoning\",\"id\":\"rs_fixture\",\"summary\":[],\"status\":\"completed\",\"content\":[{\"type\":\"reasoning_text\",\"text\":\"temporary\"}]}");
+        ((com.fasterxml.jackson.databind.node.ObjectNode) item.path("content").get(0)).set("text", secret);
+      } else if (defect.equals("function_added")) {
+        item = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree("{\"type\":\"function_call\",\"id\":\"fc_fixture\",\"call_id\":\"call_fixture\",\"name\":\"temporary\",\"arguments\":\"\",\"status\":\"in_progress\"}");
+        item.set("name", secret);
+      } else if (!defect.equals("index_done")) {
+        var content = (com.fasterxml.jackson.databind.node.ObjectNode) item.path("content").get(0);
+        if (defect.equals("refusal_terminal")) {
+          content.put("type", "refusal");
+          content.remove("text");
+          content.set("refusal", secret);
+        } else content.set("text", secret);
+      }
+      contentType = streaming ? "text/event-stream" : "application/json";
+      if (!streaming) reply = response.toString();
+      else if (defect.endsWith("terminal")) reply = event("response.completed", "\"response\":" + response);
+      else reply = event(defect.equals("function_added") ? "response.output_item.added" : "response.output_item.done",
+          "\"output_index\":" + (defect.equals("index_done") ? secret.toString() : "0") + ",\"item\":" + item)
+          + event("response.completed", "\"response\":" + completed());
+      var options = options().build();
+      assertThatThrownBy(() -> {
+        if (streaming) transport(options).stream(new Prompt("fixture", options)).collectList().block();
+        else transport(options).call(new Prompt("fixture", options));
+      }).isInstanceOf(ResponsesTransportException.class).hasMessageContaining("INVALID_RESPONSE")
+          .hasMessageNotContaining("PRIVATE-").hasNoCause();
+      for (var logged : captured.list) {
+        assertThat(logged.getFormattedMessage()).doesNotContain("PRIVATE-");
+        if (logged.getThrowableProxy() != null)
+          assertThat(ch.qos.logback.classic.spi.ThrowableProxyUtil.asString(logged.getThrowableProxy()))
+              .doesNotContain("PRIVATE-");
+      }
+    } finally {
+      logger.detachAppender(captured);
+      captured.stop();
+    }
+  }
+
   @Test
   void cancellationClosesNativeSseBodyAndDoesNotRequireCompletion() {
     contentType = "text/event-stream";
