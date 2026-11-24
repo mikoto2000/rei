@@ -75,6 +75,9 @@ class CheckpointProtocolResumeTest {
     execution.restoreProgress(progress, references);
     assertThat(execution.protocolHistorySnapshot().run()).isEqualTo("new");
     assertThat(execution.protocolHistorySnapshot().entries()).isEqualTo(history.entries());
+    execution.preserveUserMessage(new UserMessage("host checkpoint resume control"));
+    assertThat(execution.protocolHistorySnapshot().entries()).as("do not archive a replaced host control as model input")
+        .isEqualTo(history.entries());
     assertThat(execution.takeResumeMessages()).hasSize(3).element(1).isEqualTo(assistant);
     assertThat(execution.modelOptions().getToolContext()).containsKey(ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY);
     var active = (ModelMessagePayloadStore.Exchange) execution.modelOptions().getToolContext()
