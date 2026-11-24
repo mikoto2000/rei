@@ -64,12 +64,11 @@ public class OutputLimitReplanner {
     Prompt prompt =
         new Prompt(
             buildPrompt(request),
-            modelProvider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, modelHolderService.get()));
+            dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(modelProvider.requestOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, modelHolderService.get(), false)));
     ChatResponse response;
     try {
       var model = modelProvider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER);
-      if (usageRecorder != null)
-        dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+      dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
       response = model.call(prompt);
     } catch (RuntimeException | Error error) {
       if (error instanceof RuntimeException runtime)

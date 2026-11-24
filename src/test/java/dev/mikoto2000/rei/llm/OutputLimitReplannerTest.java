@@ -55,8 +55,6 @@ class OutputLimitReplannerTest {
     when(holder.get()).thenReturn("main");
     when(provider.requestOptions(LlmFeature.OUTPUT_LIMIT_PLANNER,"main",false))
         .thenReturn(OpenAiChatOptions.builder().model("planner").build());
-    when(provider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER,"main"))
-        .thenReturn(OpenAiChatOptions.builder().model("planner").build());
     when(provider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER)).thenReturn(model);
     var callback=Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
     when(callback.getToolDefinition()).thenReturn(org.springframework.ai.tool.definition.ToolDefinition.builder()
@@ -79,7 +77,7 @@ class OutputLimitReplannerTest {
     properties.setMaxOutputTokens(2048);
     when(modelHolderService.get()).thenReturn("default-model");
     when(modelProvider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER)).thenReturn(chatModel);
-    when(modelProvider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, "default-model"))
+    when(modelProvider.requestOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, "default-model", false))
         .thenReturn(OpenAiChatOptions.builder().model("default-model").maxTokens(2048).build());
     when(chatModel.call(any(Prompt.class)))
         .thenReturn(
@@ -122,7 +120,7 @@ class OutputLimitReplannerTest {
     var holder = Mockito.mock(ModelHolderService.class);
     when(holder.get()).thenReturn("model");
     when(provider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER)).thenReturn(model);
-    when(provider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, "model"))
+    when(provider.requestOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, "model", false))
         .thenReturn(OpenAiChatOptions.builder().model("model").build());
     when(model.call(any(Prompt.class)))
         .thenReturn(
@@ -148,7 +146,7 @@ class OutputLimitReplannerTest {
     var holder = Mockito.mock(ModelHolderService.class);
     when(holder.get()).thenReturn("model");
     when(provider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER)).thenReturn(model);
-    when(provider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, "model"))
+    when(provider.requestOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, "model", false))
         .thenReturn(OpenAiChatOptions.builder().model("model").build());
     var fatal = new AssertionError("model failed");
     var accounting = new IllegalStateException("usage unknown");
