@@ -34,6 +34,8 @@ class ConversationLogStoreTest {
         "rei.modelMessage.run", "run"));
     store.append("chat", "assistant", "display answer");
     var restarted = new ConversationLogStore(tempDir, Clock.systemUTC(), mapper);
+    assertThat(restarted.appendProtocolHistory("chat", "run", pointers))
+        .as("retry after restart reuses the exact committed protocol sequence range").isEqualTo(committed);
     assertThat(restarted.readAll()).extracting(ConversationLogEntry::content)
         .containsExactly("display request", "display answer");
     assertThat(restarted.readConversation("chat")).extracting(ConversationLogEntry::sequence)
