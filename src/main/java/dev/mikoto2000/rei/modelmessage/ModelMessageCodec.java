@@ -8,6 +8,8 @@ import java.util.Set;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.messages.SystemMessage;
 import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata;
 import org.springframework.ai.chat.messages.part.MessagePart;
 import org.springframework.ai.chat.messages.part.OpaquePayload;
@@ -19,23 +21,25 @@ import org.springframework.ai.chat.messages.part.StreamingParts;
 /** Versioned model-message serialization, independent of transport, storage and execution. */
 public final class ModelMessageCodec {
   public static final int MAX_BYTES = 8 * 1024 * 1024;
-  private static final Set<String> METADATA = Set.of("rei.llm.replay-origin-owner", "rei.llm.replay-origin-endpoint");
+  private static final Set<String> METADATA = Set.of("rei.llm.replay-origin-owner", "rei.llm.replay-origin-endpoint",
+      "rei.historySequence", "JdbcChatMemoryRepository_message_timestamp", "rei.reviewBudgetRecovery", "rei.fileBudgetRecovery");
   private static final ObjectMapper JSON = new ObjectMapper(com.fasterxml.jackson.core.JsonFactory.builder()
       .enable(com.fasterxml.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
       .streamReadConstraints(com.fasterxml.jackson.core.StreamReadConstraints.builder()
           .maxNestingDepth(32).maxStringLength(MAX_BYTES).build()).build())
-      .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+      .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+      .enable(com.fasterxml.jackson.databind.SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
 
   public byte[] encode(Message message) {
-    if (!(message instanceof AssistantMessage || message instanceof ToolResponseMessage)) throw invalid();
+    if (!(message instanceof AssistantMessage || message instanceof ToolResponseMessage
+        || message instanceof UserMessage || message instanceof SystemMessage)) throw invalid();
     var root = JSON.createObjectNode().put("schemaVersion", 1)
-        .put("role", message instanceof AssistantMessage ? "assistant" : "tool");
+        .put("role", message.getMessageType().name().toLowerCase(java.util.Locale.ROOT));
     var parts = root.putArray("parts");
     if (message instanceof AssistantMessage assistant) {
       if (assistant.getParts().size() > 1024) throw invalid();
       assistant.getParts().forEach(part -> parts.add(encodePart(part)));
-    } else {
-      var tool = (ToolResponseMessage) message;
+    } else if (message instanceof ToolResponseMessage tool) {
       if (tool.getResponses().size() > 1024) throw invalid();
       var ids = new java.util.HashSet<String>();
       for (var response : tool.getResponses()) {
@@ -44,15 +48,17 @@ public final class ModelMessageCodec {
         decodeResult(part);
         if (!ids.add(response.id())) throw invalid();
       }
+    } else {
+      if (message instanceof UserMessage user && !user.getMedia().isEmpty()) throw invalid();
+      parts.add(encodePart(TextPart.of(message.getText())));
     }
     var metadata = root.putObject("metadata");
     if (message instanceof ToolResponseMessage tool) metadata.set("delivery", encodeDelivery(tool));
-    for (var entry : message.getMetadata().entrySet()) {
+    for (var entry : new java.util.TreeMap<>(message.getMetadata()).entrySet()) {
       if (entry.getKey().equals("messageType")) continue;
       if (message instanceof ToolResponseMessage && Set.of("rei.deliveryPolicies", "rei.losslessPages",
           "rei.reviewReceipts", "rei.fileReadBudgets").contains(entry.getKey())) continue;
-      if (!METADATA.contains(entry.getKey()) || !(entry.getValue() instanceof String)) throw invalid();
-      metadata.put(entry.getKey(), (String) entry.getValue());
+      metadata.set(entry.getKey(), encodeProperty(entry.getKey(), entry.getValue()));
     }
     try {
       byte[] bytes = JSON.writeValueAsBytes(root);
@@ -69,13 +75,13 @@ public final class ModelMessageCodec {
       fields(root, Set.of("schemaVersion", "role", "parts", "metadata"));
       if (!root.path("schemaVersion").isInt() || root.path("schemaVersion").intValue() != 1) throw invalid();
       String role = required(root, "role");
-      if (!role.equals("assistant") && !role.equals("tool")) throw invalid();
+      if (!Set.of("assistant", "tool", "user", "system").contains(role)) throw invalid();
       if (!root.path("parts").isArray() || root.path("parts").size() > 1024) throw invalid();
       var parts = new java.util.ArrayList<MessagePart>();
       var results = new java.util.ArrayList<ToolResponseMessage.ToolResponse>();
       var ids = new java.util.HashSet<String>();
       for (var part : root.path("parts")) {
-        if (role.equals("assistant")) parts.add(decodePart(part));
+        if (!role.equals("tool")) parts.add(decodePart(part));
         else {
           var result = decodeResult(part);
           if (!ids.add(result.id())) throw invalid();
@@ -88,8 +94,7 @@ public final class ModelMessageCodec {
       fields(root.path("metadata"), allowed);
       root.path("metadata").properties().forEach(entry -> {
         if (entry.getKey().equals("delivery")) return;
-        if (!entry.getValue().isTextual()) throw invalid();
-        metadata.put(entry.getKey(), entry.getValue().textValue());
+        metadata.put(entry.getKey(), decodeProperty(entry.getKey(), entry.getValue()));
       });
       if (role.equals("tool")) {
         var raw = root.path("metadata").get("delivery");
@@ -98,8 +103,53 @@ public final class ModelMessageCodec {
         }
         return ToolResponseMessage.builder().responses(results).metadata(metadata).build();
       }
+      if (!role.equals("assistant")) {
+        if (parts.size() != 1 || !(parts.getFirst() instanceof TextPart text)
+            || text.payload() != null || !text.attributes().isEmpty()) throw invalid();
+        return role.equals("user") ? UserMessage.builder().text(text.text()).metadata(metadata).build()
+            : SystemMessage.builder().text(text.text()).metadata(metadata).build();
+      }
       return AssistantMessage.builder().parts(parts).properties(metadata).build();
     } catch (java.io.IOException | IllegalArgumentException failure) { throw invalid(); }
+  }
+
+  private static JsonNode encodeProperty(String key, Object value) {
+    if (!METADATA.contains(key)) throw invalid();
+    if (key.equals("JdbcChatMemoryRepository_message_timestamp")) {
+      if (!(value instanceof java.time.Instant instant)) throw invalid();
+      return JSON.getNodeFactory().textNode(instant.toString());
+    }
+    JsonNode node;
+    if (value instanceof String text) node = JSON.getNodeFactory().textNode(text);
+    else if (value instanceof Boolean flag) node = JSON.getNodeFactory().booleanNode(flag);
+    else if (value instanceof Long number) node = JSON.getNodeFactory().numberNode(number);
+    else if (value instanceof Integer number) node = JSON.getNodeFactory().numberNode(number);
+    else throw invalid();
+    decodeProperty(key, node);
+    return node;
+  }
+
+  private static Object decodeProperty(String key, JsonNode value) {
+    return switch (key) {
+      case "rei.llm.replay-origin-owner", "rei.llm.replay-origin-endpoint" -> {
+        if (!value.isTextual()) throw invalid();
+        yield value.textValue();
+      }
+      case "rei.historySequence" -> {
+        if (!value.isIntegralNumber() || !value.canConvertToLong() || value.longValue() < 0) throw invalid();
+        yield value.longValue();
+      }
+      case "rei.reviewBudgetRecovery", "rei.fileBudgetRecovery" -> {
+        if (!value.isBoolean()) throw invalid();
+        yield value.booleanValue();
+      }
+      case "JdbcChatMemoryRepository_message_timestamp" -> {
+        if (!value.isTextual()) throw invalid();
+        try { yield java.time.Instant.parse(value.textValue()); }
+        catch (java.time.format.DateTimeParseException malformed) { throw invalid(); }
+      }
+      default -> throw invalid();
+    };
   }
 
   private static JsonNode encodeDelivery(ToolResponseMessage tool) {
