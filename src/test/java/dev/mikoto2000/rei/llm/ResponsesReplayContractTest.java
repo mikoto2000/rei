@@ -1185,6 +1185,19 @@ class ResponsesReplayContractTest {
       dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.class)
   void mainChatExecutionUsesTheAcceptedNativeOptionsWithoutChatCasts(
       dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode) throws Exception {
+    completedNativeRun(mode, false);
+  }
+
+  @Test
+  void leaseCleanupFailureCannotChangeAnAlreadyDurableSuccessfulRun() throws Exception {
+    protocolStore = org.mockito.Mockito.spy(payloads());
+    org.mockito.Mockito.doThrow(new IllegalStateException("private retention database path"))
+        .when(protocolStore).releaseRun(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("fixture-run"));
+    completedNativeRun(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE, true);
+  }
+
+  private void completedNativeRun(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode,
+      boolean retainedAfterCleanupFailure) throws Exception {
     contentType = "text/event-stream";
     replies.add(sse(done()));
     var run =
@@ -1246,7 +1259,8 @@ class ResponsesReplayContractTest {
             run.runId());
     assertThat(saved.payloadCount()).as("original input and final assistant").isEqualTo(2);
     assertThat(saved.runCumulativeBytes()).isPositive();
-    assertThat(saved.referenceCount()).as("terminal Run leases are released after history publication").isEqualTo(2);
+    assertThat(saved.referenceCount()).as("terminal Run leases are released after history publication")
+        .isEqualTo(retainedAfterCleanupFailure ? 4 : 2);
     var protocolRows =
         logs.readConversation(run.conversationId()).stream()
             .filter(entry ->
