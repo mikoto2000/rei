@@ -7,6 +7,8 @@ import java.util.HashMap;
 import java.util.Set;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
+import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata;
 import org.springframework.ai.chat.messages.part.MessagePart;
 import org.springframework.ai.chat.messages.part.OpaquePayload;
 import org.springframework.ai.chat.messages.part.ReasoningPart;
@@ -25,14 +27,29 @@ public final class ModelMessageCodec {
       .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
   public byte[] encode(Message message) {
-    if (!(message instanceof AssistantMessage assistant)) throw invalid();
-    if (assistant.getParts().size() > 1024) throw invalid();
-    var root = JSON.createObjectNode().put("schemaVersion", 1).put("role", "assistant");
+    if (!(message instanceof AssistantMessage || message instanceof ToolResponseMessage)) throw invalid();
+    var root = JSON.createObjectNode().put("schemaVersion", 1)
+        .put("role", message instanceof AssistantMessage ? "assistant" : "tool");
     var parts = root.putArray("parts");
-    assistant.getParts().forEach(part -> parts.add(encodePart(part)));
+    if (message instanceof AssistantMessage assistant) {
+      if (assistant.getParts().size() > 1024) throw invalid();
+      assistant.getParts().forEach(part -> parts.add(encodePart(part)));
+    } else {
+      var tool = (ToolResponseMessage) message;
+      if (tool.getResponses().size() > 1024) throw invalid();
+      for (var response : tool.getResponses()) {
+        var part = parts.addObject().put("type", "tool_result").put("callId", response.id())
+            .put("name", response.name()).put("data", response.responseData());
+        decodeResult(part);
+      }
+    }
     var metadata = root.putObject("metadata");
-    for (var entry : assistant.getMetadata().entrySet()) {
+    if (message instanceof ToolResponseMessage tool)
+      metadata.set("delivery", JSON.valueToTree(ToolResultMetadata.capture(tool)));
+    for (var entry : message.getMetadata().entrySet()) {
       if (entry.getKey().equals("messageType")) continue;
+      if (message instanceof ToolResponseMessage && Set.of("rei.deliveryPolicies", "rei.losslessPages",
+          "rei.reviewReceipts", "rei.fileReadBudgets").contains(entry.getKey())) continue;
       if (!METADATA.contains(entry.getKey()) || !(entry.getValue() instanceof String)) throw invalid();
       metadata.put(entry.getKey(), (String) entry.getValue());
     }
@@ -49,19 +66,48 @@ public final class ModelMessageCodec {
     try {
       var root = JSON.readTree(bytes);
       fields(root, Set.of("schemaVersion", "role", "parts", "metadata"));
-      if (!root.path("schemaVersion").isInt() || root.path("schemaVersion").intValue() != 1
-          || !"assistant".equals(root.path("role").asText())) throw invalid();
+      if (!root.path("schemaVersion").isInt() || root.path("schemaVersion").intValue() != 1) throw invalid();
+      String role = required(root, "role");
+      if (!role.equals("assistant") && !role.equals("tool")) throw invalid();
       if (!root.path("parts").isArray() || root.path("parts").size() > 1024) throw invalid();
       var parts = new java.util.ArrayList<MessagePart>();
-      for (var part : root.path("parts")) parts.add(decodePart(part));
+      var results = new java.util.ArrayList<ToolResponseMessage.ToolResponse>();
+      var ids = new java.util.HashSet<String>();
+      for (var part : root.path("parts")) {
+        if (role.equals("assistant")) parts.add(decodePart(part));
+        else {
+          var result = decodeResult(part);
+          if (!ids.add(result.id())) throw invalid();
+          results.add(result);
+        }
+      }
       var metadata = new HashMap<String, Object>();
-      fields(root.path("metadata"), METADATA);
+      var allowed = new java.util.HashSet<>(METADATA);
+      if (role.equals("tool")) allowed.add("delivery");
+      fields(root.path("metadata"), allowed);
       root.path("metadata").properties().forEach(entry -> {
+        if (entry.getKey().equals("delivery")) return;
         if (!entry.getValue().isTextual()) throw invalid();
         metadata.put(entry.getKey(), entry.getValue().textValue());
       });
+      if (role.equals("tool")) {
+        var raw = root.path("metadata").get("delivery");
+        if (raw != null) {
+          fields(raw, Set.of("policies", "pages", "receipts", "fileReadBudgets"));
+          metadata.putAll(JSON.treeToValue(raw, ToolResultMetadata.class).restore());
+        }
+        return ToolResponseMessage.builder().responses(results).metadata(metadata).build();
+      }
       return AssistantMessage.builder().parts(parts).properties(metadata).build();
     } catch (java.io.IOException | IllegalArgumentException failure) { throw invalid(); }
+  }
+
+  private static ToolResponseMessage.ToolResponse decodeResult(JsonNode node) {
+    fields(node, Set.of("type", "callId", "name", "data"));
+    if (!"tool_result".equals(required(node, "type"))) throw invalid();
+    String id = required(node, "callId"), name = required(node, "name");
+    if (id.isBlank() || name.isBlank()) throw invalid();
+    return new ToolResponseMessage.ToolResponse(id, name, required(node, "data"));
   }
 
   private static ObjectNode encodePart(MessagePart part) {
