@@ -594,7 +594,7 @@ public class ApprovalContinuationStore {
                     d.managedParent(),
                     history));
         // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-        if (encoded.length() > 1048576 || messages.size() > 256)
+        if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576 || messages.size() > 256)
           throw new IllegalArgumentException("Approval guidance capacity exceeded");
         db.sql("UPDATE approval_continuations SET document=? WHERE approval=? AND state=?")
             .params(encoded, entry.approvalId(), entry.state())
