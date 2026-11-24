@@ -262,6 +262,8 @@ public class RunExecutionContext {
         .historyReferences(exchange.scope(), protocolHistory, "turn:" + exchange.run());
   }
 
+  public void captureModelInput(org.springframework.ai.chat.prompt.Prompt prompt) {}
+
   /** Save the original resolved input, including media, before sending or decorating it. */
   public void preserveUserMessage(org.springframework.ai.chat.messages.UserMessage message) {
     // The existing controlled-model prepare path replaces this host input with restored messages.

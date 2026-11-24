@@ -197,6 +197,8 @@ public final class ModelMessagePayloadStore {
       if (schemaVersion != 1 || entries.size() > 256) throw rejected();
     }
 
+    public java.util.List<Entry> replayEntries() { return entries; }
+
     public record Entry(String key, Ref reference) {
       public Entry {
         identifier(key);
