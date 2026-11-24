@@ -16,6 +16,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 
 /** Protocol pointers in existing Run progress, using only temporary SQLite storage. */
+@org.junit.jupiter.api.Tag("integration")
 class ModelProtocolHistoryTest {
   @TempDir Path directory;
 

@@ -124,11 +124,17 @@ public class RunExecutionContext {
       }
       entries.set(existing, entry);
     }
+    var previousHistory = protocolHistory;
     protocolHistory =
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
             1, exchange.run(), origin, entries);
-    // Use the existing checkpoint writer before any tool effect, including the first batch.
-    toolResultsCheckpoint.accept(List.of());
+    // The writer must see the proposed pointers, but failed publication is not accepted progress.
+    try {
+      toolResultsCheckpoint.accept(List.of());
+    } catch (RuntimeException | Error failed) {
+      protocolHistory = previousHistory;
+      throw failed;
+    }
   }
 
   /** Save the original resolved input, including media, before sending or decorating it. */

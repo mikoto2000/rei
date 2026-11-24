@@ -714,7 +714,10 @@ class ResponsesReplayContractTest {
             ignored -> {});
     execution.setRunContext(run);
     execution.setModelOptions(request);
+    var attempted = new java.util.concurrent.atomic.AtomicReference<
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History>();
     execution.setToolResultsCheckpoint(ignored -> {
+      attempted.set(execution.progressSnapshot().protocolHistory());
       throw new IllegalStateException("checkpoint unavailable");
     });
     var accepted =
@@ -733,7 +736,8 @@ class ResponsesReplayContractTest {
         .hasMessageNotContaining("opaque-one");
     assertThat(executions).hasValue(0);
     assertThat(requests).hasSize(1);
-    assertThat(execution.progressSnapshot().protocolHistory().entries()).hasSize(1);
+    assertThat(attempted.get().entries()).hasSize(1);
+    assertThat(execution.progressSnapshot().protocolHistory()).isNull();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
