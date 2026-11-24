@@ -15,8 +15,28 @@ public final class ModelMessagePayloadStore {
   public static final String HISTORY_HASH = "rei.modelMessage.sha256";
   public static final String HISTORY_OWNER = "rei.modelMessage.historyOwner";
 
-  public java.util.Map<String, String> historyReference(Scope scope, Ref ref, String owner) { throw rejected(); }
-  public java.util.Optional<Message> restoreHistory(Scope scope, java.util.Map<String, String> metadata) { return java.util.Optional.empty(); }
+  public java.util.Map<String, String> historyReference(Scope scope, Ref ref, String owner) {
+    publish(scope, ref, ReferenceKind.HISTORY, owner);
+    return java.util.Map.of(HISTORY_ID, ref.id(), HISTORY_HASH, ref.sha256(), HISTORY_OWNER, owner);
+  }
+
+  public static boolean hasHistoryReference(java.util.Map<String, String> metadata) {
+    return metadata != null && (metadata.containsKey(HISTORY_ID) || metadata.containsKey(HISTORY_HASH)
+        || metadata.containsKey(HISTORY_OWNER));
+  }
+
+  public java.util.Optional<Message> restoreHistory(Scope scope, java.util.Map<String, String> metadata) {
+    if (!hasHistoryReference(metadata)) return java.util.Optional.empty();
+    validate(scope);
+    String owner = metadata.get(HISTORY_OWNER);
+    identifier(owner);
+    var ref = new Ref(metadata.get(HISTORY_ID), metadata.get(HISTORY_HASH));
+    return transaction(db -> {
+      byte[] bytes = read(db, scope, ref);
+      if (scalar(db, "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='HISTORY' AND owner=?", ref.id(), owner) != 1) throw rejected();
+      return java.util.Optional.of(codec.decode(bytes));
+    });
+  }
 
   /** One existing tool-loop iteration, with its immutable persistence identity supplied by the caller. */
   public record Exchange(ModelMessagePayloadStore store, Scope scope, String run, String key) {
