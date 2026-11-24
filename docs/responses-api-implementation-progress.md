@@ -7,8 +7,8 @@
 | 0 | MERGED | codex/responses-api-phase-0-foundation / 削除済み | [#628](https://github.com/mikoto2000/rei/pull/628) | d0e3626f9565035cab20cc045dd3ba070985d3fe | PR・マージ後CI成功。全件7,718、成功7,706、skip12、failure/error0 |
 | 1 | MERGED | codex/responses-api-phase-1-transport / 削除済み | [#629](https://github.com/mikoto2000/rei/pull/629) | 10542db848d9317c7eaaab06869e63e7ab571d5b | 最終CI全件7,818、成功7,806、期待skip12、failure/error0。品質ゲート成功 |
 | 2 | MERGED | codex/responses-api-phase-2-openai-replay / 削除済み | [#630](https://github.com/mikoto2000/rei/pull/630) | a95593f48d0b4f760091d79eaf2cbc411e9a2f49 | PR・マージ後CI7,861件、成功7,849、期待skip12、failure/error0。関連859件・全品質ゲート成功 |
-| 3 | IN_PROGRESS | codex/responses-api-phase-3-message-persistence / .worktrees/responses-api-phase-3 | [#631](https://github.com/mikoto2000/rei/pull/631) | 未マージ | 最新関連570件、failure/error/skip0。Checkstyle/SpotBugs0、architecture・build成功。PR #631、最新headの全件CI・差分レビューを確認中 |
-| 4 | NOT_STARTED | — | — | — | 未実施 |
+| 3 | MERGED | codex/responses-api-phase-3-message-persistence / 削除済み | [#631](https://github.com/mikoto2000/rei/pull/631) | b22cf6646ae58a1efea325877562d7becd3aea51 | PR・マージ後CI7,960件、成功7,948、期待skip12、failure/error0。関連570件・全品質ゲート成功 |
+| 4 | IN_PROGRESS | codex/responses-api-phase-4-agent-integration / .worktrees/responses-api-phase-4 | 未作成 | 未マージ | 承認・Checkpoint・圧縮・予算・機能別クライアントの統合を開始 |
 | 5 | NOT_STARTED | — | — | — | 未実施 |
 | 6 | NOT_STARTED | — | — | — | 未実施 |
 
@@ -284,8 +284,8 @@ Phase 3 の fixture は明示的な per-iteration Exchange と参照契約を検
 全クライアントへの Run/iteration identity の供給、承認・Checkpoint の full-parts 参照、操作台帳との再開照合、
 圧縮・終了・削除 lifecycle の参照解放は Phase 4 の有効化条件として残す。本番 Responses の生成は引き続き拒否する。
 
-Phase 3 の関連回帰・全品質ゲートは成功し、PR #631 を作成した。差分レビュー、最新 head の全 CI、通常 merge、merge 後 CI、
-専用 worktree の後片付けが未完了。これらを完了してから最新 main を基準に Phase 4 を開始する。
+Phase 3 は PR #631 の差分レビュー・修正後の全 CI・通常 merge・merge 後 CI が成功し、専用 worktree とブランチを削除した。
+PR head とマージコミットの tree 一致も確認。最新 main `b22cf664` を基準に Phase 4 を開始した。
 
 
 ### Phase 3 の PR 差分レビュー
@@ -294,9 +294,15 @@ PR #631 の全20ファイルを確認し、assistant call ID の重複・空白�
 ToolResponse と旧形式に加え、現行 assistant の encode/decode でも拒否する3件の Red を確認し、
 da74dfb6 → 7600c0cc で修正した。native/Codec 207件、修正後の関連568件と全品質ゲートが成功した。
 API固有処理・DB・ツール実行の分離、所有者/ハッシュ/参照の照合、旧完了会話、容量・GC、
-未検証Responsesの本番拒否を照合した。全件CI・通常merge・merge後確認・cleanupは引き続き未完了。
+未検証Responsesの本番拒否を照合した。最終全件CI・通常merge・merge後確認・cleanupも完了した。
 
 
 追加レビューで、同時刻の複数Turnからprotocol参照を選ぶ曖昧性と、同じ表示文の通知への誤付与を2件で再現した。
 4e4057ad → 4f6a18c6 で、参照を含む時刻の対応が複数なら停止し、通知を補完対象から除外した。
 関連108件、最新Maven関連570件と全品質ゲートが成功した。既存の参照を持たない旧履歴の順序は維持する。
+
+最終 PR CI は Java `45345004343`、静的解析 `45345004446`、クライアント `45345004146` が全成功。
+マージ後も Java `45346995855`、静的解析 `45346995780`、クライアント `45346995953` が全成功。
+Windows A 3,816件・B 4,144件、期待skip12、failure/error0。集約ゲートで分割・baseline・ID・期待skipを照合した。
+旧 head の停止不能な CI は通常 cancel 後も終了しなかったため公式 force-cancel を使用した。原因は未特定。
+最新 PR head とマージ後の実行は再試行なしで成功し、検証ゲートや制限時間は変更していない。
