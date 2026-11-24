@@ -255,10 +255,14 @@ public final class ModelMessagePayloadStore {
       }
     }
 
-    public record Entry(String key, Ref reference) {
+    public record Entry(String key, Ref reference,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            Long historySequence) {
+      public Entry(String key, Ref reference) { this(key, reference, null); }
       public Entry {
         identifier(key);
         java.util.Objects.requireNonNull(reference);
+        if (historySequence != null && historySequence < 0) throw rejected();
         identifier(reference.id());
         if (reference.sha256() == null || !reference.sha256().matches("[0-9a-f]{64}"))
           throw rejected();
@@ -785,6 +789,24 @@ public final class ModelMessagePayloadStore {
           != 1) throw rejected();
       return codec.decode(bytes);
     });
+  }
+
+  /** Rebuild only the projection cursor; the referenced protocol body remains immutable. */
+  public Message loadEntry(Scope scope, History.Entry entry, ReferenceKind kind, String owner) {
+    var message = load(scope, entry.reference(), kind, owner);
+    Long sequence = entry.historySequence();
+    if (sequence == null) return message;
+    var metadata = new java.util.HashMap<>(message.getMetadata());
+    metadata.put("rei.historySequence", sequence);
+    if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant)
+      return assistant.mutate().properties(metadata).build();
+    if (message instanceof org.springframework.ai.chat.messages.UserMessage user)
+      return user.mutate().metadata(metadata).build();
+    if (message instanceof org.springframework.ai.chat.messages.SystemMessage system)
+      return system.mutate().metadata(metadata).build();
+    if (message instanceof org.springframework.ai.chat.messages.ToolResponseMessage tool)
+      return org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(tool.getResponses()).metadata(metadata).build();
+    throw rejected();
   }
 
   private static byte[] read(Connection db, Scope scope, Ref ref) throws SQLException {

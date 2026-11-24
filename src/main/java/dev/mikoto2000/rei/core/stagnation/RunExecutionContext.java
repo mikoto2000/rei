@@ -305,8 +305,11 @@ public class RunExecutionContext {
               ref,
               dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
               exchange.run());
-      input.add(
-          new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(key, ref));
+      var sequence = message.getMetadata().get("rei.historySequence");
+      if (sequence != null && !(sequence instanceof Long) && !(sequence instanceof Integer))
+        throw new IllegalArgumentException("Invalid protocol input sequence");
+      input.add(new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(key, ref,
+          sequence == null ? null : ((Number) sequence).longValue()));
     }
     var previous = protocolHistory;
     var entries =
@@ -879,14 +882,8 @@ public class RunExecutionContext {
     }
     messages.clear();
     for (var entry : history.replayEntries())
-      messages.add(
-          exchange
-              .store()
-              .load(
-                  exchange.scope(),
-                  entry.reference(),
-                  dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT,
-                  checkpoint));
+      messages.add(exchange.store().loadEntry(exchange.scope(), entry,
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, checkpoint));
     if (!dev.mikoto2000.rei.modelmessage.ModelMessageTransactions.completeProtocol(messages))
       throw new IllegalStateException("Protocol checkpoint requires tool outcome reconciliation");
     var grant = exchange.store().restoreReplayGrant(exchange, references, origin);
