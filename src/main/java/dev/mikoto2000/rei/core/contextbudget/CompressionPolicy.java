@@ -48,6 +48,16 @@ public final class CompressionPolicy {
     return safe;
   }
 
+  /** A saved request or complete tool transaction can continue; unfinished calls need reconciliation. */
+  public static boolean completeProtocol(List<Message> messages) {
+    if (messages.isEmpty() || !(messages.getFirst() instanceof org.springframework.ai.chat.messages.UserMessage))
+      return false;
+    var boundaries = completePrefixes(messages);
+    if (!boundaries.isEmpty() && boundaries.getLast() == messages.size()) return true;
+    return messages.getLast() instanceof org.springframework.ai.chat.messages.UserMessage
+        && (messages.size() == 1 || !boundaries.isEmpty() && boundaries.getLast() == messages.size() - 1);
+  }
+
   /** Complete protocol prefixes, shared by summarization and hard-limit trimming. */
   static List<Integer> completePrefixes(List<Message> messages) {
     var boundaries = new java.util.ArrayList<Integer>();

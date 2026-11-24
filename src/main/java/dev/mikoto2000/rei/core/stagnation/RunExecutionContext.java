@@ -761,7 +761,48 @@ public class RunExecutionContext {
   /** 保存済みの状態を引き継ぐため、進捗を復元する。 */
   public synchronized void restoreProgress(ProgressState saved,
       List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference> references) {
-    restoreProgress(saved);
+    if (saved == null || saved.protocolHistory() == null || references == null || references.isEmpty()) {
+      restoreProgress(saved);
+      return;
+    }
+    var history = saved.protocolHistory();
+    var context = modelOptions == null ? null : modelOptions.getToolContext();
+    if (context == null || runContext == null
+        || !(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY)
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)
+        || !(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin)
+        || !exchange.run().equals(runContext.runId())
+        || !exchange.scope().equals(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(runContext))
+        || !origin.endpoint().equals(history.origin().endpoint())
+        || references.size() != history.entries().size())
+      throw new IllegalStateException("Protocol checkpoint compatibility mismatch");
+    var messages = new ArrayList<org.springframework.ai.chat.messages.Message>();
+    String checkpoint = references.getFirst().owner();
+    for (int index = 0; index < references.size(); index++) {
+      var pointer = references.get(index);
+      if (pointer.kind() != dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT
+          || !checkpoint.equals(pointer.owner())
+          || !pointer.reference().equals(history.entries().get(index).reference()))
+        throw new IllegalStateException("Protocol checkpoint authority mismatch");
+      messages.add(exchange.store().load(exchange.scope(), pointer.reference(), pointer.kind(), pointer.owner()));
+    }
+    if (!dev.mikoto2000.rei.core.contextbudget.CompressionPolicy.completeProtocol(messages))
+      throw new IllegalStateException("Protocol checkpoint requires tool outcome reconciliation");
+    var grant = exchange.store().restoreReplayGrant(exchange, references, origin);
+    var previousOptions = modelOptions;
+    var restored = new java.util.HashMap<>(context);
+    restored.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY, grant);
+    modelOptions = modelOptions.mutate().toolContext(null).toolContext(restored).build();
+    try {
+      restoreProgress(new ProgressState(saved.information(), saved.budget(), saved.acquisitionOnlyIterations(),
+          saved.unknownIterations(), saved.unknownReplanNotices(), saved.continuity(),
+          new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(1, exchange.run(), origin, history.entries())));
+      resumeMessages = List.copyOf(messages);
+    } catch (RuntimeException | Error failure) {
+      modelOptions = previousOptions;
+      throw failure;
+    }
   }
 
   public synchronized void restoreProgress(ProgressState saved) {
@@ -808,8 +849,12 @@ public class RunExecutionContext {
                     entry.reference(),
                     dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
                     saved.protocolHistory().run());
-        if (message instanceof org.springframework.ai.chat.messages.AssistantMessage)
-          saved.protocolHistory().origin().requireMatch(message);
+        if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
+          var grant = context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY);
+          var origin = saved.protocolHistory().origin();
+          if (!(grant instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HistoryReplayGrant verified
+              && verified.permits(assistant, origin.owner(), origin.endpoint()))) origin.requireMatch(assistant);
+        }
       }
       protocolHistory = saved.protocolHistory();
     }
