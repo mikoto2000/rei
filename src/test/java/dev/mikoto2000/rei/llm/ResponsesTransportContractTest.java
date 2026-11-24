@@ -929,6 +929,81 @@ class ResponsesTransportContractTest {
     };
   }
 
+
+ @org.junit.jupiter.params.ParameterizedTest
+ @org.junit.jupiter.params.provider.ValueSource(strings={"JSON_OBJECT","JSON_SCHEMA"})
+ void sharedFeatureResponseFormatUsesNativeTextFormat(String type) {
+  var format=new org.springframework.ai.openai.OpenAiChatModel.ResponseFormat();
+  format.setType(org.springframework.ai.openai.OpenAiChatModel.ResponseFormat.Type.valueOf(type));
+  if(type.equals("JSON_SCHEMA")) {
+    format.setJsonSchema("{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}},\"required\":[\"answer\"],\"additionalProperties\":false}");
+    format.setStrict(true);
+  }
+  var options=options().responseFormat(format).build();
+  reply=completed().replace("\"text\":\"done\"","\"text\":\"{}\"");
+  transport(options).call(new Prompt("fixture JSON",options));
+  var sent=requests.getFirst().path("text").path("format");
+  assertThat(sent.path("type").asText()).isEqualTo(type.toLowerCase(java.util.Locale.ROOT));
+  assertThat(requests.getFirst().has("response_format")).isFalse();
+  if(type.equals("JSON_SCHEMA")) {
+    assertThat(sent.path("strict").asBoolean()).isTrue();
+    assertThat(sent.path("schema").path("properties").has("answer")).isTrue();
+  }
+ }
+ @org.junit.jupiter.params.ParameterizedTest
+ @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+ void refusalsAreReportedBeforeAnEmptySuccessfulAnswerCanBePersisted(boolean streaming) {
+  var refused=completed().replace("{\"type\":\"output_text\",\"text\":\"done\",\"annotations\":[]}","{\"type\":\"refusal\",\"refusal\":\"PRIVATE refusal fixture\"}");
+  assertThat(refused).contains("PRIVATE refusal fixture").doesNotContain("output_text");
+  contentType=streaming ? "text/event-stream" : "application/json";
+  reply=streaming ? event("response.completed","\"response\":"+refused) : refused;
+  var options=options().build();var model=transport(options);
+  assertThatThrownBy(()->{
+    if(streaming)model.stream(new Prompt("fixture",options)).collectList().block();
+    else model.call(new Prompt("fixture",options));
+  }).isInstanceOfSatisfying(ResponsesTransportException.class,error->{
+    assertThat(error.category().name()).isEqualTo("REFUSAL");
+    assertThat(error).hasMessageNotContaining("PRIVATE");assertUsage(error);
+  });
+  assertThat(requests).hasSize(1);
+ }
+
+
+ @Test void streamingRefusalDeltaStopsBeforeOrdinaryObserversReceiveIt() {
+  contentType="text/event-stream";
+  reply=event("response.refusal.delta","\"item_id\":\"msg_fixture\",\"output_index\":0,\"content_index\":0,\"delta\":\"PRIVATE refusal delta\"")
+      +event("response.completed","\"response\":"+completed());
+  var options=options().build();var model=transport(options);var observed=new java.util.concurrent.atomic.AtomicInteger();
+  assertThatThrownBy(()->model.stream(new Prompt("fixture",options)).doOnNext(chunk->observed.incrementAndGet()).collectList().block())
+      .isInstanceOfSatisfying(ResponsesTransportException.class,error->{
+        assertThat(error.category().name()).isEqualTo("REFUSAL");
+        assertThat(error).hasMessageNotContaining("PRIVATE");assertThat(error.usage()).isNull();
+      });
+  assertThat(observed.get()).isZero();assertThat(requests).hasSize(1);
+ }
+
+
+ @org.junit.jupiter.params.ParameterizedTest
+ @org.junit.jupiter.params.provider.EnumSource(ResponsesTransportException.Category.class)
+ void safeTransportCategoriesReachTheExistingUserDiagnostic(ResponsesTransportException.Category category) {
+  var expected=switch(category.name()) {
+   case "AUTHENTICATION" -> "authentication_failed";
+   case "RATE_LIMIT" -> "rate_limited";
+   case "TRANSIENT" -> "provider_unavailable";
+   case "PROVIDER" -> "provider_failure";
+   case "TIMEOUT" -> "timeout";
+   case "OUTPUT_LIMIT" -> "output_limit";
+   case "INCOMPLETE" -> "response_incomplete";
+   case "REFUSAL" -> "model_refusal";
+   case "INVALID_RESPONSE" -> "invalid_response";
+   default -> throw new AssertionError(category);
+  };
+  var failure=new ResponsesTransportException(category);
+  var diagnostic=dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(new RuntimeException("PRIVATE provider wrapper",failure));
+  assertThat(diagnostic.code()).isEqualTo(expected);
+  assertThat(diagnostic.message()).doesNotContain("PRIVATE");assertThat(failure.getCause()).isNull();
+ }
+
   private String completed() {
     return """
     {"id":"resp_fixture","object":"response","created_at":0,"status":"completed",
