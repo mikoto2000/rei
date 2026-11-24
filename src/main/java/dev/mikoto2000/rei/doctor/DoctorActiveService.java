@@ -257,10 +257,11 @@ public class DoctorActiveService {
       String connectionIdentity = "";
       if (check == DoctorRequest.Check.INFERENCE) {
         var defaults = optionsForModel.apply(target);
-        inferenceOptions =
-            defaults == null
-                ? OpenAiChatOptions.builder().model(target).build()
-                : defaults.mutate().build();
+        if(defaults==null) {
+          var builder=OpenAiChatOptions.builder();
+          builder.model(target);
+          inferenceOptions=builder.build();
+        } else inferenceOptions=defaults.mutate().build();
         connectionIdentity =
             Objects.toString(configuredEndpoint.get(), "")
                 + "|"
