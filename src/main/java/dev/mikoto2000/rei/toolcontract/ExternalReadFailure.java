@@ -2,6 +2,11 @@ package dev.mikoto2000.rei.toolcontract;
 
 /** 外部読み取りの失敗を、機能間の依存を増やさず安全に診断するための契約。 */
 public interface ExternalReadFailure {
+  /** Safe transport advice only; callers still own budgets and must never retry tool effects. */
+  default boolean retryAllowed() {
+    return false;
+  }
+
   /** HTTP応答がある場合にだけ、そのステータスを返す。 */
   default Integer httpStatus() {
     return null;

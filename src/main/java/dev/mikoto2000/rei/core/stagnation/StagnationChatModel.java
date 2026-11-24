@@ -435,7 +435,9 @@ public final class StagnationChatModel implements ChatModel {
                                           .withProjection(
                                               context.toolDiscovery() == null
                                                   ? ReviewToolProfile.select(actionPrompt)
-                                                  : actual,
+                                                  : new Prompt(
+                                                      actionPrompt.getInstructions(),
+                                                      actual.getOptions()),
                                               actual),
                                       result,
                                       context);
@@ -608,7 +610,8 @@ public final class StagnationChatModel implements ChatModel {
         .filter(m ->
             !(m instanceof SystemMessage
                 && (Boolean.TRUE.equals(m.getMetadata().get("rei.resumeWorkReminder"))
-                    || Boolean.TRUE.equals(m.getMetadata().get("rei.progressFeedback")))))
+                    || Boolean.TRUE.equals(m.getMetadata().get("rei.progressFeedback"))
+                    || Boolean.TRUE.equals(m.getMetadata().get("rei.reviewGuidance")))))
         .toList();
   }
 

@@ -53,6 +53,12 @@ final class ResponsesTransportException extends IllegalStateException
 
   private final Category category;
   private final ModelTokenUsage usage;
+  private final boolean retryAllowed;
+
+  @Override
+  public boolean retryAllowed() {
+    return retryAllowed;
+  }
 
   ModelTokenUsage usage() {
     return usage;
@@ -63,9 +69,19 @@ final class ResponsesTransportException extends IllegalStateException
   }
 
   ResponsesTransportException(Category category, ModelTokenUsage usage) {
+    this(category, usage, true);
+  }
+
+  private ResponsesTransportException(
+      Category category, ModelTokenUsage usage, boolean retryAllowed) {
     super("Responses transport failed: " + category);
     this.category = category;
     this.usage = usage;
+    this.retryAllowed =
+        retryAllowed
+            && (category == Category.TRANSIENT
+                || category == Category.RATE_LIMIT
+                || category == Category.TIMEOUT);
   }
 
   static ModelTokenUsage usage(com.openai.models.responses.ResponseUsage usage) {
@@ -152,7 +168,12 @@ final class ResponsesTransportException extends IllegalStateException
               ? Category.AUTHENTICATION
               : status == 429
                   ? Category.RATE_LIMIT
-                  : status >= 500 ? Category.TRANSIENT : Category.PROVIDER);
+                  : status == 408 || status == 409 || status >= 500
+                      ? Category.TRANSIENT
+                      : Category.PROVIDER,
+          null,
+          !"false"
+              .equals(service.headers().values("X-Should-Retry").stream().findFirst().orElse("")));
     }
     for (Throwable cause = error; cause != null; cause = cause.getCause())
       if (cause instanceof java.util.concurrent.TimeoutException

@@ -55,6 +55,153 @@ class ResponsesReplayContractTest {
     return context;
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "503,false,false,true",
+    "429,false,false,true",
+    "408,false,false,true",
+    "409,false,false,true",
+    "400,false,false,false",
+    "401,false,false,false",
+    "503,true,false,false",
+    "503,false,true,false",
+    "429,false,true,false"
+  })
+  void normalizedNativeFailuresRespectTheExistingBoundedRetryAndTokenBudgets(
+      int status, boolean tokenLimit, boolean providerDeclinedRetry, boolean expectedRetry)
+      throws Exception {
+    retryHint = providerDeclinedRetry ? "false" : null;
+    contentType = "text/event-stream";
+    httpStatuses.add(status);
+    replies.add("{\"error\":{\"message\":\"PRIVATE-retry-fixture\",\"type\":\"fixture\"}}");
+    replies.add(sse(done()));
+    var budget = new OutputLimitRunBudget(1, 4, null, tokenLimit ? 1000 : 0);
+    var owner =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "fixture-run", "session", protocolDirectory, "project");
+    var context =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            owner.runId(),
+            budget,
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+            new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+            ignored -> {});
+    context.setRunContext(owner);
+    var options = controlledOptions(context, options());
+    var reservation =
+        new OutputLimitRunBudget.LlmCallReservation() {
+          public boolean tryReserve() {
+            return budget.tryConsumeLlmCall();
+          }
+
+          public int remaining() {
+            return budget.remainingLlmCalls();
+          }
+
+          public void recordTotalTokens(Integer count) {
+            budget.recordTotalTokens(count);
+          }
+
+          public boolean tokenLimitEnabled() {
+            return budget.tokenLimitEnabled();
+          }
+
+          public boolean tokenExhausted() {
+            return budget.tokenExhausted();
+          }
+
+          public boolean usageUnknown() {
+            return budget.usageUnknown();
+          }
+        };
+    var retries = new dev.mikoto2000.rei.core.chat.BoundedToolLoop.ModelRetries(1);
+    var result =
+        new dev.mikoto2000.rei.core.chat.BoundedToolLoop()
+            .runWithHistory(
+                model(options),
+                new Prompt("retry fixture", options),
+                new AtomicInteger(4),
+                owner,
+                () -> {
+                  context.checkActive();
+                  context.checkModelTokenBudget();
+                },
+                reservation,
+                retries);
+    if (expectedRetry) assertThat(result.block(Duration.ofSeconds(10)).output()).isEqualTo("done");
+    else
+      assertThatThrownBy(() -> result.block(Duration.ofSeconds(10)))
+          .isInstanceOf(RuntimeException.class)
+          .hasMessageNotContaining("PRIVATE");
+    assertThat(requests).hasSize(expectedRetry ? 2 : 1);
+    assertThat(budget.snapshot().llmCalls()).isEqualTo(expectedRetry ? 2 : 1);
+    assertThat(retries.attempts()).isEqualTo(expectedRetry ? 1 : 0);
+    assertThat(executions.get()).isZero();
+    if (tokenLimit) assertThat(budget.usageUnknown()).isTrue();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "false,1,1,2,true",
+    "true,1,1,1,false",
+    "false,0,1,1,false",
+    "false,1,2,2,false"
+  })
+  void nativeReadTimeoutUsesOnlyTheExistingMainRetryAllowance(
+      boolean tokenLimit, int retryCount, int failures, int expectedRequests, boolean success)
+      throws Exception {
+    contentType = "text/event-stream";
+    timeoutFailures.set(failures);
+    replies.add(sse(done()));
+    var budget = new OutputLimitRunBudget(1, 4, null, tokenLimit ? 1000 : 0);
+    budget.tryConsumeLlmCall();
+    var owner =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "fixture-run", "session", protocolDirectory, "project");
+    var context =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            owner.runId(),
+            budget,
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+            new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+            ignored -> {});
+    context.setRunContext(owner);
+    var defaults = controlledOptions(context, options());
+    context.setModelOptions(defaults);
+    var options =
+        ((OpenAiResponsesChatOptions) context.modelOptions())
+            .mutate()
+            .toolContext(
+                Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, context))
+            .build();
+    var request =
+        new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
+                model(defaults), null, retryCount)
+            .stream(new Prompt("timeout fixture", options)).collectList();
+    if (success) {
+      var chunks = request.block(Duration.ofSeconds(10));
+      assertThat(
+              chunks.stream()
+                  .filter(chunk -> chunk.getResult() != null)
+                  .map(chunk ->
+                      java.util.Objects.toString(chunk.getResult().getOutput().getText(), ""))
+                  .collect(java.util.stream.Collectors.joining()))
+          .isEqualTo("done");
+      assertThat(
+              chunks.stream()
+                  .filter(chunk -> ToolLoopSupport.streamRetryAttempt(chunk) > 0)
+                  .count())
+          .isEqualTo(1);
+    } else
+      assertThatThrownBy(() -> request.block(Duration.ofSeconds(10)))
+          .isInstanceOf(RuntimeException.class)
+          .hasMessageNotContaining("PRIVATE");
+    assertThat(requests).hasSize(expectedRequests);
+    assertThat(budget.snapshot().llmCalls()).isEqualTo(expectedRequests);
+    assertThat(executions.get()).isZero();
+    if (tokenLimit) assertThat(budget.usageUnknown()).isTrue();
+  }
+
   @Test
   void configuredNativeModelOptionsAndClientShareOneImmutableEndpointSnapshot() {
     var properties = nativeProperties();
@@ -99,6 +246,8 @@ class ResponsesReplayContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
+    "PLAINTEXT,false,false,false", "PLAINTEXT,true,false,false", "PLAINTEXT,false,true,false",
+        "PLAINTEXT,false,true,true",
     "ENCRYPTED,false,false,false", "NONE,false,false,false", "ENCRYPTED,true,false,false",
         "NONE,true,false,false",
     "ENCRYPTED,false,true,false", "NONE,false,true,false", "ENCRYPTED,false,true,true",
@@ -2303,8 +2452,517 @@ class ResponsesReplayContractTest {
     assertThat(requests).isEmpty();
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"ENCRYPTED", "PLAINTEXT", "CHAT_COMPLETIONS"})
+  @org.junit.jupiter.api.Timeout(180)
+  void oneHundredTwentyNativeToolRoundsKeepLruCompressionAndStorageBounded(String protocol)
+      throws Exception {
+    boolean plaintext = protocol.equals("PLAINTEXT");
+    boolean completions = protocol.equals("CHAT_COMPLETIONS");
+    replayMode = plaintext ? ReasoningReplayMode.PLAINTEXT : ReasoningReplayMode.ENCRYPTED;
+    contentType = "text/event-stream";
+    var mapper = new ObjectMapper();
+    var catalog =
+        mapper.readTree(
+            java.nio.file.Path.of("src/main/resources/tool-discovery-catalog.json").toFile());
+    var groups = new java.util.HashMap<String, Integer>();
+    catalog.forEach(entry -> groups.merge(entry.path("set").asText(), 1, Integer::sum));
+    var specialists = new java.util.ArrayList<String>();
+    var callbacks = new java.util.ArrayList<ToolCallback>();
+    for (var entry : catalog) {
+      String name = entry.path("name").asText();
+      if (!entry.path("basic").asBoolean()
+          && groups.get(entry.path("set").asText()) == 1
+          && entry.path("dependencies").isEmpty()) specialists.add(name);
+      callbacks.add(
+          new ToolCallback() {
+            public ToolDefinition getToolDefinition() {
+              return ToolDefinition.builder()
+                  .name(name)
+                  .description("owned operational fixture")
+                  .inputSchema(
+                      "{\"type\":\"object\",\"properties\":{\"round\":{\"type\":\"integer\"},\"files\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}}}}")
+                  .build();
+            }
+
+            public String call(String arguments) {
+              executions.incrementAndGet();
+              if (name.equals("writeMultiFile")) {
+                try {
+                  var values = mapper.readTree(arguments);
+                  java.nio.file.Files.writeString(
+                      protocolDirectory.resolve("progress.txt"),
+                      values.path("files").get(0).path("content").asText());
+                } catch (java.io.IOException failure) {
+                  throw new java.io.UncheckedIOException(failure);
+                }
+              }
+              return "owned result " + name + " " + arguments;
+            }
+          });
+    }
+    assertThat(specialists.size()).isGreaterThanOrEqualTo(60);
+    String large = "x".repeat(16 * 1024);
+    for (int round = 0; round < 120; round++) {
+      String selected = specialists.get(round / 2);
+      String name = round % 2 == 0 ? "searchTools" : selected;
+      String arguments =
+          round % 2 == 0
+              ? mapper.writeValueAsString(Map.of("query", selected, "maxResults", 1))
+              : mapper.writeValueAsString(Map.of("round", round));
+      var output = mapper.createArrayNode();
+      output
+          .addObject()
+          .put("type", "reasoning")
+          .put("id", "rs_" + round)
+          .put("status", "completed")
+          .put("encrypted_content", large + round)
+          .putArray("summary");
+      output
+          .addObject()
+          .put("type", "function_call")
+          .put("id", "fc_" + round)
+          .put("call_id", "call_" + round)
+          .put("name", name)
+          .put("arguments", arguments)
+          .put("status", "completed");
+      if (round % 2 == 1)
+        output
+            .addObject()
+            .put("type", "function_call")
+            .put("id", "fc_progress_" + round)
+            .put("call_id", "call_progress_" + round)
+            .put("name", "writeMultiFile")
+            .put(
+                "arguments",
+                mapper.writeValueAsString(
+                    Map.of(
+                        "files",
+                        List.of(
+                            Map.of("path", "progress.txt", "content", "owned progress " + round)))))
+            .put("status", "completed");
+      replies.add(operationalStream(response("resp_" + round, output.toString()), completions));
+    }
+    replies.add(operationalStream(done(), completions));
+    var run =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "long-run", "long-session", protocolDirectory, "project");
+    var budget = new OutputLimitRunBudget(2, 130);
+    assertThat(budget.tryConsumeLlmCall()).isTrue();
+    var execution =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            run.runId(),
+            budget,
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+            new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+            ignored -> {});
+    execution.setRunContext(run);
+    org.springframework.ai.model.tool.ToolCallingChatOptions defaults =
+        completions
+            ? org.springframework.ai.openai.OpenAiChatOptions.builder()
+                .baseUrl(baseUrl)
+                .apiKey("fixture-secret")
+                .model("fixture-model")
+                .maxTokens(64)
+                .maxRetries(0)
+                .build()
+            : controlledOptions(execution, options());
+    execution.setModelOptions(defaults);
+    defaults = execution.modelOptions();
+    var requestOptions =
+        defaults
+            .mutate()
+            .toolCallbacks(callbacks)
+            .toolContext(
+                Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution))
+            .build();
+    var properties = new dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties();
+    properties.setThreshold(30_000);
+    properties.setHardLimit(60_000);
+    properties.setRecentTokens(1000);
+    properties.setSummaryTokens(256);
+    var estimator = dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative();
+    var compressionCalls = new AtomicInteger();
+    var assembler =
+        new dev.mikoto2000.rei.core.contextbudget.ContextAssembler(
+            properties,
+            estimator,
+            new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(
+                protocolDirectory),
+            new dev.mikoto2000.rei.core.contextbudget.ToolResultCompressor(
+                new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(protocolDirectory),
+                estimator,
+                8000,
+                2000),
+            (previous, messages, limit, active) ->
+                "owned rolling summary " + compressionCalls.incrementAndGet(),
+            null,
+            null);
+    var discoveryProperties = new dev.mikoto2000.rei.llm.discovery.ToolDiscoveryProperties();
+    discoveryProperties.setEnabled(true);
+    discoveryProperties.setMaxActiveTools(36);
+    var discovery =
+        new dev.mikoto2000.rei.llm.discovery.ToolDiscovery(
+            discoveryProperties,
+            new org.springframework.beans.factory.support.DefaultListableBeanFactory()
+                .getBeanProvider(dev.mikoto2000.rei.llm.discovery.ToolDiscoveryStore.class));
+    var projectedTokenEstimates = new java.util.ArrayList<Long>();
+    org.springframework.ai.chat.model.ChatModel nativeModel =
+        completions
+            ? org.springframework.ai.openai.OpenAiChatModel.builder()
+                .options((org.springframework.ai.openai.OpenAiChatOptions) defaults)
+                .httpClientBuilderCustomizer(httpCustomizers().getFirst())
+                .build()
+            : model((OpenAiResponsesChatOptions) defaults);
+    org.springframework.ai.chat.model.ChatModel measured =
+        new org.springframework.ai.chat.model.ChatModel() {
+          public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
+            return nativeModel.getOptions();
+          }
+
+          public org.springframework.ai.chat.model.ChatResponse call(Prompt prompt) {
+            return nativeModel.call(prompt);
+          }
+
+          public reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> stream(
+              Prompt prompt) {
+            projectedTokenEstimates.add(
+                dev.mikoto2000.rei.core.contextbudget.ContextBudgetManager.estimateMessages(
+                    prompt.getInstructions(), estimator));
+            return nativeModel.stream(prompt);
+          }
+        };
+    long start = System.nanoTime();
+    try {
+      new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(measured, assembler)
+          .withToolDiscovery(discovery).stream(
+                  new Prompt("owned 120 round operational fixture", requestOptions))
+              .blockLast(Duration.ofSeconds(150));
+    } catch (RuntimeException failure) {
+      var outputs = new java.util.ArrayList<String>();
+      for (var request : requests)
+        for (var item : request.path("input"))
+          if (item.path("type").asText().equals("function_call_output"))
+            outputs.add(item.path("output").asText());
+          else if (item.path("type").asText().equals("message"))
+            outputs.add(item.path("content").toString());
+      java.nio.file.Files.writeString(
+          java.nio.file.Path.of("target/responses-api/longrun-debug.txt"),
+          "callbacks="
+              + executions.get()
+              + " compression="
+              + compressionCalls.get()
+              + " requests="
+              + requests.size()
+              + "\n"
+              + String.join("\n", outputs));
+      throw failure;
+    }
+    long elapsed = System.nanoTime() - start;
+    assertThat(executions).hasValue(120);
+    assertThat(requests).hasSize(121);
+    if (!completions) assertThat(compressionCalls.get()).isGreaterThan(1);
+    assertThat(budget.snapshot().llmCalls()).isEqualTo(121);
+    for (int round = 0; round < 120; round++) {
+      var tools = requests.get(round).path("tools");
+      assertThat(tools.size()).isBetween(32, 36);
+      if (round % 2 == 1) assertThat(tools.toString()).contains(specialists.get(round / 2));
+      if (round > 0)
+        assertThat(requests.get(round).path(completions ? "messages" : "input").toString())
+            .as("newest complete tool output must survive every compression")
+            .contains("call_" + (round - 1));
+    }
+    assertThat(requests.getLast().path("tools").toString()).doesNotContain(specialists.getFirst());
+    var scope = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(run);
+    var usage =
+        completions
+            ? new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Usage(0, 0, 0, 0)
+            : payloads().usage(scope, run.runId());
+    assertThat(usage.runCumulativeBytes()).isLessThan(8L * 1024 * 1024);
+    var metrics = new java.util.LinkedHashMap<String, Object>();
+    metrics.put("fixtureOnly", true);
+    metrics.put("mode", protocol);
+    metrics.put("toolRounds", 120);
+    metrics.put("modelRequests", requests.size());
+    metrics.put("businessFixtureCallbacks", executions.get());
+    metrics.put("compressionCalls", compressionCalls.get());
+    metrics.put("wallMillis", elapsed / 1_000_000.0);
+    metrics.put(
+        "reasoningUtf8BytesPerResponseMin",
+        completions
+            ? 0
+            : large.getBytes(StandardCharsets.UTF_8).length
+                + (plaintext ? "PRIVATE-plain-".length() : 0)
+                + 1);
+    metrics.put(
+        "reasoningUtf8BytesPerResponseMax",
+        completions
+            ? 0
+            : large.getBytes(StandardCharsets.UTF_8).length
+                + (plaintext ? "PRIVATE-plain-".length() : 0)
+                + 3);
+    long canonicalEstimate = 0;
+    if (!completions)
+      for (var entry : execution.protocolHistorySnapshot().entries())
+        canonicalEstimate += estimator.message(payloads().load(scope, entry.reference()));
+    metrics.put(
+        "tokenCounts",
+        "ESTIMATES: TokenEstimator.conservative; not provider/tokenizer measurements; excludes tool definitions");
+    metrics.put(
+        "canonicalTraceEstimatedTokensBeforeProjection", completions ? null : canonicalEstimate);
+    metrics.put("lastProjectedInstructionsEstimatedTokens", projectedTokenEstimates.getLast());
+    if (!completions) assertThat(projectedTokenEstimates.getLast()).isLessThan(canonicalEstimate);
+    metrics.put("sampledHeapMaxAtHttpBoundaryBytes", sampledHeapMax.get());
+    metrics.put("rawHttpBodyBytes", rawHttpBodyBytes.get());
+    metrics.put("payloadBytes", usage.payloadBytes());
+    metrics.put("runCumulativeBytes", usage.runCumulativeBytes());
+    metrics.put("payloadCount", usage.payloadCount());
+    metrics.put(
+        "serializedHttpRequestBytes",
+        requests.stream()
+            .mapToLong(node -> node.toString().getBytes(StandardCharsets.UTF_8).length)
+            .sum());
+    metrics.put(
+        "lastSerializedHttpRequestBytes",
+        requests.getLast().toString().getBytes(StandardCharsets.UTF_8).length);
+    metrics.put(
+        "sampledHeapBytesAfterRun",
+        java.lang.management.ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed());
+    metrics.put(
+        "sqliteFileBytes",
+        java.nio.file.Files.exists(protocolDirectory.resolve("protocol.db"))
+            ? java.nio.file.Files.size(protocolDirectory.resolve("protocol.db"))
+            : 0);
+    var wal = protocolDirectory.resolve("protocol.db-wal");
+    metrics.put(
+        "sqliteWalBytes", java.nio.file.Files.exists(wal) ? java.nio.file.Files.size(wal) : 0);
+    if (!completions) {
+      var probe = AssistantMessage.builder().content("owned latency probe").build();
+      start = System.nanoTime();
+      var ref = payloads().save(scope, "latency-probe", "one", probe);
+      metrics.put("singleSaveProbeMicros", (System.nanoTime() - start) / 1000.0);
+      start = System.nanoTime();
+      assertThat(payloads().load(scope, ref).getText()).isEqualTo("owned latency probe");
+      metrics.put("singleLoadProbeMicros", (System.nanoTime() - start) / 1000.0);
+    }
+    metrics.put(
+        "realApiCacheHitAndTtft",
+        "UNMEASURED: owned injected SDK HTTP fixture; no live API authorization");
+    var evidence = java.nio.file.Path.of("target/responses-api/operational-" + protocol + ".json");
+    java.nio.file.Files.createDirectories(evidence.getParent());
+    mapper.writerWithDefaultPrettyPrinter().writeValue(evidence.toFile(), metrics);
+    if (!completions) {
+      // A long approval wait must retain the entire original trace after staging has expired.
+      var saved = execution.protocolHistorySnapshot();
+      payloads().protectContinuation(scope, saved, "long-approval");
+      int protectedCount = saved.protectedEntries().size();
+      payloads().releaseRun(scope, run.runId());
+      long count = payloads().usage(scope, run.runId()).payloadCount();
+      try (var db =
+              java.sql.DriverManager.getConnection(
+                  "jdbc:sqlite:" + protocolDirectory.resolve("protocol.db"));
+          var statement = db.createStatement()) {
+        statement.executeUpdate("UPDATE model_message_payloads SET staged_until=0");
+      }
+      assertThat(payloads().collectExpired()).isEqualTo(count - protectedCount);
+      var source = new org.sqlite.SQLiteDataSource();
+      source.setUrl("jdbc:sqlite:" + protocolDirectory.resolve("protocol.db"));
+      var restarted = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+      for (var entry : saved.protectedEntries())
+        assertThat(
+                restarted.load(
+                    scope,
+                    entry.reference(),
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                    "long-approval"))
+            .isNotNull();
+      assertThat(restarted.collectExpired()).isZero();
+      assertThat(restarted.releaseApproval(scope, "long-approval")).isEqualTo(protectedCount);
+      assertThat(restarted.collectExpired()).isEqualTo(protectedCount);
+      assertThat(executions).hasValue(120);
+    }
+  }
+
+  private String operationalStream(String json, boolean completions) throws Exception {
+    if (!completions) return sse(json);
+    var mapper = new ObjectMapper();
+    var response = mapper.readTree(json);
+    var delta = mapper.createObjectNode().put("role", "assistant");
+    var calls = mapper.createArrayNode();
+    for (var item : response.path("output")) {
+      if (item.path("type").asText().equals("function_call")) {
+        var call =
+            calls
+                .addObject()
+                .put("index", calls.size() - 1)
+                .put("id", item.path("call_id").asText())
+                .put("type", "function");
+        call.putObject("function")
+            .put("name", item.path("name").asText())
+            .put("arguments", item.path("arguments").asText());
+      } else if (item.path("type").asText().equals("message"))
+        delta.put("content", item.path("content").get(0).path("text").asText());
+    }
+    if (!calls.isEmpty()) delta.set("tool_calls", calls);
+    var chunk =
+        mapper
+            .createObjectNode()
+            .put("id", response.path("id").asText())
+            .put("object", "chat.completion.chunk")
+            .put("created", 0)
+            .put("model", "fixture-model");
+    var choice = chunk.putArray("choices").addObject().put("index", 0);
+    choice.set("delta", delta);
+    String first = "data: " + chunk + "\n\n";
+    choice.set("delta", mapper.createObjectNode());
+    choice.put("finish_reason", calls.isEmpty() ? "stop" : "tool_calls");
+    chunk
+        .putObject("usage")
+        .put("prompt_tokens", 3)
+        .put("completion_tokens", 2)
+        .put("total_tokens", 5);
+    return first + "data: " + chunk + "\n\ndata: [DONE]\n\n";
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "ENCRYPTED,false",
+    "PLAINTEXT,false",
+    "ENCRYPTED,true",
+    "PLAINTEXT,true"
+  })
+  void nativeGoalUsesDurableGoalBudgetAndRequiresVerifiedArtifact(
+      ReasoningReplayMode replay, boolean exhausted) throws Exception {
+    replayMode = replay;
+    contentType = "text/event-stream";
+    var tool = new ObjectMapper().readTree(toolResponse());
+    ((com.fasterxml.jackson.databind.node.ArrayNode) tool.path("output")).remove(4);
+    ((com.fasterxml.jackson.databind.node.ArrayNode) tool.path("output")).remove(3);
+    replies.add(sse(tool.toString()));
+    replies.add(sse(done()));
+    var properties = nativeProperties();
+    var feature = properties.feature(LlmFeature.CHAT);
+    feature.setReasoningReplay(replay);
+    properties.setFeature(LlmFeature.CHAT, feature);
+    properties.updateOutputLimit(limits -> limits.setMaxTotalTokensPerGoal(exhausted ? 4 : 1000));
+    String artifact = "owned verified goal artifact";
+    String sha =
+        java.util.HexFormat.of()
+            .formatHex(
+                java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(artifact.getBytes(StandardCharsets.UTF_8)));
+    var goals =
+        new dev.mikoto2000.rei.goal.GoalRepository(
+            new org.springframework.jdbc.datasource.DriverManagerDataSource(
+                "jdbc:sqlite:" + protocolDirectory.resolve("goals.db")),
+            java.time.Clock.systemUTC(),
+            properties);
+    var source =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "source", "session", protocolDirectory, "project");
+    var goal = goals.create(source, "Create the owned fixture artifact", "goal.txt", sha, 2, 8);
+    ToolCallback callback =
+        new ToolCallback() {
+          public ToolDefinition getToolDefinition() {
+            return ToolDefinition.builder()
+                .name("fixture_tool")
+                .description("owned artifact fixture")
+                .inputSchema("{\"type\":\"object\",\"properties\":{}}")
+                .build();
+          }
+
+          public String call(String arguments) {
+            executions.incrementAndGet();
+            try {
+              java.nio.file.Files.writeString(protocolDirectory.resolve("goal.txt"), artifact);
+            } catch (java.io.IOException failure) {
+              throw new java.io.UncheckedIOException(failure);
+            }
+            return "owned artifact saved";
+          }
+        };
+    var models = nativeProvider(properties);
+    var holder = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
+    org.mockito.Mockito.when(holder.get()).thenReturn("fixture-model");
+    var client =
+        org.springframework.ai.chat.client.ChatClient.builder(
+                new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
+                    models.chatModel(LlmFeature.CHAT)))
+            .defaultAdvisors(new RunAwareToolCallingAdvisor())
+            .defaultTools(callback)
+            .build();
+    var chat =
+        new dev.mikoto2000.rei.core.chat.ChatExecutionService(
+            new FixedLlmChatClientProvider(client),
+            holder,
+            models,
+            properties,
+            new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+            java.util.Optional.empty(),
+            java.util.Optional.empty());
+    var logs =
+        new dev.mikoto2000.rei.conversation.ConversationLogStore(
+            protocolDirectory.resolve("goal-logs"),
+            java.time.Clock.systemUTC(),
+            new ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+        chat, "setConversationLogStore", logs);
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+        chat,
+        "setConversationTurnStore",
+        dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory());
+    var outcomes = new java.util.ArrayList<dev.mikoto2000.rei.core.chat.ChatExecutionResult>();
+    var loop =
+        new dev.mikoto2000.rei.goal.GoalLoopService(
+            goals,
+            new dev.mikoto2000.rei.goal.FileGoalVerifier(),
+            (claim, run, done) -> {
+              var outcome =
+                  chat.execute(
+                      new dev.mikoto2000.rei.core.chat.AgentRunContext(
+                          run, "session", protocolDirectory, "project"),
+                      "Create the owned fixture artifact",
+                      new dev.mikoto2000.rei.core.chat.UserInterventionQueue(),
+                      goals.modelBudget(claim, run));
+              outcomes.add(outcome);
+              done.accept(new dev.mikoto2000.rei.goal.GoalLoopService.Outcome(outcome));
+            },
+            new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(true, null, null, null),
+            new dev.mikoto2000.rei.goal.GoalEvents(ignored -> {}, java.time.Clock.systemUTC()));
+    var result = loop.run("project", goal.id());
+    assertThat(result.status())
+        .as(
+            "goal reason=%s requests=%s callbacks=%s",
+            result.reason()
+                + " outcomes="
+                + outcomes
+                + " attempts="
+                + goals.attempts("project", goal.id())
+                + " verification="
+                + new dev.mikoto2000.rei.goal.FileGoalVerifier().verify(result),
+            requests.size(),
+            executions.get())
+        .isEqualTo(exhausted ? "BLOCKED" : "COMPLETED");
+    assertThat(executions).hasValue(exhausted ? 0 : 1);
+    assertThat(requests).hasSize(exhausted ? 1 : 2);
+    assertThat(result.totalTokens()).isEqualTo(exhausted ? 5 : 10);
+    assertThat(result.pendingLlmCalls()).isZero();
+    if (!exhausted)
+      assertThat(java.nio.file.Files.readString(protocolDirectory.resolve("goal.txt")))
+          .isEqualTo(artifact);
+    if (exhausted)
+      assertThatThrownBy(() -> loop.run("project", goal.id()))
+          .isInstanceOf(IllegalStateException.class);
+    else assertThat(loop.run("project", goal.id()).status()).isEqualTo("COMPLETED");
+    assertThat(requests).hasSize(exhausted ? 1 : 2);
+    assertThat(executions).hasValue(exhausted ? 0 : 1);
+  }
+
   private final List<JsonNode> requests = new CopyOnWriteArrayList<>();
   private final ArrayDeque<String> replies = new ArrayDeque<>();
+  private final ArrayDeque<Integer> httpStatuses = new ArrayDeque<>();
   private final AtomicInteger executions = new AtomicInteger();
   private String owner = "fixture-owner";
   private String endpointId = "fixture";
@@ -2313,6 +2971,12 @@ class ResponsesReplayContractTest {
   private String baseUrl = "https://responses-fixture.invalid/v1";
   private ReasoningReplayMode replayMode = ReasoningReplayMode.ENCRYPTED;
   private String contentType = "application/json";
+  private final java.util.concurrent.atomic.AtomicLong sampledHeapMax =
+      new java.util.concurrent.atomic.AtomicLong();
+  private final java.util.concurrent.atomic.AtomicLong rawHttpBodyBytes =
+      new java.util.concurrent.atomic.AtomicLong();
+  private String retryHint;
+  private final AtomicInteger timeoutFailures = new AtomicInteger();
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
@@ -3123,15 +3787,24 @@ class ResponsesReplayContractTest {
       builder.interceptor(chain -> {
         var buffer = new okio.Buffer();
         chain.request().body().writeTo(buffer);
-        requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
+        byte[] wire = buffer.readByteArray();
+        rawHttpBodyBytes.addAndGet(wire.length);
+        sampledHeapMax.accumulateAndGet(
+            java.lang.management.ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed(),
+            Math::max);
+        requests.add(new ObjectMapper().readTree(wire));
+        if (timeoutFailures.getAndUpdate(value -> Math.max(0, value - 1)) > 0)
+          throw new java.net.SocketTimeoutException("PRIVATE-timeout-fixture");
         var reply = replies.isEmpty() ? done() : replies.removeFirst();
-        return new okhttp3.Response.Builder()
-            .request(chain.request())
-            .protocol(okhttp3.Protocol.HTTP_1_1)
-            .code(200)
-            .message("fixture")
-            .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType)))
-            .build();
+        var fixtureReply =
+            new okhttp3.Response.Builder()
+                .request(chain.request())
+                .protocol(okhttp3.Protocol.HTTP_1_1)
+                .code(httpStatuses.isEmpty() ? 200 : httpStatuses.removeFirst())
+                .message("fixture")
+                .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType)));
+        if (retryHint != null) fixtureReply.header("X-Should-Retry", retryHint);
+        return fixtureReply.build();
       });
     });
   }

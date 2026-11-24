@@ -83,6 +83,8 @@ final class StreamTimeoutRetry {
   static boolean isReadTimeout(Throwable error) {
     // Follow only known transport/async wrappers; arbitrary tool/application errors are excluded.
     for (int depth = 0; error != null && depth < 16; depth++) {
+      if (error instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure failure)
+        return failure.retryAllowed() && "timeout".equals(failure.diagnosticCode());
       if (error instanceof SocketTimeoutException || error instanceof HttpTimeoutException)
         return true;
       if (!(error instanceof CompletionException

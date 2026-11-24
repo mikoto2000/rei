@@ -27,6 +27,8 @@ class ContextHistoryAdvisorTest {
     "CANCELLED,true,ok",
     "RUNNING,true,ok",
     "COMPLETED,true,covered",
+    "COMPLETED,true,coveredPinned",
+    "COMPLETED,true,coveredPinnedPlain",
     "COMPLETED,true,missing",
     "COMPLETED,true,count",
     "COMPLETED,true,range",
@@ -51,14 +53,16 @@ class ContextHistoryAdvisorTest {
             .parts(
                 java.util.List.of(
                     new org.springframework.ai.chat.messages.part.ReasoningPart(
+                        scenario.equals("coveredPinnedPlain") ? "PRIVATE-plain-history" : null,
                         null,
-                        null,
-                        new org.springframework.ai.chat.messages.part.OpaquePayload(
-                            org.springframework.ai.openai.responses.OpenAiResponsesMetadata
-                                .PROVIDER,
-                            org.springframework.ai.openai.responses.OpenAiResponsesMetadata
-                                .ENCRYPTED_CONTENT_KIND,
-                            "opaque-native-history"),
+                        scenario.equals("coveredPinnedPlain")
+                            ? null
+                            : new org.springframework.ai.chat.messages.part.OpaquePayload(
+                                org.springframework.ai.openai.responses.OpenAiResponsesMetadata
+                                    .PROVIDER,
+                                org.springframework.ai.openai.responses.OpenAiResponsesMetadata
+                                    .ENCRYPTED_CONTENT_KIND,
+                                "opaque-native-history"),
                         Map.of(
                             org.springframework.ai.openai.responses.OpenAiResponsesMetadata
                                 .ITEM_ID_ATTRIBUTE,
@@ -166,7 +170,9 @@ class ContextHistoryAdvisorTest {
     if (scenario.equals("version"))
       turns.recordMetadata(
           old, Map.of(dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_VERSION, "2"));
-    if (scenario.equals("missing") || scenario.startsWith("covered"))
+    if (scenario.equals("missing")
+        || scenario.equals("covered")
+        || scenario.equals("coveredMissingLog"))
       for (var pointer : pointers)
         payloads.release(
             previousExchange.scope(),
@@ -186,7 +192,7 @@ class ContextHistoryAdvisorTest {
           var statement = db.createStatement()) {
         statement.executeUpdate("UPDATE model_message_payloads SET staged_until=0");
       }
-      assertThat(payloads.collectExpired()).isEqualTo(2);
+      assertThat(payloads.collectExpired()).isEqualTo(scenario.startsWith("coveredPinned") ? 0 : 2);
       summaries.save(
           "chat/log",
           new ConversationSummary("retained native summary", 10, java.time.Instant.now()));
@@ -245,6 +251,20 @@ class ContextHistoryAdvisorTest {
           .isTrue();
     }
     if (scenario.startsWith("covered")) {
+      if (scenario.startsWith("coveredPinned")) {
+        try (var db = java.sql.DriverManager.getConnection(source.getUrl());
+            var statement = db.createStatement();
+            var rows =
+                statement.executeQuery(
+                    "SELECT COUNT(*) FROM model_message_references WHERE kind='HISTORY' AND owner='turn:old'")) {
+          assertThat(rows.next()).isTrue();
+          assertThat(rows.getInt(1))
+              .as("durably summarized protocol releases its history pins")
+              .isZero();
+        }
+        assertThat(payloads.collectExpired()).isEqualTo(2);
+        advisor.before(request, null); // Permanent receipts make a repeated read safe after GC.
+      }
       assertThat(projected.getContents())
           .doesNotContain("old actual", "old display", "opaque-native-history");
       assertThat(loads).hasValue(0);

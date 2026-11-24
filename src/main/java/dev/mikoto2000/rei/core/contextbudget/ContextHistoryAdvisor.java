@@ -431,6 +431,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       replaced.add(run);
       var rows = rowsByRun.getOrDefault(run, List.of());
       if (last * 3 + 1 <= through) {
+        retireCoveredHistory(exchange, run, rows, first, last, count);
         projected.put(last * 3 + 1, historical(new AssistantMessage(""), last * 3 + 1));
       } else {
         if (rows.size() != count
@@ -489,6 +490,45 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         java.util.Set.copyOf(replaced),
         java.util.Collections.unmodifiableMap(projected),
         grant);
+  }
+
+  private static void retireCoveredHistory(
+      ModelMessagePayloadStore.Exchange exchange,
+      String run,
+      List<ConversationLogEntry> rows,
+      long first,
+      long last,
+      long count) {
+    // Missing or damaged log evidence keeps pins. An already committed summary remains usable.
+    try {
+      if (rows.size() != count
+          || rows.isEmpty()
+          || rows.getFirst().sequence() != first
+          || rows.getLast().sequence() != last) return;
+      String anchor = "turn:" + run;
+      var refs = new ArrayList<ModelMessagePayloadStore.Ref>();
+      var ids = new java.util.HashSet<String>();
+      long previous = 0;
+      for (var row : rows) {
+        var metadata = row.metadata();
+        String role = metadata.get(ModelMessagePayloadStore.HISTORY_ROLE);
+        String id = metadata.get(ModelMessagePayloadStore.HISTORY_ID);
+        if (!run.equals(metadata.get(ModelMessagePayloadStore.HISTORY_RUN))
+            || !anchor.equals(metadata.get(ModelMessagePayloadStore.HISTORY_OWNER))
+            || role == null
+            || !java.util.Set.of("user", "assistant", "tool").contains(role)
+            || row.sequence() <= previous
+            || !ids.add(id)) return;
+        previous = row.sequence();
+        refs.add(
+            new ModelMessagePayloadStore.Ref(
+                id, metadata.get(ModelMessagePayloadStore.HISTORY_HASH)));
+      }
+      exchange.store().releaseHistory(exchange.scope(), anchor, refs);
+    } catch (RuntimeException failure) {
+      org.slf4j.LoggerFactory.getLogger(ContextHistoryAdvisor.class)
+          .warn("Model message history retirement deferred");
+    }
   }
 
   private Message restore(

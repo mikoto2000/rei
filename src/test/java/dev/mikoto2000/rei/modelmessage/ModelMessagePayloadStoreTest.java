@@ -86,6 +86,126 @@ class ModelMessagePayloadStoreTest {
     assertThat(grant.permits(restored, exchange.ownerKey(), "endpoint")).isTrue();
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"ok", "hash", "scope", "missing", "anchor"})
+  void summarizedHistoryRetirementIsAtomicScopedAndKeepsEveryOtherAnchor(String scenario) {
+    var time = new Time();
+    var store = store(time, 100_000, 1_000_000);
+    var first = store.save(owner, "run", "one", message());
+    var second = store.save(owner, "run", "two", message());
+    for (var ref : List.of(first, second)) {
+      store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:run");
+      store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:other");
+      store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
+      store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, "approval");
+      store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.RUN, "run");
+    }
+    var scope =
+        scenario.equals("scope")
+            ? new ModelMessagePayloadStore.Scope("foreign", "root", "conversation")
+            : owner;
+    var secondPointer =
+        scenario.equals("hash")
+            ? new ModelMessagePayloadStore.Ref(second.id(), "0".repeat(64))
+            : scenario.equals("missing")
+                ? new ModelMessagePayloadStore.Ref("missing", second.sha256())
+                : second;
+    if (java.util.Set.of("hash", "scope", "missing").contains(scenario)) {
+      assertThatThrownBy(
+              () -> store.releaseHistory(scope, "turn:run", List.of(first, secondPointer)))
+          .hasMessage("Model message persistence rejected")
+          .hasNoCause();
+      assertThat(store.usage(owner, "run").referenceCount()).isEqualTo(10);
+      assertThat(
+              store.load(owner, first, ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:run"))
+          .isNotNull();
+      return;
+    }
+    assertThat(
+            store.releaseHistory(
+                scope, scenario.equals("anchor") ? "unknown" : "turn:run", List.of(first, second)))
+        .isEqualTo(scenario.equals("anchor") ? 0 : 2);
+    if (scenario.equals("anchor")) return;
+    assertThat(store.usage(owner, "run").referenceCount()).isEqualTo(8);
+    for (var ref : List.of(first, second)) {
+      assertThat(
+              store.load(owner, ref, ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:other"))
+          .isNotNull();
+      store.release(owner, ref, ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:other");
+      store.release(owner, ref, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
+      store.release(owner, ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, "approval");
+      store.release(owner, ref, ModelMessagePayloadStore.ReferenceKind.RUN, "run");
+    }
+    time.expire();
+    assertThat(store.collectExpired()).isEqualTo(2);
+    var restarted = store(time, 100_000, 1_000_000);
+    assertThat(restarted.releaseHistory(scope, "turn:run", List.of(first, second))).isZero();
+    assertThat(restarted.usage(owner, "run").referenceCount()).isZero();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void sqliteFullRollsBackPayloadReceiptsAndQuotaWithoutTruncatingTheOriginal(boolean plaintext)
+      throws Exception {
+    var limited = new java.util.concurrent.atomic.AtomicBoolean();
+    var source =
+        new SQLiteDataSource() {
+          @Override
+          public java.sql.Connection getConnection() throws java.sql.SQLException {
+            var db = super.getConnection();
+            if (limited.get()) {
+              try (var statement = db.createStatement();
+                  var rows = statement.executeQuery("PRAGMA page_count")) {
+                if (!rows.next())
+                  throw new java.sql.SQLException("Missing owned fixture page count");
+                int pages = rows.getInt(1);
+                try (var cap = db.createStatement()) {
+                  cap.execute("PRAGMA max_page_count=" + pages);
+                }
+              }
+            }
+            return db;
+          }
+        };
+    source.setUrl("jdbc:sqlite:" + temporary.resolve("sqlite-full.db"));
+    var store = new ModelMessagePayloadStore(source);
+    var retained = store.save(owner, "run", "retained", message());
+    store.publish(owner, retained, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
+    var before = store.usage(owner, "run");
+    String body = "x".repeat(2 * 1024 * 1024);
+    var large =
+        AssistantMessage.builder()
+            .part(
+                new ReasoningPart(
+                    plaintext ? body : null,
+                    null,
+                    plaintext ? null : new OpaquePayload("openai", "reasoning", body),
+                    Map.of("id", "rs_full")))
+            .properties(
+                Map.of(
+                    "rei.llm.replay-origin-owner",
+                    "owner",
+                    "rei.llm.replay-origin-endpoint",
+                    "fingerprint"))
+            .build();
+    limited.set(true);
+    assertThatThrownBy(() -> store.save(owner, "run", "full", large))
+        .hasMessage("Model message persistence rejected")
+        .hasNoCause();
+    assertThat(store.usage(owner, "run")).isEqualTo(before);
+    assertThat(new ModelMessageCodec().encode(store.load(owner, retained)))
+        .containsExactly(new ModelMessageCodec().encode(message()));
+    try (var db = source.getConnection();
+        var statement = db.createStatement();
+        var rows =
+            statement.executeQuery(
+                "SELECT COUNT(*) FROM model_message_receipts WHERE message_key='full'")) {
+      assertThat(rows.next()).isTrue();
+      assertThat(rows.getInt(1)).isZero();
+    }
+  }
+
   @Test
   void replayGrantUnionRejectsDifferentOwnersAndEndpoints() {
     var store = new ModelMessagePayloadStore(source());
