@@ -434,6 +434,19 @@ public final class ModelMessagePayloadStore {
     });
   }
 
+  /** Called only after this scoped approval document has durably completed or been denied. */
+  public int releaseApproval(Scope scope, String approval) {
+    validate(scope);
+    identifier(approval);
+    return transaction(db -> {
+      try (var delete = db.prepareStatement(
+          "DELETE FROM model_message_references WHERE kind='APPROVAL' AND owner=? AND payload_id IN (SELECT id FROM model_message_payloads WHERE project=? AND root_path=? AND conversation=?)")) {
+        bind(delete, approval, scope.project(), scope.root(), scope.conversation());
+        return delete.executeUpdate();
+      }
+    });
+  }
+
   /** Protect every validated pointer before the existing checkpoint writer makes it visible. */
   public void protectContinuation(Scope scope, History history, String owner) {
     protectReferences(scope, history, ReferenceKind.APPROVAL, owner);
