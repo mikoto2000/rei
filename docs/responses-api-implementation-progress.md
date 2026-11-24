@@ -10,7 +10,7 @@
 | 3 | MERGED | codex/responses-api-phase-3-message-persistence / 削除済み | [#631](https://github.com/mikoto2000/rei/pull/631) | b22cf6646ae58a1efea325877562d7becd3aea51 | PR・マージ後CI7,960件、成功7,948、期待skip12、failure/error0。関連570件・全品質ゲート成功 |
 | 4 | MERGED | codex/responses-api-phase-4-agent-integration / 削除済み | [#632](https://github.com/mikoto2000/rei/pull/632) | 2c141910cc251081d46bd391be23587ce575b3d3 | PR・マージ後CI8,185件、成功8,173、期待skip12、failure/error0。全品質ゲート成功 |
 | 5 | MERGED | codex/responses-api-phase-5-deepseek / 削除済み | [#633](https://github.com/mikoto2000/rei/pull/633) | f9fd5a5ebbd4fff2fe65781373d9af4f31027276 | PR・マージ後CI8,215件、成功8,203、期待skip12、failure/error0。全品質ゲート成功 |
-| 6 | IN_PROGRESS | codex/responses-api-phase-6-operational-validation / .worktrees/responses-api-phase-6 | 未作成 | 未マージ | 関連818件・再検証227件成功、architecture7件成功、最終全compile/package/品質成功。120ラウンド×3方式・native23回圧縮。最新全回帰・PR・マージ後CI待ち |
+| 6 | IN_PROGRESS | codex/responses-api-phase-6-operational-validation / .worktrees/responses-api-phase-6 | [#634](https://github.com/mikoto2000/rei/pull/634) | 未マージ | 関連818件・再検証227件成功、architecture7件成功、最終全compile/package/品質成功。120ラウンド×3方式・native23回圧縮。最新全回帰・PR・マージ後CI待ち |
 
 ## Phase 0: 接続先管理・API抽象化
 
@@ -503,3 +503,6 @@ SQLiteFull は所有済み DB のページ上限で注入し、本文・receipt�
 
 未検証の実 API での暗号受理、意味的継続性、品質、cache、TTFT は受入条件に残す。
 本番 factory は閉じたまま。全回帰・全品質・PR・通常 merge・マージ後 CI が完了するまで Phase 6 を完了扱いしない。
+
+Phase 6 の上記状態は PR 作成時点の snapshot。最終の merge SHA・最新 head CI・マージ後 push CI・cleanup は、
+[PR #634](https://github.com/mikoto2000/rei/pull/634) の最終実績と Git の状態で照合する。
