@@ -408,11 +408,11 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return model;
   }
 
+  @Autowired
   private org.springframework.beans.factory.ObjectProvider<
           dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore>
       modelPayloads;
 
-  @Autowired
   void configureModelMessagePayloads(
       org.springframework.beans.factory.ObjectProvider<
               dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore>
