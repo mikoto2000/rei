@@ -46,35 +46,62 @@ class CheckpointHistoryTest {
     var payloadSource = new SQLiteDataSource();
     payloadSource.setUrl("jdbc:sqlite:" + root.resolve("protocol.db"));
     var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(payloadSource);
-    var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory(
-        java.util.Map.of("payloads", payloads));
-    repo.configureModelMessagePayloads(beans.getBeanProvider(
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class));
-    var scope = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
-        "project:project", root.toString(), "session");
-    var message = org.springframework.ai.chat.messages.AssistantMessage.builder()
-        .content("fixture answer").properties(java.util.Map.of(
-            "rei.llm.replay-origin-owner", "owner", "rei.llm.replay-origin-endpoint", "endpoint"))
-        .build();
+    var beans =
+        new org.springframework.beans.factory.support.StaticListableBeanFactory(
+            java.util.Map.of("payloads", payloads));
+    repo.configureModelMessagePayloads(
+        beans.getBeanProvider(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class));
+    var scope =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
+            "project:project", root.toString(), "session");
+    var message =
+        org.springframework.ai.chat.messages.AssistantMessage.builder()
+            .content("fixture answer")
+            .properties(
+                java.util.Map.of(
+                    "rei.llm.replay-origin-owner",
+                    "owner",
+                    "rei.llm.replay-origin-endpoint",
+                    "endpoint"))
+            .build();
     var ref = payloads.save(scope, "run-native", "first", message);
-    payloads.publish(scope, ref,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, "run-native");
-    var history = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
-        1, "run-native", new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin("owner", "endpoint"),
-        List.of(new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("first", ref)));
+    payloads.publish(
+        scope,
+        ref,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+        "run-native");
+    var history =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
+            1,
+            "run-native",
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+                "owner", "endpoint"),
+            List.of(
+                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                    "first", ref)));
     var fields = repo.fields(initial("native"));
-    fields.put("progress", new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(
-        null, null, 0, 0, 0, null, history));
+    fields.put(
+        "progress",
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(
+            null, null, 0, 0, 0, null, history));
     settings.setMaxRevisions(1);
     repo.save(repo.fields(fields), 0, "native-1");
-    payloads.release(scope, ref,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, "run-native");
-    try (var db = DriverManager.getConnection(payloadSource.getUrl()); var statement = db.createStatement()) {
+    payloads.release(
+        scope,
+        ref,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+        "run-native");
+    try (var db = DriverManager.getConnection(payloadSource.getUrl());
+        var statement = db.createStatement()) {
       statement.executeUpdate("UPDATE model_message_payloads SET staged_until=0");
     }
     assertEquals(0, payloads.collectExpired(), "retained checkpoint must pin the payload");
-    assertEquals(history, new PersistentCheckpointRepository(source, settings)
-        .get("project", "native").progress().protocolHistory());
+    assertEquals(
+        history,
+        new PersistentCheckpointRepository(source, settings)
+            .get("project", "native")
+            .progress()
+            .protocolHistory());
     assertEquals("fixture answer", payloads.load(scope, ref).getText());
     repo.save(initial("native"), 1, "native-2");
     assertEquals(1, payloads.collectExpired(), "deleted checkpoint revision releases its pin");

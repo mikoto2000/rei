@@ -9,6 +9,7 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 public final class ModelOptions {
   public static final String ENDPOINT_CONTEXT_KEY = "rei.llm.resolved-endpoint";
   public static final String MAX_TOOLS_CONTEXT_KEY = "rei.llm.max-tools";
+
   private ModelOptions() {}
 
   /** Remove explicit callbacks and use the native tool-less request shape. */

@@ -22,9 +22,7 @@ public final class ToolLoopSupport {
   public static Prompt newIteration(Prompt prompt) {
     var boundary = exchange(prompt);
     if (boundary == null) return prompt;
-    return withExchange(
-        prompt,
-        boundary.withKey(java.util.UUID.randomUUID().toString()));
+    return withExchange(prompt, boundary.withKey(java.util.UUID.randomUUID().toString()));
   }
 
   private static Prompt withExchange(
@@ -360,9 +358,7 @@ public final class ToolLoopSupport {
         java.util.Objects.requireNonNull(
             exchange(prompt), "Missing model message persistence boundary");
     var prefixPrompt =
-        withExchange(
-            prompt,
-            boundary.withKey(boundary.key() + "/prefix:" + completed.size()));
+        withExchange(prompt, boundary.withKey(boundary.key() + "/prefix:" + completed.size()));
     var result =
         deliveryMetadata(
             prefixPrompt,

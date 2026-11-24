@@ -120,24 +120,25 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             ObservationRegistry.NOOP,
             null,
             transportCustomizers);
-    var syncClient = ResponsesSdkBoundary.safe(
-                    OpenAiSetup.setupSyncClient(
-                        options.getBaseUrl(),
-                        options.getApiKey(),
-                        options.getCredential(),
-                        options.getMicrosoftDeploymentName(),
-                        options.getMicrosoftFoundryServiceVersion(),
-                        options.getOrganizationId(),
-                        options.isMicrosoftFoundry(),
-                        false,
-                        options.getModel(),
-                        options.getTimeout(),
-                        0,
-                        options.getProxy(),
-                        options.getCustomHeaders(),
-                        ObservationRegistry.NOOP,
-                        null,
-                        transportCustomizers));
+    var syncClient =
+        ResponsesSdkBoundary.safe(
+            OpenAiSetup.setupSyncClient(
+                options.getBaseUrl(),
+                options.getApiKey(),
+                options.getCredential(),
+                options.getMicrosoftDeploymentName(),
+                options.getMicrosoftFoundryServiceVersion(),
+                options.getOrganizationId(),
+                options.isMicrosoftFoundry(),
+                false,
+                options.getModel(),
+                options.getTimeout(),
+                0,
+                options.getProxy(),
+                options.getCustomHeaders(),
+                ObservationRegistry.NOOP,
+                null,
+                transportCustomizers));
     var asyncClient = ResponsesSdkBoundary.safe(client);
     var model =
         OpenAiResponsesChatModel.builder()
@@ -178,8 +179,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     };
   }
 
-  private ResponsesAdapter(ResolvedLlmEndpoint endpoint, OpenAiResponsesChatModel delegate,
-      com.openai.client.OpenAIClient syncClient, com.openai.client.OpenAIClientAsync asyncClient) {
+  private ResponsesAdapter(
+      ResolvedLlmEndpoint endpoint,
+      OpenAiResponsesChatModel delegate,
+      com.openai.client.OpenAIClient syncClient,
+      com.openai.client.OpenAIClientAsync asyncClient) {
     this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
     this.delegate = Objects.requireNonNull(delegate, "delegate");
     this.syncClient = Objects.requireNonNull(syncClient, "syncClient");
@@ -192,13 +196,30 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   ResponsesAdapter forModel(String model) {
     if (model == null || model.equals(endpoint.model())) return this;
     if (model.isBlank()) throw new IllegalArgumentException("Responses model is required");
-    var resolved = new ResolvedLlmEndpoint(endpoint.endpointId(), endpoint.generation(), endpoint.apiType(),
-        endpoint.baseUrl(), endpoint.credentialRef(), model, endpoint.capabilities(), endpoint.maxOutputTokens(),
-        endpoint.temperature(), endpoint.readTimeout());
-    var options = getOptions().mutate().model(model)
-        .toolContext(java.util.Map.of(ResolvedLlmEndpoint.CONTEXT_KEY, resolved)).build();
-    var selected = OpenAiResponsesChatModel.builder().options(options)
-        .openAiClient(syncClient).openAiClientAsync(asyncClient).build();
+    var resolved =
+        new ResolvedLlmEndpoint(
+            endpoint.endpointId(),
+            endpoint.generation(),
+            endpoint.apiType(),
+            endpoint.baseUrl(),
+            endpoint.credentialRef(),
+            model,
+            endpoint.capabilities(),
+            endpoint.maxOutputTokens(),
+            endpoint.temperature(),
+            endpoint.readTimeout());
+    var options =
+        getOptions()
+            .mutate()
+            .model(model)
+            .toolContext(java.util.Map.of(ResolvedLlmEndpoint.CONTEXT_KEY, resolved))
+            .build();
+    var selected =
+        OpenAiResponsesChatModel.builder()
+            .options(options)
+            .openAiClient(syncClient)
+            .openAiClientAsync(asyncClient)
+            .build();
     return new ResponsesAdapter(resolved, selected, syncClient, asyncClient);
   }
 

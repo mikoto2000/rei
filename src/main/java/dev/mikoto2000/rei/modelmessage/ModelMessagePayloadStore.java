@@ -69,7 +69,8 @@ public final class ModelMessagePayloadStore {
    * caller.
    */
   /** Bounded ordered pointers carried by the existing checkpoint document. */
-  public record History(int schemaVersion, String run, Origin origin, java.util.List<Entry> entries) {
+  public record History(
+      int schemaVersion, String run, Origin origin, java.util.List<Entry> entries) {
     public History {
       identifier(run);
       java.util.Objects.requireNonNull(origin);
@@ -82,16 +83,24 @@ public final class ModelMessagePayloadStore {
         identifier(key);
         java.util.Objects.requireNonNull(reference);
         identifier(reference.id());
-        if (reference.sha256() == null || !reference.sha256().matches("[0-9a-f]{64}")) throw rejected();
+        if (reference.sha256() == null || !reference.sha256().matches("[0-9a-f]{64}"))
+          throw rejected();
       }
     }
   }
 
   public record Accepted(Ref reference, String key, Message message) {
-    @Override public String toString() { return "Accepted[reference=" + reference + ", key=" + key + "]"; }
+    @Override
+    public String toString() {
+      return "Accepted[reference=" + reference + ", key=" + key + "]";
+    }
   }
 
-  public record Exchange(ModelMessagePayloadStore store, Scope scope, String run, String key,
+  public record Exchange(
+      ModelMessagePayloadStore store,
+      Scope scope,
+      String run,
+      String key,
       java.util.function.Consumer<Accepted> observer) {
     public Exchange(ModelMessagePayloadStore store, Scope scope, String run, String key) {
       this(store, scope, run, key, null);
@@ -101,7 +110,9 @@ public final class ModelMessagePayloadStore {
       return new Exchange(store, scope, run, key, java.util.Objects.requireNonNull(value));
     }
 
-    public Exchange withKey(String value) { return new Exchange(store, scope, run, value, observer); }
+    public Exchange withKey(String value) {
+      return new Exchange(store, scope, run, value, observer);
+    }
 
     public String ownerKey() {
       validate(scope);
@@ -197,12 +208,17 @@ public final class ModelMessagePayloadStore {
     validate(scope);
     identifier(owner);
     transaction(db -> {
-      try (var insert = db.prepareStatement(
-          "INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,'CHECKPOINT',?)")) {
+      try (var insert =
+          db.prepareStatement(
+              "INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,'CHECKPOINT',?)")) {
         for (var entry : history.entries()) {
           var message = codec.decode(read(db, scope, entry.reference()));
-          if (scalar(db, "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='RUN' AND owner=?",
-              entry.reference().id(), history.run()) != 1) throw rejected();
+          if (scalar(
+                  db,
+                  "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='RUN' AND owner=?",
+                  entry.reference().id(),
+                  history.run())
+              != 1) throw rejected();
           if (message instanceof org.springframework.ai.chat.messages.AssistantMessage)
             history.origin().requireMatch(message);
           bind(insert, entry.reference().id(), owner);
@@ -218,15 +234,17 @@ public final class ModelMessagePayloadStore {
     identifier(project);
     identifier(task);
     if (revision < 1) throw rejected();
-    return digest(String.join("\0", project, task, Long.toString(revision))
-        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    return digest(
+        String.join("\0", project, task, Long.toString(revision))
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8));
   }
 
   /** Called only after deletion of those exact checkpoint revisions has committed. */
   public void releaseCheckpointHistory(java.util.List<String> owners) {
     transaction(db -> {
-      try (var delete = db.prepareStatement(
-          "DELETE FROM model_message_references WHERE kind='CHECKPOINT' AND owner=?")) {
+      try (var delete =
+          db.prepareStatement(
+              "DELETE FROM model_message_references WHERE kind='CHECKPOINT' AND owner=?")) {
         for (String owner : owners) {
           if (owner == null || !owner.matches("[0-9a-f]{64}")) throw rejected();
           bind(delete, owner);

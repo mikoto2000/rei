@@ -254,7 +254,9 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   /** Explicit definition model; the accepted options must select the same effective endpoint. */
   public ChatModel subAgentChatModel(String model) {
     var configured = subAgentChatModel();
-    return configured instanceof ResponsesAdapter responses ? responses.forModel(model) : configured;
+    return configured instanceof ResponsesAdapter responses
+        ? responses.forModel(model)
+        : configured;
   }
 
   /** Resolve child options only after the caller has assigned the child's own scope. */
@@ -265,7 +267,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       subAgentOptionsFactory(java.util.function.Supplier<String> selectedModel) {
     return (model, owner) -> {
       var resolved = subAgentChatModel(model).getOptions();
-      if (resolved instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions options)
+      if (resolved
+          instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions options)
         return bindRunOptions(options, owner);
       var options = requestOptions(LlmFeature.CHAT, selectedModel.get(), false, owner);
       return model == null ? options : options.mutate().model(model).build();
@@ -427,7 +430,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   }
 
   private org.springframework.ai.model.tool.ToolCallingChatOptions bindRunOptions(
-      org.springframework.ai.model.tool.ToolCallingChatOptions options, dev.mikoto2000.rei.tooldelivery.ReadingRun owner) {
+      org.springframework.ai.model.tool.ToolCallingChatOptions options,
+      dev.mikoto2000.rei.tooldelivery.ReadingRun owner) {
     if (!(options instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions))
       return options;
     var context = new java.util.HashMap<String, Object>();

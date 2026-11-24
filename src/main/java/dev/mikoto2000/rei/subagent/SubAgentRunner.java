@@ -402,7 +402,8 @@ public final class SubAgentRunner {
 
   /** Resolve options after the child has acquired its own immutable Run identity. */
   public void setRunOptionsFactory(
-      java.util.function.BiFunction<String, ? super AgentRunContext, ToolCallingChatOptions> factory) {
+      java.util.function.BiFunction<String, ? super AgentRunContext, ToolCallingChatOptions>
+          factory) {
     runOptionsFactory = java.util.Objects.requireNonNull(factory);
   }
 
@@ -466,7 +467,8 @@ public final class SubAgentRunner {
     this.clock = clock;
   }
 
-  private static Map<String, Object> childToolContext(ToolCallingChatOptions options, AgentRunContext owner) {
+  private static Map<String, Object> childToolContext(
+      ToolCallingChatOptions options, AgentRunContext owner) {
     var result = new java.util.HashMap<String, Object>();
     result.put(AgentRunContext.class.getName(), owner);
     var source = options.getToolContext();
@@ -480,11 +482,15 @@ public final class SubAgentRunner {
     var exchangeKey = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY;
     var originKey = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY;
     if (!source.containsKey(exchangeKey) && !source.containsKey(originKey)) return result;
-    if (!(source.get(exchangeKey) instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)
-        || !(source.get(originKey) instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin))
+    if (!(source.get(exchangeKey)
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)
+        || !(source.get(originKey)
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin))
       throw new IllegalStateException("Child model protocol identity is incomplete");
     if (!exchange.run().equals(owner.runId())
-        || !exchange.scope().equals(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner))
+        || !exchange
+            .scope()
+            .equals(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner))
         || !origin.owner().equals(exchange.ownerKey()))
       throw new IllegalStateException("Child model protocol owner mismatch");
     result.put(exchangeKey, exchange);
