@@ -52,6 +52,31 @@ class ResponsesReplayContractTest {
   private String contentType = "application/json";
 
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"status,false", "status,true", "duplicateItem,false", "duplicateItem,true",
+      "duplicateCall,false", "duplicateCall,true", "arguments,false", "arguments,true", "hosted,false", "hosted,true"})
+  void malformedCompletedOutputCannotDispatch(String changed, boolean streaming) throws Exception {
+    String raw = switch (changed) {
+      case "status" -> toolResponse().replace("\"id\":\"fc_one\",\"call_id\":\"call_one\",\"name\":\"fixture_tool\",\"arguments\":\"{}\",\"status\":\"completed\"",
+          "\"id\":\"fc_one\",\"call_id\":\"call_one\",\"name\":\"fixture_tool\",\"arguments\":\"{}\",\"status\":\"in_progress\"");
+      case "duplicateItem" -> toolResponse().replace("fc_two", "fc_one");
+      case "duplicateCall" -> toolResponse().replace("call_two", "call_one");
+      case "arguments" -> toolResponse().replace("\"arguments\":\"{}\"", "\"arguments\":\"{\"");
+      case "hosted" -> response("resp_hosted", "[{\"type\":\"web_search_call\",\"id\":\"ws_one\",\"status\":\"completed\",\"action\":{\"type\":\"search\",\"query\":\"fixture\"}}]");
+      default -> throw new AssertionError(changed);
+    };
+    contentType = streaming ? "text/event-stream" : "application/json";
+    replies.add(streaming ? sse(raw) : raw);
+    var options = options();
+    var model = model(options);
+    var failure = org.assertj.core.api.Assertions.catchThrowable(() -> {
+      if (streaming) model.stream(new Prompt("fixture", options)).blockLast(Duration.ofSeconds(10));
+      else new ToolLoopSupport().execute(new Prompt("fixture", options), model.call(new Prompt("fixture", options)));
+    });
+    assertThat(executions.get()).isZero();
+    assertThat(failure).isInstanceOf(ResponsesTransportException.class).hasMessageContaining("INVALID_RESPONSE");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void completedStatusWithoutRequiredReasoningDataCannotReachBusinessDispatch(boolean streaming) throws Exception {
     var invalid = toolResponse().replace("\"encrypted_content\":\"opaque-one+/=\",", "");
