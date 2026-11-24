@@ -70,7 +70,8 @@ public final class ModelMessagePayloadStore {
     var pointers = java.util.List.copyOf(references);
     return transaction(db -> {
       var messages = new java.util.HashSet<String>();
-      try (var sourceRun = db.prepareStatement("SELECT run FROM model_message_payloads WHERE id=?")) {
+      try (var sourceRun = db.prepareStatement("SELECT run FROM model_message_payloads WHERE id=?");
+          var lease = db.prepareStatement("INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,'RUN',?)")) {
         for (var pointer : pointers) {
           String historyOwner = pointer.get(HISTORY_OWNER);
           identifier(historyOwner);
@@ -87,7 +88,10 @@ public final class ModelMessagePayloadStore {
             }
             messages.add(replayHash(assistant));
           }
+          bind(lease, ref.id(), target.run());
+          lease.addBatch();
         }
+        lease.executeBatch();
       }
       return new HistoryReplayGrant(origin, messages);
     });
