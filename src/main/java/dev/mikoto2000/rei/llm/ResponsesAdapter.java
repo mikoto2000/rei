@@ -47,6 +47,15 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     if (supplied != null && !(supplied instanceof OpenAiResponsesChatOptions))
       throw new IllegalArgumentException("Responses native options required");
     var options = supplied == null ? getOptions() : (OpenAiResponsesChatOptions) supplied;
+    requireCapability(options.getTemperature(), LlmCapabilities.Setting.TEMPERATURE, "temperature");
+    requireCapability(options.getTopP(), LlmCapabilities.Setting.TOP_P, "topP");
+    requireCapability(options.getReasoningEffort(), LlmCapabilities.Setting.REASONING_EFFORT, "reasoningEffort");
+    requireCapability(options.getReasoningSummary(), LlmCapabilities.Setting.REASONING_SUMMARY, "reasoningSummary");
+    requireCapability(options.getParallelToolCalls(), LlmCapabilities.Setting.PARALLEL_TOOL_CALLS, "parallelToolCalls");
+    requireCapability(options.getResponseFormat(), LlmCapabilities.Setting.STRUCTURED_OUTPUT, "structuredOutput");
+    for (var message : prompt.getInstructions())
+      if (message instanceof org.springframework.ai.chat.messages.UserMessage user && !user.getMedia().isEmpty())
+        requireCapability(Boolean.TRUE, LlmCapabilities.Setting.IMAGE_INPUT, "imageInput");
     if (options.getHostedTools() != null && !options.getHostedTools().isEmpty())
       throw new IllegalArgumentException("Responses hostedTools are not supported");
     if (options.getTruncation() != null && !"disabled".equals(options.getTruncation()))
@@ -64,6 +73,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     if (callbacks == null || callbacks.isEmpty())
       options = options.mutate().toolChoice(null).build();
     return new Prompt(prompt.getInstructions(), options);
+  }
+
+  private void requireCapability(Object value, LlmCapabilities.Setting setting, String name) {
+    if (value != null && !endpoint.capabilities().supportedSettings().contains(setting))
+      throw new IllegalArgumentException("Responses endpoint does not support " + name);
   }
 
   @Override

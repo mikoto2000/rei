@@ -208,7 +208,8 @@ class ResponsesTransportContractTest {
         })).build();
     var endpoint = new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES,
         options.getBaseUrl(), "fixture-credential", options.getModel(),
-        new LlmCapabilities(ReasoningReplayMode.NONE, 128), options.getMaxOutputTokens(),
+        new LlmCapabilities(ReasoningReplayMode.NONE, 128, java.util.Set.of(
+            LlmCapabilities.Setting.STRUCTURED_OUTPUT, LlmCapabilities.Setting.IMAGE_INPUT)), options.getMaxOutputTokens(),
         options.getTemperature(), java.time.Duration.ofMinutes(5));
     return new ResponsesAdapter(endpoint, model);
   }
