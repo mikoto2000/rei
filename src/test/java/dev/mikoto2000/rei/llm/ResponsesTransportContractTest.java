@@ -18,6 +18,50 @@ class ResponsesTransportContractTest {
   private final List<JsonNode> requests = new CopyOnWriteArrayList<>();
   private final List<String> urls = new CopyOnWriteArrayList<>();
   private String reply = completed();
+  private String contentType = "application/json";
+
+  @Test
+  void streamingTextAndUsageComeThroughTheNativeSseParser() {
+    contentType = "text/event-stream";
+    reply = textDelta() + event("response.completed", "\"response\":" + completed());
+    var options = options().build();
+    var chunks = transport(options).stream(new Prompt("fixture", options)).collectList().block();
+    assertThat(chunks).hasSize(2);
+    assertThat(chunks.getFirst().getResult().getOutput().getText()).isEqualTo("done");
+    assertThat(chunks.getLast().getMetadata().getUsage().getTotalTokens()).isEqualTo(5);
+    assertThat(requests.getFirst().path("stream").asBoolean()).isTrue();
+  }
+
+  @Test
+  void streamEndingWithoutTerminalResponseFails() {
+    contentType = "text/event-stream";
+    reply = textDelta();
+    var options = options().build();
+    assertThatThrownBy(() -> transport(options).stream(new Prompt("fixture", options))
+        .collectList().block()).isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Responses");
+  }
+
+  @Test
+  void incompleteStreamFailsInsteadOfCompletingNormally() {
+    contentType = "text/event-stream";
+    reply = textDelta() + event("response.incomplete", "\"response\":"
+        + completed().replaceFirst("\"status\":\"completed\"", "\"status\":\"incomplete\""));
+    var options = options().build();
+    assertThatThrownBy(() -> transport(options).stream(new Prompt("fixture", options))
+        .collectList().block()).isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Responses");
+  }
+
+  private String textDelta() {
+    return event("response.output_text.delta",
+        "\"item_id\":\"msg_fixture\",\"output_index\":0,\"content_index\":0,\"delta\":\"done\",\"logprobs\":[]");
+  }
+
+  private String event(String type, String fields) {
+    return "event: " + type + "\ndata: {\"type\":\"" + type
+        + "\",\"sequence_number\":1," + fields.replace("\n", "") + "}\n\n";
+  }
 
   @Test
   void toolFreeRequestsOmitBothToolFieldsAndUseOnlyResponsesTokenLimits() {
@@ -98,7 +142,7 @@ class ResponsesTransportContractTest {
           return new okhttp3.Response.Builder().request(chain.request())
               .protocol(okhttp3.Protocol.HTTP_1_1).code(200).message("OK")
               .body(okhttp3.ResponseBody.create(reply,
-                  okhttp3.MediaType.get("application/json"))).build();
+                  okhttp3.MediaType.get(contentType))).build();
         })).build();
     var endpoint = new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES,
         options.getBaseUrl(), "fixture-credential", options.getModel(),
