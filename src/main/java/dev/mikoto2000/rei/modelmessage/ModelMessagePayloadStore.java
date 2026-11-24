@@ -28,6 +28,7 @@ public final class ModelMessagePayloadStore {
         throw new IllegalStateException("Model message origin mismatch");
     }
   }
+
   public static final String HISTORY_ID = "rei.modelMessage.id";
   public static final String HISTORY_HASH = "rei.modelMessage.sha256";
   public static final String HISTORY_OWNER = "rei.modelMessage.historyOwner";

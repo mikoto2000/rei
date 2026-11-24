@@ -185,12 +185,13 @@ public final class ToolLoopSupport {
     var options = prompt.getOptions();
     var context = options instanceof ToolCallingChatOptions tools ? tools.getToolContext() : null;
     if (context == null
-          || !(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
-              instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin binding)
-          || (context.containsKey("rei.llm.replay-owner")
-              && !binding.owner().equals(context.get("rei.llm.replay-owner"))))
+        || !(context.get(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin binding)
+        || (context.containsKey("rei.llm.replay-owner")
+            && !binding.owner().equals(context.get("rei.llm.replay-owner"))))
       throw new IllegalStateException("Model message origin mismatch");
-      binding.requireMatch(message);
+    binding.requireMatch(message);
   }
 
   private static boolean truncated(ChatResponse response) {

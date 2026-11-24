@@ -103,11 +103,12 @@ class ApprovalProtocolHistoryTest {
                     dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
                     new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
                         payloads, scope, "run", "resumed"),
-                "rei.llm.resolved-endpoint",
-                current,
-                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
-                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
-                    change.equals("owner") ? "foreign-owner" : "original-owner", current.fingerprint()),
+                    "rei.llm.resolved-endpoint",
+                    current,
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+                        change.equals("owner") ? "foreign-owner" : "original-owner",
+                        current.fingerprint()),
                     "rei.llm.replay-owner",
                     change.equals("owner") ? "foreign-owner" : "original-owner"))
             .build();

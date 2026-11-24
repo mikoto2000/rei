@@ -50,13 +50,21 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.CsvSource({"ENCRYPTED,endpoint", "ENCRYPTED,owner", "ENCRYPTED,binding-only", "NONE,endpoint", "NONE,owner", "NONE,binding-only"})
+  @org.junit.jupiter.params.provider.CsvSource({
+    "ENCRYPTED,endpoint",
+    "ENCRYPTED,owner",
+    "ENCRYPTED,binding-only",
+    "NONE,endpoint",
+    "NONE,owner",
+    "NONE,binding-only"
+  })
   void backendOriginIsTheAuthoritativeRequestBinding(ReasoningReplayMode replay, String mode) {
     replayMode = replay;
     var defaults = options();
     var context = new java.util.HashMap<>(defaults.getToolContext());
     if (mode.equals("binding-only")) context.remove(ResponsesReasoningReplay.OWNER_CONTEXT_KEY);
-    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+    context.put(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
             mode.equals("owner") ? "foreign-owner" : owner,
             mode.equals("endpoint") ? "0".repeat(64) : endpoint(defaults).fingerprint()));
@@ -68,21 +76,40 @@ class ResponsesReplayContractTest {
       assertThat(requests).hasSize(1);
     } else {
       assertThatThrownBy(() -> model(defaults).call(new Prompt("fixture", request)))
-          .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(mode);
+          .isInstanceOf(IllegalArgumentException.class)
+          .hasMessageContaining(mode);
       assertThat(requests).isEmpty();
     }
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.CsvSource({"ENCRYPTED,owner", "ENCRYPTED,endpoint", "NONE,owner", "NONE,endpoint"})
-  void textOnlyNativeHistoryStillRequiresMatchingOrigin(ReasoningReplayMode replay, String mismatch) {
+  @org.junit.jupiter.params.provider.CsvSource({
+    "ENCRYPTED,owner",
+    "ENCRYPTED,endpoint",
+    "NONE,owner",
+    "NONE,endpoint"
+  })
+  void textOnlyNativeHistoryStillRequiresMatchingOrigin(
+      ReasoningReplayMode replay, String mismatch) {
     replayMode = replay;
     var defaults = options();
-    var history = AssistantMessage.builder().content("previous answer").properties(Map.of(
-        ResponsesReasoningReplay.ORIGIN_OWNER, mismatch.equals("owner") ? "foreign-owner" : owner,
-        ResponsesReasoningReplay.ORIGIN_ENDPOINT, mismatch.equals("endpoint") ? "0".repeat(64) : endpoint(defaults).fingerprint())).build();
-    assertThatThrownBy(() -> model(defaults).call(new Prompt(List.of(history, new UserMessage("continue")), defaults)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(mismatch);
+    var history =
+        AssistantMessage.builder()
+            .content("previous answer")
+            .properties(
+                Map.of(
+                    ResponsesReasoningReplay.ORIGIN_OWNER,
+                        mismatch.equals("owner") ? "foreign-owner" : owner,
+                    ResponsesReasoningReplay.ORIGIN_ENDPOINT,
+                        mismatch.equals("endpoint")
+                            ? "0".repeat(64)
+                            : endpoint(defaults).fingerprint()))
+            .build();
+    assertThatThrownBy(() ->
+            model(defaults)
+                .call(new Prompt(List.of(history, new UserMessage("continue")), defaults)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(mismatch);
     assertThat(requests).isEmpty();
   }
 
@@ -991,16 +1018,16 @@ class ResponsesReplayContractTest {
 
   private ResolvedLlmEndpoint endpoint(OpenAiResponsesChatOptions options) {
     return new ResolvedLlmEndpoint(
-            endpointId,
-            generation,
-            LlmApiType.RESPONSES,
-            options.getBaseUrl(),
-            "fixture-credential",
-            options.getModel(),
-            new LlmCapabilities(replayMode, 128),
-            options.getMaxOutputTokens(),
-            null,
-            Duration.ofMinutes(5));
+        endpointId,
+        generation,
+        LlmApiType.RESPONSES,
+        options.getBaseUrl(),
+        "fixture-credential",
+        options.getModel(),
+        new LlmCapabilities(replayMode, 128),
+        options.getMaxOutputTokens(),
+        null,
+        Duration.ofMinutes(5));
   }
 
   private ResponsesAdapter model(OpenAiResponsesChatOptions options) {
