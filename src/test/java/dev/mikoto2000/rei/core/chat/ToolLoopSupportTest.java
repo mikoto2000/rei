@@ -18,6 +18,20 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 /** ツール繰り返し補助の結果と状態の契約を検証するテスト。 */
 class ToolLoopSupportTest {
   @Test
+  void legacyPendingToolsCannotBeUpgradedIntoAProtectedProtocolRun() {
+    var store = org.mockito.Mockito.mock(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class);
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    var prompt = persistencePrompt(store, persistenceCallback(calls));
+    var pending = new RunContinuation.PendingTools("legacy", List.of(
+        new org.springframework.ai.chat.messages.AssistantMessage.ToolCall("call", "function", "fixture", "{}")), List.of());
+    var context = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.class);
+    assertThatThrownBy(() -> new ToolLoopSupport().executePending(prompt, pending, context))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("Legacy pending");
+    assertThat(calls).hasValue(0);
+    org.mockito.Mockito.verifyNoInteractions(store);
+  }
+
+  @Test
   void missingGenerationFailsBeforePersistenceOrDispatchWithAnExplicitError() {
     var callback = persistenceCallback(new java.util.concurrent.atomic.AtomicInteger());
     var prompt = new Prompt("fixture", OpenAiChatOptions.builder().toolCallbacks(callback).build());
