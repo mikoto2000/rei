@@ -141,6 +141,10 @@ public class ConversationLogStore {
     }
   }
 
+  public void append(String conversationId, String speaker, String content, java.util.Map<String, String> metadata) {
+    append(conversationId, speaker, content);
+  }
+
   /** 作業習慣通知。 */
   public static final String BEHAVIOR_NOTIFICATION = "BEHAVIOR_NOTIFICATION";
 

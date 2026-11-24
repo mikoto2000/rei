@@ -15,6 +15,28 @@ import org.junit.jupiter.api.io.TempDir;
 /** 会話ログ保存先の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ConversationLogStoreTest {
+  @Test
+  void pointerMetadataAndBlankProtocolMessageSurviveRestart() {
+    var mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    var metadata = java.util.Map.of("rei.modelMessage.id", "fixture-id", "rei.modelMessage.sha256", "a".repeat(64),
+        "rei.modelMessage.historyOwner", "turn:fixture");
+    var store = new ConversationLogStore(tempDir, Clock.systemUTC(), mapper);
+    store.append("chat", "assistant", "", metadata);
+    var entry = new ConversationLogStore(tempDir, Clock.systemUTC(), mapper).readConversation("chat").getFirst();
+    assertThat(entry.content()).isEmpty();
+    assertThat(entry.metadata()).isEqualTo(metadata);
+    assertThat(entry.sequence()).isEqualTo(1);
+  }
+
+  @Test
+  void durablePointerWriteFailureCannotBeReportedAsSuccess() throws Exception {
+    Path blocked = tempDir.resolve("blocked");
+    Files.writeString(blocked, "fixture file blocks directory creation");
+    var store = new ConversationLogStore(blocked, Clock.systemUTC(), new ObjectMapper().registerModule(new JavaTimeModule()));
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> store.append("chat", "assistant", "fixture",
+        java.util.Map.of("rei.modelMessage.id", "fixture-id")))
+        .isInstanceOf(IllegalStateException.class).hasMessage("Cannot persist conversation log reference").hasNoCause();
+  }
 
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
