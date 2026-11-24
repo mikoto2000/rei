@@ -42,6 +42,7 @@ class BlueskyReplyTextGeneratorTest {
         .model("native-reply").maxOutputTokens(321).build();
     when(models.requestOptions(dev.mikoto2000.rei.llm.LlmFeature.BLUESKY_REPLY,"selected",false)).thenReturn(base);
     var model=Mockito.mock(org.springframework.ai.chat.model.ChatModel.class);
+    when(model.getOptions()).thenReturn(base);
     var owners=new java.util.ArrayList<Object>();
     when(model.stream(any(Prompt.class))).thenAnswer(invocation->{
       Prompt prompt=invocation.getArgument(0);
@@ -128,7 +129,7 @@ class BlueskyReplyTextGeneratorTest {
             .toolChoice("required")
             .build();
     when(holder.get()).thenReturn("current-model");
-    when(models.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.BLUESKY_REPLY, "current-model"))
+    when(models.requestOptions(dev.mikoto2000.rei.llm.LlmFeature.BLUESKY_REPLY, "current-model", false))
         .thenReturn(configured);
     when(clients.chatClient(dev.mikoto2000.rei.llm.LlmFeature.BLUESKY_REPLY)).thenReturn(client);
     when(client.prompt(any(Prompt.class))).thenReturn(request);
@@ -161,7 +162,7 @@ class BlueskyReplyTextGeneratorTest {
     var models = Mockito.mock(LlmModelProvider.class);
     var holder = Mockito.mock(ModelHolderService.class);
     when(holder.get()).thenReturn("current-model");
-    when(models.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.BLUESKY_REPLY, "current-model"))
+    when(models.requestOptions(dev.mikoto2000.rei.llm.LlmFeature.BLUESKY_REPLY, "current-model", false))
         .thenReturn(
             org.springframework.ai.openai.OpenAiChatOptions.builder()
                 .extraBody(java.util.Map.of("tools", List.of(java.util.Map.of("type", "function"))))

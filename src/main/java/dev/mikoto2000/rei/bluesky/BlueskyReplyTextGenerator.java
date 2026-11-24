@@ -18,7 +18,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -48,7 +48,7 @@ public class BlueskyReplyTextGenerator {
   private final Supplier<String> readSelectedModel;
 
   /** モデル提供元。 */
-  private final Function<String, OpenAiChatOptions> optionsForModel;
+  private final Function<String, ToolCallingChatOptions> optionsForModel;
 
   /** この機能の動作設定。 */
   private final java.util.function.IntSupplier generationTimeoutSeconds;
@@ -72,7 +72,7 @@ public class BlueskyReplyTextGenerator {
       BlueskyProperties properties) {
     this.replyChatClient = () -> chatClientProvider.chatClient(LlmFeature.BLUESKY_REPLY);
     this.readSelectedModel = () -> modelHolderService.get();
-    this.optionsForModel = model -> modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, model);
+    this.optionsForModel = model -> modelProvider.requestOptions(LlmFeature.BLUESKY_REPLY, model, false);
     this.generationTimeoutSeconds =
         () -> {
           var reply = properties.getReply();
@@ -196,14 +196,8 @@ public class BlueskyReplyTextGenerator {
   }
 
   /** Blueskyとの連携で用いる返信選択可能な設定を返す。 */
-  private OpenAiChatOptions replyOptions() {
-    var options =
-        optionsForModel
-            .apply(readSelectedModel.get())
-            .mutate()
-            .toolChoice("none")
-            .toolCallbacks(List.of())
-            .build();
+  private ToolCallingChatOptions replyOptions() {
+    var options = dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(optionsForModel.apply(readSelectedModel.get()));
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
     return options;
   }
