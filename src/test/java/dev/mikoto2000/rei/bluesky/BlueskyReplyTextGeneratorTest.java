@@ -33,6 +33,37 @@ import reactor.core.publisher.Flux;
 /** Bluesky返信テキスト生成の結果と状態の契約を検証するテスト。 */
 class BlueskyReplyTextGeneratorTest {
 
+  @Test
+  void everyReplyEntryPointPreservesNativeOptionsWithoutPublishingTools() {
+    var models=Mockito.mock(LlmModelProvider.class);
+    var holder=Mockito.mock(ModelHolderService.class);
+    when(holder.get()).thenReturn("selected");
+    var base=org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+        .model("native-reply").maxOutputTokens(321).build();
+    when(models.requestOptions(dev.mikoto2000.rei.llm.LlmFeature.BLUESKY_REPLY,"selected",false)).thenReturn(base);
+    var model=Mockito.mock(org.springframework.ai.chat.model.ChatModel.class);
+    var owners=new java.util.ArrayList<Object>();
+    when(model.stream(any(Prompt.class))).thenAnswer(invocation->{
+      Prompt prompt=invocation.getArgument(0);
+      assertThat(prompt.getOptions()).isInstanceOf(org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.class);
+      var sent=(org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)prompt.getOptions();
+      assertThat(sent.getMaxOutputTokens()).isEqualTo(321);
+      assertThat(sent.getToolCallbacks()).isEmpty();
+      assertThat(sent.getToolChoice()).isNull();
+      owners.add(sent.getToolContext().get("rei.llm.replay-owner"));
+      assertThat(owners.getLast()).asString().startsWith("feature:");
+      return Flux.just(response("reply"));
+    });
+    var clients=Mockito.mock(LlmChatClientProvider.class);
+    when(clients.chatClient(dev.mikoto2000.rei.llm.LlmFeature.BLUESKY_REPLY)).thenReturn(ChatClient.builder(model).build());
+    var generator=new BlueskyReplyTextGenerator(clients,holder,models,new BlueskyProperties());
+    assertThat(generator.generate("fixture.bsky.social","post",List.of())).isEqualTo("reply");
+    assertThat(generator.generateForManualReply("post","fixture.bsky.social","fixture-id")).isEqualTo("reply");
+    assertThat(generator.generateForManualReply("post","fixture-id")).isEqualTo("reply");
+    assertThat(owners).hasSize(3).doesNotHaveDuplicates();
+    assertThat(base.getToolContext()).isNull();
+  }
+
   /** 生成について、モデルへ対話を依頼する窓口を利用することを確認する。 */
   @Test
   void generateUsesChatClientWithCurrentModel() {
