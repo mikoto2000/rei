@@ -63,6 +63,14 @@ public final class ModelMessagePayloadStore {
       }
     }
 
+    /** Combine only backend-created grants for exactly the same target owner and endpoint. */
+    public HistoryReplayGrant merge(HistoryReplayGrant other) {
+      if (other == null || !target.equals(other.target)) throw rejected();
+      var combined = new java.util.HashSet<>(messages);
+      combined.addAll(other.messages);
+      return new HistoryReplayGrant(target, combined);
+    }
+
     @Override
     public String toString() {
       return "HistoryReplayGrant[messageCount=" + messages.size() + "]";
