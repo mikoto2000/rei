@@ -93,6 +93,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   private final java.util.function.Supplier<java.time.Duration> readTimeout;
   private final java.util.function.IntSupplier defaultOutputTokens;
   private final Integer defaultMaxTools;
+  private java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
+      responsesFixtureCustomizers;
 
   /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
@@ -117,6 +119,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   public ResolvedLlmEndpoint resolvedEndpoint(String feature) {
     requireAvailableProtocol(feature);
     var server = resolvedServer(feature);
+    if (server != null && server.getApi() == LlmApiType.RESPONSES)
+      return endpoint(server, model(server, null), feature);
     if (LlmFeature.VOICE_CORRECTION.equals(feature)
         && (server == null || !server.hasCustomServer())) {
       var connection = resolvedServer(LlmFeature.CHAT);
@@ -149,14 +153,18 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       baseUrl = defaults.getBaseUrl();
       if (temperature == null) temperature = defaults.getTemperature();
     }
+    var api = server == null || server.getApi() == null ? LlmApiType.CHAT_COMPLETIONS : server.getApi();
+    if (api == LlmApiType.RESPONSES && server.getReasoningReplay() == null)
+      throw new IllegalStateException("Responses replay mode is required");
     return new ResolvedLlmEndpoint(
         custom ? feature : "default",
         server == null ? 1 : server.getEndpointGeneration(),
-        LlmApiType.CHAT_COMPLETIONS,
+        api,
         baseUrl,
         custom ? "feature:" + feature : "default",
         model,
-        new LlmCapabilities(ReasoningReplayMode.NONE, maxTools(server)),
+        new LlmCapabilities(api == LlmApiType.RESPONSES ? server.getReasoningReplay() : ReasoningReplayMode.NONE,
+            maxTools(server), api == LlmApiType.RESPONSES ? server.getSupportedSettings() : java.util.Set.of()),
         maxOutputTokens(server),
         temperature,
         readTimeout.get());
@@ -169,7 +177,9 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   static LlmModelProvider forResponsesFixture(
       ChatModel defaults, LlmProperties properties,
       java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> customizers) {
-    return new LlmModelProvider(defaults, properties);
+    var provider = new LlmModelProvider(defaults, properties);
+    provider.responsesFixtureCustomizers = java.util.List.copyOf(customizers);
+    return provider;
   }
 
   /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -210,6 +220,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         throw new IllegalStateException("Responses voice correction is unavailable");
       server = resolvedServer(LlmFeature.CHAT);
     }
+    if (server != null && server.getApi() == LlmApiType.RESPONSES && responsesFixtureCustomizers != null) return;
     if ((server != null && server.getApi() == LlmApiType.RESPONSES)
         || ((server == null || !server.hasCustomServer() || server.isFallbackToDefault())
             && defaultChatModel != null
@@ -254,6 +265,28 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   /** 新たな対象を利用できるよう、機能モデルを作成する。 */
   private ChatModel createFeatureModel(String feature) {
+    var nativeServer = resolvedServer(feature);
+    if (nativeServer != null && nativeServer.getApi() == LlmApiType.RESPONSES) {
+      if (!nativeServer.hasCustomServer() || nativeServer.getModel() == null || nativeServer.getModel().isBlank()
+          || nativeServer.isFallbackToDefault())
+        throw new IllegalStateException("Responses requires an explicit endpoint/model without fallback");
+      var endpoint = resolvedEndpoint(feature);
+      var host = java.net.URI.create(endpoint.baseUrl()).getHost();
+      if (host == null || !(host.endsWith(".invalid") || java.util.Set.of("localhost", "127.0.0.1", "::1", "[::1]").contains(host)))
+        throw new IllegalStateException("Responses fixture endpoint must be owned locally");
+      if (endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT)
+        throw new IllegalStateException("Responses plaintext replay is unavailable");
+      var builder = org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+          .baseUrl(endpoint.baseUrl()).apiKey(nativeServer.getApiKey() == null ? "fixture-key" : nativeServer.getApiKey())
+          .model(endpoint.model()).temperature(endpoint.temperature()).maxOutputTokens(endpoint.maxOutputTokens())
+          .maxRetries(0).timeout(endpoint.readTimeout()).strict(false);
+      var context = new java.util.HashMap<String, Object>();
+      context.put(ResolvedLlmEndpoint.CONTEXT_KEY, endpoint);
+      if (endpoint.capabilities().maxTools() != null)
+        context.put(LlmCapabilities.MAX_TOOLS_CONTEXT_KEY, endpoint.capabilities().maxTools());
+      builder.toolContext(context);
+      return ResponsesAdapter.create(endpoint, builder.build(), responsesFixtureCustomizers);
+    }
     if (LlmFeature.VOICE_CORRECTION.equals(feature)) {
       // An explicitly selected correction endpoint must never fall back to a different remote
       // server.
@@ -335,6 +368,13 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   /** Native request options; production availability is checked by the existing provider gate. */
   public org.springframework.ai.model.tool.ToolCallingChatOptions requestOptions(
       String feature, String defaultModel, boolean streamUsage) {
+    requireAvailableProtocol(feature);
+    var server = resolvedServer(feature);
+    if (server != null && server.getApi() == LlmApiType.RESPONSES) {
+      if (!(chatModel(feature).getOptions() instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions options))
+        throw new IllegalStateException("Responses native request options are unavailable");
+      return options.mutate().build();
+    }
     return chatOptions(feature, defaultModel, streamUsage);
   }
 
