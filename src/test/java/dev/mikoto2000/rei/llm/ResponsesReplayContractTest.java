@@ -28,6 +28,24 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 @org.junit.jupiter.api.Timeout(30)
 class ResponsesReplayContractTest {
   @Test
+  void nativeAssistantCanBeEncodedRestoredAndReplayedWithoutLosingUsageOrPayload() {
+    replies.add(reasoningDone());
+    var options = options();
+    var model = model(options);
+    var original = model.call(new Prompt("fixture", options)).getResult().getOutput();
+    var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
+    var restored = (AssistantMessage) codec.decode(codec.encode(original));
+    assertThat(restored.getParts()).containsExactlyElementsOf(original.getParts());
+    var restoredResponse = new org.springframework.ai.chat.model.ChatResponse(List.of(
+        new org.springframework.ai.chat.model.Generation(restored)));
+    assertThat(ResponsesTransportException.usage(restoredResponse))
+        .isEqualTo(new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
+    model.call(new Prompt(List.of(new UserMessage("fixture"), restored), options));
+    assertThat(requests).hasSize(2);
+    assertThat(requests.getLast().path("input").get(1).path("encrypted_content").asText())
+        .isEqualTo("opaque-bound");
+  }
+  @Test
   void outputLimitReachesTheExistingRunHandoffAndTokenBudgetWithoutDispatch() throws Exception {
     contentType = "text/event-stream";
     var truncated =
