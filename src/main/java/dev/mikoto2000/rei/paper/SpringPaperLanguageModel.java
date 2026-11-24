@@ -9,7 +9,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.stereotype.Component;
 
 /** 論文の調査と整理に必要なSpring論文文章を生成するモデルを扱う。 */
@@ -20,7 +20,7 @@ public class SpringPaperLanguageModel implements PaperLanguageModel {
 
   private final Function<String, String> configuredModel;
 
-  private final Function<String, OpenAiChatOptions> optionsForModel;
+  private final Function<String, ToolCallingChatOptions> optionsForModel;
 
   /** 設定。 */
   private final Supplier<Duration> llmTimeout;
@@ -29,7 +29,7 @@ public class SpringPaperLanguageModel implements PaperLanguageModel {
   public SpringPaperLanguageModel(LlmModelProvider provider, PaperProperties config) {
     this.subAgentModel = () -> provider.subAgentChatModel();
     this.configuredModel = fallback -> provider.model("chat", fallback);
-    this.optionsForModel = selected -> provider.chatOptions("chat", selected);
+    this.optionsForModel = selected -> provider.requestOptions("chat", selected, false);
     this.llmTimeout = () -> config.getLlmTimeout();
   }
 
@@ -45,7 +45,7 @@ public class SpringPaperLanguageModel implements PaperLanguageModel {
   public String generate(String system, String input, PaperOperation op) {
     op.check();
     var options =
-        optionsForModel.apply(model()).mutate().toolCallbacks(List.of()).toolChoice("none").build();
+        dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(optionsForModel.apply(model()));
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
     var chatModel = subAgentModel.get();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(chatModel);

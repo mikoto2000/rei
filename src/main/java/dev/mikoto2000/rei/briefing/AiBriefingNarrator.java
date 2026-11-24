@@ -9,7 +9,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -20,7 +20,7 @@ public class AiBriefingNarrator implements BriefingNarrator {
   /** モデル提供元。 */
   private final Supplier<ChatModel> featureModel;
 
-  private final Function<String, OpenAiChatOptions> optionsForModel;
+  private final Function<String, ToolCallingChatOptions> optionsForModel;
 
   /** モデル保持先サービス。 */
   private final Supplier<String> readSelectedModel;
@@ -34,7 +34,7 @@ public class AiBriefingNarrator implements BriefingNarrator {
   @Autowired
   public AiBriefingNarrator(LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
     this.featureModel = () -> modelProvider.chatModel(LlmFeature.BRIEFING);
-    this.optionsForModel = selected -> modelProvider.chatOptions(LlmFeature.BRIEFING, selected);
+    this.optionsForModel = selected -> dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(modelProvider.requestOptions(LlmFeature.BRIEFING, selected, false));
     this.readSelectedModel = () -> modelHolderService.get();
   }
 
