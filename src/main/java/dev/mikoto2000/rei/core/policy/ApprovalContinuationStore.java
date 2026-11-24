@@ -145,7 +145,8 @@ public class ApprovalContinuationStore {
       throw new IllegalArgumentException("Pending Tool required");
     if (pending.assistantReference() != null) {
       var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
-      payloads.obtain()
+      payloads
+          .obtain()
           .publish(
               scope,
               pending.assistantReference(),
@@ -161,9 +162,11 @@ public class ApprovalContinuationStore {
               if (requiresPayload(m)) {
                 var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
                 var ref =
-                    payloads.obtain()
+                    payloads
+                        .obtain()
                         .save(scope, owner.runId(), "approval:" + id + "/history:" + index, m);
-                payloads.obtain()
+                payloads
+                    .obtain()
                     .publish(scope, ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, id);
                 return new StoredMessage(
                     "MODEL_" + m.getMessageType().name(), "", List.of(), List.of(), null, ref);
@@ -275,7 +278,8 @@ public class ApprovalContinuationStore {
   public RunContinuation.Saved saved(Entry entry) {
     var d = document(entry);
     if (d.pending() != null && d.pending().assistantReference() != null)
-      payloads.obtain()
+      payloads
+          .obtain()
           .load(
               ModelMessagePayloadStore.Scope.forOwner(d.owner()),
               d.pending().assistantReference(),
@@ -287,7 +291,8 @@ public class ApprovalContinuationStore {
             .map(m -> {
               if (m.payload() != null) {
                 var message =
-                    payloads.obtain()
+                    payloads
+                        .obtain()
                         .load(
                             ModelMessagePayloadStore.Scope.forOwner(d.owner()),
                             m.payload(),
