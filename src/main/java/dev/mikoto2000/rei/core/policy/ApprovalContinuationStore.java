@@ -251,7 +251,7 @@ public class ApprovalContinuationStore {
     try {
       return json.readValue(entry.document(), Document.class);
     } catch (java.io.IOException error) {
-      throw new IllegalStateException("Invalid approval continuation", error);
+      throw new IllegalStateException("Invalid approval continuation");
     }
   }
 
@@ -369,7 +369,7 @@ public class ApprovalContinuationStore {
     try {
       return json.writeValueAsString(d);
     } catch (java.io.IOException error) {
-      throw new IllegalStateException("Cannot save approval continuation", error);
+      throw new IllegalStateException("Cannot save approval continuation");
     }
   }
 }
