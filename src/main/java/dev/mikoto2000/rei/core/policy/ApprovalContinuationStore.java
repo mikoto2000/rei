@@ -443,6 +443,11 @@ public class ApprovalContinuationStore {
                   };
             })
             .toList();
+    if (d.protocolHistory() != null && d.protocolHistory().input() != null) {
+      var scope = ModelMessagePayloadStore.Scope.forOwner(d.owner());
+      messages = d.protocolHistory().input().entries().stream().map(pointer ->
+          payloads.obtain().loadEntry(scope, pointer, ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId())).toList();
+    }
     List<ModelMessagePayloadStore.ReplayReference> references = null;
     if (d.protocolHistory() != null
         || backendNative(pendingMessage)
