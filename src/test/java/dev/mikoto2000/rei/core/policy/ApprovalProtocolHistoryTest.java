@@ -184,6 +184,7 @@ class ApprovalProtocolHistoryTest {
             org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse::responseData)
         .containsExactly("saved prefix", "approved result");
     assertThat(entry.document()).doesNotContain("pending-opaque");
+    assertThat(entry.document()).doesNotContain("saved prefix");
   }
 
   @Test
