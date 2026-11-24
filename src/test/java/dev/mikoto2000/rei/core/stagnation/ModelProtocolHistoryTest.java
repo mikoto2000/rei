@@ -98,6 +98,24 @@ class ModelProtocolHistoryTest {
   }
 
   @Test
+  void repeatedAcceptanceCannotBypassAFailedCheckpointSave() {
+    var fixture = fixture();
+    var attempts = new java.util.concurrent.atomic.AtomicInteger();
+    fixture.execution().setToolResultsCheckpoint(ignored -> {
+      attempts.incrementAndGet();
+      throw new IllegalStateException("checkpoint unavailable");
+    });
+    var assistant = AssistantMessage.builder().content("working")
+        .properties(Map.of("rei.llm.replay-origin-owner", fixture.exchange().ownerKey(),
+            "rei.llm.replay-origin-endpoint", "endpoint")).build();
+    for (int i = 0; i < 2; i++)
+      org.assertj.core.api.Assertions.assertThatThrownBy(() -> fixture.exchange().persist(assistant))
+          .isInstanceOf(IllegalStateException.class).hasMessage("checkpoint unavailable");
+    assertThat(attempts).hasValue(2);
+    assertThat(fixture.execution().progressSnapshot().protocolHistory()).isNull();
+  }
+
+  @Test
   void originalMediaBytesRemainRecoverableAfterTheAttachmentChanges() throws Exception {
     var fixture = fixture();
     var image = directory.resolve("attachment.png");
