@@ -88,6 +88,41 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"fallback", "model", "url", "replay", "plaintext", "external"})
+  void nativeFixturesCannotBypassIncompleteConfigurationOrProductionAvailability(String defect) {
+    var properties = nativeProperties();
+    var server = properties.feature(LlmFeature.CHAT);
+    switch (defect) {
+      case "fallback" -> server.setFallbackToDefault(true);
+      case "model" -> server.setModel(null);
+      case "url" -> server.setBaseUrl(null);
+      case "replay" -> server.setReasoningReplay(null);
+      case "plaintext" -> server.setReasoningReplay(ReasoningReplayMode.PLAINTEXT);
+      case "external" -> server.setBaseUrl("https://api.openai.com");
+      default -> throw new AssertionError(defect);
+    }
+    properties.setFeature(LlmFeature.CHAT, server);
+    var provider = nativeProvider(properties);
+    assertThatThrownBy(() -> provider.chatModel(LlmFeature.CHAT)).isInstanceOf(IllegalStateException.class);
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
+  void nativeExplicitSettingsWithoutDeclaredCapabilityFailBeforeHttp() {
+    var properties = nativeProperties();
+    var server = properties.feature(LlmFeature.CHAT);
+    server.setSupportedSettings(java.util.Set.of());
+    properties.setFeature(LlmFeature.CHAT, server);
+    var provider = nativeProvider(properties);
+    var run = new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "chat", protocolDirectory, "project");
+    assertThatThrownBy(() -> provider.chatModel(LlmFeature.CHAT).call(new Prompt("fixture",
+        provider.requestOptions(LlmFeature.CHAT, null, true, run))))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("temperature");
+    assertThat(requests).isEmpty();
+    assertThat(protocolStore.usage(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(run), run.runId()).payloadCount()).isZero();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(value = ReasoningReplayMode.class, names = {"ENCRYPTED", "NONE"})
   void acceptedNativeOwnersStayDistinctAcrossRunsAndCredentialRotation(ReasoningReplayMode replay) {
     var properties = nativeProperties();
