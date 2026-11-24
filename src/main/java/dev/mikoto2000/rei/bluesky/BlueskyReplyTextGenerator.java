@@ -72,7 +72,8 @@ public class BlueskyReplyTextGenerator {
       BlueskyProperties properties) {
     this.replyChatClient = () -> chatClientProvider.chatClient(LlmFeature.BLUESKY_REPLY);
     this.readSelectedModel = () -> modelHolderService.get();
-    this.optionsForModel = model -> modelProvider.requestOptions(LlmFeature.BLUESKY_REPLY, model, false);
+    this.optionsForModel =
+        model -> modelProvider.requestOptions(LlmFeature.BLUESKY_REPLY, model, false);
     this.generationTimeoutSeconds =
         () -> {
           var reply = properties.getReply();
@@ -197,7 +198,9 @@ public class BlueskyReplyTextGenerator {
 
   /** Blueskyとの連携で用いる返信選択可能な設定を返す。 */
   private ToolCallingChatOptions replyOptions() {
-    var options = dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(optionsForModel.apply(readSelectedModel.get()));
+    var options =
+        dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(
+            optionsForModel.apply(readSelectedModel.get()));
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
     return options;
   }

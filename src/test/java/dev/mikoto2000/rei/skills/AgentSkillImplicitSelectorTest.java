@@ -15,19 +15,26 @@ class AgentSkillImplicitSelectorTest {
 
   @Test
   void nativeSelectionPreservesTheFeatureLimitAndUsesAnIndependentRequestOwner() {
-    var provider=Mockito.mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
-    var model=Mockito.mock(ChatModel.class);
-    var nativeOptions=org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
-        .model("native-selector").maxOutputTokens(73).build();
-    when(provider.requestOptions("agent-skills",null,true)).thenReturn(nativeOptions);
+    var provider = Mockito.mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
+    var model = Mockito.mock(ChatModel.class);
+    var nativeOptions =
+        org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+            .model("native-selector")
+            .maxOutputTokens(73)
+            .build();
+    when(provider.requestOptions("agent-skills", null, true)).thenReturn(nativeOptions);
     when(provider.chatModel("agent-skills")).thenReturn(model);
-    var candidate=skill("skill-a");
-    var owners=new java.util.ArrayList<Object>();
+    var candidate = skill("skill-a");
+    var owners = new java.util.ArrayList<Object>();
     when(model.stream(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
-        .thenAnswer(invocation->{
-          org.springframework.ai.chat.prompt.Prompt prompt=invocation.getArgument(0);
-          assertThat(prompt.getOptions()).isInstanceOf(org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.class);
-          var sent=(org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)prompt.getOptions();
+        .thenAnswer(invocation -> {
+          org.springframework.ai.chat.prompt.Prompt prompt = invocation.getArgument(0);
+          assertThat(prompt.getOptions())
+              .isInstanceOf(
+                  org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.class);
+          var sent =
+              (org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)
+                  prompt.getOptions();
           assertThat(sent.getMaxOutputTokens()).isEqualTo(73);
           assertThat(sent.getToolCallbacks()).isEmpty();
           owners.add(sent.getToolContext().get("rei.llm.replay-owner"));
@@ -35,10 +42,13 @@ class AgentSkillImplicitSelectorTest {
           assertThat(prompt.getContents()).doesNotContain(candidate.instructions());
           return reactor.core.publisher.Flux.just(response("[\"skill-a\"]"));
         });
-    var selector=new AgentSkillImplicitSelector(provider,new InMemoryAgentSkillRepository(List.of(candidate)));
-    var calls=new java.util.concurrent.atomic.AtomicInteger();
-    for(int request=0;request<2;request++)
-      assertThat(selector.select("request",Set.of(),List.of(candidate),calls::incrementAndGet)).containsExactly(candidate);
+    var selector =
+        new AgentSkillImplicitSelector(
+            provider, new InMemoryAgentSkillRepository(List.of(candidate)));
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    for (int request = 0; request < 2; request++)
+      assertThat(selector.select("request", Set.of(), List.of(candidate), calls::incrementAndGet))
+          .containsExactly(candidate);
     assertThat(calls).hasValue(2);
     assertThat(owners).hasSize(2).doesNotHaveDuplicates();
     assertThat(nativeOptions.getToolContext()).isNull();

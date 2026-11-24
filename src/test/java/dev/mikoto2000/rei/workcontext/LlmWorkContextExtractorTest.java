@@ -128,7 +128,8 @@ class LlmWorkContextExtractorTest {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.requestOptions("memory", null, false)).thenReturn(OpenAiChatOptions.builder().build());
+    when(models.requestOptions("memory", null, false))
+        .thenReturn(OpenAiChatOptions.builder().build());
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
     when(model.stream(any(Prompt.class)))
         .thenReturn(Flux.<ChatResponse>never().doOnCancel(() -> cancelled.set(true)));
@@ -163,7 +164,8 @@ class LlmWorkContextExtractorTest {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.requestOptions("memory", null, false)).thenReturn(OpenAiChatOptions.builder().build());
+    when(models.requestOptions("memory", null, false))
+        .thenReturn(OpenAiChatOptions.builder().build());
     var firstEntered = new java.util.concurrent.CountDownLatch(1);
     var secondStarted = new java.util.concurrent.CountDownLatch(1);
     var secondEntered = new java.util.concurrent.CountDownLatch(1);

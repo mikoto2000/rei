@@ -20,13 +20,26 @@ public record OutputLimitReplanRequest(
     int replanCount,
     int maxReplansPerGoal,
     int remainingLlmCalls,
-    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    @com.fasterxml.jackson.annotation.JsonInclude(
+            com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         Integer outputTokenLimit) {
-  public OutputLimitReplanRequest(String originalUserRequest, String currentGoal,
-      String progressSoFar, String partialOutput, int replanCount, int maxReplansPerGoal,
+  public OutputLimitReplanRequest(
+      String originalUserRequest,
+      String currentGoal,
+      String progressSoFar,
+      String partialOutput,
+      int replanCount,
+      int maxReplansPerGoal,
       int remainingLlmCalls) {
-    this(originalUserRequest, currentGoal, progressSoFar, partialOutput, replanCount,
-        maxReplansPerGoal, remainingLlmCalls, null);
+    this(
+        originalUserRequest,
+        currentGoal,
+        progressSoFar,
+        partialOutput,
+        replanCount,
+        maxReplansPerGoal,
+        remainingLlmCalls,
+        null);
   }
 
   public OutputLimitReplanRequest {

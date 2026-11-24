@@ -161,7 +161,8 @@ public final class ModelOptions {
   /** Read the accepted request's native output limit without changing its parameter family. */
   public static Integer outputLimit(ToolCallingChatOptions options) {
     if (options == null) return null;
-    if (options instanceof OpenAiResponsesChatOptions responses) return responses.getMaxOutputTokens();
+    if (options instanceof OpenAiResponsesChatOptions responses)
+      return responses.getMaxOutputTokens();
     else if (options instanceof OpenAiChatOptions chat) {
       var completion = chat.getMaxCompletionTokens();
       return completion == null ? chat.getMaxTokens() : completion;

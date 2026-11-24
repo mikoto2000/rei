@@ -28,14 +28,16 @@ class NativeTextFeatureOptionsTest {
     var model = mock(ChatModel.class);
     var nativeOptions =
         OpenAiResponsesChatOptions.builder().model("native").maxOutputTokens(321).build();
-    when(models.requestOptions(feature.equals("paper") ? "chat" : feature, "selected", false)).thenReturn(nativeOptions);
+    when(models.requestOptions(feature.equals("paper") ? "chat" : feature, "selected", false))
+        .thenReturn(nativeOptions);
     if (feature.equals("paper")) {
       when(models.subAgentChatModel()).thenReturn(model);
       when(models.model("chat", null)).thenReturn("selected");
     }
     when(models.chatModel(feature)).thenReturn(model);
     var owners = new java.util.ArrayList<Object>();
-    org.mockito.stubbing.Answer<ChatResponse> response = call -> {
+    org.mockito.stubbing.Answer<ChatResponse> response =
+        call -> {
           Prompt prompt = call.getArgument(0);
           assertThat(prompt.getOptions()).isInstanceOf(OpenAiResponsesChatOptions.class);
           var sent = (OpenAiResponsesChatOptions) prompt.getOptions();
@@ -47,11 +49,15 @@ class NativeTextFeatureOptionsTest {
           owners.add(sent.getToolContext().get("rei.llm.replay-owner"));
           assertThat(sent.getToolCallbacks()).isEmpty();
           assertThat(nativeOptions.getToolContext()).isNull();
-          String text=feature.equals("briefing") ? "OVERVIEW: result\nCAUTIONS:\n- caution\nNEXT_ACTIONS:\n- action" : "result";
+          String text =
+              feature.equals("briefing")
+                  ? "OVERVIEW: result\nCAUTIONS:\n- caution\nNEXT_ACTIONS:\n- action"
+                  : "result";
           return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
         };
     when(model.call(any(Prompt.class))).thenAnswer(response);
-    when(model.stream(any(Prompt.class))).thenAnswer(call -> reactor.core.publisher.Flux.just(response.answer(call)));
+    when(model.stream(any(Prompt.class)))
+        .thenAnswer(call -> reactor.core.publisher.Flux.just(response.answer(call)));
     for (int request = 0; request < 2; request++) {
       if (feature.equals("image-prompt"))
         assertThat(
@@ -59,12 +65,28 @@ class NativeTextFeatureOptionsTest {
                     .enhance("input"))
             .isEqualTo("result");
       else if (feature.equals("briefing"))
-        assertThat(new dev.mikoto2000.rei.briefing.AiBriefingNarrator(models,holder).narrate(
-            new dev.mikoto2000.rei.briefing.BriefingContext(java.time.LocalDate.of(2026,1,1),List.of(),List.of(),List.of(),List.of())).overview())
+        assertThat(
+                new dev.mikoto2000.rei.briefing.AiBriefingNarrator(models, holder)
+                    .narrate(
+                        new dev.mikoto2000.rei.briefing.BriefingContext(
+                            java.time.LocalDate.of(2026, 1, 1),
+                            List.of(),
+                            List.of(),
+                            List.of(),
+                            List.of()))
+                    .overview())
             .isEqualTo("result");
       else if (feature.equals("paper"))
-        assertThat(new dev.mikoto2000.rei.paper.SpringPaperLanguageModel(models,new dev.mikoto2000.rei.paper.PaperProperties())
-            .generate("instructions","input",new dev.mikoto2000.rei.paper.PaperOperation("chat",null,System.nanoTime()+java.time.Duration.ofSeconds(5).toNanos())))
+        assertThat(
+                new dev.mikoto2000.rei.paper.SpringPaperLanguageModel(
+                        models, new dev.mikoto2000.rei.paper.PaperProperties())
+                    .generate(
+                        "instructions",
+                        "input",
+                        new dev.mikoto2000.rei.paper.PaperOperation(
+                            "chat",
+                            null,
+                            System.nanoTime() + java.time.Duration.ofSeconds(5).toNanos())))
             .isEqualTo("result");
       else
         assertThat(

@@ -64,7 +64,9 @@ public class OutputLimitReplanner {
     Prompt prompt =
         new Prompt(
             buildPrompt(request),
-            dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(modelProvider.requestOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, modelHolderService.get(), false)));
+            dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(
+                modelProvider.requestOptions(
+                    LlmFeature.OUTPUT_LIMIT_PLANNER, modelHolderService.get(), false)));
     ChatResponse response;
     try {
       var model = modelProvider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER);
@@ -134,7 +136,8 @@ public class OutputLimitReplanner {
 
         Max output tokens per call:
         """,
-        Objects.toString(request.outputTokenLimit(), String.valueOf(properties.getMaxOutputTokens())),
+        Objects.toString(
+            request.outputTokenLimit(), String.valueOf(properties.getMaxOutputTokens())),
         "\n\nRemaining execution budget:\nreplanCount=",
         String.valueOf(request.replanCount()),
         "\nmaxReplansPerGoal=",

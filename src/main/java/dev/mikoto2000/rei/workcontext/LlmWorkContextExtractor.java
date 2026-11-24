@@ -114,10 +114,12 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
     var model = modelForCalls.get();
     ToolLoopSupport.requireNoDefaultTools(model);
     var baseOptions = optionsForCalls.get();
-    var options = dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(
-        dev.mikoto2000.rei.modeloptions.ModelOptions.capOutputLimit(
-            dev.mikoto2000.rei.modeloptions.ModelOptions.withLocalThinking(baseOptions, properties.enableThinking()),
-            properties.maxOutputTokens()));
+    var options =
+        dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(
+            dev.mikoto2000.rei.modeloptions.ModelOptions.capOutputLimit(
+                dev.mikoto2000.rei.modeloptions.ModelOptions.withLocalThinking(
+                    baseOptions, properties.enableThinking()),
+                properties.maxOutputTokens()));
     ToolLoopSupport.requireNoRawTools(options);
     var result = new StringBuilder();
     boolean acquired = false;

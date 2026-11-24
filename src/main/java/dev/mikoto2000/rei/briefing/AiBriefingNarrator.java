@@ -34,7 +34,10 @@ public class AiBriefingNarrator implements BriefingNarrator {
   @Autowired
   public AiBriefingNarrator(LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
     this.featureModel = () -> modelProvider.chatModel(LlmFeature.BRIEFING);
-    this.optionsForModel = selected -> dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(modelProvider.requestOptions(LlmFeature.BRIEFING, selected, false));
+    this.optionsForModel =
+        selected ->
+            dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(
+                modelProvider.requestOptions(LlmFeature.BRIEFING, selected, false));
     this.readSelectedModel = () -> modelHolderService.get();
   }
 
