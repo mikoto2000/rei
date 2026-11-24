@@ -82,9 +82,16 @@ public final class ModelMessagePayloadStore {
 
   public HistoryReplayGrant historyReplayGrant(
       Exchange target, java.util.List<java.util.Map<String, String>> references, Origin origin) {
-    return restoreReplayGrant(target, references.stream().map(pointer -> new ReplayReference(
-        new Ref(pointer.get(HISTORY_ID), pointer.get(HISTORY_HASH)), ReferenceKind.HISTORY,
-        pointer.get(HISTORY_OWNER))).toList(), origin);
+    return restoreReplayGrant(
+        target,
+        references.stream()
+            .map(pointer ->
+                new ReplayReference(
+                    new Ref(pointer.get(HISTORY_ID), pointer.get(HISTORY_HASH)),
+                    ReferenceKind.HISTORY,
+                    pointer.get(HISTORY_OWNER)))
+            .toList(),
+        origin);
   }
 
   public HistoryReplayGrant restoreReplayGrant(
@@ -107,7 +114,9 @@ public final class ModelMessagePayloadStore {
           if (scalar(
                   db,
                   "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind=? AND owner=?",
-                  ref.id(), pointer.kind().name(), pointer.owner())
+                  ref.id(),
+                  pointer.kind().name(),
+                  pointer.owner())
               != 1) throw rejected();
           if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
             bind(sourceRun, ref.id());
@@ -220,14 +229,22 @@ public final class ModelMessagePayloadStore {
     public Exchange resume(History history, Ref assistant) {
       if (history == null || assistant == null) return this;
       if (!run.equals(history.run())) throw rejected();
-      var entry = history.entries().stream().filter(item -> item.reference().equals(assistant))
-          .findFirst().orElseThrow(ModelMessagePayloadStore::rejected);
+      var entry =
+          history.entries().stream()
+              .filter(item -> item.reference().equals(assistant))
+              .findFirst()
+              .orElseThrow(ModelMessagePayloadStore::rejected);
       String suffix = "/ASSISTANT";
       if (!entry.key().endsWith(suffix)) throw rejected();
       store.load(scope, assistant, ReferenceKind.RUN, run);
       store.transaction(db -> {
-        if (scalar(db, "SELECT COUNT(*) FROM model_message_payloads WHERE id=? AND run=? AND message_key=?",
-            assistant.id(), run, entry.key()) != 1) throw rejected();
+        if (scalar(
+                db,
+                "SELECT COUNT(*) FROM model_message_payloads WHERE id=? AND run=? AND message_key=?",
+                assistant.id(),
+                run,
+                entry.key())
+            != 1) throw rejected();
         return null;
       });
       return withKey(entry.key().substring(0, entry.key().length() - suffix.length()));

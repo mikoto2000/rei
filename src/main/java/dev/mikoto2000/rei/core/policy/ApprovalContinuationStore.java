@@ -104,14 +104,20 @@ public class ApprovalContinuationStore {
       RunContinuation.PendingTools pending,
       OutputLimitRunBudget.Snapshot budget,
       boolean managedParent,
-      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
           ModelMessagePayloadStore.History protocolHistory) {
     public Document {
       history = history == null ? null : Collections.unmodifiableList(new ArrayList<>(history));
     }
 
-    public Document(AgentRunContext owner, String request, List<StoredMessage> history,
-        RunContinuation.PendingTools pending, OutputLimitRunBudget.Snapshot budget, boolean managedParent) {
+    public Document(
+        AgentRunContext owner,
+        String request,
+        List<StoredMessage> history,
+        RunContinuation.PendingTools pending,
+        OutputLimitRunBudget.Snapshot budget,
+        boolean managedParent) {
       this(owner, request, history, pending, budget, managedParent, null);
     }
   }
@@ -152,8 +158,14 @@ public class ApprovalContinuationStore {
         .update();
   }
 
-  public void save(String id, AgentRunContext owner, String request, List<Message> history,
-      RunContinuation.PendingTools pending, OutputLimitRunBudget.Snapshot budget, boolean managed) {
+  public void save(
+      String id,
+      AgentRunContext owner,
+      String request,
+      List<Message> history,
+      RunContinuation.PendingTools pending,
+      OutputLimitRunBudget.Snapshot budget,
+      boolean managed) {
     save(id, owner, request, history, pending, budget, managed, null);
   }
 
@@ -199,11 +211,22 @@ public class ApprovalContinuationStore {
     if (protocolHistory != null) {
       var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
       if (!owner.runId().equals(protocolHistory.run())
-          || !new ModelMessagePayloadStore.Exchange(payloads.obtain(), scope, owner.runId(), "approval").ownerKey()
-              .equals(protocolHistory.origin().owner()) || pending.assistantReference() == null)
+          || !new ModelMessagePayloadStore.Exchange(
+                  payloads.obtain(), scope, owner.runId(), "approval")
+              .ownerKey()
+              .equals(protocolHistory.origin().owner())
+          || pending.assistantReference() == null)
         throw new IllegalStateException("Native continuation ownership mismatch");
-      protocolHistory.origin().requireMatch(payloads.obtain().load(scope, pending.assistantReference(),
-          ModelMessagePayloadStore.ReferenceKind.APPROVAL, id));
+      protocolHistory
+          .origin()
+          .requireMatch(
+              payloads
+                  .obtain()
+                  .load(
+                      scope,
+                      pending.assistantReference(),
+                      ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                      id));
       payloads.obtain().protectContinuation(scope, protocolHistory, id);
     }
     var messageIndex = new java.util.concurrent.atomic.AtomicInteger();
@@ -262,7 +285,10 @@ public class ApprovalContinuationStore {
                 pending.assistantReference(),
                 pending.completedCount(),
                 pending.completedReference());
-    String encoded = encode(new Document(owner, request, messages, storedPending, budget, managed, protocolHistory));
+    String encoded =
+        encode(
+            new Document(
+                owner, request, messages, storedPending, budget, managed, protocolHistory));
     if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576
         || messages.size() > 256
         || pending.calls().size() > 32)
@@ -341,13 +367,14 @@ public class ApprovalContinuationStore {
     var pending = d.pending();
     Message pendingMessage = null;
     if (d.pending() != null && d.pending().assistantReference() != null)
-      pendingMessage = payloads
-          .obtain()
-          .load(
-              ModelMessagePayloadStore.Scope.forOwner(d.owner()),
-              d.pending().assistantReference(),
-              ModelMessagePayloadStore.ReferenceKind.APPROVAL,
-              entry.approvalId());
+      pendingMessage =
+          payloads
+              .obtain()
+              .load(
+                  ModelMessagePayloadStore.Scope.forOwner(d.owner()),
+                  d.pending().assistantReference(),
+                  ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                  entry.approvalId());
     if (pending != null && pending.completedReference() != null) {
       var saved =
           payloads
@@ -369,7 +396,8 @@ public class ApprovalContinuationStore {
               pending.assistantReference(),
               pending.completedReference());
     }
-    var messages = d.history().stream()
+    var messages =
+        d.history().stream()
             .map(m -> {
               if (m.payload() != null) {
                 var message =
@@ -416,23 +444,40 @@ public class ApprovalContinuationStore {
             })
             .toList();
     List<ModelMessagePayloadStore.ReplayReference> references = null;
-    if (d.protocolHistory() != null || backendNative(pendingMessage) || messages.stream().anyMatch(ApprovalContinuationStore::backendNative)) {
+    if (d.protocolHistory() != null
+        || backendNative(pendingMessage)
+        || messages.stream().anyMatch(ApprovalContinuationStore::backendNative)) {
       var nativeReferences = new ArrayList<ModelMessagePayloadStore.ReplayReference>();
       for (var message : d.history())
-        if (message.payload() != null) nativeReferences.add(new ModelMessagePayloadStore.ReplayReference(
-            message.payload(), ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId()));
+        if (message.payload() != null)
+          nativeReferences.add(
+              new ModelMessagePayloadStore.ReplayReference(
+                  message.payload(),
+                  ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                  entry.approvalId()));
       if (pending != null && pending.assistantReference() != null)
-        nativeReferences.add(new ModelMessagePayloadStore.ReplayReference(pending.assistantReference(),
-            ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId()));
+        nativeReferences.add(
+            new ModelMessagePayloadStore.ReplayReference(
+                pending.assistantReference(),
+                ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                entry.approvalId()));
       if (pending != null && pending.completedReference() != null)
-        nativeReferences.add(new ModelMessagePayloadStore.ReplayReference(pending.completedReference(),
-            ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId()));
+        nativeReferences.add(
+            new ModelMessagePayloadStore.ReplayReference(
+                pending.completedReference(),
+                ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                entry.approvalId()));
       if (d.protocolHistory() != null)
-        for (var trace : d.protocolHistory().entries()) nativeReferences.add(new ModelMessagePayloadStore.ReplayReference(
-            trace.reference(), ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId()));
+        for (var trace : d.protocolHistory().entries())
+          nativeReferences.add(
+              new ModelMessagePayloadStore.ReplayReference(
+                  trace.reference(),
+                  ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                  entry.approvalId()));
       references = nativeReferences.stream().distinct().toList();
     }
-    return new RunContinuation.Saved(d.request(), messages, d.budget(), pending, references, d.protocolHistory());
+    return new RunContinuation.Saved(
+        d.request(), messages, d.budget(), pending, references, d.protocolHistory());
   }
 
   private static boolean backendNative(Message message) {
@@ -491,7 +536,13 @@ public class ApprovalContinuationStore {
         String encoded =
             encode(
                 new Document(
-                    d.owner(), d.request(), messages, d.pending(), d.budget(), d.managedParent(), d.protocolHistory()));
+                    d.owner(),
+                    d.request(),
+                    messages,
+                    d.pending(),
+                    d.budget(),
+                    d.managedParent(),
+                    d.protocolHistory()));
         // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (encoded.length() > 1048576 || messages.size() > 256)
           throw new IllegalArgumentException("Approval guidance capacity exceeded");

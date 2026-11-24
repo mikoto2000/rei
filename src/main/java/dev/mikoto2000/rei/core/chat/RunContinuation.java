@@ -121,20 +121,28 @@ public interface RunContinuation {
       List<Message> messages,
       OutputLimitRunBudget.Snapshot budget,
       PendingTools pendingTools,
-      List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference> replayReferences,
+      List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
+          replayReferences,
       dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory) {
     public Saved {
       messages = messages == null ? null : Collections.unmodifiableList(new ArrayList<>(messages));
       replayReferences = replayReferences == null ? null : List.copyOf(replayReferences);
     }
 
-    public Saved(String request, List<Message> messages, OutputLimitRunBudget.Snapshot budget,
+    public Saved(
+        String request,
+        List<Message> messages,
+        OutputLimitRunBudget.Snapshot budget,
         PendingTools pendingTools,
-        List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference> replayReferences) {
+        List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
+            replayReferences) {
       this(request, messages, budget, pendingTools, replayReferences, null);
     }
 
-    public Saved(String request, List<Message> messages, OutputLimitRunBudget.Snapshot budget,
+    public Saved(
+        String request,
+        List<Message> messages,
+        OutputLimitRunBudget.Snapshot budget,
         PendingTools pendingTools) {
       this(request, messages, budget, pendingTools, null);
     }
