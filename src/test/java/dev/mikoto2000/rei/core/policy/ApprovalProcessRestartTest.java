@@ -145,11 +145,12 @@ class ApprovalProcessRestartTest {
             new OutputLimitRunBudget(2, 5).snapshot(),
             false,
             history);
+        approvals.guidance(owner, List.of(new UserMessage("human resume guidance")));
         return;
       }
       var saved = approvals.saved(approvals.find("approval").orElseThrow());
       assertThat(saved.messages()).extracting(org.springframework.ai.chat.messages.Message::getText)
-          .containsExactly("original fixture context", "original fixture input");
+          .containsExactly("original fixture context", "original fixture input", "human resume guidance");
       assertThat(saved.messages().getFirst().getMetadata()).containsEntry("rei.workContext", true)
           .containsEntry("rei.historySequence", 7L);
       var callback =
@@ -219,15 +220,17 @@ class ApprovalProcessRestartTest {
                   new Prompt(saved.messages(), execution.modelOptions()),
                   saved.pendingTools(),
                   execution);
-      assertThat(result.conversationHistory()).hasSize(4);
+      assertThat(result.conversationHistory()).hasSize(5);
       var trace = execution.protocolHistorySnapshot();
-      assertThat(trace.entries()).hasSize(3);
+      assertThat(trace.entries()).hasSize(4);
       assertThat(trace.entries().get(1)).isEqualTo(saved.protocolHistory().entries().get(1));
+      assertThat(payloads.load(exchange.scope(), trace.entries().getLast().reference()).getText())
+          .as("human guidance remains in completed task history").isEqualTo("human resume guidance");
       assertThat(payloads.load(exchange.scope(), trace.entries().getFirst().reference()).getText())
           .isEqualTo("original fixture input");
       assertThat(
               (ToolResponseMessage)
-                  payloads.load(exchange.scope(), trace.entries().getLast().reference()))
+                  payloads.load(exchange.scope(), trace.entries().get(2).reference()))
           .extracting(message -> message.getResponses().size())
           .isEqualTo(2);
     }
