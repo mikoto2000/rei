@@ -334,7 +334,9 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     try {
       var response = delegate.call(request);
       requireCompleted(response);
-      return ResponsesReasoningReplay.bind(response, request, endpoint);
+      var bound = ResponsesReasoningReplay.bind(response, request, endpoint);
+      ResponsesReasoningReplay.validateComplete(bound, request, endpoint);
+      return bound;
     } catch (RuntimeException error) {
       throw ResponsesTransportException.normalize(error);
     }
@@ -360,21 +362,24 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     return Flux.defer(
             () -> {
               var completed = new AtomicBoolean();
-              return delegate.stream(request)
+              var aggregated = new java.util.concurrent.atomic.AtomicReference<ChatResponse>();
+              var chunks = delegate.stream(request)
                   .doOnNext(response -> {
                     if (response.getMetadata().containsKey(OpenAiResponsesMetadata.STATUS)) {
                       requireCompleted(response);
                       completed.set(true);
                     }
                   })
-                  .map(response -> ResponsesReasoningReplay.bind(response, request, endpoint))
-                  .concatWith(
-                      Flux.defer(() ->
-                          completed.get()
-                              ? Flux.empty()
-                              : Flux.error(
-                                  new ResponsesTransportException(
-                                      ResponsesTransportException.Category.INVALID_RESPONSE))));
+                  .map(response -> ResponsesReasoningReplay.bind(response, request, endpoint));
+              return new org.springframework.ai.chat.model.MessageAggregator().aggregate(chunks, aggregated::set)
+                  .concatWith(Flux.defer(() -> {
+                    var result = aggregated.get();
+                    if (!completed.get() || result == null)
+                      return Flux.error(new ResponsesTransportException(
+                          ResponsesTransportException.Category.INVALID_RESPONSE));
+                    ResponsesReasoningReplay.validateComplete(result, request, endpoint);
+                    return Flux.empty();
+                  }));
             })
         .onErrorMap(ResponsesTransportException::normalize);
   }

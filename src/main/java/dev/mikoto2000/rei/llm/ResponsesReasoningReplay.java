@@ -59,6 +59,18 @@ final class ResponsesReasoningReplay {
     return new org.springframework.ai.chat.model.ChatResponse(generations, response.getMetadata());
   }
 
+  static void validateComplete(org.springframework.ai.chat.model.ChatResponse response,
+      Prompt request, ResolvedLlmEndpoint endpoint) {
+    try {
+      var messages = response.getResults().stream()
+          .<org.springframework.ai.chat.messages.Message>map(generation -> generation.getOutput()).toList();
+      prepare(new Prompt(messages, request.getOptions()), endpoint);
+    } catch (IllegalArgumentException invalid) {
+      throw new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE,
+          ResponsesTransportException.usage(response.getMetadata().getUsage()));
+    }
+  }
+
   private static String owner(Prompt prompt) {
     var options = prompt.getOptions();
     var context = options instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools
