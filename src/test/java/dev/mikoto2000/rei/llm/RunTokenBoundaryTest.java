@@ -57,12 +57,10 @@ class RunTokenBoundaryTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
-    "false,false",
-    "false,true",
-    "true,false",
-    "true,true"
+    "false,false,false", "false,true,false", "false,false,true",
+    "true,false,false", "true,true,false", "true,false,true"
   })
-  void canonicalUsageStopsParentAndChildBeforeToolDispatch(boolean child, boolean unknown) {
+  void canonicalUsageStopsParentAndChildBeforeToolDispatch(boolean child, boolean unknown, boolean outOfRange) {
     var count = new AtomicInteger();
     ToolCallback tool =
         new ToolCallback() {
@@ -82,7 +80,9 @@ class RunTokenBoundaryTest {
     var numeric =
         unknown
             ? new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(null, null, null, null, null)
-            : new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(1L, 10L, 11L, null, null);
+            : new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(1L,
+                outOfRange ? (long) Integer.MAX_VALUE : 10L,
+                outOfRange ? (long) Integer.MAX_VALUE + 1 : 11L, null, null);
     var raw =
         response(
             3, List.of(new AssistantMessage.ToolCall("call", "function", "readMultiFile", "{}")));
@@ -129,8 +129,9 @@ class RunTokenBoundaryTest {
       request = () -> new StagnationChatModel(model).stream(prompt).collectList().block();
     }
     assertThatThrownBy(request::run)
-        .hasMessageContaining(unknown ? "TOKEN_USAGE_UNKNOWN" : "TOKEN_BUDGET_EXCEEDED");
+        .hasMessageContaining(unknown || outOfRange ? "TOKEN_USAGE_UNKNOWN" : "TOKEN_BUDGET_EXCEEDED");
     assertThat(count).hasValue(0);
+    assertThat(context.sharedLlmReservation().tryReserve()).isFalse();
   }
 
   /** 用途に応じたモデル利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
