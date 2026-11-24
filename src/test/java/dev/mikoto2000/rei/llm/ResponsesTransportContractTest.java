@@ -362,7 +362,7 @@ class ResponsesTransportContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"temperature", "topP", "reasoningEffort", "reasoningSummary", "parallelToolCalls"})
+      strings = {"temperature", "topP", "reasoningEffort", "reasoningSummary", "parallelToolCalls", "verbosity"})
   void unspecifiedCapabilitiesCannotSilentlyAcceptExplicitSettings(String setting) {
     var builder = options();
     switch (setting) {
@@ -371,6 +371,7 @@ class ResponsesTransportContractTest {
       case "reasoningEffort" -> builder.reasoningEffort("low");
       case "reasoningSummary" -> builder.reasoningSummary("auto");
       case "parallelToolCalls" -> builder.parallelToolCalls(false);
+      case "verbosity" -> builder.verbosity("low");
       default -> throw new AssertionError(setting);
     }
     var options = builder.build();
