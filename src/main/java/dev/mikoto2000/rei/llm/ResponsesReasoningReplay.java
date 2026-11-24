@@ -15,6 +15,14 @@ final class ResponsesReasoningReplay {
   private ResponsesReasoningReplay() {}
 
   static Prompt prepare(Prompt prompt, ResolvedLlmEndpoint endpoint) {
+    var context = prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools
+        ? tools.getToolContext() : null;
+    if (context != null && context.containsKey(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)) {
+      if (!(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
+          instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin)
+          || !origin.endpoint().equals(endpoint.fingerprint()))
+        throw new IllegalArgumentException("Responses replay endpoint mismatch");
+    }
     String requestOwner =
         endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.ENCRYPTED
             ? owner(prompt)
@@ -117,6 +125,13 @@ final class ResponsesReasoningReplay {
             ? tools.getToolContext()
             : null;
     var value = context == null ? null : context.get(OWNER_CONTEXT_KEY);
+    if (context != null && context.containsKey(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)) {
+      if (!(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
+          instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin)
+          || (value != null && !origin.owner().equals(value)))
+        throw new IllegalArgumentException("Responses replay owner mismatch");
+      return origin.owner();
+    }
     if (value == null) return null;
     if (!(value instanceof String owner) || owner.isBlank())
       throw new IllegalArgumentException("Responses replay owner is required");
