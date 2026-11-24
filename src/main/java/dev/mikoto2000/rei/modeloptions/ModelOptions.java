@@ -26,7 +26,11 @@ public final class ModelOptions {
     if (options instanceof OpenAiResponsesChatOptions nativeOptions) {
       add.accept(nativeOptions.getMaxOutputTokens()); add.accept(nativeOptions.getTimeout());
       add.accept(nativeOptions.getReasoningEffort()); add.accept(nativeOptions.getReasoningSummary());
-      add.accept(nativeOptions.getVerbosity()); add.accept(nativeOptions.getResponseFormat());
+      add.accept(nativeOptions.getVerbosity());
+      var format = nativeOptions.getResponseFormat();
+      add.accept(format == null ? null : format.getType());
+      add.accept(format == null ? null : format.getJsonSchema());
+      add.accept(format == null ? null : format.getStrict());
       add.accept(nativeOptions.getOutputSchema()); add.accept(nativeOptions.getStrict());
       add.accept(nativeOptions.getToolChoice()); add.accept(nativeOptions.getParallelToolCalls());
       add.accept(nativeOptions.getMaxToolCalls()); add.accept(nativeOptions.getHostedTools());
