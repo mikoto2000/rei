@@ -14,6 +14,38 @@ import org.springframework.ai.chat.messages.part.TextPart;
 import org.springframework.ai.chat.messages.part.ToolCallPart;
 
 class ModelMessageCodecTest {
+  static java.util.stream.Stream<ModelTokenUsage> numericUsage() {
+    return java.util.stream.Stream.of(new ModelTokenUsage(3L, 2L, 5L, 1L, 1L),
+        new ModelTokenUsage(null, 2L, null, null, 1L), new ModelTokenUsage(null, null, null, null, null));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("numericUsage")
+  void numericUsageRoundTripsWithoutInventingMissingCounters(ModelTokenUsage usage) {
+    var message = AssistantMessage.builder().content("fixture")
+        .properties(Map.of(ModelTokenUsage.METADATA_KEY, usage)).build();
+    var codec = new ModelMessageCodec();
+    byte[] bytes = codec.encode(message);
+    var restored = codec.decode(bytes);
+    assertThat(restored.getMetadata()).containsEntry(ModelTokenUsage.METADATA_KEY, usage);
+    assertThat(codec.encode(restored)).containsExactly(bytes);
+  }
+
+  static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> invalidUsage() {
+    return java.util.stream.Stream.of(new Long[] {-1L, 2L, 1L, null, null},
+        new Long[] {3L, -1L, 2L, null, null}, new Long[] {3L, 2L, -1L, null, null},
+        new Long[] {3L, 2L, 5L, -1L, null}, new Long[] {3L, 2L, 5L, null, -1L},
+        new Long[] {3L, 2L, 4L, null, null}, new Long[] {3L, 2L, 5L, 4L, null},
+        new Long[] {3L, 2L, 5L, null, 3L}, new Long[] {Long.MAX_VALUE, 1L, Long.MAX_VALUE, null, null})
+        .map(fields -> org.junit.jupiter.params.provider.Arguments.of((Object) fields));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("invalidUsage")
+  void negativeInconsistentAndOverflowingCountersCannotEnterPersistence(Long[] fields) {
+    assertThatThrownBy(() -> new ModelTokenUsage(fields[0], fields[1], fields[2], fields[3], fields[4]))
+        .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid model token usage").hasNoCause();
+  }
   @Test
   void inlineAndReferencedUserMediaRoundTripWithoutFetchingTheReference() {
     var inline = org.springframework.ai.content.Media.builder().mimeType(org.springframework.util.MimeTypeUtils.IMAGE_PNG)
