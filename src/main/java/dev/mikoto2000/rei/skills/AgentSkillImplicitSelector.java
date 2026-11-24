@@ -27,7 +27,7 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
   /** モデル提供元。 */
   private final java.util.function.Supplier<ChatModel> selectorModel;
 
-  private final java.util.function.Supplier<org.springframework.ai.openai.OpenAiChatOptions>
+  private final java.util.function.Supplier<org.springframework.ai.model.tool.ToolCallingChatOptions>
       selectorOptions;
 
   /** 保存と検索の窓口。 */
@@ -52,7 +52,7 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
       AgentSkillRepository repository,
       AgentSkillsProperties properties) {
     this.selectorModel = () -> modelProvider.chatModel(LlmFeature.AGENT_SKILLS);
-    this.selectorOptions = () -> modelProvider.chatOptions(LlmFeature.AGENT_SKILLS, null);
+    this.selectorOptions = () -> modelProvider.requestOptions(LlmFeature.AGENT_SKILLS, null, true);
     this.enabledSkills = () -> repository.findEnabled();
     this.selectorTimeout = properties.getSelectorTimeout();
   }
@@ -97,14 +97,7 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
       // Apply feature options on every path; a plain String call uses model defaults instead.
       // Per-request output limits are independent of the optional total-token Run budget.
-      var options =
-          selectorOptions
-              .get()
-              .mutate()
-              .streamUsage(true)
-              .toolCallbacks(List.of())
-              .toolChoice("none")
-              .build();
+      var options = dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(selectorOptions.get());
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
       var request =
           new org.springframework.ai.chat.prompt.Prompt(
