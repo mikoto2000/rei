@@ -570,6 +570,27 @@ public class RunExecutionContext {
         || saved.unknownReplanNotices() < 0
         || saved.unknownReplanNotices() > 2)
       throw new IllegalArgumentException("Invalid saved progress");
+    if (saved.protocolHistory() != null) {
+      var context = modelOptions == null ? null : modelOptions.getToolContext();
+      var boundary = context == null ? null : context.get(
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+      if (!(boundary instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)
+          || runContext == null || !saved.protocolHistory().run().equals(exchange.run())
+          || !exchange.run().equals(runContext.runId())
+          || !exchange.scope().equals(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(runContext)))
+        throw new IllegalStateException("Protocol checkpoint ownership mismatch");
+      var expected = context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
+      if (expected != null && !expected.equals(saved.protocolHistory().origin()))
+        throw new IllegalStateException("Protocol checkpoint origin mismatch");
+      for (var entry : saved.protocolHistory().entries()) {
+        var message = exchange.store().load(exchange.scope(), entry.reference(),
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+            saved.protocolHistory().run());
+        if (message instanceof org.springframework.ai.chat.messages.AssistantMessage)
+          saved.protocolHistory().origin().requireMatch(message);
+      }
+      protocolHistory = saved.protocolHistory();
+    }
     evaluator.restoreInformation(saved.information());
     budget.restore(saved.budget());
     acquisitionOnlyIterations = saved.acquisitionOnlyIterations();
