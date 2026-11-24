@@ -99,7 +99,7 @@ class ResponsesTransportContractTest {
   }
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"baseUrl", "apiKey", "organization", "headers", "outputLimit"})
+      strings = {"baseUrl", "apiKey", "organization", "headers", "outputLimit", "deployment", "timeout"})
   void runtimeOptionsCannotChangeBoundConnectionOrLimits(String field) {
     var defaults = options().build();
     var builder = defaults.mutate();
@@ -109,6 +109,8 @@ class ResponsesTransportContractTest {
       case "organization" -> builder.organizationId("other-organization");
       case "headers" -> builder.customHeaders(java.util.Map.of("Authorization", "other-secret"));
       case "outputLimit" -> builder.maxOutputTokens(128);
+      case "deployment" -> builder.deploymentName("other-deployment");
+      case "timeout" -> builder.timeout(java.time.Duration.ofSeconds(1));
       default -> throw new AssertionError(field);
     }
     var runtime = builder.build();
@@ -190,12 +192,13 @@ class ResponsesTransportContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {"duplicate", "name", "schema", "limit"})
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"duplicate", "name", "schema", "limit", "duplicateSchemaKey"})
   void invalidActualToolDefinitionsFailBeforeHttp(String invalid) {
     var normal = callback("fixture_tool", "{\"type\":\"object\",\"properties\":{}}");
     var callbacks =
         switch (invalid) {
           case "duplicate" -> List.of(normal, normal);
+          case "duplicateSchemaKey" -> List.of(callback("fixture_tool", "{\"type\":\"array\",\"type\":\"object\"}"));
           case "name" -> List.of(callback("invalid name", "{\"type\":\"object\"}"));
           case "schema" -> List.of(callback("fixture_tool", "[]"));
           case "limit" ->
