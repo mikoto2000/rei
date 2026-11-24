@@ -49,6 +49,12 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       OpenAiResponsesChatOptions options,
       java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
           customizers) {
+    if (endpoint.apiType() != LlmApiType.RESPONSES
+        || !Objects.equals(endpoint.baseUrl(), options.getBaseUrl())
+        || !Objects.equals(endpoint.model(), options.getModel())
+        || !Objects.equals(endpoint.maxOutputTokens(), options.getMaxOutputTokens())
+        || !Objects.equals(endpoint.temperature(), options.getTemperature()))
+      throw new IllegalArgumentException("Responses client must match the resolved endpoint");
     if (options.getMaxRetries() != 0)
       throw new IllegalArgumentException(
           "Responses SDK retries must stay zero at client construction");
@@ -95,6 +101,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
 
   @Override
   public OpenAiResponsesChatOptions options(ResolvedLlmEndpoint endpoint) {
+    if (!this.endpoint.equals(endpoint))
+      throw new IllegalArgumentException("Responses options must match the bound endpoint");
     if (endpoint.apiType() != LlmApiType.RESPONSES)
       throw new IllegalArgumentException("Responses endpoint required");
     return delegate
@@ -167,8 +175,30 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     var callbacks = options.getToolCallbacks();
     if (callbacks == null || callbacks.isEmpty())
       options = options.mutate().toolChoice(null).build();
-    else validateTools(callbacks);
+    else {
+      validateTools(callbacks);
+      validateToolChoice(options.getToolChoice(), callbacks);
+    }
     return new Prompt(prompt.getInstructions(), options);
+  }
+
+  private static void validateToolChoice(Object choice, java.util.List<org.springframework.ai.tool.ToolCallback> callbacks) {
+    if (choice == null || (choice instanceof String value && Set.of("auto", "none", "required").contains(value))) return;
+    String name = null;
+    if (choice instanceof String value) {
+      try {
+        var node = new com.fasterxml.jackson.databind.ObjectMapper()
+            .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(value);
+        if (node != null && "function".equals(node.path("type").asText()))
+          name = node.has("name") ? node.path("name").asText() : node.path("function").path("name").asText();
+      } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
+        throw new IllegalArgumentException("Invalid Responses tool choice");
+      }
+    }
+    if (name != null)
+      for (var callback : callbacks)
+        if (name.equals(callback.getToolDefinition().name())) return;
+    throw new IllegalArgumentException("Invalid Responses tool choice");
   }
 
   private void validateTools(java.util.List<org.springframework.ai.tool.ToolCallback> callbacks) {
