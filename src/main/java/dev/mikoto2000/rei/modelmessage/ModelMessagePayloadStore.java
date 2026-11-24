@@ -432,7 +432,7 @@ public final class ModelMessagePayloadStore {
                   entry.reference().id(),
                   history.run())
               != 1) throw rejected();
-          if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
+          if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant && !legacyPlainText(assistant)) {
             if (history
                 .origin()
                 .owner()
