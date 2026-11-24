@@ -32,6 +32,8 @@ public final class ModelMessagePayloadStore {
   public static final String HISTORY_ID = "rei.modelMessage.id";
   public static final String HISTORY_HASH = "rei.modelMessage.sha256";
   public static final String HISTORY_OWNER = "rei.modelMessage.historyOwner";
+  public static final String HISTORY_RUN = "rei.modelMessage.run";
+  public static final String HISTORY_ROLE = "rei.modelMessage.role";
 
   public java.util.Map<String, String> historyReference(Scope scope, Ref ref, String owner) {
     publish(scope, ref, ReferenceKind.HISTORY, owner);
@@ -205,28 +207,44 @@ public final class ModelMessagePayloadStore {
 
   /** Protect every validated pointer before the existing checkpoint writer makes it visible. */
   public void protectCheckpoint(Scope scope, History history, String owner) {
+    protectReferences(scope, history, ReferenceKind.CHECKPOINT, owner);
+  }
+
+  /** Publish all pins atomically; callers may write these body-free pointers only afterwards. */
+  public java.util.List<java.util.Map<String, String>> historyReferences(
+      Scope scope, History history, String owner) {
+    var messages = protectReferences(scope, history, ReferenceKind.HISTORY, owner);
+    var result = new java.util.ArrayList<java.util.Map<String, String>>();
+    for (int i = 0; i < history.entries().size(); i++) {
+      var ref = history.entries().get(i).reference();
+      result.add(java.util.Map.of(HISTORY_ID, ref.id(), HISTORY_HASH, ref.sha256(),
+          HISTORY_OWNER, owner, HISTORY_RUN, history.run(), HISTORY_ROLE,
+          messages.get(i).getMessageType().name().toLowerCase(java.util.Locale.ROOT)));
+    }
+    return java.util.List.copyOf(result);
+  }
+
+  private java.util.List<Message> protectReferences(
+      Scope scope, History history, ReferenceKind kind, String owner) {
     validate(scope);
     identifier(owner);
-    transaction(db -> {
-      try (var insert =
-          db.prepareStatement(
-              "INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,'CHECKPOINT',?)")) {
+    return transaction(db -> {
+      var messages = new java.util.ArrayList<Message>();
+      try (var insert = db.prepareStatement(
+          "INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,?,?)")) {
         for (var entry : history.entries()) {
           var message = codec.decode(read(db, scope, entry.reference()));
-          if (scalar(
-                  db,
-                  "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='RUN' AND owner=?",
-                  entry.reference().id(),
-                  history.run())
-              != 1) throw rejected();
+          if (scalar(db, "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='RUN' AND owner=?",
+              entry.reference().id(), history.run()) != 1) throw rejected();
           if (message instanceof org.springframework.ai.chat.messages.AssistantMessage)
             history.origin().requireMatch(message);
-          bind(insert, entry.reference().id(), owner);
+          messages.add(message);
+          bind(insert, entry.reference().id(), kind.name(), owner);
           insert.addBatch();
         }
         insert.executeBatch();
       }
-      return null;
+      return java.util.List.copyOf(messages);
     });
   }
 

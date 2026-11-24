@@ -159,7 +159,17 @@ public class RunExecutionContext {
 
   /** Prepare durable ordered history pointers before existing history documents are written. */
   public synchronized List<Map<String, String>> protocolHistoryReferences() {
-    return List.of();
+    if (protocolHistory == null) return List.of();
+    checkActive();
+    var context = modelOptions == null ? null : modelOptions.getToolContext();
+    var boundary = context == null ? null : context.get(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    if (!(boundary instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)
+        || runContext == null || !protocolHistory.run().equals(exchange.run())
+        || !exchange.run().equals(runContext.runId())
+        || !exchange.scope().equals(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(runContext)))
+      throw new IllegalStateException("Protocol history ownership mismatch");
+    return exchange.store().historyReferences(exchange.scope(), protocolHistory, "turn:" + exchange.run());
   }
 
   /** Save the original resolved input, including media, before sending or decorating it. */
