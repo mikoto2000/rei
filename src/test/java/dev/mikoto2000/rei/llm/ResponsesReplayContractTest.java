@@ -1246,6 +1246,7 @@ class ResponsesReplayContractTest {
             run.runId());
     assertThat(saved.payloadCount()).as("original input and final assistant").isEqualTo(2);
     assertThat(saved.runCumulativeBytes()).isPositive();
+    assertThat(saved.referenceCount()).as("terminal Run leases are released after history publication").isEqualTo(2);
     var protocolRows =
         logs.readConversation(run.conversationId()).stream()
             .filter(entry ->
