@@ -51,7 +51,7 @@ class ContextCancellationTest {
                 .doOnCancel(stopped::countDown));
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(summaryModel);
-    when(models.chatOptions(eq(LlmFeature.CHAT), any()))
+    when(models.requestOptions(eq(LlmFeature.CHAT), any(),eq(false)))
         .thenReturn(OpenAiChatOptions.builder().build());
     ObjectProvider<LlmModelProvider> provider = mock();
     when(provider.getObject()).thenReturn(models);

@@ -207,7 +207,7 @@ class ContextSummaryTokenBudgetTest {
   LlmConversationCompressor compressor(ChatModel model, ContextCompressionProperties properties) {
     var provider = mock(LlmModelProvider.class);
     when(provider.chatModel(LlmFeature.CHAT)).thenReturn(model);
-    when(provider.chatOptions(eq(LlmFeature.CHAT), any()))
+    when(provider.requestOptions(eq(LlmFeature.CHAT), any(),eq(false)))
         .thenAnswer(
             invocation -> org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     ObjectProvider<LlmModelProvider> models = mock();
