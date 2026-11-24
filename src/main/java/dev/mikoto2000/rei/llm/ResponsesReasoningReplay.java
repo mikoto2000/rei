@@ -29,7 +29,7 @@ final class ResponsesReasoningReplay {
         throw new IllegalArgumentException("Responses replay endpoint mismatch");
     }
     String requestOwner =
-        endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.ENCRYPTED
+        endpoint.capabilities().reasoningReplay() != ReasoningReplayMode.NONE
             ? owner(prompt)
             : optionalOwner(prompt);
     for (var message : prompt.getInstructions()) {
@@ -67,14 +67,21 @@ final class ResponsesReasoningReplay {
         if (status != null && !"completed".equals(status))
           throw new IllegalArgumentException("Responses replay part is not complete");
         if (!(part instanceof ReasoningPart reasoning)) continue;
-        if (endpoint.capabilities().reasoningReplay() != ReasoningReplayMode.ENCRYPTED)
+        if (endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.NONE)
           throw new IllegalArgumentException("Responses reasoning replay mode is incompatible");
         var payload = reasoning.payload();
-        if (payload == null || payload.data().isBlank())
-          throw new IllegalArgumentException("Responses reasoning payload is required");
-        if (!OpenAiResponsesMetadata.PROVIDER.equals(payload.provider())
-            || !OpenAiResponsesMetadata.ENCRYPTED_CONTENT_KIND.equals(payload.kind()))
-          throw new IllegalArgumentException("Responses reasoning payload is incompatible");
+        if (endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT) {
+          if (payload != null || reasoning.text() == null || reasoning.text().isBlank()
+              || reasoning.text().length() > 4_194_304
+              || reasoning.summary() != null && !reasoning.summary().isBlank())
+            throw new IllegalArgumentException("Responses plaintext reasoning is incompatible");
+        } else {
+          if (payload == null || payload.data().isBlank())
+            throw new IllegalArgumentException("Responses reasoning payload is required");
+          if (!OpenAiResponsesMetadata.PROVIDER.equals(payload.provider())
+              || !OpenAiResponsesMetadata.ENCRYPTED_CONTENT_KIND.equals(payload.kind()))
+            throw new IllegalArgumentException("Responses reasoning payload is incompatible");
+        }
         var itemId = reasoning.attributes().get(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE);
         if (itemId == null || itemId.isBlank())
           throw new IllegalArgumentException("Responses reasoning item id is required");
@@ -87,15 +94,38 @@ final class ResponsesReasoningReplay {
           throw new IllegalArgumentException("Responses reasoning replay endpoint mismatch");
       }
     }
-    return prompt;
+    if (endpoint.capabilities().reasoningReplay() != ReasoningReplayMode.PLAINTEXT) return prompt;
+    var messages = prompt.getInstructions().stream().map(message -> {
+      if (!(message instanceof AssistantMessage assistant)) return message;
+      var parts = assistant.getParts().stream().map(part -> {
+        if (!(part instanceof ReasoningPart reasoning)) return part;
+        var item = new java.util.LinkedHashMap<String, Object>();
+        item.put("type", "reasoning");
+        item.put("summary", java.util.List.of());
+        item.put("id", reasoning.attributes().get(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE));
+        item.put("content", java.util.List.of(java.util.Map.of("type", "reasoning_text", "text", reasoning.text())));
+        var status = reasoning.attributes().get(OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE);
+        if (status != null) item.put("status", status);
+        try {
+          String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(item);
+          return (org.springframework.ai.chat.messages.part.MessagePart)
+              new org.springframework.ai.chat.messages.part.UnknownPart(
+                  OpenAiResponsesMetadata.PROVIDER, "reasoning", json, null, java.util.Map.of());
+        } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
+          throw new IllegalArgumentException("Responses plaintext send view is invalid");
+        }
+      }).toList();
+      return (org.springframework.ai.chat.messages.Message) AssistantMessage.builder().parts(parts).properties(assistant.getMetadata()).build();
+    }).toList();
+    return new Prompt(messages, prompt.getOptions());
   }
 
   static org.springframework.ai.chat.model.ChatResponse bind(
       org.springframework.ai.chat.model.ChatResponse response,
       Prompt prompt,
       ResolvedLlmEndpoint endpoint) {
-    boolean encrypted = endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.ENCRYPTED;
-    String requestOwner = encrypted ? owner(prompt) : optionalOwner(prompt);
+    boolean protectedReplay = endpoint.capabilities().reasoningReplay() != ReasoningReplayMode.NONE;
+    String requestOwner = protectedReplay ? owner(prompt) : optionalOwner(prompt);
     var usage = ResponsesTransportException.usage(response.getMetadata().getUsage());
     var generations =
         response.getResults().stream()
