@@ -7,7 +7,7 @@
 | 0 | MERGED | codex/responses-api-phase-0-foundation / 削除済み | [#628](https://github.com/mikoto2000/rei/pull/628) | d0e3626f9565035cab20cc045dd3ba070985d3fe | PR・マージ後CI成功。全件7,718、成功7,706、skip12、failure/error0 |
 | 1 | MERGED | codex/responses-api-phase-1-transport / 削除済み | [#629](https://github.com/mikoto2000/rei/pull/629) | 10542db848d9317c7eaaab06869e63e7ab571d5b | 最終CI全件7,818、成功7,806、期待skip12、failure/error0。品質ゲート成功 |
 | 2 | MERGED | codex/responses-api-phase-2-openai-replay / 削除済み | [#630](https://github.com/mikoto2000/rei/pull/630) | a95593f48d0b4f760091d79eaf2cbc411e9a2f49 | PR・マージ後CI7,861件、成功7,849、期待skip12、failure/error0。関連859件・全品質ゲート成功 |
-| 3 | IN_PROGRESS | codex/responses-api-phase-3-message-persistence / .worktrees/responses-api-phase-3 | 未作成 | 未マージ | 最新関連565件、failure/error/skip0。Checkstyle/SpotBugs0、architecture・build成功。PR/全件CIは準備中 |
+| 3 | IN_PROGRESS | codex/responses-api-phase-3-message-persistence / .worktrees/responses-api-phase-3 | [#631](https://github.com/mikoto2000/rei/pull/631) | 未マージ | 最新関連565件、failure/error/skip0。Checkstyle/SpotBugs0、architecture・build成功。PR #631、最新headの全件CI・差分レビューを確認中 |
 | 4 | NOT_STARTED | — | — | — | 未実施 |
 | 5 | NOT_STARTED | — | — | — | 未実施 |
 | 6 | NOT_STARTED | — | — | — | 未実施 |
@@ -284,5 +284,5 @@ Phase 3 の fixture は明示的な per-iteration Exchange と参照契約を検
 全クライアントへの Run/iteration identity の供給、承認・Checkpoint の full-parts 参照、操作台帳との再開照合、
 圧縮・終了・削除 lifecycle の参照解放は Phase 4 の有効化条件として残す。本番 Responses の生成は引き続き拒否する。
 
-Phase 3 の関連回帰・全品質ゲートは成功。PR、差分レビュー、最新 head の全 CI、通常 merge、merge 後 CI、
+Phase 3 の関連回帰・全品質ゲートは成功し、PR #631 を作成した。差分レビュー、最新 head の全 CI、通常 merge、merge 後 CI、
 専用 worktree の後片付けが未完了。これらを完了してから最新 main を基準に Phase 4 を開始する。
