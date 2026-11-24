@@ -22,6 +22,18 @@ import org.springframework.stereotype.Component;
 /** 会話ログの記録を保持し、後続の処理で参照できるようにする。 */
 @Component
 public class ConversationLogStore {
+  public static final String PROTOCOL_SPEAKER = "protocol";
+  public static final String PROTOCOL_VERSION = "rei.modelMessage.historyVersion";
+  public static final String PROTOCOL_FIRST = "rei.modelMessage.historyFirst";
+  public static final String PROTOCOL_LAST = "rei.modelMessage.historyLast";
+  public static final String PROTOCOL_COUNT = "rei.modelMessage.historyCount";
+
+  /** Commit internal body-free pointers in the existing monotonic log sequence domain. */
+  public java.util.Map<String, String> appendProtocolHistory(String conversation, String run,
+      List<java.util.Map<String, String>> pointers) {
+    return java.util.Map.of();
+  }
+
   private static boolean isJsonl(Path path) {
     Path name = path.getFileName();
     return name != null && name.toString().endsWith(".jsonl");
