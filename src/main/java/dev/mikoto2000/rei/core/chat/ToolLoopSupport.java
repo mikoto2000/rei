@@ -287,7 +287,7 @@ public final class ToolLoopSupport {
     if (response.getResults().size() != 1)
       throw new IllegalArgumentException(
           "Approval continuation requires a single selected generation");
-    return executePending(
+    var executed = executePending(
         prompt,
         new RunContinuation.PendingTools(
             java.util.Objects.toString(output.getText(), ""),
@@ -295,6 +295,12 @@ public final class ToolLoopSupport {
             java.util.List.of()),
         context,
         false);
+    // The execution view may repair arguments, but the model's original ordered parts
+    // remain the source for the next protocol request.
+    var history = new java.util.ArrayList<>(executed.conversationHistory());
+    history.set(prompt.getInstructions().size(), output);
+    return ToolExecutionResult.builder().conversationHistory(history)
+        .returnDirect(executed.returnDirect()).build();
   }
 
   static ToolExecutionResult rejectedBatch(Prompt prompt, String guidance) {
