@@ -25,16 +25,20 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> customizers) {
     if (options.getMaxRetries() != 0)
       throw new IllegalArgumentException("Responses SDK retries must stay zero at client construction");
+    options = options.mutate().timeout(endpoint.readTimeout()).build();
+    var transportCustomizers = new java.util.ArrayList<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>();
+    transportCustomizers.add(builder -> builder.interceptor(new ChatStreamTimeoutInterceptor(endpoint.readTimeout())));
+    transportCustomizers.addAll(customizers);
     var client = org.springframework.ai.openai.setup.OpenAiSetup.setupAsyncClient(
         options.getBaseUrl(), options.getApiKey(), options.getCredential(),
         options.getMicrosoftDeploymentName(), options.getMicrosoftFoundryServiceVersion(),
         options.getOrganizationId(), options.isMicrosoftFoundry(), false, options.getModel(),
         options.getTimeout() == null ? endpoint.readTimeout() : options.getTimeout(),
         0, options.getProxy(), options.getCustomHeaders(),
-        io.micrometer.observation.ObservationRegistry.NOOP, null, customizers);
+        io.micrometer.observation.ObservationRegistry.NOOP, null, transportCustomizers);
     var model = OpenAiResponsesChatModel.builder().options(options)
         .openAiClientAsync(ResponsesSdkBoundary.safe(client))
-        .httpClientBuilderCustomizers(customizers).build();
+        .httpClientBuilderCustomizers(transportCustomizers).build();
     return new ResponsesAdapter(endpoint, model);
   }
 
