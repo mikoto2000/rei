@@ -420,6 +420,18 @@ public final class ModelMessagePayloadStore {
     });
   }
 
+  /** Release only this completed owner's leases, including borrowed payloads from older Runs. */
+  public int releaseRun(Scope scope, String run) {
+    validate(scope);
+    identifier(run);
+    return transaction(db -> {
+      try (var delete = db.prepareStatement("DELETE FROM model_message_references WHERE kind='RUN' AND owner=? AND payload_id IN (SELECT id FROM model_message_payloads WHERE project=? AND root_path=? AND conversation=?)")) {
+        bind(delete, run, scope.project(), scope.root(), scope.conversation());
+        return delete.executeUpdate();
+      }
+    });
+  }
+
   /** Protect every validated pointer before the existing checkpoint writer makes it visible. */
   public void protectContinuation(Scope scope, History history, String owner) {
     protectReferences(scope, history, ReferenceKind.APPROVAL, owner);

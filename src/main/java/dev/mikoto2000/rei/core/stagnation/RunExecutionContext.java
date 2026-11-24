@@ -338,6 +338,20 @@ public class RunExecutionContext {
     }
   }
 
+  /** Called only after completed history and terminal continuation metadata have committed. */
+  public synchronized void releaseProtocolRunReferences() {
+    var options = modelOptions;
+    var context = options == null ? null : options.getToolContext();
+    if (context == null) return;
+    var boundary = context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    if (!(boundary instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)) return;
+    var owner = runContext;
+    if (owner == null || !runId.equals(owner.runId()) || !runId.equals(exchange.run())
+        || !dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner).equals(exchange.scope()))
+      throw new IllegalStateException("Protocol Run cleanup ownership mismatch");
+    exchange.store().releaseRun(exchange.scope(), runId);
+  }
+
   /** Save the original resolved input, including media, before sending or decorating it. */
   public synchronized void preserveUserMessage(
       org.springframework.ai.chat.messages.UserMessage message) {
