@@ -12,7 +12,8 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
@@ -32,7 +33,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
   /** モデル提供元。 */
   private final Supplier<ChatModel> featureModel;
 
-  private final Function<String, OpenAiChatOptions> optionsForModel;
+  private final Function<String, ToolCallingChatOptions> optionsForModel;
 
   /** モデル保持先サービス。 */
   private final Supplier<String> readSelectedModel;
@@ -67,7 +68,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
     this.timeoutSeconds = properties.getExtractionTimeoutSeconds();
     this.featureModel = () -> modelProvider.isolatedChatModel(LlmFeature.INTEREST_DISCOVERY);
     this.optionsForModel =
-        selected -> modelProvider.chatOptions(LlmFeature.INTEREST_DISCOVERY, selected);
+        selected -> modelProvider.requestOptions(LlmFeature.INTEREST_DISCOVERY, selected,false);
     this.readSelectedModel = () -> modelHolderService.get();
     this.candidateReader =
         objectMapper.readerFor(new TypeReference<List<InterestTopicCandidate>>() {});
@@ -90,20 +91,11 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
     String input = boundedPrompt(snippets, maxTopics, pastQueries);
     if (input == null) return List.of();
     var baseOptions = optionsForModel.apply(readSelectedModel.get());
-    // Isolated model lookup checks default tools. Do not let per-call raw SDK tools bypass it.
-    var extra = baseOptions.getExtraBody();
-    Object rawTools = extra == null ? null : extra.get("tools");
-    if (rawTools != null && !(rawTools instanceof java.util.Collection<?> tools && tools.isEmpty()))
-      throw new IllegalArgumentException("Interest extraction must not carry raw tools");
-    var options = baseOptions.mutate().toolCallbacks(List.of()).toolChoice("none").maxRetries(0);
-    Integer completionLimit = baseOptions.getMaxCompletionTokens();
-    Integer tokenLimit = baseOptions.getMaxTokens();
-    if (completionLimit != null)
-      options.maxTokens(null).maxCompletionTokens(Math.min(completionLimit, maxOutputTokens));
-    else
-      options.maxTokens(
-          tokenLimit == null ? maxOutputTokens : Math.min(tokenLimit, maxOutputTokens));
-    return parse(callWithTimeout(new Prompt(input, options.build())));
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(baseOptions);
+    var isolated=ModelOptions.singleRequest(baseOptions);
+    var options=ModelOptions.capOutputLimit(isolated,maxOutputTokens);
+    options=ModelOptions.withoutRetries(options);
+    return parse(callWithTimeout(new Prompt(input,options)));
   }
 
   /** A single cancellable stream; the deadline covers all chunks, including reasoning. */

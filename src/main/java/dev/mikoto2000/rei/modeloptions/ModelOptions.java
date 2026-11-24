@@ -212,6 +212,14 @@ public final class ModelOptions {
     throw new IllegalArgumentException("Structured output is unavailable for this protocol");
   }
 
+  /** Rei owns retry admission; Responses retry suppression belongs to its bound SDK client. */
+  public static ToolCallingChatOptions withoutRetries(ToolCallingChatOptions options) {
+    if(options instanceof OpenAiChatOptions chat) {
+      var builder=chat.mutate();builder.maxRetries(0);return builder.build();
+    }
+    return options;
+  }
+
   /** Local chat-template controls have no implicit Responses equivalent. */
   public static ToolCallingChatOptions withLocalThinking(
       ToolCallingChatOptions options, Boolean thinking) {
