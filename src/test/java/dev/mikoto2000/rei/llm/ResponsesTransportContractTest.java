@@ -17,6 +17,7 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 class ResponsesTransportContractTest {
   private final List<JsonNode> requests = new CopyOnWriteArrayList<>();
   private final List<String> urls = new CopyOnWriteArrayList<>();
+  private String reply = completed();
 
   @Test
   void toolFreeRequestsOmitBothToolFieldsAndUseOnlyResponsesTokenLimits() {
@@ -61,6 +62,26 @@ class ResponsesTransportContractTest {
     assertThat(requests).isEmpty();
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+    "incomplete", "in_progress", "queued", "cancelled", "unknown"
+  })
+  void onlyExplicitlyCompletedResponsesAreSuccessful(String status) {
+    reply = completed().replaceFirst("\"status\":\"completed\"",
+        "\"status\":\"" + status + "\"");
+    var options = options().build();
+    assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("Responses");
+  }
+
+  @Test
+  void missingResponseStatusDoesNotBecomeCompletedThroughGenerationDefaults() {
+    reply = completed().replaceFirst("\"status\":\"completed\",", "");
+    var options = options().build();
+    assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("Responses");
+  }
+
   private OpenAiResponsesChatOptions.Builder options() {
     return OpenAiResponsesChatOptions.builder()
         .baseUrl("https://responses-fixture.invalid/v1")
@@ -76,7 +97,7 @@ class ResponsesTransportContractTest {
           urls.add(chain.request().url().toString());
           return new okhttp3.Response.Builder().request(chain.request())
               .protocol(okhttp3.Protocol.HTTP_1_1).code(200).message("OK")
-              .body(okhttp3.ResponseBody.create(completed(),
+              .body(okhttp3.ResponseBody.create(reply,
                   okhttp3.MediaType.get("application/json"))).build();
         })).build();
     var endpoint = new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES,
