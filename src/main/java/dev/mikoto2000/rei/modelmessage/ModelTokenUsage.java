@@ -7,10 +7,16 @@ public record ModelTokenUsage(Long input, Long output, Long total, Long cached, 
   public static final String METADATA_KEY = "rei.llm.token-usage";
 
   public ModelTokenUsage {
-    if (negative(input) || negative(output) || negative(total) || negative(cached) || negative(reasoning)
+    if (negative(input)
+        || negative(output)
+        || negative(total)
+        || negative(cached)
+        || negative(reasoning)
         || (cached != null && input != null && cached > input)
         || (reasoning != null && output != null && reasoning > output)
-        || (input != null && output != null && total != null
+        || (input != null
+            && output != null
+            && total != null
             && (input > Long.MAX_VALUE - output || input + output != total)))
       throw new IllegalArgumentException("Invalid model token usage");
   }

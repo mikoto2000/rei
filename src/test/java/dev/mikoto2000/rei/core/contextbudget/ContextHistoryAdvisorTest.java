@@ -20,70 +20,132 @@ import org.springframework.ai.chat.prompt.Prompt;
 class ContextHistoryAdvisorTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1, 2})
-  void durableLogAndTurnPointersTakePriorityWithoutDuplicatingTheirDisplayText(int logMode) throws Exception {
+  void durableLogAndTurnPointersTakePriorityWithoutDuplicatingTheirDisplayText(int logMode)
+      throws Exception {
     var owner = new AgentRunContext("current-run", "chat", dir, "fixture-project");
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + dir.resolve("model-messages.db"));
     var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
     var scope = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner);
-    var message = AssistantMessage.builder().parts(java.util.List.of(
-        new org.springframework.ai.chat.messages.part.ReasoningPart(null, null,
-            new org.springframework.ai.chat.messages.part.OpaquePayload("fixture", "encrypted_content", "opaque fixture"), Map.of("itemId", "rs_one")),
-        new org.springframework.ai.chat.messages.part.TextPart("complete fixture", null, Map.of("phase", "final_answer"))))
-        .properties(Map.of("rei.llm.replay-origin-owner", "fixture-owner")).build();
+    var message =
+        AssistantMessage.builder()
+            .parts(
+                java.util.List.of(
+                    new org.springframework.ai.chat.messages.part.ReasoningPart(
+                        null,
+                        null,
+                        new org.springframework.ai.chat.messages.part.OpaquePayload(
+                            "fixture", "encrypted_content", "opaque fixture"),
+                        Map.of("itemId", "rs_one")),
+                    new org.springframework.ai.chat.messages.part.TextPart(
+                        "complete fixture", null, Map.of("phase", "final_answer"))))
+            .properties(Map.of("rei.llm.replay-origin-owner", "fixture-owner"))
+            .build();
     var ref = payloads.save(scope, "old-run", "one", message);
     var metadata = payloads.historyReference(scope, ref, "turn:old-run");
-    try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(dir)) { migration.prepare(); }
+    try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(dir)) {
+      migration.prepare();
+    }
     var writingTurns = new dev.mikoto2000.rei.conversation.SqliteConversationTurnStore(dir);
     var oldOwner = new AgentRunContext("old-run", "chat", dir, "fixture-project");
     writingTurns.start(oldOwner, "old request", java.time.Instant.EPOCH);
     writingTurns.recordMetadata(oldOwner, metadata);
     writingTurns.finish(oldOwner, ConversationTurnStore.Status.COMPLETED, "display fixture");
-    var mapper = new com.fasterxml.jackson.databind.ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+    var mapper =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
     var clock = java.time.Clock.fixed(java.time.Instant.EPOCH, java.time.ZoneOffset.UTC);
-    if (logMode == 1) new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper)
-        .append("chat", "assistant", "display fixture", metadata);
-    if (logMode == 2) new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper)
-        .append("chat", "assistant", "display fixture");
+    if (logMode == 1)
+      new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper)
+          .append("chat", "assistant", "display fixture", metadata);
+    if (logMode == 2)
+      new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper)
+          .append("chat", "assistant", "display fixture");
     var turns = new dev.mikoto2000.rei.conversation.SqliteConversationTurnStore(dir);
-    var logs = new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper);
-    var advisor = new ContextHistoryAdvisor(turns, WindowedConversationMemory.builder().build(),
-        new ConversationSummaryRepository(dir), logs,
-        () -> new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source));
-    var request = ChatClientRequest.builder().prompt(new Prompt(new UserMessage("current request")))
-        .context(Map.of(org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID, "chat",
-            AgentRunContext.class.getName(), owner)).build();
+    var logs =
+        new dev.mikoto2000.rei.conversation.ConversationLogStore(
+            dir.resolve("logs"), clock, mapper);
+    var advisor =
+        new ContextHistoryAdvisor(
+            turns,
+            WindowedConversationMemory.builder().build(),
+            new ConversationSummaryRepository(dir),
+            logs,
+            () -> new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source));
+    var request =
+        ChatClientRequest.builder()
+            .prompt(new Prompt(new UserMessage("current request")))
+            .context(
+                Map.of(
+                    org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                    "chat",
+                    AgentRunContext.class.getName(),
+                    owner))
+            .build();
     var messages = advisor.before(request, null).prompt().getInstructions();
-    assertThat(messages.stream().map(Message::getText)).contains("complete fixture").doesNotContain("display fixture");
-    var restored = messages.stream().filter(m -> m instanceof AssistantMessage && "complete fixture".equals(m.getText())).toList();
+    assertThat(messages.stream().map(Message::getText))
+        .contains("complete fixture")
+        .doesNotContain("display fixture");
+    var restored =
+        messages.stream()
+            .filter(m -> m instanceof AssistantMessage && "complete fixture".equals(m.getText()))
+            .toList();
     assertThat(restored).hasSize(1);
-    assertThat(((AssistantMessage) restored.getFirst()).getParts()).containsExactlyElementsOf(message.getParts());
-    payloads.release(scope, ref, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:old-run");
+    assertThat(((AssistantMessage) restored.getFirst()).getParts())
+        .containsExactlyElementsOf(message.getParts());
+    payloads.release(
+        scope,
+        ref,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY,
+        "turn:old-run");
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
         .hasMessage("Model message persistence rejected");
   }
+
   @Test
   void assigningHistorySequencePreservesOrderedAssistantPartsAndTypedToolResults() {
-    var reasoning = new org.springframework.ai.chat.messages.part.ReasoningPart(null, "fixture summary",
-        new org.springframework.ai.chat.messages.part.OpaquePayload("fixture", "encrypted_content", "opaque fixture"),
-        Map.of("itemId", "rs_one"));
-    var input = AssistantMessage.builder().parts(java.util.List.of(reasoning,
-        new org.springframework.ai.chat.messages.part.TextPart("fixture commentary", null, Map.of("phase", "commentary")),
-        new org.springframework.ai.chat.messages.part.ToolCallPart(new AssistantMessage.ToolCall("call_one", "function", "fixture", "{}"),
-            null, Map.of("itemId", "fc_one"))))
-        .properties(Map.of("rei.llm.replay-origin-owner", "fixture-owner")).build();
+    var reasoning =
+        new org.springframework.ai.chat.messages.part.ReasoningPart(
+            null,
+            "fixture summary",
+            new org.springframework.ai.chat.messages.part.OpaquePayload(
+                "fixture", "encrypted_content", "opaque fixture"),
+            Map.of("itemId", "rs_one"));
+    var input =
+        AssistantMessage.builder()
+            .parts(
+                java.util.List.of(
+                    reasoning,
+                    new org.springframework.ai.chat.messages.part.TextPart(
+                        "fixture commentary", null, Map.of("phase", "commentary")),
+                    new org.springframework.ai.chat.messages.part.ToolCallPart(
+                        new AssistantMessage.ToolCall("call_one", "function", "fixture", "{}"),
+                        null,
+                        Map.of("itemId", "fc_one"))))
+            .properties(Map.of("rei.llm.replay-origin-owner", "fixture-owner"))
+            .build();
     var historical = (AssistantMessage) ContextHistoryAdvisor.historical(input, 7);
     assertThat(historical.getParts()).containsExactlyElementsOf(input.getParts());
-    assertThat(historical.getMetadata()).containsEntry(ContextHistoryAdvisor.SEQUENCE, 7L)
+    assertThat(historical.getMetadata())
+        .containsEntry(ContextHistoryAdvisor.SEQUENCE, 7L)
         .containsEntry("rei.llm.replay-origin-owner", "fixture-owner");
-    var tool = org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(java.util.List.of(
-        new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse("call_one", "fixture", "fixture result")))
-        .metadata(Map.of("rei.reviewBudgetRecovery", true)).build();
+    var tool =
+        org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+            .responses(
+                java.util.List.of(
+                    new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                        "call_one", "fixture", "fixture result")))
+            .metadata(Map.of("rei.reviewBudgetRecovery", true))
+            .build();
     var result = ContextHistoryAdvisor.historical(tool, 8);
     assertThat(result).isInstanceOf(org.springframework.ai.chat.messages.ToolResponseMessage.class);
-    assertThat(((org.springframework.ai.chat.messages.ToolResponseMessage) result).getResponses()).isEqualTo(tool.getResponses());
-    assertThat(result.getMetadata()).containsEntry("rei.reviewBudgetRecovery", true).containsEntry(ContextHistoryAdvisor.SEQUENCE, 8L);
+    assertThat(((org.springframework.ai.chat.messages.ToolResponseMessage) result).getResponses())
+        .isEqualTo(tool.getResponses());
+    assertThat(result.getMetadata())
+        .containsEntry("rei.reviewBudgetRecovery", true)
+        .containsEntry(ContextHistoryAdvisor.SEQUENCE, 8L);
   }
+
   @Test
   void coveredMessagesKeepOneAnchorAndUncoveredRunObservations() {
     var logs =

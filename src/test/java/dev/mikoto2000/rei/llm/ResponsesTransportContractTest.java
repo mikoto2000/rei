@@ -175,7 +175,8 @@ class ResponsesTransportContractTest {
                     if (chunk.getMetadata().getUsage().getTotalTokens() > 0)
                       assertThat(ResponsesTransportException.usage(chunk.getMetadata().getUsage()))
                           .isEqualTo(
-                              new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(3L, 2L, 5L, 1L, 1L));
+                              new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(
+                                  3L, 2L, 5L, 1L, 1L));
                   }),
               completed::set)
           .blockLast();
