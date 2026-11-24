@@ -61,14 +61,28 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   @Override
   public ChatResponse call(Prompt prompt) {
     var response = delegate.call(prepare(prompt));
+    requireCompleted(response);
+    return response;
+  }
+
+  private static void requireCompleted(ChatResponse response) {
     if (!"completed".equals(response.getMetadata().get(
         org.springframework.ai.openai.responses.OpenAiResponsesMetadata.STATUS)))
       throw new IllegalStateException("Responses did not complete successfully");
-    return response;
   }
 
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
-    return delegate.stream(prepare(prompt));
+    return Flux.defer(() -> {
+      var completed = new java.util.concurrent.atomic.AtomicBoolean();
+      return delegate.stream(prepare(prompt)).doOnNext(response -> {
+        if (response.getMetadata().containsKey(
+            org.springframework.ai.openai.responses.OpenAiResponsesMetadata.STATUS)) {
+          requireCompleted(response);
+          completed.set(true);
+        }
+      }).concatWith(Flux.defer(() -> completed.get() ? Flux.empty()
+          : Flux.error(new IllegalStateException("Responses stream ended without completion"))));
+    });
   }
 }
