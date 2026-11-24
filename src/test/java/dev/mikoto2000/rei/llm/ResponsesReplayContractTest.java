@@ -52,7 +52,9 @@ class ResponsesReplayContractTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.class)
   void mainChatExecutionUsesTheAcceptedNativeOptionsWithoutChatCasts(
-      dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode) {
+      dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode) throws Exception {
+    contentType = "text/event-stream";
+    replies.add(sse(done()));
     var run = new dev.mikoto2000.rei.core.chat.AgentRunContext(
         "fixture-run", "fixture-conversation", protocolDirectory, "fixture-project",
         dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB, mode);

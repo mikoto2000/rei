@@ -58,7 +58,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
@@ -160,7 +160,7 @@ public class ChatExecutionService {
   /** モデル提供元。 */
   private final Function<String, ChatModel> privateSecretaryModel;
 
-  private final Function<String, OpenAiChatOptions> optionsForModel;
+  private final Function<String, ToolCallingChatOptions> optionsForModel;
 
   /** 言語モデル設定。 */
   private final Supplier<LlmProperties.OutputLimit> outputLimits;
@@ -373,7 +373,7 @@ public class ChatExecutionService {
                 : chatClientProvider.parallelChatClient(mode);
     this.readSelectedModel = () -> currentModelHolder.get();
     this.privateSecretaryModel = expected -> modelProvider.privateSecretaryModel(expected);
-    this.optionsForModel = selected -> modelProvider.chatOptions(LlmFeature.CHAT, selected, true);
+    this.optionsForModel = selected -> modelProvider.requestOptions(LlmFeature.CHAT, selected, true);
     this.outputLimits = () -> llmProperties.getOutputLimit();
     this.beginCancellation = () -> cancellationService.begin(Thread.currentThread());
     this.registerCancellation = disposable -> cancellationService.register(disposable);
@@ -1206,7 +1206,7 @@ public class ChatExecutionService {
       log.warn("Prompt attachment warning: {}", warning);
     }
 
-    var baseOptions = (OpenAiChatOptions) execution.modelOptions();
+    var baseOptions = execution.modelOptions();
     if (mode != AgentRunContext.Mode.EXCLUSIVE) ToolLoopSupport.requireNoRawTools(baseOptions);
     var optionsBuilder = baseOptions.mutate();
     optionsBuilder.toolContext(
@@ -1215,11 +1215,9 @@ public class ChatExecutionService {
             execution,
             RunCancellation.CHILD_ENTRY_KEY,
             childEntry.apply(execution.runContext().runId())));
-    if (mode == AgentRunContext.Mode.CONVERSATION) {
-      optionsBuilder.toolCallbacks(java.util.List.of());
-      optionsBuilder.toolChoice("none");
-    }
-    var options = optionsBuilder.build();
+    var configured = optionsBuilder.build();
+    var options = mode == AgentRunContext.Mode.CONVERSATION
+        ? dev.mikoto2000.rei.modeloptions.ModelOptions.withoutTools(configured) : configured;
     var messages = new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
     if (!execution.outputLimitHandoff().isBlank()) {
       messages.add(
