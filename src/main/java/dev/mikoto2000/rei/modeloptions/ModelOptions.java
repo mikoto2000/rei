@@ -185,7 +185,31 @@ public final class ModelOptions {
       builder.maxCompletionTokens(tokens);
       return builder.build();
     }
-    return withOutputLimit(options, tokens);
+    return options instanceof OpenAiResponsesChatOptions
+        ? capOutputLimit(options, tokens) : withOutputLimit(options, tokens);
+  }
+
+  /** Set an explicitly selected native tool-choice value, including clearing the choice. */
+  public static ToolCallingChatOptions withToolChoice(ToolCallingChatOptions options, String choice) {
+    if (options instanceof OpenAiResponsesChatOptions responses) {
+      var builder=responses.mutate(); builder.toolChoice(choice); return builder.build();
+    }
+    if (options instanceof OpenAiChatOptions chat) {
+      var builder=chat.mutate(); builder.toolChoice(choice); return builder.build();
+    }
+    throw new IllegalArgumentException("Tool choice is unavailable for this protocol");
+  }
+
+  /** Keep the SDK's structured-output type while selecting the request's native option family. */
+  public static ToolCallingChatOptions withResponseFormat(ToolCallingChatOptions options,
+      org.springframework.ai.openai.OpenAiChatModel.ResponseFormat format) {
+    if (options instanceof OpenAiResponsesChatOptions responses) {
+      var builder=responses.mutate(); builder.responseFormat(format); return builder.build();
+    }
+    if (options instanceof OpenAiChatOptions chat) {
+      var builder=chat.mutate(); builder.responseFormat(format); return builder.build();
+    }
+    throw new IllegalArgumentException("Structured output is unavailable for this protocol");
   }
 
   /** Local chat-template controls have no implicit Responses equivalent. */

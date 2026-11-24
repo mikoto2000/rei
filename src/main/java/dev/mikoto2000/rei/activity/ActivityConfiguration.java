@@ -360,7 +360,7 @@ public class ActivityConfiguration {
         toolkit,
         new LlmClassificationRuleModel(
             () -> provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),
-            () -> provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY, current.get()),
+            () -> provider.requestOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY, current.get(), false),
             toolkit.ruleSuggestionMaxOutputTokens()));
   }
 
