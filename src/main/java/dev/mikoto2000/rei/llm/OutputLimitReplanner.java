@@ -134,7 +134,7 @@ public class OutputLimitReplanner {
 
         Max output tokens per call:
         """,
-        String.valueOf(properties.getMaxOutputTokens()),
+        Objects.toString(request.outputTokenLimit(), String.valueOf(properties.getMaxOutputTokens())),
         "\n\nRemaining execution budget:\nreplanCount=",
         String.valueOf(request.replanCount()),
         "\nmaxReplansPerGoal=",

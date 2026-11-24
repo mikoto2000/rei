@@ -1129,7 +1129,8 @@ public class ChatExecutionService {
               partialOutput,
               budget.replanCount(),
               outputLimits.get().getMaxReplansPerGoal(),
-              budget.remainingLlmCalls());
+              budget.remainingLlmCalls(),
+              dev.mikoto2000.rei.modeloptions.ModelOptions.outputLimit(execution.modelOptions()));
       plan =
           budget.tokenLimitEnabled()
               ? outputLimitReplanner.get().replan(replanRequest, execution::recordTotalTokens)
