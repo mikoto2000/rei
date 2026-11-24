@@ -47,6 +47,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
 
   /** ログ一覧。 */
   private final Function<String, List<ConversationLogEntry>> readHistory;
+  private final java.util.function.Supplier<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> payloads;
 
   /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ContextHistoryAdvisor(
@@ -62,18 +63,19 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       ConversationMemory memory,
       ConversationSummaryRepository summaries,
       dev.mikoto2000.rei.conversation.ConversationLogStore logs) {
+    this(turns, memory, summaries, logs, () -> null);
+  }
+
+  public ContextHistoryAdvisor(ConversationTurnStore turns, ConversationMemory memory,
+      ConversationSummaryRepository summaries, dev.mikoto2000.rei.conversation.ConversationLogStore logs,
+      java.util.function.Supplier<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> payloads) {
     this.readTurns = conversation -> turns.read(conversation);
     this.readLegacyMemory = id -> memory.get(id);
     this.rememberInput = (id, messages) -> memory.add(id, messages);
     this.rememberOutput = (id, message) -> memory.add(id, message);
     this.summaries = summaries;
     this.readHistory = id -> logs == null ? List.of() : logs.readConversation(id);
-  }
-
-  public ContextHistoryAdvisor(ConversationTurnStore turns, ConversationMemory memory,
-      ConversationSummaryRepository summaries, dev.mikoto2000.rei.conversation.ConversationLogStore logs,
-      java.util.function.Supplier<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> payloads) {
-    this(turns, memory, summaries, logs);
+    this.payloads = java.util.Objects.requireNonNull(payloads);
   }
 
   /** 他の補助処理と組み合わせる際の適用順序を返す。 */
@@ -159,7 +161,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                       .content(entry.content())
                       .properties(properties)
                       .build();
-          messages.add(historical(message, sequence));
+          messages.add(historical(restore(owner, entry.metadata(), entry.speaker(), message), sequence));
           historyAnchor = true;
         }
         // Carry completed run observations alongside the original final answer without rewriting
@@ -208,16 +210,17 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                   new AssistantMessage(
                       "Prior run observations (historical data):\n" + runSummary.summary()),
                   i * 3L + 2));
-        if (turn.assistantMessage() != null && !turn.assistantMessage().isBlank()) {
+        if ((turn.assistantMessage() != null && !turn.assistantMessage().isBlank())
+            || dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(turn.metadata())) {
           var properties = new HashMap<String, Object>(turn.metadata());
           if (turn.source() != null) properties.put("source", turn.source());
           if (turn.sourceId() != null) properties.put("sourceId", turn.sourceId());
           messages.add(
               historical(
-                  AssistantMessage.builder()
-                      .content(turn.assistantMessage())
+                  restore(owner, turn.metadata(), "assistant", AssistantMessage.builder()
+                      .content(java.util.Objects.toString(turn.assistantMessage(), ""))
                       .properties(properties)
-                      .build(),
+                      .build()),
                   i * 3L + 3));
         }
       }
@@ -249,6 +252,17 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         .context(context)
         .prompt(new Prompt(messages, request.prompt().getOptions()))
         .build();
+  }
+
+  private Message restore(AgentRunContext owner, Map<String, String> metadata, String speaker, Message fallback) {
+    if (!dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(metadata)) return fallback;
+    if (owner == null) throw new IllegalStateException("Model message persistence rejected");
+    var store = payloads.get();
+    if (store == null) throw new IllegalStateException("Model message persistence rejected");
+    var restored = store.restoreHistory(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner), metadata).orElseThrow();
+    if (!restored.getMessageType().name().equalsIgnoreCase(speaker))
+      throw new IllegalStateException("Model message persistence rejected");
+    return restored;
   }
 
   /** モデルへ渡す文脈の管理の実行結果を受け取り、後続の処理へ反映する。 */
