@@ -530,11 +530,13 @@ public class ApprovalContinuationStore {
         .params(state, id)
         .update();
     if (state.equals("COMPLETED") || state.equals("DENIED"))
-      find(id).filter(entry -> entry.state().equals(state)).ifPresent(this::retirePayloadReferences);
+      retirePayloadReferences(id, state);
   }
 
-  private void retirePayloadReferences(Entry entry) {
+  private void retirePayloadReferences(String id, String state) {
     try {
+      var entry = find(id).filter(found -> found.state().equals(state)).orElse(null);
+      if (entry == null) return;
       var document = document(entry);
       var pending = document.pending();
       var history = document.history();
