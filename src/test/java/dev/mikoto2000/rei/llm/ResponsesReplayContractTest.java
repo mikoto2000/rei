@@ -500,7 +500,8 @@ class ResponsesReplayContractTest {
     assertThat(turns.read(run.conversationId()).getFirst().metadata()).containsAllEntriesOf(Map.of(
         dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_VERSION, "1",
         dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_COUNT, "2",
-        "rei.modelMessage.run", run.runId()));
+        "rei.modelMessage.run", run.runId(),
+        "rei.modelMessage.endpoint", models.resolvedEndpoint(LlmFeature.CHAT).fingerprint()));
     assertThat(logs.readAll()).extracting(dev.mikoto2000.rei.conversation.ConversationLogEntry::content)
         .containsExactly("fixture request", "done");
   }

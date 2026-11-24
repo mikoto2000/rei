@@ -611,7 +611,7 @@ public class ChatExecutionService {
               && context.mode() == AgentRunContext.Mode.EXCLUSIVE
               && !structuredCommand)
             chatMemory.add(context.conversationId(), java.util.List.of(new UserMessage(text)));
-          appendConversationLog(context.conversationId(), "user", text);
+          appendConversationLog(context, execution, "user", text);
         });
     Disposable cancellationHook = onRunCancellation.apply(runId, execution::cancel);
     ConversationTurnStore.Status turnStatus = ConversationTurnStore.Status.FAILED;
@@ -642,7 +642,7 @@ public class ChatExecutionService {
       execution.checkActive();
       activityTracker.ifPresent(
           tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
-      if (resumed == null) appendConversationLog(context.conversationId(), "user", promptText);
+      if (resumed == null) appendConversationLog(context, execution, "user", promptText);
       if (!structuredCommand
           && (resumed == null || resumed.pendingTools() == null)
           && !budget.tryConsumeLlmCall()) {
@@ -780,7 +780,17 @@ public class ChatExecutionService {
       }
       if (result.status() == ChatRunStatus.SUCCESS) {
         execution.checkActive();
-        appendConversationLog(context.conversationId(), "assistant", result.text());
+        var protocolPointers = execution.protocolHistoryReferences();
+        if (!protocolPointers.isEmpty()) {
+          if (conversationLogStore == null)
+            throw new IllegalStateException("Conversation protocol history unavailable");
+          var manifest = new java.util.HashMap<>(conversationLogStore.appendProtocolHistory(
+              context.conversationId(), context.runId(), protocolPointers));
+          manifest.put("rei.modelMessage.endpoint",
+              execution.progressSnapshot().protocolHistory().origin().endpoint());
+          turns.recordMetadata(context, manifest);
+        }
+        appendConversationLog(context, execution, "assistant", result.text());
         assistantMessage = result.text();
         boolean consolidationSuggested =
             context.mode() == AgentRunContext.Mode.EXCLUSIVE
@@ -948,9 +958,13 @@ public class ChatExecutionService {
   }
 
   /** 既存の記録へ経緯を残すため、会話ログを追記する。 */
-  private void appendConversationLog(String conversationId, String speaker, String content) {
+  private void appendConversationLog(AgentRunContext owner, RunExecutionContext execution,
+      String speaker, String content) {
     if (conversationLogStore != null) {
-      conversationLogStore.append(conversationId, speaker, content);
+      if (execution.recordsProtocolMessages())
+        conversationLogStore.append(owner.conversationId(), speaker, content,
+            Map.of("rei.modelMessage.run", owner.runId()));
+      else conversationLogStore.append(owner.conversationId(), speaker, content);
     }
   }
 

@@ -34,6 +34,7 @@ public final class ModelMessagePayloadStore {
   public static final String HISTORY_OWNER = "rei.modelMessage.historyOwner";
   public static final String HISTORY_RUN = "rei.modelMessage.run";
   public static final String HISTORY_ROLE = "rei.modelMessage.role";
+  public static final String HISTORY_ENDPOINT = "rei.modelMessage.endpoint";
 
   public java.util.Map<String, String> historyReference(Scope scope, Ref ref, String owner) {
     publish(scope, ref, ReferenceKind.HISTORY, owner);

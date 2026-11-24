@@ -157,6 +157,14 @@ public class RunExecutionContext {
     }
   }
 
+  /** Whether the accepted options carry the existing durable protocol boundary. */
+  public boolean recordsProtocolMessages() {
+    var context = modelOptions == null ? null : modelOptions.getToolContext();
+    return context != null && context.get(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY)
+        instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange;
+  }
+
   /** Prepare durable ordered history pointers before existing history documents are written. */
   public synchronized List<Map<String, String>> protocolHistoryReferences() {
     if (protocolHistory == null) return List.of();
