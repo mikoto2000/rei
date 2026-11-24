@@ -39,7 +39,7 @@ class ResponsesReplayContractTest {
     var restoredResponse = new org.springframework.ai.chat.model.ChatResponse(List.of(
         new org.springframework.ai.chat.model.Generation(restored)));
     assertThat(ResponsesTransportException.usage(restoredResponse))
-        .isEqualTo(new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
+        .isEqualTo(new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(3L, 2L, 5L, 1L, 1L));
     model.call(new Prompt(List.of(new UserMessage("fixture"), restored), options));
     assertThat(requests).hasSize(2);
     assertThat(requests.getLast().path("input").get(1).path("encrypted_content").asText())
@@ -464,7 +464,7 @@ class ResponsesReplayContractTest {
         .isInstanceOf(ResponsesTransportException.class)
         .hasMessageContaining("INVALID_RESPONSE");
     assertThat(((ResponsesTransportException) failure).usage())
-        .isEqualTo(new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
+        .isEqualTo(new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(3L, 2L, 5L, 1L, 1L));
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -518,7 +518,7 @@ class ResponsesReplayContractTest {
         .blockLast(Duration.ofSeconds(10));
     var first = completed.get();
     assertThat(ResponsesTransportException.usage(first))
-        .isEqualTo(new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
+        .isEqualTo(new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(3L, 2L, 5L, 1L, 1L));
     assertThat(first.getResult().getOutput().getMetadata().get("rei.llm.replay-origin-owner"))
         .isEqualTo("fixture-owner");
     assertThat(first.getResult().getOutput().getParts()).hasSize(5);

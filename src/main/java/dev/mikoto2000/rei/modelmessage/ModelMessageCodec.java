@@ -22,7 +22,8 @@ import org.springframework.ai.chat.messages.part.StreamingParts;
 public final class ModelMessageCodec {
   public static final int MAX_BYTES = 8 * 1024 * 1024;
   private static final Set<String> METADATA = Set.of("rei.llm.replay-origin-owner", "rei.llm.replay-origin-endpoint",
-      "rei.historySequence", "JdbcChatMemoryRepository_message_timestamp", "rei.reviewBudgetRecovery", "rei.fileBudgetRecovery");
+      "rei.historySequence", "JdbcChatMemoryRepository_message_timestamp", "rei.reviewBudgetRecovery", "rei.fileBudgetRecovery",
+      ModelTokenUsage.METADATA_KEY);
   private static final ObjectMapper JSON = new ObjectMapper(com.fasterxml.jackson.core.JsonFactory.builder()
       .enable(com.fasterxml.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
       .streamReadConstraints(com.fasterxml.jackson.core.StreamReadConstraints.builder()
@@ -155,6 +156,12 @@ public final class ModelMessageCodec {
 
   private static JsonNode encodeProperty(String key, Object value) {
     if (!METADATA.contains(key)) throw invalid();
+    if (key.equals(ModelTokenUsage.METADATA_KEY)) {
+      if (!(value instanceof ModelTokenUsage)) throw invalid();
+      JsonNode node = JSON.valueToTree(value);
+      decodeProperty(key, node);
+      return node;
+    }
     if (key.equals("JdbcChatMemoryRepository_message_timestamp")) {
       if (!(value instanceof java.time.Instant instant)) throw invalid();
       return JSON.getNodeFactory().textNode(instant.toString());
@@ -171,6 +178,11 @@ public final class ModelMessageCodec {
 
   private static Object decodeProperty(String key, JsonNode value) {
     return switch (key) {
+      case ModelTokenUsage.METADATA_KEY -> {
+        fields(value, Set.of("input", "output", "total", "cached", "reasoning"));
+        yield new ModelTokenUsage(number(value, "input"), number(value, "output"), number(value, "total"),
+            number(value, "cached"), number(value, "reasoning"));
+      }
       case "rei.llm.replay-origin-owner", "rei.llm.replay-origin-endpoint" -> {
         if (!value.isTextual()) throw invalid();
         yield value.textValue();
@@ -190,6 +202,13 @@ public final class ModelMessageCodec {
       }
       default -> throw invalid();
     };
+  }
+
+  private static Long number(JsonNode node, String key) {
+    var value = node.get(key);
+    if (value == null || value.isNull()) return null;
+    if (!value.isIntegralNumber() || !value.canConvertToLong()) throw invalid();
+    return value.longValue();
   }
 
   private static JsonNode encodeDelivery(ToolResponseMessage tool) {

@@ -10,7 +10,7 @@ final class ResponsesReasoningReplay {
   static final String OWNER_CONTEXT_KEY = "rei.llm.replay-owner";
   static final String ORIGIN_OWNER = "rei.llm.replay-origin-owner";
   static final String ORIGIN_ENDPOINT = "rei.llm.replay-origin-endpoint";
-  static final String USAGE_KEY = "rei.llm.responses-usage";
+  static final String USAGE_KEY = dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY;
 
   private ResponsesReasoningReplay() {}
 

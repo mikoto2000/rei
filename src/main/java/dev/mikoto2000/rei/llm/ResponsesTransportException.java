@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.llm;
 
+import dev.mikoto2000.rei.modelmessage.ModelTokenUsage;
+
 /** Safe transport failure. Provider messages, bodies and causes must not escape this boundary. */
 final class ResponsesTransportException extends IllegalStateException {
   @java.io.Serial private static final long serialVersionUID = 1L;
@@ -16,14 +18,9 @@ final class ResponsesTransportException extends IllegalStateException {
   }
 
   private final Category category;
-  private final TokenUsage usage;
+  private final ModelTokenUsage usage;
 
-  record TokenUsage(Long input, Long output, Long total, Long cached, Long reasoning)
-      implements java.io.Serializable {
-    @java.io.Serial private static final long serialVersionUID = 1L;
-  }
-
-  TokenUsage usage() {
+  ModelTokenUsage usage() {
     return usage;
   }
 
@@ -31,17 +28,17 @@ final class ResponsesTransportException extends IllegalStateException {
     this(category, null);
   }
 
-  ResponsesTransportException(Category category, TokenUsage usage) {
+  ResponsesTransportException(Category category, ModelTokenUsage usage) {
     super("Responses transport failed: " + category);
     this.category = category;
     this.usage = usage;
   }
 
-  static TokenUsage usage(com.openai.models.responses.ResponseUsage usage) {
+  static ModelTokenUsage usage(com.openai.models.responses.ResponseUsage usage) {
     if (usage == null) return null;
     var inputDetails = usage._inputTokensDetails().asKnown().orElse(null);
     var outputDetails = usage._outputTokensDetails().asKnown().orElse(null);
-    return new TokenUsage(
+    return new ModelTokenUsage(
         usage._inputTokens().asNumber().map(Number::longValue).orElse(null),
         usage._outputTokens().asNumber().map(Number::longValue).orElse(null),
         usage._totalTokens().asNumber().map(Number::longValue).orElse(null),
@@ -53,12 +50,12 @@ final class ResponsesTransportException extends IllegalStateException {
             : outputDetails._reasoningTokens().asNumber().map(Number::longValue).orElse(null));
   }
 
-  static TokenUsage usage(org.springframework.ai.chat.metadata.Usage usage) {
+  static ModelTokenUsage usage(org.springframework.ai.chat.metadata.Usage usage) {
     if (usage == null || usage instanceof org.springframework.ai.chat.metadata.EmptyUsage)
       return null;
     if (usage.getNativeUsage() instanceof com.openai.models.responses.ResponseUsage nativeUsage)
       return usage(nativeUsage);
-    return new TokenUsage(
+    return new ModelTokenUsage(
         number(usage.getPromptTokens()),
         number(usage.getCompletionTokens()),
         number(usage.getTotalTokens()),
@@ -66,7 +63,7 @@ final class ResponsesTransportException extends IllegalStateException {
         null);
   }
 
-  static TokenUsage usage(org.springframework.ai.chat.model.ChatResponse response) {
+  static ModelTokenUsage usage(org.springframework.ai.chat.model.ChatResponse response) {
     var usage = response.getMetadata().getUsage();
     if (usage != null
         && usage.getNativeUsage() instanceof com.openai.models.responses.ResponseUsage)
@@ -74,7 +71,7 @@ final class ResponsesTransportException extends IllegalStateException {
     var generation = response.getResult();
     if (generation != null
         && generation.getOutput().getMetadata().get(ResponsesReasoningReplay.USAGE_KEY)
-            instanceof TokenUsage numeric) return numeric;
+            instanceof ModelTokenUsage numeric) return numeric;
     return usage(usage);
   }
 
