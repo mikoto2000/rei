@@ -608,8 +608,18 @@ class ResponsesReplayContractTest {
       assertThat(history.entries()).hasSize(5);
       assertThat(checkpoints).anySatisfy(snapshot -> assertThat(snapshot.protocolHistory()).isEqualTo(history));
       assertThat(execution.progressSnapshot().forExplicitResume().protocolHistory()).isEqualTo(history);
-      assertThat(new ObjectMapper().writeValueAsString(execution.progressSnapshot()))
-          .doesNotContain("opaque-one", "opaque-two", "fixture result");
+      String document = new ObjectMapper().writeValueAsString(execution.progressSnapshot());
+      assertThat(document).doesNotContain("opaque-one", "opaque-two", "fixture result");
+      var decoded = new ObjectMapper().readValue(document,
+          dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState.class);
+      var restored = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+          "fixture-run", new OutputLimitRunBudget(2, 4),
+          new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+          new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+      restored.setRunContext(run);
+      restored.setModelOptions(options);
+      restored.restoreProgress(decoded);
+      assertThat(restored.progressSnapshot().protocolHistory()).isEqualTo(history);
     }
     assertThat(executions).hasValue(4);
     assertThat(requests).hasSize(3);
@@ -627,6 +637,37 @@ class ResponsesReplayContractTest {
           .isEqualTo(item.message().getMessageType());
       assertThat(item.toString()).doesNotContain("opaque-one", "opaque-two", "fixture result");
     }
+  }
+
+  @Test
+  void checkpointWriteFailureStopsBeforeTheFirstNativeToolEffect() throws Exception {
+    contentType = "text/event-stream";
+    replies.add(sse(toolResponse()));
+    var provider = nativeProvider(nativeProperties());
+    var run = new dev.mikoto2000.rei.core.chat.AgentRunContext(
+        "fixture-run", "fixture-conversation", protocolDirectory, "fixture-project");
+    var callbacks = options().getToolCallbacks();
+    var request = provider.requestOptions(LlmFeature.CHAT, null, true, run)
+        .mutate().toolCallbacks(callbacks).build();
+    var budget = new OutputLimitRunBudget(2, 4);
+    budget.tryConsumeLlmCall();
+    var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+        run.runId(), budget,
+        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+    execution.setRunContext(run);
+    execution.setModelOptions(request);
+    execution.setToolResultsCheckpoint(ignored -> { throw new IllegalStateException("checkpoint unavailable"); });
+    var accepted = execution.modelOptions().mutate().toolContext(Map.of(
+        dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution)).build();
+    assertThatThrownBy(() -> new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
+        provider.chatModel(LlmFeature.CHAT)).stream(new Prompt("fixture", accepted))
+        .blockLast(Duration.ofSeconds(10)))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("checkpoint unavailable")
+        .hasMessageNotContaining("opaque-one");
+    assertThat(executions).hasValue(0);
+    assertThat(requests).hasSize(1);
+    assertThat(execution.progressSnapshot().protocolHistory().entries()).hasSize(1);
   }
 
   @org.junit.jupiter.params.ParameterizedTest
