@@ -19,6 +19,61 @@ import org.springframework.ai.chat.messages.part.TextPart;
 class ApprovalProtocolHistoryTest {
   @TempDir Path directory;
 
+  @Test
+  void resumedPrefixKeepsItsOriginalDeliveryPolicyAndReadGrant() {
+    var source = new org.sqlite.SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + directory.resolve("delivery.db"));
+    var owner = new AgentRunContext("run", "session", directory, "project");
+    var scope = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner);
+    var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    var calls = List.of(new AssistantMessage.ToolCall("first", "function", "readMultiFile", "{}"),
+        new AssistantMessage.ToolCall("second", "function", "fixture", "{}"));
+    var assistant = payloads.save(scope, "run", "assistant",
+        AssistantMessage.builder().content("working").toolCalls(calls).build());
+    var prefix = org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+        .responses(List.of(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+            "first", "readMultiFile", "prefix-result")))
+        .metadata(Map.of("rei.deliveryPolicies", Map.of("first",
+            new dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.Policy("FILE_CONTENT")),
+            "rei.fileReadBudgets", Map.of("first",
+                new dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.FileReadBudget(80)))).build();
+    var completed = payloads.save(scope, "run", "prefix", prefix);
+    for (var ref : List.of(assistant, completed))
+      payloads.publish(scope, ref, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, "run");
+    var pending = new RunContinuation.PendingTools("working", calls, prefix.getResponses(), java.util.Set.of(),
+        assistant, completed);
+    var store = new ApprovalContinuationStore(source);
+    store.save("approval", owner, "request", List.of(new org.springframework.ai.chat.messages.UserMessage("request")),
+        pending, new OutputLimitRunBudget(0, 5).snapshot(), false);
+    var saved = new ApprovalContinuationStore(source).saved(store.find("approval").orElseThrow());
+    var callbacks = new java.util.ArrayList<org.springframework.ai.tool.ToolCallback>();
+    for (String name : List.of("readMultiFile", "fixture")) {
+      var callback = org.mockito.Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
+      org.mockito.Mockito.when(callback.getToolDefinition()).thenReturn(
+          org.springframework.ai.tool.definition.ToolDefinition.builder().name(name).description("fixture")
+              .inputSchema("{}").build());
+      org.mockito.Mockito.when(callback.getToolMetadata()).thenReturn(
+          org.springframework.ai.tool.metadata.ToolMetadata.builder().build());
+      if (name.equals("readMultiFile"))
+        org.mockito.Mockito.when(callback.call(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+            .thenThrow(new AssertionError("Completed prefix must not execute again"));
+      else
+        org.mockito.Mockito.when(callback.call(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+            .thenReturn("approved-result");
+      callbacks.add(callback);
+    }
+    var options = org.springframework.ai.model.tool.ToolCallingChatOptions.builder().toolCallbacks(callbacks)
+        .toolContext(Map.of(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(payloads, scope, "run", "resumed"))).build();
+    var result = new dev.mikoto2000.rei.core.chat.ToolLoopSupport().executePending(
+        new org.springframework.ai.chat.prompt.Prompt(saved.messages(), options), saved.pendingTools(),
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.class));
+    var delivery = dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.capture(
+        (org.springframework.ai.chat.messages.ToolResponseMessage) result.conversationHistory().getLast());
+    assertThat(delivery.policies()).containsEntry("first", "FILE_CONTENT").containsEntry("second", "GENERAL");
+    assertThat(delivery.fileReadBudgets().get("first").tokens()).isEqualTo(80);
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void oversizedContinuationsDoNotPublishPayloadReferences(boolean oversizedHistory) {
@@ -153,6 +208,12 @@ class ApprovalProtocolHistoryTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("Invalid approval continuation")
         .hasNoCause();
+    var missingResult = json.readTree(entry.document());
+    ((com.fasterxml.jackson.databind.node.ObjectNode) missingResult.path("pending")).remove("completedReference");
+    var missingPrefix = new ApprovalContinuationStore.Entry(entry.approvalId(), entry.runId(), entry.state(),
+        json.writeValueAsString(missingResult), entry.pid(), entry.started());
+    assertThatThrownBy(() -> restarted.saved(missingPrefix))
+        .isInstanceOf(IllegalStateException.class).hasMessage("Invalid approval continuation").hasNoCause();
     org.mockito.Mockito.doReturn("approved result")
         .when(callback)
         .call(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
