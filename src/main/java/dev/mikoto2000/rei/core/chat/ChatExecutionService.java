@@ -1246,8 +1246,9 @@ public class ChatExecutionService {
                   + " assistant output."));
       messages.addAll(execution.conversationSnapshot());
     }
-    messages.add(
-        UserMessage.builder().text(resolvedPrompt.prompt()).media(resolvedPrompt.media()).build());
+    var originalUser = UserMessage.builder().text(resolvedPrompt.prompt()).media(resolvedPrompt.media()).build();
+    execution.preserveUserMessage(originalUser);
+    messages.add(originalUser);
     ChatClientRequestSpec requestSpec =
         clientForMode
             .apply(mode)
