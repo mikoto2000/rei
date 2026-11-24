@@ -5,6 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore;
 import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,11 +44,17 @@ public class ApprovalContinuationStore {
       String text,
       List<AssistantMessage.ToolCall> calls,
       List<ToolResponseMessage.ToolResponse> responses,
-      ToolResultMetadata delivery) {
+      ToolResultMetadata delivery,
+      ModelMessagePayloadStore.Ref payload) {
     /** 保存後に外部から呼び出しや応答の一覧を変更できないようにする。 */
     public StoredMessage {
       calls = calls == null ? List.of() : List.copyOf(calls);
       responses = responses == null ? List.of() : List.copyOf(responses);
+    }
+
+    public StoredMessage(String kind, String text, List<AssistantMessage.ToolCall> calls,
+        List<ToolResponseMessage.ToolResponse> responses, ToolResultMetadata delivery) {
+      this(kind, text, calls, responses, delivery, null);
     }
 
     /** 配信属性を持たないメッセージと旧形式の呼び出しを受け付ける。 */
@@ -98,12 +105,16 @@ public class ApprovalContinuationStore {
   /** データベースへのアクセス。 */
   private final JdbcClient db;
 
+  private final java.util.function.Supplier<ModelMessagePayloadStore> payloads;
+
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
 
   /** 指定された値や利用先を使って、ApprovalContinuationStoreを初期化する。 */
   public ApprovalContinuationStore(@Qualifier("memoryConsolidationDataSource") DataSource source) {
     db = JdbcClient.create(source);
+    payloads = org.springframework.util.function.SingletonSupplier.of(
+        () -> new ModelMessagePayloadStore(source));
     db.sql(
             "CREATE TABLE IF NOT EXISTS approval_continuations(approval TEXT PRIMARY KEY,run TEXT NOT NULL,state TEXT NOT NULL,document TEXT NOT NULL,pid INTEGER NOT NULL DEFAULT 0,started TEXT)")
         .update();
@@ -125,10 +136,18 @@ public class ApprovalContinuationStore {
         || pending.calls().isEmpty()
         || pending.completed().size() >= pending.calls().size())
       throw new IllegalArgumentException("Pending Tool required");
+    var messageIndex = new java.util.concurrent.atomic.AtomicInteger();
     var messages =
         history.stream()
             .filter(m -> !(m instanceof SystemMessage))
             .map(m -> {
+              int index = messageIndex.getAndIncrement();
+              if (requiresPayload(m)) {
+                var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
+                var ref = payloads.get().save(scope, owner.runId(), "approval:" + id + "/history:" + index, m);
+                payloads.get().publish(scope, ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, id);
+                return new StoredMessage(m.getMessageType().name(), "", List.of(), List.of(), null, ref);
+              }
               if (m instanceof AssistantMessage a)
                 return new StoredMessage(
                     "ASSISTANT", Objects.toString(a.getText(), ""), a.getToolCalls(), List.of());
@@ -150,6 +169,23 @@ public class ApprovalContinuationStore {
             .params(id, owner.runId(), encoded)
             .update()
         != 1) throw new IllegalStateException("Approval already has a continuation");
+  }
+
+  private static boolean requiresPayload(Message message) {
+    if (message instanceof UserMessage user) return !user.getMedia().isEmpty();
+    if (!(message instanceof AssistantMessage assistant)) return false;
+    if (assistant.getMetadata().containsKey("rei.llm.replay-origin-owner")
+        || assistant.getMetadata().containsKey("rei.llm.replay-origin-endpoint")
+        || assistant.getMetadata().containsKey(dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY))
+      return true;
+    return assistant.getParts().stream().anyMatch(part -> {
+      if (!part.attributes().isEmpty()) return true;
+      if (part instanceof org.springframework.ai.chat.messages.part.TextPart text)
+        return text.payload() != null;
+      if (part instanceof org.springframework.ai.chat.messages.part.ToolCallPart call)
+        return call.payload() != null;
+      return true;
+    });
   }
 
   /** 行。 */
@@ -219,8 +255,15 @@ public class ApprovalContinuationStore {
     return new RunContinuation.Saved(
         d.request(),
         d.history().stream()
-            .map(m ->
-                (Message)
+            .map(m -> {
+              if (m.payload() != null) {
+                var message = payloads.get().load(ModelMessagePayloadStore.Scope.forOwner(d.owner()),
+                    m.payload(), ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId());
+                if (!message.getMessageType().name().equals(m.kind()))
+                  throw new IllegalStateException("Model message persistence rejected");
+                return message;
+              }
+              return (Message)
                     switch (m.kind()) {
                       case "USER" -> new UserMessage(m.text());
                       case "ASSISTANT" ->
@@ -234,7 +277,8 @@ public class ApprovalContinuationStore {
                                       : m.delivery().restore())
                               .build();
                       default -> throw new IllegalStateException("Invalid continuation message");
-                    })
+                    };
+            })
             .toList(),
         d.budget(),
         d.pending());

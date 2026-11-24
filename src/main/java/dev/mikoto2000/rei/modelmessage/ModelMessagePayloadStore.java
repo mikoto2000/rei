@@ -306,6 +306,20 @@ public final class ModelMessagePayloadStore {
     return transaction(db -> codec.decode(read(db, scope, ref)));
   }
 
+  /** Restore only a reference published by the owning continuation or checkpoint. */
+  public Message load(Scope scope, Ref ref, ReferenceKind kind, String owner) {
+    validate(scope);
+    identifier(owner);
+    if (kind == null) throw rejected();
+    return transaction(db -> {
+      byte[] bytes = read(db, scope, ref);
+      if (scalar(db,
+          "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind=? AND owner=?",
+          ref.id(), kind.name(), owner) != 1) throw rejected();
+      return codec.decode(bytes);
+    });
+  }
+
   private static byte[] read(Connection db, Scope scope, Ref ref) throws SQLException {
     if (ref == null) throw rejected();
     identifier(ref.id());
