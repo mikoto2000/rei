@@ -176,14 +176,33 @@ class NativeComputerOptionsTest {
     verify(model, times(2)).call(any(Prompt.class));
   }
 
- @Test void uiTarsCannotSilentlyDropItsExplicitFrequencyPenaltyOnResponses() throws Exception {
-  var model=mock(ChatModel.class);
-  ComputerVisionModel planner=o->new ComputerAction.Click(new ComputerAction.Target(10,10,"fixture"),.9,ComputerAction.Risk.LOW);
-  var constructor=ShowUiComputerVisionModel.class.getDeclaredConstructor(ComputerVisionModel.class,ChatModel.class,Supplier.class,BooleanSupplier.class,GroundingProtocol.class,GroundingVerifier.class);
-  var vision=constructor.newInstance(planner,model,(Supplier<OpenAiResponsesChatOptions.Builder>)base::mutate,(BooleanSupplier)()->false,GroundingProtocol.UITARS,(GroundingVerifier)(o,i,t,point)->{});
-  org.assertj.core.api.Assertions.assertThatThrownBy(()->vision.decide(observation()))
-      .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Frequency penalty");
-  verify(model,never()).call(any(Prompt.class));
-  verify(model,never()).stream(any(Prompt.class));
- }
+  @Test
+  void uiTarsCannotSilentlyDropItsExplicitFrequencyPenaltyOnResponses() throws Exception {
+    var model = mock(ChatModel.class);
+    ComputerVisionModel planner =
+        o ->
+            new ComputerAction.Click(
+                new ComputerAction.Target(10, 10, "fixture"), .9, ComputerAction.Risk.LOW);
+    var constructor =
+        ShowUiComputerVisionModel.class.getDeclaredConstructor(
+            ComputerVisionModel.class,
+            ChatModel.class,
+            Supplier.class,
+            BooleanSupplier.class,
+            GroundingProtocol.class,
+            GroundingVerifier.class);
+    var vision =
+        constructor.newInstance(
+            planner,
+            model,
+            (Supplier<OpenAiResponsesChatOptions.Builder>) base::mutate,
+            (BooleanSupplier) () -> false,
+            GroundingProtocol.UITARS,
+            (GroundingVerifier) (o, i, t, point) -> {});
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> vision.decide(observation()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Frequency penalty");
+    verify(model, never()).call(any(Prompt.class));
+    verify(model, never()).stream(any(Prompt.class));
+  }
 }

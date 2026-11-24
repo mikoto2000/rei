@@ -120,7 +120,7 @@ public final class ModelOptions {
     } else throw new IllegalArgumentException("Unknown connection option protocol");
     try {
       var digest = java.security.MessageDigest.getInstance("SHA-256");
-      var connectionContext=options.getToolContext();
+      var connectionContext = options.getToolContext();
       for (var value :
           java.util.Arrays.asList(
               options.getClass().getName(),
@@ -184,9 +184,9 @@ public final class ModelOptions {
   public static ToolCallingChatOptions withOutputLimit(ToolCallingChatOptions options, int tokens) {
     if (tokens < 1) throw new IllegalArgumentException("Output limit must be positive");
     if (options instanceof OpenAiResponsesChatOptions responses) {
-      var configured=responses.getMaxOutputTokens();
+      var configured = responses.getMaxOutputTokens();
       var builder = responses.mutate();
-      builder.maxOutputTokens(configured==null ? tokens : Math.min(configured,tokens));
+      builder.maxOutputTokens(configured == null ? tokens : Math.min(configured, tokens));
       return builder.build();
     }
     if (options instanceof OpenAiChatOptions chat && chat.getMaxCompletionTokens() != null)
@@ -283,14 +283,15 @@ public final class ModelOptions {
 
   /** Reject wire-level tools that could bypass the caller's explicit callback boundary. */
   public static void requireNoRawTools(ToolCallingChatOptions options) {
-    java.util.Map<String,Object> extra=null;
-    if(options instanceof OpenAiResponsesChatOptions responses) {
-      extra=responses.getExtraBody();
-      var hosted=responses.getHostedTools();
-      if(hosted!=null && !hosted.isEmpty()) throw new IllegalArgumentException("Model must not carry hosted tools");
-    } else if(options instanceof OpenAiChatOptions chat) extra=chat.getExtraBody();
-    Object raw=extra==null ? null : extra.get("tools");
-    if(raw!=null && !(raw instanceof java.util.Collection<?> tools && tools.isEmpty()))
+    java.util.Map<String, Object> extra = null;
+    if (options instanceof OpenAiResponsesChatOptions responses) {
+      extra = responses.getExtraBody();
+      var hosted = responses.getHostedTools();
+      if (hosted != null && !hosted.isEmpty())
+        throw new IllegalArgumentException("Model must not carry hosted tools");
+    } else if (options instanceof OpenAiChatOptions chat) extra = chat.getExtraBody();
+    Object raw = extra == null ? null : extra.get("tools");
+    if (raw != null && !(raw instanceof java.util.Collection<?> tools && tools.isEmpty()))
       throw new IllegalArgumentException("Model must not carry raw default tools");
   }
 

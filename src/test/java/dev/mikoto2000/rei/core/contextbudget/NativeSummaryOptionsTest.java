@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -22,8 +21,9 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 
 class NativeSummaryOptionsTest {
   @ParameterizedTest
-  @org.junit.jupiter.params.provider.CsvSource({"false,16000","true,16000","false,73"})
-  void summaryHasItsOwnNativeOptionsAndCannotInheritParentReplayAuthority(boolean localThinking,int providerLimit) {
+  @org.junit.jupiter.params.provider.CsvSource({"false,16000", "true,16000", "false,73"})
+  void summaryHasItsOwnNativeOptionsAndCannotInheritParentReplayAuthority(
+      boolean localThinking, int providerLimit) {
     var models = mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
     var model = mock(ChatModel.class);
     var base =
@@ -58,7 +58,7 @@ class NativeSummaryOptionsTest {
           Prompt prompt = invocation.getArgument(0);
           assertThat(prompt.getOptions()).isInstanceOf(OpenAiResponsesChatOptions.class);
           var sent = (OpenAiResponsesChatOptions) prompt.getOptions();
-          assertThat(sent.getMaxOutputTokens()).isEqualTo(Math.min(providerLimit,8292));
+          assertThat(sent.getMaxOutputTokens()).isEqualTo(Math.min(providerLimit, 8292));
           assertThat(sent.getToolContext())
               .containsEntry("retained-owner-key", "value")
               .containsEntry("rei.modelCallPurpose", "context-summary")

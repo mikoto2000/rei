@@ -419,10 +419,12 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   }
 
   private static void requireNoRefusal(ChatResponse response) {
-    for(var generation:response.getResults()) {
-      var refusal=generation.getMetadata().get(OpenAiResponsesMetadata.REFUSAL);
-      if(refusal instanceof String text && !text.isBlank())
-        throw new ResponsesTransportException(ResponsesTransportException.Category.REFUSAL,ResponsesTransportException.usage(response));
+    for (var generation : response.getResults()) {
+      var refusal = generation.getMetadata().get(OpenAiResponsesMetadata.REFUSAL);
+      if (refusal instanceof String text && !text.isBlank())
+        throw new ResponsesTransportException(
+            ResponsesTransportException.Category.REFUSAL,
+            ResponsesTransportException.usage(response));
     }
   }
 

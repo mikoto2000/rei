@@ -83,7 +83,7 @@ class SummaryThinkingHttpTest {
               .build();
       var provider = mock(LlmModelProvider.class);
       when(provider.chatModel("chat")).thenReturn(OpenAiChatModel.builder().options(base).build());
-      when(provider.requestOptions("chat", null,false)).thenReturn(base);
+      when(provider.requestOptions("chat", null, false)).thenReturn(base);
       var properties = new ContextCompressionProperties();
       properties.setSummaryEnableThinking(thinking);
       var summary =
@@ -126,7 +126,7 @@ class SummaryThinkingHttpTest {
         OpenAiChatOptions.builder().extraBody(Map.of("chat_template_kwargs", template)).build();
     var provider = mock(LlmModelProvider.class);
     when(provider.chatModel("chat")).thenReturn(model);
-    when(provider.requestOptions("chat", null,false)).thenReturn(base);
+    when(provider.requestOptions("chat", null, false)).thenReturn(base);
     when(model.stream(any(Prompt.class)))
         .thenAnswer(invocation -> {
           var options = (OpenAiChatOptions) ((Prompt) invocation.getArgument(0)).getOptions();
@@ -157,7 +157,7 @@ class SummaryThinkingHttpTest {
     var model = mock(ChatModel.class);
     var provider = mock(LlmModelProvider.class);
     when(provider.chatModel("chat")).thenReturn(model);
-    when(provider.requestOptions("chat", null,false))
+    when(provider.requestOptions("chat", null, false))
         .thenReturn(
             OpenAiChatOptions.builder()
                 .extraBody(Map.of("chat_template_kwargs", template))
@@ -216,7 +216,7 @@ class SummaryThinkingHttpTest {
       var base = builder.build();
       var provider = mock(LlmModelProvider.class);
       when(provider.chatModel("chat")).thenReturn(OpenAiChatModel.builder().options(base).build());
-      when(provider.requestOptions("chat", null,false)).thenReturn(base);
+      when(provider.requestOptions("chat", null, false)).thenReturn(base);
       var properties = new ContextCompressionProperties();
       properties.setSummaryEnableThinking(false);
       var compressor = compressor(provider, properties);

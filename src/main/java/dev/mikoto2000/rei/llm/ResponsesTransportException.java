@@ -20,8 +20,9 @@ final class ResponsesTransportException extends IllegalStateException
   }
 
   /** Fixed codes survive existing user diagnostics without exposing SDK bodies or causes. */
-  @Override public String diagnosticCode() {
-    return switch(category) {
+  @Override
+  public String diagnosticCode() {
+    return switch (category) {
       case AUTHENTICATION -> "authentication_failed";
       case RATE_LIMIT -> "rate_limited";
       case TRANSIENT -> "provider_unavailable";
@@ -35,8 +36,9 @@ final class ResponsesTransportException extends IllegalStateException
   }
 
   /** Only host-defined guidance crosses the shared diagnostic boundary. */
-  @Override public String diagnosticMessage() {
-    return switch(category) {
+  @Override
+  public String diagnosticMessage() {
+    return switch (category) {
       case AUTHENTICATION -> "LLM の認証に失敗しました。接続先と認証設定を確認してください。";
       case RATE_LIMIT -> "LLM の呼び出し制限に達しました。利用枠と実行予算を確認してください。";
       case TRANSIENT -> "LLM へ接続できませんでした。接続先の稼働状況と実行結果を確認してください。";
