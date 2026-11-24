@@ -136,10 +136,17 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       long through = summaries.read(historyKey).throughSequence();
       var hiddenAt = cancelled.indexedTimestampFilter();
       var timeline = new java.util.TreeMap<java.time.Instant, ConversationTurnStore.Turn>();
+      var ambiguousProtocolTimes = new java.util.HashSet<java.time.Instant>();
       for (var turn : history)
         if (turn.createdAt() != null
             && !dev.mikoto2000.rei.conversation.ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(
-                turn.source())) timeline.putIfAbsent(turn.createdAt(), turn);
+                turn.source())) {
+          var previous = timeline.putIfAbsent(turn.createdAt(), turn);
+          if (previous != null
+              && (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(previous.metadata())
+                  || dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(turn.metadata())))
+            ambiguousProtocolTimes.add(turn.createdAt());
+        }
       var currentTurn =
           owner == null
               ? Optional.<ConversationTurnStore.Turn>empty()
@@ -177,10 +184,13 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                       .build();
           var modelMetadata = entry.metadata();
           if ("assistant".equals(entry.speaker())
+              && !dev.mikoto2000.rei.conversation.ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(entry.source())
               && !dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(
                   modelMetadata)
               && entry.timestamp() != null) {
             var previousTurn = timeline.floorEntry(entry.timestamp().toInstant());
+            if (previousTurn != null && ambiguousProtocolTimes.contains(previousTurn.getKey()))
+              throw new IllegalStateException("Model message persistence rejected");
             var savedTurn = previousTurn == null ? null : previousTurn.getValue();
             if (savedTurn != null
                 && savedTurn.completed()
