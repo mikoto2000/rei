@@ -189,15 +189,42 @@ public final class ModelMessagePayloadStore {
    */
   /** Bounded ordered pointers carried by the existing checkpoint document. */
   public record History(
-      int schemaVersion, String run, Origin origin, java.util.List<Entry> entries) {
+      int schemaVersion, String run, Origin origin, java.util.List<Entry> entries,
+      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) Input input) {
+    public History(int schemaVersion, String run, Origin origin, java.util.List<Entry> entries) {
+      this(schemaVersion, run, origin, entries, null);
+    }
+
     public History {
       identifier(run);
       java.util.Objects.requireNonNull(origin);
       entries = java.util.List.copyOf(entries);
-      if (schemaVersion != 1 || entries.size() > 256) throw rejected();
+      if (schemaVersion != 1 || entries.size() > 256 || input != null && input.traceSize() > entries.size()) throw rejected();
     }
 
-    public java.util.List<Entry> replayEntries() { return entries; }
+    /** The latest actual input followed by responses accepted after that request was sent. */
+    public java.util.List<Entry> replayEntries() {
+      if (input == null) return entries;
+      var result = new java.util.ArrayList<>(input.entries());
+      result.addAll(entries.subList(input.traceSize(), entries.size()));
+      return java.util.List.copyOf(result);
+    }
+
+    /** Protect both the complete input and the task's own publication history. */
+    public java.util.List<Entry> protectedEntries() {
+      if (input == null) return entries;
+      var result = new java.util.LinkedHashMap<Ref, Entry>();
+      for (var entry : input.entries()) result.putIfAbsent(entry.reference(), entry);
+      for (var entry : entries) result.putIfAbsent(entry.reference(), entry);
+      return java.util.List.copyOf(result.values());
+    }
+
+    public record Input(java.util.List<Entry> entries, int traceSize) {
+      public Input {
+        entries = java.util.List.copyOf(entries);
+        if (entries.isEmpty() || entries.size() > 256 || traceSize < 0) throw rejected();
+      }
+    }
 
     public record Entry(String key, Ref reference) {
       public Entry {
@@ -390,7 +417,7 @@ public final class ModelMessagePayloadStore {
       try (var insert =
           db.prepareStatement(
               "INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,?,?)")) {
-        for (var entry : history.entries()) {
+        for (var entry : kind == ReferenceKind.HISTORY ? history.entries() : history.protectedEntries()) {
           var message = codec.decode(read(db, scope, entry.reference()));
           if (scalar(
                   db,
@@ -582,6 +609,10 @@ public final class ModelMessagePayloadStore {
               .media(user.getMedia())
               .metadata(metadata)
               .build();
+    else if (message instanceof org.springframework.ai.chat.messages.SystemMessage system)
+      original = org.springframework.ai.chat.messages.SystemMessage.builder().text(system.getText()).metadata(metadata).build();
+    else if (message instanceof org.springframework.ai.chat.messages.ToolResponseMessage tool)
+      original = org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(tool.getResponses()).metadata(metadata).build();
     else throw rejected();
     String hash = digest(codec.encode(original));
     var existing =

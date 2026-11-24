@@ -211,7 +211,7 @@ public class RunExecutionContext {
     var previousHistory = protocolHistory;
     protocolHistory =
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
-            1, exchange.run(), origin, entries);
+            1, exchange.run(), origin, entries, protocolHistory == null ? null : protocolHistory.input());
     // The writer must see the proposed pointers, but failed publication is not accepted progress.
     try {
       toolResultsCheckpoint.accept(List.of());
@@ -262,7 +262,35 @@ public class RunExecutionContext {
         .historyReferences(exchange.scope(), protocolHistory, "turn:" + exchange.run());
   }
 
-  public void captureModelInput(org.springframework.ai.chat.prompt.Prompt prompt) {}
+  /** Snapshot exactly the native outbound view before transport starts. */
+  public synchronized void captureModelInput(org.springframework.ai.chat.prompt.Prompt prompt) {
+    if (!(prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options)
+        || options.getToolContext() == null
+        || !(options.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY)
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)) return;
+    if (runContext == null || !runContext.runId().equals(exchange.run())
+        || !exchange.scope().equals(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(runContext))
+        || !(options.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin)
+        || !origin.owner().equals(exchange.ownerKey()) || prompt.getInstructions().isEmpty()
+        || prompt.getInstructions().size() > 256)
+      throw new IllegalStateException("Protocol input snapshot ownership mismatch");
+    var input = new ArrayList<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry>();
+    String batch = "input:" + UUID.randomUUID();
+    for (var message : prompt.getInstructions()) {
+      String key = batch + ":" + input.size();
+      var ref = exchange.store().saveForContinuation(exchange.scope(), exchange.run(), key, message);
+      exchange.store().publish(exchange.scope(), ref,
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, exchange.run());
+      input.add(new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(key, ref));
+    }
+    var previous = protocolHistory;
+    var entries = previous == null ? List.<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry>of() : previous.entries();
+    protocolHistory = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(1, exchange.run(), origin,
+        entries, new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Input(input, entries.size()));
+    try { toolResultsCheckpoint.accept(List.of()); }
+    catch (RuntimeException | Error failure) { protocolHistory = previous; throw failure; }
+  }
 
   /** Save the original resolved input, including media, before sending or decorating it. */
   public void preserveUserMessage(org.springframework.ai.chat.messages.UserMessage message) {
@@ -790,7 +818,7 @@ public class RunExecutionContext {
             .equals(
                 dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(runContext))
         || !origin.endpoint().equals(history.origin().endpoint())
-        || references.size() != history.entries().size())
+        || references.size() != history.protectedEntries().size())
       throw new IllegalStateException("Protocol checkpoint compatibility mismatch");
     var messages = new ArrayList<org.springframework.ai.chat.messages.Message>();
     String checkpoint = references.getFirst().owner();
@@ -799,13 +827,17 @@ public class RunExecutionContext {
       if (pointer.kind()
               != dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT
           || !checkpoint.equals(pointer.owner())
-          || !pointer.reference().equals(history.entries().get(index).reference()))
+          || !pointer.reference().equals(history.protectedEntries().get(index).reference()))
         throw new IllegalStateException("Protocol checkpoint authority mismatch");
       messages.add(
           exchange
               .store()
               .load(exchange.scope(), pointer.reference(), pointer.kind(), pointer.owner()));
     }
+    messages.clear();
+    for (var entry : history.replayEntries())
+      messages.add(exchange.store().load(exchange.scope(), entry.reference(),
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, checkpoint));
     if (!dev.mikoto2000.rei.modelmessage.ModelMessageTransactions.completeProtocol(messages))
       throw new IllegalStateException("Protocol checkpoint requires tool outcome reconciliation");
     var grant = exchange.store().restoreReplayGrant(exchange, references, origin);
@@ -824,7 +856,7 @@ public class RunExecutionContext {
               saved.unknownReplanNotices(),
               saved.continuity(),
               new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
-                  1, exchange.run(), origin, history.entries())));
+                  1, exchange.run(), origin, history.entries(), history.input())));
       resumeMessages = List.copyOf(messages);
     } catch (RuntimeException | Error failure) {
       modelOptions = previousOptions;
