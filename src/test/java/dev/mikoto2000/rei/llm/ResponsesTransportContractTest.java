@@ -21,6 +21,39 @@ class ResponsesTransportContractTest {
   private String contentType = "application/json";
   private volatile boolean bodyClosed;
   private int httpStatus = 200;
+  private boolean passThrough;
+  private java.time.Duration readTimeout = java.time.Duration.ofMinutes(5);
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void nativeClientsClassifySilentLoopbackConnectionsAsTimeout(boolean streaming) throws Exception {
+    var server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    server.createContext("/v1/responses", exchange -> {
+      try {
+        release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+      } catch (InterruptedException interrupted) {
+        Thread.currentThread().interrupt();
+      } finally {
+        exchange.close();
+      }
+    });
+    server.start();
+    try {
+      passThrough = true;
+      readTimeout = java.time.Duration.ofMillis(150);
+      var options = options().baseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1").build();
+      var model = transport(options);
+      assertThatThrownBy(() -> {
+        if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
+        else model.call(new Prompt("fixture", options));
+      }).isInstanceOf(IllegalStateException.class).hasMessageContaining("TIMEOUT");
+      assertThat(requests).hasSize(1);
+    } finally {
+      release.countDown();
+      server.stop(0);
+    }
+  }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
@@ -273,6 +306,7 @@ class ResponsesTransportContractTest {
           chain.request().body().writeTo(buffer);
           requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
           urls.add(chain.request().url().toString());
+          if (passThrough) return chain.proceed(chain.request());
           return new okhttp3.Response.Builder().request(chain.request())
               .protocol(okhttp3.Protocol.HTTP_1_1).code(httpStatus).message("fixture")
               .body(responseBody()).build();
@@ -281,7 +315,7 @@ class ResponsesTransportContractTest {
         options.getBaseUrl(), "fixture-credential", options.getModel(),
         new LlmCapabilities(ReasoningReplayMode.NONE, 128, java.util.Set.of(
             LlmCapabilities.Setting.STRUCTURED_OUTPUT, LlmCapabilities.Setting.IMAGE_INPUT)), options.getMaxOutputTokens(),
-        options.getTemperature(), java.time.Duration.ofMinutes(5));
+        options.getTemperature(), readTimeout);
     return ResponsesAdapter.create(endpoint, options, List.of(customizer));
   }
 
