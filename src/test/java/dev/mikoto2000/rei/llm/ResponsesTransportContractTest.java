@@ -591,6 +591,39 @@ class ResponsesTransportContractTest {
     }
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+      "response.output_text.delta", "response.reasoning_text.delta",
+      "response.reasoning_summary_text.delta", "response.function_call_arguments.delta",
+      "response.refusal.delta"})
+  void malformedSdkDeltasNeverReachTheInnerAggregatorLogger(String type) {
+    var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(
+        org.slf4j.Logger.ROOT_LOGGER_NAME);
+    var captured = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    captured.start();
+    logger.addAppender(captured);
+    try {
+      contentType = "text/event-stream";
+      reply = type.equals("response.function_call_arguments.delta") ?
+          event("response.output_item.added", "\"output_index\":0,\"item\":{\"type\":\"function_call\",\"id\":\"fc_fixture\",\"call_id\":\"call_fixture\",\"name\":\"fixture\",\"arguments\":\"\",\"status\":\"in_progress\"}") : "";
+      reply += event(type, "\"item_id\":\"fixture_item\",\"output_index\":0,\"content_index\":0,\"summary_index\":0,\"delta\":{\"PRIVATE-delta-canary\":\"PRIVATE-secret\"}")
+          + event("response.completed", "\"response\":" + completed());
+      var options = options().build();
+      assertThatThrownBy(() -> transport(options).stream(new Prompt("fixture", options)).collectList().block())
+          .isInstanceOf(ResponsesTransportException.class).hasMessageContaining("INVALID_RESPONSE")
+          .hasMessageNotContaining("PRIVATE").hasNoCause();
+      for (var logged : captured.list) {
+        assertThat(logged.getFormattedMessage()).doesNotContain("PRIVATE-");
+        if (logged.getThrowableProxy() != null)
+          assertThat(ch.qos.logback.classic.spi.ThrowableProxyUtil.asString(logged.getThrowableProxy()))
+              .doesNotContain("PRIVATE-");
+      }
+    } finally {
+      logger.detachAppender(captured);
+      captured.stop();
+    }
+  }
+
   @Test
   void cancellationClosesNativeSseBodyAndDoesNotRequireCompletion() {
     contentType = "text/event-stream";
