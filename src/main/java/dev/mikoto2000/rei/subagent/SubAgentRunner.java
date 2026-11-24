@@ -397,6 +397,14 @@ public final class SubAgentRunner {
   /** 選択可能な設定。 */
   private final Function<String, ToolCallingChatOptions> options;
 
+  private java.util.function.BiFunction<String, AgentRunContext, ToolCallingChatOptions> runOptionsFactory;
+
+  /** Resolve options after the child has acquired its own immutable Run identity. */
+  public void setRunOptionsFactory(java.util.function.BiFunction<String, AgentRunContext, ToolCallingChatOptions> factory) {
+    runOptionsFactory = java.util.Objects.requireNonNull(factory);
+  }
+
+
   /** ツール生成元。 */
   private final Supplier<List<ToolCallback>> toolFactory;
 
