@@ -43,10 +43,21 @@ public class ConversationLogStore {
           || !pointer.getOrDefault("rei.modelMessage.sha256", "").matches("[0-9a-f]{64}")
           || pointer.getOrDefault("rei.modelMessage.historyOwner", "").isBlank())
         throw new IllegalStateException("Cannot persist conversation protocol history");
+    if (batch.stream().map(pointer -> pointer.get("rei.modelMessage.id")).distinct().count() != batch.size())
+      throw new IllegalStateException("Cannot persist conversation protocol history");
     synchronized (writeLock) {
-      long first = 0, last = 0;
-      for (var pointer : batch) {
-        append(conversation, PROTOCOL_SPEAKER, "", pointer);
+      var existing = readConversation(conversation).stream()
+          .filter(entry -> PROTOCOL_SPEAKER.equals(entry.speaker())
+              && run.equals(entry.metadata().get("rei.modelMessage.run"))).toList();
+      if (existing.size() > batch.size())
+        throw new IllegalStateException("Conversation protocol history changed");
+      for (int i = 0; i < existing.size(); i++)
+        if (!existing.get(i).metadata().equals(batch.get(i)))
+          throw new IllegalStateException("Conversation protocol history changed");
+      long first = existing.isEmpty() ? 0 : existing.getFirst().sequence();
+      long last = existing.isEmpty() ? 0 : existing.getLast().sequence();
+      for (int i = existing.size(); i < batch.size(); i++) {
+        append(conversation, PROTOCOL_SPEAKER, "", batch.get(i));
         last = contextSequences.getOrDefault(conversation.strip(), 0L);
         if (last < 1) throw new IllegalStateException("Cannot persist conversation protocol history");
         if (first == 0) first = last;
