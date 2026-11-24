@@ -131,6 +131,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     if (supplied != null && !(supplied instanceof OpenAiResponsesChatOptions))
       throw new IllegalArgumentException("Responses native options required");
     var options = supplied == null ? getOptions() : (OpenAiResponsesChatOptions) supplied;
+    requireCapability(options.getVerbosity(), LlmCapabilities.Setting.TEXT_VERBOSITY, "verbosity");
     var defaults = delegate.getOptions();
     if (!Objects.equals(defaults.getBaseUrl(), options.getBaseUrl())
         || !Objects.equals(defaults.getApiKey(), options.getApiKey())
