@@ -365,11 +365,11 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return model;
   }
 
-  private java.util.function.Supplier<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> modelPayloads;
+  private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> modelPayloads;
 
   @Autowired
   void configureModelMessagePayloads(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> payloads) {
-    modelPayloads = payloads::getObject;
+    modelPayloads = payloads;
   }
 
   /** Accepted Run options; no provider state is added to the public Run context. */
@@ -387,7 +387,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY))
       if (context.containsKey(key)) throw new IllegalStateException("Native Run options must not inherit protocol authority");
     if (modelPayloads == null) throw new IllegalStateException("Native model payload storage is unavailable");
-    var exchange = modelPayloads.get().newExchange(owner);
+    var exchange = modelPayloads.getObject().newExchange(owner);
     context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(exchange.ownerKey(), endpoint.fingerprint()));
     context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
