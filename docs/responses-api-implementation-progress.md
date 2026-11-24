@@ -8,7 +8,7 @@
 | 1 | MERGED | codex/responses-api-phase-1-transport / 削除済み | [#629](https://github.com/mikoto2000/rei/pull/629) | 10542db848d9317c7eaaab06869e63e7ab571d5b | 最終CI全件7,818、成功7,806、期待skip12、failure/error0。品質ゲート成功 |
 | 2 | MERGED | codex/responses-api-phase-2-openai-replay / 削除済み | [#630](https://github.com/mikoto2000/rei/pull/630) | a95593f48d0b4f760091d79eaf2cbc411e9a2f49 | PR・マージ後CI7,861件、成功7,849、期待skip12、failure/error0。関連859件・全品質ゲート成功 |
 | 3 | MERGED | codex/responses-api-phase-3-message-persistence / 削除済み | [#631](https://github.com/mikoto2000/rei/pull/631) | b22cf6646ae58a1efea325877562d7becd3aea51 | PR・マージ後CI7,960件、成功7,948、期待skip12、failure/error0。関連570件・全品質ゲート成功 |
-| 4 | IN_PROGRESS | codex/responses-api-phase-4-agent-integration / .worktrees/responses-api-phase-4 | 未作成 | 未マージ | 承認・Checkpoint・圧縮・予算・機能別クライアントの統合を開始 |
+| 4 | IN_PROGRESS | codex/responses-api-phase-4-agent-integration / .worktrees/responses-api-phase-4 | 未作成 | 未マージ | 開発回帰443件成功。関連Maven1,484件成功、SpotBugs1件を修正し再検証中 |
 | 5 | NOT_STARTED | — | — | — | 未実施 |
 | 6 | NOT_STARTED | — | — | — | 未実施 |
 
@@ -323,3 +323,54 @@ Windows A 3,816件・B 4,144件、期待skip12、failure/error0。集約ゲー�
   Checkpoint / Slack 継続、圧縮取引境界、参照解放、機能別 native options / Structured Output の契約試験。
 
 初回 Maven 関連検証は380件が全成功、Checkstyle0件、architecture・build成功。SpotBugs の nullable supplier 5件と繰り返し getter 1件で品質ゲートは失敗した。非null取得契約と getter の一度取得へ修正し、再検証する。抑制やゲート緩和は行わない。
+
+### Phase 4 の追加検証と継続境界
+
+- schema 1 の承認継続は成功済み結果も参照・件数で保持し、再生成した Store から完全な結果と元の配信権限を復元する。
+  未実行の callback だけを実行し、参照が欠ける場合は実行前に停止する。旧 schema 0 を native Run へ昇格させない。
+- 各ツール往復に異なる保存 identity を割り当て、親・子の既存ループで複数 SSE 往復から最終応答まで保存する。
+- 保存履歴の所有者・接続先を、provider が解決した由来と再開前・送信前に照合する。
+  reasoning がない応答や replay mode `none` でも照合し、不一致では HTTP を送らない。
+  キー参照だけのローテーションは互換 fingerprint を変えない。
+- 由来の値は既存 payload 境界の狭い immutable DTO で渡す。
+  `ToolLoopSupport -> ResolvedLlmEndpoint` の追加依存は既存 architecture gate で失敗したため解消した。
+- 最新の開発選別142件と Maven 関連908件（failure/error/skip0）が成功し、architecture と Checkstyle0件を確認。
+  この snapshot の SpotBugs0件・解析エラー0件、Spotless、verify・package/repackageも成功。
+  Phase 4 の全受入完了・全件 CI と扱わない。
+- 本番 native 生成の拒否は維持する。全 entrypoint、Run 受付 snapshot、全履歴の参照、Checkpoint と既存台帳、
+  Slack 継続、圧縮単位・参照解放・機能別 native options の統合が残る。
+
+### Phase 4: Run 受付・圧縮の追加検証
+
+- main 会話の options を Run 受付時にコピーして保持し、追加入力・再要求でモデル選択を読み直さない。
+  モデル選択変更は次 Run から反映する（実 ChatClient を通す Red/Green、関連46件成功）。
+- 圧縮・hard-limit 削減・要約用ページの入力予算調整に、同じ完了取引の境界を適用した。
+  ユーザー入力と応答、複数 call と全結果をまとめて扱う。不完全な取引や成功済み prefix は削除しない。
+  大きい完了済み履歴単位は全体を要約し、全ページ成功後に取引末尾へカーソルを進める。
+  要約失敗・保存失敗・キャンセル時は従来のカーソルを保持する。
+- 旧圧縮テストの「入力だけ要約して対応応答を残す」期待値は、依頼された取引単位へ変更した。
+  性能 fixture は orphan result を含んでいたため実 call/result ペアへ直し、200群の末尾一致と線形の概算回数を維持した。
+  ソースの architecture baseline・検証予算・除外は変更していない。
+- 要約済み log/Turn のアンカーは payload 本文を復元しない。参照解放後の履歴投影を可能にし、
+  未要約範囲の参照欠損は引き続き停止する。log/Turn × covered/uncovered の4ケースを検証した。
+- 送信用概算は reasoning テキスト・summary・opaque・item 属性も含める。
+  暗号文を改変・解読せず、提供元報告の実 usage と混同しない。
+- これらの最新開発選別は436件、failure/error/skip0。最新の Maven 関連回帰と全品質ゲートは再検証中。
+  全 entrypoint の native options、全履歴・Checkpoint・lifecycle などは引き続き開発中である。
+
+
+### Phase 4: native options を既存会話入口へ接続
+
+通常・会話・読み取り限定の3モードで、実 ChatExecutionService → ChatClient → 既存 StagnationChatModel →
+SDK → SSE fixture → 一時SQLite の保存を通した。Chat 固定 cast を除き、受付時に保持する型を Spring AI の
+ToolCallingChatOptions にした。ツールなし形状の変換は、実行・保存・接続先解決を持たない modeloptions の薄い境界へまとめた。
+
+fixture は各 Run と一致する保存 scope を使う。現時点ではテスト provider が native options・所有者・Exchange を明示供給する。
+実際の設定解決から Run 用の保存境界を生成する経路は続けて統合する。本番の provider は共通 requestOptions 入口でも
+未検証 Responses を拒否し、既存 Chat のキャッシュ・設定 snapshot 契約を維持する。
+
+開発選別443件（failure/error/skip0）が成功。最新 Maven 関連は1,484件、failure/error/skip0、architecture 成功、
+Spotless・Checkstyle0件、package/repackage成功。SpotBugsは builder の継承した戻り値 cast に1件、解析エラー0件で失敗した。
+同じ変換を builder の戻り値に依存しない形へ直し、開発443件の成功を確認した。静的解析を再実行中である。
+直前の Maven 1,481件の実行は、完了ターンをまとめて要約する変更に対する旧capture期待値1件で失敗した。
+元の応答が要約へ入り、wireから除かれることを明示検証するよう更新した。失敗した実行を成功とは扱わない。
