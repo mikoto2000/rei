@@ -22,6 +22,21 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 /** The existing dispatch loop must preserve the model's ordered protocol parts. */
 class ToolLoopPartsTest {
   @Test
+  void aLengthTruncatedToolBatchNeverDispatchesThroughTheSharedBoundary() {
+    var executions = new AtomicInteger();
+    var callback = new ToolCallback() {
+      public ToolDefinition getToolDefinition() { return ToolDefinition.builder().name("fixture_tool")
+          .description("fixture").inputSchema("{\"type\":\"object\"}").build(); }
+      public String call(String input) { executions.incrementAndGet(); return "fixture"; }
+    };
+    var output = AssistantMessage.builder().toolCalls(List.of(
+        new AssistantMessage.ToolCall("call_one", "function", "fixture_tool", "{}"))).build();
+    var response = new ChatResponse(List.of(new Generation(output,
+        org.springframework.ai.chat.metadata.ChatGenerationMetadata.builder().finishReason("LENGTH").build())));
+    new ToolLoopSupport().execute(new Prompt("fixture", OpenAiChatOptions.builder().toolCallbacks(callback).build()), response);
+    assertThat(executions.get()).isZero();
+  }
+  @Test
   void inheritedReadCursorKeepsPartOrderItemIdsAndReasoning() {
     var seen = new java.util.concurrent.atomic.AtomicReference<String>();
     var callback = new ToolCallback() {
