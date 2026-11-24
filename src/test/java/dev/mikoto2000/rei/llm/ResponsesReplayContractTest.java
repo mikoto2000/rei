@@ -49,6 +49,33 @@ class ResponsesReplayContractTest {
   private String modelName = "fixture-model";
   private String baseUrl = "https://responses-fixture.invalid/v1";
   private ReasoningReplayMode replayMode = ReasoningReplayMode.ENCRYPTED;
+  private String contentType = "application/json";
+
+  @Test
+  void streamingPartsRetainTheirOwnerAndCanContinueThroughTheExistingToolBoundary() throws Exception {
+    contentType = "text/event-stream";
+    replies.add(sse(toolResponse()));
+    var options = options();
+    var model = model(options);
+    var prompt = new Prompt("fixture", options);
+    var completed = new java.util.concurrent.atomic.AtomicReference<org.springframework.ai.chat.model.ChatResponse>();
+    new org.springframework.ai.chat.model.MessageAggregator().aggregate(model.stream(prompt), completed::set)
+        .blockLast(Duration.ofSeconds(10));
+    var first = completed.get();
+    assertThat(first.getResult().getOutput().getMetadata().get("rei.llm.replay-origin-owner"))
+        .isEqualTo("fixture-owner");
+    assertThat(first.getResult().getOutput().getParts()).hasSize(5);
+    assertThat(executions.get()).isZero();
+    var executed = new ToolLoopSupport().execute(prompt, first);
+    assertThat(executions.get()).isEqualTo(2);
+    contentType = "application/json";
+    model.call(new Prompt(executed.conversationHistory(), options));
+    assertThat(requests).hasSize(2);
+    assertThat(requests.getLast().path("input").get(1).path("encrypted_content").asText())
+        .isEqualTo("opaque-one+/=");
+    assertThat(requests.getLast().path("input").get(4).path("encrypted_content").asText())
+        .isEqualTo("opaque-two+/=");
+  }
 
   @Test
   void encryptedRequestsRequireAnExplicitOwnerBeforeAnyHttp() {
@@ -119,14 +146,7 @@ class ResponsesReplayContractTest {
 
   @Test
   void existingToolDispatchReplaysEveryEncryptedPartIdAndPhaseWithoutRewriting() {
-    replies.add(response("resp_tools", """
-        [{"type":"reasoning","id":"rs_one","summary":[],"encrypted_content":"opaque-one+/=","status":"completed"},
-         {"type":"function_call","id":"fc_one","call_id":"call_one","name":"fixture_tool","arguments":"{}","status":"completed"},
-         {"type":"message","id":"msg_work","role":"assistant","status":"completed","phase":"commentary",
-          "content":[{"type":"output_text","text":"working","annotations":[]}]},
-         {"type":"reasoning","id":"rs_two","summary":[],"encrypted_content":"opaque-two+/=","status":"completed"},
-         {"type":"function_call","id":"fc_two","call_id":"call_two","name":"fixture_tool","arguments":"{}","status":"completed"}]
-        """));
+    replies.add(toolResponse());
     var options = options();
     var model = model(options);
     var prompt = new Prompt("fixture", options);
@@ -154,6 +174,17 @@ class ResponsesReplayContractTest {
     assertThat(input.get(6).has("id")).isFalse();
     assertThat(requests.getLast().path("store").asBoolean(true)).isFalse();
     assertThat(requests.getLast().has("previous_response_id")).isFalse();
+  }
+
+  private String toolResponse() {
+    return response("resp_tools", """
+        [{"type":"reasoning","id":"rs_one","summary":[],"encrypted_content":"opaque-one+/=","status":"completed"},
+         {"type":"function_call","id":"fc_one","call_id":"call_one","name":"fixture_tool","arguments":"{}","status":"completed"},
+         {"type":"message","id":"msg_work","role":"assistant","status":"completed","phase":"commentary",
+          "content":[{"type":"output_text","text":"working","annotations":[]}]},
+         {"type":"reasoning","id":"rs_two","summary":[],"encrypted_content":"opaque-two+/=","status":"completed"},
+         {"type":"function_call","id":"fc_two","call_id":"call_two","name":"fixture_tool","arguments":"{}","status":"completed"}]
+        """);
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -196,7 +227,7 @@ class ResponsesReplayContractTest {
       var reply = replies.isEmpty() ? done() : replies.removeFirst();
       return new okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
           .code(200).message("fixture").body(okhttp3.ResponseBody.create(reply,
-              okhttp3.MediaType.get("application/json"))).build();
+              okhttp3.MediaType.get(contentType))).build();
     })));
   }
 
@@ -221,5 +252,27 @@ class ResponsesReplayContractTest {
          "output":%s,"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5,
           "input_tokens_details":{"cached_tokens":1},"output_tokens_details":{"reasoning_tokens":1}}}
         """.formatted(id, output);
+  }
+
+  private String sse(String json) throws Exception {
+    var mapper = new ObjectMapper();
+    var terminal = mapper.readTree(json);
+    var created = (com.fasterxml.jackson.databind.node.ObjectNode) terminal.deepCopy();
+    created.put("status", "in_progress");
+    created.set("output", mapper.createArrayNode());
+    created.remove("usage");
+    var stream = new StringBuilder();
+    int sequence = 0;
+    stream.append(event("response.created", sequence++, "\"response\":" + created));
+    int index = 0;
+    for (var item : terminal.path("output"))
+      stream.append(event("response.output_item.done", sequence++, "\"output_index\":" + index++ + ",\"item\":" + item));
+    stream.append(event("response.completed", sequence, "\"response\":" + terminal));
+    return stream.toString();
+  }
+
+  private String event(String type, int sequence, String fields) {
+    return "event: " + type + "\ndata: {\"type\":\"" + type + "\",\"sequence_number\":" + sequence
+        + "," + fields + "}\n\n";
   }
 }
