@@ -28,6 +28,36 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 @org.junit.jupiter.api.Timeout(30)
 class ResponsesReplayContractTest {
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"missing,false", "missing,true", "zero,false", "zero,true"})
+  void missingNativeUsageRemainsUnknownThroughAggregationAndPersistence(String kind, boolean streaming) throws Exception {
+    var mapper = new ObjectMapper();
+    var raw = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(reasoningDone());
+    var expected = new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(null, null, null, null, null);
+    if (kind.equals("missing")) raw.remove("usage");
+    else {
+      var usage = raw.putObject("usage").put("input_tokens", 0).put("output_tokens", 0).put("total_tokens", 0);
+      usage.putObject("input_tokens_details").put("cached_tokens", 0);
+      usage.putObject("output_tokens_details").put("reasoning_tokens", 0);
+      expected = new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(0L, 0L, 0L, 0L, 0L);
+    }
+    contentType = streaming ? "text/event-stream" : "application/json";
+    replies.add(streaming ? sse(raw.toString()) : raw.toString());
+    var options = options();
+    var model = model(options);
+    var prompt = new Prompt("fixture", options);
+    org.springframework.ai.chat.model.ChatResponse response;
+    if (streaming) {
+      var completed = new java.util.concurrent.atomic.AtomicReference<org.springframework.ai.chat.model.ChatResponse>();
+      new org.springframework.ai.chat.model.MessageAggregator().aggregate(model.stream(prompt), completed::set)
+          .blockLast(Duration.ofSeconds(10));
+      response = completed.get();
+    } else response = model.call(prompt);
+    assertThat(ResponsesTransportException.usage(response)).isEqualTo(expected);
+    var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
+    var restored = codec.decode(codec.encode(response.getResult().getOutput()));
+    assertThat(restored.getMetadata()).containsEntry(dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY, expected);
+  }
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "negative,false",
     "negative,true",
@@ -100,16 +130,20 @@ class ResponsesReplayContractTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void nativeAssistantSurvivesSqliteRestartAndReplaysWithoutLosingUsageOrPayload(
-      boolean streaming, @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
+      boolean streaming, @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)
+      throws Exception {
     contentType = streaming ? "text/event-stream" : "application/json";
     replies.add(streaming ? sse(reasoningDone()) : reasoningDone());
     var options = options();
     var model = model(options);
     org.springframework.ai.chat.model.ChatResponse response;
     if (streaming) {
-      var completed = new java.util.concurrent.atomic.AtomicReference<org.springframework.ai.chat.model.ChatResponse>();
-      new org.springframework.ai.chat.model.MessageAggregator().aggregate(
-          model.stream(new Prompt("fixture", options)), completed::set).blockLast(Duration.ofSeconds(10));
+      var completed =
+          new java.util.concurrent.atomic.AtomicReference<
+              org.springframework.ai.chat.model.ChatResponse>();
+      new org.springframework.ai.chat.model.MessageAggregator()
+          .aggregate(model.stream(new Prompt("fixture", options)), completed::set)
+          .blockLast(Duration.ofSeconds(10));
       response = completed.get();
     } else response = model.call(new Prompt("fixture", options));
     var original = response.getResult().getOutput();
@@ -117,11 +151,16 @@ class ResponsesReplayContractTest {
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + directory.resolve("messages.db"));
     var store = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
-    var scope = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope("fixture-project", directory.toString(), "fixture-conversation");
+    var scope =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
+            "fixture-project", directory.toString(), "fixture-conversation");
     var ref = store.save(scope, "fixture-run", "assistant", original);
     var pointer = store.historyReference(scope, ref, "fixture-history");
-    var restored = (AssistantMessage) new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source)
-        .restoreHistory(scope, pointer).orElseThrow();
+    var restored =
+        (AssistantMessage)
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source)
+                .restoreHistory(scope, pointer)
+                .orElseThrow();
     assertThat(codec.encode(restored)).containsExactly(codec.encode(original));
     assertThat(restored.getParts()).containsExactlyElementsOf(original.getParts());
     var restoredResponse =
