@@ -333,6 +333,53 @@ class ResponsesReplayContractTest {
         .isZero();
   }
 
+  @Test
+  void nativeReplanningUsesTheAcceptedMainOutputLimitRatherThanGlobalOrPlannerDefaults() throws Exception {
+    var truncated=done().replaceFirst("\"status\":\"completed\"",
+        "\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"}");
+    replies.add(sse(truncated).replace("response.completed","response.incomplete"));
+    String plan="{\"subgoals\":[{\"id\":\"part\",\"goal\":\"small part\"}],\"finalGoal\":\"integrate\"}";
+    replies.add(done().replace("\"text\":\"done\"", "\"text\":"+new ObjectMapper().writeValueAsString(plan)));
+    replies.add(sse(done().replace("resp_done","resp_subgoal").replace("msg_done","msg_subgoal")));
+    replies.add(sse(done().replace("resp_done","resp_final").replace("msg_done","msg_final")));
+    var properties=nativeProperties();
+    var plannerSettings=nativeProperties().feature(LlmFeature.CHAT);
+    plannerSettings.setModel("fixture-planner");
+    plannerSettings.setMaxOutputTokens(73);
+    properties.setFeature(LlmFeature.OUTPUT_LIMIT_PLANNER,plannerSettings);
+    var customizers=new java.util.ArrayList<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>();
+    customizers.add(builder->builder.interceptor(chain->{
+      var buffer=new okio.Buffer(); chain.request().body().writeTo(buffer);
+      contentType=new ObjectMapper().readTree(buffer.readByteArray()).path("stream").asBoolean()
+          ?"text/event-stream":"application/json";
+      return chain.proceed(chain.request());
+    }));
+    customizers.addAll(httpCustomizers());
+    var models=LlmModelProvider.forResponsesFixture(org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class),properties,customizers);
+    var beans=new org.springframework.beans.factory.support.StaticListableBeanFactory(Map.of("payloads",payloads()));
+    models.configureModelMessagePayloads(beans.getBeanProvider(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class));
+    var holder=org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
+    org.mockito.Mockito.when(holder.get()).thenReturn("fixture-model");
+    var global=new LlmProperties();global.setMaxOutputTokens(2048);
+    var planner=new OutputLimitReplanner(models,holder,global);
+    var client=org.springframework.ai.chat.client.ChatClient.builder(
+        new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.CHAT))).build();
+    var service=new dev.mikoto2000.rei.core.chat.ChatExecutionService(new FixedLlmChatClientProvider(client),holder,models,global,
+        new dev.mikoto2000.rei.core.service.CommandCancellationService(),java.util.Optional.empty(),java.util.Optional.of(planner));
+    var logs=new dev.mikoto2000.rei.conversation.ConversationLogStore(protocolDirectory.resolve("logs"),java.time.Clock.systemUTC(),
+        new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"setConversationLogStore",logs);
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(service,"setConversationTurnStore",dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory());
+    var run=new dev.mikoto2000.rei.core.chat.AgentRunContext("fixture-run","fixture-conversation",protocolDirectory,"fixture-project");
+    var result=service.execute(run,"fixture request",new dev.mikoto2000.rei.core.chat.UserInterventionQueue());
+    assertThat(result.success()).as("native replan: %s",result.stopCode()).isTrue();
+    assertThat(requests).hasSize(4);
+    assertThat(requests.get(1).path("max_output_tokens").asInt()).isEqualTo(73);
+    String plannerInput=requests.get(1).path("input").toString();
+    assertThat(plannerInput).contains("Max output tokens per call:\\n41");
+    for(int index:List.of(0,2,3)) assertThat(requests.get(index).path("max_output_tokens").asInt()).isEqualTo(41);
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
       value = ReasoningReplayMode.class,
