@@ -333,6 +333,39 @@ class ResponsesReplayContractTest {
         .isZero();
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans={false,true})
+  void oneShotReplyMemoryKeepsVisibleHistoryWithoutReplayingForeignOpaqueParts(boolean preseedForeign) throws Exception {
+    contentType="text/event-stream";
+    replies.add(sse(reasoningDone()));replies.add(sse(done()));
+    var properties=nativeProperties();
+    properties.setFeature(LlmFeature.BLUESKY_REPLY,nativeProperties().feature(LlmFeature.CHAT));
+    var models=nativeProvider(properties);
+    var memory=dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build();
+    String conversation=ConversationIds.blueskyReply("fixture.bsky.social");
+    if(preseedForeign) memory.add(conversation,org.springframework.ai.chat.messages.AssistantMessage.builder()
+        .parts(List.of(new org.springframework.ai.chat.messages.part.ReasoningPart(null,"",
+            new org.springframework.ai.chat.messages.part.OpaquePayload("openai","encrypted_content","foreign-private-opaque"),Map.of("id","rs_foreign")),
+            org.springframework.ai.chat.messages.part.TextPart.of("foreign visible answer")))
+        .properties(Map.of("rei.llm.replay-origin-owner","foreign-owner","rei.llm.replay-origin-endpoint","foreign-endpoint")).build());
+    var client=org.springframework.ai.chat.client.ChatClient.builder(
+        new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.BLUESKY_REPLY)))
+        .defaultAdvisors(dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor.builder(memory).build()).build();
+    var holder=org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
+    org.mockito.Mockito.when(holder.get()).thenReturn("fixture-model");
+    var generator=new dev.mikoto2000.rei.bluesky.BlueskyReplyTextGenerator(new FixedLlmChatClientProvider(client),holder,models,new dev.mikoto2000.rei.bluesky.BlueskyProperties());
+    assertThat(generator.generate("fixture.bsky.social","first post",List.of())).isEqualTo("done");
+    var firstSaved=(org.springframework.ai.chat.messages.AssistantMessage)memory.get(conversation).getLast();
+    assertThat(firstSaved.getParts()).allMatch(org.springframework.ai.chat.messages.part.TextPart.class::isInstance);
+    assertThat(firstSaved.getMetadata()).doesNotContainKeys("rei.llm.replay-origin-owner","rei.llm.replay-origin-endpoint");
+    assertThat(generator.generate("fixture.bsky.social","second post",List.of())).isEqualTo("done");
+    assertThat(requests).hasSize(2);
+    var repeated=requests.getLast().path("input").toString();
+    assertThat(repeated).contains("first post","second post","done").doesNotContain("opaque-bound","foreign-private-opaque","encrypted_content");
+    if(preseedForeign) assertThat(repeated).contains("foreign visible answer");
+    for(var item:requests.getLast().path("input")) assertThat(item.path("type").asText()).isNotEqualTo("reasoning");
+  }
+
   @Test
   void nativeReplanningUsesTheAcceptedMainOutputLimitRatherThanGlobalOrPlannerDefaults() throws Exception {
     var truncated=done().replaceFirst("\"status\":\"completed\"",
