@@ -28,14 +28,25 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 @org.junit.jupiter.api.Timeout(30)
 class ResponsesReplayContractTest {
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.CsvSource({"missing,false", "missing,true", "zero,false", "zero,true"})
-  void missingNativeUsageRemainsUnknownThroughAggregationAndPersistence(String kind, boolean streaming) throws Exception {
+  @org.junit.jupiter.params.provider.CsvSource({
+    "missing,false",
+    "missing,true",
+    "zero,false",
+    "zero,true"
+  })
+  void missingNativeUsageRemainsUnknownThroughAggregationAndPersistence(
+      String kind, boolean streaming) throws Exception {
     var mapper = new ObjectMapper();
     var raw = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(reasoningDone());
-    var expected = new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(null, null, null, null, null);
+    var expected =
+        new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(null, null, null, null, null);
     if (kind.equals("missing")) raw.remove("usage");
     else {
-      var usage = raw.putObject("usage").put("input_tokens", 0).put("output_tokens", 0).put("total_tokens", 0);
+      var usage =
+          raw.putObject("usage")
+              .put("input_tokens", 0)
+              .put("output_tokens", 0)
+              .put("total_tokens", 0);
       usage.putObject("input_tokens_details").put("cached_tokens", 0);
       usage.putObject("output_tokens_details").put("reasoning_tokens", 0);
       expected = new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(0L, 0L, 0L, 0L, 0L);
@@ -47,16 +58,21 @@ class ResponsesReplayContractTest {
     var prompt = new Prompt("fixture", options);
     org.springframework.ai.chat.model.ChatResponse response;
     if (streaming) {
-      var completed = new java.util.concurrent.atomic.AtomicReference<org.springframework.ai.chat.model.ChatResponse>();
-      new org.springframework.ai.chat.model.MessageAggregator().aggregate(model.stream(prompt), completed::set)
+      var completed =
+          new java.util.concurrent.atomic.AtomicReference<
+              org.springframework.ai.chat.model.ChatResponse>();
+      new org.springframework.ai.chat.model.MessageAggregator()
+          .aggregate(model.stream(prompt), completed::set)
           .blockLast(Duration.ofSeconds(10));
       response = completed.get();
     } else response = model.call(prompt);
     assertThat(ResponsesTransportException.usage(response)).isEqualTo(expected);
     var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
     var restored = codec.decode(codec.encode(response.getResult().getOutput()));
-    assertThat(restored.getMetadata()).containsEntry(dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY, expected);
+    assertThat(restored.getMetadata())
+        .containsEntry(dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY, expected);
   }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "negative,false",
