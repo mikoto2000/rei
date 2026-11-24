@@ -268,7 +268,12 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     Map<String, Object> metadata = new HashMap<>(message.getMetadata());
     metadata.put(SEQUENCE, sequence);
     if (message instanceof UserMessage user) return user.mutate().metadata(metadata).build();
-    return AssistantMessage.builder().content(message.getText()).properties(metadata).build();
+    if (message instanceof AssistantMessage assistant) return assistant.mutate().properties(metadata).build();
+    if (message instanceof org.springframework.ai.chat.messages.ToolResponseMessage tool)
+      return org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+          .responses(tool.getResponses()).metadata(metadata).build();
+    if (message instanceof SystemMessage system) return system.mutate().metadata(metadata).build();
+    throw new IllegalArgumentException("Unsupported historical model message");
   }
 
   /** モデルへ渡す文脈の管理で用いる発生順序を返す。 */
