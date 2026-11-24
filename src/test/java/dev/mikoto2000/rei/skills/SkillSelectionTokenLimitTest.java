@@ -167,4 +167,28 @@ class SkillSelectionTokenLimitTest {
             () -> selector.select("request", Set.of(), List.of(skill), run.modelCallBudget()))
         .hasMessage("TOKEN_USAGE_UNKNOWN");
   }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void canonicalUsageCannotBecomeSelectionFallback(boolean unknown) {
+    var numeric = unknown
+        ? new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(null, null, null, null, null)
+        : new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(1L, 10L, 11L, null, null);
+    var output = AssistantMessage.builder().content("[\"sample\"]")
+        .properties(java.util.Map.of(
+            dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY, numeric)).build();
+    var model = mock(ChatModel.class);
+    when(model.stream(any(Prompt.class))).thenReturn(reactor.core.publisher.Flux.just(
+        new ChatResponse(List.of(new Generation(output)),
+            ChatResponseMetadata.builder().usage(new DefaultUsage(1, 2)).build())));
+    var skill = new AgentSkill("sample", "description", true, Path.of("sample"),
+        Path.of("sample/SKILL.md"), "instructions");
+    var selector = new AgentSkillImplicitSelector(model,
+        new InMemoryAgentSkillRepository(List.of(skill)));
+    var run = new RunExecutionContext("run", new OutputLimitRunBudget(0, 10, null, 10),
+        null, null, null);
+    assertThatThrownBy(() -> selector.select("request", Set.of(), List.of(skill), run.modelCallBudget()))
+        .hasMessage(unknown ? "TOKEN_USAGE_UNKNOWN" : "TOKEN_BUDGET_EXCEEDED");
+    verify(model, never()).call(anyString());
+  }
 }
