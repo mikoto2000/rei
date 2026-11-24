@@ -16,7 +16,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       "conversation", "max_tokens", "max_completion_tokens", "max_output_tokens", "reasoning",
       "text", "stream", "include", "parallel_tool_calls", "response_format", "messages",
       "functions", "function_call", "chat_template_kwargs", "background", "context_management",
-      "truncation");
+      "truncation", "temperature", "top_p", "verbosity");
 
   private final ResolvedLlmEndpoint endpoint;
   private final OpenAiResponsesChatModel delegate;
@@ -72,6 +72,9 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       throw new IllegalArgumentException("Responses model differs from the bound endpoint");
     if (options.getMaxRetries() != 0)
       throw new IllegalArgumentException("Responses SDK retries must stay zero");
+    if (options.getMaxOutputTokens() == null || options.getMaxOutputTokens() < 1
+        || (endpoint.maxOutputTokens() != null && options.getMaxOutputTokens() > endpoint.maxOutputTokens()))
+      throw new IllegalArgumentException("Responses output limit must respect the resolved bound");
     requireCapability(options.getTemperature(), LlmCapabilities.Setting.TEMPERATURE, "temperature");
     requireCapability(options.getTopP(), LlmCapabilities.Setting.TOP_P, "topP");
     requireCapability(options.getReasoningEffort(), LlmCapabilities.Setting.REASONING_EFFORT, "reasoningEffort");
