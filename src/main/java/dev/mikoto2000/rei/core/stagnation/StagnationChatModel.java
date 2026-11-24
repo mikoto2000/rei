@@ -667,8 +667,12 @@ public final class StagnationChatModel implements ChatModel {
     var configuredCallbacks = options.getToolCallbacks();
     if (configuredCallbacks != null)
       for (ToolCallback callback : configuredCallbacks) callbacks.add(observe(callback, context));
-    String fingerprint = dev.mikoto2000.rei.modeloptions.ModelOptions.preparationFingerprint(prompt);
-    toolContext.put(dev.mikoto2000.rei.modeloptions.ModelOptions.PREPARATION_CONTEXT_KEY, fingerprint);
+    String fingerprint = null;
+    if (configuredContext != null && configuredContext.containsKey(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY)) {
+      fingerprint = dev.mikoto2000.rei.modeloptions.ModelOptions.preparationFingerprint(prompt);
+      toolContext.put(dev.mikoto2000.rei.modeloptions.ModelOptions.PREPARATION_CONTEXT_KEY, fingerprint);
+    }
     boolean fullInput = context.restoresModelInput();
     var resumed = context.takeResumeMessages(fingerprint);
     var instructions = new ArrayList<Message>();
