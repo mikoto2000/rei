@@ -287,9 +287,9 @@ public class ContextAssembler {
           execution(raw) == null
               ? (inherited == null ? newStandaloneSummaryBudget.get() : inherited)
               : null;
-      compress(h, raw, check, budget);
+      compress(h, raw, check, budget, true);
       if (estimate(project(raw, h, a, workingSetSnapshot)) > threshold)
-        compress(a, raw, check, budget);
+        compress(a, raw, check, budget, false);
     }
     // Bounded degraded behavior. Remove oldest complete groups only from this projection.
     // Retrieved memories are optional. Drop them before sacrificing more conversation at the hard
@@ -311,8 +311,8 @@ public class ContextAssembler {
     if (estimate(project(raw, h, a, workingSetSnapshot)) > hard) {
       var costs = new ProjectionCosts();
       costs.tokens = estimate(project(raw, h, a, workingSetSnapshot, costs));
-      trimOldest(h, costs.history, costs, hard, check);
-      trimOldest(a, costs.active, costs, hard, check);
+      trimOldest(h, costs.history, costs, hard, check, true);
+      trimOldest(a, costs.active, costs, hard, check, false);
     }
     Prompt result =
         fitToolResults.apply(
@@ -350,14 +350,14 @@ public class ContextAssembler {
 
   /** モデルへ渡す文脈の管理に関する圧縮を処理する。 */
   private void compress(
-      Segment segment, Prompt raw, Runnable check, dev.mikoto2000.rei.llm.ModelCallBudget budget) {
+      Segment segment, Prompt raw, Runnable check, dev.mikoto2000.rei.llm.ModelCallBudget budget, boolean completedHistory) {
     var options = raw.getOptions();
     String model = options == null ? null : options.getModel();
     var settings = compressionSettings.apply(model);
     int count =
         new CompressionPolicy(estimator)
             .prefixToCompress(
-                segment.entries.stream().map(Entry::message).toList(), settings.recentTokens());
+                segment.entries.stream().map(Entry::message).toList(), settings.recentTokens(), completedHistory);
     if (count == 0) return;
     var prefix = segment.entries.subList(0, count);
     long through = prefix.getLast().sequence();
@@ -618,17 +618,14 @@ public class ContextAssembler {
 
   /** Account for each complete group once, then remove its prefix without repeated array shifts. */
   private static void trimOldest(
-      Segment segment, Map<Long, Long> weights, ProjectionCosts costs, int hard, Runnable check) {
+      Segment segment, Map<Long, Long> weights, ProjectionCosts costs, int hard, Runnable check, boolean completedHistory) {
     var lastIndex = new HashMap<Long, Integer>();
     for (int i = 0; i < segment.entries.size(); i++)
       lastIndex.put(segment.entries.get(i).sequence(), i);
     int from = 0;
-    while (costs.tokens > hard && from < segment.entries.size() - 1) {
+    for (int end : CompressionPolicy.completePrefixes(segment.entries.stream().map(Entry::message).toList())) {
+      if (costs.tokens <= hard || !completedHistory && end == segment.entries.size()) break;
       check.run();
-      int end = from + 1;
-      while (end < segment.entries.size()
-          && segment.entries.get(end).message() instanceof ToolResponseMessage) end++;
-      if (end == segment.entries.size()) break; // Retain the latest complete exchange.
       for (int i = from; i < end; i++) {
         long sequence = segment.entries.get(i).sequence();
         // Duplicate sequence keys remain projected until their last retained entry is removed.

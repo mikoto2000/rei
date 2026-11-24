@@ -208,6 +208,7 @@ class ContextAssemblerTest {
   @Test
   void largeContextWindowStillSummarizesBoundedPrefixesAndKeepsUncoveredHistory() {
     var properties = config();
+    properties.setThreshold(400);
     properties.setSummaryInputTokens(1024);
     properties.setModelContextLimit(850000);
     properties.setHardLimit(800000);
@@ -232,15 +233,16 @@ class ContextAssemblerTest {
             null);
     var history = new ArrayList<Message>();
     history.add(new SystemMessage("system"));
-    for (int n = 1; n <= 12; n++)
-      history.add(
-          ContextHistoryAdvisor.historical(new UserMessage("item" + n + "x".repeat(1000)), n));
+    for (int n = 1; n <= 12; n++) {
+      history.add(ContextHistoryAdvisor.historical(new UserMessage("item" + n + "x".repeat(1000)), n * 2L - 1));
+      history.add(ContextHistoryAdvisor.historical(new AssistantMessage("completed answer " + n), n * 2L));
+    }
     history.add(new UserMessage("current"));
     var raw = new Prompt(history);
     for (int n = 0; n < 12; n++) assembler.assemble(raw, "conversation", "run", () -> {});
     assertThat(covered).hasSizeGreaterThan(2).doesNotHaveDuplicates();
-    assertThat(saved.read("conversation").throughSequence()).isBetween(1L, 11L);
-    assertThat(raw.getInstructions()).hasSize(14);
+    assertThat(saved.read("conversation").throughSequence()).isBetween(2L, 22L);
+    assertThat(raw.getInstructions()).hasSize(26);
   }
 
   @ParameterizedTest
@@ -645,11 +647,13 @@ class ContextAssemblerTest {
         assembler(
                 (previous, messages, budget, request) -> {
                   calls.incrementAndGet();
+                  assertThat(messages).containsExactlyElementsOf(p.getInstructions().subList(1, 3));
                   return "decided API X";
                 })
             .assemble(p, "conversation", "run", () -> {});
     assertThat(result.getContents())
-        .contains("decided API X", "recent", "current request and Working Set")
+        .contains("decided API X", "current request and Working Set")
+        .doesNotContain("recent")
         .doesNotContain("old old old");
     assertThat(p.getContents()).contains("old old old");
     assembler(
@@ -660,7 +664,7 @@ class ContextAssemblerTest {
         .assemble(p, "conversation", "next", () -> {});
     assertThat(calls).hasValue(1);
     assertThat(new ConversationSummaryRepository(dir).read("conversation").throughSequence())
-        .isEqualTo(1);
+        .isEqualTo(2);
   }
 
   /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
@@ -724,7 +728,8 @@ class ContextAssemblerTest {
     expanded.add(3, ContextHistoryAdvisor.historical(new UserMessage("new ".repeat(500)), 3));
     expanded.add(4, ContextHistoryAdvisor.historical(new AssistantMessage("latest"), 4));
     var result = a.assemble(new Prompt(expanded), "conversation", "run", () -> {});
-    assertThat(result.getContents()).contains("first decision; second decision", "latest");
+    assertThat(result.getContents()).contains("first decision; second decision").doesNotContain("latest");
+    assertThat(new ConversationSummaryRepository(dir).read("conversation").throughSequence()).isEqualTo(4);
     assertThat(calls).hasValue(2);
   }
 

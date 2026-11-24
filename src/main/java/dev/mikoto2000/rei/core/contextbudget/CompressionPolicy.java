@@ -20,6 +20,10 @@ public final class CompressionPolicy {
 
   /** モデルへ渡す文脈の管理で用いる接頭辞終点圧縮を返す。 */
   public int prefixToCompress(List<Message> messages, int recentTokens) {
+    return prefixToCompress(messages, recentTokens, false);
+  }
+
+  int prefixToCompress(List<Message> messages, int recentTokens, boolean completedHistory) {
     long tokens = 0;
     int cut = messages.size();
     while (cut > 0) {
@@ -29,10 +33,15 @@ public final class CompressionPolicy {
       cut--;
     }
     int safe = 0;
-    for (int boundary : completePrefixes(messages)) {
+    var boundaries = completePrefixes(messages);
+    for (int boundary : boundaries) {
       if (boundary > cut) break;
       safe = boundary;
     }
+    // A completed historical turn can be larger than the recent target by itself. Summarize
+    // that whole turn rather than separating its request or making it impossible to compress.
+    if (safe == 0 && cut > 0 && completedHistory && !boundaries.isEmpty()
+        && boundaries.getLast() == messages.size()) return messages.size();
     return safe;
   }
   /** Complete protocol prefixes, shared by summarization and hard-limit trimming. */
