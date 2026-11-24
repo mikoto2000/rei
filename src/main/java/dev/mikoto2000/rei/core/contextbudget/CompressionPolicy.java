@@ -48,19 +48,16 @@ public final class CompressionPolicy {
   static List<Integer> completePrefixes(List<Message> messages) {
     var boundaries = new java.util.ArrayList<Integer>();
     var pending = new java.util.HashMap<String, String>();
-    boolean waitingForAssistant = false;
     for (int i = 0; i < messages.size(); i++) {
       var message = messages.get(i);
       if (message instanceof org.springframework.ai.chat.messages.UserMessage) {
         if (!pending.isEmpty()) return boundaries;
-        waitingForAssistant = true;
       } else if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
         if (!pending.isEmpty()) return boundaries;
         for (var call : assistant.getToolCalls()) {
           if (call.id() == null || call.id().isBlank() || call.name() == null || call.name().isBlank()
               || pending.putIfAbsent(call.id(), call.name()) != null) return List.of();
         }
-        waitingForAssistant = false;
         if (pending.isEmpty()) boundaries.add(i + 1);
       } else if (message instanceof ToolResponseMessage tool) {
         if (pending.isEmpty() || tool.getResponses().isEmpty()) return List.of();
@@ -68,7 +65,7 @@ public final class CompressionPolicy {
           if (result.id() == null || result.name() == null || !result.name().equals(pending.remove(result.id())))
             return List.of();
         }
-        if (pending.isEmpty() && !waitingForAssistant) boundaries.add(i + 1);
+        if (pending.isEmpty()) boundaries.add(i + 1);
       }
     }
     return boundaries;
