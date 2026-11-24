@@ -60,7 +60,7 @@ public class SubAgentConfiguration {
       AgentEventFactory events,
       AgentEventPublisher publisher,
       Clock clock) {
-    return new SubAgentRunner(
+    var runner = new SubAgentRunner(
         registry,
         policy,
         model -> provider.subAgentChatModel(),
@@ -73,5 +73,7 @@ public class SubAgentConfiguration {
         events,
         publisher,
         clock);
+    runner.setRunOptionsFactory(provider.subAgentOptionsFactory(current::get));
+    return runner;
   }
 }

@@ -251,6 +251,15 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return model;
   }
 
+  /** Resolve child options only after the caller has assigned the child's own scope. */
+  public java.util.function.BiFunction<String, dev.mikoto2000.rei.tooldelivery.ReadingRun,
+      org.springframework.ai.model.tool.ToolCallingChatOptions> subAgentOptionsFactory(java.util.function.Supplier<String> selectedModel) {
+    return (model, owner) -> {
+      var options = requestOptions(LlmFeature.CHAT, selectedModel.get(), false, owner);
+      return model == null ? options : options.mutate().model(model).build();
+    };
+  }
+
   /**
    * 用途に応じたモデル利用で用いる記憶応答生成に使うモデルを返す。
    *
