@@ -26,7 +26,38 @@ class ResponsesTransportContractTest {
     assertThatThrownBy(() -> {
       if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
       else model.call(new Prompt("fixture", options));
-    }).isInstanceOf(ResponsesTransportException.class).hasMessageContaining("OUTPUT_LIMIT");
+    }).isInstanceOfSatisfying(ResponsesTransportException.class, error -> {
+      assertThat(error.category()).isEqualTo(ResponsesTransportException.Category.OUTPUT_LIMIT);
+      assertUsage(error);
+    });
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void failedResponsesKeepOnlyNumericUsageAndSafeCategory(boolean streaming) {
+    var failed = completed().replaceFirst("\"status\":\"completed\"",
+        "\"status\":\"failed\",\"error\":{\"code\":\"server_error\",\"message\":\"private-reasoning fixture-secret\"}");
+    contentType = streaming ? "text/event-stream" : "application/json";
+    reply = streaming ? event("response.failed", "\"response\":" + failed) : failed;
+    var options = options().build();
+    var model = transport(options);
+    assertThatThrownBy(() -> {
+      if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
+      else model.call(new Prompt("fixture", options));
+    }).isInstanceOfSatisfying(ResponsesTransportException.class, error -> {
+      assertThat(error.category()).isEqualTo(ResponsesTransportException.Category.PROVIDER);
+      assertThat(error).hasMessageNotContaining("private-reasoning").hasMessageNotContaining("fixture-secret");
+      assertUsage(error);
+    });
+  }
+
+  private void assertUsage(ResponsesTransportException error) {
+    assertThat(error.usage()).isNotNull();
+    assertThat(error.usage().input()).isEqualTo(3);
+    assertThat(error.usage().output()).isEqualTo(2);
+    assertThat(error.usage().total()).isEqualTo(5);
+    assertThat(error.usage().cached()).isEqualTo(1);
+    assertThat(error.usage().reasoning()).isEqualTo(1);
   }
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"baseUrl", "model", "maxOutputTokens", "temperature"})

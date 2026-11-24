@@ -17,6 +17,12 @@ final class ResponsesTransportException extends IllegalStateException {
 
   private final Category category;
 
+  record TokenUsage(Long input, Long output, Long total, Long cached, Long reasoning) {}
+
+  TokenUsage usage() {
+    return null;
+  }
+
   ResponsesTransportException(Category category) {
     super("Responses transport failed: " + category);
     this.category = category;
