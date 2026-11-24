@@ -303,7 +303,7 @@ class ContextCompressionDiagnosticsTest {
     assertThat(calls.get()).isGreaterThan(1);
     assertThat(payloads(AgentEventType.CONTEXT_COMPRESSION_FAILED)).isEmpty();
     assertThat(payloads(AgentEventType.CONTEXT_COMPRESSION_COMPLETED)).hasSize(1);
-    assertThat(new ConversationSummaryRepository(dir).read("chat").throughSequence()).isEqualTo(1);
+    assertThat(new ConversationSummaryRepository(dir).read("chat").throughSequence()).isEqualTo(2);
     assertThat(original.getContents()).contains("x".repeat(20000));
     events.clear();
     calls.set(0);

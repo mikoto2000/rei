@@ -419,28 +419,22 @@ public class ContextAssembler {
               - 2048L;
       max = Math.min(max, settings.summaryInputTokens());
       max = compressionRetries.inputLimit(segment.retryKey, configuration, max);
-      while (before > max && count > 1) {
-        count--;
-        while (count > 0 && segment.entries.get(count).message() instanceof ToolResponseMessage)
-          count--;
-        if (count == 0) break;
-        prefix = segment.entries.subList(0, count);
-        before =
-            estimator.text(segment.summary.summary())
-                + prefix.stream().mapToLong(e -> estimator.message(e.message())).sum();
+      var boundaries = CompressionPolicy.completePrefixes(prefix.stream().map(Entry::message).toList());
+      int fitting = 0;
+      int scanned = 0;
+      long candidateTokens = estimator.text(segment.summary.summary());
+      for (int boundary : boundaries) {
+        while (scanned < boundary) candidateTokens += estimator.message(segment.entries.get(scanned++).message());
+        if (candidateTokens > max) break;
+        fitting = boundary;
       }
-      boolean paged = count == 0 || before > max;
-      if (paged) {
-        // The first complete tool exchange itself is oversized. Page its summary DATA, but
-        // retain its atomic cursor and all raw history until every page has succeeded.
-        count = 1;
-        while (count < segment.entries.size()
-            && segment.entries.get(count).message() instanceof ToolResponseMessage) count++;
-        prefix = segment.entries.subList(0, count);
-        before =
-            estimator.text(segment.summary.summary())
-                + prefix.stream().mapToLong(e -> estimator.message(e.message())).sum();
-      }
+      boolean paged = fitting == 0;
+      // Page only summary DATA for one complete oversized unit. Its cursor is committed once,
+      // after every page succeeds; input, reasoning/calls and all results remain one unit.
+      count = paged ? boundaries.getFirst() : fitting;
+      prefix = segment.entries.subList(0, count);
+      before = estimator.text(segment.summary.summary())
+          + prefix.stream().mapToLong(e -> estimator.message(e.message())).sum();
       after = before;
       through = prefix.getLast().sequence();
       var messages = prefix.stream().map(Entry::message).toList();
