@@ -14,6 +14,36 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 
 /** Exercises the pinned SDK's serialized HTTP request, without external traffic. */
 class ResponsesTransportContractTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"408,false", "408,true", "503,false", "503,true"})
+  void underlyingHttpLayerCannotReplayAResponsesRequest(int status, boolean streaming) throws Exception {
+    var server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    var received = new java.util.concurrent.atomic.AtomicInteger();
+    server.createContext("/v1/responses", exchange -> {
+      received.incrementAndGet();
+      exchange.getRequestBody().readAllBytes();
+      var error = "{\"error\":{\"message\":\"fixture failure\",\"type\":\"fixture\"}}"
+          .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+      exchange.getResponseHeaders().set("Content-Type", "application/json");
+      exchange.getResponseHeaders().set("Retry-After", "0");
+      exchange.sendResponseHeaders(status, error.length);
+      try (var body = exchange.getResponseBody()) { body.write(error); }
+      exchange.close();
+    });
+    server.start();
+    try {
+      passThrough = true;
+      var options = options().baseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1").build();
+      var model = transport(options);
+      assertThatThrownBy(() -> {
+        if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
+        else model.call(new Prompt("fixture", options));
+      }).isInstanceOf(ResponsesTransportException.class);
+      assertThat(received.get()).isEqualTo(1);
+    } finally {
+      server.stop(0);
+    }
+  }
   @Test
   void undeclaredRawExtensionsCannotSilentlyBypassTypedValidation() {
     var options =
