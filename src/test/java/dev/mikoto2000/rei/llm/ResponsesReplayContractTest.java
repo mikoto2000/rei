@@ -27,6 +27,19 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 /** Native SDK input/output round trips; no external API or business tool is used. */
 @org.junit.jupiter.api.Timeout(30)
 class ResponsesReplayContractTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"provider", "kind"})
+  void foreignPayloadKindsAreNotSilentlyDroppedOrTreatedAsEncryptedReasoning(String changed) {
+    var payload = new OpaquePayload(changed.equals("provider") ? "foreign-provider" : OpenAiResponsesMetadata.PROVIDER,
+        changed.equals("kind") ? "foreign-signature" : OpenAiResponsesMetadata.ENCRYPTED_CONTENT_KIND, "private-fixture-payload");
+    var assistant = AssistantMessage.builder().part(new ReasoningPart(null, null, payload,
+        Map.of(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE, "rs_fixture"))).build();
+    var options = options();
+    var prompt = new Prompt(List.of(new UserMessage("fixture"), assistant), options);
+    assertThatThrownBy(() -> model(options).call(prompt)).isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("payload").hasMessageNotContaining("private-fixture-payload").hasNoCause();
+    assertThat(requests).isEmpty();
+  }
   private final List<JsonNode> requests = new CopyOnWriteArrayList<>();
   private final ArrayDeque<String> replies = new ArrayDeque<>();
   private final AtomicInteger executions = new AtomicInteger();
