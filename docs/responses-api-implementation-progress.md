@@ -7,7 +7,7 @@
 | 0 | MERGED | codex/responses-api-phase-0-foundation / 削除済み | [#628](https://github.com/mikoto2000/rei/pull/628) | d0e3626f9565035cab20cc045dd3ba070985d3fe | PR・マージ後CI成功。全件7,718、成功7,706、skip12、failure/error0 |
 | 1 | MERGED | codex/responses-api-phase-1-transport / 削除済み | [#629](https://github.com/mikoto2000/rei/pull/629) | 10542db848d9317c7eaaab06869e63e7ab571d5b | 最終CI全件7,818、成功7,806、期待skip12、failure/error0。品質ゲート成功 |
 | 2 | MERGED | codex/responses-api-phase-2-openai-replay / 削除済み | [#630](https://github.com/mikoto2000/rei/pull/630) | a95593f48d0b4f760091d79eaf2cbc411e9a2f49 | PR・マージ後CI7,861件、成功7,849、期待skip12、failure/error0。関連859件・全品質ゲート成功 |
-| 3 | IN_PROGRESS | codex/responses-api-phase-3-message-persistence / .worktrees/responses-api-phase-3 | [#631](https://github.com/mikoto2000/rei/pull/631) | 未マージ | 最新関連568件、failure/error/skip0。Checkstyle/SpotBugs0、architecture・build成功。PR #631、最新headの全件CI・差分レビューを確認中 |
+| 3 | IN_PROGRESS | codex/responses-api-phase-3-message-persistence / .worktrees/responses-api-phase-3 | [#631](https://github.com/mikoto2000/rei/pull/631) | 未マージ | 最新関連570件、failure/error/skip0。Checkstyle/SpotBugs0、architecture・build成功。PR #631、最新headの全件CI・差分レビューを確認中 |
 | 4 | NOT_STARTED | — | — | — | 未実施 |
 | 5 | NOT_STARTED | — | — | — | 未実施 |
 | 6 | NOT_STARTED | — | — | — | 未実施 |
@@ -261,7 +261,7 @@ GitHub公式の復旧手順でこのCI実行だけを停止し、同じheadのB�
 | 別プロセスによる保存・復元 | Writer JVM の終了後に Reader JVM で全 parts・opaque・call ID を復元 |
 | 並行・障害注入 | 8 writer と GC、上限の競合、DB途中保存失敗、DDL途中移行失敗、将来 Schema、本文改ざんを検証 |
 | 実保存先の再生成 | payload SQLite・Turn SQLite・JSONL を保存し、全 Store を作り直して参照優先を検証 |
-| Maven 最新関連回帰 | 568件成功、failure/error/skip0 |
+| Maven 最新関連回帰 | 570件成功、failure/error/skip0 |
 | Checkstyle / SpotBugs | 指摘0件、解析エラー0件 |
 | Spotless / architecture / package・repackage | 全成功。予算・除外の変更なし |
 | 実 API / 本番移行 / 運用プロセス操作 | 未実施 |
@@ -295,3 +295,8 @@ ToolResponse と旧形式に加え、現行 assistant の encode/decode でも�
 da74dfb6 → 7600c0cc で修正した。native/Codec 207件、修正後の関連568件と全品質ゲートが成功した。
 API固有処理・DB・ツール実行の分離、所有者/ハッシュ/参照の照合、旧完了会話、容量・GC、
 未検証Responsesの本番拒否を照合した。全件CI・通常merge・merge後確認・cleanupは引き続き未完了。
+
+
+追加レビューで、同時刻の複数Turnからprotocol参照を選ぶ曖昧性と、同じ表示文の通知への誤付与を2件で再現した。
+4e4057ad → 4f6a18c6 で、参照を含む時刻の対応が複数なら停止し、通知を補完対象から除外した。
+関連108件、最新Maven関連570件と全品質ゲートが成功した。既存の参照を持たない旧履歴の順序は維持する。

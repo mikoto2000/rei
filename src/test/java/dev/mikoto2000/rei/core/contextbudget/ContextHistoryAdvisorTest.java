@@ -53,7 +53,8 @@ class ContextHistoryAdvisorTest {
     writingTurns.finish(oldOwner, ConversationTurnStore.Status.COMPLETED, "display fixture");
     if (logMode == 3) {
       var secondOwner = new AgentRunContext("second-run", "chat", dir, "fixture-project");
-      var secondRef = payloads.save(scope, "second-run", "one", new AssistantMessage("second payload"));
+      var secondRef =
+          payloads.save(scope, "second-run", "one", new AssistantMessage("second payload"));
       var secondMetadata = payloads.historyReference(scope, secondRef, "turn:second-run");
       writingTurns.start(secondOwner, "second request", java.time.Instant.EPOCH);
       writingTurns.recordMetadata(secondOwner, secondMetadata);
@@ -71,7 +72,8 @@ class ContextHistoryAdvisorTest {
           .append("chat", "assistant", "display fixture");
     if (logMode == 4)
       new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper)
-          .appendNotification("chat", "fixture-notification", "display fixture", java.time.Instant.EPOCH, Map.of());
+          .appendNotification(
+              "chat", "fixture-notification", "display fixture", java.time.Instant.EPOCH, Map.of());
     var turns = new dev.mikoto2000.rei.conversation.SqliteConversationTurnStore(dir);
     var logs =
         new dev.mikoto2000.rei.conversation.ConversationLogStore(
@@ -95,14 +97,19 @@ class ContextHistoryAdvisorTest {
             .build();
     if (logMode == 3) {
       org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
-          .isInstanceOf(IllegalStateException.class).hasMessage("Model message persistence rejected");
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessage("Model message persistence rejected");
       return;
     }
     var messages = advisor.before(request, null).prompt().getInstructions();
     if (logMode == 4) {
-      assertThat(messages.stream().map(Message::getText)).contains("display fixture").doesNotContain("complete fixture");
-      assertThat(messages.stream().filter(m -> m instanceof AssistantMessage)
-          .flatMap(m -> ((AssistantMessage) m).getParts().stream()))
+      assertThat(messages.stream().map(Message::getText))
+          .contains("display fixture")
+          .doesNotContain("complete fixture");
+      assertThat(
+              messages.stream()
+                  .filter(m -> m instanceof AssistantMessage)
+                  .flatMap(m -> ((AssistantMessage) m).getParts().stream()))
           .noneMatch(p -> p instanceof org.springframework.ai.chat.messages.part.ReasoningPart);
       return;
     }

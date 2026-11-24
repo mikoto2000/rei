@@ -143,9 +143,10 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                 turn.source())) {
           var previous = timeline.putIfAbsent(turn.createdAt(), turn);
           if (previous != null
-              && (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(previous.metadata())
-                  || dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(turn.metadata())))
-            ambiguousProtocolTimes.add(turn.createdAt());
+              && (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(
+                      previous.metadata())
+                  || dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(
+                      turn.metadata()))) ambiguousProtocolTimes.add(turn.createdAt());
         }
       var currentTurn =
           owner == null
@@ -184,7 +185,8 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                       .build();
           var modelMetadata = entry.metadata();
           if ("assistant".equals(entry.speaker())
-              && !dev.mikoto2000.rei.conversation.ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(entry.source())
+              && !dev.mikoto2000.rei.conversation.ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(
+                  entry.source())
               && !dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(
                   modelMetadata)
               && entry.timestamp() != null) {

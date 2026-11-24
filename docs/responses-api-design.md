@@ -578,6 +578,8 @@ metadata 付きの `ConversationLogStore.append` は同期書き込みと force 
 pointer を持つ場合もそちらを優先する。pointer があるのに欠損・改ざん・所有者不一致・参照未公開なら停止し、
 表示テキストへの fallback で継続しない。pointer を持たない旧完了会話は従来のテキスト履歴として読む。
 履歴 sequence を加えるときにも ordered parts と ToolResponse の型を維持する。
+テキストのみのログからの補完で、同時刻に参照を持つ複数の Turn があり対応を一意にできない場合は停止する。
+独立した通知には、表示文や時刻が一致する Turn の protocol payload を補わない。
 
 ### 保持・容量・セキュリティ
 
