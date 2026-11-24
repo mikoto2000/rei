@@ -818,7 +818,7 @@ class ResponsesReplayContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"compatible", "temperature", "instructions", "tools"})
+      strings = {"compatible", "temperature", "instructions", "tools", "context-data"})
   void checkpointConsumerKeepsTheOriginalSystemPrefixAndRejectsExecutionChanges(String change)
       throws Exception {
     contentType = "text/event-stream";
@@ -841,15 +841,13 @@ class ResponsesReplayContractTest {
     context.put(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution);
     execution.setModelOptions(options.mutate().toolContext(null).toolContext(context).build());
     execution.preserveUserMessage(new UserMessage("original request"));
+    var originalInput = new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
+    originalInput.add(new org.springframework.ai.chat.messages.SystemMessage("original instructions"));
+    if (change.equals("context-data")) originalInput.add(org.springframework.ai.chat.messages.SystemMessage.builder()
+        .text("previous work context").metadata(Map.of("rei.workContext", true)).build());
+    originalInput.add(new UserMessage("original request"));
     new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.CHAT))
-        .stream(
-                new Prompt(
-                    List.of(
-                        new org.springframework.ai.chat.messages.SystemMessage(
-                            "original instructions"),
-                        new UserMessage("original request")),
-                    execution.modelOptions()))
-            .blockLast(Duration.ofSeconds(10));
+        .stream(new Prompt(originalInput, execution.modelOptions())).blockLast(Duration.ofSeconds(10));
     var history = execution.protocolHistorySnapshot();
     String checkpoint =
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
@@ -889,16 +887,14 @@ class ResponsesReplayContractTest {
     var model =
         new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
             models.chatModel(LlmFeature.CHAT));
-    var prompt =
-        new Prompt(
-            List.of(
-                new org.springframework.ai.chat.messages.SystemMessage(
-                    change.equals("instructions")
-                        ? "changed instructions"
-                        : "original instructions"),
-                new UserMessage("host resume control")),
-            restored.modelOptions());
-    if (!change.equals("compatible")) {
+    var currentInput = new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
+    currentInput.add(new org.springframework.ai.chat.messages.SystemMessage(
+        change.equals("instructions") ? "changed instructions" : "original instructions"));
+    if (change.equals("context-data")) currentInput.add(org.springframework.ai.chat.messages.SystemMessage.builder()
+        .text("updated work context").metadata(Map.of("rei.workContext", true)).build());
+    currentInput.add(new UserMessage("host resume control"));
+    var prompt = new Prompt(currentInput, restored.modelOptions());
+    if (!java.util.Set.of("compatible", "context-data").contains(change)) {
       assertThatThrownBy(() -> model.stream(prompt).blockLast(Duration.ofSeconds(10)))
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("continuation");
@@ -908,7 +904,9 @@ class ResponsesReplayContractTest {
     }
     model.stream(prompt).blockLast(Duration.ofSeconds(10));
     assertThat(requests).hasSize(2);
-    assertThat(requests.getLast().path("instructions").asText()).isEqualTo("original instructions");
+    if (change.equals("context-data")) assertThat(requests.getLast().path("instructions").asText())
+        .contains("original instructions", "previous work context", "updated work context");
+    else assertThat(requests.getLast().path("instructions").asText()).isEqualTo("original instructions");
     assertThat(requests.getLast().path("input").toString())
         .contains("original request")
         .doesNotContain("host resume control");
