@@ -17,7 +17,8 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 
 /** 作業状況の把握に必要な言語モデル日次要約書き込み先を扱う。 */
 public final class LlmDailySummaryWriter implements DailySummaryWriter {
@@ -84,14 +85,14 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
   private final Supplier<ChatModel> model;
 
   /** 選択可能な設定。 */
-  private final Supplier<OpenAiChatOptions> options;
+  private final Supplier<? extends ToolCallingChatOptions> options;
 
   /** タイムアウト。 */
   private final Duration timeout;
 
   /** 指定された値や利用先を使って、LlmDailySummaryWriterを初期化する。 */
   public LlmDailySummaryWriter(
-      Supplier<ChatModel> model, Supplier<OpenAiChatOptions> options, Duration timeout) {
+      Supplier<ChatModel> model, Supplier<? extends ToolCallingChatOptions> options, Duration timeout) {
     if (timeout.isNegative() || timeout.isZero())
       throw new IllegalArgumentException("Invalid summary timeout");
     this.model = model;
@@ -159,16 +160,9 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
     format.setType(ResponseFormat.Type.JSON_SCHEMA);
     format.setJsonSchema(SCHEMA);
     format.setStrict(true);
-    var request =
-        options
-            .get()
-            .mutate()
-            .responseFormat(format)
-            .toolChoice(null)
-            .toolCallbacks(List.of())
-            .maxTokens(null)
-            .maxCompletionTokens(2048)
-            .build();
+    var isolated=ModelOptions.singleRequest(options.get());
+    var limited=ModelOptions.withCompletionLimit(isolated,2048);
+    var request=ModelOptions.withResponseFormat(ModelOptions.withToolChoice(limited,null),format);
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(request);
     var chat = model.get();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(chat);

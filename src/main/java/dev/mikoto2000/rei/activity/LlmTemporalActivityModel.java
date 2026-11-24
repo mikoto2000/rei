@@ -15,7 +15,8 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 
 /**
  * 作業状況の把握に必要な言語モデル時系列作業状況モデルを扱う。
@@ -49,10 +50,10 @@ public final class LlmTemporalActivityModel implements TemporalActivityInference
   private final Supplier<ChatModel> models;
 
   /** 選択可能な設定。 */
-  private final Supplier<OpenAiChatOptions> options;
+  private final Supplier<? extends ToolCallingChatOptions> options;
 
   /** 指定された値や利用先を使って、LlmTemporalActivityModelを初期化する。 */
-  public LlmTemporalActivityModel(Supplier<ChatModel> models, Supplier<OpenAiChatOptions> options) {
+  public LlmTemporalActivityModel(Supplier<ChatModel> models, Supplier<? extends ToolCallingChatOptions> options) {
     this.models = models;
     this.options = options;
   }
@@ -70,16 +71,9 @@ public final class LlmTemporalActivityModel implements TemporalActivityInference
     format.setType(ResponseFormat.Type.JSON_SCHEMA);
     format.setJsonSchema(SCHEMA);
     format.setStrict(true);
-    var request =
-        options
-            .get()
-            .mutate()
-            .responseFormat(format)
-            .toolChoice(null)
-            .toolCallbacks(List.of())
-            .maxTokens(null)
-            .maxCompletionTokens(outputTokens)
-            .build();
+    var isolated=ModelOptions.singleRequest(options.get());
+    var limited=ModelOptions.withCompletionLimit(isolated,outputTokens);
+    var request=ModelOptions.withResponseFormat(ModelOptions.withToolChoice(limited,null),format);
     var chat = models.get();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(request);
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(chat);

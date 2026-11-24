@@ -61,7 +61,7 @@ public class ActivityConfiguration {
       ActivityProperties properties) {
     return new VisionActivityExtractor(
         () -> provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),
-        () -> provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY, current.get()),
+        () -> provider.requestOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY, current.get(), false),
         properties.getVisionImageScale(),
         properties.getDetection().getMaxOutputTokens());
   }
@@ -146,7 +146,7 @@ public class ActivityConfiguration {
             ? new LlmDailySummaryWriter(
                 () -> provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),
                 () ->
-                    provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY, current.get()),
+                    provider.requestOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY, current.get(), false),
                 Duration.ofSeconds(p.getSummary().getTimeoutSeconds()))
             : null;
     return new DailySummaryService(aliases, writer);
@@ -197,7 +197,7 @@ public class ActivityConfiguration {
             ? new LlmTemporalActivityModel(
                 () -> provider.chatModel(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY),
                 () ->
-                    provider.chatOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY, current.get()))
+                    provider.requestOptions(dev.mikoto2000.rei.llm.LlmFeature.ACTIVITY, current.get(), false))
             : null;
     return new TemporalActivityInferenceService(
         p,

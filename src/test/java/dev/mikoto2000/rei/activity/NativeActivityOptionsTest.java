@@ -57,7 +57,7 @@ class NativeActivityOptionsTest {
     when(model.call(any(Prompt.class))).thenAnswer(inv->{
       Prompt prompt=inv.getArgument(0);
       verifyOptions(prompt,limit,ForegroundActivityParser.SCHEMA);
-      assertThat(prompt.getUserMessage().getMedia()).hasSize(1);
+      assertThat(prompt.getUserMessage().getMedia()).hasSize(2);
       return LlmTemporalActivityModelTest.response(ForegroundActivityVisionTest.VALID,100);
     });
     var extractor=VisionActivityExtractor.class.getConstructor(Supplier.class,Supplier.class)
