@@ -19,6 +19,80 @@ import org.springframework.ai.chat.prompt.Prompt;
 @org.junit.jupiter.api.Tag("integration")
 class ContextHistoryAdvisorTest {
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"COMPLETED,true", "COMPLETED,false", "FAILED,true", "CANCELLED,true", "RUNNING,true"})
+  void committedProtocolRowsUseTheirCompletedTurnAndEndpointView(
+      ConversationTurnStore.Status status, boolean compatible) {
+    var old = new AgentRunContext("old", "chat", dir, "project");
+    var current = new AgentRunContext("current", "chat", dir, "project");
+    var source = new org.sqlite.SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + dir.resolve("protocol.db"));
+    var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    var previousExchange = payloads.newExchange(old);
+    var original = AssistantMessage.builder().parts(java.util.List.of(
+        new org.springframework.ai.chat.messages.part.ReasoningPart(null, null,
+            new org.springframework.ai.chat.messages.part.OpaquePayload(
+                org.springframework.ai.openai.responses.OpenAiResponsesMetadata.PROVIDER,
+                org.springframework.ai.openai.responses.OpenAiResponsesMetadata.ENCRYPTED_CONTENT_KIND,
+                "opaque-native-history"), Map.of(
+                    org.springframework.ai.openai.responses.OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE, "rs_old")),
+        org.springframework.ai.chat.messages.part.TextPart.of("old actual answer")))
+        .properties(Map.of("rei.llm.replay-origin-owner", previousExchange.ownerKey(),
+            "rei.llm.replay-origin-endpoint", "endpoint-a")).build();
+    var userRef = previousExchange.withKey("input").reference(new UserMessage("old actual input"));
+    var assistantRef = previousExchange.withKey("answer").reference(original);
+    var pointers = payloads.historyReferences(previousExchange.scope(),
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(1, old.runId(),
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(previousExchange.ownerKey(), "endpoint-a"),
+            java.util.List.of(new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("input", userRef),
+                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("answer", assistantRef))), "turn:old");
+    var logs = new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"),
+        java.time.Clock.systemUTC(), new com.fasterxml.jackson.databind.ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    var turns = ConversationTurnStore.inMemory();
+    turns.start(old, "old display request", java.time.Instant.EPOCH);
+    logs.append("chat", "user", "old display request", Map.of("rei.modelMessage.run", old.runId()));
+    var manifest = new java.util.HashMap<>(logs.appendProtocolHistory("chat", old.runId(), pointers));
+    manifest.put("rei.modelMessage.endpoint", "endpoint-a");
+    turns.recordMetadata(old, manifest);
+    if (status != ConversationTurnStore.Status.RUNNING) turns.finish(old, status, "old display answer");
+    logs.append("chat", "assistant", "old display answer", Map.of("rei.modelMessage.run", old.runId()));
+    var currentExchange = payloads.newExchange(current);
+    var origin = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+        currentExchange.ownerKey(), compatible ? "endpoint-a" : "endpoint-b");
+    var options = org.springframework.ai.model.tool.ToolCallingChatOptions.builder().toolContext(Map.of(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, currentExchange,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY, origin)).build();
+    var loads = new java.util.concurrent.atomic.AtomicInteger();
+    var advisor = new ContextHistoryAdvisor(turns, WindowedConversationMemory.builder().build(),
+        new ConversationSummaryRepository(dir), logs, () -> { loads.incrementAndGet(); return payloads; });
+    var request = ChatClientRequest.builder().prompt(new Prompt(new UserMessage("current request"), options))
+        .context(Map.of(org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID, "chat",
+            AgentRunContext.class.getName(), current)).build();
+    var projected = advisor.before(request, null).prompt();
+    if (status != ConversationTurnStore.Status.COMPLETED) {
+      assertThat(projected.getContents()).doesNotContain("old actual", "old display", "opaque-native-history");
+      assertThat(loads).hasValue(0);
+    } else if (!compatible) {
+      assertThat(projected.getContents()).contains("old display request", "old display answer", "current request")
+          .doesNotContain("old actual", "opaque-native-history");
+      assertThat(loads).hasValue(0);
+      assertThat(projected.getInstructions().stream().filter(AssistantMessage.class::isInstance)
+          .map(AssistantMessage.class::cast).flatMap(message -> message.getParts().stream()))
+          .noneMatch(org.springframework.ai.chat.messages.part.ReasoningPart.class::isInstance);
+    } else {
+      assertThat(projected.getInstructions()).extracting(Message::getText)
+          .containsExactly("old actual input", "old actual answer", "current request");
+      var restored = (AssistantMessage) projected.getInstructions().get(1);
+      assertThat(restored.getParts()).containsExactlyElementsOf(original.getParts());
+      var granted = (org.springframework.ai.model.tool.ToolCallingChatOptions) projected.getOptions();
+      var grant = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HistoryReplayGrant)
+          granted.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY);
+      assertThat(grant).isNotNull();
+      assertThat(grant.permits(restored, currentExchange.ownerKey(), origin.endpoint())).isTrue();
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "false,true",
     "true,true",
