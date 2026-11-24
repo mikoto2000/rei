@@ -28,14 +28,11 @@ final class ResponsesSdkBoundary {
                 (proxy, method, arguments) -> {
                   try {
                     var result = method.invoke(service, arguments);
-                    if (result instanceof com.openai.models.responses.Response response
-                        && response
-                            .status()
-                            .filter(com.openai.models.responses.ResponseStatus.FAILED::equals)
-                            .isPresent())
-                      throw new ResponsesTransportException(
-                          ResponsesTransportException.Category.PROVIDER,
-                          ResponsesTransportException.usage(response.usage().orElse(null)));
+                    if (result instanceof com.openai.models.responses.Response response) {
+                      var usage = validateResponse(response);
+                      if (response.status().filter(com.openai.models.responses.ResponseStatus.FAILED::equals).isPresent())
+                        throw new ResponsesTransportException(ResponsesTransportException.Category.PROVIDER, usage);
+                    }
                     return result;
                   } catch (InvocationTargetException error) {
                     throw ResponsesTransportException.normalize(error.getCause());
@@ -53,6 +50,23 @@ final class ResponsesSdkBoundary {
                 throw ResponsesTransportException.normalize(error.getCause());
               }
             });
+  }
+
+  private static dev.mikoto2000.rei.modelmessage.ModelTokenUsage validateResponse(
+      com.openai.models.responses.Response response) {
+    try {
+      var status = ResponsesTransportException.known(response._status());
+      ResponsesTransportException.known(response._id());
+      ResponsesTransportException.known(response._createdAt());
+      ResponsesTransportException.known(response._output());
+      var nativeUsage = ResponsesTransportException.known(response._usage());
+      var usage = ResponsesTransportException.usage(nativeUsage);
+      if (usage != null && !com.openai.models.responses.ResponseStatus.FAILED.equals(status)
+          && (usage.input() == null || usage.output() == null || usage.total() == null
+              || usage.input() > Integer.MAX_VALUE || usage.output() > Integer.MAX_VALUE || usage.total() > Integer.MAX_VALUE))
+        throw new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE, usage);
+      return usage;
+    } catch (RuntimeException invalid) { throw ResponsesTransportException.normalize(invalid); }
   }
 
   static OpenAIClientAsync safe(OpenAIClientAsync client) {
@@ -99,8 +113,10 @@ final class ResponsesSdkBoundary {
           if (event.isFailed())
             throw new ResponsesTransportException(
                 ResponsesTransportException.Category.PROVIDER,
-                ResponsesTransportException.usage(
-                    event.failed().orElseThrow().response().usage().orElse(null)));
+                validateResponse(event.failed().orElseThrow().response()));
+          if (event.isCompleted()) validateResponse(event.completed().orElseThrow().response());
+          if (event.isIncomplete()) validateResponse(event.incomplete().orElseThrow().response());
+          if (event.isCreated()) validateResponse(event.created().orElseThrow().response());
           if (event.isError())
             throw new ResponsesTransportException(ResponsesTransportException.Category.PROVIDER);
           handler.onNext(event);

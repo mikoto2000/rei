@@ -36,18 +36,31 @@ final class ResponsesTransportException extends IllegalStateException {
 
   static ModelTokenUsage usage(com.openai.models.responses.ResponseUsage usage) {
     if (usage == null) return null;
-    var inputDetails = usage._inputTokensDetails().asKnown().orElse(null);
-    var outputDetails = usage._outputTokensDetails().asKnown().orElse(null);
-    return new ModelTokenUsage(
-        usage._inputTokens().asNumber().map(Number::longValue).orElse(null),
-        usage._outputTokens().asNumber().map(Number::longValue).orElse(null),
-        usage._totalTokens().asNumber().map(Number::longValue).orElse(null),
+    var inputDetails = known(usage._inputTokensDetails());
+    var outputDetails = known(usage._outputTokensDetails());
+    try { return new ModelTokenUsage(
+        exact(usage._inputTokens()), exact(usage._outputTokens()), exact(usage._totalTokens()),
         inputDetails == null
             ? null
-            : inputDetails._cachedTokens().asNumber().map(Number::longValue).orElse(null),
+            : exact(inputDetails._cachedTokens()),
         outputDetails == null
             ? null
-            : outputDetails._reasoningTokens().asNumber().map(Number::longValue).orElse(null));
+            : exact(outputDetails._reasoningTokens())); }
+    catch (IllegalArgumentException invalid) { throw new ResponsesTransportException(Category.INVALID_RESPONSE); }
+  }
+
+  static <T> T known(com.openai.core.JsonField<T> field) {
+    if (field.isMissing() || field.isNull()) return null;
+    return field.asKnown().orElseThrow(() -> new ResponsesTransportException(Category.INVALID_RESPONSE));
+  }
+
+  private static Long exact(com.openai.core.JsonField<?> field) {
+    if (field.isMissing() || field.isNull()) return null;
+    var value = field.asNumber().orElseThrow(() -> new ResponsesTransportException(Category.INVALID_RESPONSE));
+    try { return new java.math.BigDecimal(value.toString()).longValueExact(); }
+    catch (ArithmeticException | NumberFormatException invalid) {
+      throw new ResponsesTransportException(Category.INVALID_RESPONSE);
+    }
   }
 
   static ModelTokenUsage usage(org.springframework.ai.chat.metadata.Usage usage) {
@@ -88,6 +101,8 @@ final class ResponsesTransportException extends IllegalStateException {
     while (error instanceof java.util.concurrent.CompletionException && error.getCause() != null)
       error = error.getCause();
     if (error instanceof ResponsesTransportException failure) return failure;
+    if (error instanceof com.openai.errors.OpenAIInvalidDataException || error instanceof IllegalArgumentException)
+      return new ResponsesTransportException(Category.INVALID_RESPONSE);
     if (error instanceof com.openai.errors.OpenAIServiceException service) {
       int status = service.statusCode();
       return new ResponsesTransportException(
