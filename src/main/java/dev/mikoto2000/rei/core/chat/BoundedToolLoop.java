@@ -27,7 +27,8 @@ import reactor.core.scheduler.Schedulers;
 /**
  * 会話の実行に必要な上限内に収めたツール繰り返しを扱う。
  *
- * <p>Ephemeral explicit loop: no advisors, persistence, planner, or ambient tool resolution.
+ * <p>Explicit loop: supplied message persistence is reused; no separate Run ledger or ambient tool
+ * resolution.
  */
 public final class BoundedToolLoop {
   /** ツール一覧。 */
@@ -252,8 +253,8 @@ public final class BoundedToolLoop {
                   return Mono.error(new IllegalStateException("Empty response"));
                 if (reservation != null) {
                   reported.set(true);
-                  var usage = response.getMetadata().getUsage();
-                  reservation.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+                  reservation.recordTotalTokens(
+                      dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(response));
                 }
                 if (OutputLimitDetector.isOutputLimitReached(response))
                   return Mono.error(new IllegalStateException("Output limit"));
@@ -341,12 +342,13 @@ public final class BoundedToolLoop {
   /** 会話の実行で用いる繰り返しを返す。 */
   private Mono<Outcome> iteration(
       ChatModel model,
-      Prompt prompt,
+      Prompt originalPrompt,
       AtomicInteger remaining,
       AgentRunContext owner,
       Runnable checkActive,
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,
       ModelRetries retries) {
+    Prompt prompt = ToolLoopSupport.newIteration(originalPrompt);
     return Mono.fromCallable(
             () -> {
               if (assemblePrompt == null) return prompt;
@@ -397,6 +399,7 @@ public final class BoundedToolLoop {
                             owner, "providerInputTokensUnavailable", 1);
                       if (assemblePrompt != null) confirmDelivery.accept(projected, owner);
                       if (!response.hasToolCalls()) {
+                        ToolLoopSupport.persistResponse(projected, response);
                         var generation =
                             Objects.requireNonNull(response.getResult(), "Missing model result");
                         var history = new ArrayList<Message>(prompt.getInstructions());

@@ -57,6 +57,24 @@ class ResponsesTransportContractTest {
     }
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"zero", "negative", "submillisecond", "extended"})
+  void invalidRequestDeadlinesAreRejectedBeforeHttp(String condition) {
+    var defaults = options().build();
+    var timeout =
+        switch (condition) {
+          case "zero" -> java.time.Duration.ZERO;
+          case "negative" -> java.time.Duration.ofMillis(-1);
+          case "submillisecond" -> java.time.Duration.ofNanos(1);
+          default -> java.time.Duration.ofMinutes(6);
+        };
+    var request = defaults.mutate().timeout(timeout).build();
+    assertThatThrownBy(() -> transport(defaults).call(new Prompt("fixture", request)))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(requests).isEmpty();
+  }
+
   @Test
   void undeclaredRawExtensionsCannotSilentlyBypassTypedValidation() {
     var options =
@@ -301,7 +319,7 @@ class ResponsesTransportContractTest {
       case "headers" -> builder.customHeaders(java.util.Map.of("Authorization", "other-secret"));
       case "outputLimit" -> builder.maxOutputTokens(128);
       case "deployment" -> builder.deploymentName("other-deployment");
-      case "timeout" -> builder.timeout(java.time.Duration.ofSeconds(1));
+      case "timeout" -> builder.timeout(java.time.Duration.ofMinutes(6));
       default -> throw new AssertionError(field);
     }
     var runtime = builder.build();
@@ -456,6 +474,50 @@ class ResponsesTransportContractTest {
               () -> {
                 if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
                 else model.call(new Prompt("fixture", options));
+              })
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("TIMEOUT");
+      assertThat(java.time.Duration.ofNanos(System.nanoTime() - started))
+          .isLessThan(java.time.Duration.ofSeconds(3));
+      assertThat(requests).hasSize(1);
+    } finally {
+      release.countDown();
+      server.stop(0);
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void aRequestCanShortenButNeverExtendTheBoundTransportDeadline(boolean streaming)
+      throws Exception {
+    var server =
+        com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    server.createContext(
+        "/v1/responses",
+        exchange -> {
+          try {
+            release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+          } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+          } finally {
+            exchange.close();
+          }
+        });
+    server.start();
+    try {
+      passThrough = true;
+      readTimeout = java.time.Duration.ofSeconds(5);
+      sharedReadTimeout = java.time.Duration.ofSeconds(5);
+      var options =
+          options().baseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1").build();
+      var model = transport(options);
+      var request = options.mutate().timeout(java.time.Duration.ofMillis(150)).build();
+      long started = System.nanoTime();
+      assertThatThrownBy(
+              () -> {
+                if (streaming) model.stream(new Prompt("fixture", request)).collectList().block();
+                else model.call(new Prompt("fixture", request));
               })
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("TIMEOUT");
@@ -865,6 +927,109 @@ class ResponsesTransportContractTest {
         return source;
       }
     };
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"JSON_OBJECT", "JSON_SCHEMA"})
+  void sharedFeatureResponseFormatUsesNativeTextFormat(String type) {
+    var format = new org.springframework.ai.openai.OpenAiChatModel.ResponseFormat();
+    format.setType(org.springframework.ai.openai.OpenAiChatModel.ResponseFormat.Type.valueOf(type));
+    if (type.equals("JSON_SCHEMA")) {
+      format.setJsonSchema(
+          "{\"type\":\"object\",\"properties\":{\"answer\":{\"type\":\"string\"}},\"required\":[\"answer\"],\"additionalProperties\":false}");
+      format.setStrict(true);
+    }
+    var options = options().responseFormat(format).build();
+    reply = completed().replace("\"text\":\"done\"", "\"text\":\"{}\"");
+    transport(options).call(new Prompt("fixture JSON", options));
+    var sent = requests.getFirst().path("text").path("format");
+    assertThat(sent.path("type").asText()).isEqualTo(type.toLowerCase(java.util.Locale.ROOT));
+    assertThat(requests.getFirst().has("response_format")).isFalse();
+    if (type.equals("JSON_SCHEMA")) {
+      assertThat(sent.path("strict").asBoolean()).isTrue();
+      assertThat(sent.path("schema").path("properties").has("answer")).isTrue();
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void refusalsAreReportedBeforeAnEmptySuccessfulAnswerCanBePersisted(boolean streaming) {
+    var refused =
+        completed()
+            .replace(
+                "{\"type\":\"output_text\",\"text\":\"done\",\"annotations\":[]}",
+                "{\"type\":\"refusal\",\"refusal\":\"PRIVATE refusal fixture\"}");
+    assertThat(refused).contains("PRIVATE refusal fixture").doesNotContain("output_text");
+    contentType = streaming ? "text/event-stream" : "application/json";
+    reply = streaming ? event("response.completed", "\"response\":" + refused) : refused;
+    var options = options().build();
+    var model = transport(options);
+    assertThatThrownBy(
+            () -> {
+              if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
+              else model.call(new Prompt("fixture", options));
+            })
+        .isInstanceOfSatisfying(
+            ResponsesTransportException.class,
+            error -> {
+              assertThat(error.category().name()).isEqualTo("REFUSAL");
+              assertThat(error).hasMessageNotContaining("PRIVATE");
+              assertUsage(error);
+            });
+    assertThat(requests).hasSize(1);
+  }
+
+  @Test
+  void streamingRefusalDeltaStopsBeforeOrdinaryObserversReceiveIt() {
+    contentType = "text/event-stream";
+    reply =
+        event(
+                "response.refusal.delta",
+                "\"item_id\":\"msg_fixture\",\"output_index\":0,\"content_index\":0,\"delta\":\"PRIVATE refusal delta\"")
+            + event("response.completed", "\"response\":" + completed());
+    var options = options().build();
+    var model = transport(options);
+    var observed = new java.util.concurrent.atomic.AtomicInteger();
+    assertThatThrownBy(() ->
+            model.stream(new Prompt("fixture", options))
+                .doOnNext(chunk -> observed.incrementAndGet())
+                .collectList()
+                .block())
+        .isInstanceOfSatisfying(
+            ResponsesTransportException.class,
+            error -> {
+              assertThat(error.category().name()).isEqualTo("REFUSAL");
+              assertThat(error).hasMessageNotContaining("PRIVATE");
+              assertThat(error.usage()).isNull();
+            });
+    assertThat(observed.get()).isZero();
+    assertThat(requests).hasSize(1);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(ResponsesTransportException.Category.class)
+  void safeTransportCategoriesReachTheExistingUserDiagnostic(
+      ResponsesTransportException.Category category) {
+    var expected =
+        switch (category.name()) {
+          case "AUTHENTICATION" -> "authentication_failed";
+          case "RATE_LIMIT" -> "rate_limited";
+          case "TRANSIENT" -> "provider_unavailable";
+          case "PROVIDER" -> "provider_failure";
+          case "TIMEOUT" -> "timeout";
+          case "OUTPUT_LIMIT" -> "output_limit";
+          case "INCOMPLETE" -> "response_incomplete";
+          case "REFUSAL" -> "model_refusal";
+          case "INVALID_RESPONSE" -> "invalid_response";
+          default -> throw new AssertionError(category);
+        };
+    var failure = new ResponsesTransportException(category);
+    var diagnostic =
+        dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(
+            new RuntimeException("PRIVATE provider wrapper", failure));
+    assertThat(diagnostic.code()).isEqualTo(expected);
+    assertThat(diagnostic.message()).doesNotContain("PRIVATE");
+    assertThat(failure.getCause()).isNull();
   }
 
   private String completed() {

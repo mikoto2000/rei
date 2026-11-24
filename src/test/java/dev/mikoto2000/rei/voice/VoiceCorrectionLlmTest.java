@@ -30,7 +30,7 @@ class VoiceCorrectionLlmTest {
     when(model.call(any(Prompt.class)))
         .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("{}")))));
     var models = mock(LlmModelProvider.class);
-    when(models.chatOptions(LlmFeature.VOICE_CORRECTION, null))
+    when(models.requestOptions(LlmFeature.VOICE_CORRECTION, null, false))
         .thenReturn(OpenAiChatOptions.builder().build());
     var clients = mock(LlmChatClientProvider.class);
     when(clients.chatClient(LlmFeature.VOICE_CORRECTION))
@@ -52,7 +52,7 @@ class VoiceCorrectionLlmTest {
     when(model.call(any(Prompt.class)))
         .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("{}")))));
     var models = mock(LlmModelProvider.class);
-    when(models.chatOptions(LlmFeature.VOICE_CORRECTION, null))
+    when(models.requestOptions(LlmFeature.VOICE_CORRECTION, null, false))
         .thenReturn(
             OpenAiChatOptions.builder().model("corrector").maxCompletionTokens(4096).build());
     var clients = mock(LlmChatClientProvider.class);

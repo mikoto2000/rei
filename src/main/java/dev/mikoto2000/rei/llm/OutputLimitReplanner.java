@@ -64,12 +64,13 @@ public class OutputLimitReplanner {
     Prompt prompt =
         new Prompt(
             buildPrompt(request),
-            modelProvider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, modelHolderService.get()));
+            dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(
+                modelProvider.requestOptions(
+                    LlmFeature.OUTPUT_LIMIT_PLANNER, modelHolderService.get(), false)));
     ChatResponse response;
     try {
       var model = modelProvider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER);
-      if (usageRecorder != null)
-        dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+      dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
       response = model.call(prompt);
     } catch (RuntimeException | Error error) {
       if (error instanceof RuntimeException runtime)
@@ -86,8 +87,7 @@ public class OutputLimitReplanner {
       throw error;
     }
     if (usageRecorder != null) {
-      var usage = response == null ? null : response.getMetadata().getUsage();
-      usageRecorder.accept(usage == null ? null : usage.getTotalTokens());
+      usageRecorder.accept(dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(response));
     }
     Objects.requireNonNull(response, "Replan model returned no response");
     var generation = response.getResult();
@@ -136,7 +136,8 @@ public class OutputLimitReplanner {
 
         Max output tokens per call:
         """,
-        String.valueOf(properties.getMaxOutputTokens()),
+        Objects.toString(
+            request.outputTokenLimit(), String.valueOf(properties.getMaxOutputTokens())),
         "\n\nRemaining execution budget:\nreplanCount=",
         String.valueOf(request.replanCount()),
         "\nmaxReplansPerGoal=",

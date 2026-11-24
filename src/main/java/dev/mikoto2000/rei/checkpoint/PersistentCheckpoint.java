@@ -511,4 +511,9 @@ public record PersistentCheckpoint(
         progress,
         taskState);
   }
+
+  /** Persistence-facing pointers without exposing execution progress to the repository. */
+  public dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory() {
+    return progress == null ? null : progress.protocolHistory();
+  }
 }

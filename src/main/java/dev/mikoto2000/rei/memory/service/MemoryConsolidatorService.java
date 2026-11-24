@@ -243,11 +243,7 @@ public class MemoryConsolidatorService {
       invoked = true;
       var response = request.call().chatResponse();
       RunCancellation.propagate(null);
-      var usage =
-          response == null || response.getMetadata() == null
-              ? null
-              : response.getMetadata().getUsage();
-      Integer tokens = usage == null ? null : usage.getTotalTokens();
+      Integer tokens = dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(response);
       reported = true;
       budget.recordTotalTokens(tokens);
       var generation = response == null ? null : response.getResult();

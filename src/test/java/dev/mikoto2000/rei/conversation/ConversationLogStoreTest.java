@@ -16,6 +16,68 @@ import org.junit.jupiter.api.io.TempDir;
 @org.junit.jupiter.api.Tag("integration")
 class ConversationLogStoreTest {
   @Test
+  void internalProtocolHistoryRetainsOriginalSequencesWithoutAddingDisplayMessages() {
+    var mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+    var store = new ConversationLogStore(tempDir, Clock.systemUTC(), mapper);
+    store.append("chat", "user", "display request");
+    var pointers =
+        java.util.List.of(
+            java.util.Map.of(
+                "rei.modelMessage.id",
+                "first",
+                "rei.modelMessage.sha256",
+                "a".repeat(64),
+                "rei.modelMessage.historyOwner",
+                "turn:run",
+                "rei.modelMessage.run",
+                "run",
+                "rei.modelMessage.role",
+                "user"),
+            java.util.Map.of(
+                "rei.modelMessage.id",
+                "last",
+                "rei.modelMessage.sha256",
+                "b".repeat(64),
+                "rei.modelMessage.historyOwner",
+                "turn:run",
+                "rei.modelMessage.run",
+                "run",
+                "rei.modelMessage.role",
+                "assistant"));
+    var committed = store.appendProtocolHistory("chat", "run", pointers);
+    assertThat(committed)
+        .containsAllEntriesOf(
+            java.util.Map.of(
+                ConversationLogStore.PROTOCOL_VERSION,
+                "1",
+                ConversationLogStore.PROTOCOL_FIRST,
+                "2",
+                ConversationLogStore.PROTOCOL_LAST,
+                "3",
+                ConversationLogStore.PROTOCOL_COUNT,
+                "2",
+                "rei.modelMessage.run",
+                "run"));
+    store.append("chat", "assistant", "display answer");
+    var restarted = new ConversationLogStore(tempDir, Clock.systemUTC(), mapper);
+    assertThat(restarted.appendProtocolHistory("chat", "run", pointers))
+        .as("retry after restart reuses the exact committed protocol sequence range")
+        .isEqualTo(committed);
+    assertThat(restarted.readAll())
+        .extracting(ConversationLogEntry::content)
+        .containsExactly("display request", "display answer");
+    assertThat(restarted.readConversation("chat"))
+        .extracting(ConversationLogEntry::sequence)
+        .containsExactly(1L, 2L, 3L, 4L);
+    assertThat(
+            restarted.readConversation("chat").stream()
+                .filter(entry -> ConversationLogStore.PROTOCOL_SPEAKER.equals(entry.speaker()))
+                .toList())
+        .extracting(ConversationLogEntry::metadata)
+        .containsExactlyElementsOf(pointers);
+  }
+
+  @Test
   void pointerMetadataAndBlankProtocolMessageSurviveRestart() {
     var mapper = new ObjectMapper().registerModule(new JavaTimeModule());
     var metadata =

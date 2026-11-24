@@ -71,7 +71,7 @@ class WorkContextThinkingHttpTest {
               .build();
       var models = mock(LlmModelProvider.class);
       when(models.memoryChatModel()).thenReturn(OpenAiChatModel.builder().options(base).build());
-      when(models.chatOptions("memory", null)).thenReturn(base);
+      when(models.requestOptions("memory", null, false)).thenReturn(base);
       var properties =
           new WorkContextProperties(
               false, true, 1200, 12000, 240, 20, 4000, 16, "memory", 0, 60, 4096, thinking);

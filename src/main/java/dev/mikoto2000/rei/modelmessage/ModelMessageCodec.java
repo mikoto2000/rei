@@ -21,12 +21,41 @@ import org.springframework.ai.chat.messages.part.ToolCallPart;
 /** Versioned model-message serialization, independent of transport, storage and execution. */
 public final class ModelMessageCodec {
   public static final int MAX_BYTES = 8 * 1024 * 1024;
+
+  /** Whether the legacy text/call representation would lose model protocol information. */
+  public static boolean requiresPayload(Message message) {
+    if (message instanceof UserMessage user) return !user.getMedia().isEmpty();
+    if (!(message instanceof AssistantMessage assistant)) return false;
+    if (assistant.getMetadata().containsKey("rei.llm.replay-origin-owner")
+        || assistant.getMetadata().containsKey("rei.llm.replay-origin-endpoint")
+        || assistant.getMetadata().containsKey(ModelTokenUsage.METADATA_KEY)) return true;
+    return assistant.getParts().stream()
+        .anyMatch(part -> {
+          if (!part.attributes().isEmpty()) return true;
+          if (part instanceof TextPart text) return text.payload() != null;
+          if (part instanceof ToolCallPart call) return call.payload() != null;
+          return true;
+        });
+  }
+
   private static final Set<String> METADATA =
       Set.of(
           "rei.llm.replay-origin-owner",
           "rei.llm.replay-origin-endpoint",
           "rei.historySequence",
           "JdbcChatMemoryRepository_message_timestamp",
+          "rei.reviewGuidance",
+          "rei.progressFeedback",
+          "rei.resumeWorkReminder",
+          "rei.resumeContext",
+          "rei.knownFileInventory",
+          "rei.workingSet",
+          "rei.workContext",
+          "rei.longTermMemory",
+          "rei.legacyHistory",
+          "rei.outputLimitHandoff",
+          "rei.resumeRunId",
+          "rei.historyGeneration",
           "rei.reviewBudgetRecovery",
           "rei.fileBudgetRecovery",
           ModelTokenUsage.METADATA_KEY);
@@ -293,7 +322,10 @@ public final class ModelMessageCodec {
             number(value, "cached"),
             number(value, "reasoning"));
       }
-      case "rei.llm.replay-origin-owner", "rei.llm.replay-origin-endpoint" -> {
+      case "rei.llm.replay-origin-owner",
+          "rei.llm.replay-origin-endpoint",
+          "rei.resumeRunId",
+          "rei.historyGeneration" -> {
         if (!value.isTextual()) throw invalid();
         yield value.textValue();
       }
@@ -302,7 +334,18 @@ public final class ModelMessageCodec {
           throw invalid();
         yield value.longValue();
       }
-      case "rei.reviewBudgetRecovery", "rei.fileBudgetRecovery" -> {
+      case "rei.reviewBudgetRecovery",
+          "rei.fileBudgetRecovery",
+          "rei.reviewGuidance",
+          "rei.progressFeedback",
+          "rei.resumeWorkReminder",
+          "rei.resumeContext",
+          "rei.knownFileInventory",
+          "rei.workingSet",
+          "rei.workContext",
+          "rei.longTermMemory",
+          "rei.legacyHistory",
+          "rei.outputLimitHandoff" -> {
         if (!value.isBoolean()) throw invalid();
         yield value.booleanValue();
       }

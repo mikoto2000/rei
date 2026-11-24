@@ -10,6 +10,7 @@ package dev.mikoto2000.rei.llm;
  * @param replanCount 計画の見直し件数
  * @param maxReplansPerGoal 最大計画の見直し回数ごとの目標
  * @param remainingLlmCalls 残量言語モデル呼び出し回数
+ * @param outputTokenLimit accepted calling Run output limit; absent for legacy callers
  */
 public record OutputLimitReplanRequest(
     String originalUserRequest,
@@ -18,4 +19,31 @@ public record OutputLimitReplanRequest(
     String partialOutput,
     int replanCount,
     int maxReplansPerGoal,
-    int remainingLlmCalls) {}
+    int remainingLlmCalls,
+    @com.fasterxml.jackson.annotation.JsonInclude(
+            com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        Integer outputTokenLimit) {
+  public OutputLimitReplanRequest(
+      String originalUserRequest,
+      String currentGoal,
+      String progressSoFar,
+      String partialOutput,
+      int replanCount,
+      int maxReplansPerGoal,
+      int remainingLlmCalls) {
+    this(
+        originalUserRequest,
+        currentGoal,
+        progressSoFar,
+        partialOutput,
+        replanCount,
+        maxReplansPerGoal,
+        remainingLlmCalls,
+        null);
+  }
+
+  public OutputLimitReplanRequest {
+    if (outputTokenLimit != null && outputTokenLimit < 1)
+      throw new IllegalArgumentException("Invalid accepted output token limit");
+  }
+}

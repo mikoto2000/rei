@@ -61,7 +61,7 @@ class ChatExecutionInterventionTest {
     when(clients.parallelChatClient(AgentRunContext.Mode.CONVERSATION))
         .thenReturn(ChatClient.builder(model).build());
     var models = mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
-    when(models.chatOptions(anyString(), any(), eq(true)))
+    when(models.requestOptions(anyString(), any(), eq(true), any()))
         .thenReturn(
             org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build());
     var holder = mock(ModelHolderService.class);
@@ -124,7 +124,7 @@ class ChatExecutionInterventionTest {
     var clients = mock(dev.mikoto2000.rei.llm.LlmChatClientProvider.class);
     when(clients.parallelChatClient(mode)).thenReturn(ChatClient.builder(model).build());
     var models = mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
-    when(models.chatOptions(anyString(), any(), eq(true)))
+    when(models.requestOptions(anyString(), any(), eq(true), any()))
         .thenReturn(
             org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build());
     var holder = mock(ModelHolderService.class);
@@ -409,5 +409,57 @@ class ChatExecutionInterventionTest {
                     && messages.getFirst() instanceof UserMessage
                     && messages.getFirst().getText().equals("keep README")));
     assertThat(queue.offer("after completion")).isFalse();
+  }
+
+  @Test
+  void acceptedModelRemainsStableAcrossInterventionsAndNextRunUsesNewSelection() {
+    var selection = new java.util.concurrent.atomic.AtomicReference<>("accepted-model");
+    var queue = new UserInterventionQueue();
+    var sentModels = new ArrayList<String>();
+    ChatModel model =
+        new ChatModel() {
+          public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
+            return org.springframework.ai.openai.OpenAiChatOptions.builder()
+                .model("default-model")
+                .build();
+          }
+
+          public ChatResponse call(Prompt prompt) {
+            throw new UnsupportedOperationException();
+          }
+
+          public Flux<ChatResponse> stream(Prompt prompt) {
+            sentModels.add(prompt.getOptions().getModel());
+            if (sentModels.size() == 1) {
+              selection.set("next-model");
+              queue.offer("continue the accepted task");
+            }
+            return Flux.just(
+                new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
+          }
+        };
+    var holder = mock(ModelHolderService.class);
+    when(holder.get()).thenAnswer(ignored -> selection.get());
+    var service =
+        new ChatExecutionService(
+            ChatClient.builder(model).build(),
+            holder,
+            new CommandCancellationService(),
+            Optional.empty());
+    assertThat(
+            service
+                .execute(
+                    new AgentRunContext("first-run", "chat:main", Path.of(".")), "start", queue)
+                .success())
+        .isTrue();
+    assertThat(
+            service
+                .execute(
+                    new AgentRunContext("next-run", "chat:main", Path.of(".")),
+                    "next",
+                    new UserInterventionQueue())
+                .success())
+        .isTrue();
+    assertThat(sentModels).containsExactly("accepted-model", "accepted-model", "next-model");
   }
 }

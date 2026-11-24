@@ -207,7 +207,7 @@ class WorkContextServiceTest {
     var models = mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
     var model = mock(org.springframework.ai.chat.model.ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions("memory", null))
+    when(models.requestOptions("memory", null, false))
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     when(model.stream(

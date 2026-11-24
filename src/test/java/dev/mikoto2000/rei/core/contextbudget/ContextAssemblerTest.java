@@ -23,6 +23,70 @@ import org.springframework.ai.chat.prompt.Prompt;
 /** 文脈文脈の組み立ての結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ContextAssemblerTest {
+  @Test
+  void hardLimitNeverDiscardsAnIncompleteMultiCallAndItsSuccessfulPrefix() {
+    var call =
+        AssistantMessage.builder()
+            .content("")
+            .toolCalls(
+                List.of(
+                    new AssistantMessage.ToolCall("one", "function", "readFile", "x".repeat(3000)),
+                    new AssistantMessage.ToolCall("two", "function", "readFile", "{}")))
+            .build();
+    var prefix =
+        ToolResponseMessage.builder()
+            .responses(
+                List.of(
+                    new ToolResponseMessage.ToolResponse("one", "readFile", "saved first result")))
+            .build();
+    var raw =
+        new Prompt(
+            List.of(
+                new SystemMessage("policy"),
+                new UserMessage("current"),
+                call,
+                prefix,
+                new AssistantMessage("later commentary")));
+    var assembler =
+        assembler((previous, messages, budget, request) -> {
+          throw new AssertionError("incomplete transaction must not be summarized");
+        });
+    assertThatThrownBy(() -> assembler.assemble(raw, "chat", "run", () -> {}))
+        .hasMessageContaining("CONTEXT_HARD_LIMIT");
+    assertThat(raw.getInstructions())
+        .containsExactly(
+            new SystemMessage("policy"),
+            new UserMessage("current"),
+            call,
+            prefix,
+            new AssistantMessage("later commentary"));
+  }
+
+  @Test
+  void oversizedCompletedHistoricalUnitIsSummarizedWithItsResponse() {
+    var seen = new ArrayList<Message>();
+    var assembler =
+        assembler((previous, messages, budget, request) -> {
+          seen.addAll(messages);
+          return "compact complete history";
+        });
+    var oldUser = ContextHistoryAdvisor.historical(new UserMessage("old request ".repeat(500)), 1);
+    var oldAnswer = ContextHistoryAdvisor.historical(new AssistantMessage("completed answer"), 2);
+    var result =
+        assembler.assemble(
+            new Prompt(
+                List.of(
+                    new SystemMessage("policy"), oldUser, oldAnswer, new UserMessage("current"))),
+            "chat",
+            "run",
+            () -> {});
+    assertThat(seen).containsExactly(oldUser, oldAnswer);
+    assertThat(result.getContents())
+        .contains("compact complete history", "current")
+        .doesNotContain("completed answer");
+    assertThat(new ConversationSummaryRepository(dir).read("chat").throughSequence()).isEqualTo(2);
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void oversizedDraftRepairCommitsOnlyTheCompleteToolExchange(boolean failLater) {
@@ -179,6 +243,7 @@ class ContextAssemblerTest {
   @Test
   void largeContextWindowStillSummarizesBoundedPrefixesAndKeepsUncoveredHistory() {
     var properties = config();
+    properties.setThreshold(400);
     properties.setSummaryInputTokens(1024);
     properties.setModelContextLimit(850000);
     properties.setHardLimit(800000);
@@ -203,15 +268,19 @@ class ContextAssemblerTest {
             null);
     var history = new ArrayList<Message>();
     history.add(new SystemMessage("system"));
-    for (int n = 1; n <= 12; n++)
+    for (int n = 1; n <= 12; n++) {
       history.add(
-          ContextHistoryAdvisor.historical(new UserMessage("item" + n + "x".repeat(1000)), n));
+          ContextHistoryAdvisor.historical(
+              new UserMessage("item" + n + "x".repeat(1000)), n * 2L - 1));
+      history.add(
+          ContextHistoryAdvisor.historical(new AssistantMessage("completed answer " + n), n * 2L));
+    }
     history.add(new UserMessage("current"));
     var raw = new Prompt(history);
     for (int n = 0; n < 12; n++) assembler.assemble(raw, "conversation", "run", () -> {});
     assertThat(covered).hasSizeGreaterThan(2).doesNotHaveDuplicates();
-    assertThat(saved.read("conversation").throughSequence()).isBetween(1L, 11L);
-    assertThat(raw.getInstructions()).hasSize(14);
+    assertThat(saved.read("conversation").throughSequence()).isBetween(2L, 22L);
+    assertThat(raw.getInstructions()).hasSize(26);
   }
 
   @ParameterizedTest
@@ -616,11 +685,13 @@ class ContextAssemblerTest {
         assembler(
                 (previous, messages, budget, request) -> {
                   calls.incrementAndGet();
+                  assertThat(messages).containsExactlyElementsOf(p.getInstructions().subList(1, 3));
                   return "decided API X";
                 })
             .assemble(p, "conversation", "run", () -> {});
     assertThat(result.getContents())
-        .contains("decided API X", "recent", "current request and Working Set")
+        .contains("decided API X", "current request and Working Set")
+        .doesNotContain("recent")
         .doesNotContain("old old old");
     assertThat(p.getContents()).contains("old old old");
     assembler(
@@ -631,7 +702,7 @@ class ContextAssemblerTest {
         .assemble(p, "conversation", "next", () -> {});
     assertThat(calls).hasValue(1);
     assertThat(new ConversationSummaryRepository(dir).read("conversation").throughSequence())
-        .isEqualTo(1);
+        .isEqualTo(2);
   }
 
   /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
@@ -695,7 +766,11 @@ class ContextAssemblerTest {
     expanded.add(3, ContextHistoryAdvisor.historical(new UserMessage("new ".repeat(500)), 3));
     expanded.add(4, ContextHistoryAdvisor.historical(new AssistantMessage("latest"), 4));
     var result = a.assemble(new Prompt(expanded), "conversation", "run", () -> {});
-    assertThat(result.getContents()).contains("first decision; second decision", "latest");
+    assertThat(result.getContents())
+        .contains("first decision; second decision")
+        .doesNotContain("latest");
+    assertThat(new ConversationSummaryRepository(dir).read("conversation").throughSequence())
+        .isEqualTo(4);
     assertThat(calls).hasValue(2);
   }
 

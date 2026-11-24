@@ -200,7 +200,7 @@ class LlmInterestTopicExtractorTest {
     var model = org.mockito.Mockito.mock(ChatModel.class);
     var provider = org.mockito.Mockito.mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
     when(provider.isolatedChatModel("interest-discovery")).thenReturn(model);
-    when(provider.chatOptions("interest-discovery", null))
+    when(provider.requestOptions("interest-discovery", null, false))
         .thenReturn(
             org.springframework.ai.openai.OpenAiChatOptions.builder()
                 .extraBody(java.util.Map.of("tools", "unbounded definitions"))
@@ -226,7 +226,7 @@ class LlmInterestTopicExtractorTest {
       ChatModel model, InterestProperties properties) {
     var provider = org.mockito.Mockito.mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
     when(provider.isolatedChatModel("interest-discovery")).thenReturn(model);
-    when(provider.chatOptions("interest-discovery", null))
+    when(provider.requestOptions("interest-discovery", null, false))
         .thenReturn(
             org.springframework.ai.openai.OpenAiChatOptions.builder().maxTokens(16384).build());
     return new LlmInterestTopicExtractor(

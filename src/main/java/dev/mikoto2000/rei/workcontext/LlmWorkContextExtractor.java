@@ -16,7 +16,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.stereotype.Service;
 
 /**
@@ -29,7 +29,7 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
   /** モデル一覧。 */
   private final Supplier<ChatModel> modelForCalls;
 
-  private final Supplier<OpenAiChatOptions> optionsForCalls;
+  private final Supplier<ToolCallingChatOptions> optionsForCalls;
 
   /** この機能の動作設定。 */
   private final WorkContextProperties properties;
@@ -45,7 +45,7 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
             "memory".equals(properties.modelFeature())
                 ? models.memoryChatModel()
                 : models.isolatedChatModel(properties.modelFeature());
-    this.optionsForCalls = () -> models.chatOptions(properties.modelFeature(), null);
+    this.optionsForCalls = () -> models.requestOptions(properties.modelFeature(), null, false);
     this.properties = properties;
   }
 
@@ -114,38 +114,12 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
     var model = modelForCalls.get();
     ToolLoopSupport.requireNoDefaultTools(model);
     var baseOptions = optionsForCalls.get();
-    var optionsBuilder = baseOptions.mutate();
-    Integer completionLimit = baseOptions.getMaxCompletionTokens();
-    Integer tokenLimit = baseOptions.getMaxTokens();
-    if (completionLimit != null)
-      optionsBuilder.maxCompletionTokens(Math.min(completionLimit, properties.maxOutputTokens()));
-    else
-      optionsBuilder.maxTokens(
-          tokenLimit == null
-              ? properties.maxOutputTokens()
-              : Math.min(tokenLimit, properties.maxOutputTokens()));
-    optionsBuilder.toolCallbacks(List.of());
-    optionsBuilder.toolChoice("none");
-    if (properties.enableThinking() != null) {
-      // Request-local override: do not change the shared memory/chat model or its defaults.
-      var extra = new java.util.LinkedHashMap<String, Object>();
-      if (baseOptions.getExtraBody() != null) extra.putAll(baseOptions.getExtraBody());
-      var template = new java.util.LinkedHashMap<String, Object>();
-      var configured = extra.get("chat_template_kwargs");
-      if (configured != null) {
-        if (!(configured instanceof Map<?, ?> values))
-          throw new IllegalArgumentException("chat_template_kwargs must be an object");
-        values.forEach((key, value) -> {
-          if (!(key instanceof String name))
-            throw new IllegalArgumentException("chat_template_kwargs keys must be strings");
-          template.put(name, value);
-        });
-      }
-      template.put("enable_thinking", properties.enableThinking());
-      extra.put("chat_template_kwargs", template);
-      optionsBuilder.extraBody(extra);
-    }
-    var options = optionsBuilder.build();
+    var options =
+        dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(
+            dev.mikoto2000.rei.modeloptions.ModelOptions.capOutputLimit(
+                dev.mikoto2000.rei.modeloptions.ModelOptions.withLocalThinking(
+                    baseOptions, properties.enableThinking()),
+                properties.maxOutputTokens()));
     ToolLoopSupport.requireNoRawTools(options);
     var result = new StringBuilder();
     boolean acquired = false;

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore;
 import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,17 +38,43 @@ public class ApprovalContinuationStore {
    * @param calls 呼び出し回数
    * @param responses 応答一覧
    * @param delivery 登録済みツール結果の配信情報（旧形式では未指定）
+   * @param payload 完全なモデルメッセージへの検証済み参照（旧形式では未指定）
    */
   public record StoredMessage(
       String kind,
       String text,
       List<AssistantMessage.ToolCall> calls,
       List<ToolResponseMessage.ToolResponse> responses,
-      ToolResultMetadata delivery) {
+      ToolResultMetadata delivery,
+      ModelMessagePayloadStore.Ref payload,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          Long historySequence) {
     /** 保存後に外部から呼び出しや応答の一覧を変更できないようにする。 */
     public StoredMessage {
       calls = calls == null ? List.of() : List.copyOf(calls);
       responses = responses == null ? List.of() : List.copyOf(responses);
+      if (historySequence != null && historySequence < 0)
+        throw new IllegalArgumentException("Invalid history projection");
+    }
+
+    public StoredMessage(
+        String kind,
+        String text,
+        List<AssistantMessage.ToolCall> calls,
+        List<ToolResponseMessage.ToolResponse> responses,
+        ToolResultMetadata delivery,
+        ModelMessagePayloadStore.Ref payload) {
+      this(kind, text, calls, responses, delivery, payload, null);
+    }
+
+    public StoredMessage(
+        String kind,
+        String text,
+        List<AssistantMessage.ToolCall> calls,
+        List<ToolResponseMessage.ToolResponse> responses,
+        ToolResultMetadata delivery) {
+      this(kind, text, calls, responses, delivery, null);
     }
 
     /** 配信属性を持たないメッセージと旧形式の呼び出しを受け付ける。 */
@@ -76,9 +103,22 @@ public class ApprovalContinuationStore {
       List<StoredMessage> history,
       RunContinuation.PendingTools pending,
       OutputLimitRunBudget.Snapshot budget,
-      boolean managedParent) {
+      boolean managedParent,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          ModelMessagePayloadStore.History protocolHistory) {
     public Document {
       history = history == null ? null : Collections.unmodifiableList(new ArrayList<>(history));
+    }
+
+    public Document(
+        AgentRunContext owner,
+        String request,
+        List<StoredMessage> history,
+        RunContinuation.PendingTools pending,
+        OutputLimitRunBudget.Snapshot budget,
+        boolean managedParent) {
+      this(owner, request, history, pending, budget, managedParent, null);
     }
   }
 
@@ -98,18 +138,35 @@ public class ApprovalContinuationStore {
   /** データベースへのアクセス。 */
   private final JdbcClient db;
 
+  private final org.springframework.util.function.SingletonSupplier<ModelMessagePayloadStore>
+      payloads;
+
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
 
   /** 指定された値や利用先を使って、ApprovalContinuationStoreを初期化する。 */
   public ApprovalContinuationStore(@Qualifier("memoryConsolidationDataSource") DataSource source) {
     db = JdbcClient.create(source);
+    payloads =
+        org.springframework.util.function.SingletonSupplier.of(
+            () -> new ModelMessagePayloadStore(source));
     db.sql(
             "CREATE TABLE IF NOT EXISTS approval_continuations(approval TEXT PRIMARY KEY,run TEXT NOT NULL,state TEXT NOT NULL,document TEXT NOT NULL,pid INTEGER NOT NULL DEFAULT 0,started TEXT)")
         .update();
     db.sql(
             "CREATE INDEX IF NOT EXISTS approval_continuations_run ON approval_continuations(run,state)")
         .update();
+  }
+
+  public void save(
+      String id,
+      AgentRunContext owner,
+      String request,
+      List<Message> history,
+      RunContinuation.PendingTools pending,
+      OutputLimitRunBudget.Snapshot budget,
+      boolean managed) {
+    save(id, owner, request, history, pending, budget, managed, null);
   }
 
   /** 後から参照できるよう、指定された情報を保存する。 */
@@ -120,15 +177,91 @@ public class ApprovalContinuationStore {
       List<Message> history,
       RunContinuation.PendingTools pending,
       OutputLimitRunBudget.Snapshot budget,
-      boolean managed) {
+      boolean managed,
+      ModelMessagePayloadStore.History protocolHistory) {
     if (pending == null
         || pending.calls().isEmpty()
         || pending.completed().size() >= pending.calls().size())
       throw new IllegalArgumentException("Pending Tool required");
+    if (pending.calls().size() > 32
+        || history.stream()
+                .filter(message -> !(message instanceof SystemMessage))
+                .limit(257)
+                .count()
+            > 256) throw new IllegalArgumentException("Approval continuation capacity exceeded");
+    if (pending.assistantReference() != null) {
+      var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
+      payloads
+          .obtain()
+          .publish(
+              scope,
+              pending.assistantReference(),
+              ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+              id);
+    }
+    if (pending.completedReference() != null) {
+      payloads
+          .obtain()
+          .publish(
+              ModelMessagePayloadStore.Scope.forOwner(owner),
+              pending.completedReference(),
+              ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+              id);
+    }
+    if (protocolHistory != null) {
+      var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
+      if (!owner.runId().equals(protocolHistory.run())
+          || !new ModelMessagePayloadStore.Exchange(
+                  payloads.obtain(), scope, owner.runId(), "approval")
+              .ownerKey()
+              .equals(protocolHistory.origin().owner())
+          || pending.assistantReference() == null)
+        throw new IllegalStateException("Native continuation ownership mismatch");
+      protocolHistory
+          .origin()
+          .requireMatch(
+              payloads
+                  .obtain()
+                  .load(
+                      scope,
+                      pending.assistantReference(),
+                      ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                      id));
+      payloads.obtain().protectContinuation(scope, protocolHistory, id);
+    }
+    var messageIndex = new java.util.concurrent.atomic.AtomicInteger();
     var messages =
         history.stream()
             .filter(m -> !(m instanceof SystemMessage))
             .map(m -> {
+              int index = messageIndex.getAndIncrement();
+              if (dev.mikoto2000.rei.modelmessage.ModelMessageCodec.requiresPayload(m)) {
+                Object position = m.getMetadata().get("rei.historySequence");
+                Long sequence = null;
+                if (position instanceof Long value) sequence = value;
+                else if (position instanceof Integer value) sequence = value.longValue();
+                else if (position != null)
+                  throw new IllegalStateException("Invalid history projection");
+                if (sequence != null && sequence < 0)
+                  throw new IllegalStateException("Invalid history projection");
+                var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
+                var ref =
+                    payloads
+                        .obtain()
+                        .saveForContinuation(
+                            scope, owner.runId(), "approval:" + id + "/history:" + index, m);
+                payloads
+                    .obtain()
+                    .publish(scope, ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, id);
+                return new StoredMessage(
+                    "MODEL_" + m.getMessageType().name(),
+                    "",
+                    List.of(),
+                    List.of(),
+                    null,
+                    ref,
+                    sequence);
+              }
               if (m instanceof AssistantMessage a)
                 return new StoredMessage(
                     "ASSISTANT", Objects.toString(a.getText(), ""), a.getToolCalls(), List.of());
@@ -140,7 +273,22 @@ public class ApprovalContinuationStore {
               throw new IllegalArgumentException("Unsupported continuation message");
             })
             .toList();
-    String encoded = encode(new Document(owner, request, messages, pending, budget, managed));
+    var storedPending =
+        pending.completedReference() == null
+            ? pending
+            : new RunContinuation.PendingTools(
+                pending.text(),
+                pending.calls(),
+                List.of(),
+                pending.argumentCorrections(),
+                pending.schemaVersion(),
+                pending.assistantReference(),
+                pending.completedCount(),
+                pending.completedReference());
+    String encoded =
+        encode(
+            new Document(
+                owner, request, messages, storedPending, budget, managed, protocolHistory));
     if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576
         || messages.size() > 256
         || pending.calls().size() > 32)
@@ -209,35 +357,147 @@ public class ApprovalContinuationStore {
     try {
       return json.readValue(entry.document(), Document.class);
     } catch (java.io.IOException error) {
-      throw new IllegalStateException("Invalid approval continuation", error);
+      throw new IllegalStateException("Invalid approval continuation");
     }
   }
 
   /** ツール利用の権限制御で用いる保存済みを返す。 */
   public RunContinuation.Saved saved(Entry entry) {
     var d = document(entry);
-    return new RunContinuation.Saved(
-        d.request(),
+    var pending = d.pending();
+    Message pendingMessage = null;
+    if (d.pending() != null && d.pending().assistantReference() != null)
+      pendingMessage =
+          payloads
+              .obtain()
+              .load(
+                  ModelMessagePayloadStore.Scope.forOwner(d.owner()),
+                  d.pending().assistantReference(),
+                  ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                  entry.approvalId());
+    if (pending != null && pending.completedReference() != null) {
+      var saved =
+          payloads
+              .obtain()
+              .load(
+                  ModelMessagePayloadStore.Scope.forOwner(d.owner()),
+                  pending.completedReference(),
+                  ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                  entry.approvalId());
+      if (!(saved instanceof ToolResponseMessage tool)
+          || tool.getResponses().size() != pending.completedCount())
+        throw new IllegalStateException("Invalid completed model message reference");
+      pending =
+          new RunContinuation.PendingTools(
+              pending.text(),
+              pending.calls(),
+              tool.getResponses(),
+              pending.argumentCorrections(),
+              pending.assistantReference(),
+              pending.completedReference());
+    }
+    var messages =
         d.history().stream()
-            .map(m ->
-                (Message)
-                    switch (m.kind()) {
-                      case "USER" -> new UserMessage(m.text());
-                      case "ASSISTANT" ->
-                          AssistantMessage.builder().content(m.text()).toolCalls(m.calls()).build();
-                      case "TOOL" ->
-                          ToolResponseMessage.builder()
-                              .responses(m.responses())
-                              .metadata(
-                                  m.delivery() == null
-                                      ? java.util.Map.of()
-                                      : m.delivery().restore())
-                              .build();
-                      default -> throw new IllegalStateException("Invalid continuation message");
-                    })
-            .toList(),
-        d.budget(),
-        d.pending());
+            .map(m -> {
+              if (m.payload() != null) {
+                var message =
+                    payloads
+                        .obtain()
+                        .load(
+                            ModelMessagePayloadStore.Scope.forOwner(d.owner()),
+                            m.payload(),
+                            ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                            entry.approvalId());
+                if (!("MODEL_" + message.getMessageType().name()).equals(m.kind()))
+                  throw new IllegalStateException("Model message persistence rejected");
+                if (m.historySequence() == null) return message;
+                var metadata = new java.util.HashMap<>(message.getMetadata());
+                metadata.put("rei.historySequence", m.historySequence());
+                if (message instanceof AssistantMessage assistant)
+                  return (Message)
+                      AssistantMessage.builder()
+                          .parts(assistant.getParts())
+                          .properties(metadata)
+                          .build();
+                if (message instanceof UserMessage user)
+                  return (Message)
+                      UserMessage.builder()
+                          .text(user.getText())
+                          .media(user.getMedia())
+                          .metadata(metadata)
+                          .build();
+                throw new IllegalStateException("Invalid history projection");
+              }
+              return (Message)
+                  switch (m.kind()) {
+                    case "USER" -> new UserMessage(m.text());
+                    case "ASSISTANT" ->
+                        AssistantMessage.builder().content(m.text()).toolCalls(m.calls()).build();
+                    case "TOOL" ->
+                        ToolResponseMessage.builder()
+                            .responses(m.responses())
+                            .metadata(
+                                m.delivery() == null ? java.util.Map.of() : m.delivery().restore())
+                            .build();
+                    default -> throw new IllegalStateException("Invalid continuation message");
+                  };
+            })
+            .toList();
+    if (d.protocolHistory() != null && d.protocolHistory().input() != null) {
+      var scope = ModelMessagePayloadStore.Scope.forOwner(d.owner());
+      messages =
+          d.protocolHistory().input().entries().stream()
+              .map(pointer ->
+                  payloads
+                      .obtain()
+                      .loadEntry(
+                          scope,
+                          pointer,
+                          ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                          entry.approvalId()))
+              .toList();
+    }
+    List<ModelMessagePayloadStore.ReplayReference> references = null;
+    if (d.protocolHistory() != null
+        || backendNative(pendingMessage)
+        || messages.stream().anyMatch(ApprovalContinuationStore::backendNative)) {
+      var nativeReferences = new ArrayList<ModelMessagePayloadStore.ReplayReference>();
+      for (var message : d.history())
+        if (message.payload() != null)
+          nativeReferences.add(
+              new ModelMessagePayloadStore.ReplayReference(
+                  message.payload(),
+                  ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                  entry.approvalId()));
+      if (pending != null && pending.assistantReference() != null)
+        nativeReferences.add(
+            new ModelMessagePayloadStore.ReplayReference(
+                pending.assistantReference(),
+                ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                entry.approvalId()));
+      if (pending != null && pending.completedReference() != null)
+        nativeReferences.add(
+            new ModelMessagePayloadStore.ReplayReference(
+                pending.completedReference(),
+                ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                entry.approvalId()));
+      if (d.protocolHistory() != null)
+        for (var trace : d.protocolHistory().protectedEntries())
+          nativeReferences.add(
+              new ModelMessagePayloadStore.ReplayReference(
+                  trace.reference(),
+                  ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                  entry.approvalId()));
+      references = nativeReferences.stream().distinct().toList();
+    }
+    return new RunContinuation.Saved(
+        d.request(), messages, d.budget(), pending, references, d.protocolHistory());
+  }
+
+  private static boolean backendNative(Message message) {
+    return message instanceof AssistantMessage
+        && message.getMetadata().get("rei.llm.replay-origin-owner") instanceof String owner
+        && owner.matches("[0-9a-fA-F]{64}");
   }
 
   /** ツール利用の権限制御において、実行待ちに該当するか判定する。 */
@@ -282,6 +542,42 @@ public class ApprovalContinuationStore {
       if (entry.runId().equals(owner.runId()) && !entry.state().equals("RESUMING")) {
         var d = document(entry);
         var messages = new ArrayList<>(d.history());
+        var history = d.protocolHistory();
+        if (history != null && history.input() != null) {
+          if (history.entries().size() + guidance.size() > 256
+              || history.input().entries().size() + guidance.size() > 256)
+            throw new IllegalArgumentException("Approval guidance capacity exceeded");
+          if (guidance.stream().anyMatch(message -> !(message instanceof UserMessage)))
+            throw new IllegalArgumentException("Human guidance required");
+          var ownEntries = new ArrayList<>(history.entries());
+          var inputEntries = new ArrayList<>(history.input().entries());
+          var scope = ModelMessagePayloadStore.Scope.forOwner(d.owner());
+          var store = payloads.obtain();
+          for (var message : guidance) {
+            var key = "guidance/" + java.util.UUID.randomUUID() + "/USER";
+            var reference = store.save(scope, d.owner().runId(), key, message);
+            store.publish(
+                scope, reference, ModelMessagePayloadStore.ReferenceKind.RUN, d.owner().runId());
+            store.publish(
+                scope,
+                reference,
+                ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                entry.approvalId());
+            var pointer = new ModelMessagePayloadStore.History.Entry(key, reference);
+            ownEntries.add(pointer);
+            inputEntries.add(pointer);
+          }
+          history =
+              new ModelMessagePayloadStore.History(
+                  history.schemaVersion(),
+                  history.run(),
+                  history.origin(),
+                  ownEntries,
+                  new ModelMessagePayloadStore.History.Input(
+                      inputEntries,
+                      history.input().traceSize(),
+                      history.input().preparationFingerprint()));
+        }
         for (var message : guidance) {
           if (!(message instanceof UserMessage))
             throw new IllegalArgumentException("Human guidance required");
@@ -290,9 +586,16 @@ public class ApprovalContinuationStore {
         String encoded =
             encode(
                 new Document(
-                    d.owner(), d.request(), messages, d.pending(), d.budget(), d.managedParent()));
+                    d.owner(),
+                    d.request(),
+                    messages,
+                    d.pending(),
+                    d.budget(),
+                    d.managedParent(),
+                    history));
         // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-        if (encoded.length() > 1048576 || messages.size() > 256)
+        if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576
+            || messages.size() > 256)
           throw new IllegalArgumentException("Approval guidance capacity exceeded");
         db.sql("UPDATE approval_continuations SET document=? WHERE approval=? AND state=?")
             .params(encoded, entry.approvalId(), entry.state())
@@ -316,7 +619,7 @@ public class ApprovalContinuationStore {
     try {
       return json.writeValueAsString(d);
     } catch (java.io.IOException error) {
-      throw new IllegalStateException("Cannot save approval continuation", error);
+      throw new IllegalStateException("Cannot save approval continuation");
     }
   }
 }

@@ -49,7 +49,7 @@ class LlmMemoryProcessorOptionsTest {
             .toolChoice("required")
             .build();
     when(provider.memoryChatModel()).thenReturn(model);
-    when(provider.chatOptions(LlmFeature.MEMORY, null)).thenReturn(configured);
+    when(provider.requestOptions(LlmFeature.MEMORY, null, false)).thenReturn(configured);
     when(model.stream(any(Prompt.class)))
         .thenReturn(
             Flux.just(
@@ -78,7 +78,7 @@ class LlmMemoryProcessorOptionsTest {
     var provider = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(provider.memoryChatModel()).thenReturn(model);
-    when(provider.chatOptions(LlmFeature.MEMORY, null))
+    when(provider.requestOptions(LlmFeature.MEMORY, null, false))
         .thenReturn(
             OpenAiChatOptions.builder()
                 .extraBody(Map.of("tools", List.of(Map.of("type", "function"))))

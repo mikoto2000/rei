@@ -58,6 +58,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
 
   private final ResolvedLlmEndpoint endpoint;
   private final OpenAiResponsesChatModel delegate;
+  private final com.openai.client.OpenAIClient syncClient;
+  private final com.openai.client.OpenAIClientAsync asyncClient;
   private static final ObjectMapper JSON =
       new ObjectMapper(
               JsonFactory.builder()
@@ -88,18 +90,36 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
           "Responses SDK retries must stay zero at client construction");
     options = options.mutate().timeout(endpoint.readTimeout()).build();
     var transportCustomizers = new ArrayList<OpenAiHttpClientBuilderCustomizer>();
-    transportCustomizers.addAll(customizers);
     transportCustomizers.add(builder ->
-        builder
-            .interceptor(chain -> {
-              var request = chain.request();
-              var body = request.body();
-              if (body != null)
-                request =
-                    request.newBuilder().method(request.method(), nonReplayable(body)).build();
-              return chain.proceed(request);
-            })
-            .interceptor(new ChatStreamTimeoutInterceptor(endpoint.readTimeout())));
+        builder.interceptor(chain ->
+            chain.proceed(
+                chain
+                    .request()
+                    .newBuilder()
+                    .tag(
+                        RequestReadTimeout.class, new RequestReadTimeout(chain.readTimeoutMillis()))
+                    .build())));
+    transportCustomizers.addAll(customizers);
+    transportCustomizers.add(builder -> {
+      builder
+          .interceptor(chain -> {
+            var request = chain.request();
+            var body = request.body();
+            if (body != null)
+              request = request.newBuilder().method(request.method(), nonReplayable(body)).build();
+            return chain.proceed(request);
+          })
+          .interceptor(chain -> {
+            var requested = chain.request().tag(RequestReadTimeout.class);
+            long bound = endpoint.readTimeout().toMillis();
+            long millis =
+                requested == null || requested.millis() == 0
+                    ? bound
+                    : Math.min(bound, requested.millis());
+            return new ChatStreamTimeoutInterceptor(java.time.Duration.ofMillis(millis))
+                .intercept(chain);
+          });
+    });
     var client =
         OpenAiSetup.setupAsyncClient(
             options.getBaseUrl(),
@@ -118,33 +138,37 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             ObservationRegistry.NOOP,
             null,
             transportCustomizers);
+    var syncClient =
+        ResponsesSdkBoundary.safe(
+            OpenAiSetup.setupSyncClient(
+                options.getBaseUrl(),
+                options.getApiKey(),
+                options.getCredential(),
+                options.getMicrosoftDeploymentName(),
+                options.getMicrosoftFoundryServiceVersion(),
+                options.getOrganizationId(),
+                options.isMicrosoftFoundry(),
+                false,
+                options.getModel(),
+                options.getTimeout(),
+                0,
+                options.getProxy(),
+                options.getCustomHeaders(),
+                ObservationRegistry.NOOP,
+                null,
+                transportCustomizers));
+    var asyncClient = ResponsesSdkBoundary.safe(client);
     var model =
         OpenAiResponsesChatModel.builder()
             .options(options)
-            .openAiClient(
-                ResponsesSdkBoundary.safe(
-                    OpenAiSetup.setupSyncClient(
-                        options.getBaseUrl(),
-                        options.getApiKey(),
-                        options.getCredential(),
-                        options.getMicrosoftDeploymentName(),
-                        options.getMicrosoftFoundryServiceVersion(),
-                        options.getOrganizationId(),
-                        options.isMicrosoftFoundry(),
-                        false,
-                        options.getModel(),
-                        options.getTimeout(),
-                        0,
-                        options.getProxy(),
-                        options.getCustomHeaders(),
-                        ObservationRegistry.NOOP,
-                        null,
-                        transportCustomizers)))
-            .openAiClientAsync(ResponsesSdkBoundary.safe(client))
+            .openAiClient(syncClient)
+            .openAiClientAsync(asyncClient)
             .httpClientBuilderCustomizers(transportCustomizers)
             .build();
-    return new ResponsesAdapter(endpoint, model);
+    return new ResponsesAdapter(endpoint, model, syncClient, asyncClient);
   }
+
+  private record RequestReadTimeout(int millis) {}
 
   private static okhttp3.RequestBody nonReplayable(okhttp3.RequestBody body) {
     return new okhttp3.RequestBody() {
@@ -175,11 +199,48 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     };
   }
 
-  private ResponsesAdapter(ResolvedLlmEndpoint endpoint, OpenAiResponsesChatModel delegate) {
+  private ResponsesAdapter(
+      ResolvedLlmEndpoint endpoint,
+      OpenAiResponsesChatModel delegate,
+      com.openai.client.OpenAIClient syncClient,
+      com.openai.client.OpenAIClientAsync asyncClient) {
     this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
     this.delegate = Objects.requireNonNull(delegate, "delegate");
+    this.syncClient = Objects.requireNonNull(syncClient, "syncClient");
+    this.asyncClient = Objects.requireNonNull(asyncClient, "asyncClient");
     if (endpoint.apiType() != LlmApiType.RESPONSES)
       throw new IllegalArgumentException("Responses endpoint required");
+  }
+
+  /** An explicit model shares the same resolved connection and SDK clients, never another API. */
+  ResponsesAdapter forModel(String model) {
+    if (model == null || model.equals(endpoint.model())) return this;
+    if (model.isBlank()) throw new IllegalArgumentException("Responses model is required");
+    var resolved =
+        new ResolvedLlmEndpoint(
+            endpoint.endpointId(),
+            endpoint.generation(),
+            endpoint.apiType(),
+            endpoint.baseUrl(),
+            endpoint.credentialRef(),
+            model,
+            endpoint.capabilities(),
+            endpoint.maxOutputTokens(),
+            endpoint.temperature(),
+            endpoint.readTimeout());
+    var options =
+        getOptions()
+            .mutate()
+            .model(model)
+            .toolContext(java.util.Map.of(ResolvedLlmEndpoint.CONTEXT_KEY, resolved))
+            .build();
+    var selected =
+        OpenAiResponsesChatModel.builder()
+            .options(options)
+            .openAiClient(syncClient)
+            .openAiClientAsync(asyncClient)
+            .build();
+    return new ResponsesAdapter(resolved, selected, syncClient, asyncClient);
   }
 
   @Override
@@ -210,6 +271,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     var options = supplied == null ? getOptions() : (OpenAiResponsesChatOptions) supplied;
     requireCapability(options.getVerbosity(), LlmCapabilities.Setting.TEXT_VERBOSITY, "verbosity");
     var defaults = delegate.getOptions();
+    var requestTimeout = options.getTimeout();
     if (!Objects.equals(defaults.getBaseUrl(), options.getBaseUrl())
         || !Objects.equals(defaults.getApiKey(), options.getApiKey())
         || !Objects.equals(defaults.getCredential(), options.getCredential())
@@ -219,7 +281,9 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             options.getMicrosoftFoundryServiceVersion())
         || defaults.isMicrosoftFoundry() != options.isMicrosoftFoundry()
         || !Objects.equals(defaults.getProxy(), options.getProxy())
-        || (options.getTimeout() != null && !endpoint.readTimeout().equals(options.getTimeout()))
+        || (requestTimeout != null
+            && (requestTimeout.compareTo(java.time.Duration.ofMillis(1)) < 0
+                || requestTimeout.compareTo(endpoint.readTimeout()) > 0))
         || !Objects.equals(defaults.getOrganizationId(), options.getOrganizationId())
         || !Objects.equals(defaults.getCustomHeaders(), options.getCustomHeaders()))
       throw new IllegalArgumentException("Responses connection differs from the bound endpoint");
@@ -354,7 +418,18 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     }
   }
 
+  private static void requireNoRefusal(ChatResponse response) {
+    for (var generation : response.getResults()) {
+      var refusal = generation.getMetadata().get(OpenAiResponsesMetadata.REFUSAL);
+      if (refusal instanceof String text && !text.isBlank())
+        throw new ResponsesTransportException(
+            ResponsesTransportException.Category.REFUSAL,
+            ResponsesTransportException.usage(response));
+    }
+  }
+
   private static void requireCompleted(ChatResponse response) {
+    requireNoRefusal(response);
     var metadata = response.getMetadata();
     var status = metadata.get(OpenAiResponsesMetadata.STATUS);
     if ("completed".equals(status)) return;
@@ -423,6 +498,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
               var chunks =
                   delegate.stream(request)
                       .doOnNext(response -> {
+                        requireNoRefusal(response);
                         if (response.getMetadata().containsKey(OpenAiResponsesMetadata.STATUS)) {
                           requireCompleted(response);
                           completed.set(true);

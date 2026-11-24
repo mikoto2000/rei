@@ -314,4 +314,43 @@ class BeginnerReviewServiceTest {
         () -> service.review(exhausted, request("--mode", "llm")));
     verify(model, never()).stream(any(org.springframework.ai.chat.prompt.Prompt.class));
   }
+
+  @Test
+  void nativeReviewUsesOneToolFreeRequestWithItsOwnReplayOwner() throws Exception {
+    Files.writeString(root.resolve("a.md"), "# Fixture\nA container is an isolated process.\n");
+    var models = mock(LlmModelProvider.class);
+    var model = mock(ChatModel.class);
+    var base =
+        org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+            .model("native-review")
+            .maxOutputTokens(73)
+            .build();
+    when(models.requestOptions("chat", null, false)).thenReturn(base);
+    when(models.subAgentChatModel()).thenReturn(model);
+    when(model.stream(any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenAnswer(inv -> {
+          var prompt = (org.springframework.ai.chat.prompt.Prompt) inv.getArgument(0);
+          var sent =
+              org.junit.jupiter.api.Assertions.assertInstanceOf(
+                  org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.class,
+                  prompt.getOptions());
+          assertEquals(73, sent.getMaxOutputTokens());
+          assertTrue(sent.getToolCallbacks().isEmpty());
+          assertTrue(
+              sent.getToolContext().get("rei.llm.replay-owner").toString().startsWith("feature:"));
+          return Flux.just(
+              new ChatResponse(
+                  List.of(
+                      new Generation(new AssistantMessage("{\"findings\":[],\"explained\":[]}")))));
+        });
+    new BeginnerReviewService(models, mock(ToolPermissionGuard.class))
+        .review(execution(), request("--mode", "llm"));
+    var captured =
+        org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
+    verify(model).stream(captured.capture());
+    org.junit.jupiter.api.Assertions.assertInstanceOf(
+        org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.class,
+        captured.getValue().getOptions());
+    assertTrue(base.getToolContext() == null || base.getToolContext().isEmpty());
+  }
 }

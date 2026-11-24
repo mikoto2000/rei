@@ -7,8 +7,8 @@
 | 0 | MERGED | codex/responses-api-phase-0-foundation / 削除済み | [#628](https://github.com/mikoto2000/rei/pull/628) | d0e3626f9565035cab20cc045dd3ba070985d3fe | PR・マージ後CI成功。全件7,718、成功7,706、skip12、failure/error0 |
 | 1 | MERGED | codex/responses-api-phase-1-transport / 削除済み | [#629](https://github.com/mikoto2000/rei/pull/629) | 10542db848d9317c7eaaab06869e63e7ab571d5b | 最終CI全件7,818、成功7,806、期待skip12、failure/error0。品質ゲート成功 |
 | 2 | MERGED | codex/responses-api-phase-2-openai-replay / 削除済み | [#630](https://github.com/mikoto2000/rei/pull/630) | a95593f48d0b4f760091d79eaf2cbc411e9a2f49 | PR・マージ後CI7,861件、成功7,849、期待skip12、failure/error0。関連859件・全品質ゲート成功 |
-| 3 | IN_PROGRESS | codex/responses-api-phase-3-message-persistence / .worktrees/responses-api-phase-3 | [#631](https://github.com/mikoto2000/rei/pull/631) | 未マージ | 最新関連570件、failure/error/skip0。Checkstyle/SpotBugs0、architecture・build成功。PR #631、最新headの全件CI・差分レビューを確認中 |
-| 4 | NOT_STARTED | — | — | — | 未実施 |
+| 3 | MERGED | codex/responses-api-phase-3-message-persistence / 削除済み | [#631](https://github.com/mikoto2000/rei/pull/631) | b22cf6646ae58a1efea325877562d7becd3aea51 | PR・マージ後CI7,960件、成功7,948、期待skip12、failure/error0。関連570件・全品質ゲート成功 |
+| 4 | IN_PROGRESS | codex/responses-api-phase-4-agent-integration / .worktrees/responses-api-phase-4 | 未作成 | 未マージ | 関連Maven1,065件・全architecture成功。修正後21件、再compile・Checkstyle/SpotBugs0件・Spotless成功。最新全回帰CI待ち |
 | 5 | NOT_STARTED | — | — | — | 未実施 |
 | 6 | NOT_STARTED | — | — | — | 未実施 |
 
@@ -284,8 +284,8 @@ Phase 3 の fixture は明示的な per-iteration Exchange と参照契約を検
 全クライアントへの Run/iteration identity の供給、承認・Checkpoint の full-parts 参照、操作台帳との再開照合、
 圧縮・終了・削除 lifecycle の参照解放は Phase 4 の有効化条件として残す。本番 Responses の生成は引き続き拒否する。
 
-Phase 3 の関連回帰・全品質ゲートは成功し、PR #631 を作成した。差分レビュー、最新 head の全 CI、通常 merge、merge 後 CI、
-専用 worktree の後片付けが未完了。これらを完了してから最新 main を基準に Phase 4 を開始する。
+Phase 3 は PR #631 の差分レビュー・修正後の全 CI・通常 merge・merge 後 CI が成功し、専用 worktree とブランチを削除した。
+PR head とマージコミットの tree 一致も確認。最新 main `b22cf664` を基準に Phase 4 を開始した。
 
 
 ### Phase 3 の PR 差分レビュー
@@ -294,9 +294,128 @@ PR #631 の全20ファイルを確認し、assistant call ID の重複・空白�
 ToolResponse と旧形式に加え、現行 assistant の encode/decode でも拒否する3件の Red を確認し、
 da74dfb6 → 7600c0cc で修正した。native/Codec 207件、修正後の関連568件と全品質ゲートが成功した。
 API固有処理・DB・ツール実行の分離、所有者/ハッシュ/参照の照合、旧完了会話、容量・GC、
-未検証Responsesの本番拒否を照合した。全件CI・通常merge・merge後確認・cleanupは引き続き未完了。
+未検証Responsesの本番拒否を照合した。最終全件CI・通常merge・merge後確認・cleanupも完了した。
 
 
 追加レビューで、同時刻の複数Turnからprotocol参照を選ぶ曖昧性と、同じ表示文の通知への誤付与を2件で再現した。
 4e4057ad → 4f6a18c6 で、参照を含む時刻の対応が複数なら停止し、通知を補完対象から除外した。
 関連108件、最新Maven関連570件と全品質ゲートが成功した。既存の参照を持たない旧履歴の順序は維持する。
+
+最終 PR CI は Java `45345004343`、静的解析 `45345004446`、クライアント `45345004146` が全成功。
+マージ後も Java `45346995855`、静的解析 `45346995780`、クライアント `45346995953` が全成功。
+Windows A 3,816件・B 4,144件、期待skip12、failure/error0。集約ゲートで分割・baseline・ID・期待skipを照合した。
+旧 head の停止不能な CI は通常 cancel 後も終了しなかったため公式 force-cancel を使用した。原因は未特定。
+最新 PR head とマージ後の実行は再試行なしで成功し、検証ゲートや制限時間は変更していない。
+
+## Phase 4: 長時間 Run・既存基盤への統合（全回帰検証中）
+
+### 実行と再開の境界
+
+Responses は既存の Run、ToolLoop、Stagnation、承認、Checkpoint、Context Compression を使う。
+API ごとの実行ループや別の操作台帳は追加していない。
+受け付けた native options と接続先を Run の入口で一度固定し、通常・読み取り専用・ツールなしの3モードへ渡す。
+子 Run は子自身の scope・接続先・再送権限を持ち、親の opaque payload や承認権限を継承しない。
+動的ツール公開の元要求 snapshot、公開上限、権限検査は引き続き既存基盤が所有する。
+
+HTTP 開始前に、元の UserMessage（画像を含む）と、advisors・圧縮を適用した実際の送信入力を参照保存する。
+保存対象は System/User/Assistant/Tool と、配信属性・履歴 sequence・元の protocol parts である。
+入力保存が失敗した場合は HTTP とツールを開始しない。応答保存が失敗した場合もツールを開始しない。
+保存前の失敗を、モデルの使用量不明として計上しない。
+
+承認は元の assistant 参照、成功済み結果 prefix、入力全体、予算を保存する。
+別 JVM で復元しても成功済み sibling を再実行せず、残る承認対象だけを既存の操作台帳・権限検査へ渡す。
+待機中の追加指示も保存・参照保護が成功してから受理通知する。
+入力容量は文字数ではなく UTF-8 バイト数で検査する。
+旧 schema の未完了承認を native な元応答へ捏造して移行しない。
+
+Checkpoint は元入力と自 Run 履歴の完全な参照集合を保護する。
+既存の resume routing を通る別 JVM 試験では、ツール結果の保存後に子 JVM を終了し、
+新しい Run で元 input・reasoning・call_id・結果を復元して最終回答まで到達する。
+成功済み操作は1回だけで、再開時の追加実行はない。
+接続先世代・ツール定義・基本システム指示を変更した3条件では、再開先 HTTP より前に拒否する。
+未完了の callback を含む Checkpoint は安全側で停止する。UNKNOWN な外部操作を自動再実行する仕組みは追加していない。
+
+再開の互換性はモデル、出力上限、推論設定、形式、公開ツール定義、基本システム指示の指紋で検査する。
+API キーや authorization header は実行ポリシーの指紋へ直接保存しない。
+時刻・作業状態など host 側の観測更新を、基本システム指示の変更と混同しない。
+Checkpoint の参照移管は、公開済みの旧 revision と同じ参照集合を検証して行う。
+RUN 参照を復活させて移管の証拠を捏造しない。
+
+### 完了履歴・圧縮・保持
+
+完了した native 会話は、元の protocol message への HISTORY 参照と、件数・範囲を持つ manifest で公開する。
+未完了・失敗・キャンセルの履歴は次の通常会話へ公開しない。
+別接続先・別 API の会話は、既存の表示テキストによる互換履歴とする。
+同じ接続先の履歴にも、scope と公開済み参照を検証した backend の再送権限が必要である。
+
+圧縮は完了した User/Assistant/全ツール結果の組を単位とし、現在の User や未完了 transaction を残す。
+全ページの要約・検証・cursor の保存が成功してから進める。失敗やキャンセルで cursor を進めない。
+暗号化データを解読して推定トークンへ変換しない。
+完了結果・履歴・継続記録の確定後に、その Run の RUN 参照だけを解放する。
+後片付けの DB 障害で、保存済みの成功結果を失敗へ変えない。
+FAILED/CANCELLED/UNKNOWN/承認待ちの参照は保守的に保持する。
+承認終端・要約済み履歴の参照整理、長期保持時の容量・GC 競合は Phase 6 の運用検証に含める。
+
+### 機能別クライアント
+
+API 固有の options 変換は ModelOptions に集約する。
+単発の補助要求には独立した feature owner を発行し、親の再送 grant・origin・exchange を持ち込まない。
+既存の Run 予算・キャンセル・使用量計上は維持する。
+
+| 経路 | native 向けの確認内容 |
+| --- | --- |
+| Agent Skills 選択 | メタデータによる選択、既存予算、独立 owner、選択時に指示本文を公開しない |
+| Work Context / Sleep / 文脈圧縮 | native options、機能側の出力上限、独立 owner、既存の使用量・期限管理 |
+| Planning / 出力上限回復 | 実 SDK の4要求で、主要求41・planner73・global2048を区別し、主要求の41を計画へ渡す |
+| 論文 / briefing / Bluesky 返信 | 独立した単発要求。返信履歴は表示テキストだけを記憶し、別要求の opaque parts を再送しない |
+| Activity 分類・時系列推定・日次要約・画面解析 | JSON Schema strict、native 出力上限、元画像、ツールなし。既存の CC completion 上限指定を維持 |
+| 作業習慣メッセージ / 関心抽出 | 評価済みデータ・入力上限・期限を維持し、native options と独立 owner を使う |
+| 音声補正 | native 出力上限、機能側5秒と接続期限の短い方、使用量不明時の予算拒否。独立した音声 API は変更なし |
+| 診断 / 教材レビュー | 既存 BoundedToolLoop と Run 予算、ツールなし、受け付けた設定の固定 |
+| Computer Use planner / grounding / verifier | 合成画像で native options と既存の拒否・検証を確認。ログ・診断には表示テキストだけを出す |
+
+Chat Completions 専用の local thinking template を Responses へ暗黙変換しない。
+UI-TARS の frequency penalty は Responses では明示的に拒否する。専用 CC 接続設定は維持する。
+SearchCommand の旧来のツール付き ChatClient 経路は CC 専用のままであり、Responses 対応済みとは表示しない。
+明示的に公開済みのツールを消して単発要求へ変える回避策は採用していない。
+
+### 検証と本番利用可否
+
+開発中の失敗テスト・修正は Red / Green の個別コミットに記録した。
+セットアップ・コンパイル・fixture の誤りは製品仕様の Red として数えない。
+関連 Maven snapshot 913件、architecture、Spotless、Checkstyle違反0、SpotBugs指摘/解析エラー0、package が成功した。
+その後の別 JVM Checkpoint 4条件、Activity 43件、分類15件、作業習慣4件、関心14件、
+音声4件、画面操作38件、診断・教材レビュー21件は隔離した開発テストで成功した。
+これらの件数は対象の重複を含むため合算しない。
+初回の全回帰 snapshot `d79cd6a66` は8,167件、成功8,128、failure16、error11、想定skip12で失敗した。
+失敗は関心抽出の新しい Core 依存1スイートと、要約の旧 mock 3スイートに限られた。
+生ツール検査を options 共通境界へ移し、mock を新しい requestOptions 入口へ合わせて修正した。
+予算・キャンセル・usage・元入力・HTTP の検証条件は緩めていない。
+
+追加検証で見つかった native 要約上限の引き上げも修正した。
+生成 reserve を加えた要求でも、受け付けた接続上限を超えない。
+CC の出力トークンのパラメーター種類と従来の指定は維持する。
+JSON Mode と共有 ResponseFormat の Schema は、実 SDK が `text.format` へ変換することを確認した。
+Refusal は Schema に一致する正常出力として扱わず、最初の SSE delta でも通常の受信側より前に停止する。
+終端で受信済みの数値 usage は保持し、終端前に止まった usage を推測して埋めない。
+既存の安全な外部読み取りエラー契約を使い、認証・一時障害・タイムアウト・Refusal など9分類を利用者向け診断へ渡す。
+拒否本文・SDK 本文・原因例外は診断に含めない。
+この区別は [OpenAI の Structured Outputs 仕様](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses) と、固定した Spring AI の公開 metadata の実装を根拠とする。
+
+これらは実ソースで失敗を再確認してから修正コミットへ進めた。
+修正後の関連445件がすべて成功した。
+修正後の127スイート・1,065件と全アーキテクチャ検査、jar/repackage、Spotless check が Maven で成功した。
+その実行は追加テストのワイルドカード import 12件で Checkstyle が失敗した。
+import だけを明示化し、診断の builder の型推論について SpotBugs が検出した1件も明示的な変数へ修正した。
+診断・教材レビュー21件を再確認し、全ソースの再コンパイル、Checkstyle違反0、SpotBugs指摘0・解析エラー0、Spotless check が成功した。
+検査の除外・抑制・基準値変更は行っていない。
+最新 head の全回帰は PR の CI で確認し、その成功前にマージしない。
+以前の全回帰8,113件で見つかった Activity の不要な DI 呼び出しも修正済みで、今回の全回帰では成功している。
+古い失敗 run を成功扱いしない。
+
+実 SDK の loopback fixture と永続化 DB による契約検証であり、実 OpenAI の暗号検証や推論品質を証明しない。
+実接続での reasoning の受理・文脈変更後の扱い・Prompt Cache・TTFT は未検証である。
+本番 Responses の生成ゲートは閉じたままにし、テスト専用の factory だけを利用する。
+実接続の認証情報・許可がないため、本番利用は不可と判定する。
+有効化には実接続の受入試験、未対応経路の明示、Phase 6 の容量・保持・異常終了検証が必要である。
+本番再起動、JAR 配置、本番 DB migration、課金 API 呼び出しは実施していない。

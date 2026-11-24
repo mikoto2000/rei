@@ -32,7 +32,7 @@ class PaperFailureTest {
     var model = mock(org.springframework.ai.chat.model.ChatModel.class);
     when(provider.subAgentChatModel()).thenReturn(model);
     when(provider.model(eq("chat"), nullable(String.class))).thenReturn("test");
-    when(provider.chatOptions("chat", "test"))
+    when(provider.requestOptions("chat", "test", false))
         .thenReturn(
             org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build());
     var empty = mock(org.springframework.ai.chat.model.ChatResponse.class, RETURNS_DEEP_STUBS);

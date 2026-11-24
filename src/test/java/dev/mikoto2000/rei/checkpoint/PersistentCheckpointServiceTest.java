@@ -72,6 +72,105 @@ class PersistentCheckpointServiceTest {
 
   /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @Test
+  void nativeProgressUsesTheResumedCheckpointRevisionAsReplayAuthority() {
+    var source = new SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + root.resolve("protocol.db"));
+    var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    factory.addBean("protocolPayloads", payloads);
+    repository.configureModelMessagePayloads(
+        factory.getBeanProvider(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class));
+    var original = payloads.newExchange(owner);
+    var origin =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+            original.ownerKey(), "endpoint");
+    var input =
+        original
+            .withKey("input")
+            .reference(new org.springframework.ai.chat.messages.UserMessage("original input"));
+    var answer =
+        original.reference(
+            org.springframework.ai.chat.messages.AssistantMessage.builder()
+                .content("saved answer")
+                .properties(
+                    Map.of(
+                        "rei.llm.replay-origin-owner",
+                        origin.owner(),
+                        "rei.llm.replay-origin-endpoint",
+                        origin.endpoint()))
+                .build());
+    var systemRef =
+        original
+            .withKey("instructions")
+            .reference(
+                new org.springframework.ai.chat.messages.SystemMessage("original instructions"));
+    var history =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
+            1,
+            owner.runId(),
+            origin,
+            List.of(
+                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                    "input/USER", input),
+                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                    original.key() + "/ASSISTANT", answer)),
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Input(
+                List.of(
+                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                        "instructions/SYSTEM", systemRef),
+                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                        "input/USER", input)),
+                1));
+    service.preserveResults(
+        owner,
+        List.of(),
+        new RunExecutionContext.ProgressState(
+            null, new OutputLimitRunBudget(2, 8).snapshot(), 0, 0, 0, null, history));
+    service.finish(owner, "INTERRUPTED");
+    var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
+    var context = new AgentRunContext(resumed.runId(), "session", root, "A");
+    var references = service.protocolReferences(context);
+    assertEquals(3, references.size());
+    assertTrue(
+        references.stream()
+            .allMatch(pointer ->
+                pointer
+                    .owner()
+                    .equals(
+                        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
+                            "A", state().taskId(), state().revision()))));
+    var exchange = payloads.newExchange(context);
+    var execution =
+        new RunExecutionContext(
+            context.runId(),
+            new OutputLimitRunBudget(2, 8),
+            new ProgressEvaluator(root),
+            new AgentEventFactory(Clock.systemUTC()),
+            ignored -> {});
+    execution.setRunContext(context);
+    execution.setModelOptions(
+        org.springframework.ai.model.tool.ToolCallingChatOptions.builder()
+            .toolContext(
+                Map.of(
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+                    exchange,
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+                        exchange.ownerKey(), "endpoint")))
+            .build());
+    execution.restoreProgress(service.progress(context), references);
+    assertEquals(
+        List.of("original instructions", "original input", "saved answer"),
+        execution.takeResumeMessages().stream()
+            .map(org.springframework.ai.chat.messages.Message::getText)
+            .toList());
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            service.protocolReferences(
+                new AgentRunContext(context.runId(), "wrong-session", root, "A")));
+  }
+
+  @Test
   void guardedDiscardRequiresStoppedCurrentRevisionAndKeepsHistory() {
     var running = state();
     assertThrows(

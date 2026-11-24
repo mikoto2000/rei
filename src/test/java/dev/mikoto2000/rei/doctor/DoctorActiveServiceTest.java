@@ -270,7 +270,8 @@ class DoctorActiveServiceTest {
                 .apiKey("CONFIG-SECRET")
                 .baseUrl("http://localhost/v1")
                 .build());
-    when(models.chatOptions(anyString(), anyString())).thenAnswer(call -> configured.get());
+    when(models.requestOptions(anyString(), anyString(), eq(false)))
+        .thenAnswer(call -> configured.get());
     doAnswer(
             call -> {
               assertFalse(((String) call.getArgument(1)).contains("SECRET"));
@@ -293,5 +294,36 @@ class DoctorActiveServiceTest {
     assertEquals(
         DoctorResult.Status.OK,
         service().active(run(1), request("inference")).results().getFirst().status());
+  }
+
+  @Test
+  void inferenceUsesCapturedNativeOptionsAndTheExistingRunBudget() {
+    var base =
+        org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+            .model("native-doctor")
+            .maxOutputTokens(73)
+            .build();
+    when(models.requestOptions(eq("chat"), anyString(), eq(false))).thenReturn(base);
+    var model = mock(ChatModel.class);
+    when(models.subAgentChatModel()).thenReturn(model);
+    when(model.stream(any(Prompt.class)))
+        .thenAnswer(inv -> {
+          var prompt = (Prompt) inv.getArgument(0);
+          var sent =
+              org.junit.jupiter.api.Assertions.assertInstanceOf(
+                  org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.class,
+                  prompt.getOptions());
+          assertEquals(16, sent.getMaxOutputTokens());
+          assertTrue(sent.getToolCallbacks().isEmpty());
+          assertTrue(
+              sent.getToolContext().get("rei.llm.replay-owner").toString().startsWith("feature:"));
+          return Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("OK")))));
+        });
+    var execution = run(1);
+    assertEquals(
+        DoctorResult.Status.OK,
+        service().active(execution, request("inference")).results().getFirst().status());
+    verify(model).stream(any(Prompt.class));
+    assertEquals(73, base.getMaxOutputTokens());
   }
 }

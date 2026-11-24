@@ -18,9 +18,27 @@ public interface TokenEstimator {
   /** モデルへ渡す文脈の管理で用いるメッセージを返す。 */
   default int message(Message message) {
     long total = 8L + text(message.getText());
-    if (message instanceof AssistantMessage assistant)
+    if (message instanceof AssistantMessage assistant) {
       for (var call : assistant.getToolCalls())
         total += 12L + text(call.id()) + text(call.name()) + text(call.arguments());
+      for (var part : assistant.getParts()) {
+        if (part instanceof org.springframework.ai.chat.messages.part.ReasoningPart reasoning)
+          total += (long) text(reasoning.text()) + text(reasoning.summary());
+        // Count the encoded protocol view conservatively. These are request estimates, not
+        // provider-reported reasoning/input usage; never decrypt or truncate opaque data.
+        var payload =
+            switch (part) {
+              case org.springframework.ai.chat.messages.part.TextPart value -> value.payload();
+              case org.springframework.ai.chat.messages.part.ReasoningPart value -> value.payload();
+              case org.springframework.ai.chat.messages.part.ToolCallPart value -> value.payload();
+              default -> null;
+            };
+        if (payload != null)
+          total += (long) text(payload.provider()) + text(payload.kind()) + text(payload.data());
+        for (var attribute : part.attributes().entrySet())
+          total += (long) text(attribute.getKey()) + text(attribute.getValue());
+      }
+    }
     if (message instanceof ToolResponseMessage tool)
       for (var result : tool.getResponses())
         total += 12L + text(result.id()) + text(result.name()) + text(result.responseData());

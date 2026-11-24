@@ -59,7 +59,7 @@ class WorkContextSmokeTest {
     var model = mock(ChatModel.class);
     var models = mock(LlmModelProvider.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.MEMORY, null))
+    when(models.requestOptions(LlmFeature.MEMORY, null, false))
         .thenAnswer(c -> OpenAiChatOptions.builder().build());
     String fixture =
         """

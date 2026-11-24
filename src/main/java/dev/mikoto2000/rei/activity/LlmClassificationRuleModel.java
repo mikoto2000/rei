@@ -6,8 +6,8 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
-import org.springframework.ai.openai.OpenAiChatOptions;
 
 /** 作業状況の把握に必要な言語モデル分類規則モデルを扱う。 */
 public final class LlmClassificationRuleModel implements ClassificationRuleSuggestions.Model {
@@ -15,20 +15,22 @@ public final class LlmClassificationRuleModel implements ClassificationRuleSugge
   private final Supplier<ChatModel> model;
 
   /** 選択可能な設定。 */
-  private final Supplier<OpenAiChatOptions> options;
+  private final Supplier<? extends ToolCallingChatOptions> options;
 
   /** 最大出力トークン数。 */
   private final int maxOutputTokens;
 
   /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public LlmClassificationRuleModel(
-      Supplier<ChatModel> model, Supplier<OpenAiChatOptions> options) {
+      Supplier<ChatModel> model, Supplier<? extends ToolCallingChatOptions> options) {
     this(model, options, ActivityProperties.RuleSuggestion.DEFAULT_MAX_OUTPUT_TOKENS);
   }
 
   /** 指定された値や利用先を使って、LlmClassificationRuleModelを初期化する。 */
   public LlmClassificationRuleModel(
-      Supplier<ChatModel> model, Supplier<OpenAiChatOptions> options, int maxOutputTokens) {
+      Supplier<ChatModel> model,
+      Supplier<? extends ToolCallingChatOptions> options,
+      int maxOutputTokens) {
     if (maxOutputTokens < 1) throw new IllegalArgumentException("maxOutputTokens must be positive");
     this.model = model;
     this.options = options;
@@ -41,16 +43,12 @@ public final class LlmClassificationRuleModel implements ClassificationRuleSugge
     format.setType(ResponseFormat.Type.JSON_SCHEMA);
     format.setJsonSchema(schema);
     format.setStrict(true);
+    var isolated = dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(options.get());
+    var limited =
+        dev.mikoto2000.rei.modeloptions.ModelOptions.withCompletionLimit(isolated, maxOutputTokens);
     var request =
-        options
-            .get()
-            .mutate()
-            .responseFormat(format)
-            .toolChoice(null)
-            .toolCallbacks(List.of())
-            .maxTokens(null)
-            .maxCompletionTokens(maxOutputTokens)
-            .build();
+        dev.mikoto2000.rei.modeloptions.ModelOptions.withResponseFormat(
+            dev.mikoto2000.rei.modeloptions.ModelOptions.withToolChoice(limited, null), format);
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(request);
     var chat = model.get();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(chat);

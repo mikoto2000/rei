@@ -43,6 +43,9 @@ class LlmProtocolSelectionTest {
     assertThatThrownBy(() -> provider.chatModel("chat"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Responses");
+    assertThatThrownBy(() -> provider.requestOptions("chat", "model", true))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Responses");
   }
 
   @Test
@@ -63,6 +66,8 @@ class LlmProtocolSelectionTest {
 
     assertThat(provider.chatOptions("chat", null).getModel()).isEqualTo("first-model");
     assertThat(provider.chatOptions("chat", null).getMaxTokens()).isEqualTo(1024);
+    assertThat(provider.requestOptions("chat", null, true).getModel()).isEqualTo("first-model");
+    assertThat(provider.requestOptions("chat", null, true).getMaxTokens()).isEqualTo(1024);
     assertThat(provider.chatModel("chat")).isSameAs(model);
   }
 
@@ -77,6 +82,9 @@ class LlmProtocolSelectionTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Responses");
     assertThatThrownBy(() -> provider.chatModel("chat"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Responses");
+    assertThatThrownBy(() -> provider.requestOptions("chat", "model", true))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Responses");
   }

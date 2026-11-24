@@ -58,7 +58,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
@@ -160,7 +160,8 @@ public class ChatExecutionService {
   /** モデル提供元。 */
   private final Function<String, ChatModel> privateSecretaryModel;
 
-  private final Function<String, OpenAiChatOptions> optionsForModel;
+  private final java.util.function.BiFunction<String, AgentRunContext, ToolCallingChatOptions>
+      optionsForModel;
 
   /** 言語モデル設定。 */
   private final Supplier<LlmProperties.OutputLimit> outputLimits;
@@ -373,7 +374,8 @@ public class ChatExecutionService {
                 : chatClientProvider.parallelChatClient(mode);
     this.readSelectedModel = () -> currentModelHolder.get();
     this.privateSecretaryModel = expected -> modelProvider.privateSecretaryModel(expected);
-    this.optionsForModel = selected -> modelProvider.chatOptions(LlmFeature.CHAT, selected, true);
+    this.optionsForModel =
+        (selected, owner) -> modelProvider.requestOptions(LlmFeature.CHAT, selected, true, owner);
     this.outputLimits = () -> llmProperties.getOutputLimit();
     this.beginCancellation = () -> cancellationService.begin(Thread.currentThread());
     this.registerCancellation = disposable -> cancellationService.register(disposable);
@@ -609,7 +611,7 @@ public class ChatExecutionService {
               && context.mode() == AgentRunContext.Mode.EXCLUSIVE
               && !structuredCommand)
             chatMemory.add(context.conversationId(), java.util.List.of(new UserMessage(text)));
-          appendConversationLog(context.conversationId(), "user", text);
+          appendConversationLog(context, execution, "user", text);
         });
     Disposable cancellationHook = onRunCancellation.apply(runId, execution::cancel);
     ConversationTurnStore.Status turnStatus = ConversationTurnStore.Status.FAILED;
@@ -618,11 +620,14 @@ public class ChatExecutionService {
     boolean checkpointFinished = false;
 
     try {
+      if (!structuredCommand)
+        execution.setModelOptions(optionsForModel.apply(readSelectedModel.get(), context));
       if (resumed == null) turns.startOrdered(context, promptText, clock.instant());
       if (checkpoints != null) checkpoints.start(context, promptText);
       execution.capturePlanBaseline();
       if (checkpoints != null && checkpoints.hasProgressHistory(context)) {
-        execution.restoreProgress(checkpoints.progress(context));
+        execution.restoreProgress(
+            checkpoints.progress(context), checkpoints.protocolReferences(context));
         if (execution.needsProgressReconciliation()) {
           boolean corrected = false;
           for (String result : checkpoints.recentSkillResults(context))
@@ -638,7 +643,7 @@ public class ChatExecutionService {
       execution.checkActive();
       activityTracker.ifPresent(
           tracker -> tracker.recordUserActivity(java.time.Instant.now(clock)));
-      if (resumed == null) appendConversationLog(context.conversationId(), "user", promptText);
+      if (resumed == null) appendConversationLog(context, execution, "user", promptText);
       if (!structuredCommand
           && (resumed == null || resumed.pendingTools() == null)
           && !budget.tryConsumeLlmCall()) {
@@ -754,7 +759,7 @@ public class ChatExecutionService {
       while (!structuredCommand
           && result.status() == ChatRunStatus.SUCCESS
           && !interventions.finishIfEmpty()) {
-        var guidance = execution.applyInterventions();
+        var guidance = execution.applyInterventionsForNextPrompt();
         if (!budget.tryConsumeLlmCall()) {
           result = new ChatRunResult(budgetStopStatus(budget), "");
           break;
@@ -776,7 +781,18 @@ public class ChatExecutionService {
       }
       if (result.status() == ChatRunStatus.SUCCESS) {
         execution.checkActive();
-        appendConversationLog(context.conversationId(), "assistant", result.text());
+        var protocolPointers = execution.protocolHistoryReferences();
+        if (!protocolPointers.isEmpty()) {
+          if (conversationLogStore == null)
+            throw new IllegalStateException("Conversation protocol history unavailable");
+          var manifest =
+              new java.util.HashMap<>(
+                  conversationLogStore.appendProtocolHistory(
+                      context.conversationId(), context.runId(), protocolPointers));
+          manifest.put("rei.modelMessage.endpoint", execution.protocolHistoryEndpoint());
+          turns.recordMetadata(context, manifest);
+        }
+        appendConversationLog(context, execution, "assistant", result.text());
         assistantMessage = result.text();
         boolean consolidationSuggested =
             context.mode() == AgentRunContext.Mode.EXCLUSIVE
@@ -881,7 +897,8 @@ public class ChatExecutionService {
         if (execution.isCancelled()) interventions.discardAndFinish();
         else {
           var guidance = new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
-          while (!interventions.finishIfEmpty()) guidance.addAll(execution.applyInterventions());
+          while (!interventions.finishIfEmpty())
+            guidance.addAll(execution.applyInterventionsForNextPrompt());
           if (suspended && continuations != null && !guidance.isEmpty())
             continuations.acceptGuidance(context, guidance);
         }
@@ -928,6 +945,10 @@ public class ChatExecutionService {
               && autoSleep != null
               && context.mode() == AgentRunContext.Mode.EXCLUSIVE
               && !structuredCommand) autoSleep.afterTerminal(context);
+          if (!suspended
+              && !execution.isCancelled()
+              && turnStatus == ConversationTurnStore.Status.COMPLETED)
+            execution.releaseProtocolRunReferences();
         } finally {
           try {
             if (beanFactory != null && context.mode() != AgentRunContext.Mode.EXCLUSIVE)
@@ -944,9 +965,16 @@ public class ChatExecutionService {
   }
 
   /** 既存の記録へ経緯を残すため、会話ログを追記する。 */
-  private void appendConversationLog(String conversationId, String speaker, String content) {
+  private void appendConversationLog(
+      AgentRunContext owner, RunExecutionContext execution, String speaker, String content) {
     if (conversationLogStore != null) {
-      conversationLogStore.append(conversationId, speaker, content);
+      if (execution.recordsProtocolMessages())
+        conversationLogStore.append(
+            owner.conversationId(),
+            speaker,
+            content,
+            Map.of("rei.modelMessage.run", owner.runId()));
+      else conversationLogStore.append(owner.conversationId(), speaker, content);
     }
   }
 
@@ -1101,7 +1129,8 @@ public class ChatExecutionService {
               partialOutput,
               budget.replanCount(),
               outputLimits.get().getMaxReplansPerGoal(),
-              budget.remainingLlmCalls());
+              budget.remainingLlmCalls(),
+              dev.mikoto2000.rei.modeloptions.ModelOptions.outputLimit(execution.modelOptions()));
       plan =
           budget.tokenLimitEnabled()
               ? outputLimitReplanner.get().replan(replanRequest, execution::recordTotalTokens)
@@ -1204,7 +1233,7 @@ public class ChatExecutionService {
       log.warn("Prompt attachment warning: {}", warning);
     }
 
-    var baseOptions = optionsForModel.apply(readSelectedModel.get());
+    var baseOptions = execution.modelOptions();
     if (mode != AgentRunContext.Mode.EXCLUSIVE) ToolLoopSupport.requireNoRawTools(baseOptions);
     var optionsBuilder = baseOptions.mutate();
     optionsBuilder.toolContext(
@@ -1213,11 +1242,11 @@ public class ChatExecutionService {
             execution,
             RunCancellation.CHILD_ENTRY_KEY,
             childEntry.apply(execution.runContext().runId())));
-    if (mode == AgentRunContext.Mode.CONVERSATION) {
-      optionsBuilder.toolCallbacks(java.util.List.of());
-      optionsBuilder.toolChoice("none");
-    }
-    var options = optionsBuilder.build();
+    var configured = optionsBuilder.build();
+    var options =
+        mode == AgentRunContext.Mode.CONVERSATION
+            ? dev.mikoto2000.rei.modeloptions.ModelOptions.withoutTools(configured)
+            : configured;
     var messages = new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
     if (!execution.outputLimitHandoff().isBlank()) {
       messages.add(
@@ -1242,8 +1271,10 @@ public class ChatExecutionService {
                   + " assistant output."));
       messages.addAll(execution.conversationSnapshot());
     }
-    messages.add(
-        UserMessage.builder().text(resolvedPrompt.prompt()).media(resolvedPrompt.media()).build());
+    var originalUser =
+        UserMessage.builder().text(resolvedPrompt.prompt()).media(resolvedPrompt.media()).build();
+    execution.preserveUserMessage(originalUser);
+    messages.add(originalUser);
     ChatClientRequestSpec requestSpec =
         clientForMode
             .apply(mode)

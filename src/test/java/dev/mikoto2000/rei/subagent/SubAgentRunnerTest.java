@@ -46,6 +46,30 @@ import reactor.core.publisher.Flux;
 /** 補助エージェント実行の担当の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentRunnerTest {
+  @Test
+  void optionsAreResolvedWithTheChildOwnerBeforeTheModelRequest() throws Exception {
+    var resolved = new AtomicReference<AgentRunContext>();
+    var output = "{\"status\":\"SUCCESS\",\"summary\":\"done\",\"result\":{},\"warnings\":[]}";
+    var child = runner(prompt -> Flux.just(answer(output)), "2s");
+    child.setRunOptionsFactory((selected, owner) -> {
+      resolved.set(owner);
+      return ToolCallingChatOptions.builder().model("accepted-child-model").build();
+    });
+    var parent = new AgentRunContext("parent", "session", directory, "project");
+    SubAgentResult result;
+    try (var scope = AgentRunScope.open(parent)) {
+      result = child.run("reviewer", "inspect", null);
+    }
+    assertThat(result.status()).isEqualTo(SubAgentResult.Status.COMPLETED);
+    assertThat(resolved.get()).isNotNull();
+    assertThat(resolved.get().runId())
+        .isEqualTo(result.subAgentRunId())
+        .isNotEqualTo(parent.runId());
+    assertThat(resolved.get().conversationId()).isEqualTo("subagent:" + result.subAgentRunId());
+    assertThat(resolved.get().projectRoot()).isEqualTo(parent.projectRoot());
+    assertThat(resolved.get().projectId()).isEqualTo(parent.projectId());
+  }
+
   static final String READ_ARGUMENTS = "{\"files\":[{\"path\":\"a.txt\"}]}";
 
   /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */

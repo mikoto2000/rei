@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.computeruse;
 
 import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -15,8 +16,8 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.util.MimeTypeUtils;
@@ -35,7 +36,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
   private final ChatModel model;
 
   /** 選択可能な設定。 */
-  private final Supplier<OpenAiChatOptions.Builder> options;
+  private final Supplier<? extends ToolCallingChatOptions.Builder<?>> options;
 
   /** キャンセル済み。 */
   private final BooleanSupplier cancelled;
@@ -55,7 +56,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
   /** 指定された値や利用先を使って、SpringAiComputerVisionModelを初期化する。 */
   public SpringAiComputerVisionModel(
       ChatModel model,
-      Supplier<OpenAiChatOptions.Builder> options,
+      Supplier<? extends ToolCallingChatOptions.Builder<?>> options,
       BooleanSupplier cancelled,
       int repairs) {
     if (repairs < 0 || repairs > 2) throw new IllegalArgumentException("Invalid repair budget");
@@ -226,9 +227,9 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
     for (int attempt = 0; attempt <= repairs; attempt++) {
       checkCancelled();
       // No-tools inference must omit the wire fields: compatible APIs can reject tools: [].
-      var requestBuilder = options.get().responseFormat(format).toolChoice(null);
-      requestBuilder.toolCallbacks(List.of());
-      var requestOptions = requestBuilder.build();
+      var isolated = ModelOptions.singleRequest(options.get().build());
+      var requestOptions =
+          ModelOptions.withResponseFormat(ModelOptions.withToolChoice(isolated, null), format);
       ToolLoopSupport.requireNoRawTools(requestOptions);
       var prompt =
           new Prompt(
@@ -275,7 +276,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
           "Computer Use inference response: step={}, attempt={}, response={}",
           observation.step(),
           attempt,
-          response);
+          ComputerDiagnostics.responseText(response));
       checkCancelled();
       if (dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
         throw new InvalidComputerDecision(

@@ -63,7 +63,7 @@ class SpringPaperLanguageModelTest {
             .build();
     when(provider.subAgentChatModel()).thenReturn(model);
     when(provider.model(eq("chat"), nullable(String.class))).thenReturn("paper-model");
-    when(provider.chatOptions("chat", "paper-model")).thenReturn(configured);
+    when(provider.requestOptions("chat", "paper-model", false)).thenReturn(configured);
     when(model.stream(any(Prompt.class)))
         .thenReturn(
             Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage("result"))))));
@@ -94,7 +94,7 @@ class SpringPaperLanguageModelTest {
     var model = mock(ChatModel.class);
     when(provider.subAgentChatModel()).thenReturn(model);
     when(provider.model(eq("chat"), nullable(String.class))).thenReturn("paper-model");
-    when(provider.chatOptions("chat", "paper-model"))
+    when(provider.requestOptions("chat", "paper-model", false))
         .thenReturn(
             OpenAiChatOptions.builder()
                 .extraBody(Map.of("tools", List.of(Map.of("type", "function"))))

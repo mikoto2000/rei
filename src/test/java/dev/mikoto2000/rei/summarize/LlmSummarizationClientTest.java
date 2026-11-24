@@ -31,7 +31,7 @@ class LlmSummarizationClientTest {
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(modelProvider.chatModel(LlmFeature.WEB_PAGE_SUMMARY)).thenReturn(chatModel);
-    when(modelProvider.chatOptions(anyString(), anyString(), Mockito.eq(false)))
+    when(modelProvider.requestOptions(anyString(), anyString(), Mockito.eq(false)))
         .thenReturn(OpenAiChatOptions.builder().build());
     when(chatModel.call(Mockito.any(Prompt.class)))
         .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("  要約結果  ")))));

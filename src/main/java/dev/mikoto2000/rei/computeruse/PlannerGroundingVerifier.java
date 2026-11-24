@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.computeruse;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -13,7 +14,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.MimeTypeUtils;
 
@@ -31,7 +32,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
   private final ChatModel model;
 
   /** 選択可能な設定。 */
-  private final Supplier<OpenAiChatOptions.Builder> options;
+  private final Supplier<? extends ToolCallingChatOptions.Builder<?>> options;
 
   /** キャンセル済み。 */
   private final BooleanSupplier cancelled;
@@ -41,14 +42,16 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
 
   /** 画面操作の支援を利用するため、指定を補って共通の初期化へ引き渡す。 */
   PlannerGroundingVerifier(
-      ChatModel model, Supplier<OpenAiChatOptions.Builder> options, BooleanSupplier cancelled) {
+      ChatModel model,
+      Supplier<? extends ToolCallingChatOptions.Builder<?>> options,
+      BooleanSupplier cancelled) {
     this(model, options, cancelled, new WindowsFocusProbe(cancelled)::atPoint);
   }
 
   /** 指定された値や利用先を使って、PlannerGroundingVerifierを初期化する。 */
   PlannerGroundingVerifier(
       ChatModel model,
-      Supplier<OpenAiChatOptions.Builder> options,
+      Supplier<? extends ToolCallingChatOptions.Builder<?>> options,
       BooleanSupplier cancelled,
       java.util.function.Function<java.awt.Point, String> pointProbe) {
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
@@ -292,7 +295,9 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
   private String call(ComputerObservation observation, String stage, String text, byte[]... images)
       throws IOException {
     var requestOptions =
-        options.get().responseFormat(null).toolChoice(null).toolCallbacks(List.of()).build();
+        ModelOptions.withResponseFormat(
+            ModelOptions.withToolChoice(ModelOptions.singleRequest(options.get().build()), null),
+            null);
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(requestOptions);
     if (images.length > 0) save(observation, stage, "input.png", images[0]);
     save(observation, stage, "request.txt", text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -320,12 +325,13 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
         "Grounding verification: step={}, stage={}, response={}",
         observation.step(),
         stage,
-        response);
+        ComputerDiagnostics.responseText(response));
     save(
         observation,
         stage,
         "response.txt",
-        String.valueOf(response).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        ComputerDiagnostics.responseText(response)
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     checkCancelled();
     if (dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
       throw new InvalidComputerDecision(

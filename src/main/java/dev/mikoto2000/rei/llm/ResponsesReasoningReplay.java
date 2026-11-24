@@ -15,12 +15,48 @@ final class ResponsesReasoningReplay {
   private ResponsesReasoningReplay() {}
 
   static Prompt prepare(Prompt prompt, ResolvedLlmEndpoint endpoint) {
+    var context =
+        prompt.getOptions()
+                instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools
+            ? tools.getToolContext()
+            : null;
+    if (context != null
+        && context.containsKey(
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)) {
+      if (!(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
+              instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin)
+          || !origin.endpoint().equals(endpoint.fingerprint()))
+        throw new IllegalArgumentException("Responses replay endpoint mismatch");
+    }
     String requestOwner =
         endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.ENCRYPTED
             ? owner(prompt)
-            : null;
+            : optionalOwner(prompt);
     for (var message : prompt.getInstructions()) {
       if (!(message instanceof AssistantMessage assistant)) continue;
+      var metadata = assistant.getMetadata();
+      boolean ownerPermitted = false;
+      if (metadata.containsKey(ORIGIN_OWNER) || metadata.containsKey(ORIGIN_ENDPOINT)) {
+        if (!(metadata.get(ORIGIN_OWNER) instanceof String originOwner)
+            || !(metadata.get(ORIGIN_ENDPOINT) instanceof String originEndpoint))
+          throw new IllegalArgumentException("Responses replay origin is required");
+        var authority =
+            context == null
+                ? null
+                : context.get(
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore
+                        .HISTORY_GRANT_CONTEXT_KEY);
+        ownerPermitted =
+            originOwner.equals(requestOwner)
+                || (authority
+                        instanceof
+                        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HistoryReplayGrant
+                            grant
+                    && grant.permits(assistant, requestOwner, endpoint.fingerprint()));
+        if (!ownerPermitted) throw new IllegalArgumentException("Responses replay owner mismatch");
+        if (!originEndpoint.equals(endpoint.fingerprint()))
+          throw new IllegalArgumentException("Responses replay endpoint mismatch");
+      }
       for (var part : assistant.getParts()) {
         if (!(part instanceof org.springframework.ai.chat.messages.part.TextPart
                 || part instanceof ReasoningPart
@@ -42,11 +78,10 @@ final class ResponsesReasoningReplay {
         var itemId = reasoning.attributes().get(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE);
         if (itemId == null || itemId.isBlank())
           throw new IllegalArgumentException("Responses reasoning item id is required");
-        var metadata = assistant.getMetadata();
-        if (!(metadata.get(ORIGIN_OWNER) instanceof String originOwner)
+        if (!(metadata.get(ORIGIN_OWNER) instanceof String)
             || !(metadata.get(ORIGIN_ENDPOINT) instanceof String originEndpoint))
           throw new IllegalArgumentException("Responses reasoning replay origin is required");
-        if (!originOwner.equals(requestOwner))
+        if (!ownerPermitted)
           throw new IllegalArgumentException("Responses reasoning replay owner mismatch");
         if (!originEndpoint.equals(endpoint.fingerprint()))
           throw new IllegalArgumentException("Responses reasoning replay endpoint mismatch");
@@ -60,14 +95,14 @@ final class ResponsesReasoningReplay {
       Prompt prompt,
       ResolvedLlmEndpoint endpoint) {
     boolean encrypted = endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.ENCRYPTED;
-    String requestOwner = encrypted ? owner(prompt) : null;
+    String requestOwner = encrypted ? owner(prompt) : optionalOwner(prompt);
     var usage = ResponsesTransportException.usage(response.getMetadata().getUsage());
     var generations =
         response.getResults().stream()
             .map(generation -> {
               var output = generation.getOutput();
               var metadata = new java.util.HashMap<String, Object>(output.getMetadata());
-              if (encrypted) {
+              if (requestOwner != null) {
                 metadata.put(ORIGIN_OWNER, requestOwner);
                 metadata.put(ORIGIN_ENDPOINT, endpoint.fingerprint());
               }
@@ -105,12 +140,28 @@ final class ResponsesReasoningReplay {
   }
 
   private static String owner(Prompt prompt) {
+    String owner = optionalOwner(prompt);
+    if (owner == null) throw new IllegalArgumentException("Responses replay owner is required");
+    return owner;
+  }
+
+  private static String optionalOwner(Prompt prompt) {
     var options = prompt.getOptions();
     var context =
         options instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools
             ? tools.getToolContext()
             : null;
     var value = context == null ? null : context.get(OWNER_CONTEXT_KEY);
+    if (context != null
+        && context.containsKey(
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)) {
+      if (!(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
+              instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin)
+          || (value != null && !origin.owner().equals(value)))
+        throw new IllegalArgumentException("Responses replay owner mismatch");
+      return origin.owner();
+    }
+    if (value == null) return null;
     if (!(value instanceof String owner) || owner.isBlank())
       throw new IllegalArgumentException("Responses replay owner is required");
     return owner;

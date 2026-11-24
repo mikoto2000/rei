@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.computeruse.CapturedScreen;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,8 +12,8 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
-import org.springframework.ai.openai.OpenAiChatOptions;
 
 /**
  * 画像認識作業状況に必要な情報を入力から取り出す。
@@ -28,7 +29,7 @@ public final class VisionActivityExtractor implements ActivityExtractor {
   private final Supplier<ChatModel> model;
 
   /** 選択可能な設定。 */
-  private final Supplier<OpenAiChatOptions> options;
+  private final Supplier<? extends ToolCallingChatOptions> options;
 
   /** 画像倍率。 */
   private final double imageScale;
@@ -37,20 +38,23 @@ public final class VisionActivityExtractor implements ActivityExtractor {
   private final int maxOutputTokens;
 
   /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
-  public VisionActivityExtractor(Supplier<ChatModel> model, Supplier<OpenAiChatOptions> options) {
+  public VisionActivityExtractor(
+      Supplier<ChatModel> model, Supplier<? extends ToolCallingChatOptions> options) {
     this(model, options, .5);
   }
 
   /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public VisionActivityExtractor(
-      Supplier<ChatModel> model, Supplier<OpenAiChatOptions> options, double imageScale) {
+      Supplier<ChatModel> model,
+      Supplier<? extends ToolCallingChatOptions> options,
+      double imageScale) {
     this(model, options, imageScale, 2048);
   }
 
   /** 指定された値や利用先を使って、VisionActivityExtractorを初期化する。 */
   public VisionActivityExtractor(
       Supplier<ChatModel> model,
-      Supplier<OpenAiChatOptions> options,
+      Supplier<? extends ToolCallingChatOptions> options,
       double imageScale,
       int maxOutputTokens) {
     if (!Double.isFinite(imageScale) || imageScale <= 0 || imageScale > 1)
@@ -97,11 +101,10 @@ public final class VisionActivityExtractor implements ActivityExtractor {
       format.setType(ResponseFormat.Type.JSON_SCHEMA);
       format.setJsonSchema(schema);
       format.setStrict(true);
-      var requestBuilder = options.get().mutate().responseFormat(format).toolChoice(null);
-      requestBuilder.maxTokens(null);
-      requestBuilder.maxCompletionTokens(maxOutputTokens);
-      requestBuilder.toolCallbacks(List.of());
-      var requestOptions = requestBuilder.build();
+      var isolated = ModelOptions.singleRequest(options.get());
+      var limited = ModelOptions.withCompletionLimit(isolated, maxOutputTokens);
+      var requestOptions =
+          ModelOptions.withResponseFormat(ModelOptions.withToolChoice(limited, null), format);
       var system =
           """
           Extract a cautious activity journal from desktop evidence. Return only JSON matching the schema.

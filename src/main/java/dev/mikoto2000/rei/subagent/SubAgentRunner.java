@@ -397,6 +397,16 @@ public final class SubAgentRunner {
   /** 選択可能な設定。 */
   private final Function<String, ToolCallingChatOptions> options;
 
+  private java.util.function.BiFunction<String, ? super AgentRunContext, ToolCallingChatOptions>
+      runOptionsFactory;
+
+  /** Resolve options after the child has acquired its own immutable Run identity. */
+  public void setRunOptionsFactory(
+      java.util.function.BiFunction<String, ? super AgentRunContext, ToolCallingChatOptions>
+          factory) {
+    runOptionsFactory = java.util.Objects.requireNonNull(factory);
+  }
+
   /** ツール生成元。 */
   private final Supplier<List<ToolCallback>> toolFactory;
 
@@ -455,6 +465,39 @@ public final class SubAgentRunner {
     this.events = events;
     this.publisher = publisher;
     this.clock = clock;
+  }
+
+  private static Map<String, Object> childToolContext(
+      ToolCallingChatOptions options, AgentRunContext owner) {
+    var result = new java.util.HashMap<String, Object>();
+    result.put(AgentRunContext.class.getName(), owner);
+    var source = options.getToolContext();
+    if (source == null) return result;
+    var maxKey = dev.mikoto2000.rei.modeloptions.ModelOptions.MAX_TOOLS_CONTEXT_KEY;
+    if (source.containsKey(maxKey)) {
+      if (!(source.get(maxKey) instanceof Integer limit) || limit < 1)
+        throw new IllegalArgumentException("Invalid child model tool limit");
+      result.put(maxKey, limit);
+    }
+    var exchangeKey = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY;
+    var originKey = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY;
+    if (!source.containsKey(exchangeKey) && !source.containsKey(originKey)) return result;
+    if (!(source.get(exchangeKey)
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)
+        || !(source.get(originKey)
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin))
+      throw new IllegalStateException("Child model protocol identity is incomplete");
+    if (!exchange.run().equals(owner.runId())
+        || !exchange
+            .scope()
+            .equals(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner))
+        || !origin.owner().equals(exchange.ownerKey()))
+      throw new IllegalStateException("Child model protocol owner mismatch");
+    result.put(exchangeKey, exchange);
+    result.put(originKey, origin);
+    var endpointKey = dev.mikoto2000.rei.modeloptions.ModelOptions.ENDPOINT_CONTEXT_KEY;
+    if (source.containsKey(endpointKey)) result.put(endpointKey, source.get(endpointKey));
+    return result;
   }
 
   /** 対象の実行をキャンセルする。 */
@@ -676,15 +719,16 @@ public final class SubAgentRunner {
                     .toList();
             if (callbacks.size() != effective.size())
               throw new IllegalStateException("Tool unavailable");
+            var factory = runOptionsFactory;
+            var selectedOptions =
+                factory == null ? options.apply(d.model()) : factory.apply(d.model(), owner);
             ToolCallingChatOptions runOptions =
-                options
-                    .apply(d.model())
+                selectedOptions
                     .mutate()
                     .toolCallbacks(callbacks)
-                    // The builder merges maps, so discard inherited context before adding child
-                    // ownership.
+                    // Rebuild the child context; preserve only its validated backend authority.
                     .toolContext(null)
-                    .toolContext(Map.of(AgentRunContext.class.getName(), owner))
+                    .toolContext(childToolContext(selectedOptions, owner))
                     .build();
             ToolLoopSupport.requireNoRawTools(runOptions);
             String input =

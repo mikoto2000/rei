@@ -213,8 +213,9 @@ public final class StagnationChatModel implements ChatModel {
 
   /** 実行の停滞への対処で用いる繰り返しを返す。 */
   private Flux<ChatResponse> iteration(
-      Prompt prompt, RunExecutionContext context, boolean prepaid, long progressAtLimit) {
+      Prompt originalPrompt, RunExecutionContext context, boolean prepaid, long progressAtLimit) {
     return Flux.defer(() -> {
+      Prompt prompt = dev.mikoto2000.rei.core.chat.ToolLoopSupport.newIteration(originalPrompt);
       context.checkActive();
       context.checkModelTokenBudget();
       if (!prepaid) context.consumeNextLlmCall();
@@ -350,8 +351,9 @@ public final class StagnationChatModel implements ChatModel {
           assemblePrompt == null || context.runContext() == null
               ? Flux.defer(() -> {
                 context.checkModelTokenBudget();
-                invoked.set(true);
                 var outbound = projectTools(invocationPrompt, context);
+                context.captureModelInput(outbound);
+                invoked.set(true);
                 sent.set(outbound);
                 return StreamTimeoutRetry.stream(
                     delegate, outbound, context, maxStreamTimeoutRetries, aggregate::set);
@@ -380,8 +382,9 @@ public final class StagnationChatModel implements ChatModel {
                   .flatMapMany(projected -> {
                     context.checkActive();
                     context.checkModelTokenBudget();
-                    invoked.set(true);
                     var outbound = projectTools(projected, context);
+                    context.captureModelInput(outbound);
+                    invoked.set(true);
                     sent.set(outbound);
                     return StreamTimeoutRetry.stream(
                         delegate, outbound, context, maxStreamTimeoutRetries, aggregate::set);
@@ -411,10 +414,14 @@ public final class StagnationChatModel implements ChatModel {
                   dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
                       context.runContext(), "providerInputTokensUnavailable", 1);
                 reported.set(true);
-                context.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+                context.recordTotalTokens(
+                    dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(result));
                 if (usage != null && usage.getCompletionTokens() != null) {
                   context.recordCompletionTokens(usage.getCompletionTokens());
                 }
+                if (!result.hasToolCalls() && !OutputLimitDetector.isOutputLimitReached(result))
+                  dev.mikoto2000.rei.core.chat.ToolLoopSupport.persistResponse(
+                      sent.get() == null ? invocationPrompt : sent.get(), result);
                 if (result.hasToolCalls() && !OutputLimitDetector.isOutputLimitReached(result)) {
                   return Mono.fromCallable(
                           () -> {
@@ -660,14 +667,33 @@ public final class StagnationChatModel implements ChatModel {
     var configuredCallbacks = options.getToolCallbacks();
     if (configuredCallbacks != null)
       for (ToolCallback callback : configuredCallbacks) callbacks.add(observe(callback, context));
-    var resumed = context.takeResumeMessages();
+    String fingerprint = null;
+    if (configuredContext != null
+        && configuredContext.containsKey(
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY)) {
+      fingerprint = dev.mikoto2000.rei.modeloptions.ModelOptions.preparationFingerprint(prompt);
+      toolContext.put(
+          dev.mikoto2000.rei.modeloptions.ModelOptions.PREPARATION_CONTEXT_KEY, fingerprint);
+    }
+    boolean fullInput = context.restoresModelInput();
+    var resumed = context.takeResumeMessages(fingerprint);
     var instructions = new ArrayList<Message>();
     if (resumed.isEmpty()) instructions.addAll(prompt.getInstructions());
     else {
-      prompt.getInstructions().stream()
-          .filter(m -> m instanceof SystemMessage)
-          .forEach(instructions::add);
+      if (!fullInput)
+        prompt.getInstructions().stream()
+            .filter(m -> m instanceof SystemMessage)
+            .forEach(instructions::add);
       instructions.addAll(resumed);
+      if (fullInput)
+        for (var current : prompt.getInstructions())
+          if (dev.mikoto2000.rei.modeloptions.ModelOptions.isContextData(current)
+              && instructions.stream()
+                  .noneMatch(existing ->
+                      existing.getMessageType() == current.getMessageType()
+                          && java.util.Objects.equals(existing.getText(), current.getText())
+                          && existing.getMetadata().equals(current.getMetadata())))
+            instructions.add(current);
     }
     Prompt prepared =
         new Prompt(

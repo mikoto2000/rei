@@ -149,41 +149,17 @@ public class LlmConversationCompressor implements ConversationCompressor {
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
       var ownerOptions = owner.getOptions();
       var baseOptions =
-          provider.chatOptions(
+          provider.requestOptions(
               feature,
               !LlmFeature.CHAT.equals(feature) || ownerOptions == null
                   ? null
-                  : ownerOptions.getModel());
-      var optionsBuilder = baseOptions.mutate().toolCallbacks(List.of()).toolChoice("none");
-      Boolean thinking = summaryEnableThinking.get();
-      if (thinking != null) {
-        // Override only this summary request, preserving shared chat and template defaults.
-        var extra = new LinkedHashMap<String, Object>();
-        if (baseOptions.getExtraBody() != null) extra.putAll(baseOptions.getExtraBody());
-        var template = new LinkedHashMap<String, Object>();
-        var configured = extra.get("chat_template_kwargs");
-        if (configured != null) {
-          if (!(configured instanceof java.util.Map<?, ?> values))
-            throw new IllegalArgumentException("chat_template_kwargs must be an object");
-          values.forEach((key, value) -> {
-            if (!(key instanceof String name))
-              throw new IllegalArgumentException("chat_template_kwargs keys must be strings");
-            template.put(name, value);
-          });
-        }
-        template.put("enable_thinking", thinking);
-        extra.put("chat_template_kwargs", template);
-        optionsBuilder.extraBody(extra);
-      }
-      // Explicitly disabling thinking also removes its generation reserve. Otherwise a page
-      // with a 3,000-token text limit can spend 11,192 tokens on visible text before validation.
-      int generationTokens = generationTokens(maxTokens);
-      if (baseOptions.getMaxCompletionTokens() != null)
-        optionsBuilder
-            .maxCompletionTokens(null)
-            .maxTokens(null)
-            .maxCompletionTokens(generationTokens);
-      else optionsBuilder.maxTokens(generationTokens);
+                  : ownerOptions.getModel(),
+              false);
+      var requested =
+          dev.mikoto2000.rei.modeloptions.ModelOptions.withOutputLimit(
+              dev.mikoto2000.rei.modeloptions.ModelOptions.withLocalThinking(
+                  baseOptions, summaryEnableThinking.get()),
+              generationTokens(maxTokens));
       var toolContext = new LinkedHashMap<String, Object>();
       if (ownerOptions
           instanceof org.springframework.ai.model.tool.ToolCallingChatOptions original) {
@@ -191,8 +167,8 @@ public class LlmConversationCompressor implements ConversationCompressor {
         if (context != null) toolContext.putAll(context);
       }
       toolContext.put("rei.modelCallPurpose", "context-summary");
-      optionsBuilder.toolContext(toolContext);
-      var options = optionsBuilder.build();
+      var options =
+          dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(requested, toolContext);
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
       StringBuilder data =
           new StringBuilder("Previous summary:\n").append(previous).append("\nNew history:\n");
@@ -255,11 +231,13 @@ public class LlmConversationCompressor implements ConversationCompressor {
       var usage = response == null ? null : response.getMetadata().getUsage();
       if (execution != null) {
         reported = true;
-        execution.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+        execution.recordTotalTokens(
+            dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(response));
         execution.checkActive();
       } else if (standalone != null) {
         reported = true;
-        standalone.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+        standalone.recordTotalTokens(
+            dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(response));
       }
       if (outputLimited.get())
         throw new ContextCompressionException(ContextCompressionException.Reason.OUTPUT_LIMIT);

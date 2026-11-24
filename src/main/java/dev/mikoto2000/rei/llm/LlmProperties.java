@@ -150,6 +150,8 @@ public class LlmProperties {
       copy.api = api;
       copy.endpointGeneration = endpointGeneration;
       copy.maxTools = maxTools;
+      copy.reasoningReplay = reasoningReplay;
+      copy.supportedSettings = supportedSettings;
       return copy;
     }
 
@@ -157,6 +159,24 @@ public class LlmProperties {
     private Integer maxOutputTokens;
 
     private LlmApiType api;
+    private ReasoningReplayMode reasoningReplay;
+    private java.util.Set<LlmCapabilities.Setting> supportedSettings = java.util.Set.of();
+
+    public ReasoningReplayMode getReasoningReplay() {
+      return reasoningReplay;
+    }
+
+    public void setReasoningReplay(ReasoningReplayMode value) {
+      reasoningReplay = value;
+    }
+
+    public java.util.Set<LlmCapabilities.Setting> getSupportedSettings() {
+      return supportedSettings;
+    }
+
+    public void setSupportedSettings(java.util.Set<LlmCapabilities.Setting> value) {
+      supportedSettings = java.util.Set.copyOf(value);
+    }
 
     private Integer maxTools;
 

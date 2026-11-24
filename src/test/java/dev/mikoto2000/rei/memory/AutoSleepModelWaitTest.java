@@ -37,7 +37,7 @@ class AutoSleepModelWaitTest {
   /** {@code processor} の条件を再現するための補助情報を返す。 */
   LlmMemoryProcessor processor() {
     when(provider.memoryChatModel()).thenReturn(model);
-    when(provider.chatOptions(LlmFeature.MEMORY, null))
+    when(provider.requestOptions(LlmFeature.MEMORY, null, false))
         .thenReturn(OpenAiChatOptions.builder().build());
     return new LlmMemoryProcessor(
         provider, new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null));

@@ -11,6 +11,7 @@ import dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import dev.mikoto2000.rei.subagent.SubAgentResultParser;
 import dev.mikoto2000.rei.subagent.SubAgentResultSchema;
 import java.nio.charset.StandardCharsets;
@@ -30,6 +31,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
 
@@ -204,7 +206,7 @@ public class BeginnerReviewService {
   /** モデル一覧。 */
   private final Supplier<ChatModel> modelForCalls;
 
-  private final Supplier<OpenAiChatOptions> optionsForCalls;
+  private final Supplier<ToolCallingChatOptions> optionsForCalls;
 
   /** 権限一覧。 */
   private final BiConsumer<String, AgentRunContext> authorizeReviewRead;
@@ -240,7 +242,7 @@ public class BeginnerReviewService {
   /** 指定された値や利用先を使って、BeginnerReviewServiceを初期化する。 */
   public BeginnerReviewService(LlmModelProvider models, ToolPermissionGuard permissions) {
     this.modelForCalls = () -> models.subAgentChatModel();
-    this.optionsForCalls = () -> models.chatOptions(LlmFeature.CHAT, null);
+    this.optionsForCalls = () -> models.requestOptions(LlmFeature.CHAT, null, false);
     this.authorizeReviewRead = (input, owner) -> permissions.check("readMultiFile", input, owner);
   }
 
@@ -345,12 +347,11 @@ public class BeginnerReviewService {
             var model = modelForCalls.get();
             ToolLoopSupport.requireNoDefaultTools(model);
             var defaults = optionsForCalls.get();
-            var options = defaults == null ? OpenAiChatOptions.builder() : defaults.mutate();
-            options.toolCallbacks(List.of());
-            options.toolChoice("none");
-            options.toolContext(
-                Map.of(RunExecutionContext.KEY, run, AgentRunContext.class.getName(), owner));
-            var toolOptions = options.build();
+            var baseOptions = defaults == null ? OpenAiChatOptions.builder().build() : defaults;
+            var toolOptions =
+                ModelOptions.singleRequest(
+                    baseOptions,
+                    Map.of(RunExecutionContext.KEY, run, AgentRunContext.class.getName(), owner));
             String input =
                 JSON.writeValueAsString(
                     Map.of(

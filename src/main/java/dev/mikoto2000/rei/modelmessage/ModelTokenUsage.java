@@ -6,6 +6,55 @@ public record ModelTokenUsage(Long input, Long output, Long total, Long cached, 
   @java.io.Serial private static final long serialVersionUID = 1L;
   public static final String METADATA_KEY = "rei.llm.token-usage";
 
+  /** Backend numeric metadata survives stream aggregation and takes precedence over its totals. */
+  public static ModelTokenUsage from(org.springframework.ai.chat.model.ChatResponse response) {
+    var numeric = backend(response);
+    if (numeric != null) return numeric;
+    var usage =
+        response == null || response.getMetadata() == null
+            ? null
+            : response.getMetadata().getUsage();
+    if (usage == null || usage instanceof org.springframework.ai.chat.metadata.EmptyUsage)
+      return new ModelTokenUsage(null, null, null, null, null);
+    return new ModelTokenUsage(
+        number(usage.getPromptTokens()),
+        number(usage.getCompletionTokens()),
+        number(usage.getTotalTokens()),
+        null,
+        null);
+  }
+
+  private static ModelTokenUsage backend(org.springframework.ai.chat.model.ChatResponse response) {
+    var generation = response == null ? null : response.getResult();
+    if (generation != null) {
+      var metadata = generation.getOutput().getMetadata();
+      if (metadata.containsKey(METADATA_KEY)) {
+        if (metadata.get(METADATA_KEY) instanceof ModelTokenUsage numeric) return numeric;
+        throw new IllegalArgumentException("Invalid model token usage");
+      }
+    }
+    return null;
+  }
+
+  /** Preserve the existing integer budget contract without rounding or overflow. */
+  public static Integer totalTokens(org.springframework.ai.chat.model.ChatResponse response) {
+    var numeric = backend(response);
+    if (numeric == null) {
+      var usage =
+          response == null || response.getMetadata() == null
+              ? null
+              : response.getMetadata().getUsage();
+      return usage == null ? null : usage.getTotalTokens();
+    }
+    Long total = numeric.total();
+    if (total == null || total > Integer.MAX_VALUE) return null;
+    return total.intValue();
+  }
+
+  private static Long number(Integer value) {
+    return value == null ? null : value.longValue();
+  }
+
   public ModelTokenUsage {
     if (negative(input)
         || negative(output)

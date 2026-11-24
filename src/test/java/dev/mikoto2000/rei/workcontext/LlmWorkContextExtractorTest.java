@@ -44,7 +44,7 @@ class LlmWorkContextExtractorTest {
     var extra = Map.<String, Object>of("chat_template_kwargs", template, "other", 7);
     var base = OpenAiChatOptions.builder().extraBody(extra).build();
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions("memory", null)).thenReturn(base);
+    when(models.requestOptions("memory", null, false)).thenReturn(base);
     when(model.stream(any(Prompt.class)))
         .thenAnswer(call -> {
           var options = (OpenAiChatOptions) ((Prompt) call.getArgument(0)).getOptions();
@@ -74,7 +74,7 @@ class LlmWorkContextExtractorTest {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions("memory", null))
+    when(models.requestOptions("memory", null, false))
         .thenReturn(
             OpenAiChatOptions.builder()
                 .extraBody(Map.of("chat_template_kwargs", "invalid"))
@@ -97,7 +97,7 @@ class LlmWorkContextExtractorTest {
     var model = mock(ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);
     var count = new java.util.concurrent.atomic.AtomicInteger();
-    when(models.chatOptions("memory", null))
+    when(models.requestOptions("memory", null, false))
         .thenAnswer(call -> {
           int limit = count.getAndIncrement() == 0 ? 32000 : 512;
           var builder = OpenAiChatOptions.builder();
@@ -128,7 +128,8 @@ class LlmWorkContextExtractorTest {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions("memory", null)).thenReturn(OpenAiChatOptions.builder().build());
+    when(models.requestOptions("memory", null, false))
+        .thenReturn(OpenAiChatOptions.builder().build());
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
     when(model.stream(any(Prompt.class)))
         .thenReturn(Flux.<ChatResponse>never().doOnCancel(() -> cancelled.set(true)));
@@ -163,7 +164,8 @@ class LlmWorkContextExtractorTest {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions("memory", null)).thenReturn(OpenAiChatOptions.builder().build());
+    when(models.requestOptions("memory", null, false))
+        .thenReturn(OpenAiChatOptions.builder().build());
     var firstEntered = new java.util.concurrent.CountDownLatch(1);
     var secondStarted = new java.util.concurrent.CountDownLatch(1);
     var secondEntered = new java.util.concurrent.CountDownLatch(1);
@@ -209,7 +211,7 @@ class LlmWorkContextExtractorTest {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(models.isolatedChatModel("work-context")).thenReturn(model);
-    when(models.chatOptions("work-context", null))
+    when(models.requestOptions("work-context", null, false))
         .thenReturn(OpenAiChatOptions.builder().model("handoff-model").build());
     when(model.stream(any(Prompt.class)))
         .thenAnswer(call -> {
@@ -242,7 +244,7 @@ class LlmWorkContextExtractorTest {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.MEMORY, null))
+    when(models.requestOptions(LlmFeature.MEMORY, null, false))
         .thenAnswer(c -> OpenAiChatOptions.builder().build());
     var extractor =
         new LlmWorkContextExtractor(
@@ -294,7 +296,7 @@ class LlmWorkContextExtractorTest {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.MEMORY, null))
+    when(models.requestOptions(LlmFeature.MEMORY, null, false))
         .thenAnswer(c -> OpenAiChatOptions.builder().build());
     when(model.stream(any(Prompt.class)))
         .thenReturn(
@@ -341,7 +343,7 @@ class LlmWorkContextExtractorTest {
             .toolChoice("required")
             .build();
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.MEMORY, null)).thenReturn(configured);
+    when(models.requestOptions(LlmFeature.MEMORY, null, false)).thenReturn(configured);
     when(model.stream(any(Prompt.class)))
         .thenReturn(
             Flux.just(
@@ -370,7 +372,7 @@ class LlmWorkContextExtractorTest {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.MEMORY, null))
+    when(models.requestOptions(LlmFeature.MEMORY, null, false))
         .thenReturn(
             OpenAiChatOptions.builder()
                 .extraBody(Map.of("tools", List.of(Map.of("type", "function"))))
@@ -392,7 +394,7 @@ class LlmWorkContextExtractorTest {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.MEMORY, null))
+    when(models.requestOptions(LlmFeature.MEMORY, null, false))
         .thenAnswer(c -> OpenAiChatOptions.builder().build());
     var extractor =
         new LlmWorkContextExtractor(
@@ -427,7 +429,7 @@ class LlmWorkContextExtractorTest {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.MEMORY, null))
+    when(models.requestOptions(LlmFeature.MEMORY, null, false))
         .thenAnswer(c -> OpenAiChatOptions.builder().build());
     when(model.stream(any(Prompt.class)))
         .thenReturn(
