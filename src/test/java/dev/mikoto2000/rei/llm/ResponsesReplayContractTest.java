@@ -2617,6 +2617,62 @@ class ResponsesReplayContractTest {
         .isEqualTo("opaque-two+/=");
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void plaintextReasoningUsesThePublicSdkSendViewWithoutMutatingTheStoredOriginal(boolean streaming)
+      throws Exception {
+    replayMode = ReasoningReplayMode.PLAINTEXT;
+    var wire = new ObjectMapper().readTree(toolResponse());
+    for (var item : wire.path("output"))
+      if ("reasoning".equals(item.path("type").asText())) {
+        var reasoning = (com.fasterxml.jackson.databind.node.ObjectNode) item;
+        reasoning.remove("encrypted_content");
+        reasoning.set("content", new ObjectMapper().readTree(
+            "[{\"type\":\"reasoning_text\",\"text\":\"PRIVATE-平文-" + item.path("id").asText() + "\"}]"));
+      }
+    contentType = streaming ? "text/event-stream" : "application/json";
+    replies.add(streaming ? sse(wire.toString()) : wire.toString());
+    var options = options();
+    var model = model(options);
+    var prompt = new Prompt("fixture", options);
+    org.springframework.ai.chat.model.ChatResponse first;
+    if (streaming) {
+      var completed = new java.util.concurrent.atomic.AtomicReference<org.springframework.ai.chat.model.ChatResponse>();
+      new org.springframework.ai.chat.model.MessageAggregator()
+          .aggregate(model.stream(prompt), completed::set).blockLast(Duration.ofSeconds(10));
+      first = completed.get();
+    } else first = model.call(prompt);
+    var original = first.getResult().getOutput();
+    var parts = List.copyOf(original.getParts());
+    assertThat(original.getText()).isEqualTo("working");
+    var reasoning = original.getParts().stream().filter(ReasoningPart.class::isInstance)
+        .map(ReasoningPart.class::cast).toList();
+    assertThat(reasoning).hasSize(2);
+    assertThat(reasoning).allSatisfy(part -> {
+      assertThat(part.payload()).isNull();
+      assertThat(part.text()).startsWith("PRIVATE-平文-");
+    });
+    var scope = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
+        "fixture-project", protocolDirectory.toString(), "fixture-conversation");
+    var ref = payloads().save(scope, "fixture-run", "plaintext-original", original);
+    payloads().publish(scope, ref,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, "fixture-run");
+    var restored = (AssistantMessage) payloads().load(scope, ref,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, "fixture-run");
+    assertThat(restored.getParts()).containsExactlyElementsOf(parts);
+    contentType = "application/json";
+    model.call(new Prompt(List.of(new UserMessage("fixture"), restored), options));
+    var input = requests.getLast().path("input");
+    for (int position : List.of(1, 4)) {
+      assertThat(input.get(position).path("type").asText()).isEqualTo("reasoning");
+      assertThat(input.get(position).path("content").get(0).path("text").asText())
+          .isEqualTo("PRIVATE-平文-" + input.get(position).path("id").asText());
+      assertThat(input.get(position).has("encrypted_content")).isFalse();
+    }
+    assertThat(original.getParts()).containsExactlyElementsOf(parts);
+    assertThat(executions.get()).isZero();
+  }
+
   @Test
   void encryptedRequestsRequireAnExplicitOwnerBeforeAnyHttp() {
     owner = null;
