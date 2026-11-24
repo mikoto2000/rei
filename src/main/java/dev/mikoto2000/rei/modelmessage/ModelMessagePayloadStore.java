@@ -391,7 +391,7 @@ public final class ModelMessagePayloadStore {
         }
         throw rejected();
       }
-    } catch (SQLException failure) {
+    } catch (SQLException | RuntimeException failure) {
       throw rejected();
     }
   }
