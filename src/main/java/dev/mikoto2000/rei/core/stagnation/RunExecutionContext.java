@@ -263,6 +263,8 @@ public class RunExecutionContext {
 
   /** Save the original resolved input, including media, before sending or decorating it. */
   public void preserveUserMessage(org.springframework.ai.chat.messages.UserMessage message) {
+    // The existing controlled-model prepare path replaces this host input with restored messages.
+    if (!resumeMessages.isEmpty()) return;
     var context = modelOptions == null ? null : modelOptions.getToolContext();
     var boundary =
         context == null
