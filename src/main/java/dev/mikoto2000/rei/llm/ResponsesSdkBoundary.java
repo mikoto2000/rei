@@ -152,28 +152,47 @@ final class ResponsesSdkBoundary {
             });
   }
 
+  /** Read the same typed delta fields Spring consumes before its aggregator can log SDK errors. */
+  private static void validateStreamFields(ResponseStreamEvent event) {
+    event.outputTextDelta().ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
+    event.reasoningTextDelta().ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
+    event.reasoningSummaryTextDelta().ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
+    event.functionCallArgumentsDelta().ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
+    event.refusalDelta().ifPresent(delta -> validateDelta(delta.delta(), 0));
+  }
+
+  private static void validateDelta(String delta, long index) {
+    if (delta == null || index < 0 || index > Integer.MAX_VALUE)
+      throw new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE);
+  }
+
   private record SafeStream(AsyncStreamResponse<ResponseStreamEvent> delegate, boolean plaintext)
       implements AsyncStreamResponse<ResponseStreamEvent> {
     private Handler<ResponseStreamEvent> safeHandler(Handler<? super ResponseStreamEvent> handler) {
       return new Handler<>() {
         @Override
         public void onNext(ResponseStreamEvent event) {
-          if (plaintext && event.isOutputItemDone())
-            validatePlaintextItem(event.outputItemDone().orElseThrow().item());
-          if (plaintext && event.isOutputItemAdded())
-            validatePlaintextItem(event.outputItemAdded().orElseThrow().item());
-          if (event.isFailed())
-            throw new ResponsesTransportException(
-                ResponsesTransportException.Category.PROVIDER,
-                validateResponse(event.failed().orElseThrow().response(), plaintext));
-          if (event.isCompleted())
-            validateResponse(event.completed().orElseThrow().response(), plaintext);
-          if (event.isIncomplete())
-            validateResponse(event.incomplete().orElseThrow().response(), plaintext);
-          if (event.isCreated())
-            validateResponse(event.created().orElseThrow().response(), plaintext);
-          if (event.isError())
-            throw new ResponsesTransportException(ResponsesTransportException.Category.PROVIDER);
+          try {
+            validateStreamFields(event);
+            if (plaintext && event.isOutputItemDone())
+              validatePlaintextItem(event.outputItemDone().orElseThrow().item());
+            if (plaintext && event.isOutputItemAdded())
+              validatePlaintextItem(event.outputItemAdded().orElseThrow().item());
+            if (event.isFailed())
+              throw new ResponsesTransportException(
+                  ResponsesTransportException.Category.PROVIDER,
+                  validateResponse(event.failed().orElseThrow().response(), plaintext));
+            if (event.isCompleted())
+              validateResponse(event.completed().orElseThrow().response(), plaintext);
+            if (event.isIncomplete())
+              validateResponse(event.incomplete().orElseThrow().response(), plaintext);
+            if (event.isCreated())
+              validateResponse(event.created().orElseThrow().response(), plaintext);
+            if (event.isError())
+              throw new ResponsesTransportException(ResponsesTransportException.Category.PROVIDER);
+          } catch (RuntimeException invalid) {
+            throw ResponsesTransportException.normalize(invalid);
+          }
           handler.onNext(event);
         }
 
