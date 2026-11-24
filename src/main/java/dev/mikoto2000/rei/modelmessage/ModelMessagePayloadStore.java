@@ -77,6 +77,11 @@ public final class ModelMessagePayloadStore {
     }
   }
 
+  private static boolean legacyPlainText(org.springframework.ai.chat.messages.AssistantMessage message) {
+    return !ModelMessageCodec.requiresPayload(message) && message.getParts().stream()
+        .allMatch(org.springframework.ai.chat.messages.part.TextPart.class::isInstance);
+  }
+
   private static String replayHash(org.springframework.ai.chat.messages.AssistantMessage message) {
     var metadata = new java.util.HashMap<>(message.getMetadata());
     metadata.remove("rei.historySequence");
@@ -127,12 +132,14 @@ public final class ModelMessagePayloadStore {
                   pointer.owner())
               != 1) throw rejected();
           if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
+            if (!legacyPlainText(assistant)) {
             bind(sourceRun, ref.id());
             try (var rows = sourceRun.executeQuery()) {
               if (!rows.next()) throw rejected();
               var sourceOwner =
                   new Exchange(this, target.scope(), rows.getString(1), "history").ownerKey();
               new Origin(sourceOwner, origin.endpoint()).requireMatch(assistant);
+            }
             }
             messages.add(replayHash(assistant));
           }
@@ -595,6 +602,8 @@ public final class ModelMessagePayloadStore {
     identifier(key);
     var metadata = new java.util.HashMap<>(message.getMetadata());
     metadata.remove("rei.historySequence");
+    if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant && legacyPlainText(assistant))
+      metadata.keySet().removeIf(property -> property.startsWith("rei.modelMessage.") || property.equals("source") || property.equals("sourceId"));
     Message original;
     if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant)
       original =
