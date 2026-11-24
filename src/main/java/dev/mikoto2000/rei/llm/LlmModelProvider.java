@@ -311,8 +311,6 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
           || !(host.endsWith(".invalid")
               || java.util.Set.of("localhost", "127.0.0.1", "::1", "[::1]").contains(host)))
         throw new IllegalStateException("Responses fixture endpoint must be owned locally");
-      if (endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT)
-        throw new IllegalStateException("Responses plaintext replay is unavailable");
       var builder =
           org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
               .baseUrl(endpoint.baseUrl())

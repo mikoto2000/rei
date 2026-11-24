@@ -285,7 +285,7 @@ class ResponsesReplayContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"fallback", "model", "url", "replay", "plaintext", "external"})
+      strings = {"fallback", "model", "url", "replay", "external"})
   void nativeFixturesCannotBypassIncompleteConfigurationOrProductionAvailability(String defect) {
     var properties = nativeProperties();
     var server = properties.feature(LlmFeature.CHAT);
@@ -294,7 +294,6 @@ class ResponsesReplayContractTest {
       case "model" -> server.setModel(null);
       case "url" -> server.setBaseUrl(null);
       case "replay" -> server.setReasoningReplay(null);
-      case "plaintext" -> server.setReasoningReplay(ReasoningReplayMode.PLAINTEXT);
       case "external" -> server.setBaseUrl("https://api.openai.com");
       default -> throw new AssertionError(defect);
     }
