@@ -447,17 +447,28 @@ public final class ModelMessagePayloadStore {
         identifier(ref.id());
         if (ref.sha256() == null || !ref.sha256().matches("[0-9a-f]{64}")) throw rejected();
         // Receipts survive GC, so repeated retirement cannot resurrect or load old bodies.
-        if (scalar(db,
+        if (scalar(
+                db,
                 "SELECT COUNT(*) FROM model_message_receipts WHERE project=? AND root_path=? AND conversation=? AND payload_id=? AND sha256=?",
-                scope.project(), scope.root(), scope.conversation(), ref.id(), ref.sha256()) != 1)
-          throw rejected();
+                scope.project(),
+                scope.root(),
+                scope.conversation(),
+                ref.id(),
+                ref.sha256())
+            != 1) throw rejected();
         if (scalar(db, "SELECT COUNT(*) FROM model_message_payloads WHERE id=?", ref.id()) != 0
-            && scalar(db,
-                "SELECT COUNT(*) FROM model_message_payloads WHERE id=? AND project=? AND root_path=? AND conversation=? AND sha256=?",
-                ref.id(), scope.project(), scope.root(), scope.conversation(), ref.sha256()) != 1)
-          throw rejected();
-        try (var delete = db.prepareStatement(
-            "DELETE FROM model_message_references WHERE payload_id=? AND kind='HISTORY' AND owner=?")) {
+            && scalar(
+                    db,
+                    "SELECT COUNT(*) FROM model_message_payloads WHERE id=? AND project=? AND root_path=? AND conversation=? AND sha256=?",
+                    ref.id(),
+                    scope.project(),
+                    scope.root(),
+                    scope.conversation(),
+                    ref.sha256())
+                != 1) throw rejected();
+        try (var delete =
+            db.prepareStatement(
+                "DELETE FROM model_message_references WHERE payload_id=? AND kind='HISTORY' AND owner=?")) {
           bind(delete, ref.id(), owner);
           removed += delete.executeUpdate();
         }
@@ -471,8 +482,9 @@ public final class ModelMessagePayloadStore {
     validate(scope);
     identifier(approval);
     return transaction(db -> {
-      try (var delete = db.prepareStatement(
-          "DELETE FROM model_message_references WHERE kind='APPROVAL' AND owner=? AND payload_id IN (SELECT id FROM model_message_payloads WHERE project=? AND root_path=? AND conversation=?)")) {
+      try (var delete =
+          db.prepareStatement(
+              "DELETE FROM model_message_references WHERE kind='APPROVAL' AND owner=? AND payload_id IN (SELECT id FROM model_message_payloads WHERE project=? AND root_path=? AND conversation=?)")) {
         bind(delete, approval, scope.project(), scope.root(), scope.conversation());
         return delete.executeUpdate();
       }

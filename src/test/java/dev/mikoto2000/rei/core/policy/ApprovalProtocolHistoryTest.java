@@ -20,7 +20,8 @@ class ApprovalProtocolHistoryTest {
   @TempDir Path directory;
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {"COMPLETED", "DENIED", "UNKNOWN", "EXPIRED", "CANCELLED"})
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"COMPLETED", "DENIED", "UNKNOWN", "EXPIRED", "CANCELLED"})
   void onlyKnownDurableTerminalApprovalReferencesAreRetired(String state) {
     var fixture = terminalFixture();
     fixture.store().state("approval", state);
@@ -28,8 +29,14 @@ class ApprovalProtocolHistoryTest {
     assertThat(approvalPins(fixture.source(), "approval")).isEqualTo(retired ? 0 : 1);
     assertThat(fixture.payloads().usage(fixture.scope(), "run").referenceCount())
         .isEqualTo(retired ? 2 : 3);
-    assertThat(fixture.payloads().load(fixture.scope(), fixture.reference(),
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:run"))
+    assertThat(
+            fixture
+                .payloads()
+                .load(
+                    fixture.scope(),
+                    fixture.reference(),
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY,
+                    "turn:run"))
         .isInstanceOf(AssistantMessage.class);
     fixture.store().state("approval", state);
     assertThat(approvalPins(fixture.source(), "approval")).isEqualTo(retired ? 0 : 1);
@@ -39,8 +46,9 @@ class ApprovalProtocolHistoryTest {
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void approvalPinsRemainUntilTheActualOuterTransactionCommits(boolean rollback) {
     var fixture = terminalFixture();
-    var transaction = new org.springframework.transaction.support.TransactionTemplate(
-        new org.springframework.jdbc.datasource.DataSourceTransactionManager(fixture.source()));
+    var transaction =
+        new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(fixture.source()));
     transaction.executeWithoutResult(status -> {
       fixture.store().state("approval", "COMPLETED");
       assertThat(approvalPins(fixture.source(), "approval")).isEqualTo(1);
@@ -54,13 +62,26 @@ class ApprovalProtocolHistoryTest {
   @Test
   void replacementApprovalOwnsItsPinsBeforeThePreviousApprovalRetires() {
     var fixture = terminalFixture();
-    fixture.store().save("replacement", fixture.owner(), "request", List.of(), fixture.pending(),
-        new OutputLimitRunBudget.Snapshot(0, 1, 0, false), false);
+    fixture
+        .store()
+        .save(
+            "replacement",
+            fixture.owner(),
+            "request",
+            List.of(),
+            fixture.pending(),
+            new OutputLimitRunBudget.Snapshot(0, 1, 0, false),
+            false);
     fixture.store().state("approval", "COMPLETED");
     assertThat(approvalPins(fixture.source(), "approval")).isZero();
     assertThat(approvalPins(fixture.source(), "replacement")).isEqualTo(1);
-    assertThat(fixture.store().saved(fixture.store().find("replacement").orElseThrow()).pendingTools()
-        .assistantReference()).isEqualTo(fixture.reference());
+    assertThat(
+            fixture
+                .store()
+                .saved(fixture.store().find("replacement").orElseThrow())
+                .pendingTools()
+                .assistantReference())
+        .isEqualTo(fixture.reference());
   }
 
   @Test
@@ -69,14 +90,27 @@ class ApprovalProtocolHistoryTest {
     source.setUrl("jdbc:sqlite:" + directory.resolve("legacy-terminal.db"));
     var store = new ApprovalContinuationStore(source);
     var owner = new AgentRunContext("run", "session", directory, "project");
-    var pending = new RunContinuation.PendingTools("working",
-        List.of(new AssistantMessage.ToolCall("call", "function", "fixture", "{}")), List.of(), java.util.Set.of());
-    store.save("legacy", owner, "request", List.of(), pending,
-        new OutputLimitRunBudget.Snapshot(0, 1, 0, false), false);
+    var pending =
+        new RunContinuation.PendingTools(
+            "working",
+            List.of(new AssistantMessage.ToolCall("call", "function", "fixture", "{}")),
+            List.of(),
+            java.util.Set.of());
+    store.save(
+        "legacy",
+        owner,
+        "request",
+        List.of(),
+        pending,
+        new OutputLimitRunBudget.Snapshot(0, 1, 0, false),
+        false);
     store.state("legacy", "COMPLETED");
-    assertThat(org.springframework.jdbc.core.simple.JdbcClient.create(source)
-        .sql("SELECT COUNT(*) FROM sqlite_master WHERE name='model_message_payloads'")
-        .query(Long.class).single()).isZero();
+    assertThat(
+            org.springframework.jdbc.core.simple.JdbcClient.create(source)
+                .sql("SELECT COUNT(*) FROM sqlite_master WHERE name='model_message_payloads'")
+                .query(Long.class)
+                .single())
+        .isZero();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -86,34 +120,48 @@ class ApprovalProtocolHistoryTest {
     var db = org.springframework.jdbc.core.simple.JdbcClient.create(fixture.source());
     if (failure.equals("document"))
       db.sql("UPDATE approval_continuations SET document=? WHERE approval='approval'")
-          .param("PRIVATE-corrupt-document").update();
+          .param("PRIVATE-corrupt-document")
+          .update();
     else if (failure.equals("database")) db.sql("DROP TABLE model_message_references").update();
     else {
-      var unavailable = java.lang.reflect.Proxy.newProxyInstance(
-          org.springframework.jdbc.core.simple.JdbcClient.class.getClassLoader(),
-          new Class<?>[] {org.springframework.jdbc.core.simple.JdbcClient.class},
-          (proxy, method, arguments) -> {
-            if (method.getName().equals("sql") && arguments[0] instanceof String sql
-                && sql.startsWith("SELECT * FROM approval_continuations"))
-              throw new IllegalStateException("PRIVATE-lookup-failure");
-            return method.invoke(db, arguments);
-          });
-      org.springframework.test.util.ReflectionTestUtils.setField(fixture.store(), "db", unavailable);
+      var unavailable =
+          java.lang.reflect.Proxy.newProxyInstance(
+              org.springframework.jdbc.core.simple.JdbcClient.class.getClassLoader(),
+              new Class<?>[] {org.springframework.jdbc.core.simple.JdbcClient.class},
+              (proxy, method, arguments) -> {
+                if (method.getName().equals("sql")
+                    && arguments[0] instanceof String sql
+                    && sql.startsWith("SELECT * FROM approval_continuations"))
+                  throw new IllegalStateException("PRIVATE-lookup-failure");
+                return method.invoke(db, arguments);
+              });
+      org.springframework.test.util.ReflectionTestUtils.setField(
+          fixture.store(), "db", unavailable);
     }
-    var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
-    var captured = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+    var captured =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     captured.start();
     logger.addAppender(captured);
     try {
-      org.assertj.core.api.Assertions.assertThatCode(() -> fixture.store().state("approval", "COMPLETED"))
+      org.assertj.core.api.Assertions.assertThatCode(
+              () -> fixture.store().state("approval", "COMPLETED"))
           .doesNotThrowAnyException();
-      assertThat(db.sql("SELECT state FROM approval_continuations WHERE approval='approval'")
-          .query(String.class).single()).isEqualTo("COMPLETED");
-      if (failure.equals("document")) assertThat(approvalPins(fixture.source(), "approval")).isEqualTo(1);
+      assertThat(
+              db.sql("SELECT state FROM approval_continuations WHERE approval='approval'")
+                  .query(String.class)
+                  .single())
+          .isEqualTo("COMPLETED");
+      if (failure.equals("document"))
+        assertThat(approvalPins(fixture.source(), "approval")).isEqualTo(1);
       for (var logged : captured.list) {
         assertThat(logged.getFormattedMessage()).doesNotContain("PRIVATE-");
         if (logged.getThrowableProxy() != null)
-          assertThat(ch.qos.logback.classic.spi.ThrowableProxyUtil.asString(logged.getThrowableProxy()))
+          assertThat(
+                  ch.qos.logback.classic.spi.ThrowableProxyUtil.asString(
+                      logged.getThrowableProxy()))
               .doesNotContain("PRIVATE-");
       }
     } finally {
@@ -125,7 +173,9 @@ class ApprovalProtocolHistoryTest {
   private long approvalPins(org.sqlite.SQLiteDataSource source, String id) {
     return org.springframework.jdbc.core.simple.JdbcClient.create(source)
         .sql("SELECT COUNT(*) FROM model_message_references WHERE kind='APPROVAL' AND owner=?")
-        .param(id).query(Long.class).single();
+        .param(id)
+        .query(Long.class)
+        .single();
   }
 
   private TerminalFixture terminalFixture() {
@@ -135,25 +185,57 @@ class ApprovalProtocolHistoryTest {
     var scope = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner);
     var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
     var call = new AssistantMessage.ToolCall("call", "function", "fixture", "{}");
-    var assistant = AssistantMessage.builder().parts(List.of(
-        new ReasoningPart(null, null, new OpaquePayload("fixture", "encrypted_content", "PRIVATE-retained"), Map.of()),
-        org.springframework.ai.chat.messages.part.ToolCallPart.of(call))).build();
+    var assistant =
+        AssistantMessage.builder()
+            .parts(
+                List.of(
+                    new ReasoningPart(
+                        null,
+                        null,
+                        new OpaquePayload("fixture", "encrypted_content", "PRIVATE-retained"),
+                        Map.of()),
+                    org.springframework.ai.chat.messages.part.ToolCallPart.of(call)))
+            .build();
     var ref = payloads.save(scope, "run", "assistant", assistant);
-    payloads.publish(scope, ref, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, "run");
-    var pending = new RunContinuation.PendingTools("working", List.of(call), List.of(), java.util.Set.of(), ref);
+    payloads.publish(
+        scope,
+        ref,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+        "run");
+    var pending =
+        new RunContinuation.PendingTools(
+            "working", List.of(call), List.of(), java.util.Set.of(), ref);
     var store = new ApprovalContinuationStore(source);
-    store.save("approval", owner, "request", List.of(), pending,
-        new OutputLimitRunBudget.Snapshot(0, 1, 0, false), false);
-    payloads.publish(scope, ref, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:run");
-    payloads.publish(scope, ref, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint:retained");
+    store.save(
+        "approval",
+        owner,
+        "request",
+        List.of(),
+        pending,
+        new OutputLimitRunBudget.Snapshot(0, 1, 0, false),
+        false);
+    payloads.publish(
+        scope,
+        ref,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY,
+        "turn:run");
+    payloads.publish(
+        scope,
+        ref,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT,
+        "checkpoint:retained");
     payloads.releaseRun(scope, "run");
     return new TerminalFixture(source, owner, scope, payloads, store, ref, pending);
   }
 
-  private record TerminalFixture(org.sqlite.SQLiteDataSource source, AgentRunContext owner,
+  private record TerminalFixture(
+      org.sqlite.SQLiteDataSource source,
+      AgentRunContext owner,
       dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope scope,
-      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore payloads, ApprovalContinuationStore store,
-      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref reference, RunContinuation.PendingTools pending) {}
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore payloads,
+      ApprovalContinuationStore store,
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref reference,
+      RunContinuation.PendingTools pending) {}
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(

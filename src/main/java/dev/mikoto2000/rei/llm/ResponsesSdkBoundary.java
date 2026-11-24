@@ -159,22 +159,32 @@ final class ResponsesSdkBoundary {
   /** Read the same typed delta fields Spring consumes before its aggregator can log SDK errors. */
   private static void validateStreamFields(ResponseStreamEvent event) {
     event.outputTextDelta().ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
-    event.reasoningTextDelta().ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
-    event.reasoningSummaryTextDelta().ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
-    event.functionCallArgumentsDelta().ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
+    event
+        .reasoningTextDelta()
+        .ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
+    event
+        .reasoningSummaryTextDelta()
+        .ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
+    event
+        .functionCallArgumentsDelta()
+        .ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
     event.refusalDelta().ifPresent(delta -> validateDelta(delta.delta(), 0));
-    event.outputItemDone().ifPresent(done -> {
-      validateDelta("", done.outputIndex());
-      done.item().validate();
-    });
-    event.outputItemAdded().ifPresent(added -> {
-      validateDelta("", added.outputIndex());
-      if (added.item().isFunctionCall()) {
-        var call = added.item().asFunctionCall();
-        validateDelta(call.callId(), 0);
-        validateDelta(call.name(), 0);
-      }
-    });
+    event
+        .outputItemDone()
+        .ifPresent(done -> {
+          validateDelta("", done.outputIndex());
+          done.item().validate();
+        });
+    event
+        .outputItemAdded()
+        .ifPresent(added -> {
+          validateDelta("", added.outputIndex());
+          if (added.item().isFunctionCall()) {
+            var call = added.item().asFunctionCall();
+            validateDelta(call.callId(), 0);
+            validateDelta(call.name(), 0);
+          }
+        });
   }
 
   private static void validateDelta(String delta, long index) {

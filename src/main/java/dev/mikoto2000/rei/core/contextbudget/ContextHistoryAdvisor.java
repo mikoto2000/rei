@@ -501,9 +501,10 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       long count) {
     // Missing or damaged log evidence keeps pins. An already committed summary remains usable.
     try {
-      if (rows.size() != count || rows.isEmpty()
-          || rows.getFirst().sequence() != first || rows.getLast().sequence() != last)
-        return;
+      if (rows.size() != count
+          || rows.isEmpty()
+          || rows.getFirst().sequence() != first
+          || rows.getLast().sequence() != last) return;
       String anchor = "turn:" + run;
       var refs = new ArrayList<ModelMessagePayloadStore.Ref>();
       var ids = new java.util.HashSet<String>();
@@ -514,10 +515,14 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         String id = metadata.get(ModelMessagePayloadStore.HISTORY_ID);
         if (!run.equals(metadata.get(ModelMessagePayloadStore.HISTORY_RUN))
             || !anchor.equals(metadata.get(ModelMessagePayloadStore.HISTORY_OWNER))
-            || role == null || !java.util.Set.of("user", "assistant", "tool").contains(role)
-            || row.sequence() <= previous || !ids.add(id)) return;
+            || role == null
+            || !java.util.Set.of("user", "assistant", "tool").contains(role)
+            || row.sequence() <= previous
+            || !ids.add(id)) return;
         previous = row.sequence();
-        refs.add(new ModelMessagePayloadStore.Ref(id, metadata.get(ModelMessagePayloadStore.HISTORY_HASH)));
+        refs.add(
+            new ModelMessagePayloadStore.Ref(
+                id, metadata.get(ModelMessagePayloadStore.HISTORY_HASH)));
       }
       exchange.store().releaseHistory(exchange.scope(), anchor, refs);
     } catch (RuntimeException failure) {
