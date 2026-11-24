@@ -220,6 +220,21 @@ public final class ModelOptions {
     return options;
   }
 
+  /** A feature may shorten, but never raise, a bound Responses read deadline. */
+  public static ToolCallingChatOptions withTimeout(ToolCallingChatOptions options, java.time.Duration timeout) {
+    if(timeout==null || timeout.isZero() || timeout.isNegative()) throw new IllegalArgumentException("Timeout must be positive");
+    if(options instanceof OpenAiResponsesChatOptions responses) {
+      var configured=responses.getTimeout();
+      var builder=responses.mutate();
+      builder.timeout(configured!=null && configured.compareTo(timeout)<0 ? configured : timeout);
+      return builder.build();
+    }
+    if(options instanceof OpenAiChatOptions chat) {
+      var builder=chat.mutate();builder.timeout(timeout);return builder.build();
+    }
+    throw new IllegalArgumentException("Request timeout is unavailable for this protocol");
+  }
+
   /** Local chat-template controls have no implicit Responses equivalent. */
   public static ToolCallingChatOptions withLocalThinking(
       ToolCallingChatOptions options, Boolean thinking) {
