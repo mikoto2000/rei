@@ -433,7 +433,7 @@ class ResponsesReplayContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(value = ReasoningReplayMode.class, names = {"ENCRYPTED", "NONE"})
-  void completedHistoryReplayRequiresExactStoredMessagesAndTheTargetRun(ReasoningReplayMode replay) {
+  void completedHistoryReplayRequiresExactStoredMessagesAndTheTargetRun(ReasoningReplayMode replay) throws Exception {
     var properties = nativeProperties();
     var server = properties.feature(LlmFeature.CHAT);
     server.setReasoningReplay(replay);
@@ -502,6 +502,15 @@ class ResponsesReplayContractTest {
     assertThatThrownBy(() -> protocolStore.historyReplayGrant(currentExchange, List.of(pointer), incompatible))
         .isInstanceOf(IllegalStateException.class);
     assertThat(requests).hasSize(2);
+    protocolStore.release(previousExchange.scope(), reference,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY, "completed:previous");
+    protocolStore.release(previousExchange.scope(), reference,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, previous.runId());
+    try (var db = java.sql.DriverManager.getConnection("jdbc:sqlite:" + protocolDirectory.resolve("protocol.db"));
+        var statement = db.createStatement()) {
+      statement.executeUpdate("UPDATE model_message_payloads SET staged_until=0");
+    }
+    assertThat(protocolStore.collectExpired()).as("accepted target Run owns a lease on borrowed history").isZero();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
