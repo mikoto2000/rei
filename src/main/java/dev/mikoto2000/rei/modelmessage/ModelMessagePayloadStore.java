@@ -31,6 +31,14 @@ public final class ModelMessagePayloadStore {
 
   public static final String HISTORY_GRANT_CONTEXT_KEY = "rei.modelMessage.historyGrant";
 
+  /** Published by an existing continuation document; never a serialized Java authority object. */
+  public record ReplayReference(Ref reference, ReferenceKind kind, String owner) {
+    public ReplayReference {
+      if (reference == null || kind == null) throw rejected();
+      identifier(owner);
+    }
+  }
+
   /** Backend-created replay authority; no constructor or serialized authority is public. */
   public static final class HistoryReplayGrant {
     private final Origin target;
@@ -74,6 +82,13 @@ public final class ModelMessagePayloadStore {
 
   public HistoryReplayGrant historyReplayGrant(
       Exchange target, java.util.List<java.util.Map<String, String>> references, Origin origin) {
+    return restoreReplayGrant(target, references.stream().map(pointer -> new ReplayReference(
+        new Ref(pointer.get(HISTORY_ID), pointer.get(HISTORY_HASH)), ReferenceKind.HISTORY,
+        pointer.get(HISTORY_OWNER))).toList(), origin);
+  }
+
+  public HistoryReplayGrant restoreReplayGrant(
+      Exchange target, java.util.List<ReplayReference> references, Origin origin) {
     if (target == null
         || target.store() != this
         || origin == null
@@ -87,15 +102,12 @@ public final class ModelMessagePayloadStore {
               db.prepareStatement(
                   "INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,'RUN',?)")) {
         for (var pointer : pointers) {
-          String historyOwner = pointer.get(HISTORY_OWNER);
-          identifier(historyOwner);
-          var ref = new Ref(pointer.get(HISTORY_ID), pointer.get(HISTORY_HASH));
+          var ref = pointer.reference();
           var message = codec.decode(read(db, target.scope(), ref));
           if (scalar(
                   db,
-                  "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='HISTORY' AND owner=?",
-                  ref.id(),
-                  historyOwner)
+                  "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind=? AND owner=?",
+                  ref.id(), pointer.kind().name(), pointer.owner())
               != 1) throw rejected();
           if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
             bind(sourceRun, ref.id());

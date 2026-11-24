@@ -120,9 +120,16 @@ public interface RunContinuation {
       String request,
       List<Message> messages,
       OutputLimitRunBudget.Snapshot budget,
-      PendingTools pendingTools) {
+      PendingTools pendingTools,
+      List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference> replayReferences) {
     public Saved {
       messages = messages == null ? null : Collections.unmodifiableList(new ArrayList<>(messages));
+      replayReferences = replayReferences == null ? null : List.copyOf(replayReferences);
+    }
+
+    public Saved(String request, List<Message> messages, OutputLimitRunBudget.Snapshot budget,
+        PendingTools pendingTools) {
+      this(request, messages, budget, pendingTools, null);
     }
 
     /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */

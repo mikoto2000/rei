@@ -34,6 +34,7 @@ import java.util.UUID;
  */
 public class RunExecutionContext {
   private org.springframework.ai.model.tool.ToolCallingChatOptions modelOptions;
+  private List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference> resumeReplayReferences = List.of();
 
   /** Capture once at acceptance; each request receives a copy of the same effective options. */
   public void setModelOptions(org.springframework.ai.model.tool.ToolCallingChatOptions options) {
@@ -57,6 +58,25 @@ public class RunExecutionContext {
           }));
       modelOptions = modelOptions.mutate().toolContext(null).toolContext(context).build();
     }
+    restoreReplayAuthority();
+  }
+
+  private void restoreReplayAuthority() {
+    if (resumeReplayReferences.isEmpty()) return;
+    var context = modelOptions.getToolContext();
+    var boundary = context == null ? null : context.get(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var target = context == null ? null : context.get(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
+    if (!(boundary instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)
+        || !(target instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin)
+        || runContext == null || !exchange.run().equals(runContext.runId())
+        || !exchange.scope().equals(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(runContext)))
+      throw new IllegalStateException("Native continuation ownership mismatch");
+    var grant = exchange.store().restoreReplayGrant(exchange, resumeReplayReferences, origin);
+    var restored = new java.util.HashMap<>(java.util.Objects.requireNonNull(context));
+    restored.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY, grant);
+    modelOptions = modelOptions.mutate().toolContext(null).toolContext(restored).build();
   }
 
   private dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory;
@@ -1067,6 +1087,8 @@ public class RunExecutionContext {
       evaluator.restoreInformation(null);
       resumeMessages = List.copyOf(saved.messages());
       pendingApprovalTools = saved.pendingTools();
+      resumeReplayReferences = saved.replayReferences() == null ? List.of() : saved.replayReferences();
+      if (modelOptions != null) restoreReplayAuthority();
     }
   }
 

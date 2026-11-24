@@ -316,8 +316,9 @@ public class ApprovalContinuationStore {
   public RunContinuation.Saved saved(Entry entry) {
     var d = document(entry);
     var pending = d.pending();
+    Message pendingMessage = null;
     if (d.pending() != null && d.pending().assistantReference() != null)
-      payloads
+      pendingMessage = payloads
           .obtain()
           .load(
               ModelMessagePayloadStore.Scope.forOwner(d.owner()),
@@ -345,9 +346,7 @@ public class ApprovalContinuationStore {
               pending.assistantReference(),
               pending.completedReference());
     }
-    return new RunContinuation.Saved(
-        d.request(),
-        d.history().stream()
+    var messages = d.history().stream()
             .map(m -> {
               if (m.payload() != null) {
                 var message =
@@ -392,9 +391,28 @@ public class ApprovalContinuationStore {
                     default -> throw new IllegalStateException("Invalid continuation message");
                   };
             })
-            .toList(),
-        d.budget(),
-        pending);
+            .toList();
+    List<ModelMessagePayloadStore.ReplayReference> references = null;
+    if (backendNative(pendingMessage) || messages.stream().anyMatch(ApprovalContinuationStore::backendNative)) {
+      var nativeReferences = new ArrayList<ModelMessagePayloadStore.ReplayReference>();
+      for (var message : d.history())
+        if (message.payload() != null) nativeReferences.add(new ModelMessagePayloadStore.ReplayReference(
+            message.payload(), ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId()));
+      if (pending != null && pending.assistantReference() != null)
+        nativeReferences.add(new ModelMessagePayloadStore.ReplayReference(pending.assistantReference(),
+            ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId()));
+      if (pending != null && pending.completedReference() != null)
+        nativeReferences.add(new ModelMessagePayloadStore.ReplayReference(pending.completedReference(),
+            ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId()));
+      references = nativeReferences.stream().distinct().toList();
+    }
+    return new RunContinuation.Saved(d.request(), messages, d.budget(), pending, references);
+  }
+
+  private static boolean backendNative(Message message) {
+    return message instanceof AssistantMessage
+        && message.getMetadata().get("rei.llm.replay-origin-owner") instanceof String owner
+        && owner.matches("[0-9a-fA-F]{64}");
   }
 
   /** ツール利用の権限制御において、実行待ちに該当するか判定する。 */
