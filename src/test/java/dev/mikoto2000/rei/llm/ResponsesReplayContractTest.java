@@ -57,8 +57,11 @@ class ResponsesReplayContractTest {
   @Test
   void configuredNativeModelOptionsAndClientShareOneImmutableEndpointSnapshot() {
     var properties = nativeProperties();
-    var provider = LlmModelProvider.forResponsesFixture(
-        org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class), properties, httpCustomizers());
+    var provider =
+        LlmModelProvider.forResponsesFixture(
+            org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class),
+            properties,
+            httpCustomizers());
     var endpoint = provider.resolvedEndpoint(LlmFeature.CHAT);
     assertThat(endpoint.apiType()).isEqualTo(LlmApiType.RESPONSES);
     assertThat(endpoint.generation()).isEqualTo(7);
@@ -75,8 +78,14 @@ class ResponsesReplayContractTest {
     assertThat(options.getModel()).isEqualTo(endpoint.model());
     assertThat(provider.resolvedEndpoint(LlmFeature.CHAT)).isEqualTo(endpoint);
     assertThat(provider.chatModel(LlmFeature.CHAT)).isSameAs(client);
-    var response = client.call(new Prompt("fixture", options.mutate()
-        .toolContext(Map.of(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, owner)).build()));
+    var response =
+        client.call(
+            new Prompt(
+                "fixture",
+                options
+                    .mutate()
+                    .toolContext(Map.of(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, owner))
+                    .build()));
     assertThat(response.getResult().getOutput().getText()).isEqualTo("done");
     assertThat(requests).hasSize(1);
     assertThat(requests.getFirst().path("model").asText()).isEqualTo("fixture-model");
@@ -88,7 +97,78 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {"fallback", "model", "url", "replay", "plaintext", "external"})
+  @org.junit.jupiter.params.provider.CsvSource({"ENCRYPTED,false", "NONE,false", "ENCRYPTED,true", "NONE,true"})
+  void nativeSubAgentKeepsOnlyItsOwnProtocolContext(ReasoningReplayMode replay, boolean foreign) throws Exception {
+    contentType = "text/event-stream";
+    var output = "{\"status\":\"SUCCESS\",\"summary\":\"done\",\"result\":{},\"warnings\":[]}";
+    var raw = new ObjectMapper().readTree(done());
+    ((com.fasterxml.jackson.databind.node.ObjectNode) raw.path("output").get(0).path("content").get(0)).put("text", output);
+    replies.add(sse(raw.toString()));
+    var properties = nativeProperties();
+    var server = properties.feature(LlmFeature.CHAT);
+    server.setReasoningReplay(replay);
+    properties.setFeature(LlmFeature.CHAT, server);
+    var provider = nativeProvider(properties);
+    var definitions = protocolDirectory.resolve("agents");
+    java.nio.file.Files.createDirectories(definitions);
+    java.nio.file.Files.writeString(definitions.resolve("reviewer.yaml"), """
+        id: reviewer
+        name: Reviewer
+        description: Fixture child
+        systemPrompt: Inspect the supplied fixture.
+        tools: []
+        maxSteps: 2
+        timeout: 10s
+        """);
+    var policy = new dev.mikoto2000.rei.subagent.SubAgentToolPolicy(java.util.Set.of());
+    var registry = new dev.mikoto2000.rei.subagent.SubAgentRegistry(definitions,
+        new dev.mikoto2000.rei.subagent.SubAgentDefinitionLoader(policy, ignored -> true));
+    assertThat(registry.reload()).isEmpty();
+    var childOwner = new java.util.concurrent.atomic.AtomicReference<dev.mikoto2000.rei.core.chat.AgentRunContext>();
+    var sentContext = new java.util.concurrent.atomic.AtomicReference<Map<String, Object>>();
+    var transport = provider.chatModel(LlmFeature.CHAT);
+    var model = new org.springframework.ai.chat.model.ChatModel() {
+      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return transport.getOptions(); }
+      public org.springframework.ai.chat.model.ChatResponse call(Prompt prompt) { throw new AssertionError("stream only"); }
+      public reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> stream(Prompt prompt) {
+        sentContext.set(((org.springframework.ai.model.tool.ToolCallingChatOptions) prompt.getOptions()).getToolContext());
+        return transport.stream(prompt);
+      }
+    };
+    var runner = new dev.mikoto2000.rei.subagent.SubAgentRunner(registry, policy, ignored -> model,
+        ignored -> org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build(), List::of,
+        new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {}, java.time.Clock.systemUTC());
+    var parent = new dev.mikoto2000.rei.core.chat.AgentRunContext("parent", "chat", protocolDirectory, "project");
+    runner.setRunOptionsFactory((selected, owner) -> {
+      childOwner.set(owner);
+      return provider.requestOptions(LlmFeature.CHAT, selected, true, foreign ? parent : owner).mutate()
+          .toolContext(Map.of("parent-only-context", "private parent marker")).build();
+    });
+    dev.mikoto2000.rei.subagent.SubAgentResult result;
+    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(parent)) {
+      result = runner.run("reviewer", "inspect fixture", null);
+    }
+    if (foreign) {
+      assertThat(result.status()).isEqualTo(dev.mikoto2000.rei.subagent.SubAgentResult.Status.FAILED);
+      assertThat(requests).isEmpty();
+      return;
+    }
+    assertThat(result.status()).as(result.output()).isEqualTo(dev.mikoto2000.rei.subagent.SubAgentResult.Status.COMPLETED);
+    assertThat(result.structuredOutput().summary()).isEqualTo("done");
+    assertThat(requests).hasSize(1);
+    assertThat(sentContext.get()).doesNotContainKey("parent-only-context");
+    var exchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) sentContext.get()
+        .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    assertThat(exchange.scope()).isEqualTo(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(childOwner.get()));
+    assertThat(exchange.run()).isEqualTo(result.subAgentRunId()).isNotEqualTo(parent.runId());
+    assertThat(protocolStore.usage(exchange.scope(), exchange.run()).runCumulativeBytes()).isPositive();
+    assertThat(protocolStore.usage(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(parent), parent.runId()).runCumulativeBytes()).isZero();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"fallback", "model", "url", "replay", "plaintext", "external"})
   void nativeFixturesCannotBypassIncompleteConfigurationOrProductionAvailability(String defect) {
     var properties = nativeProperties();
     var server = properties.feature(LlmFeature.CHAT);
@@ -103,7 +183,8 @@ class ResponsesReplayContractTest {
     }
     properties.setFeature(LlmFeature.CHAT, server);
     var provider = nativeProvider(properties);
-    assertThatThrownBy(() -> provider.chatModel(LlmFeature.CHAT)).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> provider.chatModel(LlmFeature.CHAT))
+        .isInstanceOf(IllegalStateException.class);
     assertThat(requests).isEmpty();
   }
 
@@ -114,64 +195,123 @@ class ResponsesReplayContractTest {
     server.setSupportedSettings(java.util.Set.of());
     properties.setFeature(LlmFeature.CHAT, server);
     var provider = nativeProvider(properties);
-    var run = new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "chat", protocolDirectory, "project");
-    assertThatThrownBy(() -> provider.chatModel(LlmFeature.CHAT).call(new Prompt("fixture",
-        provider.requestOptions(LlmFeature.CHAT, null, true, run))))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("temperature");
+    var run =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "run", "chat", protocolDirectory, "project");
+    assertThatThrownBy(() ->
+            provider
+                .chatModel(LlmFeature.CHAT)
+                .call(
+                    new Prompt(
+                        "fixture", provider.requestOptions(LlmFeature.CHAT, null, true, run))))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("temperature");
     assertThat(requests).isEmpty();
-    assertThat(protocolStore.usage(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(run), run.runId()).payloadCount()).isZero();
+    assertThat(
+            protocolStore
+                .usage(
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(run),
+                    run.runId())
+                .payloadCount())
+        .isZero();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(value = ReasoningReplayMode.class, names = {"ENCRYPTED", "NONE"})
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = ReasoningReplayMode.class,
+      names = {"ENCRYPTED", "NONE"})
   void acceptedNativeOwnersStayDistinctAcrossRunsAndCredentialRotation(ReasoningReplayMode replay) {
     var properties = nativeProperties();
     var server = properties.feature(LlmFeature.CHAT);
     server.setReasoningReplay(replay);
     properties.setFeature(LlmFeature.CHAT, server);
     var provider = nativeProvider(properties);
-    var parent = new dev.mikoto2000.rei.core.chat.AgentRunContext("parent", "chat", protocolDirectory, "project");
-    var child = new dev.mikoto2000.rei.core.chat.AgentRunContext("child", "subagent:child", protocolDirectory, "project");
+    var parent =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "parent", "chat", protocolDirectory, "project");
+    var child =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "child", "subagent:child", protocolDirectory, "project");
     var parentOptions = provider.requestOptions(LlmFeature.CHAT, null, true, parent);
     var childOptions = provider.requestOptions(LlmFeature.CHAT, null, true, child);
-    var parentExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) parentOptions.getToolContext()
-        .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
-    var childExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) childOptions.getToolContext()
-        .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
-    assertThat(parentExchange.scope()).isEqualTo(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(parent));
-    assertThat(childExchange.scope()).isEqualTo(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(child));
+    var parentExchange =
+        (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
+            parentOptions
+                .getToolContext()
+                .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var childExchange =
+        (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
+            childOptions
+                .getToolContext()
+                .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    assertThat(parentExchange.scope())
+        .isEqualTo(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(parent));
+    assertThat(childExchange.scope())
+        .isEqualTo(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(child));
     assertThat(parentExchange.ownerKey()).isNotEqualTo(childExchange.ownerKey());
     var again = provider.requestOptions(LlmFeature.CHAT, null, true, parent);
-    var againExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) again.getToolContext()
-        .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var againExchange =
+        (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
+            again
+                .getToolContext()
+                .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
     assertThat(againExchange.ownerKey()).isEqualTo(parentExchange.ownerKey());
     assertThat(againExchange.key()).isNotEqualTo(parentExchange.key());
     replies.add(replay == ReasoningReplayMode.ENCRYPTED ? reasoningDone() : done());
-    var first = provider.chatModel(LlmFeature.CHAT).call(new Prompt("fixture", parentOptions)).getResult().getOutput();
+    var first =
+        provider
+            .chatModel(LlmFeature.CHAT)
+            .call(new Prompt("fixture", parentOptions))
+            .getResult()
+            .getOutput();
     var ref = parentExchange.reference(first);
-    var saved = protocolStore.load(parentExchange.scope(), ref,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, parent.runId());
-    assertThatThrownBy(() -> protocolStore.load(childExchange.scope(), ref)).isInstanceOf(IllegalStateException.class);
-    assertThatThrownBy(() -> provider.chatModel(LlmFeature.CHAT).call(new Prompt(List.of(saved, new UserMessage("continue")), childOptions)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("owner");
+    var saved =
+        protocolStore.load(
+            parentExchange.scope(),
+            ref,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+            parent.runId());
+    assertThatThrownBy(() -> protocolStore.load(childExchange.scope(), ref))
+        .isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() ->
+            provider
+                .chatModel(LlmFeature.CHAT)
+                .call(new Prompt(List.of(saved, new UserMessage("continue")), childOptions)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("owner");
     assertThat(requests).hasSize(1);
-    provider.chatModel(LlmFeature.CHAT).call(new Prompt(List.of(saved, new UserMessage("continue")), again));
+    provider
+        .chatModel(LlmFeature.CHAT)
+        .call(new Prompt(List.of(saved, new UserMessage("continue")), again));
     server.setApiKey("rotated-fixture-key");
     properties.setFeature(LlmFeature.CHAT, server);
     var rotated = nativeProvider(properties);
-    assertThat(rotated.resolvedEndpoint(LlmFeature.CHAT).fingerprint()).isEqualTo(provider.resolvedEndpoint(LlmFeature.CHAT).fingerprint());
-    rotated.chatModel(LlmFeature.CHAT).call(new Prompt(List.of(saved, new UserMessage("continue")),
-        rotated.requestOptions(LlmFeature.CHAT, null, true, parent)));
+    assertThat(rotated.resolvedEndpoint(LlmFeature.CHAT).fingerprint())
+        .isEqualTo(provider.resolvedEndpoint(LlmFeature.CHAT).fingerprint());
+    rotated
+        .chatModel(LlmFeature.CHAT)
+        .call(
+            new Prompt(
+                List.of(saved, new UserMessage("continue")),
+                rotated.requestOptions(LlmFeature.CHAT, null, true, parent)));
     assertThat(requests).hasSize(3);
     server.setEndpointGeneration(8);
     properties.setFeature(LlmFeature.CHAT, server);
     var changed = nativeProvider(properties);
-    assertThatThrownBy(() -> changed.chatModel(LlmFeature.CHAT).call(new Prompt(List.of(saved, new UserMessage("continue")),
-        changed.requestOptions(LlmFeature.CHAT, null, true, parent))))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("endpoint");
+    assertThatThrownBy(() ->
+            changed
+                .chatModel(LlmFeature.CHAT)
+                .call(
+                    new Prompt(
+                        List.of(saved, new UserMessage("continue")),
+                        changed.requestOptions(LlmFeature.CHAT, null, true, parent))))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("endpoint");
     assertThat(requests).hasSize(3);
-    assertThat(protocolStore.usage(parentExchange.scope(), parent.runId()).runCumulativeBytes()).isPositive();
-    assertThat(protocolStore.usage(childExchange.scope(), child.runId()).runCumulativeBytes()).isZero();
+    assertThat(protocolStore.usage(parentExchange.scope(), parent.runId()).runCumulativeBytes())
+        .isPositive();
+    assertThat(protocolStore.usage(childExchange.scope(), child.runId()).runCumulativeBytes())
+        .isZero();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -1213,27 +1353,36 @@ class ResponsesReplayContractTest {
   }
 
   private LlmModelProvider nativeProvider(LlmProperties properties) {
-    var provider = LlmModelProvider.forResponsesFixture(
-        org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class), properties, httpCustomizers());
-    var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory(Map.of("payloads", payloads()));
-    provider.configureModelMessagePayloads(beans.getBeanProvider(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class));
+    var provider =
+        LlmModelProvider.forResponsesFixture(
+            org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class),
+            properties,
+            httpCustomizers());
+    var beans =
+        new org.springframework.beans.factory.support.StaticListableBeanFactory(
+            Map.of("payloads", payloads()));
+    provider.configureModelMessagePayloads(
+        beans.getBeanProvider(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class));
     return provider;
   }
 
   private LlmProperties nativeProperties() {
-    var source = new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(Map.ofEntries(
-        Map.entry("rei.llm.features.chat.api", "responses"),
-        Map.entry("rei.llm.features.chat.base-url", "https://fixture.invalid"),
-        Map.entry("rei.llm.features.chat.api-key", "fixture-secret"),
-        Map.entry("rei.llm.features.chat.model", "fixture-model"),
-        Map.entry("rei.llm.features.chat.max-output-tokens", "41"),
-        Map.entry("rei.llm.features.chat.temperature", "0.2"),
-        Map.entry("rei.llm.features.chat.reasoning-replay", "encrypted"),
-        Map.entry("rei.llm.features.chat.max-tools", "16"),
-        Map.entry("rei.llm.features.chat.endpoint-generation", "7"),
-        Map.entry("rei.llm.features.chat.supported-settings", "temperature")));
-    var properties = new org.springframework.boot.context.properties.bind.Binder(source)
-        .bindOrCreate("rei.llm", LlmProperties.class);
+    var source =
+        new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(
+            Map.ofEntries(
+                Map.entry("rei.llm.features.chat.api", "responses"),
+                Map.entry("rei.llm.features.chat.base-url", "https://fixture.invalid"),
+                Map.entry("rei.llm.features.chat.api-key", "fixture-secret"),
+                Map.entry("rei.llm.features.chat.model", "fixture-model"),
+                Map.entry("rei.llm.features.chat.max-output-tokens", "41"),
+                Map.entry("rei.llm.features.chat.temperature", "0.2"),
+                Map.entry("rei.llm.features.chat.reasoning-replay", "encrypted"),
+                Map.entry("rei.llm.features.chat.max-tools", "16"),
+                Map.entry("rei.llm.features.chat.endpoint-generation", "7"),
+                Map.entry("rei.llm.features.chat.supported-settings", "temperature")));
+    var properties =
+        new org.springframework.boot.context.properties.bind.Binder(source)
+            .bindOrCreate("rei.llm", LlmProperties.class);
     return properties;
   }
 
@@ -1241,16 +1390,22 @@ class ResponsesReplayContractTest {
     return ResponsesAdapter.create(endpoint(options), options, httpCustomizers());
   }
 
-  private List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> httpCustomizers() {
-    return List.of(builder -> builder.interceptor(chain -> {
-      var buffer = new okio.Buffer();
-      chain.request().body().writeTo(buffer);
-      requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
-      var reply = replies.isEmpty() ? done() : replies.removeFirst();
-      return new okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
-          .code(200).message("fixture")
-          .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType))).build();
-    }));
+  private List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
+      httpCustomizers() {
+    return List.of(builder ->
+        builder.interceptor(chain -> {
+          var buffer = new okio.Buffer();
+          chain.request().body().writeTo(buffer);
+          requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
+          var reply = replies.isEmpty() ? done() : replies.removeFirst();
+          return new okhttp3.Response.Builder()
+              .request(chain.request())
+              .protocol(okhttp3.Protocol.HTTP_1_1)
+              .code(200)
+              .message("fixture")
+              .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType)))
+              .build();
+        }));
   }
 
   private String done() {
