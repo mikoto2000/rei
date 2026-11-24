@@ -33,7 +33,8 @@ public interface RunContinuation {
       dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref assistantReference) {
     /** 受け取った情報からPendingToolsを作成する。 */
     public PendingTools {
-      if (schemaVersion < 0 || schemaVersion > 1
+      if (schemaVersion < 0
+          || schemaVersion > 1
           || (schemaVersion == 1) != (assistantReference != null))
         throw new IllegalArgumentException("Invalid pending model message reference");
       calls = List.copyOf(calls);
@@ -42,19 +43,26 @@ public interface RunContinuation {
           argumentCorrections == null ? Set.of() : Set.copyOf(argumentCorrections);
     }
 
-    public PendingTools(String text,
+    public PendingTools(
+        String text,
         List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> calls,
         List<org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse> completed,
         Set<String> argumentCorrections) {
       this(text, calls, completed, argumentCorrections, 0, null);
     }
 
-    public PendingTools(String text,
+    public PendingTools(
+        String text,
         List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> calls,
         List<org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse> completed,
         Set<String> argumentCorrections,
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref assistantReference) {
-      this(text, calls, completed, argumentCorrections, assistantReference == null ? 0 : 1,
+      this(
+          text,
+          calls,
+          completed,
+          argumentCorrections,
+          assistantReference == null ? 0 : 1,
           assistantReference);
     }
 

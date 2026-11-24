@@ -53,8 +53,12 @@ public class ApprovalContinuationStore {
       responses = responses == null ? List.of() : List.copyOf(responses);
     }
 
-    public StoredMessage(String kind, String text, List<AssistantMessage.ToolCall> calls,
-        List<ToolResponseMessage.ToolResponse> responses, ToolResultMetadata delivery) {
+    public StoredMessage(
+        String kind,
+        String text,
+        List<AssistantMessage.ToolCall> calls,
+        List<ToolResponseMessage.ToolResponse> responses,
+        ToolResultMetadata delivery) {
       this(kind, text, calls, responses, delivery, null);
     }
 
@@ -106,7 +110,7 @@ public class ApprovalContinuationStore {
   /** データベースへのアクセス。 */
   private final JdbcClient db;
 
-  private final java.util.function.Supplier<ModelMessagePayloadStore> payloads;
+  private final org.springframework.util.function.SingletonSupplier<ModelMessagePayloadStore> payloads;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -114,8 +118,9 @@ public class ApprovalContinuationStore {
   /** 指定された値や利用先を使って、ApprovalContinuationStoreを初期化する。 */
   public ApprovalContinuationStore(@Qualifier("memoryConsolidationDataSource") DataSource source) {
     db = JdbcClient.create(source);
-    payloads = org.springframework.util.function.SingletonSupplier.of(
-        () -> new ModelMessagePayloadStore(source));
+    payloads =
+        org.springframework.util.function.SingletonSupplier.of(
+            () -> new ModelMessagePayloadStore(source));
     db.sql(
             "CREATE TABLE IF NOT EXISTS approval_continuations(approval TEXT PRIMARY KEY,run TEXT NOT NULL,state TEXT NOT NULL,document TEXT NOT NULL,pid INTEGER NOT NULL DEFAULT 0,started TEXT)")
         .update();
@@ -139,8 +144,13 @@ public class ApprovalContinuationStore {
       throw new IllegalArgumentException("Pending Tool required");
     if (pending.assistantReference() != null) {
       var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
-      payloads.get().publish(scope, pending.assistantReference(),
-          ModelMessagePayloadStore.ReferenceKind.APPROVAL, id);
+      payloads
+          .get()
+          .publish(
+              scope,
+              pending.assistantReference(),
+              ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+              id);
     }
     var messageIndex = new java.util.concurrent.atomic.AtomicInteger();
     var messages =
@@ -150,9 +160,15 @@ public class ApprovalContinuationStore {
               int index = messageIndex.getAndIncrement();
               if (requiresPayload(m)) {
                 var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
-                var ref = payloads.get().save(scope, owner.runId(), "approval:" + id + "/history:" + index, m);
-                payloads.get().publish(scope, ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, id);
-                return new StoredMessage("MODEL_" + m.getMessageType().name(), "", List.of(), List.of(), null, ref);
+                var ref =
+                    payloads
+                        .get()
+                        .save(scope, owner.runId(), "approval:" + id + "/history:" + index, m);
+                payloads
+                    .get()
+                    .publish(scope, ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, id);
+                return new StoredMessage(
+                    "MODEL_" + m.getMessageType().name(), "", List.of(), List.of(), null, ref);
               }
               if (m instanceof AssistantMessage a)
                 return new StoredMessage(
@@ -182,16 +198,18 @@ public class ApprovalContinuationStore {
     if (!(message instanceof AssistantMessage assistant)) return false;
     if (assistant.getMetadata().containsKey("rei.llm.replay-origin-owner")
         || assistant.getMetadata().containsKey("rei.llm.replay-origin-endpoint")
-        || assistant.getMetadata().containsKey(dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY))
-      return true;
-    return assistant.getParts().stream().anyMatch(part -> {
-      if (!part.attributes().isEmpty()) return true;
-      if (part instanceof org.springframework.ai.chat.messages.part.TextPart text)
-        return text.payload() != null;
-      if (part instanceof org.springframework.ai.chat.messages.part.ToolCallPart call)
-        return call.payload() != null;
-      return true;
-    });
+        || assistant
+            .getMetadata()
+            .containsKey(dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY)) return true;
+    return assistant.getParts().stream()
+        .anyMatch(part -> {
+          if (!part.attributes().isEmpty()) return true;
+          if (part instanceof org.springframework.ai.chat.messages.part.TextPart text)
+            return text.payload() != null;
+          if (part instanceof org.springframework.ai.chat.messages.part.ToolCallPart call)
+            return call.payload() != null;
+          return true;
+        });
   }
 
   /** 行。 */
@@ -259,34 +277,43 @@ public class ApprovalContinuationStore {
   public RunContinuation.Saved saved(Entry entry) {
     var d = document(entry);
     if (d.pending() != null && d.pending().assistantReference() != null)
-      payloads.get().load(ModelMessagePayloadStore.Scope.forOwner(d.owner()),
-          d.pending().assistantReference(), ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId());
+      payloads
+          .get()
+          .load(
+              ModelMessagePayloadStore.Scope.forOwner(d.owner()),
+              d.pending().assistantReference(),
+              ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+              entry.approvalId());
     return new RunContinuation.Saved(
         d.request(),
         d.history().stream()
             .map(m -> {
               if (m.payload() != null) {
-                var message = payloads.get().load(ModelMessagePayloadStore.Scope.forOwner(d.owner()),
-                    m.payload(), ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId());
+                var message =
+                    payloads
+                        .get()
+                        .load(
+                            ModelMessagePayloadStore.Scope.forOwner(d.owner()),
+                            m.payload(),
+                            ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                            entry.approvalId());
                 if (!("MODEL_" + message.getMessageType().name()).equals(m.kind()))
                   throw new IllegalStateException("Model message persistence rejected");
                 return message;
               }
               return (Message)
-                    switch (m.kind()) {
-                      case "USER" -> new UserMessage(m.text());
-                      case "ASSISTANT" ->
-                          AssistantMessage.builder().content(m.text()).toolCalls(m.calls()).build();
-                      case "TOOL" ->
-                          ToolResponseMessage.builder()
-                              .responses(m.responses())
-                              .metadata(
-                                  m.delivery() == null
-                                      ? java.util.Map.of()
-                                      : m.delivery().restore())
-                              .build();
-                      default -> throw new IllegalStateException("Invalid continuation message");
-                    };
+                  switch (m.kind()) {
+                    case "USER" -> new UserMessage(m.text());
+                    case "ASSISTANT" ->
+                        AssistantMessage.builder().content(m.text()).toolCalls(m.calls()).build();
+                    case "TOOL" ->
+                        ToolResponseMessage.builder()
+                            .responses(m.responses())
+                            .metadata(
+                                m.delivery() == null ? java.util.Map.of() : m.delivery().restore())
+                            .build();
+                    default -> throw new IllegalStateException("Invalid continuation message");
+                  };
             })
             .toList(),
         d.budget(),

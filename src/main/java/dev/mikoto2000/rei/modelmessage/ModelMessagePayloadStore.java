@@ -318,9 +318,13 @@ public final class ModelMessagePayloadStore {
     if (kind == null) throw rejected();
     return transaction(db -> {
       byte[] bytes = read(db, scope, ref);
-      if (scalar(db,
-          "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind=? AND owner=?",
-          ref.id(), kind.name(), owner) != 1) throw rejected();
+      if (scalar(
+              db,
+              "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind=? AND owner=?",
+              ref.id(),
+              kind.name(),
+              owner)
+          != 1) throw rejected();
       return codec.decode(bytes);
     });
   }

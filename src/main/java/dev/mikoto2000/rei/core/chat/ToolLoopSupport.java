@@ -117,7 +117,8 @@ public final class ToolLoopSupport {
     }
   }
 
-  private static dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange(Prompt prompt) {
+  private static dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange(
+      Prompt prompt) {
     if (prompt.getOptions() instanceof ToolCallingChatOptions options) {
       var toolContext = options.getToolContext();
       if (toolContext == null) return null;
@@ -343,7 +344,9 @@ public final class ToolLoopSupport {
             new RunContinuation.PendingTools(
                 java.util.Objects.toString(output.getText(), ""),
                 output.getToolCalls(),
-                java.util.List.of(), java.util.Set.of(), originalReference),
+                java.util.List.of(),
+                java.util.Set.of(),
+                originalReference),
             context,
             false);
     // The execution view may repair arguments, but the model's original ordered parts
@@ -441,15 +444,26 @@ public final class ToolLoopSupport {
     org.springframework.ai.chat.messages.AssistantMessage original = null;
     if (pending.assistantReference() != null) {
       var boundary = exchange(prompt);
-      if (boundary == null) throw new IllegalStateException("Missing model message persistence boundary");
-      var saved = boundary.store().load(boundary.scope(), pending.assistantReference(),
-          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, boundary.run());
+      if (boundary == null)
+        throw new IllegalStateException("Missing model message persistence boundary");
+      var saved =
+          boundary
+              .store()
+              .load(
+                  boundary.scope(),
+                  pending.assistantReference(),
+                  dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+                  boundary.run());
       if (!(saved instanceof org.springframework.ai.chat.messages.AssistantMessage assistant)
           || assistant.getToolCalls().size() != pending.calls().size())
         throw new IllegalStateException("Invalid pending model message reference");
       for (int index = 0; index < pending.calls().size(); index++)
         if (!assistant.getToolCalls().get(index).id().equals(pending.calls().get(index).id())
-            || !assistant.getToolCalls().get(index).name().equals(pending.calls().get(index).name()))
+            || !assistant
+                .getToolCalls()
+                .get(index)
+                .name()
+                .equals(pending.calls().get(index).name()))
           throw new IllegalStateException("Invalid pending model message reference");
       original = assistant;
     }
@@ -485,7 +499,11 @@ public final class ToolLoopSupport {
             prompt, pending.calls().subList(completed.size(), pending.calls().size())));
     pending =
         new RunContinuation.PendingTools(
-            pending.text(), calls, pending.completed(), pending.argumentCorrections(), pending.assistantReference());
+            pending.text(),
+            calls,
+            pending.completed(),
+            pending.argumentCorrections(),
+            pending.assistantReference());
     // 承認待ちに入る前に成功した呼び出しは再実行せず、未完了の続きだけを処理する。
     for (int i = completed.size(); i < pending.calls().size(); i++) {
       var call = pending.calls().get(i);
@@ -550,7 +568,8 @@ public final class ToolLoopSupport {
                     pending.text(),
                     pending.calls(),
                     java.util.List.copyOf(completed),
-                    argumentCorrections, pending.assistantReference()))) throw new RunWaitingException();
+                    argumentCorrections,
+                    pending.assistantReference()))) throw new RunWaitingException();
           }
         }
         throw dev.mikoto2000.rei.core.stagnation.RunExecutionContext.toolCallbackFailure(error);
@@ -558,10 +577,12 @@ public final class ToolLoopSupport {
     }
     var history = new java.util.ArrayList<>(prompt.getInstructions());
     history.add(
-        original != null ? original : org.springframework.ai.chat.messages.AssistantMessage.builder()
-            .content(pending.text())
-            .toolCalls(pending.calls())
-            .build());
+        original != null
+            ? original
+            : org.springframework.ai.chat.messages.AssistantMessage.builder()
+                .content(pending.text())
+                .toolCalls(pending.calls())
+                .build());
     history.add(
         org.springframework.ai.chat.messages.ToolResponseMessage.builder()
             .responses(completed)
