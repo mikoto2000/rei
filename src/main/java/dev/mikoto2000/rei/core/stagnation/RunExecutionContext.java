@@ -36,10 +36,12 @@ public class RunExecutionContext {
   private volatile org.springframework.ai.model.tool.ToolCallingChatOptions modelOptions;
   private volatile List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
       resumeReplayReferences = List.of();
-  private volatile dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History resumeProtocolHistory;
+  private volatile dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History
+      resumeProtocolHistory;
 
   /** Capture once at acceptance; each request receives a copy of the same effective options. */
-  public synchronized void setModelOptions(org.springframework.ai.model.tool.ToolCallingChatOptions options) {
+  public synchronized void setModelOptions(
+      org.springframework.ai.model.tool.ToolCallingChatOptions options) {
     if (modelOptions != null || options == null)
       throw new IllegalStateException("Run model options cannot be replaced");
     modelOptions = options.mutate().build();
@@ -211,7 +213,11 @@ public class RunExecutionContext {
     var previousHistory = protocolHistory;
     protocolHistory =
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
-            1, exchange.run(), origin, entries, protocolHistory == null ? null : protocolHistory.input());
+            1,
+            exchange.run(),
+            origin,
+            entries,
+            protocolHistory == null ? null : protocolHistory.input());
     // The writer must see the proposed pointers, but failed publication is not accepted progress.
     try {
       toolResultsCheckpoint.accept(List.of());
@@ -264,32 +270,60 @@ public class RunExecutionContext {
 
   /** Snapshot exactly the native outbound view before transport starts. */
   public synchronized void captureModelInput(org.springframework.ai.chat.prompt.Prompt prompt) {
-    if (!(prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options)
-        || options.getToolContext() == null
-        || !(options.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY)
-            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)) return;
-    if (runContext == null || !runContext.runId().equals(exchange.run())
-        || !exchange.scope().equals(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(runContext))
-        || !(options.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
+    if (!(prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options)) return;
+    var context = options.getToolContext();
+    if (context == null
+        || !(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY)
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange))
+      return;
+    if (runContext == null
+        || !runContext.runId().equals(exchange.run())
+        || !exchange
+            .scope()
+            .equals(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(runContext))
+        || !(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
             instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin)
-        || !origin.owner().equals(exchange.ownerKey()) || prompt.getInstructions().isEmpty()
+        || !origin.owner().equals(exchange.ownerKey())
+        || prompt.getInstructions().isEmpty()
         || prompt.getInstructions().size() > 256)
       throw new IllegalStateException("Protocol input snapshot ownership mismatch");
-    var input = new ArrayList<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry>();
+    var input =
+        new ArrayList<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry>();
     String batch = "input:" + UUID.randomUUID();
     for (var message : prompt.getInstructions()) {
       String key = batch + ":" + input.size();
-      var ref = exchange.store().saveForContinuation(exchange.scope(), exchange.run(), key, message);
-      exchange.store().publish(exchange.scope(), ref,
-          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, exchange.run());
-      input.add(new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(key, ref));
+      var ref =
+          exchange.store().saveForContinuation(exchange.scope(), exchange.run(), key, message);
+      exchange
+          .store()
+          .publish(
+              exchange.scope(),
+              ref,
+              dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+              exchange.run());
+      input.add(
+          new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(key, ref));
     }
     var previous = protocolHistory;
-    var entries = previous == null ? List.<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry>of() : previous.entries();
-    protocolHistory = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(1, exchange.run(), origin,
-        entries, new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Input(input, entries.size()));
-    try { toolResultsCheckpoint.accept(List.of()); }
-    catch (RuntimeException | Error failure) { protocolHistory = previous; throw failure; }
+    var entries =
+        previous == null
+            ? List.<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry>of()
+            : previous.entries();
+    protocolHistory =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
+            1,
+            exchange.run(),
+            origin,
+            entries,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Input(
+                input, entries.size()));
+    try {
+      toolResultsCheckpoint.accept(List.of());
+    } catch (RuntimeException | Error failure) {
+      protocolHistory = previous;
+      throw failure;
+    }
   }
 
   /** Save the original resolved input, including media, before sending or decorating it. */
@@ -836,8 +870,14 @@ public class RunExecutionContext {
     }
     messages.clear();
     for (var entry : history.replayEntries())
-      messages.add(exchange.store().load(exchange.scope(), entry.reference(),
-          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, checkpoint));
+      messages.add(
+          exchange
+              .store()
+              .load(
+                  exchange.scope(),
+                  entry.reference(),
+                  dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT,
+                  checkpoint));
     if (!dev.mikoto2000.rei.modelmessage.ModelMessageTransactions.completeProtocol(messages))
       throw new IllegalStateException("Protocol checkpoint requires tool outcome reconciliation");
     var grant = exchange.store().restoreReplayGrant(exchange, references, origin);
