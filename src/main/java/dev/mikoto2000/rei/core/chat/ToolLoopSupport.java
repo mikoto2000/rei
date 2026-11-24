@@ -443,6 +443,8 @@ public final class ToolLoopSupport {
       RunContinuation.PendingTools pending,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context,
       boolean replay) {
+    if (replay && pending.schemaVersion() == 0 && exchange(prompt) != null)
+      throw new IllegalStateException("Legacy pending tools cannot enter a protected protocol Run");
     org.springframework.ai.chat.messages.AssistantMessage original = null;
     if (pending.assistantReference() != null) {
       var boundary = exchange(prompt);
