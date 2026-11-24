@@ -118,8 +118,18 @@ public final class ToolLoopSupport {
               var output = generation.getOutput();
               var calls = FileReadContinuation.inherit(prompt, output.getToolCalls());
               if (java.util.Objects.equals(calls, output.getToolCalls())) return generation;
+              var replacements = calls.iterator();
+              var parts = output.getParts().stream().map(part -> {
+                if (part instanceof org.springframework.ai.chat.messages.part.ToolCallPart call
+                    && !org.springframework.ai.chat.messages.part.StreamingParts.isPartial(call))
+                  return (org.springframework.ai.chat.messages.part.MessagePart)
+                      new org.springframework.ai.chat.messages.part.ToolCallPart(
+                          replacements.next(), call.payload(), call.attributes());
+                return part;
+              }).toList();
               return new org.springframework.ai.chat.model.Generation(
-                  output.mutate().toolCalls(calls).build(), generation.getMetadata());
+                  org.springframework.ai.chat.messages.AssistantMessage.builder()
+                      .parts(parts).properties(output.getMetadata()).build(), generation.getMetadata());
             })
             .toList();
     return new ChatResponse(generations, response.getMetadata());
