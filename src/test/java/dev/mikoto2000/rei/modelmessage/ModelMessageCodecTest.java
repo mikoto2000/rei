@@ -15,6 +15,19 @@ import org.springframework.ai.chat.messages.part.ToolCallPart;
 
 class ModelMessageCodecTest {
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"rei.reviewGuidance", "rei.progressFeedback", "rei.resumeWorkReminder",
+      "rei.resumeContext", "rei.knownFileInventory", "rei.workingSet", "rei.workContext", "rei.longTermMemory",
+      "rei.legacyHistory", "rei.outputLimitHandoff"})
+  void knownInputControlMarkersKeepTheirBooleanType(String key) {
+    var codec = new ModelMessageCodec();
+    var input = org.springframework.ai.chat.messages.SystemMessage.builder().text("fixture instructions")
+        .metadata(Map.of(key, true)).build();
+    assertThat(codec.decode(codec.encode(input)).getMetadata()).containsEntry(key, true);
+    var malformed = input.mutate().metadata(Map.of(key, "true")).build();
+    assertThatThrownBy(() -> codec.encode(malformed)).isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void duplicateAssistantCallIdsCannotBeWrittenOrRestored(boolean decoding) {
     var codec = new ModelMessageCodec();
