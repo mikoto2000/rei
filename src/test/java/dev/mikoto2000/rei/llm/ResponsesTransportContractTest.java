@@ -267,8 +267,8 @@ class ResponsesTransportContractTest {
   }
 
   private ChatModel transport(OpenAiResponsesChatOptions options) {
-    var model = OpenAiResponsesChatModel.builder().options(options)
-        .httpClientBuilderCustomizer(builder -> builder.interceptor(chain -> {
+    org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer customizer =
+        builder -> builder.interceptor(chain -> {
           var buffer = new okio.Buffer();
           chain.request().body().writeTo(buffer);
           requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
@@ -276,13 +276,13 @@ class ResponsesTransportContractTest {
           return new okhttp3.Response.Builder().request(chain.request())
               .protocol(okhttp3.Protocol.HTTP_1_1).code(httpStatus).message("fixture")
               .body(responseBody()).build();
-        })).build();
+        });
     var endpoint = new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES,
         options.getBaseUrl(), "fixture-credential", options.getModel(),
         new LlmCapabilities(ReasoningReplayMode.NONE, 128, java.util.Set.of(
             LlmCapabilities.Setting.STRUCTURED_OUTPUT, LlmCapabilities.Setting.IMAGE_INPUT)), options.getMaxOutputTokens(),
         options.getTemperature(), java.time.Duration.ofMinutes(5));
-    return new ResponsesAdapter(endpoint, model);
+    return ResponsesAdapter.create(endpoint, options, List.of(customizer));
   }
 
   private okhttp3.ResponseBody responseBody() {

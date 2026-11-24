@@ -19,6 +19,8 @@ final class ResponsesTransportException extends IllegalStateException {
 
   static RuntimeException normalize(Throwable error) {
     error = reactor.core.Exceptions.unwrap(error);
+    while (error instanceof java.util.concurrent.CompletionException && error.getCause() != null)
+      error = error.getCause();
     if (error instanceof ResponsesTransportException failure) return failure;
     if (error instanceof com.openai.errors.OpenAIServiceException service) {
       int status = service.statusCode();

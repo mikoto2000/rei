@@ -21,6 +21,23 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   private final ResolvedLlmEndpoint endpoint;
   private final OpenAiResponsesChatModel delegate;
 
+  static ResponsesAdapter create(ResolvedLlmEndpoint endpoint, OpenAiResponsesChatOptions options,
+      java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> customizers) {
+    if (options.getMaxRetries() != 0)
+      throw new IllegalArgumentException("Responses SDK retries must stay zero at client construction");
+    var client = org.springframework.ai.openai.setup.OpenAiSetup.setupAsyncClient(
+        options.getBaseUrl(), options.getApiKey(), options.getCredential(),
+        options.getMicrosoftDeploymentName(), options.getMicrosoftFoundryServiceVersion(),
+        options.getOrganizationId(), options.isMicrosoftFoundry(), false, options.getModel(),
+        options.getTimeout() == null ? endpoint.readTimeout() : options.getTimeout(),
+        0, options.getProxy(), options.getCustomHeaders(),
+        io.micrometer.observation.ObservationRegistry.NOOP, null, customizers);
+    var model = OpenAiResponsesChatModel.builder().options(options)
+        .openAiClientAsync(ResponsesSdkBoundary.safe(client))
+        .httpClientBuilderCustomizers(customizers).build();
+    return new ResponsesAdapter(endpoint, model);
+  }
+
   ResponsesAdapter(ResolvedLlmEndpoint endpoint, OpenAiResponsesChatModel delegate) {
     this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
     this.delegate = Objects.requireNonNull(delegate, "delegate");
