@@ -154,6 +154,11 @@ public class PersistentCheckpointService implements AutoCloseable {
     return saved.progress();
   }
 
+  public List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference> protocolReferences(
+      AgentRunContext owner) {
+    return List.of();
+  }
+
   /** Bounded, confirmed skill outputs for repairing progress recorded by older classifiers. */
   public List<String> recentSkillResults(AgentRunContext owner) {
     progress(owner); // Enforce the same project/root/session ownership as the restored ledger.
