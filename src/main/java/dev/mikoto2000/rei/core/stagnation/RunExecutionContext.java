@@ -1901,19 +1901,29 @@ public class RunExecutionContext {
 
   /** 指定された変更を有効にするため、追加入力一覧を反映する。 */
   public synchronized List<org.springframework.ai.chat.messages.Message> applyInterventions() {
+    return applyInterventions(true);
+  }
+
+  /** The outer prompt path persists its resolved input once, after attachment resolution. */
+  public synchronized List<org.springframework.ai.chat.messages.Message> applyInterventionsForNextPrompt() {
+    return applyInterventions(false);
+  }
+
+  private List<org.springframework.ai.chat.messages.Message> applyInterventions(boolean preserve) {
     if (cancelled) return List.of();
     if (interventions == null) return List.of();
     var onApplied = interventionApplied;
     return interventions.drainEntries().stream()
         .map(entry -> {
+          var message = new org.springframework.ai.chat.messages.UserMessage(entry.text());
+          if (preserve) preserveUserMessage(message);
           setUserRequest(entry.text());
           onApplied.accept(entry.text());
           publisher.publish(
               factory
                   .intervention(runId, entry.id(), entry.text(), true)
                   .withOwnership(runContext));
-          return (org.springframework.ai.chat.messages.Message)
-              new org.springframework.ai.chat.messages.UserMessage(entry.text());
+          return (org.springframework.ai.chat.messages.Message) message;
         })
         .toList();
   }

@@ -759,7 +759,7 @@ public class ChatExecutionService {
       while (!structuredCommand
           && result.status() == ChatRunStatus.SUCCESS
           && !interventions.finishIfEmpty()) {
-        var guidance = execution.applyInterventions();
+        var guidance = execution.applyInterventionsForNextPrompt();
         if (!budget.tryConsumeLlmCall()) {
           result = new ChatRunResult(budgetStopStatus(budget), "");
           break;
@@ -897,7 +897,7 @@ public class ChatExecutionService {
         if (execution.isCancelled()) interventions.discardAndFinish();
         else {
           var guidance = new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
-          while (!interventions.finishIfEmpty()) guidance.addAll(execution.applyInterventions());
+          while (!interventions.finishIfEmpty()) guidance.addAll(execution.applyInterventionsForNextPrompt());
           if (suspended && continuations != null && !guidance.isEmpty())
             continuations.acceptGuidance(context, guidance);
         }
