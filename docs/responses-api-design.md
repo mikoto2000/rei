@@ -113,12 +113,15 @@ rei:
         model: deepseek-flash
         max-output-tokens: 16384
         max-tools: 128
-        responses:
-          reasoning-effort: low
-          reasoning-replay: plaintext
+        reasoning-replay: plaintext
+        endpoint-generation: 1
+        supported-settings: [structured-output, image-input]
 ```
 
-この機能別API・responses設定も新設案であり、今の実装へ貼り付けるための設定例ではない。公式API以外の提供サービスでは、接続先の仕様を別途検証する。
+これは実装の Binder に対応する将来の本番候補設定であり、現在の本番生成ゲートは拒否する。
+`reasoning-effort` の外部設定はまだ公開しておらず、この例には含めない。
+内部の native options を利用する場合も、effort は明示した能力と提供元の仕様に従う。
+公式API以外の提供サービスでは、接続先の仕様を別途検証する。
 
 temperature/top-pは明示された場合だけ送る。モデルが許可しない組み合わせは事前の設定検証または具体的なAPIエラーとして扱い、HTTP 400を見て値を順番に変えて再送しない。`enable-thinking` / `chat_template_kwargs` はResponsesの思考制御へ流用しない。旧設定がResponses機能に残っていれば移行診断で通知し、無効な設定を黙って成功扱いしない。
 
@@ -158,7 +161,14 @@ SDKの `ReasoningPart.payload`、item id/status、summary、TextPartのphase、T
 
 変換対象は既知のReasoningPartに限定し、本文の命令・metadataの任意文字列・未知itemを推論に昇格させない。必須idがない、平文が欠けている、対応外の構造や出所なら、黙って除去せず再送検証で止める。SDKのunknown item変換失敗時のログだけに頼らず、Rei側で変換可能性と最終itemsを検証する。
 
-非streamingの変換可能性は調査済み。streamingでの全文復元、複数reasoning item、未知属性、プロセス再起動の受入条件を満たすまでDeepSeekの推論ON対応を有効化しない。この限定変換で扱えない仕様が見つかった場合はSDK修正・依存更新を再設計し、HTTP interceptorでbodyを雑に差し替える回避策は採らない。
+Phase 5 の実 SDK fixture で、非stream / stream の全文復元、複数 reasoning item、
+実 SQLite、承認継続、別 JVM Checkpoint 再開を確認した。未知の reasoning 属性は mapper 前に拒否する。
+Spring が自動追加する encrypted include は、SDK の公開 typed request builder で平文要求から除く。
+明示された include・metadata・service tier・cache key・safety identifier は平文契約では拒否する。
+summary・verbosity・parallel_tool_calls を対応能力として宣言しない。DeepSeek はこれらを黙示的に無視する。
+本番の推論ON対応は実接続を含む受入条件が満たされるまで有効化しない。
+この限定変換で扱えない仕様が見つかった場合はSDK修正・依存更新を再設計し、
+HTTP interceptorでbodyを雑に差し替える回避策は採らない。
 
 ## 履歴・保存・再開
 

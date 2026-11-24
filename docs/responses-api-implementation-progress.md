@@ -8,8 +8,8 @@
 | 1 | MERGED | codex/responses-api-phase-1-transport / 削除済み | [#629](https://github.com/mikoto2000/rei/pull/629) | 10542db848d9317c7eaaab06869e63e7ab571d5b | 最終CI全件7,818、成功7,806、期待skip12、failure/error0。品質ゲート成功 |
 | 2 | MERGED | codex/responses-api-phase-2-openai-replay / 削除済み | [#630](https://github.com/mikoto2000/rei/pull/630) | a95593f48d0b4f760091d79eaf2cbc411e9a2f49 | PR・マージ後CI7,861件、成功7,849、期待skip12、failure/error0。関連859件・全品質ゲート成功 |
 | 3 | MERGED | codex/responses-api-phase-3-message-persistence / 削除済み | [#631](https://github.com/mikoto2000/rei/pull/631) | b22cf6646ae58a1efea325877562d7becd3aea51 | PR・マージ後CI7,960件、成功7,948、期待skip12、failure/error0。関連570件・全品質ゲート成功 |
-| 4 | IN_PROGRESS | codex/responses-api-phase-4-agent-integration / .worktrees/responses-api-phase-4 | 未作成 | 未マージ | 関連Maven1,065件・全architecture成功。修正後21件、再compile・Checkstyle/SpotBugs0件・Spotless成功。最新全回帰CI待ち |
-| 5 | NOT_STARTED | — | — | — | 未実施 |
+| 4 | MERGED | codex/responses-api-phase-4-agent-integration / 削除済み | [#632](https://github.com/mikoto2000/rei/pull/632) | 2c141910cc251081d46bd391be23587ce575b3d3 | PR・マージ後CI8,185件、成功8,173、期待skip12、failure/error0。全品質ゲート成功 |
+| 5 | IN_PROGRESS | codex/responses-api-phase-5-deepseek / .worktrees/responses-api-phase-5 | 未作成 | 未マージ | 平文の実SDK送信・SQLite原本保持2件、fixture provider1件、既存再送契約117件成功。追加の再開・delta14件、安全性8件・wire4件・設定10件成功。関連Maven400件・全architecture、修正後24件・再compile・Checkstyle/SpotBugs0件・Spotless成功。最新全回帰CI待ち |
 | 6 | NOT_STARTED | — | — | — | 未実施 |
 
 ## Phase 0: 接続先管理・API抽象化
@@ -419,3 +419,46 @@ import だけを明示化し、診断の builder の型推論について SpotBu
 実接続の認証情報・許可がないため、本番利用は不可と判定する。
 有効化には実接続の受入試験、未対応経路の明示、Phase 6 の容量・保持・異常終了検証が必要である。
 本番再起動、JAR 配置、本番 DB migration、課金 API 呼び出しは実施していない。
+
+## Phase 5: DeepSeek plaintext replay
+
+### 仕様の根拠と境界
+
+[DeepSeek 公式 Responses 仕様](https://api-docs.deepseek.com/guides/responses_api/) と、
+固定した Spring AI 2.1.0 / OpenAI SDK 4.101.0 の公開 API・ソースを照合した。
+DeepSeek の reasoning input は平文 content を受け付け、encrypted_content を受け付けない。
+reasoning_text.delta / done と終端 response の両方を fixture に含めて検証する。
+同名モデルを提供する他社 API に、この仕様を自動適用しない。
+
+Spring の mapper は受信した平文を ReasoningPart に保持するが、そのままでは再送しない。
+既知の ReasoningPart だけを、所有者・接続先・世代・公開参照の既存検証後に、
+送信用 view の UnknownPart に変換する。正本・SQLite・承認・Checkpoint は ReasoningPart のまま保持する。
+平文を opaque / encrypted_content へ入れない。未知 item をローカル業務ツールへ変換しない。
+空 summary は固定 SDK の input 型に必要な構造であり、推論 summary の対応を意味しない。
+
+DeepSeek は summary、verbosity、parallel_tool_calls などを黙示的に無視する。
+対応能力にそれらを宣言せず、明示設定は送信前に拒否する構成が必要である。
+temperature / top_p にはモデルと thinking mode による制約があり、HTTP 200 を設定の有効性の証明にしない。
+本番生成ゲートは閉じたまま。実接続・課金 API・production migration は実施していない。
+本番利用可否は未検証のため不可。fixture の成功をベンダーの意味的継続性・品質の実証と扱わない。
+
+### 検証状況
+
+実ソースの Red 2件（非stream / stream の平文拒否）から開始し、送信 view の修正後に2件成功。
+複数 reasoning item の順序・全文、encrypted_content の不在、原本 parts の不変性、実 SQLite 復元を確認した。
+provider の拒否も Red 1件で再現してから修正し、明示した fixture 接続だけを受け付けた。
+既存 encrypted / none を含む再送契約117件が成功。
+追加の SSE delta・承認・別 JVM Checkpoint 14件も成功した。新旧双方を同じ既存経路で検証している。
+SDK の公開 typed request builder で、平文要求の自動 encrypted include を除いた（Red 2件からGreen）。
+明示した非対応設定10件、欠損・偽装・所有者・接続先・未完了・未知属性8件、
+受信 wire の未知属性4件は固定診断で停止し、本文や原因例外を公開しない。
+これらの件数は一部が重複するため合算しない。
+関連 Maven の18スイート400件と全 architecture、jar/repackage、Spotless check が成功し、
+Checkstyle は違反0件だった。ただし、この verify 実行は SpotBugs の nullable getter 指摘5件で失敗した。
+getter を一度取得する形へ直し、平文の送信・非対応設定・安全性24件を再確認した。
+最初の strict compile では Kotlin SDK の JsonField<Nothing> に相当する missing singleton の
+Java 型消去警告も検出した。値を持たない missing への局所的な型変換だけを明示し、
+既存 Werror・静的解析ゲート・アーキテクチャ予算は維持している。
+修正後の全ソース・テスト compile、Checkstyle違反0、SpotBugs指摘0・解析エラー0、Spotless check が成功した。
+最新 head の全回帰 PR CI 成功前にマージしない。
+旧 verify 全体を成功と記録しない。
