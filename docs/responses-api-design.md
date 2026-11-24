@@ -463,3 +463,11 @@ raw extraBody拡張は現時点で公開しない。保護フィールドを個�
 型付きの対応契約が追加されるまでは拒否する。SDKが受理できる値を接続先の対応済み機能とみなさない。
 名前付きtool choiceは要求内で公開したfunctionに限定し、hosted tool指定や不正JSONは値を表示せず拒否する。
 deployment alias/Foundry設定は現在のresolved model契約の範囲外として拒否する。
+
+SDK retry:0だけでは物理的な再送を止められないことも、実loopbackで確認した。
+同梱Spring HTTP clientはOkHttpのconnection recoveryを有効にしており、408/503 + Retry-After:0の
+同期・非同期要求はSDK retry:0でも2回届いた。Responses所有のinterceptorで本文をnon-replayableと宣言し、
+4ケースすべて1回だけ届くことと、受信したJSONが元のnative SDK JSONと等しいことを検証した。
+本文のJSONやopaque payloadは書き換えない。共有customizerの後に所有するrequest/timeout方針を適用し、
+共有の5秒read timeoutが解決済み150msのtimeoutを上書きしないことも実clientで検証する。
+この方針はResponses factoryのみに適用し、既存Chat Completions clientの再送動作は変更しない。
