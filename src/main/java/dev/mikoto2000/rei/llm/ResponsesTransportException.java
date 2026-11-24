@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.llm;
 
 /** Safe transport failure. Provider messages, bodies and causes must not escape this boundary. */
 final class ResponsesTransportException extends IllegalStateException {
+  @java.io.Serial private static final long serialVersionUID = 1L;
   enum Category {
     AUTHENTICATION,
     RATE_LIMIT,

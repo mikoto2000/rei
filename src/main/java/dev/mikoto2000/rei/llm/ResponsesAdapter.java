@@ -86,7 +86,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     return new ResponsesAdapter(endpoint, model);
   }
 
-  ResponsesAdapter(ResolvedLlmEndpoint endpoint, OpenAiResponsesChatModel delegate) {
+  private ResponsesAdapter(ResolvedLlmEndpoint endpoint, OpenAiResponsesChatModel delegate) {
     this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
     this.delegate = Objects.requireNonNull(delegate, "delegate");
     if (endpoint.apiType() != LlmApiType.RESPONSES)
@@ -117,6 +117,13 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     if (supplied != null && !(supplied instanceof OpenAiResponsesChatOptions))
       throw new IllegalArgumentException("Responses native options required");
     var options = supplied == null ? getOptions() : (OpenAiResponsesChatOptions) supplied;
+    var defaults = delegate.getOptions();
+    if (!Objects.equals(defaults.getBaseUrl(), options.getBaseUrl())
+        || !Objects.equals(defaults.getApiKey(), options.getApiKey())
+        || !Objects.equals(defaults.getCredential(), options.getCredential())
+        || !Objects.equals(defaults.getOrganizationId(), options.getOrganizationId())
+        || !Objects.equals(defaults.getCustomHeaders(), options.getCustomHeaders()))
+      throw new IllegalArgumentException("Responses connection differs from the bound endpoint");
     if (!Objects.equals(endpoint.model(), options.getModel()))
       throw new IllegalArgumentException("Responses model differs from the bound endpoint");
     if (options.getMaxRetries() != 0)
