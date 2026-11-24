@@ -52,6 +52,60 @@ class ResponsesReplayContractTest {
   private String contentType = "application/json";
 
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"eof", "failed", "incomplete", "cancelled", "outputLimit"})
+  void existingBoundedLoopNeverDispatchesBeforeAValidTerminalEvent(String ending) throws Exception {
+    String raw = toolResponse();
+    if (!ending.equals("eof")) raw = raw.replaceFirst("\"status\":\"completed\"",
+        "\"status\":\"" + (ending.equals("outputLimit") ? "incomplete" : ending) + "\""
+            + (ending.equals("outputLimit") ? ",\"incomplete_details\":{\"reason\":\"max_output_tokens\"}" : ""));
+    String stream = sse(raw);
+    if (ending.equals("eof")) stream = stream.substring(0, stream.indexOf("event: response.completed"));
+    else stream = stream.replace("response.completed", "response." + (ending.equals("outputLimit") ? "incomplete" : ending));
+    contentType = "text/event-stream";
+    replies.add(stream);
+    var options = options();
+    var run = new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", java.nio.file.Path.of("."),
+        "project", dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL,
+        dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE);
+    var failure = org.assertj.core.api.Assertions.catchThrowable(() ->
+        new dev.mikoto2000.rei.core.chat.BoundedToolLoop().run(model(options), new Prompt("fixture", options), 2, run, () -> {})
+            .block(Duration.ofSeconds(10)));
+    assertThat(executions.get()).isZero();
+    assertThat(failure).isNotNull();
+    assertThat(requests).hasSize(1);
+  }
+
+  @Test
+  void cancellingTheExistingLoopWhileToolItemsAreBufferedNeverDispatches() throws Exception {
+    contentType = "text/event-stream";
+    replies.add(sse(toolResponse()));
+    var options = options();
+    var nativeModel = model(options);
+    var toolReceived = new java.util.concurrent.CountDownLatch(1);
+    org.springframework.ai.chat.model.ChatModel paused = new org.springframework.ai.chat.model.ChatModel() {
+      public org.springframework.ai.chat.model.ChatResponse call(Prompt prompt) { return nativeModel.call(prompt); }
+      public reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> stream(Prompt prompt) {
+        return nativeModel.stream(prompt).concatMap(chunk -> {
+          if (chunk.hasToolCalls()) {
+            toolReceived.countDown();
+            return reactor.core.publisher.Mono.<org.springframework.ai.chat.model.ChatResponse>never();
+          }
+          return reactor.core.publisher.Mono.just(chunk);
+        }, 1);
+      }
+    };
+    var run = new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", java.nio.file.Path.of("."),
+        "project", dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL,
+        dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE);
+    var subscription = new dev.mikoto2000.rei.core.chat.BoundedToolLoop()
+        .run(paused, new Prompt("fixture", options), 2, run, () -> {}).subscribe();
+    try {
+      assertThat(toolReceived.await(5, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+    } finally { subscription.dispose(); }
+    assertThat(executions.get()).isZero();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void partialOrHostedSavedPartsCannotBeSilentlyDroppedOrReplayed(boolean partial) {
     org.springframework.ai.chat.messages.part.MessagePart part = partial
