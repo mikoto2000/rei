@@ -680,8 +680,12 @@ class ResponsesReplayContractTest {
     var budget = new OutputLimitRunBudget(2, 8);
     budget.tryConsumeLlmCall();
     budget.tryConsumeLlmCall();
-    var systemRef = currentExchange.withKey("instructions").reference(
-        new org.springframework.ai.chat.messages.SystemMessage("original approval instructions"));
+    var systemRef =
+        currentExchange
+            .withKey("instructions")
+            .reference(
+                new org.springframework.ai.chat.messages.SystemMessage(
+                    "original approval instructions"));
     var ownHistory =
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
             1,
@@ -694,10 +698,15 @@ class ResponsesReplayContractTest {
                     currentExchange.key() + "/ASSISTANT", pendingRef),
                 new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
                     currentExchange.key() + "/TOOL", prefixRef)),
-            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Input(List.of(
-                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("instructions/SYSTEM", systemRef),
-                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("prior/ASSISTANT", originalRef),
-                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("current-input/USER", currentInputRef)), 1));
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Input(
+                List.of(
+                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                        "instructions/SYSTEM", systemRef),
+                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                        "prior/ASSISTANT", originalRef),
+                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                        "current-input/USER", currentInputRef)),
+                1));
     approvals.save(
         "approval",
         current,
@@ -725,8 +734,11 @@ class ResponsesReplayContractTest {
         originalRef,
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
         current.runId());
-    protocolStore.release(currentExchange.scope(), systemRef,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, current.runId());
+    protocolStore.release(
+        currentExchange.scope(),
+        systemRef,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+        current.runId());
     var restarted = new dev.mikoto2000.rei.core.policy.ApprovalContinuationStore(source);
     var saved = restarted.saved(restarted.find("approval").orElseThrow());
     assertThat(saved.protocolHistory())
@@ -761,9 +773,16 @@ class ResponsesReplayContractTest {
             .toolCallbacks(callbacks)
             .build());
     assertThat(execution.progressSnapshot().protocolHistory()).isEqualTo(ownHistory);
-    assertThat(protocolStore.load(currentExchange.scope(), systemRef,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, current.runId()).getText())
-        .as("restore all input leases before approval callbacks").isEqualTo("original approval instructions");
+    assertThat(
+            protocolStore
+                .load(
+                    currentExchange.scope(),
+                    systemRef,
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+                    current.runId())
+                .getText())
+        .as("restore all input leases before approval callbacks")
+        .isEqualTo("original approval instructions");
     assertThat(
             execution
                 .modelOptions()
@@ -798,36 +817,121 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-  void inputCheckpointFailureDoesNotSendOrInventUnknownProviderUsage(boolean assembled) throws Exception {
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"compatible", "temperature", "instructions", "tools"})
+  void checkpointConsumerKeepsTheOriginalSystemPrefixAndRejectsExecutionChanges(String change) throws Exception {
+    contentType = "text/event-stream";
+    replies.add(sse(done()));
+    replies.add(sse(done()));
     var models = nativeProvider(nativeProperties());
-    var owner = new dev.mikoto2000.rei.core.chat.AgentRunContext("input-failure", "chat", protocolDirectory, "project");
-    var budget = new OutputLimitRunBudget(2, 8, null, 1000);
-    budget.tryConsumeLlmCall();
-    var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(owner.runId(), budget,
+    var source = new dev.mikoto2000.rei.core.chat.AgentRunContext("contract-source", "chat", protocolDirectory, "project");
+    var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(source.runId(), new OutputLimitRunBudget(2, 8),
         new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
         new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+    execution.setRunContext(source);
+    var options = models.requestOptions(LlmFeature.CHAT, null, true, source);
+    var context = new java.util.HashMap<>(options.getToolContext());
+    context.put(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution);
+    execution.setModelOptions(options.mutate().toolContext(null).toolContext(context).build());
+    execution.preserveUserMessage(new UserMessage("original request"));
+    new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.CHAT))
+        .stream(new Prompt(List.of(new org.springframework.ai.chat.messages.SystemMessage("original instructions"),
+            new UserMessage("original request")), execution.modelOptions())).blockLast(Duration.ofSeconds(10));
+    var history = execution.protocolHistorySnapshot();
+    String checkpoint = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner("project", "task", 1);
+    var scope = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(source);
+    protocolStore.protectCheckpoint(scope, history, checkpoint);
+    var references = history.protectedEntries().stream().map(entry ->
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference(entry.reference(),
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, checkpoint)).toList();
+    var target = new dev.mikoto2000.rei.core.chat.AgentRunContext("contract-target", "chat", protocolDirectory, "project");
+    var restored = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(target.runId(), new OutputLimitRunBudget(2, 8),
+        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+    restored.setRunContext(target);
+    var targetOptions = models.requestOptions(LlmFeature.CHAT, null, true, target);
+    if (change.equals("temperature")) targetOptions = targetOptions.mutate().temperature(0.3).build();
+    if (change.equals("tools")) targetOptions = targetOptions.mutate().toolCallbacks(options().getToolCallbacks()).build();
+    var targetContext = new java.util.HashMap<>(targetOptions.getToolContext());
+    targetContext.put(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, restored);
+    restored.setModelOptions(targetOptions.mutate().toolContext(null).toolContext(targetContext).build());
+    restored.restoreProgress(execution.progressSnapshot(), references);
+    var model = new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.CHAT));
+    var prompt = new Prompt(List.of(new org.springframework.ai.chat.messages.SystemMessage(
+        change.equals("instructions") ? "changed instructions" : "original instructions"),
+        new UserMessage("host resume control")), restored.modelOptions());
+    if (!change.equals("compatible")) {
+      assertThatThrownBy(() -> model.stream(prompt).blockLast(Duration.ofSeconds(10)))
+          .isInstanceOf(IllegalStateException.class).hasMessageContaining("continuation");
+      assertThat(requests).hasSize(1);
+      assertThat(executions).hasValue(0);
+      return;
+    }
+    model.stream(prompt).blockLast(Duration.ofSeconds(10));
+    assertThat(requests).hasSize(2);
+    assertThat(requests.getLast().path("instructions").asText()).isEqualTo("original instructions");
+    assertThat(requests.getLast().path("input").toString()).contains("original request").doesNotContain("host resume control");
+    assertThat(restored.protocolHistorySnapshot().input().entries().stream()
+        .map(entry -> protocolStore.load(scope, entry.reference()))
+        .filter(message -> message instanceof org.springframework.ai.chat.messages.SystemMessage
+            && "original instructions".equals(message.getText())).count())
+        .as("do not accumulate duplicate base instructions inside the saved input").isEqualTo(1);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void inputCheckpointFailureDoesNotSendOrInventUnknownProviderUsage(boolean assembled)
+      throws Exception {
+    var models = nativeProvider(nativeProperties());
+    var owner =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "input-failure", "chat", protocolDirectory, "project");
+    var budget = new OutputLimitRunBudget(2, 8, null, 1000);
+    budget.tryConsumeLlmCall();
+    var execution =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            owner.runId(),
+            budget,
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+            new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+            ignored -> {});
     execution.setRunContext(owner);
     var options = models.requestOptions(LlmFeature.CHAT, null, true, owner);
     var values = new java.util.HashMap<>(options.getToolContext());
     values.put(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution);
     execution.setModelOptions(options.mutate().toolContext(null).toolContext(values).build());
     execution.preserveUserMessage(new UserMessage("original input"));
-    execution.setToolResultsCheckpoint(ignored -> { throw new IllegalStateException("input checkpoint unavailable"); });
+    execution.setToolResultsCheckpoint(ignored -> {
+      throw new IllegalStateException("input checkpoint unavailable");
+    });
     dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler = null;
     if (assembled) {
-      assembler = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.contextbudget.ContextAssembler.class);
-      org.mockito.Mockito.when(assembler.assemble(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
-          org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any())).thenAnswer(call -> call.getArgument(0));
-      org.mockito.Mockito.when(assembler.reviewContinuation(org.mockito.ArgumentMatchers.any())).thenReturn("");
+      assembler =
+          org.mockito.Mockito.mock(dev.mikoto2000.rei.core.contextbudget.ContextAssembler.class);
+      org.mockito.Mockito.when(
+              assembler.assemble(
+                  org.mockito.ArgumentMatchers.any(),
+                  org.mockito.ArgumentMatchers.anyString(),
+                  org.mockito.ArgumentMatchers.anyString(),
+                  org.mockito.ArgumentMatchers.any()))
+          .thenAnswer(call -> call.getArgument(0));
+      org.mockito.Mockito.when(assembler.reviewContinuation(org.mockito.ArgumentMatchers.any()))
+          .thenReturn("");
     }
-    var controlled = new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.CHAT), assembler);
-    var failure = org.assertj.core.api.Assertions.catchThrowable(() -> controlled.stream(new Prompt("original input", execution.modelOptions()))
-        .blockLast(Duration.ofSeconds(10)));
+    var controlled =
+        new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
+            models.chatModel(LlmFeature.CHAT), assembler);
+    var failure =
+        org.assertj.core.api.Assertions.catchThrowable(() ->
+            controlled.stream(new Prompt("original input", execution.modelOptions()))
+                .blockLast(Duration.ofSeconds(10)));
     assertThat(requests).isEmpty();
     assertThat(executions).hasValue(0);
-    assertThat(budget.snapshot().usageUnknown()).as("no transport started, so usage is not unknown").isFalse();
-    assertThat(failure).isInstanceOf(IllegalStateException.class).hasMessage("input checkpoint unavailable");
+    assertThat(budget.snapshot().usageUnknown())
+        .as("no transport started, so usage is not unknown")
+        .isFalse();
+    assertThat(failure)
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("input checkpoint unavailable");
     assertThat(execution.protocolHistorySnapshot().input()).isNull();
   }
 
@@ -837,12 +941,18 @@ class ResponsesReplayContractTest {
     contentType = "text/event-stream";
     replies.add(sse(done()));
     var models = nativeProvider(nativeProperties());
-    var owner = new dev.mikoto2000.rei.core.chat.AgentRunContext("snapshot", "chat", protocolDirectory, "project");
+    var owner =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "snapshot", "chat", protocolDirectory, "project");
     var budget = new OutputLimitRunBudget(2, 8);
     budget.tryConsumeLlmCall();
-    var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(owner.runId(), budget,
-        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
-        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+    var execution =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            owner.runId(),
+            budget,
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+            new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+            ignored -> {});
     execution.setRunContext(owner);
     var options = models.requestOptions(LlmFeature.CHAT, null, true, owner);
     var values = new java.util.HashMap<>(options.getToolContext());
@@ -853,38 +963,72 @@ class ResponsesReplayContractTest {
     var capturedBeforeHttp = new java.util.concurrent.atomic.AtomicBoolean();
     execution.setToolResultsCheckpoint(ignored -> {
       var history = execution.protocolHistorySnapshot();
-      if (history != null && history.input() != null && capturedBeforeHttp.compareAndSet(false, true))
+      if (history != null
+          && history.input() != null
+          && capturedBeforeHttp.compareAndSet(false, true))
         assertThat(requests).as("publish full input before any HTTP side effect").isEmpty();
     });
     dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler = null;
     if (assembled) {
-      assembler = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.contextbudget.ContextAssembler.class);
-      org.mockito.Mockito.when(assembler.assemble(org.mockito.ArgumentMatchers.any(),
-          org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+      assembler =
+          org.mockito.Mockito.mock(dev.mikoto2000.rei.core.contextbudget.ContextAssembler.class);
+      org.mockito.Mockito.when(
+              assembler.assemble(
+                  org.mockito.ArgumentMatchers.any(),
+                  org.mockito.ArgumentMatchers.anyString(),
+                  org.mockito.ArgumentMatchers.anyString(),
+                  org.mockito.ArgumentMatchers.any()))
           .thenAnswer(call -> call.getArgument(0));
-      org.mockito.Mockito.when(assembler.reviewContinuation(org.mockito.ArgumentMatchers.any())).thenReturn("");
+      org.mockito.Mockito.when(assembler.reviewContinuation(org.mockito.ArgumentMatchers.any()))
+          .thenReturn("");
     }
-    new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.CHAT), assembler)
-        .stream(new Prompt(List.of(new org.springframework.ai.chat.messages.SystemMessage("original instructions"), user),
-            execution.modelOptions())).blockLast();
+    new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
+            models.chatModel(LlmFeature.CHAT), assembler)
+        .stream(
+                new Prompt(
+                    List.of(
+                        new org.springframework.ai.chat.messages.SystemMessage(
+                            "original instructions"),
+                        user),
+                    execution.modelOptions()))
+            .blockLast();
     assertThat(capturedBeforeHttp).isTrue();
     var history = execution.protocolHistorySnapshot();
     assertThat(history.input()).isNotNull();
-    var exchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) execution.modelOptions()
-        .getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
-    String checkpoint = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner("project", "task", 1);
+    var exchange =
+        (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
+            execution
+                .modelOptions()
+                .getToolContext()
+                .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    String checkpoint =
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
+            "project", "task", 1);
     protocolStore.protectCheckpoint(exchange.scope(), history, checkpoint);
-    var references = history.protectedEntries().stream().map(entry ->
-        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference(entry.reference(),
-            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, checkpoint)).toList();
-    var next = new dev.mikoto2000.rei.core.chat.AgentRunContext("resumed-snapshot", "chat", protocolDirectory, "project");
-    var restored = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(next.runId(), new OutputLimitRunBudget(2, 8),
-        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
-        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+    var references =
+        history.protectedEntries().stream()
+            .map(entry ->
+                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference(
+                    entry.reference(),
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind
+                        .CHECKPOINT,
+                    checkpoint))
+            .toList();
+    var next =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "resumed-snapshot", "chat", protocolDirectory, "project");
+    var restored =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            next.runId(),
+            new OutputLimitRunBudget(2, 8),
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+            new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+            ignored -> {});
     restored.setRunContext(next);
     restored.setModelOptions(models.requestOptions(LlmFeature.CHAT, null, true, next));
     restored.restoreProgress(execution.progressSnapshot(), references);
-    assertThat(restored.takeResumeMessages()).extracting(org.springframework.ai.chat.messages.Message::getText)
+    assertThat(restored.takeResumeMessages())
+        .extracting(org.springframework.ai.chat.messages.Message::getText)
         .containsExactly("original instructions", "original input", "done");
     assertThat(requests).hasSize(1);
   }
@@ -1240,7 +1384,8 @@ class ResponsesReplayContractTest {
     assertThat(requests.getLast().path("input").toString())
         .contains("opaque-one+/=", "opaque-two+/=", "opaque-three+/=", "opaque-four+/=");
     var usage = protocolStore.usage(boundary.scope(), boundary.run());
-    assertThat(usage.payloadCount()).as("five outputs plus input and distinct feedback snapshots")
+    assertThat(usage.payloadCount())
+        .as("five outputs plus input and distinct feedback snapshots")
         .isEqualTo(bounded ? 5 : 8);
     assertThat(accepted).hasSize(5);
     assertThat(accepted)
@@ -1515,9 +1660,7 @@ class ResponsesReplayContractTest {
         defaults
             .mutate()
             .toolContext(
-                Map.of(
-                    dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY,
-                    context))
+                Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, context))
             .build();
     new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(model(defaults))
         .stream(new Prompt("fixture", options)).blockLast(Duration.ofSeconds(10));
@@ -1569,9 +1712,7 @@ class ResponsesReplayContractTest {
         defaults
             .mutate()
             .toolContext(
-                Map.of(
-                    dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY,
-                    context))
+                Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, context))
             .build();
     var failure =
         org.assertj.core.api.Assertions.catchThrowable(() ->
@@ -1821,9 +1962,7 @@ class ResponsesReplayContractTest {
             .mutate()
             .toolCallbacks(callbacks)
             .toolContext(
-                Map.of(
-                    dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY,
-                    execution))
+                Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution))
             .build();
     var discoveryProperties = new dev.mikoto2000.rei.llm.discovery.ToolDiscoveryProperties();
     discoveryProperties.setEnabled(true);
@@ -2129,16 +2268,23 @@ class ResponsesReplayContractTest {
   }
 
   private OpenAiResponsesChatOptions controlledOptions(
-      dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution, OpenAiResponsesChatOptions defaults) {
+      dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution,
+      OpenAiResponsesChatOptions defaults) {
     var exchange = protocolStore.newExchange(execution.runContext());
-    var previous = defaults.getToolContext().get(
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
-    if (previous instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange original
+    var previous =
+        defaults
+            .getToolContext()
+            .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    if (previous
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange original
         && original.observer() != null) exchange = exchange.withObserver(original.observer());
     var context = new java.util.HashMap<>(defaults.getToolContext());
-    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
-    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
-        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(exchange.ownerKey(), endpoint(defaults).fingerprint()));
+    context.put(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
+    context.put(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+            exchange.ownerKey(), endpoint(defaults).fingerprint()));
     context.put(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, exchange.ownerKey());
     return defaults.mutate().toolContext(null).toolContext(context).build();
   }
