@@ -20,6 +20,99 @@ class ApprovalProtocolHistoryTest {
   @TempDir Path directory;
 
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"COMPLETED", "DENIED", "UNKNOWN", "EXPIRED", "CANCELLED"})
+  void onlyKnownDurableTerminalApprovalReferencesAreRetired(String state) {
+    var fixture = terminalFixture();
+    fixture.store().state("approval", state);
+    boolean retired = state.equals("COMPLETED") || state.equals("DENIED");
+    assertThat(approvalPins(fixture.source(), "approval")).isEqualTo(retired ? 0 : 1);
+    assertThat(fixture.payloads().usage(fixture.scope(), "run").referenceCount())
+        .isEqualTo(retired ? 2 : 3);
+    assertThat(fixture.payloads().load(fixture.scope(), fixture.reference(),
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:run"))
+        .isInstanceOf(AssistantMessage.class);
+    fixture.store().state("approval", state);
+    assertThat(approvalPins(fixture.source(), "approval")).isEqualTo(retired ? 0 : 1);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void approvalPinsRemainUntilTheActualOuterTransactionCommits(boolean rollback) {
+    var fixture = terminalFixture();
+    var transaction = new org.springframework.transaction.support.TransactionTemplate(
+        new org.springframework.jdbc.datasource.DataSourceTransactionManager(fixture.source()));
+    transaction.executeWithoutResult(status -> {
+      fixture.store().state("approval", "COMPLETED");
+      assertThat(approvalPins(fixture.source(), "approval")).isEqualTo(1);
+      if (rollback) status.setRollbackOnly();
+    });
+    assertThat(fixture.store().find("approval").orElseThrow().state())
+        .isEqualTo(rollback ? "WAITING_APPROVAL" : "COMPLETED");
+    assertThat(approvalPins(fixture.source(), "approval")).isEqualTo(rollback ? 1 : 0);
+  }
+
+  @Test
+  void replacementApprovalOwnsItsPinsBeforeThePreviousApprovalRetires() {
+    var fixture = terminalFixture();
+    fixture.store().save("replacement", fixture.owner(), "request", List.of(), fixture.pending(),
+        new OutputLimitRunBudget.Snapshot(0, 1, 0, false), false);
+    fixture.store().state("approval", "COMPLETED");
+    assertThat(approvalPins(fixture.source(), "approval")).isZero();
+    assertThat(approvalPins(fixture.source(), "replacement")).isEqualTo(1);
+    assertThat(fixture.store().saved(fixture.store().find("replacement").orElseThrow()).pendingTools()
+        .assistantReference()).isEqualTo(fixture.reference());
+  }
+
+  @Test
+  void retiringLegacyTextOnlyApprovalNeverInitializesThePayloadSchema() {
+    var source = new org.sqlite.SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + directory.resolve("legacy-terminal.db"));
+    var store = new ApprovalContinuationStore(source);
+    var owner = new AgentRunContext("run", "session", directory, "project");
+    var pending = new RunContinuation.PendingTools("working",
+        List.of(new AssistantMessage.ToolCall("call", "function", "fixture", "{}")), List.of(), java.util.Set.of());
+    store.save("legacy", owner, "request", List.of(), pending,
+        new OutputLimitRunBudget.Snapshot(0, 1, 0, false), false);
+    store.state("legacy", "COMPLETED");
+    assertThat(org.springframework.jdbc.core.simple.JdbcClient.create(source)
+        .sql("SELECT COUNT(*) FROM sqlite_master WHERE name='model_message_payloads'")
+        .query(Long.class).single()).isZero();
+  }
+
+  private long approvalPins(org.sqlite.SQLiteDataSource source, String id) {
+    return org.springframework.jdbc.core.simple.JdbcClient.create(source)
+        .sql("SELECT COUNT(*) FROM model_message_references WHERE kind='APPROVAL' AND owner=?")
+        .param(id).query(Long.class).single();
+  }
+
+  private TerminalFixture terminalFixture() {
+    var source = new org.sqlite.SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + directory.resolve("terminal.db"));
+    var owner = new AgentRunContext("run", "session", directory, "project");
+    var scope = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner);
+    var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    var call = new AssistantMessage.ToolCall("call", "function", "fixture", "{}");
+    var assistant = AssistantMessage.builder().parts(List.of(
+        new ReasoningPart(null, null, new OpaquePayload("fixture", "encrypted_content", "PRIVATE-retained"), Map.of()),
+        org.springframework.ai.chat.messages.part.ToolCallPart.of(call))).build();
+    var ref = payloads.save(scope, "run", "assistant", assistant);
+    payloads.publish(scope, ref, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, "run");
+    var pending = new RunContinuation.PendingTools("working", List.of(call), List.of(), java.util.Set.of(), ref);
+    var store = new ApprovalContinuationStore(source);
+    store.save("approval", owner, "request", List.of(), pending,
+        new OutputLimitRunBudget.Snapshot(0, 1, 0, false), false);
+    payloads.publish(scope, ref, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:run");
+    payloads.publish(scope, ref, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint:retained");
+    payloads.releaseRun(scope, "run");
+    return new TerminalFixture(source, owner, scope, payloads, store, ref, pending);
+  }
+
+  private record TerminalFixture(org.sqlite.SQLiteDataSource source, AgentRunContext owner,
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope scope,
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore payloads, ApprovalContinuationStore store,
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref reference, RunContinuation.PendingTools pending) {}
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"generation", "owner", "model", "api", "url", "mode", "credential", "same"})
   void changedEndpointOrReplayOwnerStopsBeforeSavedToolDispatch(String change) {
