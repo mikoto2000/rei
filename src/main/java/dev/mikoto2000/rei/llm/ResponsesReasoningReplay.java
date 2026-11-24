@@ -26,7 +26,7 @@ final class ResponsesReasoningReplay {
     String requestOwner =
         endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.ENCRYPTED
             ? owner(prompt)
-            : null;
+            : optionalOwner(prompt);
     for (var message : prompt.getInstructions()) {
       if (!(message instanceof AssistantMessage assistant)) continue;
       for (var part : assistant.getParts()) {
