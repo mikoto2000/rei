@@ -21,6 +21,48 @@ class ResponsesTransportContractTest {
   private String contentType = "application/json";
 
   @Test
+  void structuredOutputUsesNativeTextFormat() {
+    var options = options().outputSchema("{\"type\":\"object\",\"properties\":{}}").build();
+    transport(options).call(new Prompt("fixture", options));
+    var format = requests.getFirst().path("text").path("format");
+    assertThat(format.path("type").asText()).isEqualTo("json_schema");
+    assertThat(format.path("schema").path("type").asText()).isEqualTo("object");
+    assertThat(requests.getFirst().has("response_format")).isFalse();
+  }
+
+  @Test
+  void imageMediaUsesNativeResponsesInputImage() {
+    var options = options().build();
+    var image = new org.springframework.ai.content.Media(org.springframework.util.MimeTypeUtils.IMAGE_PNG,
+        new org.springframework.core.io.ByteArrayResource(new byte[] {1, 2, 3}));
+    var user = org.springframework.ai.chat.messages.UserMessage.builder().text("look").media(image).build();
+    transport(options).call(new Prompt(user, options));
+    var content = requests.getFirst().path("input").get(0).path("content");
+    assertThat(content.get(1).path("type").asText()).isEqualTo("input_image");
+    assertThat(content.get(1).path("image_url").asText()).isEqualTo("data:image/png;base64,AQID");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+    "hostedTools", "truncation", "maxToolCalls", "strict"
+  })
+  void rejectsSettingsOutsideReisInitialContract(String setting) {
+    var builder = options();
+    switch (setting) {
+      case "hostedTools" -> builder.hostedTools(List.of(
+          org.springframework.ai.openai.responses.HostedTool.WebSearch.of()));
+      case "truncation" -> builder.truncation("auto");
+      case "maxToolCalls" -> builder.maxToolCalls(1);
+      case "strict" -> builder.strict(true);
+      default -> throw new AssertionError(setting);
+    }
+    var options = builder.build();
+    assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(setting);
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
   void streamingTextAndUsageComeThroughTheNativeSseParser() {
     contentType = "text/event-stream";
     reply = textDelta() + event("response.completed", "\"response\":" + completed());
