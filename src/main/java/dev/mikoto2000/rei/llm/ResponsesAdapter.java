@@ -58,6 +58,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
           customizers) {
     if (endpoint.apiType() != LlmApiType.RESPONSES
+        || options.getDeploymentName() != null
+        || options.isMicrosoftFoundry()
         || !Objects.equals(endpoint.baseUrl(), options.getBaseUrl())
         || !Objects.equals(endpoint.model(), options.getModel())
         || !Objects.equals(endpoint.maxOutputTokens(), options.getMaxOutputTokens())
