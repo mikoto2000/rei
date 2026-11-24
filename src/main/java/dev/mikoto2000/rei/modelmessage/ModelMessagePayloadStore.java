@@ -68,7 +68,22 @@ public final class ModelMessagePayloadStore {
    * One existing tool-loop iteration, with its immutable persistence identity supplied by the
    * caller.
    */
-  public record Exchange(ModelMessagePayloadStore store, Scope scope, String run, String key) {
+  public record Accepted(Ref reference, String key, Message message) {
+    @Override public String toString() { return "Accepted[reference=" + reference + ", key=" + key + "]"; }
+  }
+
+  public record Exchange(ModelMessagePayloadStore store, Scope scope, String run, String key,
+      java.util.function.Consumer<Accepted> observer) {
+    public Exchange(ModelMessagePayloadStore store, Scope scope, String run, String key) {
+      this(store, scope, run, key, null);
+    }
+
+    public Exchange withObserver(java.util.function.Consumer<Accepted> value) {
+      return new Exchange(store, scope, run, key, java.util.Objects.requireNonNull(value));
+    }
+
+    public Exchange withKey(String value) { return new Exchange(store, scope, run, value, observer); }
+
     public String ownerKey() {
       validate(scope);
       identifier(run);

@@ -556,7 +556,12 @@ class ResponsesReplayContractTest {
                 .replace("opaque-two", "opaque-four")
                 .replace("msg_work", "msg_work_second")));
     replies.add(sse(done()));
-    var options = options();
+    var accepted = new java.util.ArrayList<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Accepted>();
+    var seed = options();
+    var boundary = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) seed.getToolContext()
+        .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var options = seed.mutate().toolContext(Map.of(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, boundary.withObserver(accepted::add))).build();
     var run =
         new dev.mikoto2000.rei.core.chat.AgentRunContext(
             "fixture-run", "fixture-conversation", protocolDirectory, "fixture-project");
@@ -598,6 +603,16 @@ class ResponsesReplayContractTest {
                 "fixture-project", protocolDirectory.toString(), "fixture-conversation"),
             "fixture-run");
     assertThat(usage.payloadCount()).isEqualTo(5);
+    assertThat(accepted).hasSize(5);
+    assertThat(accepted).extracting(item -> item.message().getMessageType().name())
+        .containsExactly("ASSISTANT", "TOOL", "ASSISTANT", "TOOL", "ASSISTANT");
+    assertThat(accepted).extracting(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Accepted::reference).doesNotHaveDuplicates();
+    for (var item : accepted) {
+      assertThat(protocolStore.load(boundary.scope(), item.reference(),
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, boundary.run()).getMessageType())
+          .isEqualTo(item.message().getMessageType());
+      assertThat(item.toString()).doesNotContain("opaque-one", "opaque-two", "fixture result");
+    }
   }
 
   @org.junit.jupiter.params.ParameterizedTest
