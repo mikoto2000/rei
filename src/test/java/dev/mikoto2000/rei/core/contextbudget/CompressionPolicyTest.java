@@ -59,7 +59,7 @@ class CompressionPolicyTest {
     assertThat(result.dropped()).containsExactly("TOOL_RESULTS");
   }
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {"missing", "orphan", "duplicate", "name"})
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"missing", "orphan", "duplicate", "name", "null-name-orphan"})
   void incompleteOrInconsistentToolTransactionsCannotBeCompressed(String defect) {
     var call = AssistantMessage.builder().content("").toolCalls(List.of(
         new AssistantMessage.ToolCall("one", "function", "readFile", "{}"),
@@ -73,6 +73,10 @@ class CompressionPolicyTest {
         results.add(new ToolResponseMessage.ToolResponse("two", "readFile", "second result"));
       }
       case "name" -> results.add(new ToolResponseMessage.ToolResponse("two", "writeFile", "wrong name"));
+      case "null-name-orphan" -> {
+        results.add(new ToolResponseMessage.ToolResponse("foreign", null, "orphan"));
+        results.add(new ToolResponseMessage.ToolResponse("two", "readFile", "second result"));
+      }
       default -> { }
     }
     List<Message> messages = List.of(call, ToolResponseMessage.builder().responses(results).build(),
