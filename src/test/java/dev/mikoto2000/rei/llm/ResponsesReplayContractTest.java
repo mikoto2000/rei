@@ -55,6 +55,47 @@ class ResponsesReplayContractTest {
     return context;
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+      "503,false,false,true", "429,false,false,true", "408,false,false,true", "409,false,false,true",
+      "400,false,false,false", "401,false,false,false", "503,true,false,false",
+      "503,false,true,false", "429,false,true,false"})
+  void normalizedNativeFailuresRespectTheExistingBoundedRetryAndTokenBudgets(
+      int status, boolean tokenLimit, boolean providerDeclinedRetry, boolean expectedRetry) throws Exception {
+    retryHint = providerDeclinedRetry ? "false" : null;
+    contentType = "text/event-stream";
+    httpStatuses.add(status);
+    replies.add("{\"error\":{\"message\":\"PRIVATE-retry-fixture\",\"type\":\"fixture\"}}");
+    replies.add(sse(done()));
+    var budget = new OutputLimitRunBudget(1, 4, null, tokenLimit ? 1000 : 0);
+    var owner = new dev.mikoto2000.rei.core.chat.AgentRunContext("fixture-run", "session", protocolDirectory, "project");
+    var context = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(owner.runId(), budget,
+        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+    context.setRunContext(owner);
+    var options = controlledOptions(context, options());
+    var reservation = new OutputLimitRunBudget.LlmCallReservation() {
+      public boolean tryReserve() { return budget.tryConsumeLlmCall(); }
+      public int remaining() { return budget.remainingLlmCalls(); }
+      public void recordTotalTokens(Integer count) { budget.recordTotalTokens(count); }
+      public boolean tokenLimitEnabled() { return budget.tokenLimitEnabled(); }
+      public boolean tokenExhausted() { return budget.tokenExhausted(); }
+      public boolean usageUnknown() { return budget.usageUnknown(); }
+    };
+    var retries = new dev.mikoto2000.rei.core.chat.BoundedToolLoop.ModelRetries(1);
+    var result = new dev.mikoto2000.rei.core.chat.BoundedToolLoop().runWithHistory(model(options),
+        new Prompt("retry fixture", options), new AtomicInteger(4), owner,
+        () -> { context.checkActive(); context.checkModelTokenBudget(); }, reservation, retries);
+    if (expectedRetry) assertThat(result.block(Duration.ofSeconds(10)).output()).isEqualTo("done");
+    else assertThatThrownBy(() -> result.block(Duration.ofSeconds(10))).isInstanceOf(RuntimeException.class)
+        .hasMessageNotContaining("PRIVATE");
+    assertThat(requests).hasSize(expectedRetry ? 2 : 1);
+    assertThat(budget.snapshot().llmCalls()).isEqualTo(expectedRetry ? 2 : 1);
+    assertThat(retries.attempts()).isEqualTo(expectedRetry ? 1 : 0);
+    assertThat(executions.get()).isZero();
+    if (tokenLimit) assertThat(budget.usageUnknown()).isTrue();
+  }
+
   @Test
   void configuredNativeModelOptionsAndClientShareOneImmutableEndpointSnapshot() {
     var properties = nativeProperties();
@@ -2305,6 +2346,7 @@ class ResponsesReplayContractTest {
 
   private final List<JsonNode> requests = new CopyOnWriteArrayList<>();
   private final ArrayDeque<String> replies = new ArrayDeque<>();
+  private final ArrayDeque<Integer> httpStatuses = new ArrayDeque<>();
   private final AtomicInteger executions = new AtomicInteger();
   private String owner = "fixture-owner";
   private String endpointId = "fixture";
@@ -2313,6 +2355,7 @@ class ResponsesReplayContractTest {
   private String baseUrl = "https://responses-fixture.invalid/v1";
   private ReasoningReplayMode replayMode = ReasoningReplayMode.ENCRYPTED;
   private String contentType = "application/json";
+  private String retryHint;
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
@@ -3125,13 +3168,14 @@ class ResponsesReplayContractTest {
         chain.request().body().writeTo(buffer);
         requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
         var reply = replies.isEmpty() ? done() : replies.removeFirst();
-        return new okhttp3.Response.Builder()
+        var fixtureReply = new okhttp3.Response.Builder()
             .request(chain.request())
             .protocol(okhttp3.Protocol.HTTP_1_1)
-            .code(200)
+            .code(httpStatuses.isEmpty() ? 200 : httpStatuses.removeFirst())
             .message("fixture")
-            .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType)))
-            .build();
+            .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType)));
+        if (retryHint != null) fixtureReply.header("X-Should-Retry", retryHint);
+        return fixtureReply.build();
       });
     });
   }
