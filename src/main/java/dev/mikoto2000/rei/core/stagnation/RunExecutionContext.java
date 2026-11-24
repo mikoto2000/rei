@@ -40,15 +40,12 @@ public class RunExecutionContext {
     if (modelOptions != null || options == null)
       throw new IllegalStateException("Run model options cannot be replaced");
     modelOptions = options.mutate().build();
-    var boundary =
-        modelOptions.getToolContext() == null
-            ? null
-            : modelOptions
-                .getToolContext()
-                .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var suppliedContext = modelOptions.getToolContext();
+    var boundary = suppliedContext == null ? null : suppliedContext.get(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
     if (boundary
         instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange) {
-      var context = new java.util.HashMap<>(modelOptions.getToolContext());
+      var context = new java.util.HashMap<>(java.util.Objects.requireNonNull(suppliedContext));
       context.put(
           dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
           exchange.withObserver(accepted -> {
@@ -72,10 +69,9 @@ public class RunExecutionContext {
                 dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(
                     runContext)))
       throw new IllegalStateException("Protocol checkpoint ownership mismatch");
-    var binding =
-        modelOptions
-            .getToolContext()
-            .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
+    var modelContext = modelOptions.getToolContext();
+    var binding = modelContext == null ? null : modelContext.get(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
     var origin =
         protocolHistory != null
             ? protocolHistory.origin()
