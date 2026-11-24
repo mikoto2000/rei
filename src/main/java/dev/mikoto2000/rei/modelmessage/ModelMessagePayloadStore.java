@@ -16,31 +16,96 @@ public final class ModelMessagePayloadStore {
   public record Usage(long payloadBytes, long runCumulativeBytes, long payloadCount, long referenceCount) {}
   public enum ReferenceKind { HISTORY, RUN, APPROVAL, CHECKPOINT }
 
-  public void publish(Scope scope, Ref ref, ReferenceKind kind, String owner) { throw rejected(); }
-  public void release(Scope scope, Ref ref, ReferenceKind kind, String owner) { throw rejected(); }
-  public int collectExpired() { return 0; }
-  public Usage usage(Scope scope, String run) { return new Usage(0, 0, 0, 0); }
-
-  private final DataSource source;
-  private final ModelMessageCodec codec = new ModelMessageCodec();
-
-  public ModelMessagePayloadStore(DataSource source) {
-    this.source = java.util.Objects.requireNonNull(source);
+  public void publish(Scope scope, Ref ref, ReferenceKind kind, String owner) {
+    validate(scope);
+    identifier(owner);
+    if (kind == null) throw rejected();
     transaction(db -> {
-      execute(db, "CREATE TABLE IF NOT EXISTS model_message_schema(version INTEGER NOT NULL)");
-      long version = scalar(db, "SELECT COALESCE(MAX(version),0) FROM model_message_schema");
-      if (version != 0 && version != 1) throw rejected();
-      if (version == 0) {
-        execute(db, "CREATE TABLE model_message_payloads(id TEXT PRIMARY KEY,project TEXT NOT NULL,root_run TEXT NOT NULL,conversation TEXT NOT NULL,run TEXT NOT NULL,message_key TEXT NOT NULL,sha256 TEXT NOT NULL,payload BLOB NOT NULL,size INTEGER NOT NULL,UNIQUE(project,root_run,conversation,run,message_key))");
-        execute(db, "INSERT INTO model_message_schema(version) VALUES(1)");
+      read(db, scope, ref);
+      long references = scalar(db, "SELECT COUNT(*) FROM model_message_references WHERE payload_id=?", ref.id());
+      if (references == 0 && scalar(db, "SELECT staged_until FROM model_message_payloads WHERE id=?", ref.id()) <= clock.millis()) throw rejected();
+      try (var insert = db.prepareStatement("INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,?,?)")) {
+        bind(insert, ref.id(), kind.name(), owner);
+        insert.executeUpdate();
       }
-      // Verify even existing schemas before accepting a write; do not reinterpret future versions.
-      execute(db, "SELECT id,project,root_run,conversation,run,message_key,sha256,payload,size FROM model_message_payloads LIMIT 0");
       return null;
     });
   }
 
-  ModelMessagePayloadStore(DataSource source, java.time.Clock clock, Limits limits) { this(source); }
+  public void release(Scope scope, Ref ref, ReferenceKind kind, String owner) {
+    validate(scope);
+    identifier(owner);
+    if (kind == null) throw rejected();
+    transaction(db -> {
+      read(db, scope, ref);
+      try (var delete = db.prepareStatement("DELETE FROM model_message_references WHERE payload_id=? AND kind=? AND owner=?")) {
+        bind(delete, ref.id(), kind.name(), owner);
+        delete.executeUpdate();
+      }
+      return null;
+    });
+  }
+
+  /** Invoked by retention maintenance, never by an independent background scheduler. */
+  public int collectExpired() {
+    return transaction(db -> {
+      try (var delete = db.prepareStatement("DELETE FROM model_message_payloads WHERE staged_until<=? AND NOT EXISTS(SELECT 1 FROM model_message_references WHERE payload_id=model_message_payloads.id)")) {
+        delete.setLong(1, clock.millis());
+        return delete.executeUpdate();
+      }
+    });
+  }
+
+  public Usage usage(Scope scope, String run) {
+    validate(scope);
+    identifier(run);
+    return transaction(db -> new Usage(scalar(db, "SELECT COALESCE(SUM(size),0) FROM model_message_payloads"),
+        scalar(db, "SELECT COALESCE(SUM(bytes),0) FROM model_message_run_usage WHERE project=? AND root_run=? AND conversation=? AND run=?",
+            scope.project(), scope.rootRun(), scope.conversation(), run),
+        scalar(db, "SELECT COUNT(*) FROM model_message_payloads"), scalar(db, "SELECT COUNT(*) FROM model_message_references")));
+  }
+
+  private final DataSource source;
+  private final ModelMessageCodec codec = new ModelMessageCodec();
+  private final java.time.Clock clock;
+  private final Limits limits;
+
+  public ModelMessagePayloadStore(DataSource source) {
+    this(source, java.time.Clock.systemUTC(), new Limits(64L * 1024 * 1024, 512L * 1024 * 1024, java.time.Duration.ofHours(1)));
+  }
+
+  ModelMessagePayloadStore(DataSource source, java.time.Clock clock, Limits limits) {
+    this.source = java.util.Objects.requireNonNull(source);
+    this.clock = java.util.Objects.requireNonNull(clock);
+    this.limits = java.util.Objects.requireNonNull(limits);
+    if (limits.runBytes() <= 0 || limits.totalBytes() <= 0 || limits.stagingLifetime() == null
+        || limits.stagingLifetime().isNegative() || limits.stagingLifetime().isZero()
+        || limits.stagingLifetime().compareTo(java.time.Duration.ofDays(1)) > 0) throw rejected();
+    transaction(db -> {
+      execute(db, "CREATE TABLE IF NOT EXISTS model_message_schema(version INTEGER NOT NULL)");
+      long version = scalar(db, "SELECT COALESCE(MAX(version),0) FROM model_message_schema");
+      if (version < 0 || version > 2) throw rejected();
+      if (version == 0) {
+        execute(db, "CREATE TABLE model_message_payloads(id TEXT PRIMARY KEY,project TEXT NOT NULL,root_run TEXT NOT NULL,conversation TEXT NOT NULL,run TEXT NOT NULL,message_key TEXT NOT NULL,sha256 TEXT NOT NULL,payload BLOB NOT NULL,size INTEGER NOT NULL,UNIQUE(project,root_run,conversation,run,message_key))");
+        execute(db, "INSERT INTO model_message_schema(version) VALUES(1)");
+      }
+      if (version <= 1) {
+        // Unknown references in the prototype v1 schema must be retained conservatively.
+        execute(db, "ALTER TABLE model_message_payloads ADD COLUMN staged_until INTEGER NOT NULL DEFAULT 9223372036854775807");
+        execute(db, "CREATE TABLE model_message_references(payload_id TEXT NOT NULL REFERENCES model_message_payloads(id) ON DELETE RESTRICT,kind TEXT NOT NULL,owner TEXT NOT NULL,PRIMARY KEY(payload_id,kind,owner))");
+        execute(db, "CREATE TABLE model_message_run_usage(project TEXT NOT NULL,root_run TEXT NOT NULL,conversation TEXT NOT NULL,run TEXT NOT NULL,bytes INTEGER NOT NULL,PRIMARY KEY(project,root_run,conversation,run))");
+        execute(db, "INSERT INTO model_message_run_usage SELECT project,root_run,conversation,run,SUM(size) FROM model_message_payloads GROUP BY project,root_run,conversation,run");
+        execute(db, "CREATE INDEX model_message_payloads_gc ON model_message_payloads(staged_until)");
+        execute(db, "UPDATE model_message_schema SET version=2");
+      }
+      if (scalar(db, "SELECT COUNT(*) FROM model_message_schema") != 1) throw rejected();
+      // Verify even existing schemas before accepting a write; do not reinterpret future versions.
+      execute(db, "SELECT id,project,root_run,conversation,run,message_key,sha256,payload,size,staged_until FROM model_message_payloads LIMIT 0");
+      execute(db, "SELECT payload_id,kind,owner FROM model_message_references LIMIT 0");
+      execute(db, "SELECT project,root_run,conversation,run,bytes FROM model_message_run_usage LIMIT 0");
+      return null;
+    });
+  }
 
   public Ref save(Scope scope, String run, String key, Message message) {
     validate(scope);
@@ -60,10 +125,20 @@ public final class ModelMessagePayloadStore {
           }
         }
       }
+      long runBytes = scalar(db, "SELECT COALESCE(SUM(bytes),0) FROM model_message_run_usage WHERE project=? AND root_run=? AND conversation=? AND run=?",
+          scope.project(), scope.rootRun(), scope.conversation(), run);
+      long totalBytes = scalar(db, "SELECT COALESCE(SUM(size),0) FROM model_message_payloads");
+      if (runBytes < 0 || totalBytes < 0 || runBytes > limits.runBytes() - bytes.length
+          || totalBytes > limits.totalBytes() - bytes.length) throw rejected();
       var ref = new Ref(UUID.randomUUID().toString(), hash);
-      try (var insert = db.prepareStatement("INSERT INTO model_message_payloads(id,project,root_run,conversation,run,message_key,sha256,payload,size) VALUES(?,?,?,?,?,?,?,?,?)")) {
-        bind(insert, ref.id(), scope.project(), scope.rootRun(), scope.conversation(), run, key, hash, bytes, bytes.length);
+      try (var insert = db.prepareStatement("INSERT INTO model_message_payloads(id,project,root_run,conversation,run,message_key,sha256,payload,size,staged_until) VALUES(?,?,?,?,?,?,?,?,?,?)")) {
+        bind(insert, ref.id(), scope.project(), scope.rootRun(), scope.conversation(), run, key, hash, bytes, bytes.length,
+            Math.addExact(clock.millis(), limits.stagingLifetime().toMillis()));
         insert.executeUpdate();
+      }
+      try (var update = db.prepareStatement("INSERT INTO model_message_run_usage(project,root_run,conversation,run,bytes) VALUES(?,?,?,?,?) ON CONFLICT(project,root_run,conversation,run) DO UPDATE SET bytes=excluded.bytes")) {
+        bind(update, scope.project(), scope.rootRun(), scope.conversation(), run, Math.addExact(runBytes, bytes.length));
+        update.executeUpdate();
       }
       return ref;
     });
@@ -78,12 +153,12 @@ public final class ModelMessagePayloadStore {
     if (ref == null) throw rejected();
     identifier(ref.id());
     if (ref.sha256() == null || !ref.sha256().matches("[0-9a-f]{64}")) throw rejected();
-    try (var query = db.prepareStatement("SELECT sha256,payload,size FROM model_message_payloads WHERE id=? AND project=? AND root_run=? AND conversation=?")) {
+    try (var query = db.prepareStatement("SELECT sha256,payload,size,length(payload) FROM model_message_payloads WHERE id=? AND project=? AND root_run=? AND conversation=?")) {
       bind(query, ref.id(), scope.project(), scope.rootRun(), scope.conversation());
       try (var row = query.executeQuery()) {
         if (!row.next()) throw rejected();
         long size = row.getLong(3);
-        if (size < 0 || size > ModelMessageCodec.MAX_BYTES || !ref.sha256().equals(row.getString(1))) throw rejected();
+        if (size < 0 || size > ModelMessageCodec.MAX_BYTES || size != row.getLong(4) || !ref.sha256().equals(row.getString(1))) throw rejected();
         byte[] bytes = row.getBytes(2);
         if (bytes == null || bytes.length != size || !ref.sha256().equals(digest(bytes))) throw rejected();
         return bytes;
@@ -115,10 +190,13 @@ public final class ModelMessagePayloadStore {
     try (var statement = db.createStatement()) { statement.execute(sql); }
   }
 
-  private static long scalar(Connection db, String sql) throws SQLException {
-    try (var statement = db.createStatement(); var row = statement.executeQuery(sql)) {
+  private static long scalar(Connection db, String sql, Object... values) throws SQLException {
+    try (var statement = db.prepareStatement(sql)) {
+      bind(statement, values);
+      try (var row = statement.executeQuery()) {
       if (!row.next()) throw rejected();
       return row.getLong(1);
+      }
     }
   }
 
@@ -127,6 +205,7 @@ public final class ModelMessagePayloadStore {
 
   private <T> T transaction(Work<T> work) {
     try (var db = source.getConnection()) {
+      execute(db, "PRAGMA foreign_keys=ON");
       execute(db, "BEGIN IMMEDIATE");
       try {
         T result = work.apply(db);
