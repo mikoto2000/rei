@@ -222,7 +222,10 @@ public final class ModelMessagePayloadStore {
     public java.util.List<Entry> replayEntries() {
       if (input == null) return entries;
       var result = new java.util.ArrayList<>(input.entries());
-      result.addAll(entries.subList(input.traceSize(), entries.size()));
+      var inputReferences = input.entries().stream().map(Entry::reference)
+          .collect(java.util.stream.Collectors.toSet());
+      for (var entry : entries.subList(input.traceSize(), entries.size()))
+        if (!inputReferences.contains(entry.reference())) result.add(entry);
       return java.util.List.copyOf(result);
     }
 

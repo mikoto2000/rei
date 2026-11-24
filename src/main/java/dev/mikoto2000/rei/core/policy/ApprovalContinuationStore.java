@@ -533,6 +533,30 @@ public class ApprovalContinuationStore {
       if (entry.runId().equals(owner.runId()) && !entry.state().equals("RESUMING")) {
         var d = document(entry);
         var messages = new ArrayList<>(d.history());
+        var history = d.protocolHistory();
+        if (history != null && history.input() != null) {
+          if (history.entries().size() + guidance.size() > 256
+              || history.input().entries().size() + guidance.size() > 256)
+            throw new IllegalArgumentException("Approval guidance capacity exceeded");
+          if (guidance.stream().anyMatch(message -> !(message instanceof UserMessage)))
+            throw new IllegalArgumentException("Human guidance required");
+          var ownEntries = new ArrayList<>(history.entries());
+          var inputEntries = new ArrayList<>(history.input().entries());
+          var scope = ModelMessagePayloadStore.Scope.forOwner(d.owner());
+          var store = payloads.obtain();
+          for (var message : guidance) {
+            var key = "guidance/" + java.util.UUID.randomUUID() + "/USER";
+            var reference = store.save(scope, d.owner().runId(), key, message);
+            store.publish(scope, reference, ModelMessagePayloadStore.ReferenceKind.RUN, d.owner().runId());
+            store.publish(scope, reference, ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId());
+            var pointer = new ModelMessagePayloadStore.History.Entry(key, reference);
+            ownEntries.add(pointer);
+            inputEntries.add(pointer);
+          }
+          history = new ModelMessagePayloadStore.History(history.schemaVersion(), history.run(),
+              history.origin(), ownEntries, new ModelMessagePayloadStore.History.Input(inputEntries,
+                  history.input().traceSize(), history.input().preparationFingerprint()));
+        }
         for (var message : guidance) {
           if (!(message instanceof UserMessage))
             throw new IllegalArgumentException("Human guidance required");
@@ -547,7 +571,7 @@ public class ApprovalContinuationStore {
                     d.pending(),
                     d.budget(),
                     d.managedParent(),
-                    d.protocolHistory()));
+                    history));
         // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (encoded.length() > 1048576 || messages.size() > 256)
           throw new IllegalArgumentException("Approval guidance capacity exceeded");
