@@ -39,7 +39,7 @@ public class RunExecutionContext {
   private volatile dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History resumeProtocolHistory;
 
   /** Capture once at acceptance; each request receives a copy of the same effective options. */
-  public void setModelOptions(org.springframework.ai.model.tool.ToolCallingChatOptions options) {
+  public synchronized void setModelOptions(org.springframework.ai.model.tool.ToolCallingChatOptions options) {
     if (modelOptions != null || options == null)
       throw new IllegalStateException("Run model options cannot be replaced");
     modelOptions = options.mutate().build();
@@ -1240,7 +1240,7 @@ public class RunExecutionContext {
   private dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools pendingApprovalTools;
 
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
-  public void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved) {
+  public synchronized void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved) {
     if (saved != null) {
       budget.restore(saved.budget());
       evaluator.restoreInformation(null);
