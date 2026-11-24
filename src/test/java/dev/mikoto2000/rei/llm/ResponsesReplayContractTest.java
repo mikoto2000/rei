@@ -1152,7 +1152,7 @@ class ResponsesReplayContractTest {
               new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
               ignored -> {});
       execution.setRunContext(run);
-      execution.setModelOptions(options);
+      execution.setModelOptions(controlledOptions(execution, options));
       var checkpoints =
           new java.util.ArrayList<
               dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState>();
@@ -1197,7 +1197,7 @@ class ResponsesReplayContractTest {
               new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
               ignored -> {});
       restored.setRunContext(run);
-      restored.setModelOptions(options);
+      restored.setModelOptions(controlledOptions(restored, options));
       restored.restoreProgress(decoded);
       assertThat(restored.progressSnapshot().protocolHistory()).isEqualTo(history);
     }
@@ -1206,7 +1206,8 @@ class ResponsesReplayContractTest {
     assertThat(requests.getLast().path("input").toString())
         .contains("opaque-one+/=", "opaque-two+/=", "opaque-three+/=", "opaque-four+/=");
     var usage = protocolStore.usage(boundary.scope(), boundary.run());
-    assertThat(usage.payloadCount()).isEqualTo(5);
+    assertThat(usage.payloadCount()).as("five outputs plus input and distinct feedback snapshots")
+        .isEqualTo(bounded ? 5 : 8);
     assertThat(accepted).hasSize(5);
     assertThat(accepted)
         .extracting(item -> item.message().getMessageType().name())
@@ -1258,8 +1259,11 @@ class ResponsesReplayContractTest {
         new java.util.concurrent.atomic.AtomicReference<
             dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History>();
     execution.setToolResultsCheckpoint(ignored -> {
-      attempted.set(execution.progressSnapshot().protocolHistory());
-      throw new IllegalStateException("checkpoint unavailable");
+      var proposed = execution.progressSnapshot().protocolHistory();
+      if (!proposed.entries().isEmpty()) {
+        attempted.set(proposed);
+        throw new IllegalStateException("checkpoint unavailable");
+      }
     });
     var accepted =
         execution
@@ -1278,7 +1282,8 @@ class ResponsesReplayContractTest {
     assertThat(executions).hasValue(0);
     assertThat(requests).hasSize(1);
     assertThat(attempted.get().entries()).hasSize(1);
-    assertThat(execution.progressSnapshot().protocolHistory()).isNull();
+    assertThat(execution.progressSnapshot().protocolHistory().entries()).isEmpty();
+    assertThat(execution.progressSnapshot().protocolHistory().input()).isNotNull();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -1471,14 +1476,12 @@ class ResponsesReplayContractTest {
             "project",
             dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL,
             dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE));
-    var defaults = options();
+    var defaults = controlledOptions(context, options());
     var options =
         defaults
             .mutate()
             .toolContext(
                 Map.of(
-                    ResponsesReasoningReplay.OWNER_CONTEXT_KEY,
-                    owner,
                     dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY,
                     context))
             .build();
@@ -1527,14 +1530,12 @@ class ResponsesReplayContractTest {
             org.mockito.ArgumentMatchers.anyString(),
             org.mockito.ArgumentMatchers.any());
     context.setToolPermissionGuard(guard);
-    var defaults = options();
+    var defaults = controlledOptions(context, options());
     var guarded =
         defaults
             .mutate()
             .toolContext(
                 Map.of(
-                    ResponsesReasoningReplay.OWNER_CONTEXT_KEY,
-                    owner,
                     dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY,
                     context))
             .build();
@@ -1780,15 +1781,13 @@ class ResponsesReplayContractTest {
                   }
                 })
             .toList();
-    var defaults = options();
+    var defaults = controlledOptions(execution, options());
     var requestOptions =
         defaults
             .mutate()
             .toolCallbacks(callbacks)
             .toolContext(
                 Map.of(
-                    ResponsesReasoningReplay.OWNER_CONTEXT_KEY,
-                    owner,
                     dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY,
                     execution))
             .build();
@@ -2093,6 +2092,21 @@ class ResponsesReplayContractTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining(missing);
     assertThat(requests).isEmpty();
+  }
+
+  private OpenAiResponsesChatOptions controlledOptions(
+      dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution, OpenAiResponsesChatOptions defaults) {
+    var exchange = protocolStore.newExchange(execution.runContext());
+    var previous = defaults.getToolContext().get(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    if (previous instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange original
+        && original.observer() != null) exchange = exchange.withObserver(original.observer());
+    var context = new java.util.HashMap<>(defaults.getToolContext());
+    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
+    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(exchange.ownerKey(), endpoint(defaults).fingerprint()));
+    context.put(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, exchange.ownerKey());
+    return defaults.mutate().toolContext(null).toolContext(context).build();
   }
 
   private OpenAiResponsesChatOptions options() {
