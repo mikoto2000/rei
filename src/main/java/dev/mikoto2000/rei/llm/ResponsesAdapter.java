@@ -47,6 +47,14 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     if (supplied != null && !(supplied instanceof OpenAiResponsesChatOptions))
       throw new IllegalArgumentException("Responses native options required");
     var options = supplied == null ? getOptions() : (OpenAiResponsesChatOptions) supplied;
+    if (options.getHostedTools() != null && !options.getHostedTools().isEmpty())
+      throw new IllegalArgumentException("Responses hostedTools are not supported");
+    if (options.getTruncation() != null && !"disabled".equals(options.getTruncation()))
+      throw new IllegalArgumentException("Responses truncation must stay disabled");
+    if (options.getMaxToolCalls() != null)
+      throw new IllegalArgumentException("Responses maxToolCalls requires hosted execution");
+    if (Boolean.TRUE.equals(options.getStrict()))
+      throw new IllegalArgumentException("Responses function strict must stay false");
     var extra = options.getExtraBody();
     if (extra != null)
       for (String field : extra.keySet())
