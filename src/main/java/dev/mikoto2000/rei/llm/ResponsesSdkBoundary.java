@@ -29,7 +29,7 @@ final class ResponsesSdkBoundary {
                   try {
                     var result = method.invoke(service, requestArguments(arguments, plaintext));
                     if (result instanceof com.openai.models.responses.Response response) {
-                      var usage = validateResponse(response);
+                      var usage = validateResponse(response, plaintext);
                       if (response
                           .status()
                           .filter(com.openai.models.responses.ResponseStatus.FAILED::equals)
@@ -67,8 +67,9 @@ final class ResponsesSdkBoundary {
   }
 
   private static dev.mikoto2000.rei.modelmessage.ModelTokenUsage validateResponse(
-      com.openai.models.responses.Response response) {
+      com.openai.models.responses.Response response, boolean plaintext) {
     try {
+      if (plaintext) response.output().forEach(ResponsesSdkBoundary::validatePlaintextItem);
       var status = ResponsesTransportException.known(response._status());
       ResponsesTransportException.known(response._id());
       ResponsesTransportException.known(response._createdAt());
@@ -91,6 +92,19 @@ final class ResponsesSdkBoundary {
     }
   }
 
+  /** Unknown plaintext fields cannot be dropped before the canonical ReasoningPart is stored. */
+  private static void validatePlaintextItem(com.openai.models.responses.ResponseOutputItem output) {
+    output.reasoning().ifPresent(item -> {
+      if (!java.util.Set.of("id", "type", "summary", "content", "encrypted_content", "status")
+          .containsAll(item._allProperties().keySet()))
+        throw new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE);
+      for (var content : item.content().orElse(java.util.List.of()))
+        if (!java.util.Set.of("type", "text").containsAll(content._allProperties().keySet())
+            || !com.openai.core.JsonValue.from("reasoning_text").equals(content._type()))
+          throw new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE);
+    });
+  }
+
   static OpenAIClientAsync safe(OpenAIClientAsync client, boolean plaintext) {
     var service = client.responses();
     var safeService =
@@ -105,7 +119,7 @@ final class ResponsesSdkBoundary {
                       var stream =
                           (AsyncStreamResponse<ResponseStreamEvent>)
                               method.invoke(service, requestArguments(arguments, plaintext));
-                      return new SafeStream(stream);
+                      return new SafeStream(stream, plaintext);
                     }
                     return method.invoke(service, requestArguments(arguments, plaintext));
                   } catch (InvocationTargetException error) {
@@ -126,19 +140,23 @@ final class ResponsesSdkBoundary {
             });
   }
 
-  private record SafeStream(AsyncStreamResponse<ResponseStreamEvent> delegate)
+  private record SafeStream(AsyncStreamResponse<ResponseStreamEvent> delegate, boolean plaintext)
       implements AsyncStreamResponse<ResponseStreamEvent> {
     private Handler<ResponseStreamEvent> safeHandler(Handler<? super ResponseStreamEvent> handler) {
       return new Handler<>() {
         @Override
         public void onNext(ResponseStreamEvent event) {
+          if (plaintext && event.isOutputItemDone())
+            validatePlaintextItem(event.outputItemDone().orElseThrow().item());
+          if (plaintext && event.isOutputItemAdded())
+            validatePlaintextItem(event.outputItemAdded().orElseThrow().item());
           if (event.isFailed())
             throw new ResponsesTransportException(
                 ResponsesTransportException.Category.PROVIDER,
-                validateResponse(event.failed().orElseThrow().response()));
-          if (event.isCompleted()) validateResponse(event.completed().orElseThrow().response());
-          if (event.isIncomplete()) validateResponse(event.incomplete().orElseThrow().response());
-          if (event.isCreated()) validateResponse(event.created().orElseThrow().response());
+                validateResponse(event.failed().orElseThrow().response(), plaintext));
+          if (event.isCompleted()) validateResponse(event.completed().orElseThrow().response(), plaintext);
+          if (event.isIncomplete()) validateResponse(event.incomplete().orElseThrow().response(), plaintext);
+          if (event.isCreated()) validateResponse(event.created().orElseThrow().response(), plaintext);
           if (event.isError())
             throw new ResponsesTransportException(ResponsesTransportException.Category.PROVIDER);
           handler.onNext(event);
