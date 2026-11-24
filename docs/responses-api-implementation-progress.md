@@ -6,7 +6,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 0 | MERGED | codex/responses-api-phase-0-foundation / 削除済み | [#628](https://github.com/mikoto2000/rei/pull/628) | d0e3626f9565035cab20cc045dd3ba070985d3fe | PR・マージ後CI成功。全件7,718、成功7,706、skip12、failure/error0 |
 | 1 | MERGED | codex/responses-api-phase-1-transport / 削除済み | [#629](https://github.com/mikoto2000/rei/pull/629) | 10542db848d9317c7eaaab06869e63e7ab571d5b | 最終CI全件7,818、成功7,806、期待skip12、failure/error0。品質ゲート成功 |
-| 2 | IN_PROGRESS | codex/responses-api-phase-2-openai-replay / .worktrees/responses-api-phase-2 | 未作成 | 未マージ | 関連158件成功。全回帰・品質ゲート検証中 |
+| 2 | IN_PROGRESS | codex/responses-api-phase-2-openai-replay / .worktrees/responses-api-phase-2 | [#630](https://github.com/mikoto2000/rei/pull/630) | 未マージ | 関連159件・修正後architecture成功。最新headの全回帰・品質ゲート確認後にmerge |
 | 3 | NOT_STARTED | — | — | — | 未実施 |
 | 4 | NOT_STARTED | — | — | — | 未実施 |
 | 5 | NOT_STARTED | — | — | — | 未実施 |
@@ -194,7 +194,13 @@ DENY/REQUIRE_APPROVALは既存guardを通り、業務callbackは実行されな�
 BoundedToolLoopでもEOF、failed、incomplete、cancelled、output limit、buffer中のキャンセルで実行0件。
 独自agent loop、独自HTTP client/SSE parser、interceptorのJSON書き換えは追加していない。
 
-短いTDDはRed/Greenの独立commitで記録した。関連最終158件、failure/error/skip0。
+短いTDDはRed/Greenの独立commitで記録した。関連最終159件、failure/error/skip0。
 全回帰・静的解析・architecture・PR/CIの結果は確認後に追記する。
 承認待ちの完全なparts保存・プロセス再起動後の復元・実Runの所有者接続はPhase 3・4で実装し、
 このphaseのin-memory fixtureの結果を永続化済み・本番利用可能とは扱わない。
+
+PR差分レビューで、Spring MessageAggregatorがnative cached/reasoning内訳を落とすことを追加Redで検出した。
+標準集約器の再実装はせず、raw terminalのnative usageと、集約をまたぐbackend metadataの正規化5数値を
+それぞれ検証する。正常完了・出力上限・整合性エラーで内訳を保持し、未提供値を推測しない。
+全回帰snapshot ab6e3b45ではarchitecture依存1件を検出した。予算を緩和せず共有境界内の判定へ修正し、
+production snapshotの独立architecture検証は成功した。snapshot全回帰の結果と修正後の結果は区別する。

@@ -169,13 +169,21 @@ class ResponsesTransportContractTest {
           new java.util.concurrent.atomic.AtomicReference<
               org.springframework.ai.chat.model.ChatResponse>();
       new org.springframework.ai.chat.model.MessageAggregator()
-          .aggregate(model.stream(new Prompt("fixture", options)), completed::set)
+          .aggregate(
+              model.stream(new Prompt("fixture", options))
+                  .doOnNext(chunk -> {
+                    if (chunk.getMetadata().getUsage().getTotalTokens() > 0)
+                      assertThat(ResponsesTransportException.usage(chunk.getMetadata().getUsage()))
+                          .isEqualTo(
+                              new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
+                  }),
+              completed::set)
           .blockLast();
       result = completed.get();
     } else result = model.call(new Prompt("fixture", options));
     assertThat(OutputLimitDetector.isOutputLimitReached(result)).isTrue();
     assertThat(result.getMetadata().getUsage().getTotalTokens()).isEqualTo(5);
-    assertThat(ResponsesTransportException.usage(result.getMetadata().getUsage()))
+    assertThat(ResponsesTransportException.usage(result))
         .isEqualTo(new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
     assertThat(result.hasToolCalls()).isFalse();
   }

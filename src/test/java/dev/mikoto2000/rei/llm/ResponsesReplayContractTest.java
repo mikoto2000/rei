@@ -445,6 +445,8 @@ class ResponsesReplayContractTest {
     assertThat(failure)
         .isInstanceOf(ResponsesTransportException.class)
         .hasMessageContaining("INVALID_RESPONSE");
+    assertThat(((ResponsesTransportException) failure).usage())
+        .isEqualTo(new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -497,6 +499,8 @@ class ResponsesReplayContractTest {
         .aggregate(model.stream(prompt), completed::set)
         .blockLast(Duration.ofSeconds(10));
     var first = completed.get();
+    assertThat(ResponsesTransportException.usage(first))
+        .isEqualTo(new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
     assertThat(first.getResult().getOutput().getMetadata().get("rei.llm.replay-origin-owner"))
         .isEqualTo("fixture-owner");
     assertThat(first.getResult().getOutput().getParts()).hasSize(5);

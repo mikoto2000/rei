@@ -409,7 +409,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     } catch (IllegalArgumentException | JsonProcessingException invalid) {
       throw new ResponsesTransportException(
           ResponsesTransportException.Category.INVALID_RESPONSE,
-          ResponsesTransportException.usage(response.getMetadata().getUsage()));
+          ResponsesTransportException.usage(response));
     }
   }
 

@@ -10,6 +10,7 @@ final class ResponsesReasoningReplay {
   static final String OWNER_CONTEXT_KEY = "rei.llm.replay-owner";
   static final String ORIGIN_OWNER = "rei.llm.replay-origin-owner";
   static final String ORIGIN_ENDPOINT = "rei.llm.replay-origin-endpoint";
+  static final String USAGE_KEY = "rei.llm.responses-usage";
 
   private ResponsesReasoningReplay() {}
 
@@ -58,15 +59,21 @@ final class ResponsesReasoningReplay {
       org.springframework.ai.chat.model.ChatResponse response,
       Prompt prompt,
       ResolvedLlmEndpoint endpoint) {
-    if (endpoint.capabilities().reasoningReplay() != ReasoningReplayMode.ENCRYPTED) return response;
-    String requestOwner = owner(prompt);
+    boolean encrypted = endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.ENCRYPTED;
+    String requestOwner = encrypted ? owner(prompt) : null;
+    var usage = ResponsesTransportException.usage(response.getMetadata().getUsage());
     var generations =
         response.getResults().stream()
             .map(generation -> {
               var output = generation.getOutput();
               var metadata = new java.util.HashMap<String, Object>(output.getMetadata());
-              metadata.put(ORIGIN_OWNER, requestOwner);
-              metadata.put(ORIGIN_ENDPOINT, endpoint.fingerprint());
+              if (encrypted) {
+                metadata.put(ORIGIN_OWNER, requestOwner);
+                metadata.put(ORIGIN_ENDPOINT, endpoint.fingerprint());
+              }
+              // Spring's MessageAggregator rebuilds Usage from three totals. Its message
+              // metadata is retained, so carry only the normalized numeric details here.
+              if (usage != null) metadata.put(USAGE_KEY, usage);
               return new org.springframework.ai.chat.model.Generation(
                   output.mutate().properties(metadata).build(), generation.getMetadata());
             })
@@ -88,7 +95,7 @@ final class ResponsesReasoningReplay {
     } catch (IllegalArgumentException invalid) {
       throw new ResponsesTransportException(
           ResponsesTransportException.Category.INVALID_RESPONSE,
-          ResponsesTransportException.usage(response.getMetadata().getUsage()));
+          ResponsesTransportException.usage(response));
     }
   }
 

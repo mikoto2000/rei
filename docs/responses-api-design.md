@@ -505,3 +505,10 @@ reasoning を落として正常な要求として再試行しない。返され�
 動的公開は基本31件＋searchTools、検索の効果は次要求からという既存スナップショットを維持する。
 同じ応答の未公開 sibling は検索自体より前にバッチ全体を拒否する。既存の権限・承認 guard も通す。
 外部 API を呼ばない native JSON/SSE fixture と既存ループの結合試験で検証し、別 agent loop は追加しない。
+
+集約された usage には追加の依存制約がある。Spring MessageAggregator は prompt/completion/total の
+3数値から Usage を再構築し、native cached/reasoning 内訳を破棄する。独自集約器を作らず、raw terminal の
+native usage はそのまま保持し、さらに正規化した5数値だけを assistant の backend metadata に運ぶ。
+同じ集約器が保持する metadata から内訳を復元する。本文・opaque payload・提供元の任意フィールドを
+usage に保持しない。標準の集約済み Usage.getNativeUsage() が元のSDK値を返すとは扱わず、Rei側の
+正規化値を検証する。要求 input にこの計測metadataを混ぜない。数値の未提供は null のまま区別する。

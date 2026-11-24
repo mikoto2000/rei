@@ -66,6 +66,18 @@ final class ResponsesTransportException extends IllegalStateException {
         null);
   }
 
+  static TokenUsage usage(org.springframework.ai.chat.model.ChatResponse response) {
+    var usage = response.getMetadata().getUsage();
+    if (usage != null
+        && usage.getNativeUsage() instanceof com.openai.models.responses.ResponseUsage)
+      return usage(usage);
+    var generation = response.getResult();
+    if (generation != null
+        && generation.getOutput().getMetadata().get(ResponsesReasoningReplay.USAGE_KEY)
+            instanceof TokenUsage numeric) return numeric;
+    return usage(usage);
+  }
+
   private static Long number(Integer value) {
     return value == null ? null : value.longValue();
   }
