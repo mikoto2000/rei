@@ -27,6 +27,54 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 /** Native SDK input/output round trips; no external API or business tool is used. */
 @org.junit.jupiter.api.Timeout(30)
 class ResponsesReplayContractTest {
+  @Test
+  void outputLimitReachesTheExistingRunHandoffAndTokenBudgetWithoutDispatch() throws Exception {
+    contentType = "text/event-stream";
+    var truncated =
+        toolResponse()
+            .replaceFirst(
+                "\"status\":\"completed\"",
+                "\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"}");
+    replies.add(sse(truncated).replace("response.completed", "response.incomplete"));
+    var budget = new OutputLimitRunBudget(3, 10, null, 1000);
+    budget.tryConsumeLlmCall();
+    var context =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            "limit-run",
+            budget,
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(java.nio.file.Path.of(".")),
+            new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+            event -> {});
+    context.setRunContext(
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "limit-run",
+            "session",
+            java.nio.file.Path.of("."),
+            "project",
+            dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL,
+            dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE));
+    var defaults = options();
+    var options =
+        defaults
+            .mutate()
+            .toolContext(
+                Map.of(
+                    ResponsesReasoningReplay.OWNER_CONTEXT_KEY,
+                    owner,
+                    dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY,
+                    context))
+            .build();
+    new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(model(defaults))
+        .stream(new Prompt("fixture", options)).blockLast(Duration.ofSeconds(10));
+    assertThat(executions.get()).isZero();
+    assertThat(context.outputLimitHandoff())
+        .isNotBlank()
+        .doesNotContain("opaque-one", "opaque-two");
+    assertThat(budget.totalTokens()).isEqualTo(5);
+    assertThat(budget.snapshot().usageUnknown()).isFalse();
+    assertThat(requests).hasSize(1);
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
       value = dev.mikoto2000.rei.core.policy.PermissionDecision.class,

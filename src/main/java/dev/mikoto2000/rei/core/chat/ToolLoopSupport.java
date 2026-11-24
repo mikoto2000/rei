@@ -100,7 +100,7 @@ public final class ToolLoopSupport {
 
   /** 要求された処理を実行する。 */
   public ToolExecutionResult execute(Prompt prompt, ChatResponse response) {
-    if (dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
+    if (truncated(response))
       return rejectedBatch(prompt, "The output limit interrupted this tool batch. No calls ran.");
     if (hasInvalidToolCallIds(response)) return invalidToolCallIds(prompt);
     response = inheritFileContinuations(prompt, response);
@@ -111,6 +111,14 @@ public final class ToolLoopSupport {
         return deliveryMetadata(prompt, manager.executeToolCalls(prompt, response));
       }
     }
+  }
+
+  private static boolean truncated(ChatResponse response) {
+    var generation = response.getResult();
+    return generation != null
+        && "length"
+            .equalsIgnoreCase(
+                java.util.Objects.toString(generation.getMetadata().getFinishReason(), "").strip());
   }
 
   private ChatResponse inheritFileContinuations(Prompt prompt, ChatResponse response) {
@@ -273,7 +281,7 @@ public final class ToolLoopSupport {
       Prompt prompt,
       ChatResponse response,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
-    if (dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
+    if (truncated(response))
       return rejectedBatch(prompt, "The output limit interrupted this tool batch. No calls ran.");
     for (var candidate : response.getResults()) {
       var candidateIds = new java.util.HashSet<String>();

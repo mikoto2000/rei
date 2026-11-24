@@ -1,7 +1,7 @@
 # Rei の Responses API 対応設計
 
 作成日: 2026-11-24
-状態: Phase 0 はマージ済み。Phase 1 のテスト専用通信境界を検証中。末尾の改訂契約と進捗台帳を参照。DB移行・本番有効化は未実装。
+状態: Phase 0・1 はマージ済み。Phase 2 の暗号化推論再送・既存ツールループ統合を検証中。末尾の改訂契約と進捗台帳を参照。DB移行・本番有効化は未実装。
 基準コミット: `18894acb`（Run ごとの動的ツール選択）。
 
 ## 前回調査時点の作業範囲（履歴）
@@ -471,3 +471,37 @@ SDK retry:0だけでは物理的な再送を止められないことも、実loo
 本文のJSONやopaque payloadは書き換えない。共有customizerの後に所有するrequest/timeout方針を適用し、
 共有の5秒read timeoutが解決済み150msのtimeoutを上書きしないことも実clientで検証する。
 この方針はResponses factoryのみに適用し、既存Chat Completions clientの再送動作は変更しない。
+
+## Phase 2 の再送・実行境界
+
+`ResponsesReasoningReplay` は DB にアクセスせず、native MessagePart から送信用 view を検証する。
+ENCRYPTED 要求にはバックエンド tool context の明示 owner を必須とし、応答の assistant metadata に
+owner と解決済み endpoint fingerprint を結び付ける。これらを HTTP の input に混入させない。
+再送時は owner、API、接続先、モデル、互換性世代、再送方式を照合し、不明な出所を現在の接続先由来と
+推定しない。認証キーだけの更新は同じ fingerprint を維持する。実 Run の所有者解決・永続化との接続は
+Phase 3・4 で実装するため、現時点の factory は引き続きテスト専用とする。
+
+複数の暗号化 payload の文字列・bytes、reasoning item id、function item id と call_id、text phase、
+パーツ順序を native HTTP JSON まで検証する。payload 欠損、別 provider/kind、所有者・接続先の不一致、
+partial/unknown part は HTTP 送信前に拒否する。none は欠損時の fallback として使用しない。
+
+同期応答は明示 terminal status の検証後、完全な parts を検証してから呼び出し元へ返す。
+stream は raw terminal status を記録し、既存 Spring MessageAggregator で集約した parts の検証が
+終わるまで完了を下流へ伝えない。Spring の集約結果は独自 response metadata の STATUS を保持しないため、
+集約後に generation の既定値を terminal 証拠とみなさない。途中の表示 chunk は維持し、ツール実行は既存の
+StagnationChatModel / BoundedToolLoop / ToolLoopSupport が正常完了した要求に対してだけ行う。
+重複 item/call id、未完了 function、壊れた引数 JSON、Hosted Tool は完了扱いにしない。
+
+既存 ToolLoopSupport の不要な toolCalls setter は item 属性を失うため使用を避ける。ファイル継続引数を
+補う場合もパーツの位置・payload・属性を保持する。引数修正を扱う同期中の実行経路では、実行 view と
+モデルが返した元 assistant を区別し、次要求には元の ordered parts を保持する。
+承認待ち保存・プロセス再起動の完全な parts 参照は Phase 3・4 の永続化契約で扱う。
+
+native incomplete/max_output_tokens は Spring の LENGTH 正規化を使って既存の出力上限回復へ渡す。
+同期要求では部分的な reasoning/function を結果から除き、stream は既存ループが LENGTH を先に判定する。
+共有 ToolLoopSupport も truncated batch の実行を拒否する。他の incomplete、failed、EOF は失敗であり、
+reasoning を落として正常な要求として再試行しない。返された数値 usage と未知 usage を区別する。
+
+動的公開は基本31件＋searchTools、検索の効果は次要求からという既存スナップショットを維持する。
+同じ応答の未公開 sibling は検索自体より前にバッチ全体を拒否する。既存の権限・承認 guard も通す。
+外部 API を呼ばない native JSON/SSE fixture と既存ループの結合試験で検証し、別 agent loop は追加しない。
