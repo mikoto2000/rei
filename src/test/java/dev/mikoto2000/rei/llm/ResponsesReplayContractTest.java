@@ -514,6 +514,57 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void completedHistoryFlowsThroughRealCoreAdvisorsAndTheNativeSdk(boolean compatible) throws Exception {
+    contentType = "text/event-stream";
+    replies.add(sse(reasoningDone()));
+    replies.add(sse(done()));
+    var turns = dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory();
+    var logs = new dev.mikoto2000.rei.conversation.ConversationLogStore(
+        protocolDirectory.resolve("logs"), java.time.Clock.systemUTC(),
+        new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    var summaries = new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(protocolDirectory);
+    var memory = dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build();
+    for (int i = 0; i < 2; i++) {
+      var properties = nativeProperties();
+      if (i == 1 && !compatible) {
+        var server = properties.feature(LlmFeature.CHAT);
+        server.setEndpointGeneration(8);
+        properties.setFeature(LlmFeature.CHAT, server);
+      }
+      var models = nativeProvider(properties);
+      var client = org.springframework.ai.chat.client.ChatClient.builder(
+          new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.CHAT)))
+          .defaultAdvisors(new dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor(
+              turns, memory, summaries, logs, () -> protocolStore)).build();
+      var clients = new FixedLlmChatClientProvider(client);
+      var holder = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
+      org.mockito.Mockito.when(holder.get()).thenReturn("fixture-model");
+      var service = new dev.mikoto2000.rei.core.chat.ChatExecutionService(clients, holder, models,
+          new LlmProperties(), new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+          java.util.Optional.empty(), java.util.Optional.empty());
+      org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "setConversationLogStore", logs);
+      org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "setConversationTurnStore", turns);
+      var run = new dev.mikoto2000.rei.core.chat.AgentRunContext(
+          i == 0 ? "first" : "second", "fixture-conversation", protocolDirectory, "fixture-project");
+      var result = service.execute(run, i == 0 ? "first request" : "second request",
+          new dev.mikoto2000.rei.core.chat.UserInterventionQueue());
+      assertThat(result.success()).as("native Run %s: %s", run.runId(), result.stopCode()).isTrue();
+    }
+    assertThat(requests).hasSize(2);
+    var input = requests.getLast().path("input");
+    assertThat(input.toString()).contains("first request", "second request", "done");
+    if (compatible) {
+      assertThat(input.toString()).contains("opaque-bound");
+      assertThat(java.util.stream.StreamSupport.stream(input.spliterator(), false)
+          .filter(item -> "reasoning".equals(item.path("type").asText())).count()).isEqualTo(1);
+    } else assertThat(input.toString()).doesNotContain("opaque-bound", "encrypted_content");
+    assertThat(turns.read("fixture-conversation")).allMatch(dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn::completed);
+    assertThat(logs.readAll()).extracting(dev.mikoto2000.rei.conversation.ConversationLogEntry::content)
+        .containsExactly("first request", "done", "second request", "done");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
       dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.class)
   void mainChatExecutionUsesTheAcceptedNativeOptionsWithoutChatCasts(
