@@ -29,6 +29,16 @@ final class ResponsesReasoningReplay {
             : optionalOwner(prompt);
     for (var message : prompt.getInstructions()) {
       if (!(message instanceof AssistantMessage assistant)) continue;
+      var metadata = assistant.getMetadata();
+      if (metadata.containsKey(ORIGIN_OWNER) || metadata.containsKey(ORIGIN_ENDPOINT)) {
+        if (!(metadata.get(ORIGIN_OWNER) instanceof String originOwner)
+            || !(metadata.get(ORIGIN_ENDPOINT) instanceof String originEndpoint))
+          throw new IllegalArgumentException("Responses replay origin is required");
+        if (!originOwner.equals(requestOwner))
+          throw new IllegalArgumentException("Responses replay owner mismatch");
+        if (!originEndpoint.equals(endpoint.fingerprint()))
+          throw new IllegalArgumentException("Responses replay endpoint mismatch");
+      }
       for (var part : assistant.getParts()) {
         if (!(part instanceof org.springframework.ai.chat.messages.part.TextPart
                 || part instanceof ReasoningPart
@@ -50,7 +60,6 @@ final class ResponsesReasoningReplay {
         var itemId = reasoning.attributes().get(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE);
         if (itemId == null || itemId.isBlank())
           throw new IllegalArgumentException("Responses reasoning item id is required");
-        var metadata = assistant.getMetadata();
         if (!(metadata.get(ORIGIN_OWNER) instanceof String originOwner)
             || !(metadata.get(ORIGIN_ENDPOINT) instanceof String originEndpoint))
           throw new IllegalArgumentException("Responses reasoning replay origin is required");
