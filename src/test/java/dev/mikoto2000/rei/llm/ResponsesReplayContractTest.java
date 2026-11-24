@@ -471,6 +471,12 @@ class ResponsesReplayContractTest {
             new dev.mikoto2000.rei.core.service.CommandCancellationService(),
             java.util.Optional.empty(),
             java.util.Optional.empty());
+    var logs = new dev.mikoto2000.rei.conversation.ConversationLogStore(
+        protocolDirectory.resolve("logs"), java.time.Clock.systemUTC(),
+        new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    var turns = dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory();
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "setConversationLogStore", logs);
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "setConversationTurnStore", turns);
     var result =
         service.execute(
             run, "fixture request", new dev.mikoto2000.rei.core.chat.UserInterventionQueue());
@@ -486,6 +492,17 @@ class ResponsesReplayContractTest {
             run.runId());
     assertThat(saved.payloadCount()).as("original input and final assistant").isEqualTo(2);
     assertThat(saved.runCumulativeBytes()).isPositive();
+    var protocolRows = logs.readConversation(run.conversationId()).stream().filter(entry ->
+        dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_SPEAKER.equals(entry.speaker())).toList();
+    assertThat(protocolRows).as("real main path publishes every protocol pointer").hasSize(2);
+    assertThat(protocolRows).extracting(entry -> entry.metadata().get("rei.modelMessage.role"))
+        .containsExactly("user", "assistant");
+    assertThat(turns.read(run.conversationId()).getFirst().metadata()).containsAllEntriesOf(Map.of(
+        dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_VERSION, "1",
+        dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_COUNT, "2",
+        "rei.modelMessage.run", run.runId()));
+    assertThat(logs.readAll()).extracting(dev.mikoto2000.rei.conversation.ConversationLogEntry::content)
+        .containsExactly("fixture request", "done");
   }
 
   @org.junit.jupiter.params.ParameterizedTest
