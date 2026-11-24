@@ -73,7 +73,7 @@ class LlmChatClientProviderTest {
   void exposesHolidayToolsInFeatureClient() throws Exception {
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(mock(ChatModel.class));
-    when(models.chatOptions(LlmFeature.CHAT, null))
+    when(models.requestOptions(LlmFeature.CHAT, null, false))
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var system = mock(SystemPromptService.class);
     when(system.systemPrompt()).thenReturn("system");
@@ -139,7 +139,7 @@ class LlmChatClientProviderTest {
       throws Exception {
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(mock(ChatModel.class));
-    when(models.chatOptions(LlmFeature.CHAT, null))
+    when(models.requestOptions(LlmFeature.CHAT, null, false))
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var system = mock(SystemPromptService.class);
     when(system.systemPrompt()).thenReturn("system");
@@ -216,7 +216,7 @@ class LlmChatClientProviderTest {
     var model = mock(ChatModel.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(model);
     when(models.subAgentChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.CHAT, null))
+    when(models.requestOptions(LlmFeature.CHAT, null, false))
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var system = mock(SystemPromptService.class);
     when(system.systemPrompt()).thenReturn("parent personality");
@@ -307,7 +307,7 @@ class LlmChatClientProviderTest {
                         new org.springframework.ai.chat.messages.AssistantMessage("answer")))));
     var models = mock(LlmModelProvider.class);
     when(models.subAgentChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.CHAT, null))
+    when(models.requestOptions(LlmFeature.CHAT, null, false))
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var memory = mock(ConversationMemory.class);
     var provider =
@@ -389,7 +389,7 @@ class LlmChatClientProviderTest {
             .maxCompletionTokens(321)
             .toolChoice("auto")
             .build();
-    when(models.chatOptions(feature, null)).thenReturn(originalOptions);
+    when(models.requestOptions(feature, null, false)).thenReturn(originalOptions);
     var memory = mock(ConversationMemory.class);
     var system = mock(SystemPromptService.class);
     var provider =
@@ -475,7 +475,7 @@ class LlmChatClientProviderTest {
         };
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(feature)).thenReturn(model);
-    when(models.chatOptions(feature, null))
+    when(models.requestOptions(feature, null, false))
         .thenReturn(
             org.springframework.ai.openai.OpenAiChatOptions.builder().model("local").build());
     var system = mock(SystemPromptService.class);
@@ -558,7 +558,7 @@ class LlmChatClientProviderTest {
         };
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(model);
-    when(models.chatOptions(LlmFeature.CHAT, null))
+    when(models.requestOptions(LlmFeature.CHAT, null, false))
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var system = mock(SystemPromptService.class);
     when(system.systemPrompt()).thenReturn("system");
@@ -616,7 +616,7 @@ class LlmChatClientProviderTest {
   void chatClientExposesLastSummaryTool() throws Exception {
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(mock(ChatModel.class));
-    when(models.chatOptions(LlmFeature.CHAT, null))
+    when(models.requestOptions(LlmFeature.CHAT, null, false))
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var systemPrompt = mock(SystemPromptService.class);
     when(systemPrompt.systemPrompt()).thenReturn("system prompt");
@@ -678,7 +678,7 @@ class LlmChatClientProviderTest {
   void blueskyReplyDoesNotExposeTools() throws Exception {
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(LlmFeature.BLUESKY_REPLY)).thenReturn(mock(ChatModel.class));
-    when(models.chatOptions(LlmFeature.BLUESKY_REPLY, null))
+    when(models.requestOptions(LlmFeature.BLUESKY_REPLY, null, false))
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var systemPrompt = mock(SystemPromptService.class);
     when(systemPrompt.systemPrompt()).thenReturn("system prompt");

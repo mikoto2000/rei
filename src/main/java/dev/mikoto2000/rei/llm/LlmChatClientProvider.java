@@ -36,7 +36,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
@@ -192,7 +192,7 @@ public class LlmChatClientProvider {
   }
 
   /** モデル提供元。 */
-  private final Function<String, OpenAiChatOptions> featureOptions;
+  private final Function<String, ToolCallingChatOptions> featureOptions;
 
   private final Function<String, ChatModel> featureModel;
   private final Supplier<ChatModel> subAgentModel;
@@ -385,7 +385,7 @@ public class LlmChatClientProvider {
       ObjectProvider<ToolEventCallbackProvider> toolEventCallbackProvider,
       AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher) {
-    this.featureOptions = feature -> modelProvider.chatOptions(feature, null);
+    this.featureOptions = feature -> modelProvider.requestOptions(feature, null, false);
     this.featureModel = feature -> modelProvider.chatModel(feature);
     this.subAgentModel = () -> modelProvider.subAgentChatModel();
     this.memoryModel = () -> modelProvider.memoryChatModel();
@@ -468,10 +468,7 @@ public class LlmChatClientProvider {
                           .withToolDiscovery(toolDiscovery))
                   .defaultAdvisors(new RunAwareToolCallingAdvisor())
                   .defaultOptions(
-                      options
-                          .mutate()
-                          .toolCallbacks(callbacks)
-                          .toolChoice(callbacks.isEmpty() ? "none" : "auto"));
+                      dev.mikoto2000.rei.modeloptions.ModelOptions.withTools(options, callbacks).mutate());
           if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY)
             builder.defaultSystem(
                 dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.INSTRUCTIONS);
@@ -485,14 +482,12 @@ public class LlmChatClientProvider {
     if (LlmFeature.MEMORY.equals(feature) || LlmFeature.VOICE_CORRECTION.equals(feature)) {
       var options = featureOptions.apply(feature);
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
-      var defaults = options.mutate();
-      defaults.toolCallbacks(List.of());
-      defaults.toolChoice("none");
+      var defaults = dev.mikoto2000.rei.modeloptions.ModelOptions.withoutTools(options);
       return ChatClient.builder(
               LlmFeature.VOICE_CORRECTION.equals(feature)
                   ? voiceCorrectionModel.get()
                   : memoryModel.get())
-          .defaultOptions(defaults)
+          .defaultOptions(defaults.mutate())
           .build();
     }
     List<Advisor> advisors = new ArrayList<>();
