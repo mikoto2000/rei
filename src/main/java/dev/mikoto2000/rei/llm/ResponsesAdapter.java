@@ -90,26 +90,35 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
           "Responses SDK retries must stay zero at client construction");
     options = options.mutate().timeout(endpoint.readTimeout()).build();
     var transportCustomizers = new ArrayList<OpenAiHttpClientBuilderCustomizer>();
-    transportCustomizers.add(builder -> builder.interceptor(chain -> chain.proceed(
-        chain.request().newBuilder().tag(RequestReadTimeout.class,
-            new RequestReadTimeout(chain.readTimeoutMillis())).build())));
+    transportCustomizers.add(builder ->
+        builder.interceptor(chain ->
+            chain.proceed(
+                chain
+                    .request()
+                    .newBuilder()
+                    .tag(
+                        RequestReadTimeout.class, new RequestReadTimeout(chain.readTimeoutMillis()))
+                    .build())));
     transportCustomizers.addAll(customizers);
     transportCustomizers.add(builder -> {
-        builder
-            .interceptor(chain -> {
-              var request = chain.request();
-              var body = request.body();
-              if (body != null)
-                request =
-                    request.newBuilder().method(request.method(), nonReplayable(body)).build();
-              return chain.proceed(request);
-            })
-            .interceptor(chain -> {
-              var requested = chain.request().tag(RequestReadTimeout.class);
-              long bound = endpoint.readTimeout().toMillis();
-              long millis = requested == null || requested.millis() == 0 ? bound : Math.min(bound, requested.millis());
-              return new ChatStreamTimeoutInterceptor(java.time.Duration.ofMillis(millis)).intercept(chain);
-            });
+      builder
+          .interceptor(chain -> {
+            var request = chain.request();
+            var body = request.body();
+            if (body != null)
+              request = request.newBuilder().method(request.method(), nonReplayable(body)).build();
+            return chain.proceed(request);
+          })
+          .interceptor(chain -> {
+            var requested = chain.request().tag(RequestReadTimeout.class);
+            long bound = endpoint.readTimeout().toMillis();
+            long millis =
+                requested == null || requested.millis() == 0
+                    ? bound
+                    : Math.min(bound, requested.millis());
+            return new ChatStreamTimeoutInterceptor(java.time.Duration.ofMillis(millis))
+                .intercept(chain);
+          });
     });
     var client =
         OpenAiSetup.setupAsyncClient(
@@ -262,6 +271,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     var options = supplied == null ? getOptions() : (OpenAiResponsesChatOptions) supplied;
     requireCapability(options.getVerbosity(), LlmCapabilities.Setting.TEXT_VERBOSITY, "verbosity");
     var defaults = delegate.getOptions();
+    var requestTimeout = options.getTimeout();
     if (!Objects.equals(defaults.getBaseUrl(), options.getBaseUrl())
         || !Objects.equals(defaults.getApiKey(), options.getApiKey())
         || !Objects.equals(defaults.getCredential(), options.getCredential())
@@ -271,8 +281,9 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             options.getMicrosoftFoundryServiceVersion())
         || defaults.isMicrosoftFoundry() != options.isMicrosoftFoundry()
         || !Objects.equals(defaults.getProxy(), options.getProxy())
-        || (options.getTimeout() != null && (options.getTimeout().compareTo(java.time.Duration.ofMillis(1)) < 0
-            || options.getTimeout().compareTo(endpoint.readTimeout()) > 0))
+        || (requestTimeout != null
+            && (requestTimeout.compareTo(java.time.Duration.ofMillis(1)) < 0
+                || requestTimeout.compareTo(endpoint.readTimeout()) > 0))
         || !Objects.equals(defaults.getOrganizationId(), options.getOrganizationId())
         || !Objects.equals(defaults.getCustomHeaders(), options.getCustomHeaders()))
       throw new IllegalArgumentException("Responses connection differs from the bound endpoint");

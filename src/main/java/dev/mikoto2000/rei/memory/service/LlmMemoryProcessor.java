@@ -147,8 +147,7 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
   public String call(String system, String data, ModelCallBudget budget) {
     var model = modelForCalls.get();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
-    var options =
-        dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(optionsForCalls.get());
+    var options = dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(optionsForCalls.get());
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
     var prompt = new Prompt(List.of(new SystemMessage(system), new UserMessage(data)), options);
     if (dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative().text(data)

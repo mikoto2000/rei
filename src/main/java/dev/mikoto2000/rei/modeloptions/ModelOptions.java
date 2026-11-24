@@ -110,24 +110,34 @@ public final class ModelOptions {
     return singleRequest(options, java.util.Map.of());
   }
 
-  public static ToolCallingChatOptions singleRequest(ToolCallingChatOptions options, java.util.Map<String,Object> callerContext) {
+  public static ToolCallingChatOptions singleRequest(
+      ToolCallingChatOptions options, java.util.Map<String, Object> callerContext) {
     var clean = withoutTools(options);
     var context = new java.util.HashMap<String, Object>(callerContext);
-    for (String key : List.of("rei.llm.replay-owner", ENDPOINT_CONTEXT_KEY, MAX_TOOLS_CONTEXT_KEY,
-        PREPARATION_CONTEXT_KEY,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY)) context.remove(key);
+    for (String key :
+        List.of(
+            "rei.llm.replay-owner",
+            ENDPOINT_CONTEXT_KEY,
+            MAX_TOOLS_CONTEXT_KEY,
+            PREPARATION_CONTEXT_KEY,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY))
+      context.remove(key);
+    var ownedContext = clean.getToolContext();
     if (!(clean instanceof OpenAiResponsesChatOptions)) {
-      if (clean.getToolContext()!=null) context.putAll(clean.getToolContext());
+      if (ownedContext != null) context.putAll(ownedContext);
       return clean.mutate().toolContext(null).toolContext(context).build();
     }
-    if (clean.getToolContext() != null) context.putAll(clean.getToolContext());
-    for (String key : List.of("rei.llm.replay-owner",
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY))
-      if (context.containsKey(key)) throw new IllegalArgumentException("A feature request cannot inherit replay authority");
+    if (ownedContext != null) context.putAll(ownedContext);
+    for (String key :
+        List.of(
+            "rei.llm.replay-owner",
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY))
+      if (context.containsKey(key))
+        throw new IllegalArgumentException("A feature request cannot inherit replay authority");
     context.put("rei.llm.replay-owner", "feature:" + java.util.UUID.randomUUID());
     return clean.mutate().toolContext(null).toolContext(context).build();
   }
@@ -136,7 +146,9 @@ public final class ModelOptions {
   public static ToolCallingChatOptions withOutputLimit(ToolCallingChatOptions options, int tokens) {
     if (tokens < 1) throw new IllegalArgumentException("Output limit must be positive");
     if (options instanceof OpenAiResponsesChatOptions responses) {
-      var builder = responses.mutate(); builder.maxOutputTokens(tokens); return builder.build();
+      var builder = responses.mutate();
+      builder.maxOutputTokens(tokens);
+      return builder.build();
     }
     if (options instanceof OpenAiChatOptions chat && chat.getMaxCompletionTokens() != null)
       return withCompletionLimit(chat, tokens);
@@ -144,32 +156,44 @@ public final class ModelOptions {
   }
 
   /** Structured extractors explicitly use completion-token budgets on Chat Completions. */
-  public static ToolCallingChatOptions withCompletionLimit(ToolCallingChatOptions options, int tokens) {
+  public static ToolCallingChatOptions withCompletionLimit(
+      ToolCallingChatOptions options, int tokens) {
     if (tokens < 1) throw new IllegalArgumentException("Output limit must be positive");
     if (options instanceof OpenAiChatOptions chat) {
-      var builder=chat.mutate(); builder.maxTokens(null); builder.maxCompletionTokens(tokens); return builder.build();
+      var builder = chat.mutate();
+      builder.maxTokens(null);
+      builder.maxCompletionTokens(tokens);
+      return builder.build();
     }
     return withOutputLimit(options, tokens);
   }
 
   /** Local chat-template controls have no implicit Responses equivalent. */
-  public static ToolCallingChatOptions withLocalThinking(ToolCallingChatOptions options, Boolean thinking) {
+  public static ToolCallingChatOptions withLocalThinking(
+      ToolCallingChatOptions options, Boolean thinking) {
     if (thinking == null) return options;
     if (!(options instanceof OpenAiChatOptions chat))
-      throw new IllegalArgumentException("Local thinking template override is unavailable for this protocol");
-    var extra=new java.util.LinkedHashMap<String,Object>();
-    if (chat.getExtraBody()!=null) extra.putAll(chat.getExtraBody());
-    var template=new java.util.LinkedHashMap<String,Object>();
-    var configured=extra.get("chat_template_kwargs");
-    if (configured!=null) {
-      if (!(configured instanceof java.util.Map<?,?> values)) throw new IllegalArgumentException("chat_template_kwargs must be an object");
-      values.forEach((key,value)->{
-        if (!(key instanceof String name)) throw new IllegalArgumentException("chat_template_kwargs keys must be strings");
-        template.put(name,value);
+      throw new IllegalArgumentException(
+          "Local thinking template override is unavailable for this protocol");
+    var extra = new java.util.LinkedHashMap<String, Object>();
+    var configuredExtra = chat.getExtraBody();
+    if (configuredExtra != null) extra.putAll(configuredExtra);
+    var template = new java.util.LinkedHashMap<String, Object>();
+    var configured = extra.get("chat_template_kwargs");
+    if (configured != null) {
+      if (!(configured instanceof java.util.Map<?, ?> values))
+        throw new IllegalArgumentException("chat_template_kwargs must be an object");
+      values.forEach((key, value) -> {
+        if (!(key instanceof String name))
+          throw new IllegalArgumentException("chat_template_kwargs keys must be strings");
+        template.put(name, value);
       });
     }
-    template.put("enable_thinking",thinking); extra.put("chat_template_kwargs",template);
-    var builder=chat.mutate();builder.extraBody(extra);return builder.build();
+    template.put("enable_thinking", thinking);
+    extra.put("chat_template_kwargs", template);
+    var builder = chat.mutate();
+    builder.extraBody(extra);
+    return builder.build();
   }
 
   /** Select explicitly published callbacks using the native automatic function-call shape. */

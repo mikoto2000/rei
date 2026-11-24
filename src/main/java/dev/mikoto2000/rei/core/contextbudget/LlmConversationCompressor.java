@@ -153,10 +153,13 @@ public class LlmConversationCompressor implements ConversationCompressor {
               feature,
               !LlmFeature.CHAT.equals(feature) || ownerOptions == null
                   ? null
-                  : ownerOptions.getModel(), false);
-      var requested = dev.mikoto2000.rei.modeloptions.ModelOptions.withOutputLimit(
-          dev.mikoto2000.rei.modeloptions.ModelOptions.withLocalThinking(baseOptions, summaryEnableThinking.get()),
-          generationTokens(maxTokens));
+                  : ownerOptions.getModel(),
+              false);
+      var requested =
+          dev.mikoto2000.rei.modeloptions.ModelOptions.withOutputLimit(
+              dev.mikoto2000.rei.modeloptions.ModelOptions.withLocalThinking(
+                  baseOptions, summaryEnableThinking.get()),
+              generationTokens(maxTokens));
       var toolContext = new LinkedHashMap<String, Object>();
       if (ownerOptions
           instanceof org.springframework.ai.model.tool.ToolCallingChatOptions original) {
@@ -164,7 +167,8 @@ public class LlmConversationCompressor implements ConversationCompressor {
         if (context != null) toolContext.putAll(context);
       }
       toolContext.put("rei.modelCallPurpose", "context-summary");
-      var options = dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(requested, toolContext);
+      var options =
+          dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(requested, toolContext);
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
       StringBuilder data =
           new StringBuilder("Previous summary:\n").append(previous).append("\nNew history:\n");

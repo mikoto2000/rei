@@ -1,17 +1,13 @@
 package dev.mikoto2000.rei.checkpoint;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.sql.DriverManager;
-import java.util.ConcurrentModificationException;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -41,8 +37,10 @@ class CheckpointProtocolTransferTest {
     repo = new PersistentCheckpointRepository(source, settings);
   }
 
-  @ParameterizedTest @ValueSource(strings = {"compatible", "missing", "changed"})
-  void checkpointRevisionTransfersItsPinsAfterTheOriginalRunHasEnded(String condition) throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"compatible", "missing", "changed"})
+  void checkpointRevisionTransfersItsPinsAfterTheOriginalRunHasEnded(String condition)
+      throws Exception {
     var payloadSource = new SQLiteDataSource();
     payloadSource.setUrl("jdbc:sqlite:" + root.resolve("protocol.db"));
     var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(payloadSource);
@@ -105,33 +103,73 @@ class CheckpointProtocolTransferTest {
     assertEquals("fixture answer", payloads.load(scope, ref).getText());
     var resumed = repo.get("project", "native").resume("resumed-run");
     if (!condition.equals("compatible")) {
-      if (condition.equals("missing")) payloads.releaseCheckpointHistory(List.of(
-          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner("project", "native", 1)));
+      if (condition.equals("missing"))
+        payloads.releaseCheckpointHistory(
+            List.of(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
+                    "project", "native", 1)));
       else {
-        var unpublished = payloads.save(scope,"run-native","unpublished",new org.springframework.ai.chat.messages.UserMessage("unpublished replacement"));
-        var changed = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(1, history.run(),history.origin(),
-            List.of(new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("changed/USER",unpublished)));
+        var unpublished =
+            payloads.save(
+                scope,
+                "run-native",
+                "unpublished",
+                new org.springframework.ai.chat.messages.UserMessage("unpublished replacement"));
+        var changed =
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
+                1,
+                history.run(),
+                history.origin(),
+                List.of(
+                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                        "changed/USER", unpublished)));
         var altered = repo.fields(resumed);
-        altered.put("progress",new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(null,null,0,0,0,null,changed));
+        altered.put(
+            "progress",
+            new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(
+                null, null, 0, 0, 0, null, changed));
         resumed = repo.fields(altered);
       }
       var rejected = resumed;
-      assertThrows(IllegalStateException.class, () -> repo.save(rejected,1,"native-resume"));
-      assertEquals(1,repo.get("project","native").revision());
+      assertThrows(IllegalStateException.class, () -> repo.save(rejected, 1, "native-resume"));
+      assertEquals(1, repo.get("project", "native").revision());
       return;
     }
     repo.save(resumed, 1, "native-resume");
-    assertEquals(0, payloads.collectExpired(), "new checkpoint revision must replace the original pin");
-    String nextOwner = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner("project", "native", 2);
-    assertEquals("fixture answer", payloads.load(scope, ref,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, nextOwner).getText());
-    assertThrows(IllegalStateException.class, () -> payloads.load(scope, ref,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, "run-native"));
-    payloads.releaseCheckpointHistory(List.of(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner("project", "native", 1)));
-    assertEquals(0, payloads.collectExpired(), "new revision pin survives the old revision's release");
+    assertEquals(
+        0, payloads.collectExpired(), "new checkpoint revision must replace the original pin");
+    String nextOwner =
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
+            "project", "native", 2);
+    assertEquals(
+        "fixture answer",
+        payloads
+            .load(
+                scope,
+                ref,
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT,
+                nextOwner)
+            .getText());
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            payloads.load(
+                scope,
+                ref,
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+                "run-native"));
+    payloads.releaseCheckpointHistory(
+        List.of(
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
+                "project", "native", 1)));
+    assertEquals(
+        0, payloads.collectExpired(), "new revision pin survives the old revision's release");
     payloads.releaseCheckpointHistory(List.of(nextOwner));
     assertEquals(1, payloads.collectExpired(), "no Run lease was resurrected by transfer");
   }
 
-  PersistentCheckpoint initial(String task) { return PersistentCheckpoint.initial(task,"project","session","run-"+task,root,"request-"+task); }
+  PersistentCheckpoint initial(String task) {
+    return PersistentCheckpoint.initial(
+        task, "project", "session", "run-" + task, root, "request-" + task);
+  }
 }

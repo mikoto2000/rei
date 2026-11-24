@@ -453,9 +453,15 @@ public final class ModelMessagePayloadStore {
   }
 
   /** Transfer an unchanged retained checkpoint without resurrecting the original Run lease. */
-  public void transferCheckpoint(Scope scope, History history, String sourceOwner, String targetOwner) {
-    protectReferences(scope, history, ReferenceKind.CHECKPOINT, targetOwner,
-        ReferenceKind.CHECKPOINT, sourceOwner);
+  public void transferCheckpoint(
+      Scope scope, History history, String sourceOwner, String targetOwner) {
+    protectReferences(
+        scope,
+        history,
+        ReferenceKind.CHECKPOINT,
+        targetOwner,
+        ReferenceKind.CHECKPOINT,
+        sourceOwner);
   }
 
   private java.util.List<String> protectReferences(
@@ -463,8 +469,13 @@ public final class ModelMessagePayloadStore {
     return protectReferences(scope, history, kind, owner, ReferenceKind.RUN, history.run());
   }
 
-  private java.util.List<String> protectReferences(Scope scope, History history, ReferenceKind kind,
-      String owner, ReferenceKind proofKind, String proofOwner) {
+  private java.util.List<String> protectReferences(
+      Scope scope,
+      History history,
+      ReferenceKind kind,
+      String owner,
+      ReferenceKind proofKind,
+      String proofOwner) {
     validate(scope);
     identifier(proofOwner);
     identifier(owner);
@@ -479,7 +490,9 @@ public final class ModelMessagePayloadStore {
           if (scalar(
                   db,
                   "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind=? AND owner=?",
-                  entry.reference().id(), proofKind.name(), proofOwner)
+                  entry.reference().id(),
+                  proofKind.name(),
+                  proofOwner)
               != 1) throw rejected();
           if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant
               && !legacyPlainText(assistant)) {

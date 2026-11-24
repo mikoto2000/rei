@@ -58,17 +58,19 @@ class ResponsesTransportContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings={"zero","negative","submillisecond","extended"})
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"zero", "negative", "submillisecond", "extended"})
   void invalidRequestDeadlinesAreRejectedBeforeHttp(String condition) {
-    var defaults=options().build();
-    var timeout=switch(condition) {
-      case "zero" -> java.time.Duration.ZERO;
-      case "negative" -> java.time.Duration.ofMillis(-1);
-      case "submillisecond" -> java.time.Duration.ofNanos(1);
-      default -> java.time.Duration.ofMinutes(6);
-    };
-    var request=defaults.mutate().timeout(timeout).build();
-    assertThatThrownBy(()->transport(defaults).call(new Prompt("fixture",request)))
+    var defaults = options().build();
+    var timeout =
+        switch (condition) {
+          case "zero" -> java.time.Duration.ZERO;
+          case "negative" -> java.time.Duration.ofMillis(-1);
+          case "submillisecond" -> java.time.Duration.ofNanos(1);
+          default -> java.time.Duration.ofMinutes(6);
+        };
+    var request = defaults.mutate().timeout(timeout).build();
+    assertThatThrownBy(() -> transport(defaults).call(new Prompt("fixture", request)))
         .isInstanceOf(IllegalArgumentException.class);
     assertThat(requests).isEmpty();
   }
@@ -486,7 +488,8 @@ class ResponsesTransportContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-  void aRequestCanShortenButNeverExtendTheBoundTransportDeadline(boolean streaming) throws Exception {
+  void aRequestCanShortenButNeverExtendTheBoundTransportDeadline(boolean streaming)
+      throws Exception {
     var server =
         com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
     var release = new java.util.concurrent.CountDownLatch(1);

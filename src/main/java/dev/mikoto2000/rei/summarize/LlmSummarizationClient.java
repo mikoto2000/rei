@@ -30,7 +30,9 @@ public class LlmSummarizationClient implements SummarizationClient {
       LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
     this.featureModel = () -> modelProvider.chatModel(LlmFeature.WEB_PAGE_SUMMARY);
     this.optionsForModel =
-        selected -> dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(modelProvider.requestOptions(LlmFeature.WEB_PAGE_SUMMARY, selected, false));
+        selected ->
+            dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(
+                modelProvider.requestOptions(LlmFeature.WEB_PAGE_SUMMARY, selected, false));
     this.readSelectedModel = () -> modelHolderService.get();
   }
 

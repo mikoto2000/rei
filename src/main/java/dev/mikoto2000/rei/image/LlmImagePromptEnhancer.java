@@ -26,7 +26,10 @@ public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
   public LlmImagePromptEnhancer(
       LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
     this.featureModel = () -> modelProvider.chatModel(LlmFeature.IMAGE_PROMPT);
-    this.optionsForModel = selected -> dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(modelProvider.requestOptions(LlmFeature.IMAGE_PROMPT, selected, false));
+    this.optionsForModel =
+        selected ->
+            dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(
+                modelProvider.requestOptions(LlmFeature.IMAGE_PROMPT, selected, false));
     this.readSelectedModel = () -> modelHolderService.get();
   }
 
