@@ -18,7 +18,7 @@ import java.util.concurrent.Executor;
 final class ResponsesSdkBoundary {
   private ResponsesSdkBoundary() {}
 
-  static com.openai.client.OpenAIClient safe(com.openai.client.OpenAIClient client) {
+  static com.openai.client.OpenAIClient safe(com.openai.client.OpenAIClient client, boolean plaintext) {
     var service = client.responses();
     var safeService =
         (com.openai.services.blocking.ResponseService)
@@ -27,7 +27,7 @@ final class ResponsesSdkBoundary {
                 new Class<?>[] {com.openai.services.blocking.ResponseService.class},
                 (proxy, method, arguments) -> {
                   try {
-                    var result = method.invoke(service, arguments);
+                    var result = method.invoke(service, requestArguments(arguments, plaintext));
                     if (result instanceof com.openai.models.responses.Response response) {
                       var usage = validateResponse(response);
                       if (response
@@ -56,6 +56,16 @@ final class ResponsesSdkBoundary {
             });
   }
 
+  /** Remove only the SDK's automatic encrypted include through its typed public request API. */
+  private static Object[] requestArguments(Object[] arguments, boolean plaintext) {
+    if (!plaintext || arguments == null) return arguments;
+    var rewritten = arguments.clone();
+    for (int i = 0; i < rewritten.length; i++)
+      if (rewritten[i] instanceof com.openai.models.responses.ResponseCreateParams request)
+        rewritten[i] = request.toBuilder().include(com.openai.core.JsonMissing.of()).build();
+    return rewritten;
+  }
+
   private static dev.mikoto2000.rei.modelmessage.ModelTokenUsage validateResponse(
       com.openai.models.responses.Response response) {
     try {
@@ -81,7 +91,7 @@ final class ResponsesSdkBoundary {
     }
   }
 
-  static OpenAIClientAsync safe(OpenAIClientAsync client) {
+  static OpenAIClientAsync safe(OpenAIClientAsync client, boolean plaintext) {
     var service = client.responses();
     var safeService =
         (ResponseServiceAsync)
@@ -94,10 +104,10 @@ final class ResponsesSdkBoundary {
                       @SuppressWarnings("unchecked")
                       var stream =
                           (AsyncStreamResponse<ResponseStreamEvent>)
-                              method.invoke(service, arguments);
+                              method.invoke(service, requestArguments(arguments, plaintext));
                       return new SafeStream(stream);
                     }
-                    return method.invoke(service, arguments);
+                    return method.invoke(service, requestArguments(arguments, plaintext));
                   } catch (InvocationTargetException error) {
                     throw ResponsesTransportException.normalize(error.getCause());
                   }

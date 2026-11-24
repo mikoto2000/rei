@@ -156,8 +156,10 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                 options.getCustomHeaders(),
                 ObservationRegistry.NOOP,
                 null,
-                transportCustomizers));
-    var asyncClient = ResponsesSdkBoundary.safe(client);
+                transportCustomizers),
+            endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT);
+    var asyncClient = ResponsesSdkBoundary.safe(client,
+        endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT);
     var model =
         OpenAiResponsesChatModel.builder()
             .options(options)
