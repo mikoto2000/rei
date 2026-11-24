@@ -101,7 +101,7 @@ public class RunExecutionContext {
       if (!exchange.run().equals(resumeProtocolHistory.run())
           || !origin.equals(resumeProtocolHistory.origin()))
         throw new IllegalStateException("Native continuation trace mismatch");
-      for (var entry : resumeProtocolHistory.entries()) {
+      for (var entry : resumeProtocolHistory.protectedEntries()) {
         var message =
             exchange
                 .store()

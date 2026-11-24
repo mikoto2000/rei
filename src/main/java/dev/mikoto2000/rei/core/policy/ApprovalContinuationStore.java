@@ -468,7 +468,7 @@ public class ApprovalContinuationStore {
                 ModelMessagePayloadStore.ReferenceKind.APPROVAL,
                 entry.approvalId()));
       if (d.protocolHistory() != null)
-        for (var trace : d.protocolHistory().entries())
+        for (var trace : d.protocolHistory().protectedEntries())
           nativeReferences.add(
               new ModelMessagePayloadStore.ReplayReference(
                   trace.reference(),
