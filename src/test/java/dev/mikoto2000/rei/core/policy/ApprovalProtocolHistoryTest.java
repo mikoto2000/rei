@@ -20,7 +20,7 @@ class ApprovalProtocolHistoryTest {
   @TempDir Path directory;
 
   @Test
-  void completedPrefixAndOriginalPartsSurvivePendingApprovalRestart() {
+  void completedPrefixAndOriginalPartsSurvivePendingApprovalRestart() throws Exception {
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + directory.resolve("pending.db"));
     var owner = new AgentRunContext("run", "session", directory, "project");
@@ -70,6 +70,13 @@ class ApprovalProtocolHistoryTest {
     var restarted = new ApprovalContinuationStore(source);
     var entry = restarted.find("approval").orElseThrow();
     var saved = restarted.saved(entry);
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    var broken = json.readTree(entry.document());
+    ((com.fasterxml.jackson.databind.node.ObjectNode) broken.path("pending")).remove("assistantReference");
+    var missing = new ApprovalContinuationStore.Entry(entry.approvalId(), entry.runId(), entry.state(),
+        json.writeValueAsString(broken), entry.pid(), entry.started());
+    assertThatThrownBy(() -> restarted.saved(missing))
+        .isInstanceOf(IllegalStateException.class).hasMessage("Invalid approval continuation").hasNoCause();
     org.mockito.Mockito.doReturn("approved result").when(callback)
         .call(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
     var resumedOptions = options.mutate().toolContext(Map.of(
