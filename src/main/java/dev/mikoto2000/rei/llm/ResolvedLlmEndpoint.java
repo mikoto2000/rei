@@ -21,7 +21,7 @@ public record ResolvedLlmEndpoint(
     Integer maxOutputTokens,
     Double temperature,
     Duration readTimeout) {
-  public static final String CONTEXT_KEY = "rei.llm.resolved-endpoint";
+  public static final String CONTEXT_KEY = dev.mikoto2000.rei.modeloptions.ModelOptions.ENDPOINT_CONTEXT_KEY;
 
   public ResolvedLlmEndpoint {
     Objects.requireNonNull(endpointId, "endpointId");

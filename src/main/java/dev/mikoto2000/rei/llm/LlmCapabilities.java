@@ -25,7 +25,7 @@ public record LlmCapabilities(
   }
 
   /** Backend-only request context; never an HTTP body field. */
-  public static final String MAX_TOOLS_CONTEXT_KEY = "rei.llm.max-tools";
+  public static final String MAX_TOOLS_CONTEXT_KEY = dev.mikoto2000.rei.modeloptions.ModelOptions.MAX_TOOLS_CONTEXT_KEY;
 
   public LlmCapabilities {
     Objects.requireNonNull(reasoningReplay, "reasoningReplay");
