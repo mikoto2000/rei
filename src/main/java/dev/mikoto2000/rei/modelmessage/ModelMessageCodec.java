@@ -56,11 +56,14 @@ public final class ModelMessageCodec {
     if (message instanceof AssistantMessage assistant) {
       if (assistant.getParts().size() > 1024) throw invalid();
       var ids = new java.util.HashSet<String>();
-      assistant.getParts().forEach(part -> {
-        var encoded = encodePart(part);
-        if (part instanceof ToolCallPart call && !ids.add(call.toolCall().id())) throw invalid();
-        parts.add(encoded);
-      });
+      assistant
+          .getParts()
+          .forEach(part -> {
+            var encoded = encodePart(part);
+            if (part instanceof ToolCallPart call && !ids.add(call.toolCall().id()))
+              throw invalid();
+            parts.add(encoded);
+          });
     } else if (message instanceof ToolResponseMessage tool) {
       if (tool.getResponses().size() > 1024) throw invalid();
       var ids = new java.util.HashSet<String>();
@@ -127,7 +130,8 @@ public final class ModelMessageCodec {
         } else if (!role.equals("tool")) {
           if (!media.isEmpty()) throw invalid();
           var decoded = decodePart(part);
-          if (decoded instanceof ToolCallPart call && !ids.add(call.toolCall().id())) throw invalid();
+          if (decoded instanceof ToolCallPart call && !ids.add(call.toolCall().id()))
+            throw invalid();
           parts.add(decoded);
         } else {
           var result = decodeResult(part);
@@ -479,10 +483,7 @@ public final class ModelMessageCodec {
         if (id.isBlank() || name.isBlank()) throw invalid();
         yield new ToolCallPart(
             new AssistantMessage.ToolCall(
-                id,
-                required(call, "type"),
-                name,
-                required(call, "arguments")),
+                id, required(call, "type"), name, required(call, "arguments")),
             payload,
             attributes);
       }

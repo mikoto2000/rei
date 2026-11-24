@@ -524,6 +524,7 @@ Codec は Spring の Message/MessagePart と既存の型付き `ToolResultMetada
 - 書き込み形式は `schemaVersion: 1`、role、ordered parts、許可された backend metadata。
   Text/Reasoning/ToolCall、ToolResponse、User/System と画像 media を明示 DTO で表現する。
   arbitrary class/type 名による復元は行わず、未知フィールド・型・重複 JSON キー・末尾データを拒否する。
+  assistant/tool result の call ID はメッセージ内で一意とし、空白の ID/ツール名も保存前に拒否する。
 - opaque data は文字列のまま保持し、復号・要約・再生成しない。part の順序、item 属性、call ID を保つ。
   StreamingParts の partial/index 属性が残る生 chunk は保存しない。
 - 旧 approval StoredMessage の kind/text/calls/responses/delivery だけを互換読み込みする。
