@@ -9,8 +9,8 @@
 | 2 | MERGED | codex/responses-api-phase-2-openai-replay / 削除済み | [#630](https://github.com/mikoto2000/rei/pull/630) | a95593f48d0b4f760091d79eaf2cbc411e9a2f49 | PR・マージ後CI7,861件、成功7,849、期待skip12、failure/error0。関連859件・全品質ゲート成功 |
 | 3 | MERGED | codex/responses-api-phase-3-message-persistence / 削除済み | [#631](https://github.com/mikoto2000/rei/pull/631) | b22cf6646ae58a1efea325877562d7becd3aea51 | PR・マージ後CI7,960件、成功7,948、期待skip12、failure/error0。関連570件・全品質ゲート成功 |
 | 4 | MERGED | codex/responses-api-phase-4-agent-integration / 削除済み | [#632](https://github.com/mikoto2000/rei/pull/632) | 2c141910cc251081d46bd391be23587ce575b3d3 | PR・マージ後CI8,185件、成功8,173、期待skip12、failure/error0。全品質ゲート成功 |
-| 5 | IN_PROGRESS | codex/responses-api-phase-5-deepseek / .worktrees/responses-api-phase-5 | 未作成 | 未マージ | 平文の実SDK送信・SQLite原本保持2件、fixture provider1件、既存再送契約117件成功。追加の再開・delta14件、安全性8件・wire4件・設定10件成功。関連Maven400件・全architecture、修正後24件・再compile・Checkstyle/SpotBugs0件・Spotless成功。最新全回帰CI待ち |
-| 6 | NOT_STARTED | — | — | — | 未実施 |
+| 5 | MERGED | codex/responses-api-phase-5-deepseek / 削除済み | [#633](https://github.com/mikoto2000/rei/pull/633) | f9fd5a5ebbd4fff2fe65781373d9af4f31027276 | PR・マージ後CI8,215件、成功8,203、期待skip12、failure/error0。全品質ゲート成功 |
+| 6 | IN_PROGRESS | codex/responses-api-phase-6-operational-validation / .worktrees/responses-api-phase-6 | 未作成 | 未マージ | 関連818件・再検証227件成功、architecture7件成功、最終全compile/package/品質成功。120ラウンド×3方式・native23回圧縮。最新全回帰・PR・マージ後CI待ち |
 
 ## Phase 0: 接続先管理・API抽象化
 
@@ -462,3 +462,44 @@ Java 型消去警告も検出した。値を持たない missing への局所的
 修正後の全ソース・テスト compile、Checkstyle違反0、SpotBugs指摘0・解析エラー0、Spotless check が成功した。
 最新 head の全回帰 PR CI 成功前にマージしない。
 旧 verify 全体を成功と記録しない。
+
+
+## Phase 5 の最終照合
+
+PR #633 を通常 merge し、merge SHA は `f9fd5a5ebbd4fff2fe65781373d9af4f31027276`。
+PR 最新 head と merge tree は一致し、全回帰 8,215 件（成功 8,203、期待 skip12、failure/error0）、
+静的解析・全クライアント CI が PR とマージ後 push の双方で成功した。
+最初の Windows A は既存 sqlite-vec の外部ダウンロード timeout 1 件で失敗したが、
+ソース・skip・ゲートを変更せず failed jobs のみ一度再実行し、最新 attempt の全 shard と aggregate を確認した。
+通常 worktree 削除・ローカル作業ブランチ削除も完了した。次 Phase はこの merge から開始している。
+
+## Phase 6: 運用・長時間実行
+
+開始点は上記 Phase 5 merge、専用 worktree は `.worktrees/responses-api-phase-6`。
+本番プロセス・JAR・外部設定・実運用 DB を変更せず、SDK HTTP fixture と所有済み SQLite で検証する。
+
+| 実際の Red | Green と判断 |
+| --- | --- |
+| SDK delta 5 件・nested item の 6 件で PRIVATE canary が内側 logger に現れる | 公開 typed getter / validate を handler に渡す前に検証し固定例外へ正規化。独自 SSE parser は追加しない |
+| COMPLETED / DENIED の承認 pin 4 条件が残る | durable state 後、外側 transaction は afterCommit で該当 APPROVAL だけ解放 |
+| cleanup 文書破損・lookup I/O で確定済み terminal state の呼び出しが例外になる | cleanup 全体の固定診断と安全側の保持。rollback と他 anchor は維持 |
+| normalized native の retry 4 条件・Main timeout 2 条件が既存許可に到達しない | 安全な retry advice だけ既存ループへ渡す。X-Should-Retry:false・不明 token・回数上限を維持 |
+| 完了済み要約の encrypted / plaintext 履歴 pin が残る 2 件 | fully covered manifest / scope / receipt / hash を本文なしで照合し原子的解放 |
+| 120 ラウンドで CONTEXT_HARD_LIMIT、途中修正では圧縮回数 1 の assertion failure | host guidance の蓄積を防ぎ、動的公開時も raw history と actual options を維持。23 回圧縮と直前 output の全要求保持を確認 |
+
+fixture の classpath・schema・必須保存先の配線ミス、コンパイルエラーは仕様上の Red として数えない。
+Goal は既存 GoalLoopService / GoalRepository / ChatExecutionService / 成果物 SHA 検証を通し、
+正常完了と token 超過時の callback 0 件を encrypted / plaintext の双方で確認した。
+SubAgent は親の replay 権限を引き継がず、平文4条件を追加した。
+SQLiteFull は所有済み DB のページ上限で注入し、本文・receipt・容量計上の rollback と既存 CP 保持を確認する。
+
+ローカル関連回帰は 55 スイート **818 件、failure/error/skip0**。
+この verify は書式チェックで失敗したため、全体成功とは記録しない。
+変更14ファイルに Spotless を適用し、全 architecture を含む再検証227件も failure/error/skip0。
+最終の全main/test compile、jar/repackage、Spotless、Checkstyle違反0、SpotBugs指摘0・解析エラー0が成功した。
+この最終品質コマンドはテスト再実行を省略しており、818件と227件の実行結果を置き換えるものではない。
+最新 native 再送契約169件は、別JVM Checkpoint、120ラウンド、承認 payload の期限切れ・GC・Store再起動を含み成功した。
+実測・14機能の対応表は [検証記録](responses-api-validation.md)、設定・移行・切り戻しは [運用手順](responses-api-operations.md)。
+
+未検証の実 API での暗号受理、意味的継続性、品質、cache、TTFT は受入条件に残す。
+本番 factory は閉じたまま。全回帰・全品質・PR・通常 merge・マージ後 CI が完了するまで Phase 6 を完了扱いしない。

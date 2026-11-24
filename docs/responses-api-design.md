@@ -619,3 +619,36 @@ pointer を持つ場合もそちらを優先する。pointer があるのに欠�
 
 以上はソースと隔離 fixture による検証範囲である。実 API、実データ送信、本番 DB 移行、本番 JAR 更新、
 運用プロセス再起動は行っておらず、Phase 3 の完了と本番利用可能の判定を同一にしない。
+
+
+## Phase 6 で実行経路から確認した修正
+
+動的ツール選択では、送信時の公開 snapshot と execution に使う options / exchange は同じものを使う。
+一方、次の反復の正本メッセージは圧縮前の actionPrompt を維持する。
+圧縮した送信投影を正本へ戻すと sequence が再利用され、新しい tool output が既存 summary cursor 以下に
+見えて脱落する。FileReadContext は既存の raw / projection 分離を使い、容量計算だけを実送信へ合わせる。
+120 ラウンド試験は圧縮を 23 回行い、毎回、直前の complete call / output が送信されることを検証する。
+毎回生成する host の reviewGuidance / progressFeedback は次反復へ蓄積しない。
+User / System の正本や immutable protocol parts を書き換える圧縮処理は追加しない。
+
+承認の COMPLETED / DENIED 参照は durable state 確定後に、該当 APPROVAL anchor だけ解放する。
+外側 Spring transaction 中は afterCommit へ登録し、rollback なら保持する。
+afterCommit 内で continuation の検索を再実行しない。SQLite の新しい read transaction を開いて
+payload cleanup の writer を妨げないよう、scope / anchor は commit 前に捕捉する。
+参照 cleanup の失敗は固定診断で保持し、既に確定した terminal state を失敗へ戻さない。
+
+完了 turn の HISTORY 参照は、既存の durable summary cursor が manifest の全範囲を覆った後に
+次回の互換 native 履歴投影で解放する。既知の turn:run anchor、順序・件数・範囲・role・unique ID を照合し、
+receipt の scope / hash と現存 payload metadata を本文なしで検証する。
+同じ transaction の batch delete で、後続 pointer が不正なら先行分も rollback する。
+GC 後にも receipt が残るため、二度目の投影で本文を再取得せず冪等に解放できる。
+API / endpoint の変更などで互換 native exchange がない場合、欠損ログや未知 anchor の場合は保持する。
+その追加保持は自動削除の証明とせず、容量監視と手動照合の対象にする。
+
+安全な retry 可否は transport の分類と X-Should-Retry:false の有無を boolean だけで共通境界に渡す。
+既存 bounded retry / Main read-timeout allowance が回数と token 予算を所有し、SDK の hidden retry や
+独自 retry engine、異 API fallback は追加しない。callback の副作用を retry 対象へ含めない。
+
+詳細な設定・移行・切り戻し・容量の注意は [運用手順](responses-api-operations.md)、
+対応表とローカル性能標本は [検証記録](responses-api-validation.md) に記録する。
+本番利用の許可、実接続の成功、cache / TTFT の測定をこれらの fixture 成功から推測しない。
