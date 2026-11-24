@@ -12,6 +12,14 @@ import org.springframework.ai.chat.messages.Message;
 public final class ModelMessagePayloadStore {
   public record Scope(String project, String rootRun, String conversation) {}
   public record Ref(String id, String sha256) {}
+  public record Limits(long runBytes, long totalBytes, java.time.Duration stagingLifetime) {}
+  public record Usage(long payloadBytes, long runCumulativeBytes, long payloadCount, long referenceCount) {}
+  public enum ReferenceKind { HISTORY, RUN, APPROVAL, CHECKPOINT }
+
+  public void publish(Scope scope, Ref ref, ReferenceKind kind, String owner) { throw rejected(); }
+  public void release(Scope scope, Ref ref, ReferenceKind kind, String owner) { throw rejected(); }
+  public int collectExpired() { return 0; }
+  public Usage usage(Scope scope, String run) { return new Usage(0, 0, 0, 0); }
 
   private final DataSource source;
   private final ModelMessageCodec codec = new ModelMessageCodec();
@@ -31,6 +39,8 @@ public final class ModelMessagePayloadStore {
       return null;
     });
   }
+
+  ModelMessagePayloadStore(DataSource source, java.time.Clock clock, Limits limits) { this(source); }
 
   public Ref save(Scope scope, String run, String key, Message message) {
     validate(scope);

@@ -19,6 +19,88 @@ class ModelMessagePayloadStoreTest {
   @TempDir Path temporary;
   private final ModelMessagePayloadStore.Scope owner = new ModelMessagePayloadStore.Scope("project", "root", "conversation");
 
+  static class Time extends java.time.Clock {
+    java.time.Instant now = java.time.Instant.parse("2026-11-24T00:00:00Z");
+    @Override public java.time.ZoneId getZone() { return java.time.ZoneOffset.UTC; }
+    @Override public java.time.Clock withZone(java.time.ZoneId zone) { return this; }
+    @Override public java.time.Instant instant() { return now; }
+    void expire() { now = now.plusSeconds(61); }
+  }
+
+  ModelMessagePayloadStore store(Time time, long runBytes, long totalBytes) {
+    return new ModelMessagePayloadStore(source(), time,
+        new ModelMessagePayloadStore.Limits(runBytes, totalBytes, java.time.Duration.ofSeconds(60)));
+  }
+
+  @Test
+  void onlyExpiredUnreferencedPayloadsAreCollectedAndLatePublicationFails() {
+    var time = new Time();
+    var store = store(time, 100_000, 1_000_000);
+    var staged = store.save(owner, "run", "staged", message());
+    var published = store.save(owner, "run", "published", message());
+    store.publish(owner, published, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
+    store.publish(owner, published, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
+    assertThat(store.collectExpired()).isZero();
+    time.expire();
+    assertThatThrownBy(() -> store.publish(owner, staged, ModelMessagePayloadStore.ReferenceKind.RUN, "late"))
+        .hasMessage("Model message persistence rejected");
+    assertThat(store.collectExpired()).isEqualTo(1);
+    assertThat(store.load(owner, published).getText()).isEqualTo("fixture commentary");
+    assertThatThrownBy(() -> store.load(owner, staged)).hasMessage("Model message persistence rejected");
+    store.release(owner, published, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
+    assertThat(store.collectExpired()).isEqualTo(1);
+    assertThatThrownBy(() -> store.publish(owner, published, ModelMessagePayloadStore.ReferenceKind.RUN, "late"))
+        .hasMessage("Model message persistence rejected");
+  }
+
+  @Test
+  void everyDurableReferenceKindProtectsAcrossStoreRestart() {
+    var time = new Time();
+    var store = store(time, 100_000, 1_000_000);
+    var ref = store.save(owner, "run", "message", message());
+    for (var kind : ModelMessagePayloadStore.ReferenceKind.values()) store.publish(owner, ref, kind, "owner");
+    time.expire();
+    var restarted = store(time, 100_000, 1_000_000);
+    assertThat(restarted.collectExpired()).isZero();
+    for (var kind : ModelMessagePayloadStore.ReferenceKind.values()) {
+      assertThat(restarted.load(owner, ref)).isInstanceOf(AssistantMessage.class);
+      restarted.release(owner, ref, kind, "owner");
+      if (kind != ModelMessagePayloadStore.ReferenceKind.CHECKPOINT) assertThat(restarted.collectExpired()).isZero();
+    }
+    assertThat(restarted.collectExpired()).isEqualTo(1);
+  }
+
+  @Test
+  void runCumulativeQuotaSurvivesCollectionAndIdempotentRetryDoesNotDoubleCharge() {
+    var time = new Time();
+    int size = new ModelMessageCodec().encode(message()).length;
+    var store = store(time, size, size * 10L);
+    var ref = store.save(owner, "run", "one", message());
+    assertThat(store.save(owner, "run", "one", message())).isEqualTo(ref);
+    assertThat(store.usage(owner, "run")).isEqualTo(new ModelMessagePayloadStore.Usage(size, size, 1, 0));
+    assertThatThrownBy(() -> store.save(owner, "run", "two", message())).hasMessage("Model message persistence rejected");
+    time.expire();
+    assertThat(store.collectExpired()).isEqualTo(1);
+    assertThat(store.usage(owner, "run")).isEqualTo(new ModelMessagePayloadStore.Usage(0, size, 0, 0));
+    assertThatThrownBy(() -> store.save(owner, "run", "three", message())).hasMessage("Model message persistence rejected");
+    assertThat(store.save(owner, "other-run", "one", message())).isNotNull();
+  }
+
+  @Test
+  void totalQuotaIncludesOtherOwnersAndRejectedWritesLeaveNoAccountingOrPayload() {
+    var time = new Time();
+    int size = new ModelMessageCodec().encode(message()).length;
+    var store = store(time, size * 10L, size);
+    store.save(owner, "run", "one", message());
+    var other = new ModelMessagePayloadStore.Scope("other", "root", "conversation");
+    assertThatThrownBy(() -> store.save(other, "run", "one", message())).hasMessage("Model message persistence rejected");
+    assertThat(store.usage(other, "run")).isEqualTo(new ModelMessagePayloadStore.Usage(size, 0, 1, 0));
+    time.expire();
+    assertThat(store.collectExpired()).isEqualTo(1);
+    assertThat(store.save(other, "run", "one", message())).isNotNull();
+    assertThat(store.usage(other, "run").runCumulativeBytes()).isEqualTo(size);
+  }
+
   SQLiteDataSource source() {
     var config = new org.sqlite.SQLiteConfig();
     config.setBusyTimeout(5000);
