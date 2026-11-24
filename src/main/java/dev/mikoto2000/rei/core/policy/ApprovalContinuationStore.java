@@ -159,7 +159,7 @@ public class ApprovalContinuationStore {
             .filter(m -> !(m instanceof SystemMessage))
             .map(m -> {
               int index = messageIndex.getAndIncrement();
-              if (requiresPayload(m)) {
+              if (dev.mikoto2000.rei.modelmessage.ModelMessageCodec.requiresPayload(m)) {
                 var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
                 var ref =
                     payloads
@@ -192,25 +192,6 @@ public class ApprovalContinuationStore {
             .params(id, owner.runId(), encoded)
             .update()
         != 1) throw new IllegalStateException("Approval already has a continuation");
-  }
-
-  private static boolean requiresPayload(Message message) {
-    if (message instanceof UserMessage user) return !user.getMedia().isEmpty();
-    if (!(message instanceof AssistantMessage assistant)) return false;
-    if (assistant.getMetadata().containsKey("rei.llm.replay-origin-owner")
-        || assistant.getMetadata().containsKey("rei.llm.replay-origin-endpoint")
-        || assistant
-            .getMetadata()
-            .containsKey(dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY)) return true;
-    return assistant.getParts().stream()
-        .anyMatch(part -> {
-          if (!part.attributes().isEmpty()) return true;
-          if (part instanceof org.springframework.ai.chat.messages.part.TextPart text)
-            return text.payload() != null;
-          if (part instanceof org.springframework.ai.chat.messages.part.ToolCallPart call)
-            return call.payload() != null;
-          return true;
-        });
   }
 
   /** 行。 */

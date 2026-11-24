@@ -137,6 +137,8 @@ public final class ToolLoopSupport {
   private static dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref persist(
       Prompt prompt, org.springframework.ai.chat.messages.Message message) {
     var boundary = exchange(prompt);
+    if (boundary == null && dev.mikoto2000.rei.modelmessage.ModelMessageCodec.requiresPayload(message))
+      throw new IllegalStateException("Model message persistence required before tool dispatch");
     return boundary == null ? null : boundary.reference(message);
   }
 

@@ -27,6 +27,24 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 /** Native SDK input/output round trips; no external API or business tool is used. */
 @org.junit.jupiter.api.Timeout(30)
 class ResponsesReplayContractTest {
+  @org.junit.jupiter.api.io.TempDir java.nio.file.Path protocolDirectory;
+  private dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore protocolStore;
+
+  private Map<String, Object> protocolContext() {
+    if (protocolStore == null) {
+      var source = new org.sqlite.SQLiteDataSource();
+      source.setUrl("jdbc:sqlite:" + protocolDirectory.resolve("protocol.db"));
+      protocolStore = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    }
+    var context = new java.util.HashMap<String, Object>();
+    if (owner != null) context.put(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, owner);
+    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(protocolStore,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope("fixture-project",
+                protocolDirectory.toString(), "fixture-conversation"),
+            "fixture-run", java.util.UUID.randomUUID().toString()));
+    return context;
+  }
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "missing,false",
@@ -865,7 +883,7 @@ class ResponsesReplayContractTest {
         .model(modelName)
         .maxOutputTokens(64)
         .maxRetries(0)
-        .toolContext(owner == null ? Map.of() : Map.of("rei.llm.replay-owner", owner))
+        .toolContext(protocolContext())
         .toolCallbacks(callback)
         .build();
   }

@@ -21,6 +21,21 @@ import org.springframework.ai.chat.messages.part.ToolCallPart;
 /** Versioned model-message serialization, independent of transport, storage and execution. */
 public final class ModelMessageCodec {
   public static final int MAX_BYTES = 8 * 1024 * 1024;
+
+  /** Whether the legacy text/call representation would lose model protocol information. */
+  public static boolean requiresPayload(Message message) {
+    if (message instanceof UserMessage user) return !user.getMedia().isEmpty();
+    if (!(message instanceof AssistantMessage assistant)) return false;
+    if (assistant.getMetadata().containsKey("rei.llm.replay-origin-owner")
+        || assistant.getMetadata().containsKey("rei.llm.replay-origin-endpoint")
+        || assistant.getMetadata().containsKey(ModelTokenUsage.METADATA_KEY)) return true;
+    return assistant.getParts().stream().anyMatch(part -> {
+      if (!part.attributes().isEmpty()) return true;
+      if (part instanceof TextPart text) return text.payload() != null;
+      if (part instanceof ToolCallPart call) return call.payload() != null;
+      return true;
+    });
+  }
   private static final Set<String> METADATA =
       Set.of(
           "rei.llm.replay-origin-owner",
