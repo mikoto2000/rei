@@ -38,42 +38,85 @@ class ResponsesReplayContractTest {
     }
     var context = new java.util.HashMap<String, Object>();
     if (owner != null) context.put(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, owner);
-    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
-        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(protocolStore,
-            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope("fixture-project",
-                protocolDirectory.toString(), "fixture-conversation"),
-            "fixture-run", java.util.UUID.randomUUID().toString()));
+    context.put(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
+            protocolStore,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
+                "fixture-project", protocolDirectory.toString(), "fixture-conversation"),
+            "fixture-run",
+            java.util.UUID.randomUUID().toString()));
     return context;
   }
 
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"endpoint", "owner", "binding-only"})
+  void backendOriginIsTheAuthoritativeRequestBinding(String mode) {
+    var defaults = options();
+    var context = new java.util.HashMap<>(defaults.getToolContext());
+    if (mode.equals("binding-only")) context.remove(ResponsesReasoningReplay.OWNER_CONTEXT_KEY);
+    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+            mode.equals("owner") ? "foreign-owner" : owner,
+            mode.equals("endpoint") ? "0".repeat(64) : endpoint(defaults).fingerprint()));
+    var request = defaults.mutate().toolContext(null).toolContext(context).build();
+    if (mode.equals("binding-only")) {
+      var response = model(defaults).call(new Prompt("fixture", request));
+      assertThat(response.getResult().getOutput().getMetadata())
+          .containsEntry(ResponsesReasoningReplay.ORIGIN_OWNER, owner);
+      assertThat(requests).hasSize(1);
+    } else {
+      assertThatThrownBy(() -> model(defaults).call(new Prompt("fixture", request)))
+          .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(mode);
+      assertThat(requests).isEmpty();
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-  void existingLoopsPersistDistinctIterationsAndTheFinalAssistant(boolean bounded) throws Exception {
+  void existingLoopsPersistDistinctIterationsAndTheFinalAssistant(boolean bounded)
+      throws Exception {
     contentType = "text/event-stream";
     replies.add(sse(toolResponse()));
-    replies.add(sse(toolResponse().replace("resp_tools", "resp_tools_second")
-        .replace("_one", "_three").replace("_two", "_four")
-        .replace("opaque-one", "opaque-three").replace("opaque-two", "opaque-four")
-        .replace("msg_work", "msg_work_second")));
+    replies.add(
+        sse(
+            toolResponse()
+                .replace("resp_tools", "resp_tools_second")
+                .replace("_one", "_three")
+                .replace("_two", "_four")
+                .replace("opaque-one", "opaque-three")
+                .replace("opaque-two", "opaque-four")
+                .replace("msg_work", "msg_work_second")));
     replies.add(sse(done()));
     var options = options();
-    var run = new dev.mikoto2000.rei.core.chat.AgentRunContext("fixture-run", "fixture-conversation",
-        protocolDirectory, "fixture-project");
+    var run =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "fixture-run", "fixture-conversation", protocolDirectory, "fixture-project");
     var client = model(options);
     if (bounded) {
-      var outcome = new dev.mikoto2000.rei.core.chat.BoundedToolLoop()
-          .runWithHistory(client, new Prompt("fixture", options), new AtomicInteger(3), run,
-              () -> {}, null).block(Duration.ofSeconds(10));
+      var outcome =
+          new dev.mikoto2000.rei.core.chat.BoundedToolLoop()
+              .runWithHistory(
+                  client, new Prompt("fixture", options), new AtomicInteger(3), run, () -> {}, null)
+              .block(Duration.ofSeconds(10));
       assertThat(outcome.output()).isEqualTo("done");
     } else {
       var budget = new OutputLimitRunBudget(2, 4);
       budget.tryConsumeLlmCall();
-      var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("fixture-run", budget,
-          new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
-          new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+      var execution =
+          new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+              "fixture-run",
+              budget,
+              new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+              new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+              ignored -> {});
       execution.setRunContext(run);
-      var requestOptions = options.mutate().toolContext(Map.of(
-          dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution)).build();
+      var requestOptions =
+          options
+              .mutate()
+              .toolContext(
+                  Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution))
+              .build();
       new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(client)
           .stream(new Prompt("fixture", requestOptions)).blockLast(Duration.ofSeconds(10));
     }
@@ -81,10 +124,14 @@ class ResponsesReplayContractTest {
     assertThat(requests).hasSize(3);
     assertThat(requests.getLast().path("input").toString())
         .contains("opaque-one+/=", "opaque-two+/=", "opaque-three+/=", "opaque-four+/=");
-    var usage = protocolStore.usage(new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
-        "fixture-project", protocolDirectory.toString(), "fixture-conversation"), "fixture-run");
+    var usage =
+        protocolStore.usage(
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
+                "fixture-project", protocolDirectory.toString(), "fixture-conversation"),
+            "fixture-run");
     assertThat(usage.payloadCount()).isEqualTo(5);
   }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "missing,false",
@@ -928,9 +975,8 @@ class ResponsesReplayContractTest {
         .build();
   }
 
-  private ResponsesAdapter model(OpenAiResponsesChatOptions options) {
-    var endpoint =
-        new ResolvedLlmEndpoint(
+  private ResolvedLlmEndpoint endpoint(OpenAiResponsesChatOptions options) {
+    return new ResolvedLlmEndpoint(
             endpointId,
             generation,
             LlmApiType.RESPONSES,
@@ -941,6 +987,10 @@ class ResponsesReplayContractTest {
             options.getMaxOutputTokens(),
             null,
             Duration.ofMinutes(5));
+  }
+
+  private ResponsesAdapter model(OpenAiResponsesChatOptions options) {
+    var endpoint = endpoint(options);
     return ResponsesAdapter.create(
         endpoint,
         options,
