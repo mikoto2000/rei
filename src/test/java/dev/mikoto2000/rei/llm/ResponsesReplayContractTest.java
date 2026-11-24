@@ -118,7 +118,9 @@ class ResponsesReplayContractTest {
         .stream(new Prompt("timeout fixture", options)).collectList();
     if (success) {
       var chunks = request.block(Duration.ofSeconds(10));
-      assertThat(chunks.getLast().getResult().getOutput().getText()).isEqualTo("done");
+      assertThat(chunks.stream().filter(chunk -> chunk.getResult() != null)
+          .map(chunk -> java.util.Objects.toString(chunk.getResult().getOutput().getText(), ""))
+          .collect(java.util.stream.Collectors.joining())).isEqualTo("done");
       assertThat(chunks.stream().filter(chunk -> ToolLoopSupport.streamRetryAttempt(chunk) > 0).count()).isEqualTo(1);
     } else assertThatThrownBy(() -> request.block(Duration.ofSeconds(10)))
         .isInstanceOf(RuntimeException.class).hasMessageNotContaining("PRIVATE");
