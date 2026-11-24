@@ -2721,6 +2721,34 @@ class ResponsesReplayContractTest {
     assertThat(requests).isEmpty();
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+      "empty", "missing", "opaque", "summary", "attribute", "owner", "endpoint", "partial"})
+  void plaintextReplayRejectsMissingForeignOrLossyPartsBeforeHttp(String defect) {
+    replayMode = ReasoningReplayMode.PLAINTEXT;
+    replies.add(reasoningDone());
+    var options = options();
+    var model = model(options);
+    var original = model.call(new Prompt("fixture", options)).getResult().getOutput();
+    var part = (ReasoningPart) original.getParts().getFirst();
+    var attributes = new java.util.HashMap<>(part.attributes());
+    var metadata = new java.util.HashMap<>(original.getMetadata());
+    if (defect.equals("attribute")) attributes.put("PRIVATE-future-field", "PRIVATE-value");
+    if (defect.equals("owner")) metadata.put(ResponsesReasoningReplay.ORIGIN_OWNER, "other-owner");
+    if (defect.equals("endpoint")) metadata.put(ResponsesReasoningReplay.ORIGIN_ENDPOINT, "other-endpoint");
+    org.springframework.ai.chat.messages.part.MessagePart changed = new ReasoningPart(
+        defect.equals("missing") ? null : defect.equals("empty") ? "" : part.text(),
+        defect.equals("summary") ? "PRIVATE-summary" : null,
+        defect.equals("opaque") ? new OpaquePayload(OpenAiResponsesMetadata.PROVIDER,
+            OpenAiResponsesMetadata.ENCRYPTED_CONTENT_KIND, "PRIVATE-fake-opaque") : null,
+        attributes);
+    if (defect.equals("partial")) changed = org.springframework.ai.chat.messages.part.StreamingParts.partial(changed, 0);
+    var assistant = AssistantMessage.builder().part(changed).properties(metadata).build();
+    assertThatThrownBy(() -> model.call(new Prompt(List.of(new UserMessage("fixture"), assistant), options)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageNotContaining("PRIVATE");
+    assertThat(requests).hasSize(1);
+  }
+
   @Test
   void encryptedRequestsRequireAnExplicitOwnerBeforeAnyHttp() {
     owner = null;
