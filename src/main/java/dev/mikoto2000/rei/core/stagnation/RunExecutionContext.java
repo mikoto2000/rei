@@ -93,9 +93,23 @@ public class RunExecutionContext {
         new ArrayList<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry>(
             protocolHistory == null ? List.of() : protocolHistory.entries());
     if (entries.stream().anyMatch(entry -> entry.reference().equals(accepted.reference()))) return;
-    entries.add(
-        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
-            accepted.key(), accepted.reference()));
+    String iterationKey = accepted.key();
+    if (accepted.message() instanceof org.springframework.ai.chat.messages.ToolResponseMessage) {
+      int prefix = iterationKey.lastIndexOf("/prefix:");
+      if (prefix >= 0 && iterationKey.substring(prefix + 8).matches("[0-9]+"))
+        iterationKey = iterationKey.substring(0, prefix);
+    }
+    String messageKey = iterationKey + "/" + accepted.message().getMessageType().name();
+    var entry = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+        messageKey, accepted.reference());
+    int existing = -1;
+    for (int i = 0; i < entries.size(); i++)
+      if (entries.get(i).key().equals(messageKey)) {
+        existing = i;
+        break;
+      }
+    if (existing < 0) entries.add(entry);
+    else entries.set(existing, entry);
     protocolHistory =
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
             1, exchange.run(), origin, entries);
