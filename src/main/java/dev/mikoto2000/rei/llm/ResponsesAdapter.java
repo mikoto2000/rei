@@ -60,7 +60,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
 
   @Override
   public ChatResponse call(Prompt prompt) {
-    return delegate.call(prepare(prompt));
+    var response = delegate.call(prepare(prompt));
+    if (!"completed".equals(response.getMetadata().get(
+        org.springframework.ai.openai.responses.OpenAiResponsesMetadata.STATUS)))
+      throw new IllegalStateException("Responses did not complete successfully");
+    return response;
   }
 
   @Override
