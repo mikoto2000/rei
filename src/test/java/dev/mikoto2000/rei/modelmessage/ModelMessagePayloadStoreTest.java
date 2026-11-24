@@ -86,6 +86,48 @@ class ModelMessagePayloadStoreTest {
     assertThat(grant.permits(restored, exchange.ownerKey(), "endpoint")).isTrue();
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"ok", "hash", "scope", "missing", "anchor"})
+  void summarizedHistoryRetirementIsAtomicScopedAndKeepsEveryOtherAnchor(String scenario) {
+    var time = new Time();
+    var store = store(time, 100_000, 1_000_000);
+    var first = store.save(owner, "run", "one", message());
+    var second = store.save(owner, "run", "two", message());
+    for (var ref : List.of(first, second)) {
+      store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:run");
+      store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:other");
+      store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
+      store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, "approval");
+      store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.RUN, "run");
+    }
+    var scope = scenario.equals("scope") ? new ModelMessagePayloadStore.Scope("foreign", "root", "conversation") : owner;
+    var secondPointer = scenario.equals("hash") ? new ModelMessagePayloadStore.Ref(second.id(), "0".repeat(64))
+        : scenario.equals("missing") ? new ModelMessagePayloadStore.Ref("missing", second.sha256()) : second;
+    if (java.util.Set.of("hash", "scope", "missing").contains(scenario)) {
+      assertThatThrownBy(() -> store.releaseHistory(scope, "turn:run", List.of(first, secondPointer)))
+          .hasMessage("Model message persistence rejected").hasNoCause();
+      assertThat(store.usage(owner, "run").referenceCount()).isEqualTo(10);
+      assertThat(store.load(owner, first, ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:run")).isNotNull();
+      return;
+    }
+    assertThat(store.releaseHistory(scope, scenario.equals("anchor") ? "unknown" : "turn:run", List.of(first, second)))
+        .isEqualTo(scenario.equals("anchor") ? 0 : 2);
+    if (scenario.equals("anchor")) return;
+    assertThat(store.usage(owner, "run").referenceCount()).isEqualTo(8);
+    for (var ref : List.of(first, second)) {
+      assertThat(store.load(owner, ref, ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:other")).isNotNull();
+      store.release(owner, ref, ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:other");
+      store.release(owner, ref, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
+      store.release(owner, ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, "approval");
+      store.release(owner, ref, ModelMessagePayloadStore.ReferenceKind.RUN, "run");
+    }
+    time.expire();
+    assertThat(store.collectExpired()).isEqualTo(2);
+    var restarted = store(time, 100_000, 1_000_000);
+    assertThat(restarted.releaseHistory(scope, "turn:run", List.of(first, second))).isZero();
+    assertThat(restarted.usage(owner, "run").referenceCount()).isZero();
+  }
+
   @Test
   void replayGrantUnionRejectsDifferentOwnersAndEndpoints() {
     var store = new ModelMessagePayloadStore(source());
