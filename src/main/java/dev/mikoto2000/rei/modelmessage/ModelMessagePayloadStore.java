@@ -216,6 +216,23 @@ public final class ModelMessagePayloadStore {
       return new Exchange(store, scope, run, value, observer);
     }
 
+    /** Recover an iteration only from an owned, published payload and its verified trace. */
+    public Exchange resume(History history, Ref assistant) {
+      if (history == null || assistant == null) return this;
+      if (!run.equals(history.run())) throw rejected();
+      var entry = history.entries().stream().filter(item -> item.reference().equals(assistant))
+          .findFirst().orElseThrow(ModelMessagePayloadStore::rejected);
+      String suffix = "/ASSISTANT";
+      if (!entry.key().endsWith(suffix)) throw rejected();
+      store.load(scope, assistant, ReferenceKind.RUN, run);
+      store.transaction(db -> {
+        if (scalar(db, "SELECT COUNT(*) FROM model_message_payloads WHERE id=? AND run=? AND message_key=?",
+            assistant.id(), run, entry.key()) != 1) throw rejected();
+        return null;
+      });
+      return withKey(entry.key().substring(0, entry.key().length() - suffix.length()));
+    }
+
     public String ownerKey() {
       validate(scope);
       identifier(run);

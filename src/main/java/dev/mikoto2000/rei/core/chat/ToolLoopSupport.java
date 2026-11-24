@@ -537,6 +537,10 @@ public final class ToolLoopSupport {
       RunContinuation.PendingTools pending,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context,
       boolean replay) {
+    if (replay && exchange(prompt) != null) {
+      var boundary = exchange(prompt);
+      prompt = withExchange(prompt, boundary.resume(context.protocolHistorySnapshot(), pending.assistantReference()));
+    }
     var readBudget =
         dev.mikoto2000.rei.tooldelivery.FileReadContext.open(
             prompt, pending.calls().size(), pending.text() + pending.calls());
