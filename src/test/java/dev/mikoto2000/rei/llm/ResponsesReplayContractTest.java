@@ -99,16 +99,20 @@ class ResponsesReplayContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
-    "ENCRYPTED,false,false,false", "NONE,false,false,false", "ENCRYPTED,true,false,false", "NONE,true,false,false",
-    "ENCRYPTED,false,true,false", "NONE,false,true,false", "ENCRYPTED,false,true,true", "NONE,false,true,true"
+    "ENCRYPTED,false,false,false", "NONE,false,false,false", "ENCRYPTED,true,false,false",
+        "NONE,true,false,false",
+    "ENCRYPTED,false,true,false", "NONE,false,true,false", "ENCRYPTED,false,true,true",
+        "NONE,false,true,true"
   })
   void nativeSubAgentKeepsOnlyItsOwnProtocolContext(
-      ReasoningReplayMode replay, boolean foreign, boolean configured, boolean definitionOverride) throws Exception {
+      ReasoningReplayMode replay, boolean foreign, boolean configured, boolean definitionOverride)
+      throws Exception {
     contentType = "text/event-stream";
     var output = "{\"status\":\"SUCCESS\",\"summary\":\"done\",\"result\":{},\"warnings\":[]}";
     var definitionModel = definitionOverride ? "child-model" : null;
     var raw = new ObjectMapper().readTree(done());
-    ((com.fasterxml.jackson.databind.node.ObjectNode) raw).put("model", definitionModel == null ? "fixture-model" : definitionModel);
+    ((com.fasterxml.jackson.databind.node.ObjectNode) raw)
+        .put("model", definitionModel == null ? "fixture-model" : definitionModel);
     ((com.fasterxml.jackson.databind.node.ObjectNode)
             raw.path("output").get(0).path("content").get(0))
         .put("text", output);
@@ -130,7 +134,8 @@ class ResponsesReplayContractTest {
         tools: []
         maxSteps: 2
         timeout: 10s
-        """ + (definitionOverride ? "model: child-model\n" : ""));
+        """
+            + (definitionOverride ? "model: child-model\n" : ""));
     var policy = new dev.mikoto2000.rei.subagent.SubAgentToolPolicy(java.util.Set.of());
     var registry =
         new dev.mikoto2000.rei.subagent.SubAgentRegistry(
@@ -168,7 +173,9 @@ class ResponsesReplayContractTest {
     dev.mikoto2000.rei.subagent.SubAgentRunner runner;
     if (configured) {
       var models = org.mockito.Mockito.spy(provider);
-      org.mockito.Mockito.doReturn(model).when(models).subAgentChatModel(org.mockito.ArgumentMatchers.any());
+      org.mockito.Mockito.doReturn(model)
+          .when(models)
+          .subAgentChatModel(org.mockito.ArgumentMatchers.any());
       org.mockito.Mockito.doAnswer(
               invocation -> {
                 var owner =
@@ -245,8 +252,10 @@ class ResponsesReplayContractTest {
         .isEqualTo(dev.mikoto2000.rei.subagent.SubAgentResult.Status.COMPLETED);
     assertThat(result.structuredOutput().summary()).isEqualTo("done");
     assertThat(requests).hasSize(1);
-    assertThat(requests.getFirst().path("model").asText()).isEqualTo(definitionModel == null ? "fixture-model" : definitionModel);
-    assertThat(((ResolvedLlmEndpoint) sentContext.get().get(ResolvedLlmEndpoint.CONTEXT_KEY)).model())
+    assertThat(requests.getFirst().path("model").asText())
+        .isEqualTo(definitionModel == null ? "fixture-model" : definitionModel);
+    assertThat(
+            ((ResolvedLlmEndpoint) sentContext.get().get(ResolvedLlmEndpoint.CONTEXT_KEY)).model())
         .isEqualTo(definitionModel == null ? "fixture-model" : definitionModel);
     assertThat(transportBuilds.get()).isEqualTo(acceptedTransportBuilds);
     assertThat(sentContext.get()).doesNotContainKey("parent-only-context");
@@ -258,7 +267,10 @@ class ResponsesReplayContractTest {
     assertThat(exchange.scope())
         .isEqualTo(
             dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(
-                (dev.mikoto2000.rei.core.chat.AgentRunContext) sentContext.get().get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())));
+                (dev.mikoto2000.rei.core.chat.AgentRunContext)
+                    sentContext
+                        .get()
+                        .get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())));
     assertThat(exchange.run()).isEqualTo(result.subAgentRunId()).isNotEqualTo(parent.runId());
     assertThat(protocolStore.usage(exchange.scope(), exchange.run()).runCumulativeBytes())
         .isPositive();
@@ -472,7 +484,7 @@ class ResponsesReplayContractTest {
         protocolStore.usage(
             dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(run),
             run.runId());
-    assertThat(saved.payloadCount()).isEqualTo(1);
+    assertThat(saved.payloadCount()).as("original input and final assistant").isEqualTo(2);
     assertThat(saved.runCumulativeBytes()).isPositive();
   }
 
@@ -556,16 +568,28 @@ class ResponsesReplayContractTest {
                 .replace("opaque-two", "opaque-four")
                 .replace("msg_work", "msg_work_second")));
     replies.add(sse(done()));
-    var accepted = new java.util.ArrayList<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Accepted>();
+    var accepted =
+        new java.util.ArrayList<
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Accepted>();
     var seed = options();
-    var originalBoundary = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) seed.getToolContext()
-        .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
-    var boundary = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
-        originalBoundary.store(), new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
-            "project:fixture-project", protocolDirectory.toString(), "fixture-conversation"),
-        originalBoundary.run(), originalBoundary.key());
-    var options = seed.mutate().toolContext(Map.of(
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, boundary.withObserver(accepted::add))).build();
+    var originalBoundary =
+        (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
+            seed.getToolContext()
+                .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var boundary =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
+            originalBoundary.store(),
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
+                "project:fixture-project", protocolDirectory.toString(), "fixture-conversation"),
+            originalBoundary.run(),
+            originalBoundary.key());
+    var options =
+        seed.mutate()
+            .toolContext(
+                Map.of(
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+                    boundary.withObserver(accepted::add)))
+            .build();
     var run =
         new dev.mikoto2000.rei.core.chat.AgentRunContext(
             "fixture-run", "fixture-conversation", protocolDirectory, "fixture-project");
@@ -589,10 +613,13 @@ class ResponsesReplayContractTest {
               ignored -> {});
       execution.setRunContext(run);
       execution.setModelOptions(options);
-      var checkpoints = new java.util.ArrayList<dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState>();
+      var checkpoints =
+          new java.util.ArrayList<
+              dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState>();
       execution.setToolResultsCheckpoint(ignored -> checkpoints.add(execution.progressSnapshot()));
       var requestOptions =
-          execution.modelOptions()
+          execution
+              .modelOptions()
               .mutate()
               .toolContext(
                   Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution))
@@ -603,19 +630,32 @@ class ResponsesReplayContractTest {
       assertThat(history).as("ordered durable history in existing progress checkpoint").isNotNull();
       assertThat(history.schemaVersion()).isEqualTo(1);
       assertThat(history.run()).isEqualTo(run.runId());
-      assertThat(history.entries()).extracting(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry::reference)
-          .containsExactlyElementsOf(accepted.stream().map(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Accepted::reference).toList());
+      assertThat(history.entries())
+          .extracting(
+              dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry::reference)
+          .containsExactlyElementsOf(
+              accepted.stream()
+                  .map(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Accepted::reference)
+                  .toList());
       assertThat(history.entries()).hasSize(5);
-      assertThat(checkpoints).anySatisfy(snapshot -> assertThat(snapshot.protocolHistory()).isEqualTo(history));
-      assertThat(execution.progressSnapshot().forExplicitResume().protocolHistory()).isEqualTo(history);
+      assertThat(checkpoints)
+          .anySatisfy(snapshot -> assertThat(snapshot.protocolHistory()).isEqualTo(history));
+      assertThat(execution.progressSnapshot().forExplicitResume().protocolHistory())
+          .isEqualTo(history);
       String document = new ObjectMapper().writeValueAsString(execution.progressSnapshot());
       assertThat(document).doesNotContain("opaque-one", "opaque-two", "fixture result");
-      var decoded = new ObjectMapper().readValue(document,
-          dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState.class);
-      var restored = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
-          "fixture-run", new OutputLimitRunBudget(2, 4),
-          new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
-          new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+      var decoded =
+          new ObjectMapper()
+              .readValue(
+                  document,
+                  dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState.class);
+      var restored =
+          new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+              "fixture-run",
+              new OutputLimitRunBudget(2, 4),
+              new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+              new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+              ignored -> {});
       restored.setRunContext(run);
       restored.setModelOptions(options);
       restored.restoreProgress(decoded);
@@ -628,12 +668,21 @@ class ResponsesReplayContractTest {
     var usage = protocolStore.usage(boundary.scope(), boundary.run());
     assertThat(usage.payloadCount()).isEqualTo(5);
     assertThat(accepted).hasSize(5);
-    assertThat(accepted).extracting(item -> item.message().getMessageType().name())
+    assertThat(accepted)
+        .extracting(item -> item.message().getMessageType().name())
         .containsExactly("ASSISTANT", "TOOL", "ASSISTANT", "TOOL", "ASSISTANT");
-    assertThat(accepted).extracting(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Accepted::reference).doesNotHaveDuplicates();
+    assertThat(accepted)
+        .extracting(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Accepted::reference)
+        .doesNotHaveDuplicates();
     for (var item : accepted) {
-      assertThat(protocolStore.load(boundary.scope(), item.reference(),
-          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, boundary.run()).getMessageType())
+      assertThat(
+              protocolStore
+                  .load(
+                      boundary.scope(),
+                      item.reference(),
+                      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+                      boundary.run())
+                  .getMessageType())
           .isEqualTo(item.message().getMessageType());
       assertThat(item.toString()).doesNotContain("opaque-one", "opaque-two", "fixture result");
     }
@@ -644,26 +693,43 @@ class ResponsesReplayContractTest {
     contentType = "text/event-stream";
     replies.add(sse(toolResponse()));
     var provider = nativeProvider(nativeProperties());
-    var run = new dev.mikoto2000.rei.core.chat.AgentRunContext(
-        "fixture-run", "fixture-conversation", protocolDirectory, "fixture-project");
+    var run =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "fixture-run", "fixture-conversation", protocolDirectory, "fixture-project");
     var callbacks = options().getToolCallbacks();
-    var request = provider.requestOptions(LlmFeature.CHAT, null, true, run)
-        .mutate().toolCallbacks(callbacks).build();
+    var request =
+        provider
+            .requestOptions(LlmFeature.CHAT, null, true, run)
+            .mutate()
+            .toolCallbacks(callbacks)
+            .build();
     var budget = new OutputLimitRunBudget(2, 4);
     budget.tryConsumeLlmCall();
-    var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
-        run.runId(), budget,
-        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
-        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+    var execution =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            run.runId(),
+            budget,
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+            new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+            ignored -> {});
     execution.setRunContext(run);
     execution.setModelOptions(request);
-    execution.setToolResultsCheckpoint(ignored -> { throw new IllegalStateException("checkpoint unavailable"); });
-    var accepted = execution.modelOptions().mutate().toolContext(Map.of(
-        dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution)).build();
-    assertThatThrownBy(() -> new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-        provider.chatModel(LlmFeature.CHAT)).stream(new Prompt("fixture", accepted))
-        .blockLast(Duration.ofSeconds(10)))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("checkpoint unavailable")
+    execution.setToolResultsCheckpoint(ignored -> {
+      throw new IllegalStateException("checkpoint unavailable");
+    });
+    var accepted =
+        execution
+            .modelOptions()
+            .mutate()
+            .toolContext(
+                Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution))
+            .build();
+    assertThatThrownBy(() ->
+            new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
+                    provider.chatModel(LlmFeature.CHAT))
+                .stream(new Prompt("fixture", accepted)).blockLast(Duration.ofSeconds(10)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("checkpoint unavailable")
         .hasMessageNotContaining("opaque-one");
     assertThat(executions).hasValue(0);
     assertThat(requests).hasSize(1);
@@ -1565,7 +1631,8 @@ class ResponsesReplayContractTest {
     return ResponsesAdapter.create(endpoint(options), options, httpCustomizers());
   }
 
-  private List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> httpCustomizers() {
+  private List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
+      httpCustomizers() {
     return List.of(builder -> {
       transportBuilds.incrementAndGet();
       builder.interceptor(chain -> {
@@ -1573,9 +1640,13 @@ class ResponsesReplayContractTest {
         chain.request().body().writeTo(buffer);
         requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
         var reply = replies.isEmpty() ? done() : replies.removeFirst();
-        return new okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
-            .code(200).message("fixture")
-            .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType))).build();
+        return new okhttp3.Response.Builder()
+            .request(chain.request())
+            .protocol(okhttp3.Protocol.HTTP_1_1)
+            .code(200)
+            .message("fixture")
+            .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType)))
+            .build();
       });
     });
   }
