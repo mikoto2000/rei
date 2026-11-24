@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.interest;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -13,7 +14,6 @@ import java.util.function.Supplier;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.type.TypeReference;
@@ -68,7 +68,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
     this.timeoutSeconds = properties.getExtractionTimeoutSeconds();
     this.featureModel = () -> modelProvider.isolatedChatModel(LlmFeature.INTEREST_DISCOVERY);
     this.optionsForModel =
-        selected -> modelProvider.requestOptions(LlmFeature.INTEREST_DISCOVERY, selected,false);
+        selected -> modelProvider.requestOptions(LlmFeature.INTEREST_DISCOVERY, selected, false);
     this.readSelectedModel = () -> modelHolderService.get();
     this.candidateReader =
         objectMapper.readerFor(new TypeReference<List<InterestTopicCandidate>>() {});
@@ -92,10 +92,10 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
     if (input == null) return List.of();
     var baseOptions = optionsForModel.apply(readSelectedModel.get());
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(baseOptions);
-    var isolated=ModelOptions.singleRequest(baseOptions);
-    var options=ModelOptions.capOutputLimit(isolated,maxOutputTokens);
-    options=ModelOptions.withoutRetries(options);
-    return parse(callWithTimeout(new Prompt(input,options)));
+    var isolated = ModelOptions.singleRequest(baseOptions);
+    var options = ModelOptions.capOutputLimit(isolated, maxOutputTokens);
+    options = ModelOptions.withoutRetries(options);
+    return parse(callWithTimeout(new Prompt(input, options)));
   }
 
   /** A single cancellable stream; the deadline covers all chunks, including reasoning. */

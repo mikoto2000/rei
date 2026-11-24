@@ -334,121 +334,245 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings={"compatible","endpoint","tools","instructions"})
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"compatible", "endpoint", "tools", "instructions"})
   @org.junit.jupiter.api.Timeout(90)
-  void nativeCoreCheckpointSurvivesAProcessExitWithoutRepeatingCompletedTools(String change) throws Exception {
-    String first=response("resp_checkpoint", """
-        [{"type":"reasoning","id":"rs_checkpoint","summary":[],"encrypted_content":"restart-opaque","status":"completed"},
-         {"type":"function_call","id":"fc_checkpoint","call_id":"call_checkpoint","name":"fixture","arguments":"{}","status":"completed"}]
-        """);
-    byte[] firstBody=sse(first).getBytes(java.nio.charset.StandardCharsets.UTF_8);
-    byte[] finalBody=sse(done()).getBytes(java.nio.charset.StandardCharsets.UTF_8);
-    var received=new java.util.concurrent.CopyOnWriteArrayList<com.fasterxml.jackson.databind.JsonNode>();
-    var server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
-    server.createContext("/v1/responses",exchange->{
-      received.add(new ObjectMapper().readTree(exchange.getRequestBody().readAllBytes()));
-      byte[] body=received.size()==1?firstBody:finalBody;
-      exchange.getResponseHeaders().set("Content-Type","text/event-stream");
-      exchange.sendResponseHeaders(200,body.length);
-      try(var output=exchange.getResponseBody()){output.write(body);} finally {exchange.close();}
-    });
+  void nativeCoreCheckpointSurvivesAProcessExitWithoutRepeatingCompletedTools(String change)
+      throws Exception {
+    String first =
+        response(
+            "resp_checkpoint",
+            """
+            [{"type":"reasoning","id":"rs_checkpoint","summary":[],"encrypted_content":"restart-opaque","status":"completed"},
+             {"type":"function_call","id":"fc_checkpoint","call_id":"call_checkpoint","name":"fixture","arguments":"{}","status":"completed"}]
+            """);
+    byte[] firstBody = sse(first).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    byte[] finalBody = sse(done()).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    var received =
+        new java.util.concurrent.CopyOnWriteArrayList<com.fasterxml.jackson.databind.JsonNode>();
+    var server =
+        com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/v1/responses",
+        exchange -> {
+          received.add(new ObjectMapper().readTree(exchange.getRequestBody().readAllBytes()));
+          byte[] body = received.size() == 1 ? firstBody : finalBody;
+          exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+          exchange.sendResponseHeaders(200, body.length);
+          try (var output = exchange.getResponseBody()) {
+            output.write(body);
+          } finally {
+            exchange.close();
+          }
+        });
     server.start();
     try {
-      String base="http://127.0.0.1:"+server.getAddress().getPort()+"/v1";
-      checkpointWorker("write",base);
-      checkpointWorker(change.equals("compatible")?"read":change,base);
-      assertThat(java.nio.file.Files.readAllLines(protocolDirectory.resolve("effects.txt"))).containsExactly("fixture-called");
-      assertThat(received).hasSize(change.equals("compatible")?2:1);
-      if(change.equals("compatible")) assertThat(received.getLast().path("input").toString())
-          .contains("restart-opaque","call_checkpoint","completed fixture result","restart fixture task");
-    } finally {server.stop(0);}
+      String base = "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
+      checkpointWorker("write", base);
+      checkpointWorker(change.equals("compatible") ? "read" : change, base);
+      assertThat(java.nio.file.Files.readAllLines(protocolDirectory.resolve("effects.txt")))
+          .containsExactly("fixture-called");
+      assertThat(received).hasSize(change.equals("compatible") ? 2 : 1);
+      if (change.equals("compatible"))
+        assertThat(received.getLast().path("input").toString())
+            .contains(
+                "restart-opaque",
+                "call_checkpoint",
+                "completed fixture result",
+                "restart fixture task");
+    } finally {
+      server.stop(0);
+    }
   }
 
-  private void checkpointWorker(String mode,String base) throws Exception {
-    var builder=new ProcessBuilder(dev.mikoto2000.rei.testsupport.JavaFixtureCommand.command(protocolDirectory,
-        NativeCheckpointProcessProbe.class,protocolDirectory.toString(),mode,base))
-        .redirectErrorStream(true).redirectOutput(protocolDirectory.resolve(mode+"-checkpoint.log").toFile());
-    var data=java.nio.file.Files.createDirectories(protocolDirectory.resolve(mode+"-data"));
-    builder.environment().put("REI_DATA_DIR",data.toString());
-    var process=builder.start();
-    if(!process.waitFor(40,java.util.concurrent.TimeUnit.SECONDS)) {
+  private void checkpointWorker(String mode, String base) throws Exception {
+    var builder =
+        new ProcessBuilder(
+                dev.mikoto2000.rei.testsupport.JavaFixtureCommand.command(
+                    protocolDirectory,
+                    NativeCheckpointProcessProbe.class,
+                    protocolDirectory.toString(),
+                    mode,
+                    base))
+            .redirectErrorStream(true)
+            .redirectOutput(protocolDirectory.resolve(mode + "-checkpoint.log").toFile());
+    var data = java.nio.file.Files.createDirectories(protocolDirectory.resolve(mode + "-data"));
+    builder.environment().put("REI_DATA_DIR", data.toString());
+    var process = builder.start();
+    if (!process.waitFor(40, java.util.concurrent.TimeUnit.SECONDS)) {
       process.destroyForcibly();
-      throw new AssertionError("Owned checkpoint fixture JVM timed out: "+java.nio.file.Files.readString(protocolDirectory.resolve(mode+"-checkpoint.log")));
+      throw new AssertionError(
+          "Owned checkpoint fixture JVM timed out: "
+              + java.nio.file.Files.readString(
+                  protocolDirectory.resolve(mode + "-checkpoint.log")));
     }
-    assertThat(process.exitValue()).as("checkpoint worker: %s",java.nio.file.Files.readString(protocolDirectory.resolve(mode+"-checkpoint.log"))).isZero();
+    assertThat(process.exitValue())
+        .as(
+            "checkpoint worker: %s",
+            java.nio.file.Files.readString(protocolDirectory.resolve(mode + "-checkpoint.log")))
+        .isZero();
   }
 
   public static class NativeCheckpointProcessProbe {
     public static void main(String[] args) throws Exception {
-      var root=java.nio.file.Path.of(args[0]);boolean writer=args[1].equals("write");boolean changed=!writer&&!args[1].equals("read");
-      var fixture=new ResponsesReplayContractTest();fixture.protocolDirectory=root;
-      var payloads=fixture.payloads();
-      var source=new org.sqlite.SQLiteDataSource();source.setUrl("jdbc:sqlite:"+root.resolve("checkpoint.db"));
-      var settings=new dev.mikoto2000.rei.checkpoint.CheckpointProperties();
-      var repository=new dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository(source,settings);
-      var beans=new org.springframework.beans.factory.support.StaticListableBeanFactory();
-      beans.addBean("payloads",payloads);
-      org.springframework.test.util.ReflectionTestUtils.invokeMethod(repository,"configureModelMessagePayloads",
+      var root = java.nio.file.Path.of(args[0]);
+      boolean writer = args[1].equals("write");
+      boolean changed = !writer && !args[1].equals("read");
+      var fixture = new ResponsesReplayContractTest();
+      fixture.protocolDirectory = root;
+      var payloads = fixture.payloads();
+      var source = new org.sqlite.SQLiteDataSource();
+      source.setUrl("jdbc:sqlite:" + root.resolve("checkpoint.db"));
+      var settings = new dev.mikoto2000.rei.checkpoint.CheckpointProperties();
+      var repository =
+          new dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository(source, settings);
+      var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory();
+      beans.addBean("payloads", payloads);
+      org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+          repository,
+          "configureModelMessagePayloads",
           beans.getBeanProvider(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class));
-      var properties=fixture.nativeProperties();var server=properties.feature(LlmFeature.CHAT);
-      server.setBaseUrl(args[2]);server.setMaxOutputTokens(512);if(args[1].equals("endpoint"))server.setEndpointGeneration(8);
-      properties.setFeature(LlmFeature.CHAT,server);
-      var models=LlmModelProvider.forResponsesFixture(org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class),properties,List.of());
-      models.configureModelMessagePayloads(beans.getBeanProvider(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class));
-      var callback=new org.springframework.ai.tool.ToolCallback(){
-        public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition(){return org.springframework.ai.tool.definition.ToolDefinition.builder()
-            .name("fixture").description(args[1].equals("tools")?"changed fixture":"fixture").inputSchema("{\"type\":\"object\",\"properties\":{}}").build();}
-        public String call(String input){
-          try {java.nio.file.Files.writeString(root.resolve("effects.txt"),"fixture-called\n",java.nio.file.StandardOpenOption.CREATE,java.nio.file.StandardOpenOption.APPEND);}
-          catch(java.io.IOException failure){throw new IllegalStateException(failure);}
-          return "completed fixture result";
-        }
-      };
-      var client=org.springframework.ai.chat.client.ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.CHAT)))
-          .defaultSystem(args[1].equals("instructions")?"changed fixture system":"fixture stable system").defaultTools(callback).build();
-      var holder=org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
+      var properties = fixture.nativeProperties();
+      var server = properties.feature(LlmFeature.CHAT);
+      server.setBaseUrl(args[2]);
+      server.setMaxOutputTokens(512);
+      if (args[1].equals("endpoint")) server.setEndpointGeneration(8);
+      properties.setFeature(LlmFeature.CHAT, server);
+      var models =
+          LlmModelProvider.forResponsesFixture(
+              org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class),
+              properties,
+              List.of());
+      models.configureModelMessagePayloads(
+          beans.getBeanProvider(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class));
+      var callback =
+          new org.springframework.ai.tool.ToolCallback() {
+            public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
+              return org.springframework.ai.tool.definition.ToolDefinition.builder()
+                  .name("fixture")
+                  .description(args[1].equals("tools") ? "changed fixture" : "fixture")
+                  .inputSchema("{\"type\":\"object\",\"properties\":{}}")
+                  .build();
+            }
+
+            public String call(String input) {
+              try {
+                java.nio.file.Files.writeString(
+                    root.resolve("effects.txt"),
+                    "fixture-called\n",
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.APPEND);
+              } catch (java.io.IOException failure) {
+                throw new IllegalStateException(failure);
+              }
+              return "completed fixture result";
+            }
+          };
+      var client =
+          org.springframework.ai.chat.client.ChatClient.builder(
+                  new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
+                      models.chatModel(LlmFeature.CHAT)))
+              .defaultSystem(
+                  args[1].equals("instructions")
+                      ? "changed fixture system"
+                      : "fixture stable system")
+              .defaultTools(callback)
+              .build();
+      var holder =
+          org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
       org.mockito.Mockito.when(holder.get()).thenReturn("fixture-model");
-      var core=new dev.mikoto2000.rei.core.chat.ChatExecutionService(new FixedLlmChatClientProvider(client),holder,models,new LlmProperties(),
-          new dev.mikoto2000.rei.core.service.CommandCancellationService(),java.util.Optional.empty(),java.util.Optional.empty());
-      var logs=new dev.mikoto2000.rei.conversation.ConversationLogStore(root.resolve("logs"),java.time.Clock.systemUTC(),
-          new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
-      org.springframework.test.util.ReflectionTestUtils.invokeMethod(core,"setConversationLogStore",logs);
-      org.springframework.test.util.ReflectionTestUtils.invokeMethod(core,"setConversationTurnStore",dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory());
-      var outcome=new java.util.concurrent.atomic.AtomicReference<dev.mikoto2000.rei.core.chat.ChatExecutionResult>();
-      beans.addBean("router",new dev.mikoto2000.rei.core.chat.ConversationInputRouter(Runnable::run,
-          (owner,prompt,input)->outcome.set(core.execute(owner,prompt,input))));
-      try(var checkpoints=new dev.mikoto2000.rei.checkpoint.PersistentCheckpointService(repository,
-          new dev.mikoto2000.rei.checkpoint.CheckpointReconciler(null),settings,new dev.mikoto2000.rei.event.InMemoryAgentEventBus(),
-          beans.getBeanProvider(dev.mikoto2000.rei.core.chat.ConversationInputRouter.class),
-          beans.getBeanProvider(dev.mikoto2000.rei.application.run.RunRegistry.class),
-          beans.getBeanProvider(dev.mikoto2000.rei.application.run.RunService.class),
-          beans.getBeanProvider(dev.mikoto2000.rei.core.actionplan.ActionPlan.class),
-          beans.getBeanProvider(dev.mikoto2000.rei.core.working.WorkingSet.class),
-          beans.getBeanProvider(dev.mikoto2000.rei.core.taskstate.TaskState.class),
-          beans.getBeanProvider(dev.mikoto2000.rei.core.checkpoint.CheckpointStore.class)){
-        @Override public void preserveResults(dev.mikoto2000.rei.core.chat.AgentRunContext owner,
-            List<org.springframework.ai.chat.messages.Message> history,
-            dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState progress){
-          super.preserveResults(owner,history,progress);
-          if(writer&&progress!=null&&progress.protocolHistory()!=null&&progress.protocolHistory().entries().stream().anyMatch(entry->entry.key().endsWith("/TOOL"))){
-            try{java.nio.file.Files.writeString(root.resolve("task-id.txt"),repository.findByRun(owner.projectId(),owner.runId()).orElseThrow().taskId());}
-            catch(java.io.IOException failure){throw new IllegalStateException(failure);}
-            System.exit(0);
-          }
+      var core =
+          new dev.mikoto2000.rei.core.chat.ChatExecutionService(
+              new FixedLlmChatClientProvider(client),
+              holder,
+              models,
+              new LlmProperties(),
+              new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+              java.util.Optional.empty(),
+              java.util.Optional.empty());
+      var logs =
+          new dev.mikoto2000.rei.conversation.ConversationLogStore(
+              root.resolve("logs"),
+              java.time.Clock.systemUTC(),
+              new ObjectMapper()
+                  .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+      org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+          core, "setConversationLogStore", logs);
+      org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+          core,
+          "setConversationTurnStore",
+          dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory());
+      var outcome =
+          new java.util.concurrent.atomic.AtomicReference<
+              dev.mikoto2000.rei.core.chat.ChatExecutionResult>();
+      beans.addBean(
+          "router",
+          new dev.mikoto2000.rei.core.chat.ConversationInputRouter(
+              Runnable::run,
+              (owner, prompt, input) -> outcome.set(core.execute(owner, prompt, input))));
+      try (var checkpoints =
+          new dev.mikoto2000.rei.checkpoint.PersistentCheckpointService(
+              repository,
+              new dev.mikoto2000.rei.checkpoint.CheckpointReconciler(null),
+              settings,
+              new dev.mikoto2000.rei.event.InMemoryAgentEventBus(),
+              beans.getBeanProvider(dev.mikoto2000.rei.core.chat.ConversationInputRouter.class),
+              beans.getBeanProvider(dev.mikoto2000.rei.application.run.RunRegistry.class),
+              beans.getBeanProvider(dev.mikoto2000.rei.application.run.RunService.class),
+              beans.getBeanProvider(dev.mikoto2000.rei.core.actionplan.ActionPlan.class),
+              beans.getBeanProvider(dev.mikoto2000.rei.core.working.WorkingSet.class),
+              beans.getBeanProvider(dev.mikoto2000.rei.core.taskstate.TaskState.class),
+              beans.getBeanProvider(dev.mikoto2000.rei.core.checkpoint.CheckpointStore.class)) {
+            @Override
+            public void preserveResults(
+                dev.mikoto2000.rei.core.chat.AgentRunContext owner,
+                List<org.springframework.ai.chat.messages.Message> history,
+                dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState progress) {
+              super.preserveResults(owner, history, progress);
+              if (writer
+                  && progress != null
+                  && progress.protocolHistory() != null
+                  && progress.protocolHistory().entries().stream()
+                      .anyMatch(entry -> entry.key().endsWith("/TOOL"))) {
+                try {
+                  java.nio.file.Files.writeString(
+                      root.resolve("task-id.txt"),
+                      repository
+                          .findByRun(owner.projectId(), owner.runId())
+                          .orElseThrow()
+                          .taskId());
+                } catch (java.io.IOException failure) {
+                  throw new IllegalStateException(failure);
+                }
+                System.exit(0);
+              }
+            }
+          }) {
+        org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+            core, "setCheckpoints", checkpoints);
+        if (writer) {
+          var result =
+              core.execute(
+                  new dev.mikoto2000.rei.core.chat.AgentRunContext(
+                      "before-restart", "fixture-conversation", root, "fixture-project"),
+                  "restart fixture task",
+                  new dev.mikoto2000.rei.core.chat.UserInterventionQueue());
+          throw new AssertionError(
+              "Writer failed to exit at its durable tool boundary: " + result.stopCode());
         }
-      }) {
-        org.springframework.test.util.ReflectionTestUtils.invokeMethod(core,"setCheckpoints",checkpoints);
-        if(writer){
-          var result=core.execute(new dev.mikoto2000.rei.core.chat.AgentRunContext("before-restart","fixture-conversation",root,"fixture-project"),
-              "restart fixture task",new dev.mikoto2000.rei.core.chat.UserInterventionQueue());
-          throw new AssertionError("Writer failed to exit at its durable tool boundary: "+result.stopCode());
-        }
-        String task=java.nio.file.Files.readString(root.resolve("task-id.txt"));
-        var resumed=checkpoints.resume("fixture-project",task,dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL);
+        String task = java.nio.file.Files.readString(root.resolve("task-id.txt"));
+        var resumed =
+            checkpoints.resume(
+                "fixture-project",
+                task,
+                dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL);
         assertThat(resumed.previousRunId()).isEqualTo("before-restart");
         assertThat(outcome.get()).isNotNull();
-        assertThat(outcome.get().success()).as("resumed native Core: %s",outcome.get().stopCode()).isEqualTo(!changed);
-        if(!changed) assertThat(repository.get("fixture-project",task).status()).isEqualTo("COMPLETED");
+        assertThat(outcome.get().success())
+            .as("resumed native Core: %s", outcome.get().stopCode())
+            .isEqualTo(!changed);
+        if (!changed)
+          assertThat(repository.get("fixture-project", task).status()).isEqualTo("COMPLETED");
       }
       System.exit(0);
     }

@@ -106,26 +106,40 @@ public final class ModelOptions {
     }
   }
 
-  /** Opaque digest for approval invalidation; connection credentials must never leave this method. */
+  /**
+   * Opaque digest for approval invalidation; connection credentials must never leave this method.
+   */
   public static String connectionFingerprint(ToolCallingChatOptions options) {
-    String baseUrl,apiKey;
-    if(options instanceof OpenAiResponsesChatOptions responses) {
-      baseUrl=responses.getBaseUrl();apiKey=responses.getApiKey();
-    } else if(options instanceof OpenAiChatOptions chat) {
-      baseUrl=chat.getBaseUrl();apiKey=chat.getApiKey();
+    String baseUrl, apiKey;
+    if (options instanceof OpenAiResponsesChatOptions responses) {
+      baseUrl = responses.getBaseUrl();
+      apiKey = responses.getApiKey();
+    } else if (options instanceof OpenAiChatOptions chat) {
+      baseUrl = chat.getBaseUrl();
+      apiKey = chat.getApiKey();
     } else throw new IllegalArgumentException("Unknown connection option protocol");
     try {
-      var digest=java.security.MessageDigest.getInstance("SHA-256");
-      for(var value:java.util.Arrays.asList(options.getClass().getName(),baseUrl,apiKey,options.getModel(),
-          options.getToolContext()==null ? null : options.getToolContext().get(ENDPOINT_CONTEXT_KEY))) {
-        digest.update((byte)(value==null ? 0 : 1));
-        if(value!=null) {
-          byte[] bytes=value.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-          digest.update(java.nio.ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());digest.update(bytes);
+      var digest = java.security.MessageDigest.getInstance("SHA-256");
+      for (var value :
+          java.util.Arrays.asList(
+              options.getClass().getName(),
+              baseUrl,
+              apiKey,
+              options.getModel(),
+              options.getToolContext() == null
+                  ? null
+                  : options.getToolContext().get(ENDPOINT_CONTEXT_KEY))) {
+        digest.update((byte) (value == null ? 0 : 1));
+        if (value != null) {
+          byte[] bytes = value.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+          digest.update(java.nio.ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());
+          digest.update(bytes);
         }
       }
       return java.util.HexFormat.of().formatHex(digest.digest());
-    } catch(java.security.NoSuchAlgorithmException impossible) {throw new IllegalStateException(impossible);}
+    } catch (java.security.NoSuchAlgorithmException impossible) {
+      throw new IllegalStateException(impossible);
+    }
   }
 
   /** A one-shot feature call owns no conversation replay or durable tool-loop authority. */
@@ -208,66 +222,91 @@ public final class ModelOptions {
       return builder.build();
     }
     return options instanceof OpenAiResponsesChatOptions
-        ? capOutputLimit(options, tokens) : withOutputLimit(options, tokens);
+        ? capOutputLimit(options, tokens)
+        : withOutputLimit(options, tokens);
   }
 
-  /** Grounding's legacy token parameter remains explicit while native requests retain their bound. */
-  public static ToolCallingChatOptions withTokenLimit(ToolCallingChatOptions options,int tokens) {
-    if(tokens<1) throw new IllegalArgumentException("Output limit must be positive");
-    if(options instanceof OpenAiChatOptions chat) {
-      var builder=chat.mutate();builder.maxCompletionTokens(null);builder.maxTokens(tokens);return builder.build();
+  /**
+   * Grounding's legacy token parameter remains explicit while native requests retain their bound.
+   */
+  public static ToolCallingChatOptions withTokenLimit(ToolCallingChatOptions options, int tokens) {
+    if (tokens < 1) throw new IllegalArgumentException("Output limit must be positive");
+    if (options instanceof OpenAiChatOptions chat) {
+      var builder = chat.mutate();
+      builder.maxCompletionTokens(null);
+      builder.maxTokens(tokens);
+      return builder.build();
     }
-    return capOutputLimit(options,tokens);
+    return capOutputLimit(options, tokens);
   }
 
   /** A protocol-specific feature setting must never silently disappear on another API. */
-  public static ToolCallingChatOptions withFrequencyPenalty(ToolCallingChatOptions options,double penalty) {
-    if(options instanceof OpenAiResponsesChatOptions) throw new IllegalArgumentException("Frequency penalty is unavailable for Responses");
+  public static ToolCallingChatOptions withFrequencyPenalty(
+      ToolCallingChatOptions options, double penalty) {
+    if (options instanceof OpenAiResponsesChatOptions)
+      throw new IllegalArgumentException("Frequency penalty is unavailable for Responses");
     return options.mutate().frequencyPenalty(penalty).build();
   }
 
   /** Set an explicitly selected native tool-choice value, including clearing the choice. */
-  public static ToolCallingChatOptions withToolChoice(ToolCallingChatOptions options, String choice) {
+  public static ToolCallingChatOptions withToolChoice(
+      ToolCallingChatOptions options, String choice) {
     if (options instanceof OpenAiResponsesChatOptions responses) {
-      var builder=responses.mutate(); builder.toolChoice(choice); return builder.build();
+      var builder = responses.mutate();
+      builder.toolChoice(choice);
+      return builder.build();
     }
     if (options instanceof OpenAiChatOptions chat) {
-      var builder=chat.mutate(); builder.toolChoice(choice); return builder.build();
+      var builder = chat.mutate();
+      builder.toolChoice(choice);
+      return builder.build();
     }
     throw new IllegalArgumentException("Tool choice is unavailable for this protocol");
   }
 
   /** Keep the SDK's structured-output type while selecting the request's native option family. */
-  public static ToolCallingChatOptions withResponseFormat(ToolCallingChatOptions options,
+  public static ToolCallingChatOptions withResponseFormat(
+      ToolCallingChatOptions options,
       org.springframework.ai.openai.OpenAiChatModel.ResponseFormat format) {
     if (options instanceof OpenAiResponsesChatOptions responses) {
-      var builder=responses.mutate(); builder.responseFormat(format); return builder.build();
+      var builder = responses.mutate();
+      builder.responseFormat(format);
+      return builder.build();
     }
     if (options instanceof OpenAiChatOptions chat) {
-      var builder=chat.mutate(); builder.responseFormat(format); return builder.build();
+      var builder = chat.mutate();
+      builder.responseFormat(format);
+      return builder.build();
     }
     throw new IllegalArgumentException("Structured output is unavailable for this protocol");
   }
 
   /** Rei owns retry admission; Responses retry suppression belongs to its bound SDK client. */
   public static ToolCallingChatOptions withoutRetries(ToolCallingChatOptions options) {
-    if(options instanceof OpenAiChatOptions chat) {
-      var builder=chat.mutate();builder.maxRetries(0);return builder.build();
+    if (options instanceof OpenAiChatOptions chat) {
+      var builder = chat.mutate();
+      builder.maxRetries(0);
+      return builder.build();
     }
     return options;
   }
 
   /** A feature may shorten, but never raise, a bound Responses read deadline. */
-  public static ToolCallingChatOptions withTimeout(ToolCallingChatOptions options, java.time.Duration timeout) {
-    if(timeout==null || timeout.isZero() || timeout.isNegative()) throw new IllegalArgumentException("Timeout must be positive");
-    if(options instanceof OpenAiResponsesChatOptions responses) {
-      var configured=responses.getTimeout();
-      var builder=responses.mutate();
-      builder.timeout(configured!=null && configured.compareTo(timeout)<0 ? configured : timeout);
+  public static ToolCallingChatOptions withTimeout(
+      ToolCallingChatOptions options, java.time.Duration timeout) {
+    if (timeout == null || timeout.isZero() || timeout.isNegative())
+      throw new IllegalArgumentException("Timeout must be positive");
+    if (options instanceof OpenAiResponsesChatOptions responses) {
+      var configured = responses.getTimeout();
+      var builder = responses.mutate();
+      builder.timeout(
+          configured != null && configured.compareTo(timeout) < 0 ? configured : timeout);
       return builder.build();
     }
-    if(options instanceof OpenAiChatOptions chat) {
-      var builder=chat.mutate();builder.timeout(timeout);return builder.build();
+    if (options instanceof OpenAiChatOptions chat) {
+      var builder = chat.mutate();
+      builder.timeout(timeout);
+      return builder.build();
     }
     throw new IllegalArgumentException("Request timeout is unavailable for this protocol");
   }

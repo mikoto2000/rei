@@ -6,13 +6,12 @@ import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
-import java.util.List;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import java.util.function.IntSupplier;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import dev.mikoto2000.rei.modeloptions.ModelOptions;
 
 /**
  * 音声による対話に必要な音声補正言語モデルを扱う。
@@ -63,7 +62,7 @@ public final class VoiceCorrectionLlm {
       LlmModelProvider models,
       VoiceCorrectionProperties properties) {
     this.correctionClient = () -> clients.chatClient(LlmFeature.VOICE_CORRECTION);
-    this.correctionOptions = () -> models.requestOptions(LlmFeature.VOICE_CORRECTION, null,false);
+    this.correctionOptions = () -> models.requestOptions(LlmFeature.VOICE_CORRECTION, null, false);
     this.timeoutMs = () -> properties.getTimeoutMs();
     this.maxOutputTokens = () -> properties.getMaxOutputTokens();
     this.maxTotalTokens = () -> properties.getMaxTotalTokens();
@@ -72,9 +71,12 @@ public final class VoiceCorrectionLlm {
   /** 音声による対話の要求を実行し、呼び出し元へ結果を返す。 */
   public String call(String original, VoiceCorrectionContext.Snapshot context)
       throws JsonProcessingException {
-    var isolated=ModelOptions.singleRequest(correctionOptions.get());
-    var bounded=ModelOptions.capOutputLimit(isolated,maxOutputTokens.getAsInt());
-    var options=ModelOptions.withTimeout(ModelOptions.withoutRetries(bounded),java.time.Duration.ofMillis(timeoutMs.getAsInt()));
+    var isolated = ModelOptions.singleRequest(correctionOptions.get());
+    var bounded = ModelOptions.capOutputLimit(isolated, maxOutputTokens.getAsInt());
+    var options =
+        ModelOptions.withTimeout(
+            ModelOptions.withoutRetries(bounded),
+            java.time.Duration.ofMillis(timeoutMs.getAsInt()));
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
     var budget = new OutputLimitRunBudget(0, 1, null, maxTotalTokens.getAsLong());
     if (!budget.tryConsumeLlmCall()) throw new IllegalStateException("correction_budget");

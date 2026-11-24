@@ -25,6 +25,7 @@ import dev.mikoto2000.rei.externalagent.ImplementationProposal;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.OpenAiCompatibleEndpoint;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import dev.mikoto2000.rei.voice.VoiceProperties;
 import java.net.URI;
 import java.time.Clock;
@@ -45,9 +46,8 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import dev.mikoto2000.rei.modeloptions.ModelOptions;
+import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
@@ -181,7 +181,7 @@ public class DoctorActiveService {
     this.passiveReport = details -> DoctorService.render(passive.passive(details));
     this.environment = environment;
     this.subAgentModel = () -> models.subAgentChatModel();
-    this.optionsForModel = selected -> models.requestOptions(LlmFeature.CHAT, selected,false);
+    this.optionsForModel = selected -> models.requestOptions(LlmFeature.CHAT, selected, false);
     this.readSelectedModel = () -> selectedModel.get();
     this.connectivityProbe =
         request -> http.connectivity(request.endpoint(), request.timeout(), request.checkActive());
@@ -257,8 +257,14 @@ public class DoctorActiveService {
       String connectionIdentity = "";
       if (check == DoctorRequest.Check.INFERENCE) {
         var defaults = optionsForModel.apply(target);
-        inferenceOptions=defaults==null ? OpenAiChatOptions.builder().model(target).build() : defaults.mutate().build();
-        connectionIdentity=Objects.toString(configuredEndpoint.get(),"")+"|"+ModelOptions.connectionFingerprint(inferenceOptions);
+        inferenceOptions =
+            defaults == null
+                ? OpenAiChatOptions.builder().model(target).build()
+                : defaults.mutate().build();
+        connectionIdentity =
+            Objects.toString(configuredEndpoint.get(), "")
+                + "|"
+                + ModelOptions.connectionFingerprint(inferenceOptions);
       }
       String fingerprint =
           ImplementationProposal.sha256(
@@ -425,8 +431,12 @@ public class DoctorActiveService {
       RunExecutionContext run, ToolCallingChatOptions captured, Duration timeout) {
     var model = subAgentModel.get();
     ToolLoopSupport.requireNoDefaultTools(model);
-    var isolated=ModelOptions.singleRequest(captured,Map.of(RunExecutionContext.KEY,run,AgentRunContext.class.getName(),run.runContext()));
-    var bounded=ModelOptions.withTokenLimit(isolated,16);
+    var isolated =
+        ModelOptions.singleRequest(
+            captured,
+            Map.of(
+                RunExecutionContext.KEY, run, AgentRunContext.class.getName(), run.runContext()));
+    var bounded = ModelOptions.withTokenLimit(isolated, 16);
     var inference =
         new BoundedToolLoop()
             .runWithHistory(

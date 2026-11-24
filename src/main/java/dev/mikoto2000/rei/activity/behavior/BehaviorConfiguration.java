@@ -33,7 +33,7 @@ public class BehaviorConfiguration {
       dev.mikoto2000.rei.core.configuration.SystemPromptService system) {
     return new LlmBehaviorMessageGenerator(
         () -> provider.chatModel(LlmFeature.ACTIVITY_BEHAVIOR),
-        () -> provider.requestOptions(LlmFeature.ACTIVITY_BEHAVIOR, model.get(),false),
+        () -> provider.requestOptions(LlmFeature.ACTIVITY_BEHAVIOR, model.get(), false),
         system::systemPrompt);
   }
 

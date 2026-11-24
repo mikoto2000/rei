@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.computeruse.CapturedScreen;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,9 +12,8 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
-import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import dev.mikoto2000.rei.modeloptions.ModelOptions;
+import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
 
 /**
  * 画像認識作業状況に必要な情報を入力から取り出す。
@@ -38,13 +38,16 @@ public final class VisionActivityExtractor implements ActivityExtractor {
   private final int maxOutputTokens;
 
   /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
-  public VisionActivityExtractor(Supplier<ChatModel> model, Supplier<? extends ToolCallingChatOptions> options) {
+  public VisionActivityExtractor(
+      Supplier<ChatModel> model, Supplier<? extends ToolCallingChatOptions> options) {
     this(model, options, .5);
   }
 
   /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public VisionActivityExtractor(
-      Supplier<ChatModel> model, Supplier<? extends ToolCallingChatOptions> options, double imageScale) {
+      Supplier<ChatModel> model,
+      Supplier<? extends ToolCallingChatOptions> options,
+      double imageScale) {
     this(model, options, imageScale, 2048);
   }
 
@@ -98,9 +101,10 @@ public final class VisionActivityExtractor implements ActivityExtractor {
       format.setType(ResponseFormat.Type.JSON_SCHEMA);
       format.setJsonSchema(schema);
       format.setStrict(true);
-      var isolated=ModelOptions.singleRequest(options.get());
-      var limited=ModelOptions.withCompletionLimit(isolated,maxOutputTokens);
-      var requestOptions=ModelOptions.withResponseFormat(ModelOptions.withToolChoice(limited,null),format);
+      var isolated = ModelOptions.singleRequest(options.get());
+      var limited = ModelOptions.withCompletionLimit(isolated, maxOutputTokens);
+      var requestOptions =
+          ModelOptions.withResponseFormat(ModelOptions.withToolChoice(limited, null), format);
       var system =
           """
           Extract a cautious activity journal from desktop evidence. Return only JSON matching the schema.

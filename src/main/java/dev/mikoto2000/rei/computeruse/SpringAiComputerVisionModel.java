@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.computeruse;
 
 import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -15,9 +16,8 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
-import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import dev.mikoto2000.rei.modeloptions.ModelOptions;
+import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.util.MimeTypeUtils;
@@ -227,8 +227,9 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
     for (int attempt = 0; attempt <= repairs; attempt++) {
       checkCancelled();
       // No-tools inference must omit the wire fields: compatible APIs can reject tools: [].
-      var isolated=ModelOptions.singleRequest(options.get().build());
-      var requestOptions=ModelOptions.withResponseFormat(ModelOptions.withToolChoice(isolated,null),format);
+      var isolated = ModelOptions.singleRequest(options.get().build());
+      var requestOptions =
+          ModelOptions.withResponseFormat(ModelOptions.withToolChoice(isolated, null), format);
       ToolLoopSupport.requireNoRawTools(requestOptions);
       var prompt =
           new Prompt(

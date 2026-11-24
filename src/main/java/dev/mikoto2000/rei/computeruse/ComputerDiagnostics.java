@@ -22,11 +22,11 @@ import javax.imageio.ImageIO;
 public final class ComputerDiagnostics {
   /** Diagnostics only expose visible output; protocol parts and response metadata stay private. */
   static String responseText(org.springframework.ai.chat.model.ChatResponse response) {
-    if(response==null) return "null";
-    var visible=new java.util.ArrayList<String>();
-    for(var generation:response.getResults()) {
-      var output=generation.getOutput();
-      visible.add(output==null ? "" : String.valueOf(output.getText()));
+    if (response == null) return "null";
+    var visible = new java.util.ArrayList<String>();
+    for (var generation : response.getResults()) {
+      var output = generation.getOutput();
+      visible.add(output == null ? "" : String.valueOf(output.getText()));
     }
     return visible.toString();
   }

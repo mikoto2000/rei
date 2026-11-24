@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.computeruse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -16,7 +17,6 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.content.Media;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.MimeTypeUtils;
 
@@ -194,11 +194,13 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
             .text(protocol.prompt(target.description()))
             .media(new Media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(bytes.toByteArray())))
             .build();
-    var isolated=ModelOptions.singleRequest(options.get().build());
-    var bounded=ModelOptions.withTokenLimit(isolated,128);
-    var plain=ModelOptions.withResponseFormat(ModelOptions.withToolChoice(bounded,null),null);
-    var requestOptions=protocol==GroundingProtocol.UITARS
-        ? ModelOptions.withFrequencyPenalty(plain,1.0) : plain;
+    var isolated = ModelOptions.singleRequest(options.get().build());
+    var bounded = ModelOptions.withTokenLimit(isolated, 128);
+    var plain = ModelOptions.withResponseFormat(ModelOptions.withToolChoice(bounded, null), null);
+    var requestOptions =
+        protocol == GroundingProtocol.UITARS
+            ? ModelOptions.withFrequencyPenalty(plain, 1.0)
+            : plain;
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(requestOptions);
     saveDiagnostics(
         observation,
