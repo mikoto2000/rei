@@ -97,8 +97,8 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.CsvSource({"ENCRYPTED,false", "NONE,false", "ENCRYPTED,true", "NONE,true"})
-  void nativeSubAgentKeepsOnlyItsOwnProtocolContext(ReasoningReplayMode replay, boolean foreign) throws Exception {
+  @org.junit.jupiter.params.provider.CsvSource({"ENCRYPTED,false,false", "NONE,false,false", "ENCRYPTED,true,false", "NONE,true,false", "ENCRYPTED,false,true", "NONE,false,true"})
+  void nativeSubAgentKeepsOnlyItsOwnProtocolContext(ReasoningReplayMode replay, boolean foreign, boolean configured) throws Exception {
     contentType = "text/event-stream";
     var output = "{\"status\":\"SUCCESS\",\"summary\":\"done\",\"result\":{},\"warnings\":[]}";
     var raw = new ObjectMapper().readTree(done());
@@ -135,16 +135,39 @@ class ResponsesReplayContractTest {
         return transport.stream(prompt);
       }
     };
-    var runner = new dev.mikoto2000.rei.subagent.SubAgentRunner(registry, policy, ignored -> model,
-        ignored -> org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build(), List::of,
-        new dev.mikoto2000.rei.core.service.CommandCancellationService(),
-        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {}, java.time.Clock.systemUTC());
     var parent = new dev.mikoto2000.rei.core.chat.AgentRunContext("parent", "chat", protocolDirectory, "project");
-    runner.setRunOptionsFactory((selected, owner) -> {
-      childOwner.set(owner);
-      return provider.requestOptions(LlmFeature.CHAT, selected, true, foreign ? parent : owner).mutate()
-          .toolContext(Map.of("parent-only-context", "private parent marker")).build();
-    });
+    dev.mikoto2000.rei.subagent.SubAgentRunner runner;
+    if (configured) {
+      var models = org.mockito.Mockito.spy(provider);
+      org.mockito.Mockito.doReturn(model).when(models).subAgentChatModel();
+      org.mockito.Mockito.doAnswer(invocation -> {
+        var owner = (dev.mikoto2000.rei.core.chat.AgentRunContext) invocation.getArgument(3);
+        childOwner.set(owner);
+        return provider.requestOptions(invocation.getArgument(0), invocation.getArgument(1),
+            invocation.<Boolean>getArgument(2), owner).mutate()
+            .toolContext(Map.of("parent-only-context", "private parent marker")).build();
+      }).when(models).requestOptions(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
+          org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any());
+      var catalog = org.mockito.Mockito.mock(dev.mikoto2000.rei.subagent.SubAgentToolCatalog.class);
+      org.mockito.Mockito.when(catalog.createTools()).thenReturn(List.of());
+      var current = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
+      org.mockito.Mockito.when(current.get()).thenReturn("selected-model");
+      dev.mikoto2000.rei.event.AgentEventPublisher publisher = ignored -> {};
+      runner = org.springframework.test.util.ReflectionTestUtils.invokeMethod(new dev.mikoto2000.rei.subagent.SubAgentConfiguration(),
+          "subAgentRunner", registry, policy, catalog, models, current,
+          new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+          new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), publisher, java.time.Clock.systemUTC());
+    } else {
+      runner = new dev.mikoto2000.rei.subagent.SubAgentRunner(registry, policy, ignored -> model,
+          ignored -> org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build(), List::of,
+          new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+          new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {}, java.time.Clock.systemUTC());
+      runner.setRunOptionsFactory((selected, owner) -> {
+        childOwner.set(owner);
+        return provider.requestOptions(LlmFeature.CHAT, selected, true, foreign ? parent : owner).mutate()
+            .toolContext(Map.of("parent-only-context", "private parent marker")).build();
+      });
+    }
     dev.mikoto2000.rei.subagent.SubAgentResult result;
     try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(parent)) {
       result = runner.run("reviewer", "inspect fixture", null);
