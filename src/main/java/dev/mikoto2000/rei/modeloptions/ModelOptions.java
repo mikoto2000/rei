@@ -281,6 +281,19 @@ public final class ModelOptions {
     throw new IllegalArgumentException("Structured output is unavailable for this protocol");
   }
 
+  /** Reject wire-level tools that could bypass the caller's explicit callback boundary. */
+  public static void requireNoRawTools(ToolCallingChatOptions options) {
+    java.util.Map<String,Object> extra=null;
+    if(options instanceof OpenAiResponsesChatOptions responses) {
+      extra=responses.getExtraBody();
+      var hosted=responses.getHostedTools();
+      if(hosted!=null && !hosted.isEmpty()) throw new IllegalArgumentException("Model must not carry hosted tools");
+    } else if(options instanceof OpenAiChatOptions chat) extra=chat.getExtraBody();
+    Object raw=extra==null ? null : extra.get("tools");
+    if(raw!=null && !(raw instanceof java.util.Collection<?> tools && tools.isEmpty()))
+      throw new IllegalArgumentException("Model must not carry raw default tools");
+  }
+
   /** Rei owns retry admission; Responses retry suppression belongs to its bound SDK client. */
   public static ToolCallingChatOptions withoutRetries(ToolCallingChatOptions options) {
     if (options instanceof OpenAiChatOptions chat) {

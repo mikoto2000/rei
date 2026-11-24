@@ -91,7 +91,7 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
     String input = boundedPrompt(snippets, maxTopics, pastQueries);
     if (input == null) return List.of();
     var baseOptions = optionsForModel.apply(readSelectedModel.get());
-    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(baseOptions);
+    ModelOptions.requireNoRawTools(baseOptions);
     var isolated = ModelOptions.singleRequest(baseOptions);
     var options = ModelOptions.capOutputLimit(isolated, maxOutputTokens);
     options = ModelOptions.withoutRetries(options);
