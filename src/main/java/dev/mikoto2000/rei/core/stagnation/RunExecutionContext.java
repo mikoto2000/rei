@@ -41,8 +41,11 @@ public class RunExecutionContext {
       throw new IllegalStateException("Run model options cannot be replaced");
     modelOptions = options.mutate().build();
     var suppliedContext = modelOptions.getToolContext();
-    var boundary = suppliedContext == null ? null : suppliedContext.get(
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var boundary =
+        suppliedContext == null
+            ? null
+            : suppliedContext.get(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
     if (boundary
         instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange) {
       var context = new java.util.HashMap<>(java.util.Objects.requireNonNull(suppliedContext));
@@ -70,8 +73,11 @@ public class RunExecutionContext {
                     runContext)))
       throw new IllegalStateException("Protocol checkpoint ownership mismatch");
     var modelContext = modelOptions.getToolContext();
-    var binding = modelContext == null ? null : modelContext.get(
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
+    var binding =
+        modelContext == null
+            ? null
+            : modelContext.get(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
     var origin =
         protocolHistory != null
             ? protocolHistory.origin()
@@ -96,8 +102,9 @@ public class RunExecutionContext {
         iterationKey = iterationKey.substring(0, prefix);
     }
     String messageKey = iterationKey + "/" + accepted.message().getMessageType().name();
-    var entry = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
-        messageKey, accepted.reference());
+    var entry =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+            messageKey, accepted.reference());
     int existing = -1;
     for (int i = 0; i < entries.size(); i++)
       if (entries.get(i).key().equals(messageKey)) {
@@ -106,19 +113,32 @@ public class RunExecutionContext {
       }
     if (existing < 0) entries.add(entry);
     else {
-      if (accepted.message() instanceof org.springframework.ai.chat.messages.ToolResponseMessage current) {
-        var previous = (org.springframework.ai.chat.messages.ToolResponseMessage) exchange.store().load(
-            exchange.scope(), entries.get(existing).reference(),
-            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, exchange.run());
+      if (accepted.message()
+          instanceof org.springframework.ai.chat.messages.ToolResponseMessage current) {
+        var previous =
+            (org.springframework.ai.chat.messages.ToolResponseMessage)
+                exchange
+                    .store()
+                    .load(
+                        exchange.scope(),
+                        entries.get(existing).reference(),
+                        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+                        exchange.run());
         boolean forward = previous.getResponses().size() <= current.getResponses().size();
         var smaller = forward ? previous : current;
         var larger = forward ? current : previous;
-        if (!larger.getResponses().subList(0, smaller.getResponses().size()).equals(smaller.getResponses()))
+        if (!larger
+            .getResponses()
+            .subList(0, smaller.getResponses().size())
+            .equals(smaller.getResponses()))
           throw new IllegalStateException("Protocol checkpoint result prefix mismatch");
-        if (!dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.capture(smaller).equals(
-            dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.capture(
-                org.springframework.ai.chat.messages.ToolResponseMessage.builder()
-                    .responses(smaller.getResponses()).metadata(larger.getMetadata()).build())))
+        if (!dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.capture(smaller)
+            .equals(
+                dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.capture(
+                    org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+                        .responses(smaller.getResponses())
+                        .metadata(larger.getMetadata())
+                        .build())))
           throw new IllegalStateException("Protocol checkpoint delivery prefix mismatch");
         if (!forward) return;
       }
@@ -135,6 +155,11 @@ public class RunExecutionContext {
       protocolHistory = previousHistory;
       throw failed;
     }
+  }
+
+  /** Prepare durable ordered history pointers before existing history documents are written. */
+  public synchronized List<Map<String, String>> protocolHistoryReferences() {
+    return List.of();
   }
 
   /** Save the original resolved input, including media, before sending or decorating it. */
