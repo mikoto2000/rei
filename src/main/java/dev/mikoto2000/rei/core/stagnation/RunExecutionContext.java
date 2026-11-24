@@ -33,6 +33,20 @@ import java.util.UUID;
  * <p>One user run, explicitly passed in ToolContext across reactive scheduler boundaries.
  */
 public class RunExecutionContext {
+  private org.springframework.ai.model.tool.ToolCallingChatOptions modelOptions;
+
+  /** Capture once at acceptance; each request receives a copy of the same effective options. */
+  public void setModelOptions(org.springframework.ai.model.tool.ToolCallingChatOptions options) {
+    if (modelOptions != null || options == null)
+      throw new IllegalStateException("Run model options cannot be replaced");
+    modelOptions = options.mutate().build();
+  }
+
+  public org.springframework.ai.model.tool.ToolCallingChatOptions modelOptions() {
+    if (modelOptions == null) throw new IllegalStateException("Run model options are unavailable");
+    return modelOptions.mutate().build();
+  }
+
   private dev.mikoto2000.rei.llm.discovery.ToolDiscovery.Session toolDiscovery;
 
   public dev.mikoto2000.rei.llm.discovery.ToolDiscovery.Session toolDiscovery() {

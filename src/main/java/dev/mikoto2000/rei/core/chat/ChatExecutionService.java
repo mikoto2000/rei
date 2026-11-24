@@ -618,6 +618,8 @@ public class ChatExecutionService {
     boolean checkpointFinished = false;
 
     try {
+      if (!structuredCommand)
+        execution.setModelOptions(optionsForModel.apply(readSelectedModel.get()));
       if (resumed == null) turns.startOrdered(context, promptText, clock.instant());
       if (checkpoints != null) checkpoints.start(context, promptText);
       execution.capturePlanBaseline();
@@ -1204,7 +1206,7 @@ public class ChatExecutionService {
       log.warn("Prompt attachment warning: {}", warning);
     }
 
-    var baseOptions = optionsForModel.apply(readSelectedModel.get());
+    var baseOptions = (OpenAiChatOptions) execution.modelOptions();
     if (mode != AgentRunContext.Mode.EXCLUSIVE) ToolLoopSupport.requireNoRawTools(baseOptions);
     var optionsBuilder = baseOptions.mutate();
     optionsBuilder.toolContext(
