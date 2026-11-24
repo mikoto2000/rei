@@ -270,10 +270,12 @@ public class RunExecutionContext {
 
   /** Snapshot exactly the native outbound view before transport starts. */
   public synchronized void captureModelInput(org.springframework.ai.chat.prompt.Prompt prompt) {
-    if (!(prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options)) return;
+    if (!(prompt.getOptions()
+        instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options)) return;
     var context = options.getToolContext();
     if (context == null
-        || !(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY)
+        || !(context.get(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY)
             instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange))
       return;
     if (runContext == null
@@ -282,7 +284,8 @@ public class RunExecutionContext {
             .scope()
             .equals(
                 dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(runContext))
-        || !(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
+        || !(context.get(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
             instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin origin)
         || !origin.owner().equals(exchange.ownerKey())
         || prompt.getInstructions().isEmpty()
@@ -317,8 +320,11 @@ public class RunExecutionContext {
             origin,
             entries,
             new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Input(
-                input, entries.size(), context.get(dev.mikoto2000.rei.modeloptions.ModelOptions.PREPARATION_CONTEXT_KEY)
-                    instanceof String fingerprint ? fingerprint
+                input,
+                entries.size(),
+                context.get(dev.mikoto2000.rei.modeloptions.ModelOptions.PREPARATION_CONTEXT_KEY)
+                        instanceof String fingerprint
+                    ? fingerprint
                     : dev.mikoto2000.rei.modeloptions.ModelOptions.preparationFingerprint(prompt)));
     try {
       toolResultsCheckpoint.accept(List.of());
@@ -329,7 +335,8 @@ public class RunExecutionContext {
   }
 
   /** Save the original resolved input, including media, before sending or decorating it. */
-  public synchronized void preserveUserMessage(org.springframework.ai.chat.messages.UserMessage message) {
+  public synchronized void preserveUserMessage(
+      org.springframework.ai.chat.messages.UserMessage message) {
     // The existing controlled-model prepare path replaces this host input with restored messages.
     if (!resumeMessages.isEmpty()) return;
     var context = modelOptions == null ? null : modelOptions.getToolContext();
@@ -1337,7 +1344,8 @@ public class RunExecutionContext {
     return protocolHistory != null && protocolHistory.input() != null && !resumeMessages.isEmpty();
   }
 
-  public synchronized List<org.springframework.ai.chat.messages.Message> takeResumeMessages(String fingerprint) {
+  public synchronized List<org.springframework.ai.chat.messages.Message> takeResumeMessages(
+      String fingerprint) {
     var input = protocolHistory == null ? null : protocolHistory.input();
     if (!resumeMessages.isEmpty() && input != null) {
       String expected = input.preparationFingerprint();

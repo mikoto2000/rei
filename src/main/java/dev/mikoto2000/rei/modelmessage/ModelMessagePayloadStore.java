@@ -235,14 +235,23 @@ public final class ModelMessagePayloadStore {
       return java.util.List.copyOf(result.values());
     }
 
-    public record Input(java.util.List<Entry> entries, int traceSize,
-        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public record Input(
+        java.util.List<Entry> entries,
+        int traceSize,
+        @com.fasterxml.jackson.annotation.JsonInclude(
+                com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
             String preparationFingerprint) {
-      public Input(java.util.List<Entry> entries, int traceSize) { this(entries, traceSize, null); }
+      public Input(java.util.List<Entry> entries, int traceSize) {
+        this(entries, traceSize, null);
+      }
+
       public Input {
         entries = java.util.List.copyOf(entries);
-        if (entries.isEmpty() || entries.size() > 256 || traceSize < 0
-            || preparationFingerprint != null && !preparationFingerprint.matches("[0-9a-f]{64}")) throw rejected();
+        if (entries.isEmpty()
+            || entries.size() > 256
+            || traceSize < 0
+            || preparationFingerprint != null && !preparationFingerprint.matches("[0-9a-f]{64}"))
+          throw rejected();
       }
     }
 
