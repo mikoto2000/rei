@@ -2,7 +2,6 @@ package dev.mikoto2000.rei.llm;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -21,7 +20,7 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 
 class NativeTextFeatureOptionsTest {
   @ParameterizedTest
-  @ValueSource(strings = {"image-prompt", "web-page-summary"})
+  @ValueSource(strings = {"image-prompt", "web-page-summary", "briefing", "paper"})
   void forwardsTheNativeSnapshotToTheExistingFeature(String feature) {
     var models = mock(LlmModelProvider.class);
     var holder = mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
@@ -29,11 +28,14 @@ class NativeTextFeatureOptionsTest {
     var model = mock(ChatModel.class);
     var nativeOptions =
         OpenAiResponsesChatOptions.builder().model("native").maxOutputTokens(321).build();
-    when(models.requestOptions(feature, "selected", false)).thenReturn(nativeOptions);
+    when(models.requestOptions(feature.equals("paper") ? "chat" : feature, "selected", false)).thenReturn(nativeOptions);
+    if (feature.equals("paper")) {
+      when(models.subAgentChatModel()).thenReturn(model);
+      when(models.model("chat", null)).thenReturn("selected");
+    }
     when(models.chatModel(feature)).thenReturn(model);
     var owners = new java.util.ArrayList<Object>();
-    when(model.call(any(Prompt.class)))
-        .thenAnswer(call -> {
+    org.mockito.stubbing.Answer<ChatResponse> response = call -> {
           Prompt prompt = call.getArgument(0);
           assertThat(prompt.getOptions()).isInstanceOf(OpenAiResponsesChatOptions.class);
           var sent = (OpenAiResponsesChatOptions) prompt.getOptions();
@@ -45,13 +47,24 @@ class NativeTextFeatureOptionsTest {
           owners.add(sent.getToolContext().get("rei.llm.replay-owner"));
           assertThat(sent.getToolCallbacks()).isEmpty();
           assertThat(nativeOptions.getToolContext()).isNull();
-          return new ChatResponse(List.of(new Generation(new AssistantMessage("result"))));
-        });
+          String text=feature.equals("briefing") ? "OVERVIEW: result\nCAUTIONS:\n- caution\nNEXT_ACTIONS:\n- action" : "result";
+          return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
+        };
+    when(model.call(any(Prompt.class))).thenAnswer(response);
+    when(model.stream(any(Prompt.class))).thenAnswer(call -> reactor.core.publisher.Flux.just(response.answer(call)));
     for (int request = 0; request < 2; request++) {
       if (feature.equals("image-prompt"))
         assertThat(
                 new dev.mikoto2000.rei.image.LlmImagePromptEnhancer(models, holder)
                     .enhance("input"))
+            .isEqualTo("result");
+      else if (feature.equals("briefing"))
+        assertThat(new dev.mikoto2000.rei.briefing.AiBriefingNarrator(models,holder).narrate(
+            new dev.mikoto2000.rei.briefing.BriefingContext(java.time.LocalDate.of(2026,1,1),List.of(),List.of(),List.of(),List.of())).overview())
+            .isEqualTo("result");
+      else if (feature.equals("paper"))
+        assertThat(new dev.mikoto2000.rei.paper.SpringPaperLanguageModel(models,new dev.mikoto2000.rei.paper.PaperProperties())
+            .generate("instructions","input",new dev.mikoto2000.rei.paper.PaperOperation("chat",null,System.nanoTime()+java.time.Duration.ofSeconds(5).toNanos())))
             .isEqualTo("result");
       else
         assertThat(
