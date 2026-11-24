@@ -52,6 +52,11 @@ public class PersistentCheckpointRepository {
                 objects::protectCheckpoint, objects::releaseCheckpointHistory);
   }
 
+  /** Lazily resolved only for checkpoints containing protocol payload references. */
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void configureModelMessagePayloads(org.springframework.beans.factory.ObjectProvider<
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> payloads) {}
+
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
 
