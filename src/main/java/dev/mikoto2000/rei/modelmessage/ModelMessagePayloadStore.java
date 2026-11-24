@@ -11,6 +11,12 @@ import org.springframework.ai.chat.messages.Message;
 /** Durable protocol messages; callers publish references before making them visible. */
 public final class ModelMessagePayloadStore {
   public static final String EXCHANGE_CONTEXT_KEY = "rei.modelMessageExchange";
+  public static final String HISTORY_ID = "rei.modelMessage.id";
+  public static final String HISTORY_HASH = "rei.modelMessage.sha256";
+  public static final String HISTORY_OWNER = "rei.modelMessage.historyOwner";
+
+  public java.util.Map<String, String> historyReference(Scope scope, Ref ref, String owner) { throw rejected(); }
+  public java.util.Optional<Message> restoreHistory(Scope scope, java.util.Map<String, String> metadata) { return java.util.Optional.empty(); }
 
   /** One existing tool-loop iteration, with its immutable persistence identity supplied by the caller. */
   public record Exchange(ModelMessagePayloadStore store, Scope scope, String run, String key) {

@@ -517,6 +517,26 @@ class ModelMessagePayloadStoreTest {
   }
 
   @Test
+  void historyContainsOnlyAPublishedPointerAndMissingOrPartialPointersCannotBecomeTextFallback() {
+    var store = new ModelMessagePayloadStore(source());
+    var ref = store.save(owner, "run", "one", message());
+    var metadata = store.historyReference(owner, ref, "turn:run:one");
+    assertThat(metadata).hasSize(3).doesNotContainValue("opaque fixture bytes");
+    var restarted = new ModelMessagePayloadStore(source());
+    assertThat(((AssistantMessage) restarted.restoreHistory(owner, metadata).orElseThrow()).getParts())
+        .containsExactlyElementsOf(message().getParts());
+    assertThat(restarted.restoreHistory(null, Map.of("source", "legacy"))).isEmpty();
+    var partial = new java.util.HashMap<>(metadata);
+    partial.remove(ModelMessagePayloadStore.HISTORY_HASH);
+    assertThatThrownBy(() -> restarted.restoreHistory(owner, partial)).hasMessage("Model message persistence rejected");
+    var unpublished = new java.util.HashMap<>(metadata);
+    unpublished.put(ModelMessagePayloadStore.HISTORY_OWNER, "different-owner");
+    assertThatThrownBy(() -> restarted.restoreHistory(owner, unpublished)).hasMessage("Model message persistence rejected");
+    store.release(owner, ref, ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:run:one");
+    assertThatThrownBy(() -> restarted.restoreHistory(owner, metadata)).hasMessage("Model message persistence rejected");
+  }
+
+  @Test
   void retryIsIdempotentButCannotReplaceAnExistingMessage() {
     var store = new ModelMessagePayloadStore(source());
     var ref = store.save(owner, "run", "iteration-1", message());
