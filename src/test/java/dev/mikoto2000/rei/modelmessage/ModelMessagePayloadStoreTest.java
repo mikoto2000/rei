@@ -33,6 +33,146 @@ class ModelMessagePayloadStoreTest {
   }
 
   @Test
+  void aSeparateJvmReadsTheSameDurablePartsAfterTheWriterHasExited() throws Exception {
+    Path references = temporary.resolve("reference.txt");
+    runProcess(WriterProcess.class, temporary.resolve("payloads.db").toString(), references.toString());
+    var ref = java.nio.file.Files.readAllLines(references);
+    runProcess(ReaderProcess.class, temporary.resolve("payloads.db").toString(), ref.get(0), ref.get(1));
+    assertThat(java.nio.file.Files.readString(temporary.resolve("child-output.txt")))
+        .contains("RESTORED_VERIFIED_PARTS");
+  }
+
+  private void runProcess(Class<?> entry, String... args) throws Exception {
+    Path output = temporary.resolve("child-output.txt");
+    Path classpath = temporary.resolve("classpath.args");
+    // Java argument files also work when the Windows command line cannot hold the test classpath.
+    java.nio.file.Files.writeString(classpath, "-cp\n\""
+        + System.getProperty("java.class.path").replace("\\", "\\\\").replace("\"", "\\\"") + "\"\n");
+    var arguments = new java.util.ArrayList<String>();
+    arguments.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+    arguments.add("@" + classpath);
+    arguments.add(entry.getName());
+    arguments.addAll(List.of(args));
+    var command = new ProcessBuilder(arguments)
+        .redirectErrorStream(true).redirectOutput(output.toFile()).start();
+    try {
+      assertThat(command.waitFor(20, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+      assertThat(command.exitValue()).isZero();
+    } finally {
+      if (command.isAlive()) command.destroyForcibly();
+    }
+  }
+
+  public static final class WriterProcess {
+    public static void main(String[] args) throws Exception {
+      var source = new SQLiteDataSource();
+      source.setUrl("jdbc:sqlite:" + args[0]);
+      var store = new ModelMessagePayloadStore(source);
+      var scope = new ModelMessagePayloadStore.Scope("project", "root", "conversation");
+      var ref = store.save(scope, "run", "one", new ModelMessagePayloadStoreTest().message());
+      store.publish(scope, ref, ModelMessagePayloadStore.ReferenceKind.RUN, "run");
+      java.nio.file.Files.write(Path.of(args[1]), List.of(ref.id(), ref.sha256()));
+    }
+  }
+
+  /** Runs in a fresh JVM, with no shared codec, message or DataSource instance. */
+  public static final class ReaderProcess {
+    public static void main(String[] args) {
+      var source = new SQLiteDataSource();
+      source.setUrl("jdbc:sqlite:" + args[0]);
+      var store = new ModelMessagePayloadStore(source);
+      var scope = new ModelMessagePayloadStore.Scope("project", "root", "conversation");
+      var restored = (AssistantMessage) store.load(scope, new ModelMessagePayloadStore.Ref(args[1], args[2]));
+      if (restored.getParts().size() != 3
+          || !(restored.getParts().getFirst() instanceof ReasoningPart reasoning)
+          || !"opaque fixture bytes".equals(reasoning.payload().data())
+          || !"call_fixture".equals(restored.getToolCalls().getFirst().id())) throw new AssertionError("Restore failed");
+      System.out.println("RESTORED_VERIFIED_PARTS");
+    }
+  }
+
+  @Test
+  void concurrentWritersCannotExceedTotalQuotaAndGcCannotRemovePublishedMessages() throws Exception {
+    int size = new ModelMessageCodec().encode(message()).length;
+    var time = new Time();
+    var store = store(time, size * 10L, size * 2L);
+    var start = new java.util.concurrent.CountDownLatch(1);
+    try (var workers = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+      var futures = new java.util.ArrayList<java.util.concurrent.Future<ModelMessagePayloadStore.Ref>>();
+      for (int i = 0; i < 8; i++) {
+        String key = "message-" + i;
+        futures.add(workers.submit(() -> {
+          start.await();
+          try {
+            var ref = store.save(owner, "run", key, message());
+            store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.RUN, "run");
+            return ref;
+          } catch (IllegalStateException capacity) {
+            assertThat(capacity).hasMessage("Model message persistence rejected");
+            return null;
+          }
+        }));
+      }
+      var gc = workers.submit(() -> {
+        start.await();
+        for (int i = 0; i < 12; i++) assertThat(store.collectExpired()).isZero();
+        return null;
+      });
+      start.countDown();
+      var saved = new java.util.ArrayList<ModelMessagePayloadStore.Ref>();
+      for (var future : futures) {
+        var ref = future.get(15, java.util.concurrent.TimeUnit.SECONDS);
+        if (ref != null) saved.add(ref);
+      }
+      gc.get(15, java.util.concurrent.TimeUnit.SECONDS);
+      assertThat(saved).hasSize(2);
+      time.expire();
+      assertThat(store.collectExpired()).isZero();
+      for (var ref : saved) assertThat(store.load(owner, ref)).isInstanceOf(AssistantMessage.class);
+      assertThat(store.usage(owner, "run")).isEqualTo(new ModelMessagePayloadStore.Usage(size * 2L, size * 2L, 2, 2));
+    }
+  }
+
+  @Test
+  void aFutureSchemaIsRefusedWithoutChangingItOrUnrelatedTables() throws Exception {
+    try (var db = source().getConnection(); var sql = db.createStatement()) {
+      sql.execute("CREATE TABLE model_message_schema(version INTEGER NOT NULL)");
+      sql.execute("INSERT INTO model_message_schema VALUES(999)");
+      sql.execute("CREATE TABLE legacy_conversation(text TEXT)");
+      sql.execute("INSERT INTO legacy_conversation VALUES('legacy fixture')");
+    }
+    assertThatThrownBy(() -> new ModelMessagePayloadStore(source())).hasMessage("Model message persistence rejected");
+    try (var db = source().getConnection(); var sql = db.createStatement()) {
+      try (var row = sql.executeQuery("SELECT version FROM model_message_schema")) {
+        assertThat(row.next()).isTrue();
+        assertThat(row.getInt(1)).isEqualTo(999);
+      }
+      try (var row = sql.executeQuery("SELECT text FROM legacy_conversation")) {
+        assertThat(row.next()).isTrue();
+        assertThat(row.getString(1)).isEqualTo("legacy fixture");
+      }
+    }
+  }
+
+  @Test
+  void corruptedStoredBodyCannotBeRestoredOrPublished() throws Exception {
+    var store = new ModelMessagePayloadStore(source());
+    var ref = store.save(owner, "run", "one", message());
+    try (var db = source().getConnection(); var change = db.prepareStatement(
+        "UPDATE model_message_payloads SET payload=? WHERE id=?")) {
+      byte[] tampered = new ModelMessageCodec().encode(message());
+      tampered[tampered.length - 4] ^= 1;
+      change.setBytes(1, tampered);
+      change.setString(2, ref.id());
+      change.executeUpdate();
+    }
+    assertThatThrownBy(() -> store.load(owner, ref)).hasMessage("Model message persistence rejected").hasNoCause();
+    assertThatThrownBy(() -> store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.RUN, "run"))
+        .hasMessage("Model message persistence rejected").hasNoCause();
+    assertThat(store.usage(owner, "run").referenceCount()).isZero();
+  }
+
+  @Test
   void onlyExpiredUnreferencedPayloadsAreCollectedAndLatePublicationFails() {
     var time = new Time();
     var store = store(time, 100_000, 1_000_000);
