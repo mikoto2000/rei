@@ -14,6 +14,44 @@ import org.springframework.ai.chat.messages.part.TextPart;
 import org.springframework.ai.chat.messages.part.ToolCallPart;
 
 class ModelMessageCodecTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void inputRolesAndHistorySequenceRoundTrip(boolean system) {
+    var metadata = Map.<String, Object>of("rei.historySequence", 41L,
+        "JdbcChatMemoryRepository_message_timestamp", java.time.Instant.parse("2026-11-24T00:00:00Z"));
+    org.springframework.ai.chat.messages.Message input = system
+        ? org.springframework.ai.chat.messages.SystemMessage.builder().text("fixture rules 日本語").metadata(metadata).build()
+        : org.springframework.ai.chat.messages.UserMessage.builder().text("fixture request 日本語").metadata(metadata).build();
+    var codec = new ModelMessageCodec();
+    var restored = codec.decode(codec.encode(input));
+    assertThat(restored.getMessageType()).isEqualTo(input.getMessageType());
+    assertThat(restored.getText()).isEqualTo(input.getText());
+    assertThat(restored.getMetadata()).containsAllEntriesOf(input.getMetadata());
+  }
+
+  @Test
+  void recoveryMarkersArePreservedAsBooleans() {
+    var message = org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(List.of(
+        new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse("call_one", "fixture", "fixture")))
+        .metadata(Map.of("rei.reviewBudgetRecovery", true, "rei.fileBudgetRecovery", true)).build();
+    var codec = new ModelMessageCodec();
+    var restored = codec.decode(codec.encode(message));
+    assertThat(restored.getMetadata()).containsEntry("rei.reviewBudgetRecovery", true)
+        .containsEntry("rei.fileBudgetRecovery", true);
+  }
+
+  @Test
+  void attributeSerializationHasCanonicalKeyOrderForStableHashes() throws Exception {
+    var attributes = new java.util.HashMap<String, String>();
+    for (var key : List.of("itemId", "phase", "itemStatus", "z-last", "A-first", "fixture-1", "fixture-10", "fixture-2"))
+      attributes.put(key, "fixture");
+    var message = AssistantMessage.builder().part(new TextPart("fixture", null, attributes)).build();
+    var codec = new ModelMessageCodec();
+    byte[] encoded = codec.encode(message);
+    var actual = new com.fasterxml.jackson.databind.ObjectMapper().readTree(encoded).path("parts").get(0).path("attributes");
+    assertThat(actual.properties().stream().map(Map.Entry::getKey).toList()).isSorted();
+    assertThat(codec.encode(codec.decode(encoded))).containsExactly(encoded);
+  }
   @Test
   void rawStringPoliciesCannotBecomeTrustedDeliveryMetadata() {
     var message = org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(List.of(
