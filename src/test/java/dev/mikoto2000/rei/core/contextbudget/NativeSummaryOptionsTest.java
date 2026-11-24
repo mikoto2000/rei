@@ -22,14 +22,14 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 
 class NativeSummaryOptionsTest {
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void summaryHasItsOwnNativeOptionsAndCannotInheritParentReplayAuthority(boolean localThinking) {
+  @org.junit.jupiter.params.provider.CsvSource({"false,16000","true,16000","false,73"})
+  void summaryHasItsOwnNativeOptionsAndCannotInheritParentReplayAuthority(boolean localThinking,int providerLimit) {
     var models = mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
     var model = mock(ChatModel.class);
     var base =
         OpenAiResponsesChatOptions.builder()
             .model("native")
-            .maxOutputTokens(16000)
+            .maxOutputTokens(providerLimit)
             .toolContext(Map.of("rei.llm.resolved-endpoint", "summary-endpoint"))
             .build();
     when(models.chatModel("chat")).thenReturn(model);
@@ -58,7 +58,7 @@ class NativeSummaryOptionsTest {
           Prompt prompt = invocation.getArgument(0);
           assertThat(prompt.getOptions()).isInstanceOf(OpenAiResponsesChatOptions.class);
           var sent = (OpenAiResponsesChatOptions) prompt.getOptions();
-          assertThat(sent.getMaxOutputTokens()).isEqualTo(8292);
+          assertThat(sent.getMaxOutputTokens()).isEqualTo(Math.min(providerLimit,8292));
           assertThat(sent.getToolContext())
               .containsEntry("retained-owner-key", "value")
               .containsEntry("rei.modelCallPurpose", "context-summary")
@@ -86,7 +86,7 @@ class NativeSummaryOptionsTest {
                   "", List.of(new UserMessage("history")), 100, new Prompt("owner", owner)))
           .isEqualTo("summary");
     verify(models).requestOptions("chat", "native", false);
-    assertThat(base.getMaxOutputTokens()).isEqualTo(16000);
+    assertThat(base.getMaxOutputTokens()).isEqualTo(providerLimit);
     assertThat(owner.getToolContext()).containsEntry("rei.llm.replay-owner", "parent-owner");
   }
 }
