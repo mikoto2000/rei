@@ -22,8 +22,11 @@ public final class ToolLoopSupport {
   public static Prompt newIteration(Prompt prompt) {
     var boundary = exchange(prompt);
     if (boundary == null) return prompt;
-    var options = (ToolCallingChatOptions) prompt.getOptions();
-    var context = new java.util.HashMap<String, Object>(options.getToolContext());
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
+      throw new IllegalStateException("Missing model message persistence options");
+    var values = options.getToolContext();
+    if (values == null) throw new IllegalStateException("Missing model message persistence context");
+    var context = new java.util.HashMap<String, Object>(values);
     context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
             boundary.store(), boundary.scope(), boundary.run(), java.util.UUID.randomUUID().toString()));

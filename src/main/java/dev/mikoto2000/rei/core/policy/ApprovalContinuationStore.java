@@ -143,6 +143,9 @@ public class ApprovalContinuationStore {
         || pending.calls().isEmpty()
         || pending.completed().size() >= pending.calls().size())
       throw new IllegalArgumentException("Pending Tool required");
+    if (pending.calls().size() > 32
+        || history.stream().filter(message -> !(message instanceof SystemMessage)).limit(257).count() > 256)
+      throw new IllegalArgumentException("Approval continuation capacity exceeded");
     if (pending.assistantReference() != null) {
       var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
       payloads
