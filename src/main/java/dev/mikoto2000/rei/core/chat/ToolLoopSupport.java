@@ -170,6 +170,20 @@ public final class ToolLoopSupport {
     return boundary == null ? null : boundary.reference(message);
   }
 
+  private static void requireSavedOrigin(Prompt prompt, org.springframework.ai.chat.messages.AssistantMessage message) {
+    var origin = message.getMetadata();
+    if (!origin.containsKey("rei.llm.replay-origin-owner") && !origin.containsKey("rei.llm.replay-origin-endpoint")) return;
+    var options = prompt.getOptions();
+    var context = options instanceof ToolCallingChatOptions tools ? tools.getToolContext() : null;
+    if (context == null
+        || !(context.get(dev.mikoto2000.rei.llm.ResolvedLlmEndpoint.CONTEXT_KEY)
+            instanceof dev.mikoto2000.rei.llm.ResolvedLlmEndpoint endpoint)
+        || !(context.get("rei.llm.replay-owner") instanceof String owner) || owner.isBlank()
+        || !owner.equals(origin.get("rei.llm.replay-origin-owner"))
+        || !endpoint.fingerprint().equals(origin.get("rei.llm.replay-origin-endpoint")))
+      throw new IllegalStateException("Model message origin mismatch");
+  }
+
   private static boolean truncated(ChatResponse response) {
     var generation = response.getResult();
     return generation != null
@@ -537,6 +551,7 @@ public final class ToolLoopSupport {
                 .equals(pending.calls().get(index).name()))
           throw new IllegalStateException("Invalid pending model message reference");
       original = assistant;
+      if (replay) requireSavedOrigin(prompt, assistant);
     }
     if (pending.completedReference() != null) {
       var boundary = java.util.Objects.requireNonNull(exchange(prompt), "Missing model message persistence boundary");

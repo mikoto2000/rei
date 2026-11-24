@@ -60,14 +60,14 @@ final class ResponsesReasoningReplay {
       Prompt prompt,
       ResolvedLlmEndpoint endpoint) {
     boolean encrypted = endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.ENCRYPTED;
-    String requestOwner = encrypted ? owner(prompt) : null;
+    String requestOwner = encrypted ? owner(prompt) : optionalOwner(prompt);
     var usage = ResponsesTransportException.usage(response.getMetadata().getUsage());
     var generations =
         response.getResults().stream()
             .map(generation -> {
               var output = generation.getOutput();
               var metadata = new java.util.HashMap<String, Object>(output.getMetadata());
-              if (encrypted) {
+              if (requestOwner != null) {
                 metadata.put(ORIGIN_OWNER, requestOwner);
                 metadata.put(ORIGIN_ENDPOINT, endpoint.fingerprint());
               }
@@ -105,12 +105,19 @@ final class ResponsesReasoningReplay {
   }
 
   private static String owner(Prompt prompt) {
+    String owner = optionalOwner(prompt);
+    if (owner == null) throw new IllegalArgumentException("Responses replay owner is required");
+    return owner;
+  }
+
+  private static String optionalOwner(Prompt prompt) {
     var options = prompt.getOptions();
     var context =
         options instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools
             ? tools.getToolContext()
             : null;
     var value = context == null ? null : context.get(OWNER_CONTEXT_KEY);
+    if (value == null) return null;
     if (!(value instanceof String owner) || owner.isBlank())
       throw new IllegalArgumentException("Responses replay owner is required");
     return owner;

@@ -20,8 +20,8 @@ class ApprovalProtocolHistoryTest {
   @TempDir Path directory;
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-  void changedEndpointOrReplayOwnerStopsBeforeSavedToolDispatch(boolean changedOwner) {
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"generation", "owner", "model", "api", "url", "mode", "credential", "same"})
+  void changedEndpointOrReplayOwnerStopsBeforeSavedToolDispatch(String change) {
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + directory.resolve("binding.db"));
     var owner = new AgentRunContext("run", "session", directory, "project");
@@ -31,8 +31,13 @@ class ApprovalProtocolHistoryTest {
         dev.mikoto2000.rei.llm.LlmApiType.RESPONSES, "https://fixture.invalid", "credential", "fixture-model",
         new dev.mikoto2000.rei.llm.LlmCapabilities(dev.mikoto2000.rei.llm.ReasoningReplayMode.ENCRYPTED, 128),
         64, null, java.time.Duration.ofSeconds(5));
-    var current = changedOwner ? initial : new dev.mikoto2000.rei.llm.ResolvedLlmEndpoint("fixture", 2,
-        initial.apiType(), initial.baseUrl(), initial.credentialRef(), initial.model(), initial.capabilities(),
+    var current = new dev.mikoto2000.rei.llm.ResolvedLlmEndpoint("fixture", change.equals("generation") ? 2 : 1,
+        change.equals("api") ? dev.mikoto2000.rei.llm.LlmApiType.CHAT_COMPLETIONS : initial.apiType(),
+        change.equals("url") ? "https://other.invalid" : initial.baseUrl(),
+        change.equals("credential") ? "rotated-reference" : initial.credentialRef(),
+        change.equals("model") ? "other-model" : initial.model(),
+        change.equals("mode") ? new dev.mikoto2000.rei.llm.LlmCapabilities(
+            dev.mikoto2000.rei.llm.ReasoningReplayMode.NONE, 128) : initial.capabilities(),
         initial.maxOutputTokens(), initial.temperature(), initial.readTimeout());
     var call = new AssistantMessage.ToolCall("call", "function", "fixture", "{}");
     var message = AssistantMessage.builder().content("working").toolCalls(List.of(call))
@@ -53,12 +58,14 @@ class ApprovalProtocolHistoryTest {
         .toolContext(Map.of(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
             new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(payloads, scope, "run", "resumed"),
             "rei.llm.resolved-endpoint", current,
-            "rei.llm.replay-owner", changedOwner ? "foreign-owner" : "original-owner")).build();
-    assertThatThrownBy(() -> new dev.mikoto2000.rei.core.chat.ToolLoopSupport().executePending(
+            "rei.llm.replay-owner", change.equals("owner") ? "foreign-owner" : "original-owner")).build();
+    Runnable resume = () -> new dev.mikoto2000.rei.core.chat.ToolLoopSupport().executePending(
         new org.springframework.ai.chat.prompt.Prompt("request", options), pending,
-        org.mockito.Mockito.mock(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.class)))
-        .isInstanceOf(IllegalStateException.class).hasMessage("Model message origin mismatch");
-    assertThat(executions).hasValue(0);
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.class));
+    boolean compatible = change.equals("same") || change.equals("credential");
+    if (compatible) org.assertj.core.api.Assertions.assertThatCode(resume::run).doesNotThrowAnyException();
+    else assertThatThrownBy(resume::run).isInstanceOf(IllegalStateException.class).hasMessage("Model message origin mismatch");
+    assertThat(executions).hasValue(compatible ? 1 : 0);
   }
 
   @Test

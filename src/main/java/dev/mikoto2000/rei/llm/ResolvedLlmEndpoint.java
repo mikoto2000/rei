@@ -21,6 +21,7 @@ public record ResolvedLlmEndpoint(
     Integer maxOutputTokens,
     Double temperature,
     Duration readTimeout) {
+  public static final String CONTEXT_KEY = "rei.llm.resolved-endpoint";
   public ResolvedLlmEndpoint {
     Objects.requireNonNull(endpointId, "endpointId");
     Objects.requireNonNull(apiType, "apiType");
