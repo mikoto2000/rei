@@ -21,18 +21,41 @@ public interface RunContinuation {
    * @param calls 呼び出し回数
    * @param completed 完了
    * @param argumentCorrections 引数補正一覧
+   * @param schemaVersion 継続形式のバージョン（旧形式は0）
+   * @param assistantReference 元のモデル応答への参照
    */
   record PendingTools(
       String text,
       List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> calls,
       List<org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse> completed,
-      Set<String> argumentCorrections) {
+      Set<String> argumentCorrections,
+      int schemaVersion,
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref assistantReference) {
     /** 受け取った情報からPendingToolsを作成する。 */
     public PendingTools {
+      if (schemaVersion < 0 || schemaVersion > 1
+          || (schemaVersion == 1) != (assistantReference != null))
+        throw new IllegalArgumentException("Invalid pending model message reference");
       calls = List.copyOf(calls);
       completed = List.copyOf(completed);
       argumentCorrections =
           argumentCorrections == null ? Set.of() : Set.copyOf(argumentCorrections);
+    }
+
+    public PendingTools(String text,
+        List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> calls,
+        List<org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse> completed,
+        Set<String> argumentCorrections) {
+      this(text, calls, completed, argumentCorrections, 0, null);
+    }
+
+    public PendingTools(String text,
+        List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> calls,
+        List<org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse> completed,
+        Set<String> argumentCorrections,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref assistantReference) {
+      this(text, calls, completed, argumentCorrections, assistantReference == null ? 0 : 1,
+          assistantReference);
     }
 
     /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */

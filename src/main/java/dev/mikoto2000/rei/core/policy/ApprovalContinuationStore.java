@@ -137,6 +137,11 @@ public class ApprovalContinuationStore {
         || pending.calls().isEmpty()
         || pending.completed().size() >= pending.calls().size())
       throw new IllegalArgumentException("Pending Tool required");
+    if (pending.assistantReference() != null) {
+      var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
+      payloads.get().publish(scope, pending.assistantReference(),
+          ModelMessagePayloadStore.ReferenceKind.APPROVAL, id);
+    }
     var messageIndex = new java.util.concurrent.atomic.AtomicInteger();
     var messages =
         history.stream()
@@ -253,6 +258,9 @@ public class ApprovalContinuationStore {
   /** ツール利用の権限制御で用いる保存済みを返す。 */
   public RunContinuation.Saved saved(Entry entry) {
     var d = document(entry);
+    if (d.pending() != null && d.pending().assistantReference() != null)
+      payloads.get().load(ModelMessagePayloadStore.Scope.forOwner(d.owner()),
+          d.pending().assistantReference(), ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId());
     return new RunContinuation.Saved(
         d.request(),
         d.history().stream()

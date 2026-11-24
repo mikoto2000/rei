@@ -54,8 +54,13 @@ public final class ModelMessagePayloadStore {
    */
   public record Exchange(ModelMessagePayloadStore store, Scope scope, String run, String key) {
     public void persist(Message message) {
+      reference(message);
+    }
+
+    public Ref reference(Message message) {
       var ref = store.save(scope, run, key + "/" + message.getMessageType().name(), message);
       store.publish(scope, ref, ReferenceKind.RUN, run);
+      return ref;
     }
   }
 
