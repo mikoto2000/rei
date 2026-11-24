@@ -60,19 +60,20 @@ public class SubAgentConfiguration {
       AgentEventFactory events,
       AgentEventPublisher publisher,
       Clock clock) {
-    var runner = new SubAgentRunner(
-        registry,
-        policy,
-        model -> provider.subAgentChatModel(),
-        model -> {
-          var options = provider.chatOptions(LlmFeature.CHAT, current.get());
-          return model == null ? options : options.mutate().model(model).build();
-        },
-        catalog::createTools,
-        cancellation,
-        events,
-        publisher,
-        clock);
+    var runner =
+        new SubAgentRunner(
+            registry,
+            policy,
+            model -> provider.subAgentChatModel(model),
+            model -> {
+              var options = provider.chatOptions(LlmFeature.CHAT, current.get());
+              return model == null ? options : options.mutate().model(model).build();
+            },
+            catalog::createTools,
+            cancellation,
+            events,
+            publisher,
+            clock);
     runner.setRunOptionsFactory(provider.subAgentOptionsFactory(current::get));
     return runner;
   }

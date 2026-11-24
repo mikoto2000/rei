@@ -29,6 +29,7 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 class ResponsesReplayContractTest {
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path protocolDirectory;
   private dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore protocolStore;
+  private final AtomicInteger transportBuilds = new AtomicInteger();
 
   private dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore payloads() {
     if (protocolStore == null) {
@@ -97,12 +98,20 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.CsvSource({"ENCRYPTED,false,false", "NONE,false,false", "ENCRYPTED,true,false", "NONE,true,false", "ENCRYPTED,false,true", "NONE,false,true"})
-  void nativeSubAgentKeepsOnlyItsOwnProtocolContext(ReasoningReplayMode replay, boolean foreign, boolean configured) throws Exception {
+  @org.junit.jupiter.params.provider.CsvSource({
+    "ENCRYPTED,false,false,false", "NONE,false,false,false", "ENCRYPTED,true,false,false", "NONE,true,false,false",
+    "ENCRYPTED,false,true,false", "NONE,false,true,false", "ENCRYPTED,false,true,true", "NONE,false,true,true"
+  })
+  void nativeSubAgentKeepsOnlyItsOwnProtocolContext(
+      ReasoningReplayMode replay, boolean foreign, boolean configured, boolean definitionOverride) throws Exception {
     contentType = "text/event-stream";
     var output = "{\"status\":\"SUCCESS\",\"summary\":\"done\",\"result\":{},\"warnings\":[]}";
+    var definitionModel = definitionOverride ? "child-model" : null;
     var raw = new ObjectMapper().readTree(done());
-    ((com.fasterxml.jackson.databind.node.ObjectNode) raw.path("output").get(0).path("content").get(0)).put("text", output);
+    ((com.fasterxml.jackson.databind.node.ObjectNode) raw).put("model", definitionModel == null ? "fixture-model" : definitionModel);
+    ((com.fasterxml.jackson.databind.node.ObjectNode)
+            raw.path("output").get(0).path("content").get(0))
+        .put("text", output);
     replies.add(sse(raw.toString()));
     var properties = nativeProperties();
     var server = properties.feature(LlmFeature.CHAT);
@@ -111,7 +120,9 @@ class ResponsesReplayContractTest {
     var provider = nativeProvider(properties);
     var definitions = protocolDirectory.resolve("agents");
     java.nio.file.Files.createDirectories(definitions);
-    java.nio.file.Files.writeString(definitions.resolve("reviewer.yaml"), """
+    java.nio.file.Files.writeString(
+        definitions.resolve("reviewer.yaml"),
+        """
         id: reviewer
         name: Reviewer
         description: Fixture child
@@ -119,53 +130,104 @@ class ResponsesReplayContractTest {
         tools: []
         maxSteps: 2
         timeout: 10s
-        """);
+        """ + (definitionOverride ? "model: child-model\n" : ""));
     var policy = new dev.mikoto2000.rei.subagent.SubAgentToolPolicy(java.util.Set.of());
-    var registry = new dev.mikoto2000.rei.subagent.SubAgentRegistry(definitions,
-        new dev.mikoto2000.rei.subagent.SubAgentDefinitionLoader(policy, ignored -> true));
+    var registry =
+        new dev.mikoto2000.rei.subagent.SubAgentRegistry(
+            definitions,
+            new dev.mikoto2000.rei.subagent.SubAgentDefinitionLoader(policy, ignored -> true));
     assertThat(registry.reload()).isEmpty();
-    var childOwner = new java.util.concurrent.atomic.AtomicReference<dev.mikoto2000.rei.core.chat.AgentRunContext>();
+    var childOwner =
+        new java.util.concurrent.atomic.AtomicReference<
+            dev.mikoto2000.rei.core.chat.AgentRunContext>();
     var sentContext = new java.util.concurrent.atomic.AtomicReference<Map<String, Object>>();
-    var transport = provider.chatModel(LlmFeature.CHAT);
-    var model = new org.springframework.ai.chat.model.ChatModel() {
-      public org.springframework.ai.chat.prompt.ChatOptions getOptions() { return transport.getOptions(); }
-      public org.springframework.ai.chat.model.ChatResponse call(Prompt prompt) { throw new AssertionError("stream only"); }
-      public reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> stream(Prompt prompt) {
-        sentContext.set(((org.springframework.ai.model.tool.ToolCallingChatOptions) prompt.getOptions()).getToolContext());
-        return transport.stream(prompt);
-      }
-    };
-    var parent = new dev.mikoto2000.rei.core.chat.AgentRunContext("parent", "chat", protocolDirectory, "project");
+    provider.chatModel(LlmFeature.CHAT);
+    int acceptedTransportBuilds = transportBuilds.get();
+    var transport = provider.subAgentChatModel(definitionModel);
+    var model =
+        new org.springframework.ai.chat.model.ChatModel() {
+          public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
+            return transport.getOptions();
+          }
+
+          public org.springframework.ai.chat.model.ChatResponse call(Prompt prompt) {
+            throw new AssertionError("stream only");
+          }
+
+          public reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> stream(
+              Prompt prompt) {
+            sentContext.set(
+                ((org.springframework.ai.model.tool.ToolCallingChatOptions) prompt.getOptions())
+                    .getToolContext());
+            return transport.stream(prompt);
+          }
+        };
+    var parent =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "parent", "chat", protocolDirectory, "project");
     dev.mikoto2000.rei.subagent.SubAgentRunner runner;
     if (configured) {
       var models = org.mockito.Mockito.spy(provider);
-      org.mockito.Mockito.doReturn(model).when(models).subAgentChatModel();
-      org.mockito.Mockito.doAnswer(invocation -> {
-        var owner = (dev.mikoto2000.rei.core.chat.AgentRunContext) invocation.getArgument(3);
-        childOwner.set(owner);
-        return provider.requestOptions(invocation.getArgument(0), invocation.getArgument(1),
-            invocation.<Boolean>getArgument(2), owner).mutate()
-            .toolContext(Map.of("parent-only-context", "private parent marker")).build();
-      }).when(models).requestOptions(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(),
-          org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any());
+      org.mockito.Mockito.doReturn(model).when(models).subAgentChatModel(org.mockito.ArgumentMatchers.any());
+      org.mockito.Mockito.doAnswer(
+              invocation -> {
+                var owner =
+                    (dev.mikoto2000.rei.core.chat.AgentRunContext) invocation.getArgument(3);
+                childOwner.set(owner);
+                return provider
+                    .requestOptions(
+                        invocation.getArgument(0),
+                        invocation.getArgument(1),
+                        invocation.<Boolean>getArgument(2),
+                        owner)
+                    .mutate()
+                    .toolContext(Map.of("parent-only-context", "private parent marker"))
+                    .build();
+              })
+          .when(models)
+          .requestOptions(
+              org.mockito.ArgumentMatchers.anyString(),
+              org.mockito.ArgumentMatchers.any(),
+              org.mockito.ArgumentMatchers.anyBoolean(),
+              org.mockito.ArgumentMatchers.any());
       var catalog = org.mockito.Mockito.mock(dev.mikoto2000.rei.subagent.SubAgentToolCatalog.class);
       org.mockito.Mockito.when(catalog.createTools()).thenReturn(List.of());
-      var current = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
+      var current =
+          org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
       org.mockito.Mockito.when(current.get()).thenReturn("selected-model");
       dev.mikoto2000.rei.event.AgentEventPublisher publisher = ignored -> {};
-      runner = org.springframework.test.util.ReflectionTestUtils.invokeMethod(new dev.mikoto2000.rei.subagent.SubAgentConfiguration(),
-          "subAgentRunner", registry, policy, catalog, models, current,
-          new dev.mikoto2000.rei.core.service.CommandCancellationService(),
-          new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), publisher, java.time.Clock.systemUTC());
+      runner =
+          org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+              new dev.mikoto2000.rei.subagent.SubAgentConfiguration(),
+              "subAgentRunner",
+              registry,
+              policy,
+              catalog,
+              models,
+              current,
+              new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+              new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+              publisher,
+              java.time.Clock.systemUTC());
     } else {
-      runner = new dev.mikoto2000.rei.subagent.SubAgentRunner(registry, policy, ignored -> model,
-          ignored -> org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build(), List::of,
-          new dev.mikoto2000.rei.core.service.CommandCancellationService(),
-          new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {}, java.time.Clock.systemUTC());
+      runner =
+          new dev.mikoto2000.rei.subagent.SubAgentRunner(
+              registry,
+              policy,
+              ignored -> model,
+              ignored -> org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build(),
+              List::of,
+              new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+              new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+              ignored -> {},
+              java.time.Clock.systemUTC());
       runner.setRunOptionsFactory((selected, owner) -> {
         childOwner.set(owner);
-        return provider.requestOptions(LlmFeature.CHAT, selected, true, foreign ? parent : owner).mutate()
-            .toolContext(Map.of("parent-only-context", "private parent marker")).build();
+        return provider
+            .requestOptions(LlmFeature.CHAT, selected, true, foreign ? parent : owner)
+            .mutate()
+            .toolContext(Map.of("parent-only-context", "private parent marker"))
+            .build();
       });
     }
     dev.mikoto2000.rei.subagent.SubAgentResult result;
@@ -173,20 +235,40 @@ class ResponsesReplayContractTest {
       result = runner.run("reviewer", "inspect fixture", null);
     }
     if (foreign) {
-      assertThat(result.status()).isEqualTo(dev.mikoto2000.rei.subagent.SubAgentResult.Status.FAILED);
+      assertThat(result.status())
+          .isEqualTo(dev.mikoto2000.rei.subagent.SubAgentResult.Status.FAILED);
       assertThat(requests).isEmpty();
       return;
     }
-    assertThat(result.status()).as(result.output()).isEqualTo(dev.mikoto2000.rei.subagent.SubAgentResult.Status.COMPLETED);
+    assertThat(result.status())
+        .as(result.output())
+        .isEqualTo(dev.mikoto2000.rei.subagent.SubAgentResult.Status.COMPLETED);
     assertThat(result.structuredOutput().summary()).isEqualTo("done");
     assertThat(requests).hasSize(1);
+    assertThat(requests.getFirst().path("model").asText()).isEqualTo(definitionModel == null ? "fixture-model" : definitionModel);
+    assertThat(((ResolvedLlmEndpoint) sentContext.get().get(ResolvedLlmEndpoint.CONTEXT_KEY)).model())
+        .isEqualTo(definitionModel == null ? "fixture-model" : definitionModel);
+    assertThat(transportBuilds.get()).isEqualTo(acceptedTransportBuilds);
     assertThat(sentContext.get()).doesNotContainKey("parent-only-context");
-    var exchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) sentContext.get()
-        .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
-    assertThat(exchange.scope()).isEqualTo(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(childOwner.get()));
+    var exchange =
+        (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
+            sentContext
+                .get()
+                .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    assertThat(exchange.scope())
+        .isEqualTo(
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(
+                childOwner.get()));
     assertThat(exchange.run()).isEqualTo(result.subAgentRunId()).isNotEqualTo(parent.runId());
-    assertThat(protocolStore.usage(exchange.scope(), exchange.run()).runCumulativeBytes()).isPositive();
-    assertThat(protocolStore.usage(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(parent), parent.runId()).runCumulativeBytes()).isZero();
+    assertThat(protocolStore.usage(exchange.scope(), exchange.run()).runCumulativeBytes())
+        .isPositive();
+    assertThat(
+            protocolStore
+                .usage(
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(parent),
+                    parent.runId())
+                .runCumulativeBytes())
+        .isZero();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -1413,22 +1495,19 @@ class ResponsesReplayContractTest {
     return ResponsesAdapter.create(endpoint(options), options, httpCustomizers());
   }
 
-  private List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
-      httpCustomizers() {
-    return List.of(builder ->
-        builder.interceptor(chain -> {
-          var buffer = new okio.Buffer();
-          chain.request().body().writeTo(buffer);
-          requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
-          var reply = replies.isEmpty() ? done() : replies.removeFirst();
-          return new okhttp3.Response.Builder()
-              .request(chain.request())
-              .protocol(okhttp3.Protocol.HTTP_1_1)
-              .code(200)
-              .message("fixture")
-              .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType)))
-              .build();
-        }));
+  private List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> httpCustomizers() {
+    return List.of(builder -> {
+      transportBuilds.incrementAndGet();
+      builder.interceptor(chain -> {
+        var buffer = new okio.Buffer();
+        chain.request().body().writeTo(buffer);
+        requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
+        var reply = replies.isEmpty() ? done() : replies.removeFirst();
+        return new okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
+            .code(200).message("fixture")
+            .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType))).build();
+      });
+    });
   }
 
   private String done() {

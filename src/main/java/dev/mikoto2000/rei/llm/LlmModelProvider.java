@@ -251,9 +251,17 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return model;
   }
 
+  /** Explicit definition model; the accepted options must select the same effective endpoint. */
+  public ChatModel subAgentChatModel(String model) {
+    return subAgentChatModel();
+  }
+
   /** Resolve child options only after the caller has assigned the child's own scope. */
-  public java.util.function.BiFunction<String, dev.mikoto2000.rei.tooldelivery.ReadingRun,
-      org.springframework.ai.model.tool.ToolCallingChatOptions> subAgentOptionsFactory(java.util.function.Supplier<String> selectedModel) {
+  public java.util.function.BiFunction<
+          String,
+          dev.mikoto2000.rei.tooldelivery.ReadingRun,
+          org.springframework.ai.model.tool.ToolCallingChatOptions>
+      subAgentOptionsFactory(java.util.function.Supplier<String> selectedModel) {
     return (model, owner) -> {
       var options = requestOptions(LlmFeature.CHAT, selectedModel.get(), false, owner);
       return model == null ? options : options.mutate().model(model).build();
