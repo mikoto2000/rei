@@ -19,6 +19,48 @@ import org.springframework.ai.chat.messages.part.TextPart;
 class ApprovalProtocolHistoryTest {
   @TempDir Path directory;
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void changedEndpointOrReplayOwnerStopsBeforeSavedToolDispatch(boolean changedOwner) {
+    var source = new org.sqlite.SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + directory.resolve("binding.db"));
+    var owner = new AgentRunContext("run", "session", directory, "project");
+    var scope = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner);
+    var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    var initial = new dev.mikoto2000.rei.llm.ResolvedLlmEndpoint("fixture", 1,
+        dev.mikoto2000.rei.llm.LlmApiType.RESPONSES, "https://fixture.invalid", "credential", "fixture-model",
+        new dev.mikoto2000.rei.llm.LlmCapabilities(dev.mikoto2000.rei.llm.ReasoningReplayMode.ENCRYPTED, 128),
+        64, null, java.time.Duration.ofSeconds(5));
+    var current = changedOwner ? initial : new dev.mikoto2000.rei.llm.ResolvedLlmEndpoint("fixture", 2,
+        initial.apiType(), initial.baseUrl(), initial.credentialRef(), initial.model(), initial.capabilities(),
+        initial.maxOutputTokens(), initial.temperature(), initial.readTimeout());
+    var call = new AssistantMessage.ToolCall("call", "function", "fixture", "{}");
+    var message = AssistantMessage.builder().content("working").toolCalls(List.of(call))
+        .properties(Map.of("rei.llm.replay-origin-owner", "original-owner",
+            "rei.llm.replay-origin-endpoint", initial.fingerprint())).build();
+    var reference = payloads.save(scope, "run", "assistant", message);
+    payloads.publish(scope, reference, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, "run");
+    var pending = new RunContinuation.PendingTools("working", List.of(call), List.of(), java.util.Set.of(), reference);
+    var executions = new java.util.concurrent.atomic.AtomicInteger();
+    var callback = new org.springframework.ai.tool.ToolCallback() {
+      public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
+        return org.springframework.ai.tool.definition.ToolDefinition.builder().name("fixture").description("fixture")
+            .inputSchema("{}").build();
+      }
+      public String call(String input) { executions.incrementAndGet(); return "fixture"; }
+    };
+    var options = org.springframework.ai.model.tool.ToolCallingChatOptions.builder().toolCallbacks(callback)
+        .toolContext(Map.of(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(payloads, scope, "run", "resumed"),
+            "rei.llm.resolved-endpoint", current,
+            "rei.llm.replay-owner", changedOwner ? "foreign-owner" : "original-owner")).build();
+    assertThatThrownBy(() -> new dev.mikoto2000.rei.core.chat.ToolLoopSupport().executePending(
+        new org.springframework.ai.chat.prompt.Prompt("request", options), pending,
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.class)))
+        .isInstanceOf(IllegalStateException.class).hasMessage("Model message origin mismatch");
+    assertThat(executions).hasValue(0);
+  }
+
   @Test
   void resumedPrefixKeepsItsOriginalDeliveryPolicyAndReadGrant() {
     var source = new org.sqlite.SQLiteDataSource();
