@@ -160,9 +160,16 @@ public class RunExecutionContext {
   /** Whether the accepted options carry the existing durable protocol boundary. */
   public boolean recordsProtocolMessages() {
     var context = modelOptions == null ? null : modelOptions.getToolContext();
-    return context != null && context.get(
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY)
-        instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange;
+    return context != null
+        && context.get(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY)
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange;
+  }
+
+  /** Expose the publication identity without coupling callers to progress checkpoint details. */
+  public synchronized String protocolHistoryEndpoint() {
+    if (protocolHistory == null) throw new IllegalStateException("Protocol history is unavailable");
+    return protocolHistory.origin().endpoint();
   }
 
   /** Prepare durable ordered history pointers before existing history documents are written. */
@@ -170,14 +177,25 @@ public class RunExecutionContext {
     if (protocolHistory == null) return List.of();
     checkActive();
     var context = modelOptions == null ? null : modelOptions.getToolContext();
-    var boundary = context == null ? null : context.get(
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
-    if (!(boundary instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)
-        || runContext == null || !protocolHistory.run().equals(exchange.run())
+    var boundary =
+        context == null
+            ? null
+            : context.get(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    if (!(boundary
+            instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)
+        || runContext == null
+        || !protocolHistory.run().equals(exchange.run())
         || !exchange.run().equals(runContext.runId())
-        || !exchange.scope().equals(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(runContext)))
+        || !exchange
+            .scope()
+            .equals(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(
+                    runContext)))
       throw new IllegalStateException("Protocol history ownership mismatch");
-    return exchange.store().historyReferences(exchange.scope(), protocolHistory, "turn:" + exchange.run());
+    return exchange
+        .store()
+        .historyReferences(exchange.scope(), protocolHistory, "turn:" + exchange.run());
   }
 
   /** Save the original resolved input, including media, before sending or decorating it. */

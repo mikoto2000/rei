@@ -784,10 +784,13 @@ public class ChatExecutionService {
         if (!protocolPointers.isEmpty()) {
           if (conversationLogStore == null)
             throw new IllegalStateException("Conversation protocol history unavailable");
-          var manifest = new java.util.HashMap<>(conversationLogStore.appendProtocolHistory(
-              context.conversationId(), context.runId(), protocolPointers));
-          manifest.put("rei.modelMessage.endpoint",
-              execution.progressSnapshot().protocolHistory().origin().endpoint());
+          var manifest =
+              new java.util.HashMap<>(
+                  conversationLogStore.appendProtocolHistory(
+                      context.conversationId(), context.runId(), protocolPointers));
+          manifest.put(
+              "rei.modelMessage.endpoint",
+              execution.protocolHistoryEndpoint());
           turns.recordMetadata(context, manifest);
         }
         appendConversationLog(context, execution, "assistant", result.text());
@@ -958,11 +961,14 @@ public class ChatExecutionService {
   }
 
   /** 既存の記録へ経緯を残すため、会話ログを追記する。 */
-  private void appendConversationLog(AgentRunContext owner, RunExecutionContext execution,
-      String speaker, String content) {
+  private void appendConversationLog(
+      AgentRunContext owner, RunExecutionContext execution, String speaker, String content) {
     if (conversationLogStore != null) {
       if (execution.recordsProtocolMessages())
-        conversationLogStore.append(owner.conversationId(), speaker, content,
+        conversationLogStore.append(
+            owner.conversationId(),
+            speaker,
+            content,
             Map.of("rei.modelMessage.run", owner.runId()));
       else conversationLogStore.append(owner.conversationId(), speaker, content);
     }
