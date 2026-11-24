@@ -100,6 +100,8 @@ public final class ToolLoopSupport {
 
   /** 要求された処理を実行する。 */
   public ToolExecutionResult execute(Prompt prompt, ChatResponse response) {
+    if (dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
+      return rejectedBatch(prompt, "The output limit interrupted this tool batch. No calls ran.");
     if (hasInvalidToolCallIds(response)) return invalidToolCallIds(prompt);
     response = inheritFileContinuations(prompt, response);
     var lease = RunCancellation.enterChild(prompt);
@@ -262,6 +264,8 @@ public final class ToolLoopSupport {
       Prompt prompt,
       ChatResponse response,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
+    if (dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
+      return rejectedBatch(prompt, "The output limit interrupted this tool batch. No calls ran.");
     for (var candidate : response.getResults()) {
       var candidateIds = new java.util.HashSet<String>();
       for (var call : candidate.getOutput().getToolCalls()) {
