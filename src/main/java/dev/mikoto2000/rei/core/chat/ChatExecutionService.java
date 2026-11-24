@@ -373,7 +373,8 @@ public class ChatExecutionService {
                 : chatClientProvider.parallelChatClient(mode);
     this.readSelectedModel = () -> currentModelHolder.get();
     this.privateSecretaryModel = expected -> modelProvider.privateSecretaryModel(expected);
-    this.optionsForModel = selected -> modelProvider.requestOptions(LlmFeature.CHAT, selected, true);
+    this.optionsForModel =
+        selected -> modelProvider.requestOptions(LlmFeature.CHAT, selected, true);
     this.outputLimits = () -> llmProperties.getOutputLimit();
     this.beginCancellation = () -> cancellationService.begin(Thread.currentThread());
     this.registerCancellation = disposable -> cancellationService.register(disposable);
@@ -1216,8 +1217,10 @@ public class ChatExecutionService {
             RunCancellation.CHILD_ENTRY_KEY,
             childEntry.apply(execution.runContext().runId())));
     var configured = optionsBuilder.build();
-    var options = mode == AgentRunContext.Mode.CONVERSATION
-        ? dev.mikoto2000.rei.modeloptions.ModelOptions.withoutTools(configured) : configured;
+    var options =
+        mode == AgentRunContext.Mode.CONVERSATION
+            ? dev.mikoto2000.rei.modeloptions.ModelOptions.withoutTools(configured)
+            : configured;
     var messages = new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
     if (!execution.outputLimitHandoff().isBlank()) {
       messages.add(

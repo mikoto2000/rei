@@ -269,7 +269,9 @@ class CapturingChatModelHttpTest {
               new ToolResultCompressor(new RawToolResultStore(dir), estimate, 100, 70),
               (previous, messages, budget, request) -> {
                 compressed.incrementAndGet();
-                assertThat(messages).extracting(org.springframework.ai.chat.messages.Message::getText).contains("recent");
+                assertThat(messages)
+                    .extracting(org.springframework.ai.chat.messages.Message::getText)
+                    .contains("recent");
                 return "decided API X";
               },
               null,
