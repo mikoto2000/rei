@@ -60,6 +60,7 @@ class ApprovalBorrowedReferenceTest {
         .as("preserve the source Run identity and payload hash instead of copying foreign origin into the new Run")
         .isEqualTo(reference);
     assertThat(restarted.saved(entry).messages().getFirst().getMetadata())
-        .containsEntry("rei.llm.replay-origin-owner", previous.ownerKey());
+        .containsEntry("rei.llm.replay-origin-owner", previous.ownerKey())
+        .containsEntry(ContextHistoryAdvisor.SEQUENCE, 4L);
   }
 }

@@ -46,11 +46,20 @@ public class ApprovalContinuationStore {
       List<AssistantMessage.ToolCall> calls,
       List<ToolResponseMessage.ToolResponse> responses,
       ToolResultMetadata delivery,
-      ModelMessagePayloadStore.Ref payload) {
+      ModelMessagePayloadStore.Ref payload,
+      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          Long historySequence) {
     /** 保存後に外部から呼び出しや応答の一覧を変更できないようにする。 */
     public StoredMessage {
       calls = calls == null ? List.of() : List.copyOf(calls);
       responses = responses == null ? List.of() : List.copyOf(responses);
+      if (historySequence != null && historySequence < 0) throw new IllegalArgumentException("Invalid history projection");
+    }
+
+    public StoredMessage(String kind, String text, List<AssistantMessage.ToolCall> calls,
+        List<ToolResponseMessage.ToolResponse> responses, ToolResultMetadata delivery,
+        ModelMessagePayloadStore.Ref payload) {
+      this(kind, text, calls, responses, delivery, payload, null);
     }
 
     public StoredMessage(
@@ -175,16 +184,22 @@ public class ApprovalContinuationStore {
             .map(m -> {
               int index = messageIndex.getAndIncrement();
               if (dev.mikoto2000.rei.modelmessage.ModelMessageCodec.requiresPayload(m)) {
+                Object position = m.getMetadata().get("rei.historySequence");
+                Long sequence = null;
+                if (position instanceof Long value) sequence = value;
+                else if (position instanceof Integer value) sequence = value.longValue();
+                else if (position != null) throw new IllegalStateException("Invalid history projection");
+                if (sequence != null && sequence < 0) throw new IllegalStateException("Invalid history projection");
                 var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
                 var ref =
                     payloads
                         .obtain()
-                        .save(scope, owner.runId(), "approval:" + id + "/history:" + index, m);
+                        .saveForContinuation(scope, owner.runId(), "approval:" + id + "/history:" + index, m);
                 payloads
                     .obtain()
                     .publish(scope, ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, id);
                 return new StoredMessage(
-                    "MODEL_" + m.getMessageType().name(), "", List.of(), List.of(), null, ref);
+                    "MODEL_" + m.getMessageType().name(), "", List.of(), List.of(), null, ref, sequence);
               }
               if (m instanceof AssistantMessage a)
                 return new StoredMessage(
@@ -330,7 +345,14 @@ public class ApprovalContinuationStore {
                             entry.approvalId());
                 if (!("MODEL_" + message.getMessageType().name()).equals(m.kind()))
                   throw new IllegalStateException("Model message persistence rejected");
-                return message;
+                if (m.historySequence() == null) return message;
+                var metadata = new java.util.HashMap<>(message.getMetadata());
+                metadata.put("rei.historySequence", m.historySequence());
+                if (message instanceof AssistantMessage assistant)
+                  return (Message) AssistantMessage.builder().parts(assistant.getParts()).properties(metadata).build();
+                if (message instanceof UserMessage user)
+                  return (Message) UserMessage.builder().text(user.getText()).media(user.getMedia()).metadata(metadata).build();
+                throw new IllegalStateException("Invalid history projection");
               }
               return (Message)
                   switch (m.kind()) {
