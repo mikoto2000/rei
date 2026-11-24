@@ -23,6 +23,47 @@ class ResponsesTransportContractTest {
   private int httpStatus = 200;
   private boolean passThrough;
   private java.time.Duration readTimeout = java.time.Duration.ofMinutes(5);
+  private java.util.Set<LlmCapabilities.Setting> supportedSettings = java.util.Set.of(
+      LlmCapabilities.Setting.STRUCTURED_OUTPUT, LlmCapabilities.Setting.IMAGE_INPUT);
+
+  @Test
+  void declaredSettingsAndNativeUsageDetailsSurviveSerialization() {
+    supportedSettings = java.util.EnumSet.allOf(LlmCapabilities.Setting.class);
+    var options = options().temperature(0.2).topP(0.8).reasoningEffort("low")
+        .reasoningSummary("auto").parallelToolCalls(false).build();
+    var response = transport(options).call(new Prompt("fixture", options));
+    var request = requests.getFirst();
+    assertThat(request.path("temperature").asDouble()).isEqualTo(0.2);
+    assertThat(request.path("top_p").asDouble()).isEqualTo(0.8);
+    assertThat(request.path("reasoning").path("effort").asText()).isEqualTo("low");
+    assertThat(request.path("reasoning").path("summary").asText()).isEqualTo("auto");
+    assertThat(request.path("parallel_tool_calls").asBoolean(true)).isFalse();
+    var usage = response.getMetadata().getUsage();
+    assertThat(usage.getPromptTokens()).isEqualTo(3);
+    assertThat(usage.getCompletionTokens()).isEqualTo(2);
+    assertThat(usage.getTotalTokens()).isEqualTo(5);
+    var nativeUsage = (com.openai.models.responses.ResponseUsage) usage.getNativeUsage();
+    assertThat(nativeUsage.inputTokensDetails().cachedTokens()).isEqualTo(1);
+    assertThat(nativeUsage.outputTokensDetails().reasoningTokens()).isEqualTo(1);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"temperature", "top_p", "verbosity"})
+  void rawBodyCannotBypassCapabilityValidation(String field) {
+    var options = options().extraBody(java.util.Map.of(field, "untrusted override")).build();
+    assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(field);
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
+  void nativeRuntimeOptionsCannotRemoveTheResolvedOutputLimit() {
+    var defaults = options().build();
+    var runtime = defaults.mutate().maxOutputTokens(null).build();
+    assertThatThrownBy(() -> transport(defaults).call(new Prompt("fixture", runtime)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("output limit");
+    assertThat(requests).isEmpty();
+  }
 
   @Test
   void validatesActualCallbackDefinitionAndSendsNonStrictFunctionSchema() {
@@ -353,8 +394,7 @@ class ResponsesTransportContractTest {
         });
     var endpoint = new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES,
         options.getBaseUrl(), "fixture-credential", options.getModel(),
-        new LlmCapabilities(ReasoningReplayMode.NONE, 128, java.util.Set.of(
-            LlmCapabilities.Setting.STRUCTURED_OUTPUT, LlmCapabilities.Setting.IMAGE_INPUT)), options.getMaxOutputTokens(),
+        new LlmCapabilities(ReasoningReplayMode.NONE, 128, supportedSettings), options.getMaxOutputTokens(),
         options.getTemperature(), readTimeout);
     return ResponsesAdapter.create(endpoint, options, List.of(customizer));
   }
