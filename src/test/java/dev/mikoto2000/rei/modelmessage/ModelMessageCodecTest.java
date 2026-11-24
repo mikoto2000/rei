@@ -14,6 +14,27 @@ import org.springframework.ai.chat.messages.part.TextPart;
 import org.springframework.ai.chat.messages.part.ToolCallPart;
 
 class ModelMessageCodecTest {
+  @Test
+  void toolResultsKeepCallReferencesModelProjectionAndTypedDeliveryMetadata() {
+    var delivery = new dev.mikoto2000.rei.tooldelivery.ToolResultMetadata(
+        Map.of("call_one", "FILE_CONTENT", "call_two", "GENERAL"),
+        Map.of("call_one", new dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.Page("raw-fixture", 48)),
+        Map.of("call_one", new dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.Receipt("a".repeat(64))),
+        Map.of("call_one", new dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.FileReadBudget(8000)));
+    var original = org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(List.of(
+        new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse("call_one", "fixture_read", "actual model projection\n日本語"),
+        new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse("call_two", "fixture_tool", "{\"ok\":true}")))
+        .metadata(delivery.restore()).build();
+    var codec = new ModelMessageCodec();
+    byte[] bytes = codec.encode(original);
+    var restored = (org.springframework.ai.chat.messages.ToolResponseMessage) codec.decode(bytes);
+    assertThat(restored.getResponses()).containsExactlyElementsOf(original.getResponses());
+    assertThat(dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.capture(restored)).isEqualTo(delivery);
+    assertThat(((Map<?, ?>) restored.getMetadata().get("rei.deliveryPolicies")).get("call_one"))
+        .isInstanceOf(dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.PolicyValue.class);
+    assertThat(new String(bytes, StandardCharsets.UTF_8)).doesNotContain("dev.mikoto2000", "@class", "org.springframework");
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void encoderCannotPersistPartsThatItsDecoderWouldReject(boolean missingCallId) {
