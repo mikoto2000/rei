@@ -456,4 +456,10 @@ JSONのinterceptor書き換え、独自SSE parser、ログの無効化は採用�
 SDK retryは同期・非同期clientの構築時に0とする。既存のread inactivity制御を`/responses`にも適用し、
 読み取りが続く長い応答と無通信timeoutを区別する。認証・rate limit・server/transient・provider・timeoutの
 エラー分類には提供元body・メッセージ・元例外causeを含めない。通常のusageとnative usageの
-cached/reasoning token数は保持する。失敗応答のusage保持と既存予算・再開との統合は後続phaseの課題として残す。
+cached/reasoning token数は保持する。incomplete/failedでも、提供されたusageの数値だけを安全な例外へ保持する。
+未提供のusageは未取得として扱い、推測で埋めない。既存予算・再開との統合は後続phaseの課題として残す。
+
+raw extraBody拡張は現時点で公開しない。保護フィールドを個別に診断したうえで、その他の拡張も
+型付きの対応契約が追加されるまでは拒否する。SDKが受理できる値を接続先の対応済み機能とみなさない。
+名前付きtool choiceは要求内で公開したfunctionに限定し、hosted tool指定や不正JSONは値を表示せず拒否する。
+deployment alias/Foundry設定は現在のresolved model契約の範囲外として拒否する。

@@ -225,7 +225,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
         if (PROTECTED_FIELDS.contains(field))
           throw new IllegalArgumentException("Protected Responses field: " + field);
     if (extra != null && !extra.isEmpty())
-      throw new IllegalArgumentException("Responses extraBody extensions require an explicit typed contract");
+      throw new IllegalArgumentException(
+          "Responses extraBody extensions require an explicit typed contract");
     var callbacks = options.getToolCallbacks();
     if (callbacks == null || callbacks.isEmpty())
       options = options.mutate().toolChoice(null).build();

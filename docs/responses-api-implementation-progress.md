@@ -5,7 +5,7 @@
 | Phase | 状態 | ブランチ / worktree | PR | マージコミット | 検証 |
 | --- | --- | --- | --- | --- | --- |
 | 0 | MERGED | codex/responses-api-phase-0-foundation / 削除済み | [#628](https://github.com/mikoto2000/rei/pull/628) | d0e3626f9565035cab20cc045dd3ba070985d3fe | PR・マージ後CI成功。全件7,718、成功7,706、skip12、failure/error0 |
-| 1 | IN_PROGRESS | codex/responses-api-phase-1-transport / .worktrees/responses-api-phase-1 | 未作成 | 未マージ | 対象77件成功、全回帰・品質ゲート実行中 |
+| 1 | IN_PROGRESS | codex/responses-api-phase-1-transport / .worktrees/responses-api-phase-1 | 未作成 | 未マージ | 対象100件成功、全回帰・品質ゲート実行中 |
 | 2 | NOT_STARTED | — | — | — | 未実施 |
 | 3 | NOT_STARTED | — | — | — | 未実施 |
 | 4 | NOT_STARTED | — | — | — | 未実施 |
@@ -109,7 +109,7 @@ Windowsで通常削除後に残った自作のignored build artifactsだけは�
 ## Phase 1: 基本通信（進行中）
 
 基準main: d0e3626f。Spring AI2.1.0/OpenAI SDK4.101.0を引き続き使用する。
-TDDで実JSON・native SSE・loopback HTTPのfixtureを追加し、現在77件が成功、skip/failure/error0。
+TDDで実JSON・native SSE・loopback HTTPのfixtureを追加し、現在100件が成功、skip/failure/error0。
 全回帰、Checkstyle、SpotBugs、architecture、packageを実行中。PRと最終検証結果は確定後に記録する。
 
 | 境界 | Redで検出した問題 | Greenと契約 |
@@ -132,3 +132,14 @@ Responses本番agent実行、実API、再送、永続化・再開、長時間性
 
 新worktreeでmvnw.cmdが既存の.gitattributesと異なるCRLF indexを持ち、restore後にも差分が残ることを
 確認した。working bytesを維持してindexだけを既存規則どおりに正規化した変更を独立commit1433745dに分離した。
+
+Phase1のレビュー追加分も短いRed/Green履歴で修正した。resolved descriptorとclient既定値の一致、
+別endpoint向けoptions生成拒否、deployment/timeoutによる隠れた変更の拒否、名前付きtool choiceの
+公開範囲照合、Schema重複キーの拒否、verbosity能力、unknown raw拡張の拒否を含む。
+incomplete(max_output_tokens)とfailedでは、数値usageだけを安全な例外へ保持する。
+SDK response本文やcauseを保持せず、失敗時にも提供済みのinput/output/total/cached/reasoningを失わない。
+実接続の未測定値やusage欠落を推測値で埋めない。
+
+ローカル全回帰はsource snapshot45fcd42dで開始し、レビュー追加分は独立出力先のJUnitで継続した。
+進行中のMaven classesを上書きしていない。全回帰の結果と最終sourceの対象/品質ゲートの結果を分けて記録し、
+最終PR headの全件CIが成功するまでマージしない。

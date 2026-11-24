@@ -18,7 +18,10 @@ final class ResponsesTransportException extends IllegalStateException {
   private final Category category;
   private final TokenUsage usage;
 
-  record TokenUsage(Long input, Long output, Long total, Long cached, Long reasoning) {}
+  record TokenUsage(Long input, Long output, Long total, Long cached, Long reasoning)
+      implements java.io.Serializable {
+    @java.io.Serial private static final long serialVersionUID = 1L;
+  }
 
   TokenUsage usage() {
     return usage;

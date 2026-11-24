@@ -16,12 +16,18 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 class ResponsesTransportContractTest {
   @Test
   void undeclaredRawExtensionsCannotSilentlyBypassTypedValidation() {
-    var options = options().extraBody(java.util.Map.of("unreviewed_extension", "private-reasoning fixture-secret")).build();
+    var options =
+        options()
+            .extraBody(java.util.Map.of("unreviewed_extension", "private-reasoning fixture-secret"))
+            .build();
     assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("extraBody")
-        .hasMessageNotContaining("private-reasoning").hasMessageNotContaining("fixture-secret");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("extraBody")
+        .hasMessageNotContaining("private-reasoning")
+        .hasMessageNotContaining("fixture-secret");
     assertThat(requests).isEmpty();
   }
+
   @Test
   void deploymentAliasCannotReplaceTheResolvedWireModelAtConstruction() {
     var defaults = options().build();
