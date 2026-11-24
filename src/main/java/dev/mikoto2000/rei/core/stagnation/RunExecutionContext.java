@@ -105,7 +105,25 @@ public class RunExecutionContext {
         break;
       }
     if (existing < 0) entries.add(entry);
-    else entries.set(existing, entry);
+    else {
+      if (accepted.message() instanceof org.springframework.ai.chat.messages.ToolResponseMessage current) {
+        var previous = (org.springframework.ai.chat.messages.ToolResponseMessage) exchange.store().load(
+            exchange.scope(), entries.get(existing).reference(),
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, exchange.run());
+        boolean forward = previous.getResponses().size() <= current.getResponses().size();
+        var smaller = forward ? previous : current;
+        var larger = forward ? current : previous;
+        if (!larger.getResponses().subList(0, smaller.getResponses().size()).equals(smaller.getResponses()))
+          throw new IllegalStateException("Protocol checkpoint result prefix mismatch");
+        if (!dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.capture(smaller).equals(
+            dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.capture(
+                org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+                    .responses(smaller.getResponses()).metadata(larger.getMetadata()).build())))
+          throw new IllegalStateException("Protocol checkpoint delivery prefix mismatch");
+        if (!forward) return;
+      }
+      entries.set(existing, entry);
+    }
     protocolHistory =
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
             1, exchange.run(), origin, entries);
