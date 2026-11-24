@@ -2795,7 +2795,7 @@ class ResponsesReplayContractTest {
         var call =
             calls
                 .addObject()
-                .put("index", calls.size())
+                .put("index", calls.size() - 1)
                 .put("id", item.path("call_id").asText())
                 .put("type", "function");
         call.putObject("function")
