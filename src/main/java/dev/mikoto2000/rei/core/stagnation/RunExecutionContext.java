@@ -111,7 +111,20 @@ public class RunExecutionContext {
       int acquisitionOnlyIterations,
       int unknownIterations,
       int unknownReplanNotices,
-      Continuity continuity) {
+      Continuity continuity,
+      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory) {
+    public ProgressState(
+        InformationLedger.State information,
+        OutputLimitRunBudget.Snapshot budget,
+        int acquisitionOnlyIterations,
+        int unknownIterations,
+        int unknownReplanNotices,
+        Continuity continuity) {
+      this(information, budget, acquisitionOnlyIterations, unknownIterations, unknownReplanNotices,
+          continuity, null);
+    }
+
     public ProgressState(
         InformationLedger.State information,
         OutputLimitRunBudget.Snapshot budget,

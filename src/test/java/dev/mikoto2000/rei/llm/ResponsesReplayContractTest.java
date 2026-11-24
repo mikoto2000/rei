@@ -584,14 +584,28 @@ class ResponsesReplayContractTest {
               new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
               ignored -> {});
       execution.setRunContext(run);
+      execution.setModelOptions(options);
+      var checkpoints = new java.util.ArrayList<dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState>();
+      execution.setToolResultsCheckpoint(ignored -> checkpoints.add(execution.progressSnapshot()));
       var requestOptions =
-          options
+          execution.modelOptions()
               .mutate()
               .toolContext(
                   Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution))
               .build();
       new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(client)
           .stream(new Prompt("fixture", requestOptions)).blockLast(Duration.ofSeconds(10));
+      var history = execution.progressSnapshot().protocolHistory();
+      assertThat(history).as("ordered durable history in existing progress checkpoint").isNotNull();
+      assertThat(history.schemaVersion()).isEqualTo(1);
+      assertThat(history.run()).isEqualTo(run.runId());
+      assertThat(history.entries()).extracting(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry::reference)
+          .containsExactlyElementsOf(accepted.stream().map(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Accepted::reference).toList());
+      assertThat(history.entries()).hasSize(5);
+      assertThat(checkpoints).anySatisfy(snapshot -> assertThat(snapshot.protocolHistory()).isEqualTo(history));
+      assertThat(execution.progressSnapshot().forExplicitResume().protocolHistory()).isEqualTo(history);
+      assertThat(new ObjectMapper().writeValueAsString(execution.progressSnapshot()))
+          .doesNotContain("opaque-one", "opaque-two", "fixture result");
     }
     assertThat(executions).hasValue(4);
     assertThat(requests).hasSize(3);

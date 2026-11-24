@@ -68,6 +68,11 @@ public final class ModelMessagePayloadStore {
    * One existing tool-loop iteration, with its immutable persistence identity supplied by the
    * caller.
    */
+  /** Bounded ordered pointers carried by the existing checkpoint document. */
+  public record History(int schemaVersion, String run, Origin origin, java.util.List<Entry> entries) {
+    public record Entry(String key, Ref reference) {}
+  }
+
   public record Accepted(Ref reference, String key, Message message) {
     @Override public String toString() { return "Accepted[reference=" + reference + ", key=" + key + "]"; }
   }
