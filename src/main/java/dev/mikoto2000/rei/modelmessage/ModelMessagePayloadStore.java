@@ -222,8 +222,10 @@ public final class ModelMessagePayloadStore {
     public java.util.List<Entry> replayEntries() {
       if (input == null) return entries;
       var result = new java.util.ArrayList<>(input.entries());
-      var inputReferences = input.entries().stream().map(Entry::reference)
-          .collect(java.util.stream.Collectors.toSet());
+      var inputReferences =
+          input.entries().stream()
+              .map(Entry::reference)
+              .collect(java.util.stream.Collectors.toSet());
       for (var entry : entries.subList(input.traceSize(), entries.size()))
         if (!inputReferences.contains(entry.reference())) result.add(entry);
       return java.util.List.copyOf(result);
@@ -258,10 +260,16 @@ public final class ModelMessagePayloadStore {
       }
     }
 
-    public record Entry(String key, Ref reference,
-        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public record Entry(
+        String key,
+        Ref reference,
+        @com.fasterxml.jackson.annotation.JsonInclude(
+                com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
             Long historySequence) {
-      public Entry(String key, Ref reference) { this(key, reference, null); }
+      public Entry(String key, Ref reference) {
+        this(key, reference, null);
+      }
+
       public Entry {
         identifier(key);
         java.util.Objects.requireNonNull(reference);
@@ -808,7 +816,10 @@ public final class ModelMessagePayloadStore {
     if (message instanceof org.springframework.ai.chat.messages.SystemMessage system)
       return system.mutate().metadata(metadata).build();
     if (message instanceof org.springframework.ai.chat.messages.ToolResponseMessage tool)
-      return org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(tool.getResponses()).metadata(metadata).build();
+      return org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+          .responses(tool.getResponses())
+          .metadata(metadata)
+          .build();
     throw rejected();
   }
 

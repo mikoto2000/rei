@@ -685,11 +685,15 @@ public final class StagnationChatModel implements ChatModel {
             .filter(m -> m instanceof SystemMessage)
             .forEach(instructions::add);
       instructions.addAll(resumed);
-      if (fullInput) for (var current : prompt.getInstructions())
-        if (dev.mikoto2000.rei.modeloptions.ModelOptions.isContextData(current)
-            && instructions.stream().noneMatch(existing -> existing.getMessageType() == current.getMessageType()
-                && java.util.Objects.equals(existing.getText(), current.getText())
-                && existing.getMetadata().equals(current.getMetadata()))) instructions.add(current);
+      if (fullInput)
+        for (var current : prompt.getInstructions())
+          if (dev.mikoto2000.rei.modeloptions.ModelOptions.isContextData(current)
+              && instructions.stream()
+                  .noneMatch(existing ->
+                      existing.getMessageType() == current.getMessageType()
+                          && java.util.Objects.equals(existing.getText(), current.getText())
+                          && existing.getMetadata().equals(current.getMetadata())))
+            instructions.add(current);
     }
     Prompt prepared =
         new Prompt(

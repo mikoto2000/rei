@@ -445,8 +445,17 @@ public class ApprovalContinuationStore {
             .toList();
     if (d.protocolHistory() != null && d.protocolHistory().input() != null) {
       var scope = ModelMessagePayloadStore.Scope.forOwner(d.owner());
-      messages = d.protocolHistory().input().entries().stream().map(pointer ->
-          payloads.obtain().loadEntry(scope, pointer, ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId())).toList();
+      messages =
+          d.protocolHistory().input().entries().stream()
+              .map(pointer ->
+                  payloads
+                      .obtain()
+                      .loadEntry(
+                          scope,
+                          pointer,
+                          ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                          entry.approvalId()))
+              .toList();
     }
     List<ModelMessagePayloadStore.ReplayReference> references = null;
     if (d.protocolHistory() != null
@@ -547,15 +556,27 @@ public class ApprovalContinuationStore {
           for (var message : guidance) {
             var key = "guidance/" + java.util.UUID.randomUUID() + "/USER";
             var reference = store.save(scope, d.owner().runId(), key, message);
-            store.publish(scope, reference, ModelMessagePayloadStore.ReferenceKind.RUN, d.owner().runId());
-            store.publish(scope, reference, ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId());
+            store.publish(
+                scope, reference, ModelMessagePayloadStore.ReferenceKind.RUN, d.owner().runId());
+            store.publish(
+                scope,
+                reference,
+                ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                entry.approvalId());
             var pointer = new ModelMessagePayloadStore.History.Entry(key, reference);
             ownEntries.add(pointer);
             inputEntries.add(pointer);
           }
-          history = new ModelMessagePayloadStore.History(history.schemaVersion(), history.run(),
-              history.origin(), ownEntries, new ModelMessagePayloadStore.History.Input(inputEntries,
-                  history.input().traceSize(), history.input().preparationFingerprint()));
+          history =
+              new ModelMessagePayloadStore.History(
+                  history.schemaVersion(),
+                  history.run(),
+                  history.origin(),
+                  ownEntries,
+                  new ModelMessagePayloadStore.History.Input(
+                      inputEntries,
+                      history.input().traceSize(),
+                      history.input().preparationFingerprint()));
         }
         for (var message : guidance) {
           if (!(message instanceof UserMessage))

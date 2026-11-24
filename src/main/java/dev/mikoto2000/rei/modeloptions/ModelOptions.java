@@ -17,8 +17,10 @@ public final class ModelOptions {
   public static boolean isContextData(org.springframework.ai.chat.messages.Message message) {
     if (!(message instanceof org.springframework.ai.chat.messages.SystemMessage)) return false;
     var metadata = message.getMetadata();
-    return java.util.List.of("rei.workContext", "rei.longTermMemory", "rei.workingSet", "rei.resumeContext").stream()
-        .anyMatch(key -> Boolean.TRUE.equals(metadata.get(key)))
+    return java.util.List.of(
+                "rei.workContext", "rei.longTermMemory", "rei.workingSet", "rei.resumeContext")
+            .stream()
+            .anyMatch(key -> Boolean.TRUE.equals(metadata.get(key)))
         || metadata.get("rei.historyGeneration") instanceof String
         || metadata.get("rei.historySequence") instanceof Long
         || metadata.get("rei.historySequence") instanceof Integer;
@@ -82,7 +84,8 @@ public final class ModelOptions {
           add.accept(callback.getToolMetadata().returnDirect());
         });
     for (var message : prompt.getInstructions())
-      if (message instanceof org.springframework.ai.chat.messages.SystemMessage && !isContextData(message)) {
+      if (message instanceof org.springframework.ai.chat.messages.SystemMessage
+          && !isContextData(message)) {
         add.accept(message.getText());
         add.accept(new java.util.TreeMap<>(message.getMetadata()));
       }

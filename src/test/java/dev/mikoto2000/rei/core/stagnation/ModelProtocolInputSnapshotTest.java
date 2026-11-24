@@ -70,7 +70,8 @@ class ModelProtocolInputSnapshotTest {
     var borrowedRef = old.reference(borrowed);
     payloads.historyReplayGrant(
         exchange,
-        List.of(payloads.historyReference(old.scope(), previousUserRef, "history:old"),
+        List.of(
+            payloads.historyReference(old.scope(), previousUserRef, "history:old"),
             payloads.historyReference(old.scope(), borrowedRef, "history:old")),
         origin);
     var execution = execution(owner, exchange, origin);
@@ -79,7 +80,8 @@ class ModelProtocolInputSnapshotTest {
     List<Message> actualInput =
         List.of(
             new SystemMessage("original instructions"),
-            dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(new SystemMessage("retained summary"), 10),
+            dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(
+                new SystemMessage("retained summary"), 10),
             dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(previousUser, 1),
             dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(borrowed, 4),
             current);

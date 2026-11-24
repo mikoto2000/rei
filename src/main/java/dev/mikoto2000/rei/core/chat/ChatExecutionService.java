@@ -897,7 +897,8 @@ public class ChatExecutionService {
         if (execution.isCancelled()) interventions.discardAndFinish();
         else {
           var guidance = new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
-          while (!interventions.finishIfEmpty()) guidance.addAll(execution.applyInterventionsForNextPrompt());
+          while (!interventions.finishIfEmpty())
+            guidance.addAll(execution.applyInterventionsForNextPrompt());
           if (suspended && continuations != null && !guidance.isEmpty())
             continuations.acceptGuidance(context, guidance);
         }

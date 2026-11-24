@@ -842,12 +842,18 @@ class ResponsesReplayContractTest {
     execution.setModelOptions(options.mutate().toolContext(null).toolContext(context).build());
     execution.preserveUserMessage(new UserMessage("original request"));
     var originalInput = new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
-    originalInput.add(new org.springframework.ai.chat.messages.SystemMessage("original instructions"));
-    if (change.equals("context-data")) originalInput.add(org.springframework.ai.chat.messages.SystemMessage.builder()
-        .text("previous work context").metadata(Map.of("rei.workContext", true)).build());
+    originalInput.add(
+        new org.springframework.ai.chat.messages.SystemMessage("original instructions"));
+    if (change.equals("context-data"))
+      originalInput.add(
+          org.springframework.ai.chat.messages.SystemMessage.builder()
+              .text("previous work context")
+              .metadata(Map.of("rei.workContext", true))
+              .build());
     originalInput.add(new UserMessage("original request"));
     new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.CHAT))
-        .stream(new Prompt(originalInput, execution.modelOptions())).blockLast(Duration.ofSeconds(10));
+        .stream(new Prompt(originalInput, execution.modelOptions()))
+            .blockLast(Duration.ofSeconds(10));
     var history = execution.protocolHistorySnapshot();
     String checkpoint =
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
@@ -888,10 +894,15 @@ class ResponsesReplayContractTest {
         new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
             models.chatModel(LlmFeature.CHAT));
     var currentInput = new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
-    currentInput.add(new org.springframework.ai.chat.messages.SystemMessage(
-        change.equals("instructions") ? "changed instructions" : "original instructions"));
-    if (change.equals("context-data")) currentInput.add(org.springframework.ai.chat.messages.SystemMessage.builder()
-        .text("updated work context").metadata(Map.of("rei.workContext", true)).build());
+    currentInput.add(
+        new org.springframework.ai.chat.messages.SystemMessage(
+            change.equals("instructions") ? "changed instructions" : "original instructions"));
+    if (change.equals("context-data"))
+      currentInput.add(
+          org.springframework.ai.chat.messages.SystemMessage.builder()
+              .text("updated work context")
+              .metadata(Map.of("rei.workContext", true))
+              .build());
     currentInput.add(new UserMessage("host resume control"));
     var prompt = new Prompt(currentInput, restored.modelOptions());
     if (!java.util.Set.of("compatible", "context-data").contains(change)) {
@@ -906,11 +917,17 @@ class ResponsesReplayContractTest {
     assertThat(requests).hasSize(2);
     assertThat(requests.getLast().path("instructions").asText()).isEqualTo("original instructions");
     if (change.equals("context-data")) {
-      assertThat(requests.getLast().path("input").toString()).contains("previous work context", "updated work context");
+      assertThat(requests.getLast().path("input").toString())
+          .contains("previous work context", "updated work context");
       for (String expectedContext : List.of("previous work context", "updated work context"))
-        assertThat(java.util.stream.StreamSupport.stream(requests.getLast().path("input").spliterator(), false)
-            .filter(item -> "developer".equals(item.path("role").asText())
-                && item.path("content").toString().contains(expectedContext)).count()).isEqualTo(1);
+        assertThat(
+                java.util.stream.StreamSupport.stream(
+                        requests.getLast().path("input").spliterator(), false)
+                    .filter(item ->
+                        "developer".equals(item.path("role").asText())
+                            && item.path("content").toString().contains(expectedContext))
+                    .count())
+            .isEqualTo(1);
     }
     assertThat(requests.getLast().path("input").toString())
         .contains("original request")

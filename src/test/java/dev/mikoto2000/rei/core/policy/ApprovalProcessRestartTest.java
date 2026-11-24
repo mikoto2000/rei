@@ -113,9 +113,14 @@ class ApprovalProcessRestartTest {
                 .withKey(exchange.key() + "/prefix:1")
                 .reference(ToolResponseMessage.builder().responses(List.of(result)).build());
         Files.writeString(directory.resolve("effects.txt"), "first\n");
-        var systemRef = exchange.withKey("instructions").reference(
-            org.springframework.ai.chat.messages.SystemMessage.builder().text("original fixture context")
-                .metadata(Map.of("rei.workContext", true)).build());
+        var systemRef =
+            exchange
+                .withKey("instructions")
+                .reference(
+                    org.springframework.ai.chat.messages.SystemMessage.builder()
+                        .text("original fixture context")
+                        .metadata(Map.of("rei.workContext", true))
+                        .build());
         var history =
             new ModelMessagePayloadStore.History(
                 1,
@@ -127,9 +132,12 @@ class ApprovalProcessRestartTest {
                         exchange.key() + "/ASSISTANT", assistantRef),
                     new ModelMessagePayloadStore.History.Entry(
                         exchange.key() + "/TOOL", prefixRef)),
-                new ModelMessagePayloadStore.History.Input(List.of(
-                    new ModelMessagePayloadStore.History.Entry("instructions/SYSTEM", systemRef, 7L),
-                    new ModelMessagePayloadStore.History.Entry("input/USER", userRef)), 1));
+                new ModelMessagePayloadStore.History.Input(
+                    List.of(
+                        new ModelMessagePayloadStore.History.Entry(
+                            "instructions/SYSTEM", systemRef, 7L),
+                        new ModelMessagePayloadStore.History.Entry("input/USER", userRef)),
+                    1));
         approvals.save(
             "approval",
             owner,
@@ -149,9 +157,12 @@ class ApprovalProcessRestartTest {
         return;
       }
       var saved = approvals.saved(approvals.find("approval").orElseThrow());
-      assertThat(saved.messages()).extracting(org.springframework.ai.chat.messages.Message::getText)
-          .containsExactly("original fixture context", "original fixture input", "human resume guidance");
-      assertThat(saved.messages().getFirst().getMetadata()).containsEntry("rei.workContext", true)
+      assertThat(saved.messages())
+          .extracting(org.springframework.ai.chat.messages.Message::getText)
+          .containsExactly(
+              "original fixture context", "original fixture input", "human resume guidance");
+      assertThat(saved.messages().getFirst().getMetadata())
+          .containsEntry("rei.workContext", true)
           .containsEntry("rei.historySequence", 7L);
       var callback =
           new org.springframework.ai.tool.ToolCallback() {
@@ -225,7 +236,8 @@ class ApprovalProcessRestartTest {
       assertThat(trace.entries()).hasSize(4);
       assertThat(trace.entries().get(1)).isEqualTo(saved.protocolHistory().entries().get(1));
       assertThat(payloads.load(exchange.scope(), trace.entries().getLast().reference()).getText())
-          .as("human guidance remains in completed task history").isEqualTo("human resume guidance");
+          .as("human guidance remains in completed task history")
+          .isEqualTo("human resume guidance");
       assertThat(payloads.load(exchange.scope(), trace.entries().getFirst().reference()).getText())
           .isEqualTo("original fixture input");
       assertThat(
