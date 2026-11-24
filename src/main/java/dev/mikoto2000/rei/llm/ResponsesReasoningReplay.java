@@ -71,9 +71,13 @@ final class ResponsesReasoningReplay {
           throw new IllegalArgumentException("Responses reasoning replay mode is incompatible");
         var payload = reasoning.payload();
         if (endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT) {
-          if (!java.util.Set.of(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE,
-                  OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE).containsAll(reasoning.attributes().keySet())
-              || payload != null || reasoning.text() == null || reasoning.text().isBlank()
+          if (!java.util.Set.of(
+                      OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE,
+                      OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE)
+                  .containsAll(reasoning.attributes().keySet())
+              || payload != null
+              || reasoning.text() == null
+              || reasoning.text().isBlank()
               || reasoning.text().length() > 4_194_304
               || reasoning.summary() != null && !reasoning.summary().isBlank())
             throw new IllegalArgumentException("Responses plaintext reasoning is incompatible");
@@ -97,28 +101,54 @@ final class ResponsesReasoningReplay {
       }
     }
     if (endpoint.capabilities().reasoningReplay() != ReasoningReplayMode.PLAINTEXT) return prompt;
-    var messages = prompt.getInstructions().stream().map(message -> {
-      if (!(message instanceof AssistantMessage assistant)) return message;
-      var parts = assistant.getParts().stream().map(part -> {
-        if (!(part instanceof ReasoningPart reasoning)) return part;
-        var item = new java.util.LinkedHashMap<String, Object>();
-        item.put("type", "reasoning");
-        item.put("summary", java.util.List.of());
-        item.put("id", reasoning.attributes().get(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE));
-        item.put("content", java.util.List.of(java.util.Map.of("type", "reasoning_text", "text", reasoning.text())));
-        var status = reasoning.attributes().get(OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE);
-        if (status != null) item.put("status", status);
-        try {
-          String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(item);
-          return (org.springframework.ai.chat.messages.part.MessagePart)
-              new org.springframework.ai.chat.messages.part.UnknownPart(
-                  OpenAiResponsesMetadata.PROVIDER, "reasoning", json, null, java.util.Map.of());
-        } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
-          throw new IllegalArgumentException("Responses plaintext send view is invalid");
-        }
-      }).toList();
-      return (org.springframework.ai.chat.messages.Message) AssistantMessage.builder().parts(parts).properties(assistant.getMetadata()).build();
-    }).toList();
+    var messages =
+        prompt.getInstructions().stream()
+            .map(message -> {
+              if (!(message instanceof AssistantMessage assistant)) return message;
+              var parts =
+                  assistant.getParts().stream()
+                      .map(part -> {
+                        if (!(part instanceof ReasoningPart reasoning)) return part;
+                        var item = new java.util.LinkedHashMap<String, Object>();
+                        item.put("type", "reasoning");
+                        item.put("summary", java.util.List.of());
+                        item.put(
+                            "id",
+                            reasoning.attributes().get(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE));
+                        item.put(
+                            "content",
+                            java.util.List.of(
+                                java.util.Map.of(
+                                    "type", "reasoning_text", "text", reasoning.text())));
+                        var status =
+                            reasoning
+                                .attributes()
+                                .get(OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE);
+                        if (status != null) item.put("status", status);
+                        try {
+                          String json =
+                              new com.fasterxml.jackson.databind.ObjectMapper()
+                                  .writeValueAsString(item);
+                          return (org.springframework.ai.chat.messages.part.MessagePart)
+                              new org.springframework.ai.chat.messages.part.UnknownPart(
+                                  OpenAiResponsesMetadata.PROVIDER,
+                                  "reasoning",
+                                  json,
+                                  null,
+                                  java.util.Map.of());
+                        } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
+                          throw new IllegalArgumentException(
+                              "Responses plaintext send view is invalid");
+                        }
+                      })
+                      .toList();
+              return (org.springframework.ai.chat.messages.Message)
+                  AssistantMessage.builder()
+                      .parts(parts)
+                      .properties(assistant.getMetadata())
+                      .build();
+            })
+            .toList();
     return new Prompt(messages, prompt.getOptions());
   }
 
