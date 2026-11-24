@@ -2694,6 +2694,33 @@ class ResponsesReplayContractTest {
     assertThat(executions.get()).isZero();
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+      "parallel", "summary", "verbosity", "temperature", "top-p", "include",
+      "metadata", "service-tier", "cache-key", "safety"})
+  void plaintextUnsupportedSettingsAreRejectedBeforeTheProviderCanSilentlyIgnoreThem(String setting) {
+    replayMode = ReasoningReplayMode.PLAINTEXT;
+    var builder = options().mutate();
+    switch (setting) {
+      case "parallel" -> builder.parallelToolCalls(false);
+      case "summary" -> builder.reasoningSummary("auto");
+      case "verbosity" -> builder.verbosity("low");
+      case "temperature" -> builder.temperature(0.2);
+      case "top-p" -> builder.topP(0.95);
+      case "include" -> builder.include(List.of("reasoning.encrypted_content"));
+      case "metadata" -> builder.metadata(Map.of("fixture", "PRIVATE-metadata"));
+      case "service-tier" -> builder.serviceTier("auto");
+      case "cache-key" -> builder.promptCacheKey("PRIVATE-cache-key");
+      case "safety" -> builder.safetyIdentifier("PRIVATE-safety");
+      default -> throw new AssertionError(setting);
+    }
+    var supplied = builder.build();
+    assertThatThrownBy(() -> model(options()).call(new Prompt("fixture", supplied)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageNotContaining("PRIVATE");
+    assertThat(requests).isEmpty();
+  }
+
   @Test
   void encryptedRequestsRequireAnExplicitOwnerBeforeAnyHttp() {
     owner = null;
