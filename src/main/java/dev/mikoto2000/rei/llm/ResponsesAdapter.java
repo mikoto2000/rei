@@ -90,8 +90,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
           "Responses SDK retries must stay zero at client construction");
     options = options.mutate().timeout(endpoint.readTimeout()).build();
     var transportCustomizers = new ArrayList<OpenAiHttpClientBuilderCustomizer>();
+    transportCustomizers.add(builder -> builder.interceptor(chain -> chain.proceed(
+        chain.request().newBuilder().tag(RequestReadTimeout.class,
+            new RequestReadTimeout(chain.readTimeoutMillis())).build())));
     transportCustomizers.addAll(customizers);
-    transportCustomizers.add(builder ->
+    transportCustomizers.add(builder -> {
         builder
             .interceptor(chain -> {
               var request = chain.request();
@@ -101,7 +104,13 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                     request.newBuilder().method(request.method(), nonReplayable(body)).build();
               return chain.proceed(request);
             })
-            .interceptor(new ChatStreamTimeoutInterceptor(endpoint.readTimeout())));
+            .interceptor(chain -> {
+              var requested = chain.request().tag(RequestReadTimeout.class);
+              long bound = endpoint.readTimeout().toMillis();
+              long millis = requested == null || requested.millis() == 0 ? bound : Math.min(bound, requested.millis());
+              return new ChatStreamTimeoutInterceptor(java.time.Duration.ofMillis(millis)).intercept(chain);
+            });
+    });
     var client =
         OpenAiSetup.setupAsyncClient(
             options.getBaseUrl(),
@@ -149,6 +158,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             .build();
     return new ResponsesAdapter(endpoint, model, syncClient, asyncClient);
   }
+
+  private record RequestReadTimeout(int millis) {}
 
   private static okhttp3.RequestBody nonReplayable(okhttp3.RequestBody body) {
     return new okhttp3.RequestBody() {
@@ -260,7 +271,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             options.getMicrosoftFoundryServiceVersion())
         || defaults.isMicrosoftFoundry() != options.isMicrosoftFoundry()
         || !Objects.equals(defaults.getProxy(), options.getProxy())
-        || (options.getTimeout() != null && !endpoint.readTimeout().equals(options.getTimeout()))
+        || (options.getTimeout() != null && (options.getTimeout().compareTo(java.time.Duration.ofMillis(1)) < 0
+            || options.getTimeout().compareTo(endpoint.readTimeout()) > 0))
         || !Objects.equals(defaults.getOrganizationId(), options.getOrganizationId())
         || !Objects.equals(defaults.getCustomHeaders(), options.getCustomHeaders()))
       throw new IllegalArgumentException("Responses connection differs from the bound endpoint");
