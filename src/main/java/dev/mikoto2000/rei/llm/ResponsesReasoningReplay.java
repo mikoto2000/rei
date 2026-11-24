@@ -35,11 +35,17 @@ final class ResponsesReasoningReplay {
     for (var message : prompt.getInstructions()) {
       if (!(message instanceof AssistantMessage assistant)) continue;
       var metadata = assistant.getMetadata();
+      boolean ownerPermitted = false;
       if (metadata.containsKey(ORIGIN_OWNER) || metadata.containsKey(ORIGIN_ENDPOINT)) {
         if (!(metadata.get(ORIGIN_OWNER) instanceof String originOwner)
             || !(metadata.get(ORIGIN_ENDPOINT) instanceof String originEndpoint))
           throw new IllegalArgumentException("Responses replay origin is required");
-        if (!originOwner.equals(requestOwner))
+        var authority = context == null ? null : context.get(
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY);
+        ownerPermitted = originOwner.equals(requestOwner)
+            || (authority instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HistoryReplayGrant grant
+                && grant.permits(assistant, requestOwner, endpoint.fingerprint()));
+        if (!ownerPermitted)
           throw new IllegalArgumentException("Responses replay owner mismatch");
         if (!originEndpoint.equals(endpoint.fingerprint()))
           throw new IllegalArgumentException("Responses replay endpoint mismatch");
@@ -68,7 +74,7 @@ final class ResponsesReasoningReplay {
         if (!(metadata.get(ORIGIN_OWNER) instanceof String originOwner)
             || !(metadata.get(ORIGIN_ENDPOINT) instanceof String originEndpoint))
           throw new IllegalArgumentException("Responses reasoning replay origin is required");
-        if (!originOwner.equals(requestOwner))
+        if (!ownerPermitted)
           throw new IllegalArgumentException("Responses reasoning replay owner mismatch");
         if (!originEndpoint.equals(endpoint.fingerprint()))
           throw new IllegalArgumentException("Responses reasoning replay endpoint mismatch");

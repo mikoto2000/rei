@@ -443,7 +443,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         java.util.List.of(
             ResponsesReasoningReplay.OWNER_CONTEXT_KEY,
             dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
-            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY))
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY))
       if (context.containsKey(key))
         throw new IllegalStateException("Native Run options must not inherit protocol authority");
     if (modelPayloads == null)

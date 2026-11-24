@@ -33,12 +33,64 @@ public final class ModelMessagePayloadStore {
 
   /** Backend-created replay authority; no constructor or serialized authority is public. */
   public static final class HistoryReplayGrant {
-    private HistoryReplayGrant() {}
+    private final Origin target;
+    private final java.util.Set<String> messages;
+
+    private HistoryReplayGrant(Origin target, java.util.Set<String> messages) {
+      this.target = target;
+      this.messages = java.util.Set.copyOf(messages);
+    }
+
+    /** Pure send-view check; database access occurs only when the backend creates this grant. */
+    public boolean permits(org.springframework.ai.chat.messages.AssistantMessage message,
+        String owner, String endpoint) {
+      if (message == null || !target.owner().equals(owner) || !target.endpoint().equals(endpoint)) return false;
+      try {
+        return messages.contains(replayHash(message));
+      } catch (IllegalArgumentException invalid) {
+        return false;
+      }
+    }
+
+    @Override public String toString() { return "HistoryReplayGrant[messageCount=" + messages.size() + "]"; }
+  }
+
+  private static String replayHash(org.springframework.ai.chat.messages.AssistantMessage message) {
+    var metadata = new java.util.HashMap<>(message.getMetadata());
+    metadata.remove("rei.historySequence");
+    var original = org.springframework.ai.chat.messages.AssistantMessage.builder()
+        .parts(message.getParts()).properties(metadata).build();
+    return digest(new ModelMessageCodec().encode(original));
   }
 
   public HistoryReplayGrant historyReplayGrant(
       Exchange target, java.util.List<java.util.Map<String, String>> references, Origin origin) {
-    return new HistoryReplayGrant();
+    if (target == null || target.store() != this || origin == null
+        || !target.ownerKey().equals(origin.owner())) throw rejected();
+    var pointers = java.util.List.copyOf(references);
+    return transaction(db -> {
+      var messages = new java.util.HashSet<String>();
+      try (var sourceRun = db.prepareStatement("SELECT run FROM model_message_payloads WHERE id=?")) {
+        for (var pointer : pointers) {
+          String historyOwner = pointer.get(HISTORY_OWNER);
+          identifier(historyOwner);
+          var ref = new Ref(pointer.get(HISTORY_ID), pointer.get(HISTORY_HASH));
+          var message = codec.decode(read(db, target.scope(), ref));
+          if (scalar(db, "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='HISTORY' AND owner=?",
+              ref.id(), historyOwner) != 1) throw rejected();
+          if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
+            bind(sourceRun, ref.id());
+            try (var rows = sourceRun.executeQuery()) {
+              if (!rows.next()) throw rejected();
+              var sourceOwner = new Exchange(this, target.scope(), rows.getString(1), "history").ownerKey();
+              new Origin(sourceOwner, origin.endpoint()).requireMatch(assistant);
+            }
+            messages.add(replayHash(assistant));
+          }
+        }
+      }
+      return new HistoryReplayGrant(origin, messages);
+    });
   }
 
   public static final String HISTORY_ID = "rei.modelMessage.id";

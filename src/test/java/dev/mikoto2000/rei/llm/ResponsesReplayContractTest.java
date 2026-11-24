@@ -444,7 +444,9 @@ class ResponsesReplayContractTest {
     var previousOptions = models.requestOptions(LlmFeature.CHAT, null, true, previous);
     var previousExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
         previousOptions.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
-    replies.add(replay == ReasoningReplayMode.ENCRYPTED ? reasoningDone() : done());
+    var completed = reasoningDone().replace("{\"type\":\"reasoning\",\"id\":\"rs_bound\"",
+        "{\"type\":\"reasoning\",\"id\":\"rs_extra\",\"summary\":[],\"encrypted_content\":\"opaque-extra+/=\",\"status\":\"completed\"},{\"type\":\"reasoning\",\"id\":\"rs_bound\"");
+    replies.add(replay == ReasoningReplayMode.ENCRYPTED ? completed : done());
     var first = models.chatModel(LlmFeature.CHAT).call(new Prompt("first", previousOptions))
         .getResult().getOutput();
     var reference = previousExchange.reference(first);
@@ -464,9 +466,10 @@ class ResponsesReplayContractTest {
         List.of(historical, new UserMessage("second")), granted));
     assertThat(response.getResult().getOutput().getText()).isEqualTo("done");
     assertThat(requests).hasSize(2);
+    assertThat(first.getMetadata()).containsEntry(ResponsesReasoningReplay.ORIGIN_OWNER, previousExchange.ownerKey());
     if (replay == ReasoningReplayMode.ENCRYPTED)
-      assertThat(requests.getLast().path("input").toString()).contains("opaque-one+/=", "opaque-two+/=");
-    assertThat(grant.toString()).doesNotContain("opaque-one", "opaque-two");
+      assertThat(requests.getLast().path("input").toString()).contains("opaque-extra+/=", "opaque-bound");
+    assertThat(grant.toString()).doesNotContain("opaque-extra", "opaque-bound");
 
     var changedParts = new java.util.ArrayList<>(first.getParts());
     changedParts.add(org.springframework.ai.chat.messages.part.TextPart.of("unapproved addition"));
@@ -484,6 +487,19 @@ class ResponsesReplayContractTest {
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_HASH, unpublished.sha256(),
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_OWNER, "completed:previous");
     assertThatThrownBy(() -> protocolStore.historyReplayGrant(currentExchange, List.of(runOnlyPointer), origin))
+        .isInstanceOf(IllegalStateException.class);
+    var child = new dev.mikoto2000.rei.core.chat.AgentRunContext(
+        "child", "child-chat", protocolDirectory, "project");
+    var childOptions = models.requestOptions(LlmFeature.CHAT, null, true, child);
+    var childExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
+        childOptions.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var childOrigin = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin)
+        childOptions.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
+    assertThatThrownBy(() -> protocolStore.historyReplayGrant(childExchange, List.of(pointer), childOrigin))
+        .isInstanceOf(IllegalStateException.class);
+    var incompatible = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+        origin.owner(), "different-endpoint");
+    assertThatThrownBy(() -> protocolStore.historyReplayGrant(currentExchange, List.of(pointer), incompatible))
         .isInstanceOf(IllegalStateException.class);
     assertThat(requests).hasSize(2);
   }
