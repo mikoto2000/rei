@@ -57,6 +57,22 @@ class ResponsesTransportContractTest {
     }
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings={"zero","negative","submillisecond","extended"})
+  void invalidRequestDeadlinesAreRejectedBeforeHttp(String condition) {
+    var defaults=options().build();
+    var timeout=switch(condition) {
+      case "zero" -> java.time.Duration.ZERO;
+      case "negative" -> java.time.Duration.ofMillis(-1);
+      case "submillisecond" -> java.time.Duration.ofNanos(1);
+      default -> java.time.Duration.ofMinutes(6);
+    };
+    var request=defaults.mutate().timeout(timeout).build();
+    assertThatThrownBy(()->transport(defaults).call(new Prompt("fixture",request)))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(requests).isEmpty();
+  }
+
   @Test
   void undeclaredRawExtensionsCannotSilentlyBypassTypedValidation() {
     var options =
@@ -301,7 +317,7 @@ class ResponsesTransportContractTest {
       case "headers" -> builder.customHeaders(java.util.Map.of("Authorization", "other-secret"));
       case "outputLimit" -> builder.maxOutputTokens(128);
       case "deployment" -> builder.deploymentName("other-deployment");
-      case "timeout" -> builder.timeout(java.time.Duration.ofSeconds(1));
+      case "timeout" -> builder.timeout(java.time.Duration.ofMinutes(6));
       default -> throw new AssertionError(field);
     }
     var runtime = builder.build();
@@ -456,6 +472,49 @@ class ResponsesTransportContractTest {
               () -> {
                 if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
                 else model.call(new Prompt("fixture", options));
+              })
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("TIMEOUT");
+      assertThat(java.time.Duration.ofNanos(System.nanoTime() - started))
+          .isLessThan(java.time.Duration.ofSeconds(3));
+      assertThat(requests).hasSize(1);
+    } finally {
+      release.countDown();
+      server.stop(0);
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void aRequestCanShortenButNeverExtendTheBoundTransportDeadline(boolean streaming) throws Exception {
+    var server =
+        com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    server.createContext(
+        "/v1/responses",
+        exchange -> {
+          try {
+            release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+          } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+          } finally {
+            exchange.close();
+          }
+        });
+    server.start();
+    try {
+      passThrough = true;
+      readTimeout = java.time.Duration.ofSeconds(5);
+      sharedReadTimeout = java.time.Duration.ofSeconds(5);
+      var options =
+          options().baseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1").build();
+      var model = transport(options);
+      var request = options.mutate().timeout(java.time.Duration.ofMillis(150)).build();
+      long started = System.nanoTime();
+      assertThatThrownBy(
+              () -> {
+                if (streaming) model.stream(new Prompt("fixture", request)).collectList().block();
+                else model.call(new Prompt("fixture", request));
               })
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("TIMEOUT");
