@@ -30,12 +30,17 @@ class ResponsesReplayContractTest {
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path protocolDirectory;
   private dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore protocolStore;
 
-  private Map<String, Object> protocolContext() {
+  private dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore payloads() {
     if (protocolStore == null) {
       var source = new org.sqlite.SQLiteDataSource();
       source.setUrl("jdbc:sqlite:" + protocolDirectory.resolve("protocol.db"));
       protocolStore = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
     }
+    return protocolStore;
+  }
+
+  private Map<String, Object> protocolContext() {
+    payloads();
     var context = new java.util.HashMap<String, Object>();
     if (owner != null) context.put(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, owner);
     context.put(
@@ -51,19 +56,7 @@ class ResponsesReplayContractTest {
 
   @Test
   void configuredNativeModelOptionsAndClientShareOneImmutableEndpointSnapshot() {
-    var source = new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(Map.ofEntries(
-        Map.entry("rei.llm.features.chat.api", "responses"),
-        Map.entry("rei.llm.features.chat.base-url", "https://fixture.invalid"),
-        Map.entry("rei.llm.features.chat.api-key", "fixture-secret"),
-        Map.entry("rei.llm.features.chat.model", "fixture-model"),
-        Map.entry("rei.llm.features.chat.max-output-tokens", "41"),
-        Map.entry("rei.llm.features.chat.temperature", "0.2"),
-        Map.entry("rei.llm.features.chat.reasoning-replay", "encrypted"),
-        Map.entry("rei.llm.features.chat.max-tools", "16"),
-        Map.entry("rei.llm.features.chat.endpoint-generation", "7"),
-        Map.entry("rei.llm.features.chat.supported-settings", "temperature")));
-    var properties = new org.springframework.boot.context.properties.bind.Binder(source)
-        .bindOrCreate("rei.llm", LlmProperties.class);
+    var properties = nativeProperties();
     var provider = LlmModelProvider.forResponsesFixture(
         org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class), properties, httpCustomizers());
     var endpoint = provider.resolvedEndpoint(LlmFeature.CHAT);
@@ -109,30 +102,11 @@ class ResponsesReplayContractTest {
             "fixture-project",
             dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB,
             mode);
-    var nativeOptions =
-        options()
-            .mutate()
-            .toolCallbacks(List.of())
-            .toolChoice(null)
-            .toolContext(
-                Map.of(
-                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
-                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
-                        protocolStore,
-                        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(
-                            run),
-                        run.runId(),
-                        "main-request")))
-            .build();
-    var nativeModel = model(nativeOptions);
-    var models =
-        new FixedLlmModelProvider() {
-          @Override
-          public org.springframework.ai.model.tool.ToolCallingChatOptions requestOptions(
-              String feature, String selected, boolean streamUsage) {
-            return nativeOptions;
-          }
-        };
+    var models = LlmModelProvider.forResponsesFixture(
+        org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class), nativeProperties(), httpCustomizers());
+    var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory(Map.of("payloads", payloads()));
+    models.configureModelMessagePayloads(beans.getBeanProvider(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class));
+    var nativeModel = models.chatModel(LlmFeature.CHAT);
     var holder = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
     org.mockito.Mockito.when(holder.get()).thenReturn("fixture-model");
     var client =
@@ -1152,6 +1126,23 @@ class ResponsesReplayContractTest {
         options.getMaxOutputTokens(),
         null,
         Duration.ofMinutes(5));
+  }
+
+  private LlmProperties nativeProperties() {
+    var source = new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(Map.ofEntries(
+        Map.entry("rei.llm.features.chat.api", "responses"),
+        Map.entry("rei.llm.features.chat.base-url", "https://fixture.invalid"),
+        Map.entry("rei.llm.features.chat.api-key", "fixture-secret"),
+        Map.entry("rei.llm.features.chat.model", "fixture-model"),
+        Map.entry("rei.llm.features.chat.max-output-tokens", "41"),
+        Map.entry("rei.llm.features.chat.temperature", "0.2"),
+        Map.entry("rei.llm.features.chat.reasoning-replay", "encrypted"),
+        Map.entry("rei.llm.features.chat.max-tools", "16"),
+        Map.entry("rei.llm.features.chat.endpoint-generation", "7"),
+        Map.entry("rei.llm.features.chat.supported-settings", "temperature")));
+    var properties = new org.springframework.boot.context.properties.bind.Binder(source)
+        .bindOrCreate("rei.llm", LlmProperties.class);
+    return properties;
   }
 
   private ResponsesAdapter model(OpenAiResponsesChatOptions options) {

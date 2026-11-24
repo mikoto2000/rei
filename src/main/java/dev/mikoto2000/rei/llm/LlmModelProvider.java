@@ -365,6 +365,19 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return model;
   }
 
+  private java.util.function.Supplier<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> modelPayloads;
+
+  @Autowired
+  void configureModelMessagePayloads(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> payloads) {
+    modelPayloads = payloads::getObject;
+  }
+
+  /** Accepted Run options; no provider state is added to the public Run context. */
+  public org.springframework.ai.model.tool.ToolCallingChatOptions requestOptions(
+      String feature, String selected, boolean streamUsage, dev.mikoto2000.rei.tooldelivery.ReadingRun owner) {
+    return requestOptions(feature, selected, streamUsage);
+  }
+
   /** Native request options; production availability is checked by the existing provider gate. */
   public org.springframework.ai.model.tool.ToolCallingChatOptions requestOptions(
       String feature, String defaultModel, boolean streamUsage) {
