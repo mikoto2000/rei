@@ -184,7 +184,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                       .properties(properties)
                       .build();
           var modelMetadata = entry.metadata();
-          if ("assistant".equals(entry.speaker())
+          if (sequence > through && "assistant".equals(entry.speaker())
               && !dev.mikoto2000.rei.conversation.ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(
                   entry.source())
               && !dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(
@@ -200,7 +200,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
               modelMetadata = savedTurn.metadata();
           }
           messages.add(
-              historical(restore(owner, modelMetadata, entry.speaker(), message), sequence));
+              historical(sequence > through ? restore(owner, modelMetadata, entry.speaker(), message) : message, sequence));
           historyAnchor = true;
         }
         // Carry completed run observations alongside the original final answer without rewriting
@@ -236,6 +236,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         }
       }
     } else {
+      long through = summaries.read(dev.mikoto2000.rei.context.CancelledTaskHistory.summaryKey(id, cancelled.generation())).throughSequence();
       for (int i = 0; i < history.size(); i++) {
         var turn = history.get(i);
         if (owner != null && owner.runId().equals(turn.runId())) continue;
@@ -259,7 +260,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
               historical(
                   restore(
                       owner,
-                      turn.metadata(),
+                      i * 3L + 3 > through ? turn.metadata() : Map.of(),
                       "assistant",
                       AssistantMessage.builder()
                           .content(java.util.Objects.toString(turn.assistantMessage(), ""))
