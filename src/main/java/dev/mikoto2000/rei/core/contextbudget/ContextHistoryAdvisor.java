@@ -70,6 +70,12 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     this.readHistory = id -> logs == null ? List.of() : logs.readConversation(id);
   }
 
+  public ContextHistoryAdvisor(ConversationTurnStore turns, ConversationMemory memory,
+      ConversationSummaryRepository summaries, dev.mikoto2000.rei.conversation.ConversationLogStore logs,
+      java.util.function.Supplier<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> payloads) {
+    this(turns, memory, summaries, logs);
+  }
+
   /** 他の補助処理と組み合わせる際の適用順序を返す。 */
   @Override
   public int getOrder() {

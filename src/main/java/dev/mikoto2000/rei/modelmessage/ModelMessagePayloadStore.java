@@ -45,7 +45,13 @@ public final class ModelMessagePayloadStore {
       store.publish(scope, ref, ReferenceKind.RUN, run);
     }
   }
-  public record Scope(String project, String root, String conversation) {}
+  public record Scope(String project, String root, String conversation) {
+    public static Scope forOwner(dev.mikoto2000.rei.tooldelivery.ReadingRun owner) {
+      if (owner == null || owner.projectRoot() == null) throw rejected();
+      return new Scope(owner.projectId() == null ? "default" : "project:" + owner.projectId(),
+          owner.projectRoot().toAbsolutePath().normalize().toString(), owner.conversationId());
+    }
+  }
 
   public record Ref(String id, String sha256) {}
 

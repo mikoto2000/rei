@@ -18,6 +18,50 @@ import org.springframework.ai.chat.prompt.Prompt;
 /** 文脈履歴対話の補助の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ContextHistoryAdvisorTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void durableLogAndTurnPointersTakePriorityWithoutDuplicatingTheirDisplayText(boolean fromLog) {
+    var owner = new AgentRunContext("current-run", "chat", dir, "fixture-project");
+    var source = new org.sqlite.SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + dir.resolve("model-messages.db"));
+    var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    var scope = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner);
+    var message = AssistantMessage.builder().parts(java.util.List.of(
+        new org.springframework.ai.chat.messages.part.ReasoningPart(null, null,
+            new org.springframework.ai.chat.messages.part.OpaquePayload("fixture", "encrypted_content", "opaque fixture"), Map.of("itemId", "rs_one")),
+        new org.springframework.ai.chat.messages.part.TextPart("complete fixture", null, Map.of("phase", "final_answer"))))
+        .properties(Map.of("rei.llm.replay-origin-owner", "fixture-owner")).build();
+    var ref = payloads.save(scope, "old-run", "one", message);
+    var metadata = payloads.historyReference(scope, ref, "turn:old-run");
+    var turns = new ConversationTurnStore((Path) null) {
+      @Override public synchronized java.util.List<Turn> read(String conversation) {
+        return java.util.List.of(new Turn("old-run", "old request", Status.COMPLETED, "display fixture",
+            java.time.Instant.EPOCH, null, null, metadata));
+      }
+    };
+    var logs = new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), java.time.Clock.systemUTC(),
+        new com.fasterxml.jackson.databind.ObjectMapper()) {
+      @Override public java.util.List<dev.mikoto2000.rei.conversation.ConversationLogEntry> readConversation(String conversation) {
+        return fromLog ? java.util.List.of(new dev.mikoto2000.rei.conversation.ConversationLogEntry("chat", "chat", "assistant",
+            java.time.OffsetDateTime.ofInstant(java.time.Instant.EPOCH, java.time.ZoneOffset.UTC), "display fixture", 1, null, null, metadata))
+            : java.util.List.of();
+      }
+    };
+    var advisor = new ContextHistoryAdvisor(turns, WindowedConversationMemory.builder().build(),
+        new ConversationSummaryRepository(dir), logs,
+        () -> new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source));
+    var request = ChatClientRequest.builder().prompt(new Prompt(new UserMessage("current request")))
+        .context(Map.of(org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID, "chat",
+            AgentRunContext.class.getName(), owner)).build();
+    var messages = advisor.before(request, null).prompt().getInstructions();
+    assertThat(messages.stream().map(Message::getText)).contains("complete fixture").doesNotContain("display fixture");
+    var restored = messages.stream().filter(m -> m instanceof AssistantMessage && "complete fixture".equals(m.getText())).toList();
+    assertThat(restored).hasSize(1);
+    assertThat(((AssistantMessage) restored.getFirst()).getParts()).containsExactlyElementsOf(message.getParts());
+    payloads.release(scope, ref, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:old-run");
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
+        .hasMessage("Model message persistence rejected");
+  }
   @Test
   void assigningHistorySequencePreservesOrderedAssistantPartsAndTypedToolResults() {
     var reasoning = new org.springframework.ai.chat.messages.part.ReasoningPart(null, "fixture summary",
