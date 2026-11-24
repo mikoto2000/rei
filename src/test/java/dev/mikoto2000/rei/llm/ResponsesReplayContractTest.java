@@ -285,7 +285,7 @@ class ResponsesReplayContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"fallback", "model", "url", "replay", "plaintext", "external"})
+      strings = {"fallback", "model", "url", "replay", "external"})
   void nativeFixturesCannotBypassIncompleteConfigurationOrProductionAvailability(String defect) {
     var properties = nativeProperties();
     var server = properties.feature(LlmFeature.CHAT);
@@ -294,7 +294,6 @@ class ResponsesReplayContractTest {
       case "model" -> server.setModel(null);
       case "url" -> server.setBaseUrl(null);
       case "replay" -> server.setReasoningReplay(null);
-      case "plaintext" -> server.setReasoningReplay(ReasoningReplayMode.PLAINTEXT);
       case "external" -> server.setBaseUrl("https://api.openai.com");
       default -> throw new AssertionError(defect);
     }
@@ -303,6 +302,29 @@ class ResponsesReplayContractTest {
     assertThatThrownBy(() -> provider.chatModel(LlmFeature.CHAT))
         .isInstanceOf(IllegalStateException.class);
     assertThat(requests).isEmpty();
+  }
+
+  @Test
+  void explicitlyConfiguredPlaintextFixtureUsesTheAcceptedOwnerAndEndpoint() {
+    var properties = nativeProperties();
+    var server = properties.feature(LlmFeature.CHAT);
+    server.setReasoningReplay(ReasoningReplayMode.PLAINTEXT);
+    properties.setFeature(LlmFeature.CHAT, server);
+    var provider = nativeProvider(properties);
+    var run =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "plain-run", "chat", protocolDirectory, "project");
+    var options = provider.requestOptions(LlmFeature.CHAT, null, true, run);
+    assertThat(
+            provider
+                .chatModel(LlmFeature.CHAT)
+                .call(new Prompt("fixture", options))
+                .getResult()
+                .getOutput()
+                .getText())
+        .isEqualTo("done");
+    assertThat(requests).hasSize(1);
+    assertThat(requests.getFirst().has("include")).isFalse();
   }
 
   @Test
@@ -334,11 +356,14 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"compatible", "endpoint", "tools", "instructions"})
+  @org.junit.jupiter.params.provider.CsvSource({
+    "ENCRYPTED,compatible", "ENCRYPTED,endpoint", "ENCRYPTED,tools", "ENCRYPTED,instructions",
+    "PLAINTEXT,compatible", "PLAINTEXT,endpoint", "PLAINTEXT,tools", "PLAINTEXT,instructions"
+  })
   @org.junit.jupiter.api.Timeout(90)
-  void nativeCoreCheckpointSurvivesAProcessExitWithoutRepeatingCompletedTools(String change)
-      throws Exception {
+  void nativeCoreCheckpointSurvivesAProcessExitWithoutRepeatingCompletedTools(
+      ReasoningReplayMode replay, String change) throws Exception {
+    replayMode = replay;
     String first =
         response(
             "resp_checkpoint",
@@ -376,7 +401,9 @@ class ResponsesReplayContractTest {
       if (change.equals("compatible"))
         assertThat(received.getLast().path("input").toString())
             .contains(
-                "restart-opaque",
+                replay == ReasoningReplayMode.PLAINTEXT
+                    ? "PRIVATE-plain-restart-opaque"
+                    : "restart-opaque",
                 "call_checkpoint",
                 "completed fixture result",
                 "restart fixture task");
@@ -393,7 +420,8 @@ class ResponsesReplayContractTest {
                     NativeCheckpointProcessProbe.class,
                     protocolDirectory.toString(),
                     mode,
-                    base))
+                    base,
+                    replayMode.name()))
             .redirectErrorStream(true)
             .redirectOutput(protocolDirectory.resolve(mode + "-checkpoint.log").toFile());
     var data = java.nio.file.Files.createDirectories(protocolDirectory.resolve(mode + "-data"));
@@ -420,6 +448,7 @@ class ResponsesReplayContractTest {
       boolean changed = !writer && !args[1].equals("read");
       var fixture = new ResponsesReplayContractTest();
       fixture.protocolDirectory = root;
+      fixture.replayMode = ReasoningReplayMode.valueOf(args[3]);
       var payloads = fixture.payloads();
       var source = new org.sqlite.SQLiteDataSource();
       source.setUrl("jdbc:sqlite:" + root.resolve("checkpoint.db"));
@@ -1016,9 +1045,15 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  @org.junit.jupiter.params.provider.CsvSource({
+    "ENCRYPTED,false",
+    "ENCRYPTED,true",
+    "PLAINTEXT,false",
+    "PLAINTEXT,true"
+  })
   void approvalRestartRestoresBorrowedReplayAuthorityBeforeRemainingCallbacks(
-      boolean endpointChanged) throws Exception {
+      ReasoningReplayMode replay, boolean endpointChanged) throws Exception {
+    replayMode = replay;
     var properties = nativeProperties();
     var models = nativeProvider(properties);
     var previous =
@@ -2617,6 +2652,204 @@ class ResponsesReplayContractTest {
         .isEqualTo("opaque-two+/=");
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void plaintextReasoningUsesThePublicSdkSendViewWithoutMutatingTheStoredOriginal(boolean streaming)
+      throws Exception {
+    replayMode = ReasoningReplayMode.PLAINTEXT;
+    var wire = new ObjectMapper().readTree(toolResponse());
+    for (var item : wire.path("output"))
+      if ("reasoning".equals(item.path("type").asText())) {
+        var reasoning = (com.fasterxml.jackson.databind.node.ObjectNode) item;
+        reasoning.remove("encrypted_content");
+        reasoning.set(
+            "content",
+            new ObjectMapper()
+                .readTree(
+                    "[{\"type\":\"reasoning_text\",\"text\":\"PRIVATE-平文-"
+                        + item.path("id").asText()
+                        + "\"}]"));
+      }
+    contentType = streaming ? "text/event-stream" : "application/json";
+    replies.add(streaming ? sse(wire.toString()) : wire.toString());
+    var options = options();
+    var model = model(options);
+    var prompt = new Prompt("fixture", options);
+    org.springframework.ai.chat.model.ChatResponse first;
+    if (streaming) {
+      var completed =
+          new java.util.concurrent.atomic.AtomicReference<
+              org.springframework.ai.chat.model.ChatResponse>();
+      new org.springframework.ai.chat.model.MessageAggregator()
+          .aggregate(model.stream(prompt), completed::set)
+          .blockLast(Duration.ofSeconds(10));
+      first = completed.get();
+    } else first = model.call(prompt);
+    var original = first.getResult().getOutput();
+    var parts = List.copyOf(original.getParts());
+    assertThat(original.getText()).isEqualTo("working");
+    var reasoning =
+        original.getParts().stream()
+            .filter(ReasoningPart.class::isInstance)
+            .map(ReasoningPart.class::cast)
+            .toList();
+    assertThat(reasoning).hasSize(2);
+    assertThat(reasoning)
+        .allSatisfy(part -> {
+          assertThat(part.payload()).isNull();
+          assertThat(part.text()).startsWith("PRIVATE-平文-");
+        });
+    var scope =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
+            "fixture-project", protocolDirectory.toString(), "fixture-conversation");
+    var ref = payloads().save(scope, "fixture-run", "plaintext-original", original);
+    payloads()
+        .publish(
+            scope,
+            ref,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+            "fixture-run");
+    var restored =
+        (AssistantMessage)
+            payloads()
+                .load(
+                    scope,
+                    ref,
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+                    "fixture-run");
+    assertThat(restored.getParts()).containsExactlyElementsOf(parts);
+    contentType = "application/json";
+    model.call(new Prompt(List.of(new UserMessage("fixture"), restored), options));
+    assertThat(requests).allSatisfy(request -> assertThat(request.has("include")).isFalse());
+    var input = requests.getLast().path("input");
+    for (int position : List.of(1, 4)) {
+      assertThat(input.get(position).path("type").asText()).isEqualTo("reasoning");
+      assertThat(input.get(position).path("content").get(0).path("text").asText())
+          .isEqualTo("PRIVATE-平文-" + input.get(position).path("id").asText());
+      assertThat(input.get(position).has("encrypted_content")).isFalse();
+    }
+    assertThat(original.getParts()).containsExactlyElementsOf(parts);
+    assertThat(executions.get()).isZero();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "parallel",
+        "summary",
+        "verbosity",
+        "temperature",
+        "top-p",
+        "include",
+        "metadata",
+        "service-tier",
+        "cache-key",
+        "safety"
+      })
+  void plaintextUnsupportedSettingsAreRejectedBeforeTheProviderCanSilentlyIgnoreThem(
+      String setting) {
+    replayMode = ReasoningReplayMode.PLAINTEXT;
+    var builder = options().mutate();
+    switch (setting) {
+      case "parallel" -> builder.parallelToolCalls(false);
+      case "summary" -> builder.reasoningSummary("auto");
+      case "verbosity" -> builder.verbosity("low");
+      case "temperature" -> builder.temperature(0.2);
+      case "top-p" -> builder.topP(0.95);
+      case "include" -> builder.include(List.of("reasoning.encrypted_content"));
+      case "metadata" -> builder.metadata(Map.of("fixture", "PRIVATE-metadata"));
+      case "service-tier" -> builder.serviceTier("auto");
+      case "cache-key" -> builder.promptCacheKey("PRIVATE-cache-key");
+      case "safety" -> builder.safetyIdentifier("PRIVATE-safety");
+      default -> throw new AssertionError(setting);
+    }
+    var supplied = builder.build();
+    assertThatThrownBy(() -> model(options()).call(new Prompt("fixture", supplied)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageNotContaining("PRIVATE");
+    assertThat(requests).isEmpty();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "empty",
+        "missing",
+        "opaque",
+        "summary",
+        "attribute",
+        "owner",
+        "endpoint",
+        "partial"
+      })
+  void plaintextReplayRejectsMissingForeignOrLossyPartsBeforeHttp(String defect) {
+    replayMode = ReasoningReplayMode.PLAINTEXT;
+    replies.add(reasoningDone());
+    var options = options();
+    var model = model(options);
+    var original = model.call(new Prompt("fixture", options)).getResult().getOutput();
+    var part = (ReasoningPart) original.getParts().getFirst();
+    var attributes = new java.util.HashMap<>(part.attributes());
+    var metadata = new java.util.HashMap<>(original.getMetadata());
+    if (defect.equals("attribute")) attributes.put("PRIVATE-future-field", "PRIVATE-value");
+    if (defect.equals("owner")) metadata.put(ResponsesReasoningReplay.ORIGIN_OWNER, "other-owner");
+    if (defect.equals("endpoint"))
+      metadata.put(ResponsesReasoningReplay.ORIGIN_ENDPOINT, "other-endpoint");
+    org.springframework.ai.chat.messages.part.MessagePart changed =
+        new ReasoningPart(
+            defect.equals("missing") ? null : defect.equals("empty") ? "" : part.text(),
+            defect.equals("summary") ? "PRIVATE-summary" : null,
+            defect.equals("opaque")
+                ? new OpaquePayload(
+                    OpenAiResponsesMetadata.PROVIDER,
+                    OpenAiResponsesMetadata.ENCRYPTED_CONTENT_KIND,
+                    "PRIVATE-fake-opaque")
+                : null,
+            attributes);
+    if (defect.equals("partial"))
+      changed = org.springframework.ai.chat.messages.part.StreamingParts.partial(changed, 0);
+    var assistant = AssistantMessage.builder().part(changed).properties(metadata).build();
+    assertThatThrownBy(
+            () -> model.call(new Prompt(List.of(new UserMessage("fixture"), assistant), options)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageNotContaining("PRIVATE");
+    assertThat(requests).hasSize(1);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "false,item",
+    "true,item",
+    "false,content",
+    "true,content"
+  })
+  void unknownPlaintextWireFieldsCannotDisappearInTheSpringMapper(boolean streaming, String field)
+      throws Exception {
+    replayMode = ReasoningReplayMode.PLAINTEXT;
+    var wire = new ObjectMapper().readTree(reasoningDone());
+    var item = (com.fasterxml.jackson.databind.node.ObjectNode) wire.path("output").get(0);
+    var target =
+        field.equals("item")
+            ? item
+            : (com.fasterxml.jackson.databind.node.ObjectNode) item.path("content").get(0);
+    target.put("PRIVATE-future", "PRIVATE-value");
+    contentType = streaming ? "text/event-stream" : "application/json";
+    replies.add(streaming ? sse(wire.toString()) : wire.toString());
+    var options = options();
+    var model = model(options);
+    assertThatThrownBy(
+            () -> {
+              if (streaming)
+                model.stream(new Prompt("fixture", options)).blockLast(Duration.ofSeconds(10));
+              else model.call(new Prompt("fixture", options));
+            })
+        .isInstanceOf(ResponsesTransportException.class)
+        .hasMessageContaining("INVALID_RESPONSE")
+        .hasMessageNotContaining("PRIVATE")
+        .hasNoCause();
+    assertThat(executions.get()).isZero();
+  }
+
   @Test
   void encryptedRequestsRequireAnExplicitOwnerBeforeAnyHttp() {
     owner = null;
@@ -2867,7 +3100,9 @@ class ResponsesReplayContractTest {
                 Map.entry("rei.llm.features.chat.model", "fixture-model"),
                 Map.entry("rei.llm.features.chat.max-output-tokens", "41"),
                 Map.entry("rei.llm.features.chat.temperature", "0.2"),
-                Map.entry("rei.llm.features.chat.reasoning-replay", "encrypted"),
+                Map.entry(
+                    "rei.llm.features.chat.reasoning-replay",
+                    replayMode.name().toLowerCase(java.util.Locale.ROOT)),
                 Map.entry("rei.llm.features.chat.max-tools", "16"),
                 Map.entry("rei.llm.features.chat.endpoint-generation", "7"),
                 Map.entry("rei.llm.features.chat.supported-settings", "temperature")));
@@ -2921,12 +3156,19 @@ class ResponsesReplayContractTest {
   }
 
   private String response(String id, String output) {
-    return """
-    {"id":"%s","object":"response","created_at":0,"status":"completed","model":"fixture-model",
-     "output":%s,"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5,
-      "input_tokens_details":{"cached_tokens":1},"output_tokens_details":{"reasoning_tokens":1}}}
-    """
-        .formatted(id, output);
+    String raw =
+        """
+        {"id":"%s","object":"response","created_at":0,"status":"completed","model":"fixture-model",
+         "output":%s,"usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5,
+          "input_tokens_details":{"cached_tokens":1},"output_tokens_details":{"reasoning_tokens":1}}}
+        """
+            .formatted(id, output);
+    if (replayMode == ReasoningReplayMode.PLAINTEXT)
+      raw =
+          raw.replaceAll(
+              "\"encrypted_content\":\"([^\"]*)\"",
+              "\"content\":[{\"type\":\"reasoning_text\",\"text\":\"PRIVATE-plain-$1\"}]");
+    return raw;
   }
 
   private String sse(String json) throws Exception {
@@ -2940,12 +3182,38 @@ class ResponsesReplayContractTest {
     int sequence = 0;
     stream.append(event("response.created", sequence++, "\"response\":" + created));
     int index = 0;
-    for (var item : terminal.path("output"))
+    for (var item : terminal.path("output")) {
+      if ("reasoning".equals(item.path("type").asText()) && item.path("content").isArray()) {
+        String text = item.path("content").get(0).path("text").asText();
+        for (String delta :
+            List.of(text.substring(0, text.length() / 2), text.substring(text.length() / 2)))
+          stream.append(
+              event(
+                  "response.reasoning_text.delta",
+                  sequence++,
+                  "\"output_index\":"
+                      + index
+                      + ",\"item_id\":\""
+                      + item.path("id").asText()
+                      + "\",\"content_index\":0,\"delta\":"
+                      + mapper.writeValueAsString(delta)));
+        stream.append(
+            event(
+                "response.reasoning_text.done",
+                sequence++,
+                "\"output_index\":"
+                    + index
+                    + ",\"item_id\":\""
+                    + item.path("id").asText()
+                    + "\",\"content_index\":0,\"text\":"
+                    + mapper.writeValueAsString(text)));
+      }
       stream.append(
           event(
               "response.output_item.done",
               sequence++,
               "\"output_index\":" + index++ + ",\"item\":" + item));
+    }
     stream.append(event("response.completed", sequence, "\"response\":" + terminal));
     return stream.toString();
   }

@@ -156,8 +156,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                 options.getCustomHeaders(),
                 ObservationRegistry.NOOP,
                 null,
-                transportCustomizers));
-    var asyncClient = ResponsesSdkBoundary.safe(client);
+                transportCustomizers),
+            endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT);
+    var asyncClient =
+        ResponsesSdkBoundary.safe(
+            client, endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT);
     var model =
         OpenAiResponsesChatModel.builder()
             .options(options)
@@ -269,6 +272,15 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     if (supplied != null && !(supplied instanceof OpenAiResponsesChatOptions))
       throw new IllegalArgumentException("Responses native options required");
     var options = supplied == null ? getOptions() : (OpenAiResponsesChatOptions) supplied;
+    var include = options.getInclude();
+    var metadata = options.getMetadata();
+    if (endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT
+        && (include != null && !include.isEmpty()
+            || metadata != null && !metadata.isEmpty()
+            || options.getServiceTier() != null
+            || options.getPromptCacheKey() != null
+            || options.getSafetyIdentifier() != null))
+      throw new IllegalArgumentException("Responses plaintext platform setting is unsupported");
     requireCapability(options.getVerbosity(), LlmCapabilities.Setting.TEXT_VERBOSITY, "verbosity");
     var defaults = delegate.getOptions();
     var requestTimeout = options.getTimeout();
