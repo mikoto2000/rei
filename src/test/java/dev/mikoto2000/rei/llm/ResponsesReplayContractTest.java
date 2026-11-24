@@ -27,6 +27,40 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 /** Native SDK input/output round trips; no external API or business tool is used. */
 @org.junit.jupiter.api.Timeout(30)
 class ResponsesReplayContractTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"negative,false", "negative,true", "sum,false", "cached,true",
+      "reasoning,false", "fraction,false", "fraction,true", "overflow,false", "typed,false",
+      "cachedFraction,true", "detailType,true", "cachedOverflow,false"})
+  void invalidNativeUsageCannotBeRoundedStoredOrDispatched(String changed, boolean streaming) throws Exception {
+    String raw = switch (changed) {
+      case "negative" -> toolResponse().replace("\"input_tokens\":3", "\"input_tokens\":-1");
+      case "sum" -> toolResponse().replace("\"total_tokens\":5", "\"total_tokens\":4");
+      case "cached" -> toolResponse().replace("\"cached_tokens\":1", "\"cached_tokens\":4");
+      case "reasoning" -> toolResponse().replace("\"reasoning_tokens\":1", "\"reasoning_tokens\":3");
+      case "fraction" -> toolResponse().replace("\"total_tokens\":5", "\"total_tokens\":5.5");
+      case "overflow" -> toolResponse().replace("\"input_tokens\":3", "\"input_tokens\":18446744073709551619");
+      case "typed" -> toolResponse().replace("\"input_tokens\":3", "\"input_tokens\":\"3\"");
+      case "cachedFraction" -> toolResponse().replace("\"cached_tokens\":1", "\"cached_tokens\":1.5");
+      case "detailType" -> toolResponse().replace("\"input_tokens_details\":{\"cached_tokens\":1}", "\"input_tokens_details\":\"private-fixture\"");
+      case "cachedOverflow" -> toolResponse().replace("\"cached_tokens\":1", "\"cached_tokens\":18446744073709551617");
+      default -> throw new AssertionError(changed);
+    };
+    contentType = streaming ? "text/event-stream" : "application/json";
+    replies.add(streaming ? sse(raw) : raw);
+    var options = options();
+    var model = model(options);
+    var failure = org.assertj.core.api.Assertions.catchThrowable(() -> {
+      if (streaming) {
+        var run = new dev.mikoto2000.rei.core.chat.AgentRunContext("usage-run", "session", java.nio.file.Path.of("."),
+            "project", dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL,
+            dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE);
+        new dev.mikoto2000.rei.core.chat.BoundedToolLoop().run(model, new Prompt("fixture", options), 2, run, () -> {})
+            .block(Duration.ofSeconds(10));
+      } else new ToolLoopSupport().execute(new Prompt("fixture", options), model.call(new Prompt("fixture", options)));
+    });
+    assertThat(executions.get()).isZero();
+    assertThat(failure).isInstanceOf(ResponsesTransportException.class).hasMessageContaining("INVALID_RESPONSE").hasNoCause();
+  }
   @Test
   void nativeAssistantCanBeEncodedRestoredAndReplayedWithoutLosingUsageOrPayload() {
     replies.add(reasoningDone());
