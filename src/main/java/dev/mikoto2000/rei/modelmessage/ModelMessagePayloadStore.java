@@ -192,6 +192,52 @@ public final class ModelMessagePayloadStore {
     });
   }
 
+  /** Protect every validated pointer before the existing checkpoint writer makes it visible. */
+  public void protectCheckpoint(Scope scope, History history, String owner) {
+    validate(scope);
+    identifier(owner);
+    transaction(db -> {
+      try (var insert = db.prepareStatement(
+          "INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,'CHECKPOINT',?)")) {
+        for (var entry : history.entries()) {
+          var message = codec.decode(read(db, scope, entry.reference()));
+          if (scalar(db, "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='RUN' AND owner=?",
+              entry.reference().id(), history.run()) != 1) throw rejected();
+          if (message instanceof org.springframework.ai.chat.messages.AssistantMessage)
+            history.origin().requireMatch(message);
+          bind(insert, entry.reference().id(), owner);
+          insert.addBatch();
+        }
+        insert.executeBatch();
+      }
+      return null;
+    });
+  }
+
+  public static String checkpointOwner(String project, String task, long revision) {
+    identifier(project);
+    identifier(task);
+    if (revision < 1) throw rejected();
+    return digest(String.join("\0", project, task, Long.toString(revision))
+        .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+  }
+
+  /** Called only after deletion of those exact checkpoint revisions has committed. */
+  public void releaseCheckpointHistory(java.util.List<String> owners) {
+    transaction(db -> {
+      try (var delete = db.prepareStatement(
+          "DELETE FROM model_message_references WHERE kind='CHECKPOINT' AND owner=?")) {
+        for (String owner : owners) {
+          if (owner == null || !owner.matches("[0-9a-f]{64}")) throw rejected();
+          bind(delete, owner);
+          delete.addBatch();
+        }
+        delete.executeBatch();
+      }
+      return null;
+    });
+  }
+
   /** Invoked by retention maintenance, never by an independent background scheduler. */
   public int collectExpired() {
     return transaction(db -> {
