@@ -11,7 +11,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -30,26 +29,56 @@ class ApprovalBorrowedReferenceTest {
     var current = new AgentRunContext("current", "chat", directory, "project");
     var previous = payloads.newExchange(old);
     var active = payloads.newExchange(current);
-    var original = AssistantMessage.builder().content("previous native answer")
-        .properties(Map.of("rei.llm.replay-origin-owner", previous.ownerKey(),
-            "rei.llm.replay-origin-endpoint", "endpoint")).build();
+    var original =
+        AssistantMessage.builder()
+            .content("previous native answer")
+            .properties(
+                Map.of(
+                    "rei.llm.replay-origin-owner",
+                    previous.ownerKey(),
+                    "rei.llm.replay-origin-endpoint",
+                    "endpoint"))
+            .build();
     var reference = previous.reference(original);
     var pointer = payloads.historyReference(previous.scope(), reference, "history:previous");
-    if (verified) payloads.historyReplayGrant(active, List.of(pointer),
-        new ModelMessagePayloadStore.Origin(active.ownerKey(), "endpoint"));
+    if (verified)
+      payloads.historyReplayGrant(
+          active,
+          List.of(pointer),
+          new ModelMessagePayloadStore.Origin(active.ownerKey(), "endpoint"));
     var call = new AssistantMessage.ToolCall("call", "function", "fixture", "{}");
-    var pendingMessage = AssistantMessage.builder().content("pending").toolCalls(List.of(call))
-        .properties(Map.of("rei.llm.replay-origin-owner", active.ownerKey(),
-            "rei.llm.replay-origin-endpoint", "endpoint")).build();
+    var pendingMessage =
+        AssistantMessage.builder()
+            .content("pending")
+            .toolCalls(List.of(call))
+            .properties(
+                Map.of(
+                    "rei.llm.replay-origin-owner",
+                    active.ownerKey(),
+                    "rei.llm.replay-origin-endpoint",
+                    "endpoint"))
+            .build();
     var pendingReference = active.reference(pendingMessage);
-    var pending = new RunContinuation.PendingTools("pending", List.of(call), List.of(), Set.of(), pendingReference);
+    var pending =
+        new RunContinuation.PendingTools(
+            "pending", List.of(call), List.of(), Set.of(), pendingReference);
     var approvals = new ApprovalContinuationStore(source);
-    Runnable save = () -> approvals.save("approval", current, "current request", List.of(
-        ContextHistoryAdvisor.historical(original, 4), new UserMessage("current request")),
-        pending, new OutputLimitRunBudget(2, 4).snapshot(), false);
+    Runnable save =
+        () ->
+            approvals.save(
+                "approval",
+                current,
+                "current request",
+                List.of(
+                    ContextHistoryAdvisor.historical(original, 4),
+                    new UserMessage("current request")),
+                pending,
+                new OutputLimitRunBudget(2, 4).snapshot(),
+                false);
     if (!verified) {
       org.assertj.core.api.Assertions.assertThatThrownBy(save::run)
-          .isInstanceOf(IllegalStateException.class).hasMessageNotContaining("previous native answer");
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageNotContaining("previous native answer");
       assertThat(approvals.find("approval")).isEmpty();
       return;
     }
@@ -57,7 +86,8 @@ class ApprovalBorrowedReferenceTest {
     var restarted = new ApprovalContinuationStore(source);
     var entry = restarted.find("approval").orElseThrow();
     assertThat(restarted.document(entry).history().getFirst().payload())
-        .as("preserve the source Run identity and payload hash instead of copying foreign origin into the new Run")
+        .as(
+            "preserve the source Run identity and payload hash instead of copying foreign origin into the new Run")
         .isEqualTo(reference);
     assertThat(restarted.saved(entry).messages().getFirst().getMetadata())
         .containsEntry("rei.llm.replay-origin-owner", previous.ownerKey())

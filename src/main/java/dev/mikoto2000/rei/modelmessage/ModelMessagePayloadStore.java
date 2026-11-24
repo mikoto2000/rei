@@ -492,31 +492,44 @@ public final class ModelMessagePayloadStore {
     metadata.remove("rei.historySequence");
     Message original;
     if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant)
-      original = org.springframework.ai.chat.messages.AssistantMessage.builder()
-          .parts(assistant.getParts()).properties(metadata).build();
+      original =
+          org.springframework.ai.chat.messages.AssistantMessage.builder()
+              .parts(assistant.getParts())
+              .properties(metadata)
+              .build();
     else if (message instanceof org.springframework.ai.chat.messages.UserMessage user)
-      original = org.springframework.ai.chat.messages.UserMessage.builder().text(user.getText())
-          .media(user.getMedia()).metadata(metadata).build();
+      original =
+          org.springframework.ai.chat.messages.UserMessage.builder()
+              .text(user.getText())
+              .media(user.getMedia())
+              .metadata(metadata)
+              .build();
     else throw rejected();
     String hash = digest(codec.encode(original));
-    var existing = transaction(db -> {
-      try (var query = db.prepareStatement(
-          "SELECT p.id,p.sha256,p.run FROM model_message_payloads p JOIN model_message_references r ON r.payload_id=p.id WHERE p.project=? AND p.root_path=? AND p.conversation=? AND p.sha256=? AND r.kind='RUN' AND r.owner=? ORDER BY p.id LIMIT 1")) {
-        bind(query, scope.project(), scope.root(), scope.conversation(), hash, run);
-        try (var rows = query.executeQuery()) {
-          if (!rows.next()) return java.util.Optional.<Ref>empty();
-          var ref = new Ref(rows.getString(1), rows.getString(2));
-          read(db, scope, ref);
-          var sourceOwner = original.getMetadata().get("rei.llm.replay-origin-owner");
-          if (sourceOwner instanceof String owner && owner.matches("[0-9a-fA-F]{64}")
-              && !owner.equals(new Exchange(this, scope, rows.getString(3), "source").ownerKey())) throw rejected();
-          return java.util.Optional.of(ref);
-        }
-      }
-    });
+    var existing =
+        transaction(db -> {
+          try (var query =
+              db.prepareStatement(
+                  "SELECT p.id,p.sha256,p.run FROM model_message_payloads p JOIN model_message_references r ON r.payload_id=p.id WHERE p.project=? AND p.root_path=? AND p.conversation=? AND p.sha256=? AND r.kind='RUN' AND r.owner=? ORDER BY p.id LIMIT 1")) {
+            bind(query, scope.project(), scope.root(), scope.conversation(), hash, run);
+            try (var rows = query.executeQuery()) {
+              if (!rows.next()) return java.util.Optional.<Ref>empty();
+              var ref = new Ref(rows.getString(1), rows.getString(2));
+              read(db, scope, ref);
+              var sourceOwner = original.getMetadata().get("rei.llm.replay-origin-owner");
+              if (sourceOwner instanceof String owner
+                  && owner.matches("[0-9a-fA-F]{64}")
+                  && !owner.equals(
+                      new Exchange(this, scope, rows.getString(3), "source").ownerKey()))
+                throw rejected();
+              return java.util.Optional.of(ref);
+            }
+          }
+        });
     if (existing.isPresent()) return existing.orElseThrow();
     var sourceOwner = original.getMetadata().get("rei.llm.replay-origin-owner");
-    if (sourceOwner instanceof String owner && owner.matches("[0-9a-fA-F]{64}")
+    if (sourceOwner instanceof String owner
+        && owner.matches("[0-9a-fA-F]{64}")
         && !owner.equals(new Exchange(this, scope, run, key).ownerKey())) throw rejected();
     return save(scope, run, key, original);
   }
