@@ -96,4 +96,22 @@ class CompressionPolicyTest {
     assertThat(new CompressionPolicy(estimator).prefixToCompress(messages, 1)).isEqualTo(4);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void requestEstimateIncludesReasoningSummaryOpaqueAndWireAttributes(boolean tokenizerAware) {
+    var counter = tokenizerAware ? TokenEstimator.tokenizerAware() : estimator;
+    var payload = new org.springframework.ai.chat.messages.part.OpaquePayload("fixture", "encrypted_content", "opaque+/=".repeat(1000));
+    var reasoning = new org.springframework.ai.chat.messages.part.ReasoningPart("reasoning ".repeat(100), "summary ".repeat(50), payload,
+        java.util.Map.of("itemId", "rs_" + "identifier".repeat(100)));
+    var message = AssistantMessage.builder().parts(List.of(reasoning,
+        new org.springframework.ai.chat.messages.part.TextPart("visible answer", null, java.util.Map.of("phase", "final_answer")))).build();
+    long required = counter.message(new AssistantMessage("visible answer"))
+        + (long) counter.text(reasoning.text()) + counter.text(reasoning.summary())
+        + counter.text(payload.data()) + counter.text(reasoning.attributes().get("itemId"));
+    assertThat(counter.message(message)).isGreaterThanOrEqualTo((int) required);
+    assertThat(message.getParts()).containsExactly(reasoning, new org.springframework.ai.chat.messages.part.TextPart("visible answer", null, java.util.Map.of("phase", "final_answer")));
+    assertThat(reasoning.payload()).isSameAs(payload);
+    assertThat(message.getText()).isEqualTo("visible answer");
+  }
+
 }
