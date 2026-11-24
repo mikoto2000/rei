@@ -6,6 +6,36 @@ public record ModelTokenUsage(Long input, Long output, Long total, Long cached, 
   @java.io.Serial private static final long serialVersionUID = 1L;
   public static final String METADATA_KEY = "rei.llm.token-usage";
 
+  /** Backend numeric metadata survives stream aggregation and takes precedence over its totals. */
+  public static ModelTokenUsage from(org.springframework.ai.chat.model.ChatResponse response) {
+    if (response != null && response.getResult() != null) {
+      var metadata = response.getResult().getOutput().getMetadata();
+      if (metadata.containsKey(METADATA_KEY)) {
+        if (metadata.get(METADATA_KEY) instanceof ModelTokenUsage numeric) return numeric;
+        throw new IllegalArgumentException("Invalid model token usage");
+      }
+    }
+    var usage = response == null || response.getMetadata() == null
+        ? null : response.getMetadata().getUsage();
+    if (usage == null || usage instanceof org.springframework.ai.chat.metadata.EmptyUsage)
+      return new ModelTokenUsage(null, null, null, null, null);
+    return new ModelTokenUsage(number(usage.getPromptTokens()), number(usage.getCompletionTokens()),
+        number(usage.getTotalTokens()), null, null);
+  }
+
+  /** Preserve the existing integer budget contract without rounding or overflow. */
+  public static Integer totalTokens(org.springframework.ai.chat.model.ChatResponse response) {
+    Long total = from(response).total();
+    if (total == null) return null;
+    if (total > Integer.MAX_VALUE)
+      throw new IllegalArgumentException("Model token usage exceeds accounting range");
+    return total.intValue();
+  }
+
+  private static Long number(Integer value) {
+    return value == null ? null : value.longValue();
+  }
+
   public ModelTokenUsage {
     if (negative(input)
         || negative(output)

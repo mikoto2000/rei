@@ -252,8 +252,8 @@ public final class BoundedToolLoop {
                   return Mono.error(new IllegalStateException("Empty response"));
                 if (reservation != null) {
                   reported.set(true);
-                  var usage = response.getMetadata().getUsage();
-                  reservation.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+                  reservation.recordTotalTokens(
+                      dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(response));
                 }
                 if (OutputLimitDetector.isOutputLimitReached(response))
                   return Mono.error(new IllegalStateException("Output limit"));

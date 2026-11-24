@@ -411,7 +411,8 @@ public final class StagnationChatModel implements ChatModel {
                   dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
                       context.runContext(), "providerInputTokensUnavailable", 1);
                 reported.set(true);
-                context.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+                context.recordTotalTokens(
+                    dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(result));
                 if (usage != null && usage.getCompletionTokens() != null) {
                   context.recordCompletionTokens(usage.getCompletionTokens());
                 }
