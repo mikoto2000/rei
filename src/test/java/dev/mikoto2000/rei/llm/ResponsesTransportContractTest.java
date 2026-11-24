@@ -19,22 +19,26 @@ class ResponsesTransportContractTest {
     var defaults = options().build();
     var changed = defaults.mutate().deploymentName("other-deployment").build();
     assertThatThrownBy(() -> ResponsesAdapter.create(endpoint(defaults), changed, List.of()))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("resolved");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("resolved");
   }
+
   @Test
   void capabilityCollectionIsImmutableAndHasStableFingerprintOrder() {
-    var mutable = java.util.EnumSet.of(LlmCapabilities.Setting.TEMPERATURE, LlmCapabilities.Setting.TOP_P);
+    var mutable =
+        java.util.EnumSet.of(LlmCapabilities.Setting.TEMPERATURE, LlmCapabilities.Setting.TOP_P);
     supportedSettings = mutable;
     var frozen = endpoint(options().build());
     var fingerprint = frozen.fingerprint();
     mutable.clear();
-    assertThat(frozen.capabilities().supportedSettings()).containsExactly(
-        LlmCapabilities.Setting.TEMPERATURE, LlmCapabilities.Setting.TOP_P);
+    assertThat(frozen.capabilities().supportedSettings())
+        .containsExactly(LlmCapabilities.Setting.TEMPERATURE, LlmCapabilities.Setting.TOP_P);
     assertThat(frozen.fingerprint()).isEqualTo(fingerprint);
     assertThatThrownBy(() -> frozen.capabilities().supportedSettings().clear())
         .isInstanceOf(UnsupportedOperationException.class);
-    supportedSettings = new java.util.LinkedHashSet<>(List.of(
-        LlmCapabilities.Setting.TOP_P, LlmCapabilities.Setting.TEMPERATURE));
+    supportedSettings =
+        new java.util.LinkedHashSet<>(
+            List.of(LlmCapabilities.Setting.TOP_P, LlmCapabilities.Setting.TEMPERATURE));
     assertThat(endpoint(options().build()).fingerprint()).isEqualTo(fingerprint);
   }
 
@@ -51,7 +55,8 @@ class ResponsesTransportContractTest {
     supportedSettings = java.util.Set.of();
     var options = options().outputSchema("{\"type\":\"object\"}").build();
     assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("structuredOutput");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("structuredOutput");
     assertThat(requests).isEmpty();
   }
 
@@ -59,56 +64,88 @@ class ResponsesTransportContractTest {
   void imageInputRequiresDeclaredSupport() {
     supportedSettings = java.util.Set.of();
     var options = options().build();
-    var image = new org.springframework.ai.content.Media(org.springframework.util.MimeTypeUtils.IMAGE_PNG,
-        new org.springframework.core.io.ByteArrayResource(new byte[] {1, 2, 3}));
-    var user = org.springframework.ai.chat.messages.UserMessage.builder().text("look").media(image).build();
+    var image =
+        new org.springframework.ai.content.Media(
+            org.springframework.util.MimeTypeUtils.IMAGE_PNG,
+            new org.springframework.core.io.ByteArrayResource(new byte[] {1, 2, 3}));
+    var user =
+        org.springframework.ai.chat.messages.UserMessage.builder()
+            .text("look")
+            .media(image)
+            .build();
     assertThatThrownBy(() -> transport(options).call(new Prompt(user, options)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("imageInput");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("imageInput");
     assertThat(requests).isEmpty();
   }
 
   @Test
   void namedPublishedToolChoiceUsesNativeFunctionShape() {
-    var options = options().toolCallbacks(callback("fixture_tool", "{\"type\":\"object\"}"))
-        .toolChoice("{\"type\":\"function\",\"name\":\"fixture_tool\"}").build();
+    var options =
+        options()
+            .toolCallbacks(callback("fixture_tool", "{\"type\":\"object\"}"))
+            .toolChoice("{\"type\":\"function\",\"name\":\"fixture_tool\"}")
+            .build();
     transport(options).call(new Prompt("fixture", options));
-    assertThat(requests.getFirst().path("tool_choice").path("name").asText()).isEqualTo("fixture_tool");
+    assertThat(requests.getFirst().path("tool_choice").path("name").asText())
+        .isEqualTo("fixture_tool");
   }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void outputLimitFailureKeepsTokenUsageWithoutReturningPartialOutput(boolean streaming) {
-    var incomplete = completed().replaceFirst("\"status\":\"completed\"",
-        "\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"}");
+    var incomplete =
+        completed()
+            .replaceFirst(
+                "\"status\":\"completed\"",
+                "\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"}");
     contentType = streaming ? "text/event-stream" : "application/json";
-    reply = streaming ? textDelta() + event("response.incomplete", "\"response\":" + incomplete) : incomplete;
+    reply =
+        streaming
+            ? textDelta() + event("response.incomplete", "\"response\":" + incomplete)
+            : incomplete;
     var options = options().build();
     var model = transport(options);
-    assertThatThrownBy(() -> {
-      if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
-      else model.call(new Prompt("fixture", options));
-    }).isInstanceOfSatisfying(ResponsesTransportException.class, error -> {
-      assertThat(error.category()).isEqualTo(ResponsesTransportException.Category.OUTPUT_LIMIT);
-      assertUsage(error);
-    });
+    assertThatThrownBy(
+            () -> {
+              if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
+              else model.call(new Prompt("fixture", options));
+            })
+        .isInstanceOfSatisfying(
+            ResponsesTransportException.class,
+            error -> {
+              assertThat(error.category())
+                  .isEqualTo(ResponsesTransportException.Category.OUTPUT_LIMIT);
+              assertUsage(error);
+            });
   }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void failedResponsesKeepOnlyNumericUsageAndSafeCategory(boolean streaming) {
-    var failed = completed().replaceFirst("\"status\":\"completed\"",
-        "\"status\":\"failed\",\"error\":{\"code\":\"server_error\",\"message\":\"private-reasoning fixture-secret\"}");
+    var failed =
+        completed()
+            .replaceFirst(
+                "\"status\":\"completed\"",
+                "\"status\":\"failed\",\"error\":{\"code\":\"server_error\",\"message\":\"private-reasoning fixture-secret\"}");
     contentType = streaming ? "text/event-stream" : "application/json";
     reply = streaming ? event("response.failed", "\"response\":" + failed) : failed;
     var options = options().build();
     var model = transport(options);
-    assertThatThrownBy(() -> {
-      if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
-      else model.call(new Prompt("fixture", options));
-    }).isInstanceOfSatisfying(ResponsesTransportException.class, error -> {
-      assertThat(error.category()).isEqualTo(ResponsesTransportException.Category.PROVIDER);
-      assertThat(error).hasMessageNotContaining("private-reasoning").hasMessageNotContaining("fixture-secret");
-      assertUsage(error);
-    });
+    assertThatThrownBy(
+            () -> {
+              if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
+              else model.call(new Prompt("fixture", options));
+            })
+        .isInstanceOfSatisfying(
+            ResponsesTransportException.class,
+            error -> {
+              assertThat(error.category()).isEqualTo(ResponsesTransportException.Category.PROVIDER);
+              assertThat(error)
+                  .hasMessageNotContaining("private-reasoning")
+                  .hasMessageNotContaining("fixture-secret");
+              assertUsage(error);
+            });
   }
 
   private void assertUsage(ResponsesTransportException error) {
@@ -119,18 +156,27 @@ class ResponsesTransportContractTest {
     assertThat(error.usage().cached()).isEqualTo(1);
     assertThat(error.usage().reasoning()).isEqualTo(1);
   }
+
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {"baseUrl", "model", "maxOutputTokens", "temperature"})
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"baseUrl", "model", "maxOutputTokens", "temperature"})
   void clientConstructionRequiresTheResolvedDescriptor(String field) {
     var options = options().build();
-    var endpoint = new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES,
-        field.equals("baseUrl") ? "https://other.invalid/v1" : options.getBaseUrl(),
-        "fixture-credential", field.equals("model") ? "other-model" : options.getModel(),
-        new LlmCapabilities(ReasoningReplayMode.NONE, 128),
-        field.equals("maxOutputTokens") ? 32 : options.getMaxOutputTokens(),
-        field.equals("temperature") ? Double.valueOf(0.2) : options.getTemperature(), readTimeout);
+    var endpoint =
+        new ResolvedLlmEndpoint(
+            "fixture",
+            1,
+            LlmApiType.RESPONSES,
+            field.equals("baseUrl") ? "https://other.invalid/v1" : options.getBaseUrl(),
+            "fixture-credential",
+            field.equals("model") ? "other-model" : options.getModel(),
+            new LlmCapabilities(ReasoningReplayMode.NONE, 128),
+            field.equals("maxOutputTokens") ? 32 : options.getMaxOutputTokens(),
+            field.equals("temperature") ? Double.valueOf(0.2) : options.getTemperature(),
+            readTimeout);
     assertThatThrownBy(() -> ResponsesAdapter.create(endpoint, options, List.of()))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("resolved");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("resolved");
   }
 
   @Test
@@ -138,28 +184,44 @@ class ResponsesTransportContractTest {
     var options = options().build();
     var other = endpoint(options.mutate().model("other-model").build());
     var model = (ResponsesAdapter) transport(options);
-    assertThatThrownBy(() -> model.options(other)).isInstanceOf(IllegalArgumentException.class)
+    assertThatThrownBy(() -> model.options(other))
+        .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("bound");
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {
-    "{\"type\":\"web_search\"}",
-    "{\"type\":\"function\",\"name\":\"unpublished\"}",
-    "private-reasoning fixture-secret"
-  })
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "{\"type\":\"web_search\"}",
+        "{\"type\":\"function\",\"name\":\"unpublished\"}",
+        "private-reasoning fixture-secret"
+      })
   void invalidToolChoiceIsRejectedBeforeSdkParsingWithoutExposingItsValue(String choice) {
-    var options = options().toolCallbacks(callback("fixture_tool", "{\"type\":\"object\"}"))
-        .toolChoice(choice).build();
+    var options =
+        options()
+            .toolCallbacks(callback("fixture_tool", "{\"type\":\"object\"}"))
+            .toolChoice(choice)
+            .build();
     assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("tool choice")
-        .hasMessageNotContaining("private-reasoning").hasMessageNotContaining("fixture-secret")
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("tool choice")
+        .hasMessageNotContaining("private-reasoning")
+        .hasMessageNotContaining("fixture-secret")
         .hasNoCause();
     assertThat(requests).isEmpty();
   }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"baseUrl", "apiKey", "organization", "headers", "outputLimit", "deployment", "timeout"})
+      strings = {
+        "baseUrl",
+        "apiKey",
+        "organization",
+        "headers",
+        "outputLimit",
+        "deployment",
+        "timeout"
+      })
   void runtimeOptionsCannotChangeBoundConnectionOrLimits(String field) {
     var defaults = options().build();
     var builder = defaults.mutate();
@@ -252,13 +314,15 @@ class ResponsesTransportContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {"duplicate", "name", "schema", "limit", "duplicateSchemaKey"})
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"duplicate", "name", "schema", "limit", "duplicateSchemaKey"})
   void invalidActualToolDefinitionsFailBeforeHttp(String invalid) {
     var normal = callback("fixture_tool", "{\"type\":\"object\",\"properties\":{}}");
     var callbacks =
         switch (invalid) {
           case "duplicate" -> List.of(normal, normal);
-          case "duplicateSchemaKey" -> List.of(callback("fixture_tool", "{\"type\":\"array\",\"type\":\"object\"}"));
+          case "duplicateSchemaKey" ->
+              List.of(callback("fixture_tool", "{\"type\":\"array\",\"type\":\"object\"}"));
           case "name" -> List.of(callback("invalid name", "{\"type\":\"object\"}"));
           case "schema" -> List.of(callback("fixture_tool", "[]"));
           case "limit" ->
@@ -425,7 +489,14 @@ class ResponsesTransportContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"temperature", "topP", "reasoningEffort", "reasoningSummary", "parallelToolCalls", "verbosity"})
+      strings = {
+        "temperature",
+        "topP",
+        "reasoningEffort",
+        "reasoningSummary",
+        "parallelToolCalls",
+        "verbosity"
+      })
   void unspecifiedCapabilitiesCannotSilentlyAcceptExplicitSettings(String setting) {
     var builder = options();
     switch (setting) {
@@ -673,18 +744,17 @@ class ResponsesTransportContractTest {
   }
 
   private ResolvedLlmEndpoint endpoint(OpenAiResponsesChatOptions options) {
-    return
-        new ResolvedLlmEndpoint(
-            "fixture",
-            1,
-            LlmApiType.RESPONSES,
-            options.getBaseUrl(),
-            "fixture-credential",
-            options.getModel(),
-            new LlmCapabilities(ReasoningReplayMode.NONE, 128, supportedSettings),
-            options.getMaxOutputTokens(),
-            options.getTemperature(),
-            readTimeout);
+    return new ResolvedLlmEndpoint(
+        "fixture",
+        1,
+        LlmApiType.RESPONSES,
+        options.getBaseUrl(),
+        "fixture-credential",
+        options.getModel(),
+        new LlmCapabilities(ReasoningReplayMode.NONE, 128, supportedSettings),
+        options.getMaxOutputTokens(),
+        options.getTemperature(),
+        readTimeout);
   }
 
   private okhttp3.ResponseBody responseBody() {

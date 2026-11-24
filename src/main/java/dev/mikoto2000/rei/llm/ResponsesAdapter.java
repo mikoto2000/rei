@@ -45,11 +45,15 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   private final OpenAiResponsesChatModel delegate;
   private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
       new com.fasterxml.jackson.databind.ObjectMapper(
-          com.fasterxml.jackson.core.JsonFactory.builder()
-              .enable(com.fasterxml.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-              .streamReadConstraints(com.fasterxml.jackson.core.StreamReadConstraints.builder()
-                  .maxNestingDepth(64).maxStringLength(4_194_304).maxNumberLength(1000).build())
-              .build())
+              com.fasterxml.jackson.core.JsonFactory.builder()
+                  .enable(com.fasterxml.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+                  .streamReadConstraints(
+                      com.fasterxml.jackson.core.StreamReadConstraints.builder()
+                          .maxNestingDepth(64)
+                          .maxStringLength(4_194_304)
+                          .maxNumberLength(1000)
+                          .build())
+                  .build())
           .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
   static ResponsesAdapter create(
@@ -96,12 +100,25 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     var model =
         OpenAiResponsesChatModel.builder()
             .options(options)
-            .openAiClient(ResponsesSdkBoundary.safe(org.springframework.ai.openai.setup.OpenAiSetup.setupSyncClient(
-                options.getBaseUrl(), options.getApiKey(), options.getCredential(),
-                options.getMicrosoftDeploymentName(), options.getMicrosoftFoundryServiceVersion(),
-                options.getOrganizationId(), options.isMicrosoftFoundry(), false, options.getModel(),
-                options.getTimeout(), 0, options.getProxy(), options.getCustomHeaders(),
-                io.micrometer.observation.ObservationRegistry.NOOP, null, transportCustomizers)))
+            .openAiClient(
+                ResponsesSdkBoundary.safe(
+                    org.springframework.ai.openai.setup.OpenAiSetup.setupSyncClient(
+                        options.getBaseUrl(),
+                        options.getApiKey(),
+                        options.getCredential(),
+                        options.getMicrosoftDeploymentName(),
+                        options.getMicrosoftFoundryServiceVersion(),
+                        options.getOrganizationId(),
+                        options.isMicrosoftFoundry(),
+                        false,
+                        options.getModel(),
+                        options.getTimeout(),
+                        0,
+                        options.getProxy(),
+                        options.getCustomHeaders(),
+                        io.micrometer.observation.ObservationRegistry.NOOP,
+                        null,
+                        transportCustomizers)))
             .openAiClientAsync(ResponsesSdkBoundary.safe(client))
             .httpClientBuilderCustomizers(transportCustomizers)
             .build();
@@ -147,7 +164,9 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
         || !Objects.equals(defaults.getApiKey(), options.getApiKey())
         || !Objects.equals(defaults.getCredential(), options.getCredential())
         || !Objects.equals(defaults.getDeploymentName(), options.getDeploymentName())
-        || !Objects.equals(defaults.getMicrosoftFoundryServiceVersion(), options.getMicrosoftFoundryServiceVersion())
+        || !Objects.equals(
+            defaults.getMicrosoftFoundryServiceVersion(),
+            options.getMicrosoftFoundryServiceVersion())
         || defaults.isMicrosoftFoundry() != options.isMicrosoftFoundry()
         || !Objects.equals(defaults.getProxy(), options.getProxy())
         || (options.getTimeout() != null && !endpoint.readTimeout().equals(options.getTimeout()))
@@ -204,22 +223,28 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     return new Prompt(prompt.getInstructions(), options);
   }
 
-  private static void validateToolChoice(Object choice, java.util.List<org.springframework.ai.tool.ToolCallback> callbacks) {
-    if (choice == null || (choice instanceof String value && Set.of("auto", "none", "required").contains(value))) return;
+  private static void validateToolChoice(
+      Object choice, java.util.List<org.springframework.ai.tool.ToolCallback> callbacks) {
+    if (choice == null
+        || (choice instanceof String value && Set.of("auto", "none", "required").contains(value)))
+      return;
     String name = null;
     if (choice instanceof String value) {
       try {
-        if (value.length() > 4_194_304) throw new IllegalArgumentException("Invalid Responses tool choice");
+        if (value.length() > 4_194_304)
+          throw new IllegalArgumentException("Invalid Responses tool choice");
         var node = JSON.readTree(value);
         if (node != null && "function".equals(node.path("type").asText()))
-          name = node.has("name") ? node.path("name").asText() : node.path("function").path("name").asText();
+          name =
+              node.has("name")
+                  ? node.path("name").asText()
+                  : node.path("function").path("name").asText();
       } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
         throw new IllegalArgumentException("Invalid Responses tool choice");
       }
     }
     if (name != null)
-      for (var callback : callbacks)
-        if (name.equals(callback.getToolDefinition().name())) return;
+      for (var callback : callbacks) if (name.equals(callback.getToolDefinition().name())) return;
     throw new IllegalArgumentException("Invalid Responses tool choice");
   }
 
@@ -268,12 +293,24 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             response
                 .getMetadata()
                 .get(org.springframework.ai.openai.responses.OpenAiResponsesMetadata.STATUS)))
-      throw new ResponsesTransportException("incomplete".equals(response.getMetadata().get(
-          org.springframework.ai.openai.responses.OpenAiResponsesMetadata.STATUS))
-          ? ("max_output_tokens".equals(response.getMetadata().get(
-              org.springframework.ai.openai.responses.OpenAiResponsesMetadata.INCOMPLETE_REASON))
-              ? ResponsesTransportException.Category.OUTPUT_LIMIT : ResponsesTransportException.Category.INCOMPLETE)
-          : ResponsesTransportException.Category.INVALID_RESPONSE,
+      throw new ResponsesTransportException(
+          "incomplete"
+                  .equals(
+                      response
+                          .getMetadata()
+                          .get(
+                              org.springframework.ai.openai.responses.OpenAiResponsesMetadata
+                                  .STATUS))
+              ? ("max_output_tokens"
+                      .equals(
+                          response
+                              .getMetadata()
+                              .get(
+                                  org.springframework.ai.openai.responses.OpenAiResponsesMetadata
+                                      .INCOMPLETE_REASON))
+                  ? ResponsesTransportException.Category.OUTPUT_LIMIT
+                  : ResponsesTransportException.Category.INCOMPLETE)
+              : ResponsesTransportException.Category.INVALID_RESPONSE,
           ResponsesTransportException.usage(response.getMetadata().getUsage()));
   }
 
