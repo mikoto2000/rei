@@ -103,7 +103,7 @@ class SleepModelBudgetTest {
         .thenReturn(Flux.just(response("{\"action\":\"NEW\",\"targetIds\":[]}", resolutionUsage)));
     var provider = mock(LlmModelProvider.class);
     when(provider.memoryChatModel()).thenReturn(model);
-    when(provider.chatOptions(eq(LlmFeature.MEMORY), any()))
+    when(provider.requestOptions(eq(LlmFeature.MEMORY), any(), eq(false)))
         .thenAnswer(invocation -> OpenAiChatOptions.builder().build());
     var processor = new LlmMemoryProcessor(provider, props);
     return new SleepService(

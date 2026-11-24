@@ -184,7 +184,7 @@ class MemoryIntegrationTest {
     var model = mock(ChatModel.class);
     when(model.getOptions()).thenReturn(OpenAiChatOptions.builder().model("test").build());
     when(models.memoryChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.MEMORY, null))
+    when(models.requestOptions(LlmFeature.MEMORY, null, false))
         .thenReturn(OpenAiChatOptions.builder().build());
     when(model.stream(any(Prompt.class)))
         .thenAnswer(a -> {

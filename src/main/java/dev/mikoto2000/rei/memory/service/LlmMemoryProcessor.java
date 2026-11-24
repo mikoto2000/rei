@@ -18,7 +18,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.stereotype.Service;
 
 /**
@@ -32,7 +32,7 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
   /** モデル一覧。 */
   private final Supplier<ChatModel> modelForCalls;
 
-  private final Supplier<OpenAiChatOptions> optionsForCalls;
+  private final Supplier<ToolCallingChatOptions> optionsForCalls;
 
   /** この機能の動作設定。 */
   private final MemoryProperties properties;
@@ -47,7 +47,7 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
   /** 指定された値や利用先を使って、LlmMemoryProcessorを初期化する。 */
   public LlmMemoryProcessor(LlmModelProvider models, MemoryProperties properties) {
     this.modelForCalls = () -> models.memoryChatModel();
-    this.optionsForCalls = () -> models.chatOptions(LlmFeature.MEMORY, null);
+    this.optionsForCalls = () -> models.requestOptions(LlmFeature.MEMORY, null, false);
     this.properties = properties;
   }
 
@@ -148,7 +148,7 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
     var model = modelForCalls.get();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
     var options =
-        optionsForCalls.get().mutate().toolCallbacks(List.of()).toolChoice("none").build();
+        dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(optionsForCalls.get());
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
     var prompt = new Prompt(List.of(new SystemMessage(system), new UserMessage(data)), options);
     if (dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative().text(data)

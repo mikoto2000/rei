@@ -560,7 +560,7 @@ class AutoSleepFailureTest {
             Flux.just(new ChatResponse(List.of(new Generation(new AssistantMessage(output))))));
     var provider = mock(LlmModelProvider.class);
     when(provider.memoryChatModel()).thenReturn(model);
-    when(provider.chatOptions(LlmFeature.MEMORY, null))
+    when(provider.requestOptions(LlmFeature.MEMORY, null, false))
         .thenReturn(OpenAiChatOptions.builder().build());
     var episodeRepository = new EpisodeRepository(memoryDataSource());
     var extractor = new LlmEpisodeExtractor(new LlmMemoryProcessor(provider, memory));
