@@ -175,6 +175,8 @@ class ResponsesTransportContractTest {
     } else result = model.call(new Prompt("fixture", options));
     assertThat(OutputLimitDetector.isOutputLimitReached(result)).isTrue();
     assertThat(result.getMetadata().getUsage().getTotalTokens()).isEqualTo(5);
+    assertThat(ResponsesTransportException.usage(result.getMetadata().getUsage()))
+        .isEqualTo(new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
     assertThat(result.hasToolCalls()).isFalse();
   }
 
