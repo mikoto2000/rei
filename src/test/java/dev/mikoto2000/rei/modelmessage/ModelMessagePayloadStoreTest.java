@@ -36,7 +36,10 @@ class ModelMessagePayloadStoreTest {
       return;
     }
     var ref = store.saveForContinuation(owner, "current", "legacy-input", assistant);
-    store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
+    store.publish(owner, ref, ModelMessagePayloadStore.ReferenceKind.RUN, "current");
+    store.protectCheckpoint(owner, new ModelMessagePayloadStore.History(1, "current",
+        new ModelMessagePayloadStore.Origin(exchange.ownerKey(), "endpoint"),
+        List.of(new ModelMessagePayloadStore.History.Entry("legacy/ASSISTANT", ref))), "checkpoint");
     var grant = store.restoreReplayGrant(exchange, List.of(new ModelMessagePayloadStore.ReplayReference(
         ref, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint")),
         new ModelMessagePayloadStore.Origin(exchange.ownerKey(), "endpoint"));
