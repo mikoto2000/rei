@@ -40,7 +40,7 @@ class ResponsesTransportContractTest {
   }
 
   private ChatModel transport(OpenAiResponsesChatOptions options) {
-    return OpenAiResponsesChatModel.builder().options(options)
+    var model = OpenAiResponsesChatModel.builder().options(options)
         .httpClientBuilderCustomizer(builder -> builder.interceptor(chain -> {
           var buffer = new okio.Buffer();
           chain.request().body().writeTo(buffer);
@@ -51,6 +51,11 @@ class ResponsesTransportContractTest {
               .body(okhttp3.ResponseBody.create(completed(),
                   okhttp3.MediaType.get("application/json"))).build();
         })).build();
+    var endpoint = new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES,
+        options.getBaseUrl(), "fixture-credential", options.getModel(),
+        new LlmCapabilities(ReasoningReplayMode.NONE, 128), options.getMaxOutputTokens(),
+        options.getTemperature(), java.time.Duration.ofMinutes(5));
+    return new ResponsesAdapter(endpoint, model);
   }
 
   private String completed() {
