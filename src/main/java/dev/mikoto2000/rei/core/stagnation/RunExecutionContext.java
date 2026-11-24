@@ -317,7 +317,9 @@ public class RunExecutionContext {
             origin,
             entries,
             new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Input(
-                input, entries.size()));
+                input, entries.size(), context.get(dev.mikoto2000.rei.modeloptions.ModelOptions.PREPARATION_CONTEXT_KEY)
+                    instanceof String fingerprint ? fingerprint
+                    : dev.mikoto2000.rei.modeloptions.ModelOptions.preparationFingerprint(prompt)));
     try {
       toolResultsCheckpoint.accept(List.of());
     } catch (RuntimeException | Error failure) {
@@ -327,7 +329,7 @@ public class RunExecutionContext {
   }
 
   /** Save the original resolved input, including media, before sending or decorating it. */
-  public void preserveUserMessage(org.springframework.ai.chat.messages.UserMessage message) {
+  public synchronized void preserveUserMessage(org.springframework.ai.chat.messages.UserMessage message) {
     // The existing controlled-model prepare path replaces this host input with restored messages.
     if (!resumeMessages.isEmpty()) return;
     var context = modelOptions == null ? null : modelOptions.getToolContext();
@@ -1326,12 +1328,27 @@ public class RunExecutionContext {
   }
 
   /** 次のモデル準備で保存済み会話履歴を復元するかを判定する。 */
-  public boolean hasRestoredConversation() {
+  public synchronized boolean hasRestoredConversation() {
     return !resumeMessages.isEmpty();
   }
 
+  /** A full input snapshot owns its original system prefix after contract validation. */
+  public synchronized boolean restoresModelInput() {
+    return protocolHistory != null && protocolHistory.input() != null && !resumeMessages.isEmpty();
+  }
+
+  public synchronized List<org.springframework.ai.chat.messages.Message> takeResumeMessages(String fingerprint) {
+    var input = protocolHistory == null ? null : protocolHistory.input();
+    if (!resumeMessages.isEmpty() && input != null) {
+      String expected = input.preparationFingerprint();
+      if (expected == null || !expected.equals(fingerprint))
+        throw new IllegalStateException("Native continuation execution contract mismatch");
+    }
+    return takeResumeMessages();
+  }
+
   /** 実行の停滞への対処で用いる取り出し再開メッセージ一覧を返す。 */
-  public List<org.springframework.ai.chat.messages.Message> takeResumeMessages() {
+  public synchronized List<org.springframework.ai.chat.messages.Message> takeResumeMessages() {
     var saved = resumeMessages;
     resumeMessages = List.of();
     return saved;

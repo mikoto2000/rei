@@ -9,6 +9,7 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 public final class ModelOptions {
   public static final String ENDPOINT_CONTEXT_KEY = "rei.llm.resolved-endpoint";
   public static final String MAX_TOOLS_CONTEXT_KEY = "rei.llm.max-tools";
+  public static final String PREPARATION_CONTEXT_KEY = "rei.modelOptions.preparation-fingerprint";
 
   private ModelOptions() {}
 

@@ -77,9 +77,11 @@ public final class ModelMessagePayloadStore {
     }
   }
 
-  private static boolean legacyPlainText(org.springframework.ai.chat.messages.AssistantMessage message) {
-    return !ModelMessageCodec.requiresPayload(message) && message.getParts().stream()
-        .allMatch(org.springframework.ai.chat.messages.part.TextPart.class::isInstance);
+  private static boolean legacyPlainText(
+      org.springframework.ai.chat.messages.AssistantMessage message) {
+    return !ModelMessageCodec.requiresPayload(message)
+        && message.getParts().stream()
+            .allMatch(org.springframework.ai.chat.messages.part.TextPart.class::isInstance);
   }
 
   private static String replayHash(org.springframework.ai.chat.messages.AssistantMessage message) {
@@ -133,13 +135,13 @@ public final class ModelMessagePayloadStore {
               != 1) throw rejected();
           if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
             if (!legacyPlainText(assistant)) {
-            bind(sourceRun, ref.id());
-            try (var rows = sourceRun.executeQuery()) {
-              if (!rows.next()) throw rejected();
-              var sourceOwner =
-                  new Exchange(this, target.scope(), rows.getString(1), "history").ownerKey();
-              new Origin(sourceOwner, origin.endpoint()).requireMatch(assistant);
-            }
+              bind(sourceRun, ref.id());
+              try (var rows = sourceRun.executeQuery()) {
+                if (!rows.next()) throw rejected();
+                var sourceOwner =
+                    new Exchange(this, target.scope(), rows.getString(1), "history").ownerKey();
+                new Origin(sourceOwner, origin.endpoint()).requireMatch(assistant);
+              }
             }
             messages.add(replayHash(assistant));
           }
@@ -196,8 +198,13 @@ public final class ModelMessagePayloadStore {
    */
   /** Bounded ordered pointers carried by the existing checkpoint document. */
   public record History(
-      int schemaVersion, String run, Origin origin, java.util.List<Entry> entries,
-      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) Input input) {
+      int schemaVersion,
+      String run,
+      Origin origin,
+      java.util.List<Entry> entries,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          Input input) {
     public History(int schemaVersion, String run, Origin origin, java.util.List<Entry> entries) {
       this(schemaVersion, run, origin, entries, null);
     }
@@ -206,7 +213,9 @@ public final class ModelMessagePayloadStore {
       identifier(run);
       java.util.Objects.requireNonNull(origin);
       entries = java.util.List.copyOf(entries);
-      if (schemaVersion != 1 || entries.size() > 256 || input != null && input.traceSize() > entries.size()) throw rejected();
+      if (schemaVersion != 1
+          || entries.size() > 256
+          || input != null && input.traceSize() > entries.size()) throw rejected();
     }
 
     /** The latest actual input followed by responses accepted after that request was sent. */
@@ -226,10 +235,14 @@ public final class ModelMessagePayloadStore {
       return java.util.List.copyOf(result.values());
     }
 
-    public record Input(java.util.List<Entry> entries, int traceSize) {
+    public record Input(java.util.List<Entry> entries, int traceSize,
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            String preparationFingerprint) {
+      public Input(java.util.List<Entry> entries, int traceSize) { this(entries, traceSize, null); }
       public Input {
         entries = java.util.List.copyOf(entries);
-        if (entries.isEmpty() || entries.size() > 256 || traceSize < 0) throw rejected();
+        if (entries.isEmpty() || entries.size() > 256 || traceSize < 0
+            || preparationFingerprint != null && !preparationFingerprint.matches("[0-9a-f]{64}")) throw rejected();
       }
     }
 
@@ -424,7 +437,8 @@ public final class ModelMessagePayloadStore {
       try (var insert =
           db.prepareStatement(
               "INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,?,?)")) {
-        for (var entry : kind == ReferenceKind.HISTORY ? history.entries() : history.protectedEntries()) {
+        for (var entry :
+            kind == ReferenceKind.HISTORY ? history.entries() : history.protectedEntries()) {
           var message = codec.decode(read(db, scope, entry.reference()));
           if (scalar(
                   db,
@@ -432,7 +446,8 @@ public final class ModelMessagePayloadStore {
                   entry.reference().id(),
                   history.run())
               != 1) throw rejected();
-          if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant && !legacyPlainText(assistant)) {
+          if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant
+              && !legacyPlainText(assistant)) {
             if (history
                 .origin()
                 .owner()
@@ -602,8 +617,14 @@ public final class ModelMessagePayloadStore {
     identifier(key);
     var metadata = new java.util.HashMap<>(message.getMetadata());
     metadata.remove("rei.historySequence");
-    if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant && legacyPlainText(assistant))
-      metadata.keySet().removeIf(property -> property.startsWith("rei.modelMessage.") || property.equals("source") || property.equals("sourceId"));
+    if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant
+        && legacyPlainText(assistant))
+      metadata
+          .keySet()
+          .removeIf(property ->
+              property.startsWith("rei.modelMessage.")
+                  || property.equals("source")
+                  || property.equals("sourceId"));
     Message original;
     if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant)
       original =
@@ -619,9 +640,17 @@ public final class ModelMessagePayloadStore {
               .metadata(metadata)
               .build();
     else if (message instanceof org.springframework.ai.chat.messages.SystemMessage system)
-      original = org.springframework.ai.chat.messages.SystemMessage.builder().text(system.getText()).metadata(metadata).build();
+      original =
+          org.springframework.ai.chat.messages.SystemMessage.builder()
+              .text(system.getText())
+              .metadata(metadata)
+              .build();
     else if (message instanceof org.springframework.ai.chat.messages.ToolResponseMessage tool)
-      original = org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(tool.getResponses()).metadata(metadata).build();
+      original =
+          org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+              .responses(tool.getResponses())
+              .metadata(metadata)
+              .build();
     else throw rejected();
     String hash = digest(codec.encode(original));
     var existing =
