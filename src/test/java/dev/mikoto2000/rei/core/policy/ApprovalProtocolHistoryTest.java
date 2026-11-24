@@ -19,6 +19,30 @@ import org.springframework.ai.chat.messages.part.TextPart;
 class ApprovalProtocolHistoryTest {
   @TempDir Path directory;
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void oversizedContinuationsDoNotPublishPayloadReferences(boolean oversizedHistory) {
+    var source = new org.sqlite.SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + directory.resolve("capacity.db"));
+    var owner = new AgentRunContext("run", "session", directory, "project");
+    var message = AssistantMessage.builder().content("fixture")
+        .properties(Map.of(dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY,
+            new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(1L, 1L, 2L, null, null))).build();
+    var history = java.util.Collections.<org.springframework.ai.chat.messages.Message>nCopies(
+        oversizedHistory ? 257 : 1, message);
+    var calls = java.util.stream.IntStream.range(0, oversizedHistory ? 1 : 33)
+        .mapToObj(index -> new AssistantMessage.ToolCall("call-" + index, "function", "fixture", "{}"))
+        .toList();
+    var pending = new RunContinuation.PendingTools("pending", calls, List.of());
+    assertThatThrownBy(() -> new ApprovalContinuationStore(source).save("approval", owner, "request",
+        history, pending, new OutputLimitRunBudget(0, 5).snapshot(), false))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("capacity");
+    var usage = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source).usage(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner), "run");
+    assertThat(usage.payloadCount()).isZero();
+    assertThat(usage.referenceCount()).isZero();
+  }
+
   @Test
   void completedPrefixAndOriginalPartsSurvivePendingApprovalRestart() throws Exception {
     var source = new org.sqlite.SQLiteDataSource();
