@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.llm;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -28,9 +29,36 @@ class ResponsesTransportContractTest {
     assertThat(request.path("model").asText()).isEqualTo("fixture-model");
     assertThat(request.path("max_output_tokens").asInt()).isEqualTo(64);
     assertThat(request.path("store").asBoolean(true)).isFalse();
+    assertThat(options.getToolChoice()).isEqualTo("none");
+    assertThat(request.toString()).doesNotContain("fixture-secret");
     for (String field : List.of("tools", "tool_choice", "max_tokens", "max_completion_tokens",
         "previous_response_id", "conversation"))
       assertThat(request.has(field)).as(field).isFalse();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+    "model", "input", "instructions", "tools", "tool_choice", "store", "previous_response_id",
+    "conversation", "max_tokens", "max_completion_tokens", "max_output_tokens", "reasoning",
+    "text", "stream", "include", "parallel_tool_calls", "response_format", "messages",
+    "functions", "function_call", "chat_template_kwargs", "background", "context_management",
+    "truncation"
+  })
+  void extraBodyCannotOverrideProtectedProtocolFields(String field) {
+    var options = options().extraBody(java.util.Map.of(field, "untrusted override")).build();
+    assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(field)
+        .hasMessageNotContaining("untrusted override").hasMessageNotContaining("fixture-secret");
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
+  void rejectsChatCompletionsOptionsBeforeSending() {
+    var legacy = org.springframework.ai.openai.OpenAiChatOptions.builder()
+        .model("fixture-model").maxTokens(64).build();
+    assertThatThrownBy(() -> transport(options().build()).call(new Prompt("fixture", legacy)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Responses native");
+    assertThat(requests).isEmpty();
   }
 
   private OpenAiResponsesChatOptions.Builder options() {
