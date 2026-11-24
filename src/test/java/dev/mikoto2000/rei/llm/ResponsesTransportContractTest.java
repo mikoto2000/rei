@@ -15,6 +15,44 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 /** Exercises the pinned SDK's serialized HTTP request, without external traffic. */
 class ResponsesTransportContractTest {
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"baseUrl", "model", "maxOutputTokens", "temperature"})
+  void clientConstructionRequiresTheResolvedDescriptor(String field) {
+    var options = options().build();
+    var endpoint = new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES,
+        field.equals("baseUrl") ? "https://other.invalid/v1" : options.getBaseUrl(),
+        "fixture-credential", field.equals("model") ? "other-model" : options.getModel(),
+        new LlmCapabilities(ReasoningReplayMode.NONE, 128),
+        field.equals("maxOutputTokens") ? 32 : options.getMaxOutputTokens(),
+        field.equals("temperature") ? Double.valueOf(0.2) : options.getTemperature(), readTimeout);
+    assertThatThrownBy(() -> ResponsesAdapter.create(endpoint, options, List.of()))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("resolved");
+  }
+
+  @Test
+  void optionsCannotBeGeneratedForADifferentBoundEndpoint() {
+    var options = options().build();
+    var other = endpoint(options.mutate().model("other-model").build());
+    var model = (ResponsesAdapter) transport(options);
+    assertThatThrownBy(() -> model.options(other)).isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("bound");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+    "{\"type\":\"web_search\"}",
+    "{\"type\":\"function\",\"name\":\"unpublished\"}",
+    "private-reasoning fixture-secret"
+  })
+  void invalidToolChoiceIsRejectedBeforeSdkParsingWithoutExposingItsValue(String choice) {
+    var options = options().toolCallbacks(callback("fixture_tool", "{\"type\":\"object\"}"))
+        .toolChoice(choice).build();
+    assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("tool choice")
+        .hasMessageNotContaining("private-reasoning").hasMessageNotContaining("fixture-secret")
+        .hasNoCause();
+    assertThat(requests).isEmpty();
+  }
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"baseUrl", "apiKey", "organization", "headers", "outputLimit"})
   void runtimeOptionsCannotChangeBoundConnectionOrLimits(String field) {
@@ -522,7 +560,11 @@ class ResponsesTransportContractTest {
                   .body(responseBody())
                   .build();
             });
-    var endpoint =
+    return ResponsesAdapter.create(endpoint(options), options, List.of(customizer));
+  }
+
+  private ResolvedLlmEndpoint endpoint(OpenAiResponsesChatOptions options) {
+    return
         new ResolvedLlmEndpoint(
             "fixture",
             1,
@@ -534,7 +576,6 @@ class ResponsesTransportContractTest {
             options.getMaxOutputTokens(),
             options.getTemperature(),
             readTimeout);
-    return ResponsesAdapter.create(endpoint, options, List.of(customizer));
   }
 
   private okhttp3.ResponseBody responseBody() {
