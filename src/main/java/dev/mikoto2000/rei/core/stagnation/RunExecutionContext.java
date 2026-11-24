@@ -40,6 +40,43 @@ public class RunExecutionContext {
     if (modelOptions != null || options == null)
       throw new IllegalStateException("Run model options cannot be replaced");
     modelOptions = options.mutate().build();
+    var boundary = modelOptions.getToolContext().get(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    if (boundary instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange) {
+      var context = new java.util.HashMap<>(modelOptions.getToolContext());
+      context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+          exchange.withObserver(accepted -> {
+            acceptProtocolMessage(exchange, accepted);
+            if (exchange.observer() != null) exchange.observer().accept(accepted);
+          }));
+      modelOptions = modelOptions.mutate().toolContext(null).toolContext(context).build();
+    }
+  }
+
+  private dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory;
+
+  private synchronized void acceptProtocolMessage(
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange,
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Accepted accepted) {
+    if (runContext == null || !exchange.run().equals(runContext.runId())
+        || !exchange.scope().equals(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(runContext)))
+      throw new IllegalStateException("Protocol checkpoint ownership mismatch");
+    var origin = protocolHistory == null
+        ? new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+            (String) accepted.message().getMetadata().get("rei.llm.replay-origin-owner"),
+            (String) accepted.message().getMetadata().get("rei.llm.replay-origin-endpoint"))
+        : protocolHistory.origin();
+    if (accepted.message() instanceof org.springframework.ai.chat.messages.AssistantMessage)
+      origin.requireMatch(accepted.message());
+    var entries = new ArrayList<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry>(
+        protocolHistory == null ? List.of() : protocolHistory.entries());
+    if (entries.stream().anyMatch(entry -> entry.reference().equals(accepted.reference()))) return;
+    entries.add(new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+        accepted.key(), accepted.reference()));
+    protocolHistory = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
+        1, exchange.run(), origin, entries);
+    // Use the existing checkpoint writer before any tool effect, including the first batch.
+    toolResultsCheckpoint.accept(List.of());
   }
 
   public org.springframework.ai.model.tool.ToolCallingChatOptions modelOptions() {
@@ -160,7 +197,8 @@ public class RunExecutionContext {
             acquisitionOnlyIterations,
             unknownIterations,
             unknownReplanNotices,
-            null);
+            null,
+            protocolHistory);
       var d = c.detector();
       var batch = c.resumeBatch();
       return new ProgressState(
@@ -195,7 +233,8 @@ public class RunExecutionContext {
                       batch.reviewPageReadKey(),
                       batch.reviewPageReadArguments(),
                       batch.reviewPageKeys(),
-                      false)));
+                      false)),
+          protocolHistory);
     }
 
     /**
@@ -513,7 +552,8 @@ public class RunExecutionContext {
                 resumeReviewPageReadKey,
                 resumeReviewPageReadArguments,
                 resumeReviewPageKeys,
-                reconciliationHandoffUsed)));
+                reconciliationHandoffUsed)),
+        protocolHistory);
   }
 
   /** 保存済みの状態を引き継ぐため、進捗を復元する。 */

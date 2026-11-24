@@ -558,8 +558,12 @@ class ResponsesReplayContractTest {
     replies.add(sse(done()));
     var accepted = new java.util.ArrayList<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Accepted>();
     var seed = options();
-    var boundary = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) seed.getToolContext()
+    var originalBoundary = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange) seed.getToolContext()
         .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var boundary = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
+        originalBoundary.store(), new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
+            "project:fixture-project", protocolDirectory.toString(), "fixture-conversation"),
+        originalBoundary.run(), originalBoundary.key());
     var options = seed.mutate().toolContext(Map.of(
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, boundary.withObserver(accepted::add))).build();
     var run =
@@ -611,11 +615,7 @@ class ResponsesReplayContractTest {
     assertThat(requests).hasSize(3);
     assertThat(requests.getLast().path("input").toString())
         .contains("opaque-one+/=", "opaque-two+/=", "opaque-three+/=", "opaque-four+/=");
-    var usage =
-        protocolStore.usage(
-            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
-                "fixture-project", protocolDirectory.toString(), "fixture-conversation"),
-            "fixture-run");
+    var usage = protocolStore.usage(boundary.scope(), boundary.run());
     assertThat(usage.payloadCount()).isEqualTo(5);
     assertThat(accepted).hasSize(5);
     assertThat(accepted).extracting(item -> item.message().getMessageType().name())

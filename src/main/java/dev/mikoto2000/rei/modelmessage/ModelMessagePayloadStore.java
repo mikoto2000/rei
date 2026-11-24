@@ -70,7 +70,21 @@ public final class ModelMessagePayloadStore {
    */
   /** Bounded ordered pointers carried by the existing checkpoint document. */
   public record History(int schemaVersion, String run, Origin origin, java.util.List<Entry> entries) {
-    public record Entry(String key, Ref reference) {}
+    public History {
+      identifier(run);
+      java.util.Objects.requireNonNull(origin);
+      entries = java.util.List.copyOf(entries);
+      if (schemaVersion != 1 || entries.size() > 256) throw rejected();
+    }
+
+    public record Entry(String key, Ref reference) {
+      public Entry {
+        identifier(key);
+        java.util.Objects.requireNonNull(reference);
+        identifier(reference.id());
+        if (reference.sha256() == null || !reference.sha256().matches("[0-9a-f]{64}")) throw rejected();
+      }
+    }
   }
 
   public record Accepted(Ref reference, String key, Message message) {
