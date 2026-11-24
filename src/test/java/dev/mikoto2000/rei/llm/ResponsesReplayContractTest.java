@@ -45,6 +45,46 @@ class ResponsesReplayContractTest {
             "fixture-run", java.util.UUID.randomUUID().toString()));
     return context;
   }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void existingLoopsPersistDistinctIterationsAndTheFinalAssistant(boolean bounded) throws Exception {
+    contentType = "text/event-stream";
+    replies.add(sse(toolResponse()));
+    replies.add(sse(toolResponse().replace("resp_tools", "resp_tools_second")
+        .replace("_one", "_three").replace("_two", "_four")
+        .replace("opaque-one", "opaque-three").replace("opaque-two", "opaque-four")
+        .replace("msg_work", "msg_work_second")));
+    replies.add(sse(done()));
+    var options = options();
+    var run = new dev.mikoto2000.rei.core.chat.AgentRunContext("fixture-run", "fixture-conversation",
+        protocolDirectory, "fixture-project");
+    var client = model(options);
+    if (bounded) {
+      var outcome = new dev.mikoto2000.rei.core.chat.BoundedToolLoop()
+          .runWithHistory(client, new Prompt("fixture", options), new AtomicInteger(3), run,
+              () -> {}, null).block(Duration.ofSeconds(10));
+      assertThat(outcome.output()).isEqualTo("done");
+    } else {
+      var budget = new OutputLimitRunBudget(2, 4);
+      budget.tryConsumeLlmCall();
+      var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("fixture-run", budget,
+          new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+          new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+      execution.setRunContext(run);
+      var requestOptions = options.mutate().toolContext(Map.of(
+          dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution)).build();
+      new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(client)
+          .stream(new Prompt("fixture", requestOptions)).blockLast(Duration.ofSeconds(10));
+    }
+    assertThat(executions).hasValue(4);
+    assertThat(requests).hasSize(3);
+    assertThat(requests.getLast().path("input").toString())
+        .contains("opaque-one+/=", "opaque-two+/=", "opaque-three+/=", "opaque-four+/=");
+    var usage = protocolStore.usage(new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
+        "fixture-project", protocolDirectory.toString(), "fixture-conversation"), "fixture-run");
+    assertThat(usage.payloadCount()).isEqualTo(5);
+  }
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "missing,false",
