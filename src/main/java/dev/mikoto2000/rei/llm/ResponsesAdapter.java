@@ -47,6 +47,10 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     if (supplied != null && !(supplied instanceof OpenAiResponsesChatOptions))
       throw new IllegalArgumentException("Responses native options required");
     var options = supplied == null ? getOptions() : (OpenAiResponsesChatOptions) supplied;
+    if (!Objects.equals(endpoint.model(), options.getModel()))
+      throw new IllegalArgumentException("Responses model differs from the bound endpoint");
+    if (options.getMaxRetries() != 0)
+      throw new IllegalArgumentException("Responses SDK retries must stay zero");
     requireCapability(options.getTemperature(), LlmCapabilities.Setting.TEMPERATURE, "temperature");
     requireCapability(options.getTopP(), LlmCapabilities.Setting.TOP_P, "topP");
     requireCapability(options.getReasoningEffort(), LlmCapabilities.Setting.REASONING_EFFORT, "reasoningEffort");
