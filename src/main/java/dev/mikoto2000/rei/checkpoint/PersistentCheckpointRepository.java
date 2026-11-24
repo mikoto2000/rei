@@ -552,12 +552,15 @@ public class PersistentCheckpointRepository {
               "project:" + next.projectId(),
               java.nio.file.Path.of(next.projectRoot()).toAbsolutePath().normalize().toString(),
               next.sessionId());
-      protocolPayloads()
-          .protectCheckpoint(
-              scope,
-              history,
-              dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
-                  next.projectId(), next.taskId(), next.revision()));
+      String owner = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
+          next.projectId(), next.taskId(), next.revision());
+      var prior = expected > 0 ? get(next.projectId(), next.taskId()) : null;
+      if (prior != null && prior.revision() == expected
+          && java.util.Objects.equals(prior.protocolHistory(), history))
+        protocolPayloads().transferCheckpoint(scope, history,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
+                prior.projectId(), prior.taskId(), prior.revision()), owner);
+      else protocolPayloads().protectCheckpoint(scope, history, owner);
     }
     var removed = new ArrayList<HistoricalRow>();
     var saved =
