@@ -20,6 +20,26 @@ class ResponsesTransportContractTest {
   private String reply = completed();
   private String contentType = "application/json";
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {
+    "temperature", "topP", "reasoningEffort", "reasoningSummary", "parallelToolCalls"
+  })
+  void unspecifiedCapabilitiesCannotSilentlyAcceptExplicitSettings(String setting) {
+    var builder = options();
+    switch (setting) {
+      case "temperature" -> builder.temperature(0.2);
+      case "topP" -> builder.topP(0.8);
+      case "reasoningEffort" -> builder.reasoningEffort("low");
+      case "reasoningSummary" -> builder.reasoningSummary("auto");
+      case "parallelToolCalls" -> builder.parallelToolCalls(false);
+      default -> throw new AssertionError(setting);
+    }
+    var options = builder.build();
+    assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(setting);
+    assertThat(requests).isEmpty();
+  }
+
   @Test
   void structuredOutputUsesNativeTextFormat() {
     var options = options().outputSchema("{\"type\":\"object\",\"properties\":{}}").build();
