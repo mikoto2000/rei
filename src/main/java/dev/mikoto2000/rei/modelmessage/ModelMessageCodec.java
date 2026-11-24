@@ -76,6 +76,7 @@ public final class ModelMessageCodec {
     if (bytes == null || bytes.length > MAX_BYTES) throw invalid();
     try {
       var root = JSON.readTree(bytes);
+      if (root != null && root.has("kind") && !root.has("schemaVersion")) return decodeLegacy(root);
       fields(root, Set.of("schemaVersion", "role", "parts", "metadata"));
       if (!root.path("schemaVersion").isInt() || root.path("schemaVersion").intValue() != 1) throw invalid();
       String role = required(root, "role");
@@ -122,6 +123,53 @@ public final class ModelMessageCodec {
       }
       return AssistantMessage.builder().parts(parts).properties(metadata).build();
     } catch (java.io.IOException | IllegalArgumentException failure) { throw invalid(); }
+  }
+
+  private static Message decodeLegacy(JsonNode root) {
+    fields(root, Set.of("kind", "text", "calls", "responses", "delivery"));
+    String kind = required(root, "kind");
+    String text = java.util.Objects.toString(text(root, "text"), "");
+    var calls = new java.util.ArrayList<AssistantMessage.ToolCall>();
+    var responses = new java.util.ArrayList<ToolResponseMessage.ToolResponse>();
+    var callIds = new java.util.HashSet<String>();
+    var responseIds = new java.util.HashSet<String>();
+    for (var call : legacyArray(root, "calls")) {
+      fields(call, Set.of("id", "type", "name", "arguments"));
+      String id = required(call, "id"), name = required(call, "name");
+      if (id.isBlank() || name.isBlank() || !callIds.add(id)) throw invalid();
+      calls.add(new AssistantMessage.ToolCall(id, required(call, "type"), name, required(call, "arguments")));
+    }
+    for (var result : legacyArray(root, "responses")) {
+      fields(result, Set.of("id", "name", "responseData"));
+      String id = required(result, "id"), name = required(result, "name");
+      if (id.isBlank() || name.isBlank() || !responseIds.add(id)) throw invalid();
+      responses.add(new ToolResponseMessage.ToolResponse(id, name, required(result, "responseData")));
+    }
+    var delivery = root.get("delivery");
+    boolean hasDelivery = delivery != null && !delivery.isNull();
+    return switch (kind) {
+      case "ASSISTANT" -> {
+        if (!responses.isEmpty() || hasDelivery) throw invalid();
+        yield AssistantMessage.builder().content(text).toolCalls(calls).build();
+      }
+      case "USER" -> {
+        if (!calls.isEmpty() || !responses.isEmpty() || hasDelivery) throw invalid();
+        yield new UserMessage(text);
+      }
+      case "TOOL" -> {
+        if (!calls.isEmpty() || !text.isEmpty()) throw invalid();
+        yield ToolResponseMessage.builder().responses(responses)
+            .metadata(hasDelivery ? decodeDelivery(delivery, responseIds).restore() : java.util.Map.of()).build();
+      }
+      default -> throw invalid();
+    };
+  }
+
+  private static Iterable<JsonNode> legacyArray(JsonNode root, String key) {
+    var node = root.get(key);
+    if (node == null || node.isNull()) return java.util.List.of();
+    if (!node.isArray() || node.size() > 1024) throw invalid();
+    return node;
   }
 
   private static ObjectNode encodeMedia(org.springframework.ai.content.Media media) {
