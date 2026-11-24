@@ -77,11 +77,15 @@ final class ResponsesSdkBoundary {
   private static dev.mikoto2000.rei.modelmessage.ModelTokenUsage validateResponse(
       com.openai.models.responses.Response response, boolean plaintext) {
     try {
-      if (plaintext) response.output().forEach(ResponsesSdkBoundary::validatePlaintextItem);
       var status = ResponsesTransportException.known(response._status());
       ResponsesTransportException.known(response._id());
       ResponsesTransportException.known(response._createdAt());
-      ResponsesTransportException.known(response._output());
+      var output = ResponsesTransportException.known(response._output());
+      if (output != null)
+        for (var item : output) {
+          item.validate();
+          if (plaintext) validatePlaintextItem(item);
+        }
       var nativeUsage = ResponsesTransportException.known(response._usage());
       var usage = ResponsesTransportException.usage(nativeUsage);
       if (usage != null
@@ -159,6 +163,18 @@ final class ResponsesSdkBoundary {
     event.reasoningSummaryTextDelta().ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
     event.functionCallArgumentsDelta().ifPresent(delta -> validateDelta(delta.delta(), delta.outputIndex()));
     event.refusalDelta().ifPresent(delta -> validateDelta(delta.delta(), 0));
+    event.outputItemDone().ifPresent(done -> {
+      validateDelta("", done.outputIndex());
+      done.item().validate();
+    });
+    event.outputItemAdded().ifPresent(added -> {
+      validateDelta("", added.outputIndex());
+      if (added.item().isFunctionCall()) {
+        var call = added.item().asFunctionCall();
+        validateDelta(call.callId(), 0);
+        validateDelta(call.name(), 0);
+      }
+    });
   }
 
   private static void validateDelta(String delta, long index) {
