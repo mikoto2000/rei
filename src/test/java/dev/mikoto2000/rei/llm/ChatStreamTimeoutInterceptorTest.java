@@ -16,11 +16,12 @@ import org.junit.jupiter.params.provider.ValueSource;
 /** チャット逐次データタイムアウトInterceptorの結果と状態の契約を検証するテスト。 */
 class ChatStreamTimeoutInterceptorTest {
   /** 応答全体の時間と無通信の時間を分け、遅い応答を読み切れることを確認する。 */
-  @Test
-  void responseCanOutliveCallTimeoutAndUsesFiveMinuteReadTimeout() throws Exception {
+  @ParameterizedTest
+  @ValueSource(strings = {"/v1/chat/completions", "/v1/responses"})
+  void responseCanOutliveCallTimeoutAndUsesFiveMinuteReadTimeout(String path) throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     server.createContext(
-        "/v1/chat/completions",
+        path,
         exchange -> {
           exchange.sendResponseHeaders(200, 0);
           try (var body = exchange.getResponseBody()) {
@@ -50,7 +51,7 @@ class ChatStreamTimeoutInterceptorTest {
     try {
       var request =
           new Request.Builder()
-              .url("http://127.0.0.1:" + server.getAddress().getPort() + "/v1/chat/completions")
+              .url("http://127.0.0.1:" + server.getAddress().getPort() + path)
               .build();
       try (var response = client.newCall(request).execute()) {
         assertThat(response.body().string()).isEqualTo("ab");
