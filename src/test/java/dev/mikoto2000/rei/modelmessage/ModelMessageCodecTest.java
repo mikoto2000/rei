@@ -14,6 +14,29 @@ import org.springframework.ai.chat.messages.part.TextPart;
 import org.springframework.ai.chat.messages.part.ToolCallPart;
 
 class ModelMessageCodecTest {
+  @Test
+  void inlineAndReferencedUserMediaRoundTripWithoutFetchingTheReference() {
+    var inline = org.springframework.ai.content.Media.builder().mimeType(org.springframework.util.MimeTypeUtils.IMAGE_PNG)
+        .data(new byte[] {0, 1, 2, -1}).id("image-one").name("fixture.png").build();
+    var remote = org.springframework.ai.content.Media.builder().mimeType(org.springframework.util.MimeTypeUtils.IMAGE_JPEG)
+        .data(java.net.URI.create("https://image-fixture.invalid/image.jpg?token=fixture"))
+        .id("image-two").name("fixture.jpg").build();
+    var input = org.springframework.ai.chat.messages.UserMessage.builder().text("fixture image request")
+        .media(inline, remote).build();
+    var codec = new ModelMessageCodec();
+    byte[] bytes = codec.encode(input);
+    var restored = (org.springframework.ai.chat.messages.UserMessage) codec.decode(bytes);
+    assertThat(restored.getText()).isEqualTo(input.getText());
+    assertThat(restored.getMedia()).hasSize(2);
+    var first = restored.getMedia().get(0);
+    assertThat(first.getDataAsByteArray()).containsExactly(0, 1, 2, -1);
+    assertThat(first.getId()).isEqualTo(inline.getId());
+    assertThat(first.getName()).isEqualTo(inline.getName());
+    assertThat(first.getMimeType()).isEqualTo(inline.getMimeType());
+    assertThat(restored.getMedia().get(1).getData()).isEqualTo(remote.getData());
+    assertThat(restored.getMedia().get(1).getMimeType()).isEqualTo(remote.getMimeType());
+    assertThat(codec.encode(restored)).containsExactly(bytes);
+  }
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void inputRolesAndHistorySequenceRoundTrip(boolean system) {
