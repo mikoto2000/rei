@@ -97,7 +97,29 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     var callbacks = options.getToolCallbacks();
     if (callbacks == null || callbacks.isEmpty())
       options = options.mutate().toolChoice(null).build();
+    else validateTools(callbacks);
     return new Prompt(prompt.getInstructions(), options);
+  }
+
+  private void validateTools(java.util.List<org.springframework.ai.tool.ToolCallback> callbacks) {
+    int maximum = endpoint.capabilities().maxTools() == null ? 128 : endpoint.capabilities().maxTools();
+    if (callbacks.size() > maximum)
+      throw new IllegalArgumentException("Responses tool count exceeds endpoint limit");
+    var names = new java.util.HashSet<String>();
+    var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
+        .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+    for (var callback : callbacks) {
+      var definition = callback.getToolDefinition();
+      if (!definition.name().matches("[A-Za-z0-9_-]{1,64}") || !names.add(definition.name()))
+        throw new IllegalArgumentException("Responses tool names must be valid and unique");
+      try {
+        var schema = mapper.readTree(definition.inputSchema());
+        if (schema == null || !schema.isObject() || !"object".equals(schema.path("type").asText()))
+          throw new IllegalArgumentException("Responses tool schema must describe an object");
+      } catch (com.fasterxml.jackson.core.JsonProcessingException error) {
+        throw new IllegalArgumentException("Responses tool schema must be valid JSON");
+      }
+    }
   }
 
   private void requireCapability(Object value, LlmCapabilities.Setting setting, String name) {
