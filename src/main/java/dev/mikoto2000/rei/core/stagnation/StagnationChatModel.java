@@ -353,6 +353,7 @@ public final class StagnationChatModel implements ChatModel {
                 context.checkModelTokenBudget();
                 invoked.set(true);
                 var outbound = projectTools(invocationPrompt, context);
+                context.captureModelInput(outbound);
                 sent.set(outbound);
                 return StreamTimeoutRetry.stream(
                     delegate, outbound, context, maxStreamTimeoutRetries, aggregate::set);
@@ -383,6 +384,7 @@ public final class StagnationChatModel implements ChatModel {
                     context.checkModelTokenBudget();
                     invoked.set(true);
                     var outbound = projectTools(projected, context);
+                    context.captureModelInput(outbound);
                     sent.set(outbound);
                     return StreamTimeoutRetry.stream(
                         delegate, outbound, context, maxStreamTimeoutRetries, aggregate::set);
