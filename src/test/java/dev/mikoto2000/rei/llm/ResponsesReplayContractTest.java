@@ -51,6 +51,31 @@ class ResponsesReplayContractTest {
   private ReasoningReplayMode replayMode = ReasoningReplayMode.ENCRYPTED;
   private String contentType = "application/json";
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void completedStatusWithoutRequiredReasoningDataCannotReachBusinessDispatch(boolean streaming) throws Exception {
+    var invalid = toolResponse().replace("\"encrypted_content\":\"opaque-one+/=\",", "");
+    contentType = streaming ? "text/event-stream" : "application/json";
+    replies.add(streaming ? sse(invalid) : invalid);
+    var options = options();
+    var model = model(options);
+    var prompt = new Prompt("fixture", options);
+    var failure = org.assertj.core.api.Assertions.catchThrowable(() -> {
+      if (streaming) {
+        var run = new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", java.nio.file.Path.of("."),
+            "project", dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL,
+            dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE);
+        new dev.mikoto2000.rei.core.chat.BoundedToolLoop().run(model, prompt, 2, run, () -> {})
+            .block(Duration.ofSeconds(10));
+      } else {
+        new ToolLoopSupport().execute(prompt, model.call(prompt));
+      }
+    });
+    assertThat(executions.get()).isZero();
+    assertThat(failure).isInstanceOf(ResponsesTransportException.class).hasMessageContaining("INVALID_RESPONSE");
+    assertThat(requests).hasSize(1);
+  }
+
   @Test
   void streamingPartsRetainTheirOwnerAndCanContinueThroughTheExistingToolBoundary() throws Exception {
     contentType = "text/event-stream";
