@@ -18,6 +18,26 @@ import org.springframework.ai.tool.execution.ToolExecutionException;
  * <p>Shared Spring AI tool dispatch boundary for explicit application-owned loops.
  */
 public final class ToolLoopSupport {
+  /** Give each existing loop iteration a fresh immutable message identity. */
+  public static Prompt newIteration(Prompt prompt) {
+    var boundary = exchange(prompt);
+    if (boundary == null) return prompt;
+    var options = (ToolCallingChatOptions) prompt.getOptions();
+    var context = new java.util.HashMap<String, Object>(options.getToolContext());
+    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
+            boundary.store(), boundary.scope(), boundary.run(), java.util.UUID.randomUUID().toString()));
+    return new Prompt(prompt.getInstructions(), options.mutate().toolContext(context).build());
+  }
+
+  /** Called only after the existing terminal, integrity and usage checks. */
+  public static dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref persistResponse(
+      Prompt prompt, ChatResponse response) {
+    var generation = response.getResult();
+    if (generation == null) throw new IllegalArgumentException("Missing model result");
+    return persist(prompt, generation.getOutput());
+  }
+
   /** Recognize internal retry control frames without treating them as assistant content. */
   public static int streamRetryAttempt(ChatResponse response) {
     Object value = response.getMetadata().get("rei.streamTimeoutRetry");

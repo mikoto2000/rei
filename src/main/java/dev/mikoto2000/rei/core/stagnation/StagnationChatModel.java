@@ -213,8 +213,9 @@ public final class StagnationChatModel implements ChatModel {
 
   /** 実行の停滞への対処で用いる繰り返しを返す。 */
   private Flux<ChatResponse> iteration(
-      Prompt prompt, RunExecutionContext context, boolean prepaid, long progressAtLimit) {
+      Prompt originalPrompt, RunExecutionContext context, boolean prepaid, long progressAtLimit) {
     return Flux.defer(() -> {
+      Prompt prompt = dev.mikoto2000.rei.core.chat.ToolLoopSupport.newIteration(originalPrompt);
       context.checkActive();
       context.checkModelTokenBudget();
       if (!prepaid) context.consumeNextLlmCall();
@@ -416,6 +417,9 @@ public final class StagnationChatModel implements ChatModel {
                 if (usage != null && usage.getCompletionTokens() != null) {
                   context.recordCompletionTokens(usage.getCompletionTokens());
                 }
+                if (!result.hasToolCalls() && !OutputLimitDetector.isOutputLimitReached(result))
+                  dev.mikoto2000.rei.core.chat.ToolLoopSupport.persistResponse(
+                      sent.get() == null ? invocationPrompt : sent.get(), result);
                 if (result.hasToolCalls() && !OutputLimitDetector.isOutputLimitReached(result)) {
                   return Mono.fromCallable(
                           () -> {
