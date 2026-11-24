@@ -18,7 +18,8 @@ import java.util.concurrent.Executor;
 final class ResponsesSdkBoundary {
   private ResponsesSdkBoundary() {}
 
-  static com.openai.client.OpenAIClient safe(com.openai.client.OpenAIClient client, boolean plaintext) {
+  static com.openai.client.OpenAIClient safe(
+      com.openai.client.OpenAIClient client, boolean plaintext) {
     var service = client.responses();
     var safeService =
         (com.openai.services.blocking.ResponseService)
@@ -60,9 +61,16 @@ final class ResponsesSdkBoundary {
   private static Object[] requestArguments(Object[] arguments, boolean plaintext) {
     if (!plaintext || arguments == null) return arguments;
     var rewritten = arguments.clone();
+    // Kotlin's JsonField<Nothing> singleton erases to a raw Java type. Missing holds no value.
+    @SuppressWarnings("unchecked")
+    com.openai.core.JsonField<java.util.List<com.openai.models.responses.ResponseIncludable>>
+        missing =
+            (com.openai.core.JsonField<
+                    java.util.List<com.openai.models.responses.ResponseIncludable>>)
+                (com.openai.core.JsonField<?>) com.openai.core.JsonMissing.of();
     for (int i = 0; i < rewritten.length; i++)
       if (rewritten[i] instanceof com.openai.models.responses.ResponseCreateParams request)
-        rewritten[i] = request.toBuilder().include(com.openai.core.JsonMissing.of()).build();
+        rewritten[i] = request.toBuilder().include(missing).build();
     return rewritten;
   }
 
@@ -94,15 +102,19 @@ final class ResponsesSdkBoundary {
 
   /** Unknown plaintext fields cannot be dropped before the canonical ReasoningPart is stored. */
   private static void validatePlaintextItem(com.openai.models.responses.ResponseOutputItem output) {
-    output.reasoning().ifPresent(item -> {
-      if (!java.util.Set.of("id", "type", "summary", "content", "encrypted_content", "status")
-          .containsAll(item._allProperties().keySet()))
-        throw new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE);
-      for (var content : item.content().orElse(java.util.List.of()))
-        if (!java.util.Set.of("type", "text").containsAll(content._allProperties().keySet())
-            || !com.openai.core.JsonValue.from("reasoning_text").equals(content._type()))
-          throw new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE);
-    });
+    output
+        .reasoning()
+        .ifPresent(item -> {
+          if (!java.util.Set.of("id", "type", "summary", "content", "encrypted_content", "status")
+              .containsAll(item._allProperties().keySet()))
+            throw new ResponsesTransportException(
+                ResponsesTransportException.Category.INVALID_RESPONSE);
+          for (var content : item.content().orElse(java.util.List.of()))
+            if (!java.util.Set.of("type", "text").containsAll(content._allProperties().keySet())
+                || !com.openai.core.JsonValue.from("reasoning_text").equals(content._type()))
+              throw new ResponsesTransportException(
+                  ResponsesTransportException.Category.INVALID_RESPONSE);
+        });
   }
 
   static OpenAIClientAsync safe(OpenAIClientAsync client, boolean plaintext) {
@@ -154,9 +166,12 @@ final class ResponsesSdkBoundary {
             throw new ResponsesTransportException(
                 ResponsesTransportException.Category.PROVIDER,
                 validateResponse(event.failed().orElseThrow().response(), plaintext));
-          if (event.isCompleted()) validateResponse(event.completed().orElseThrow().response(), plaintext);
-          if (event.isIncomplete()) validateResponse(event.incomplete().orElseThrow().response(), plaintext);
-          if (event.isCreated()) validateResponse(event.created().orElseThrow().response(), plaintext);
+          if (event.isCompleted())
+            validateResponse(event.completed().orElseThrow().response(), plaintext);
+          if (event.isIncomplete())
+            validateResponse(event.incomplete().orElseThrow().response(), plaintext);
+          if (event.isCreated())
+            validateResponse(event.created().orElseThrow().response(), plaintext);
           if (event.isError())
             throw new ResponsesTransportException(ResponsesTransportException.Category.PROVIDER);
           handler.onNext(event);
