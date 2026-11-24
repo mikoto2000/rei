@@ -43,6 +43,14 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
 
   private final ResolvedLlmEndpoint endpoint;
   private final OpenAiResponsesChatModel delegate;
+  private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
+      new com.fasterxml.jackson.databind.ObjectMapper(
+          com.fasterxml.jackson.core.JsonFactory.builder()
+              .enable(com.fasterxml.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+              .streamReadConstraints(com.fasterxml.jackson.core.StreamReadConstraints.builder()
+                  .maxNestingDepth(64).maxStringLength(4_194_304).maxNumberLength(1000).build())
+              .build())
+          .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
   static ResponsesAdapter create(
       ResolvedLlmEndpoint endpoint,
@@ -136,6 +144,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     if (!Objects.equals(defaults.getBaseUrl(), options.getBaseUrl())
         || !Objects.equals(defaults.getApiKey(), options.getApiKey())
         || !Objects.equals(defaults.getCredential(), options.getCredential())
+        || !Objects.equals(defaults.getDeploymentName(), options.getDeploymentName())
+        || !Objects.equals(defaults.getMicrosoftFoundryServiceVersion(), options.getMicrosoftFoundryServiceVersion())
+        || defaults.isMicrosoftFoundry() != options.isMicrosoftFoundry()
+        || !Objects.equals(defaults.getProxy(), options.getProxy())
+        || (options.getTimeout() != null && !endpoint.readTimeout().equals(options.getTimeout()))
         || !Objects.equals(defaults.getOrganizationId(), options.getOrganizationId())
         || !Objects.equals(defaults.getCustomHeaders(), options.getCustomHeaders()))
       throw new IllegalArgumentException("Responses connection differs from the bound endpoint");
@@ -194,8 +207,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     String name = null;
     if (choice instanceof String value) {
       try {
-        var node = new com.fasterxml.jackson.databind.ObjectMapper()
-            .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(value);
+        if (value.length() > 4_194_304) throw new IllegalArgumentException("Invalid Responses tool choice");
+        var node = JSON.readTree(value);
         if (node != null && "function".equals(node.path("type").asText()))
           name = node.has("name") ? node.path("name").asText() : node.path("function").path("name").asText();
       } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
@@ -214,15 +227,14 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     if (callbacks.size() > maximum)
       throw new IllegalArgumentException("Responses tool count exceeds endpoint limit");
     var names = new java.util.HashSet<String>();
-    var mapper =
-        new com.fasterxml.jackson.databind.ObjectMapper()
-            .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     for (var callback : callbacks) {
       var definition = callback.getToolDefinition();
       if (!definition.name().matches("[A-Za-z0-9_-]{1,64}") || !names.add(definition.name()))
         throw new IllegalArgumentException("Responses tool names must be valid and unique");
       try {
-        var schema = mapper.readTree(definition.inputSchema());
+        if (definition.inputSchema().length() > 4_194_304)
+          throw new IllegalArgumentException("Responses tool schema exceeds the size limit");
+        var schema = JSON.readTree(definition.inputSchema());
         if (schema == null || !schema.isObject() || !"object".equals(schema.path("type").asText()))
           throw new IllegalArgumentException("Responses tool schema must describe an object");
       } catch (com.fasterxml.jackson.core.JsonProcessingException error) {
