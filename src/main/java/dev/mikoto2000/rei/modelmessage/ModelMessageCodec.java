@@ -37,15 +37,16 @@ public final class ModelMessageCodec {
     } else {
       var tool = (ToolResponseMessage) message;
       if (tool.getResponses().size() > 1024) throw invalid();
+      var ids = new java.util.HashSet<String>();
       for (var response : tool.getResponses()) {
         var part = parts.addObject().put("type", "tool_result").put("callId", response.id())
             .put("name", response.name()).put("data", response.responseData());
         decodeResult(part);
+        if (!ids.add(response.id())) throw invalid();
       }
     }
     var metadata = root.putObject("metadata");
-    if (message instanceof ToolResponseMessage tool)
-      metadata.set("delivery", JSON.valueToTree(ToolResultMetadata.capture(tool)));
+    if (message instanceof ToolResponseMessage tool) metadata.set("delivery", encodeDelivery(tool));
     for (var entry : message.getMetadata().entrySet()) {
       if (entry.getKey().equals("messageType")) continue;
       if (message instanceof ToolResponseMessage && Set.of("rei.deliveryPolicies", "rei.losslessPages",
@@ -93,13 +94,76 @@ public final class ModelMessageCodec {
       if (role.equals("tool")) {
         var raw = root.path("metadata").get("delivery");
         if (raw != null) {
-          fields(raw, Set.of("policies", "pages", "receipts", "fileReadBudgets"));
-          metadata.putAll(JSON.treeToValue(raw, ToolResultMetadata.class).restore());
+          metadata.putAll(decodeDelivery(raw, ids).restore());
         }
         return ToolResponseMessage.builder().responses(results).metadata(metadata).build();
       }
       return AssistantMessage.builder().parts(parts).properties(metadata).build();
     } catch (java.io.IOException | IllegalArgumentException failure) { throw invalid(); }
+  }
+
+  private static JsonNode encodeDelivery(ToolResponseMessage tool) {
+    var captured = ToolResultMetadata.capture(tool);
+    var counts = java.util.Map.of("rei.deliveryPolicies", captured.policies().size(),
+        "rei.losslessPages", captured.pages().size(), "rei.reviewReceipts", captured.receipts().size(),
+        "rei.fileReadBudgets", captured.fileReadBudgets().size());
+    counts.forEach((key, count) -> {
+      var value = tool.getMetadata().get(key);
+      if (value != null && (!(value instanceof java.util.Map<?, ?> values) || values.size() != count))
+        throw invalid();
+    });
+    JsonNode node = JSON.valueToTree(captured);
+    decodeDelivery(node, tool.getResponses().stream().map(ToolResponseMessage.ToolResponse::id)
+        .collect(java.util.stream.Collectors.toSet()));
+    return node;
+  }
+
+  private static ToolResultMetadata decodeDelivery(JsonNode node, Set<String> ids) {
+    fields(node, Set.of("policies", "pages", "receipts", "fileReadBudgets"));
+    var policies = new HashMap<String, String>();
+    var pages = new HashMap<String, ToolResultMetadata.Page>();
+    var receipts = new HashMap<String, ToolResultMetadata.Receipt>();
+    var budgets = new HashMap<String, ToolResultMetadata.FileReadBudget>();
+    for (var group : node.properties()) {
+      if (!group.getValue().isObject()) throw invalid();
+      for (var entry : group.getValue().properties()) {
+        String id = entry.getKey();
+        if (!ids.contains(id)) throw invalid();
+        var value = entry.getValue();
+        switch (group.getKey()) {
+          case "policies" -> {
+            if (!value.isTextual() || !value.textValue().matches("[A-Z][A-Z0-9_]{0,127}")) throw invalid();
+            policies.put(id, value.textValue());
+          }
+          case "pages" -> {
+            fields(value, Set.of("ref", "offset"));
+            String ref = required(value, "ref");
+            if (ref.isBlank() || ref.length() > 4096) throw invalid();
+            pages.put(id, new ToolResultMetadata.Page(ref, nonnegative(value, "offset")));
+          }
+          case "receipts" -> {
+            fields(value, Set.of("serializedHash"));
+            String hash = required(value, "serializedHash");
+            if (!hash.matches("[0-9a-f]{64}")) throw invalid();
+            receipts.put(id, new ToolResultMetadata.Receipt(hash));
+          }
+          case "fileReadBudgets" -> {
+            fields(value, Set.of("tokens"));
+            int tokens = nonnegative(value, "tokens");
+            if (tokens == 0) throw invalid();
+            budgets.put(id, new ToolResultMetadata.FileReadBudget(tokens));
+          }
+          default -> throw invalid();
+        }
+      }
+    }
+    return new ToolResultMetadata(policies, pages, receipts, budgets);
+  }
+
+  private static int nonnegative(JsonNode node, String key) {
+    var value = node.path(key);
+    if (!value.isInt() || value.intValue() < 0) throw invalid();
+    return value.intValue();
   }
 
   private static ToolResponseMessage.ToolResponse decodeResult(JsonNode node) {
