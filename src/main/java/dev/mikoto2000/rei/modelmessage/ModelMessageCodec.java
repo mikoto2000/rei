@@ -49,8 +49,11 @@ public final class ModelMessageCodec {
         if (!ids.add(response.id())) throw invalid();
       }
     } else {
-      if (message instanceof UserMessage user && !user.getMedia().isEmpty()) throw invalid();
       parts.add(encodePart(TextPart.of(message.getText())));
+      if (message instanceof UserMessage user) {
+        if (user.getMedia().size() > 1023) throw invalid();
+        user.getMedia().forEach(media -> parts.add(encodeMedia(media)));
+      }
     }
     var metadata = root.putObject("metadata");
     if (message instanceof ToolResponseMessage tool) metadata.set("delivery", encodeDelivery(tool));
@@ -78,10 +81,17 @@ public final class ModelMessageCodec {
       if (!Set.of("assistant", "tool", "user", "system").contains(role)) throw invalid();
       if (!root.path("parts").isArray() || root.path("parts").size() > 1024) throw invalid();
       var parts = new java.util.ArrayList<MessagePart>();
+      var media = new java.util.ArrayList<org.springframework.ai.content.Media>();
       var results = new java.util.ArrayList<ToolResponseMessage.ToolResponse>();
       var ids = new java.util.HashSet<String>();
       for (var part : root.path("parts")) {
-        if (!role.equals("tool")) parts.add(decodePart(part));
+        if (role.equals("user") && "media".equals(part.path("type").asText())) {
+          if (parts.size() != 1) throw invalid();
+          media.add(decodeMedia(part));
+        } else if (!role.equals("tool")) {
+          if (!media.isEmpty()) throw invalid();
+          parts.add(decodePart(part));
+        }
         else {
           var result = decodeResult(part);
           if (!ids.add(result.id())) throw invalid();
@@ -106,11 +116,41 @@ public final class ModelMessageCodec {
       if (!role.equals("assistant")) {
         if (parts.size() != 1 || !(parts.getFirst() instanceof TextPart text)
             || text.payload() != null || !text.attributes().isEmpty()) throw invalid();
-        return role.equals("user") ? UserMessage.builder().text(text.text()).metadata(metadata).build()
+        return role.equals("user") ? UserMessage.builder().text(text.text()).media(media).metadata(metadata).build()
             : SystemMessage.builder().text(text.text()).metadata(metadata).build();
       }
       return AssistantMessage.builder().parts(parts).properties(metadata).build();
     } catch (java.io.IOException | IllegalArgumentException failure) { throw invalid(); }
+  }
+
+  private static ObjectNode encodeMedia(org.springframework.ai.content.Media media) {
+    var node = JSON.createObjectNode().put("type", "media").put("mimeType", media.getMimeType().toString())
+        .put("id", media.getId()).put("name", media.getName());
+    var data = media.getData();
+    if (data instanceof byte[] bytes) {
+      if (bytes.length > MAX_BYTES) throw invalid();
+      node.put("dataType", "bytes").put("data", java.util.Base64.getEncoder().encodeToString(bytes));
+    } else if (data instanceof String value) node.put("dataType", "string").put("data", value);
+    else throw invalid();
+    decodeMedia(node);
+    return node;
+  }
+
+  private static org.springframework.ai.content.Media decodeMedia(JsonNode node) {
+    fields(node, Set.of("type", "mimeType", "id", "name", "dataType", "data"));
+    if (!"media".equals(required(node, "type"))) throw invalid();
+    var builder = org.springframework.ai.content.Media.builder()
+        .mimeType(org.springframework.util.MimeType.valueOf(required(node, "mimeType")));
+    String data = required(node, "data");
+    switch (required(node, "dataType")) {
+      case "bytes" -> builder.data(java.util.Base64.getDecoder().decode(data));
+      case "string" -> builder.data(data);
+      default -> throw invalid();
+    }
+    String id = text(node, "id"), name = text(node, "name");
+    if (id != null) builder.id(id);
+    if (name != null) builder.name(name);
+    return builder.build();
   }
 
   private static JsonNode encodeProperty(String key, Object value) {
