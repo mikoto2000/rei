@@ -17,6 +17,19 @@ import org.sqlite.SQLiteDataSource;
 
 class ModelMessagePayloadStoreTest {
   @Test
+  void replayGrantUnionRejectsDifferentOwnersAndEndpoints() {
+    var store = new ModelMessagePayloadStore(source());
+    var first = new ModelMessagePayloadStore.Exchange(store, owner, "first", "request");
+    var second = new ModelMessagePayloadStore.Exchange(store, owner, "second", "request");
+    var original = store.restoreReplayGrant(first, List.of(), new ModelMessagePayloadStore.Origin(first.ownerKey(), "endpoint"));
+    var foreign = store.restoreReplayGrant(second, List.of(), new ModelMessagePayloadStore.Origin(second.ownerKey(), "endpoint"));
+    var changedEndpoint = store.restoreReplayGrant(first, List.of(), new ModelMessagePayloadStore.Origin(first.ownerKey(), "changed-endpoint"));
+    assertThatThrownBy(() -> original.merge(foreign)).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> original.merge(changedEndpoint)).isInstanceOf(IllegalStateException.class);
+    assertThat(original.merge(original).toString()).isEqualTo("HistoryReplayGrant[messageCount=0]");
+  }
+
+  @Test
   void connectionRuntimeFailuresDoNotExposeConfigurationOrCauses() {
     var source =
         new org.springframework.jdbc.datasource.AbstractDataSource() {
