@@ -58,6 +58,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
 
   private final ResolvedLlmEndpoint endpoint;
   private final OpenAiResponsesChatModel delegate;
+  private final com.openai.client.OpenAIClient syncClient;
+  private final com.openai.client.OpenAIClientAsync asyncClient;
   private static final ObjectMapper JSON =
       new ObjectMapper(
               JsonFactory.builder()
@@ -118,11 +120,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             ObservationRegistry.NOOP,
             null,
             transportCustomizers);
-    var model =
-        OpenAiResponsesChatModel.builder()
-            .options(options)
-            .openAiClient(
-                ResponsesSdkBoundary.safe(
+    var syncClient = ResponsesSdkBoundary.safe(
                     OpenAiSetup.setupSyncClient(
                         options.getBaseUrl(),
                         options.getApiKey(),
@@ -139,11 +137,16 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                         options.getCustomHeaders(),
                         ObservationRegistry.NOOP,
                         null,
-                        transportCustomizers)))
-            .openAiClientAsync(ResponsesSdkBoundary.safe(client))
+                        transportCustomizers));
+    var asyncClient = ResponsesSdkBoundary.safe(client);
+    var model =
+        OpenAiResponsesChatModel.builder()
+            .options(options)
+            .openAiClient(syncClient)
+            .openAiClientAsync(asyncClient)
             .httpClientBuilderCustomizers(transportCustomizers)
             .build();
-    return new ResponsesAdapter(endpoint, model);
+    return new ResponsesAdapter(endpoint, model, syncClient, asyncClient);
   }
 
   private static okhttp3.RequestBody nonReplayable(okhttp3.RequestBody body) {
@@ -175,11 +178,28 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     };
   }
 
-  private ResponsesAdapter(ResolvedLlmEndpoint endpoint, OpenAiResponsesChatModel delegate) {
+  private ResponsesAdapter(ResolvedLlmEndpoint endpoint, OpenAiResponsesChatModel delegate,
+      com.openai.client.OpenAIClient syncClient, com.openai.client.OpenAIClientAsync asyncClient) {
     this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
     this.delegate = Objects.requireNonNull(delegate, "delegate");
+    this.syncClient = Objects.requireNonNull(syncClient, "syncClient");
+    this.asyncClient = Objects.requireNonNull(asyncClient, "asyncClient");
     if (endpoint.apiType() != LlmApiType.RESPONSES)
       throw new IllegalArgumentException("Responses endpoint required");
+  }
+
+  /** An explicit model shares the same resolved connection and SDK clients, never another API. */
+  ResponsesAdapter forModel(String model) {
+    if (model == null || model.equals(endpoint.model())) return this;
+    if (model.isBlank()) throw new IllegalArgumentException("Responses model is required");
+    var resolved = new ResolvedLlmEndpoint(endpoint.endpointId(), endpoint.generation(), endpoint.apiType(),
+        endpoint.baseUrl(), endpoint.credentialRef(), model, endpoint.capabilities(), endpoint.maxOutputTokens(),
+        endpoint.temperature(), endpoint.readTimeout());
+    var options = getOptions().mutate().model(model)
+        .toolContext(java.util.Map.of(ResolvedLlmEndpoint.CONTEXT_KEY, resolved)).build();
+    var selected = OpenAiResponsesChatModel.builder().options(options)
+        .openAiClient(syncClient).openAiClientAsync(asyncClient).build();
+    return new ResponsesAdapter(resolved, selected, syncClient, asyncClient);
   }
 
   @Override

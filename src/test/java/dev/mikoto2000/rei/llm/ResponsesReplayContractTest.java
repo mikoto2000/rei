@@ -258,7 +258,7 @@ class ResponsesReplayContractTest {
     assertThat(exchange.scope())
         .isEqualTo(
             dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(
-                childOwner.get()));
+                (dev.mikoto2000.rei.core.chat.AgentRunContext) sentContext.get().get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())));
     assertThat(exchange.run()).isEqualTo(result.subAgentRunId()).isNotEqualTo(parent.runId());
     assertThat(protocolStore.usage(exchange.scope(), exchange.run()).runCumulativeBytes())
         .isPositive();
