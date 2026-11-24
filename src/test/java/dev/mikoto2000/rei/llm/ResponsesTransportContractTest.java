@@ -165,9 +165,12 @@ class ResponsesTransportContractTest {
     var model = transport(options);
     org.springframework.ai.chat.model.ChatResponse result;
     if (streaming) {
-      var completed = new java.util.concurrent.atomic.AtomicReference<org.springframework.ai.chat.model.ChatResponse>();
-      new org.springframework.ai.chat.model.MessageAggregator().aggregate(
-          model.stream(new Prompt("fixture", options)), completed::set).blockLast();
+      var completed =
+          new java.util.concurrent.atomic.AtomicReference<
+              org.springframework.ai.chat.model.ChatResponse>();
+      new org.springframework.ai.chat.model.MessageAggregator()
+          .aggregate(model.stream(new Prompt("fixture", options)), completed::set)
+          .blockLast();
       result = completed.get();
     } else result = model.call(new Prompt("fixture", options));
     assertThat(OutputLimitDetector.isOutputLimitReached(result)).isTrue();

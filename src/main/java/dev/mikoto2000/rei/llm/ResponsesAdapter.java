@@ -274,7 +274,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       validateTools(callbacks);
       validateToolChoice(options.getToolChoice(), callbacks);
     }
-    return ResponsesReasoningReplay.prepare(new Prompt(prompt.getInstructions(), options), endpoint);
+    return ResponsesReasoningReplay.prepare(
+        new Prompt(prompt.getInstructions(), options), endpoint);
   }
 
   private static void validateToolChoice(Object choice, List<ToolCallback> callbacks) {
@@ -335,10 +336,14 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       var response = delegate.call(request);
       requireCompleted(response);
       if (OutputLimitDetector.isOutputLimitReached(response)) {
-        var generations = response.getResults().stream().map(generation ->
-            new org.springframework.ai.chat.model.Generation(
-                new org.springframework.ai.chat.messages.AssistantMessage(
-                    java.util.Objects.toString(generation.getOutput().getText(), "")), generation.getMetadata())).toList();
+        var generations =
+            response.getResults().stream()
+                .map(generation ->
+                    new org.springframework.ai.chat.model.Generation(
+                        new org.springframework.ai.chat.messages.AssistantMessage(
+                            java.util.Objects.toString(generation.getOutput().getText(), "")),
+                        generation.getMetadata()))
+                .toList();
         return new ChatResponse(generations, response.getMetadata());
       }
       var bound = ResponsesReasoningReplay.bind(response, request, endpoint);
@@ -376,8 +381,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       for (var generation : response.getResults()) {
         for (var part : generation.getOutput().getParts()) {
           if (!(part instanceof org.springframework.ai.chat.messages.part.TextPart
-              || part instanceof org.springframework.ai.chat.messages.part.ReasoningPart
-              || part instanceof org.springframework.ai.chat.messages.part.ToolCallPart)
+                  || part instanceof org.springframework.ai.chat.messages.part.ReasoningPart
+                  || part instanceof org.springframework.ai.chat.messages.part.ToolCallPart)
               || org.springframework.ai.chat.messages.part.StreamingParts.isPartial(part))
             throw new IllegalArgumentException();
           var status = part.attributes().get(OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE);
@@ -388,17 +393,22 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             throw new IllegalArgumentException();
           if (part instanceof org.springframework.ai.chat.messages.part.ToolCallPart call) {
             var value = call.toolCall();
-            if (value.id() == null || value.id().isBlank() || !callIds.add(value.id())
-                || !"function".equals(value.type()) || value.name() == null || value.name().isBlank()
-                || value.arguments() == null || value.arguments().length() > 4_194_304)
-              throw new IllegalArgumentException();
+            if (value.id() == null
+                || value.id().isBlank()
+                || !callIds.add(value.id())
+                || !"function".equals(value.type())
+                || value.name() == null
+                || value.name().isBlank()
+                || value.arguments() == null
+                || value.arguments().length() > 4_194_304) throw new IllegalArgumentException();
             var arguments = JSON.readTree(value.arguments());
             if (arguments == null || !arguments.isObject()) throw new IllegalArgumentException();
           }
         }
       }
     } catch (IllegalArgumentException | JsonProcessingException invalid) {
-      throw new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE,
+      throw new ResponsesTransportException(
+          ResponsesTransportException.Category.INVALID_RESPONSE,
           ResponsesTransportException.usage(response.getMetadata().getUsage()));
     }
   }
@@ -410,23 +420,28 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             () -> {
               var completed = new AtomicBoolean();
               var aggregated = new java.util.concurrent.atomic.AtomicReference<ChatResponse>();
-              var chunks = delegate.stream(request)
-                  .doOnNext(response -> {
-                    if (response.getMetadata().containsKey(OpenAiResponsesMetadata.STATUS)) {
-                      requireCompleted(response);
-                      completed.set(true);
-                    }
-                  })
-                  .map(response -> ResponsesReasoningReplay.bind(response, request, endpoint));
-              return new org.springframework.ai.chat.model.MessageAggregator().aggregate(chunks, aggregated::set)
-                  .concatWith(Flux.defer(() -> {
-                    var result = aggregated.get();
-                    if (!completed.get() || result == null)
-                      return Flux.error(new ResponsesTransportException(
-                          ResponsesTransportException.Category.INVALID_RESPONSE));
-                    if (!OutputLimitDetector.isOutputLimitReached(result)) validateComplete(result, request);
-                    return Flux.empty();
-                  }));
+              var chunks =
+                  delegate.stream(request)
+                      .doOnNext(response -> {
+                        if (response.getMetadata().containsKey(OpenAiResponsesMetadata.STATUS)) {
+                          requireCompleted(response);
+                          completed.set(true);
+                        }
+                      })
+                      .map(response -> ResponsesReasoningReplay.bind(response, request, endpoint));
+              return new org.springframework.ai.chat.model.MessageAggregator()
+                  .aggregate(chunks, aggregated::set)
+                  .concatWith(
+                      Flux.defer(() -> {
+                        var result = aggregated.get();
+                        if (!completed.get() || result == null)
+                          return Flux.error(
+                              new ResponsesTransportException(
+                                  ResponsesTransportException.Category.INVALID_RESPONSE));
+                        if (!OutputLimitDetector.isOutputLimitReached(result))
+                          validateComplete(result, request);
+                        return Flux.empty();
+                      }));
             })
         .onErrorMap(ResponsesTransportException::normalize);
   }

@@ -14,13 +14,16 @@ final class ResponsesReasoningReplay {
   private ResponsesReasoningReplay() {}
 
   static Prompt prepare(Prompt prompt, ResolvedLlmEndpoint endpoint) {
-    String requestOwner = endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.ENCRYPTED
-        ? owner(prompt) : null;
+    String requestOwner =
+        endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.ENCRYPTED
+            ? owner(prompt)
+            : null;
     for (var message : prompt.getInstructions()) {
       if (!(message instanceof AssistantMessage assistant)) continue;
       for (var part : assistant.getParts()) {
         if (!(part instanceof org.springframework.ai.chat.messages.part.TextPart
-            || part instanceof ReasoningPart || part instanceof org.springframework.ai.chat.messages.part.ToolCallPart)
+                || part instanceof ReasoningPart
+                || part instanceof org.springframework.ai.chat.messages.part.ToolCallPart)
             || org.springframework.ai.chat.messages.part.StreamingParts.isPartial(part))
           throw new IllegalArgumentException("Responses replay part is not supported or complete");
         var status = part.attributes().get(OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE);
@@ -52,36 +55,49 @@ final class ResponsesReasoningReplay {
   }
 
   static org.springframework.ai.chat.model.ChatResponse bind(
-      org.springframework.ai.chat.model.ChatResponse response, Prompt prompt, ResolvedLlmEndpoint endpoint) {
+      org.springframework.ai.chat.model.ChatResponse response,
+      Prompt prompt,
+      ResolvedLlmEndpoint endpoint) {
     if (endpoint.capabilities().reasoningReplay() != ReasoningReplayMode.ENCRYPTED) return response;
     String requestOwner = owner(prompt);
-    var generations = response.getResults().stream().map(generation -> {
-      var output = generation.getOutput();
-      var metadata = new java.util.HashMap<String, Object>(output.getMetadata());
-      metadata.put(ORIGIN_OWNER, requestOwner);
-      metadata.put(ORIGIN_ENDPOINT, endpoint.fingerprint());
-      return new org.springframework.ai.chat.model.Generation(
-          output.mutate().properties(metadata).build(), generation.getMetadata());
-    }).toList();
+    var generations =
+        response.getResults().stream()
+            .map(generation -> {
+              var output = generation.getOutput();
+              var metadata = new java.util.HashMap<String, Object>(output.getMetadata());
+              metadata.put(ORIGIN_OWNER, requestOwner);
+              metadata.put(ORIGIN_ENDPOINT, endpoint.fingerprint());
+              return new org.springframework.ai.chat.model.Generation(
+                  output.mutate().properties(metadata).build(), generation.getMetadata());
+            })
+            .toList();
     return new org.springframework.ai.chat.model.ChatResponse(generations, response.getMetadata());
   }
 
-  static void validateComplete(org.springframework.ai.chat.model.ChatResponse response,
-      Prompt request, ResolvedLlmEndpoint endpoint) {
+  static void validateComplete(
+      org.springframework.ai.chat.model.ChatResponse response,
+      Prompt request,
+      ResolvedLlmEndpoint endpoint) {
     try {
-      var messages = response.getResults().stream()
-          .<org.springframework.ai.chat.messages.Message>map(generation -> generation.getOutput()).toList();
+      var messages =
+          response.getResults().stream()
+              .<org.springframework.ai.chat.messages.Message>map(
+                  generation -> generation.getOutput())
+              .toList();
       prepare(new Prompt(messages, request.getOptions()), endpoint);
     } catch (IllegalArgumentException invalid) {
-      throw new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE,
+      throw new ResponsesTransportException(
+          ResponsesTransportException.Category.INVALID_RESPONSE,
           ResponsesTransportException.usage(response.getMetadata().getUsage()));
     }
   }
 
   private static String owner(Prompt prompt) {
     var options = prompt.getOptions();
-    var context = options instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools
-        ? tools.getToolContext() : null;
+    var context =
+        options instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools
+            ? tools.getToolContext()
+            : null;
     var value = context == null ? null : context.get(OWNER_CONTEXT_KEY);
     if (!(value instanceof String owner) || owner.isBlank())
       throw new IllegalArgumentException("Responses replay owner is required");

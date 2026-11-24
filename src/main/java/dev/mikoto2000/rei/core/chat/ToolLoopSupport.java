@@ -121,17 +121,26 @@ public final class ToolLoopSupport {
               var calls = FileReadContinuation.inherit(prompt, output.getToolCalls());
               if (java.util.Objects.equals(calls, output.getToolCalls())) return generation;
               var replacements = calls.iterator();
-              var parts = output.getParts().stream().map(part -> {
-                if (part instanceof org.springframework.ai.chat.messages.part.ToolCallPart call
-                    && !org.springframework.ai.chat.messages.part.StreamingParts.isPartial(call))
-                  return (org.springframework.ai.chat.messages.part.MessagePart)
-                      new org.springframework.ai.chat.messages.part.ToolCallPart(
-                          replacements.next(), call.payload(), call.attributes());
-                return part;
-              }).toList();
+              var parts =
+                  output.getParts().stream()
+                      .map(part -> {
+                        if (part
+                                instanceof
+                                org.springframework.ai.chat.messages.part.ToolCallPart call
+                            && !org.springframework.ai.chat.messages.part.StreamingParts.isPartial(
+                                call))
+                          return (org.springframework.ai.chat.messages.part.MessagePart)
+                              new org.springframework.ai.chat.messages.part.ToolCallPart(
+                                  replacements.next(), call.payload(), call.attributes());
+                        return part;
+                      })
+                      .toList();
               return new org.springframework.ai.chat.model.Generation(
                   org.springframework.ai.chat.messages.AssistantMessage.builder()
-                      .parts(parts).properties(output.getMetadata()).build(), generation.getMetadata());
+                      .parts(parts)
+                      .properties(output.getMetadata())
+                      .build(),
+                  generation.getMetadata());
             })
             .toList();
     return new ChatResponse(generations, response.getMetadata());
@@ -291,20 +300,23 @@ public final class ToolLoopSupport {
     if (response.getResults().size() != 1)
       throw new IllegalArgumentException(
           "Approval continuation requires a single selected generation");
-    var executed = executePending(
-        prompt,
-        new RunContinuation.PendingTools(
-            java.util.Objects.toString(output.getText(), ""),
-            output.getToolCalls(),
-            java.util.List.of()),
-        context,
-        false);
+    var executed =
+        executePending(
+            prompt,
+            new RunContinuation.PendingTools(
+                java.util.Objects.toString(output.getText(), ""),
+                output.getToolCalls(),
+                java.util.List.of()),
+            context,
+            false);
     // The execution view may repair arguments, but the model's original ordered parts
     // remain the source for the next protocol request.
     var history = new java.util.ArrayList<>(executed.conversationHistory());
     history.set(prompt.getInstructions().size(), output);
-    return ToolExecutionResult.builder().conversationHistory(history)
-        .returnDirect(executed.returnDirect()).build();
+    return ToolExecutionResult.builder()
+        .conversationHistory(history)
+        .returnDirect(executed.returnDirect())
+        .build();
   }
 
   static ToolExecutionResult rejectedBatch(Prompt prompt, String guidance) {
