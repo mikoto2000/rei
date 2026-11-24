@@ -2749,6 +2749,28 @@ class ResponsesReplayContractTest {
     assertThat(requests).hasSize(1);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"false,item", "true,item", "false,content", "true,content"})
+  void unknownPlaintextWireFieldsCannotDisappearInTheSpringMapper(boolean streaming, String field)
+      throws Exception {
+    replayMode = ReasoningReplayMode.PLAINTEXT;
+    var wire = new ObjectMapper().readTree(reasoningDone());
+    var item = (com.fasterxml.jackson.databind.node.ObjectNode) wire.path("output").get(0);
+    var target = field.equals("item") ? item :
+        (com.fasterxml.jackson.databind.node.ObjectNode) item.path("content").get(0);
+    target.put("PRIVATE-future", "PRIVATE-value");
+    contentType = streaming ? "text/event-stream" : "application/json";
+    replies.add(streaming ? sse(wire.toString()) : wire.toString());
+    var options = options();
+    var model = model(options);
+    assertThatThrownBy(() -> {
+      if (streaming) model.stream(new Prompt("fixture", options)).blockLast(Duration.ofSeconds(10));
+      else model.call(new Prompt("fixture", options));
+    }).isInstanceOf(ResponsesTransportException.class)
+        .hasMessageContaining("INVALID_RESPONSE").hasMessageNotContaining("PRIVATE").hasNoCause();
+    assertThat(executions.get()).isZero();
+  }
+
   @Test
   void encryptedRequestsRequireAnExplicitOwnerBeforeAnyHttp() {
     owner = null;
