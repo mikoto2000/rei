@@ -156,6 +156,10 @@ public class ApprovalContinuationStore {
               ModelMessagePayloadStore.ReferenceKind.APPROVAL,
               id);
     }
+    if (pending.completedReference() != null) {
+      payloads.obtain().publish(ModelMessagePayloadStore.Scope.forOwner(owner), pending.completedReference(),
+          ModelMessagePayloadStore.ReferenceKind.APPROVAL, id);
+    }
     var messageIndex = new java.util.concurrent.atomic.AtomicInteger();
     var messages =
         history.stream()
@@ -185,7 +189,11 @@ public class ApprovalContinuationStore {
               throw new IllegalArgumentException("Unsupported continuation message");
             })
             .toList();
-    String encoded = encode(new Document(owner, request, messages, pending, budget, managed));
+    var storedPending = pending.completedReference() == null ? pending
+        : new RunContinuation.PendingTools(pending.text(), pending.calls(), List.of(),
+            pending.argumentCorrections(), pending.schemaVersion(), pending.assistantReference(),
+            pending.completedCount(), pending.completedReference());
+    String encoded = encode(new Document(owner, request, messages, storedPending, budget, managed));
     if (encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 1048576
         || messages.size() > 256
         || pending.calls().size() > 32)
@@ -261,6 +269,7 @@ public class ApprovalContinuationStore {
   /** ツール利用の権限制御で用いる保存済みを返す。 */
   public RunContinuation.Saved saved(Entry entry) {
     var d = document(entry);
+    var pending = d.pending();
     if (d.pending() != null && d.pending().assistantReference() != null)
       payloads
           .obtain()
@@ -269,6 +278,14 @@ public class ApprovalContinuationStore {
               d.pending().assistantReference(),
               ModelMessagePayloadStore.ReferenceKind.APPROVAL,
               entry.approvalId());
+    if (pending != null && pending.completedReference() != null) {
+      var saved = payloads.obtain().load(ModelMessagePayloadStore.Scope.forOwner(d.owner()),
+          pending.completedReference(), ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId());
+      if (!(saved instanceof ToolResponseMessage tool) || tool.getResponses().size() != pending.completedCount())
+        throw new IllegalStateException("Invalid completed model message reference");
+      pending = new RunContinuation.PendingTools(pending.text(), pending.calls(), tool.getResponses(),
+          pending.argumentCorrections(), pending.assistantReference(), pending.completedReference());
+    }
     return new RunContinuation.Saved(
         d.request(),
         d.history().stream()
@@ -302,7 +319,7 @@ public class ApprovalContinuationStore {
             })
             .toList(),
         d.budget(),
-        d.pending());
+        pending);
   }
 
   /** ツール利用の権限制御において、実行待ちに該当するか判定する。 */

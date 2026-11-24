@@ -23,6 +23,8 @@ public interface RunContinuation {
    * @param argumentCorrections 引数補正一覧
    * @param schemaVersion 継続形式のバージョン（旧形式は0）
    * @param assistantReference 元のモデル応答への参照
+   * @param completedCount 成功済み prefix の件数
+   * @param completedReference 配信属性付き prefix 結果への参照
    */
   record PendingTools(
       String text,
@@ -30,7 +32,9 @@ public interface RunContinuation {
       List<org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse> completed,
       Set<String> argumentCorrections,
       int schemaVersion,
-      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref assistantReference) {
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref assistantReference,
+      int completedCount,
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref completedReference) {
     /** 受け取った情報からPendingToolsを作成する。 */
     public PendingTools {
       if (schemaVersion < 0
@@ -39,6 +43,13 @@ public interface RunContinuation {
         throw new IllegalArgumentException("Invalid pending model message reference");
       calls = List.copyOf(calls);
       completed = List.copyOf(completed);
+      if (schemaVersion == 0) {
+        if (completedReference != null) throw new IllegalArgumentException("Invalid pending model message reference");
+        completedCount = completed.size();
+      } else if (completedCount < 0 || completedCount > calls.size()
+          || (completedCount > 0) != (completedReference != null)
+          || (!completed.isEmpty() && completed.size() != completedCount))
+        throw new IllegalArgumentException("Invalid completed model message reference");
       argumentCorrections =
           argumentCorrections == null ? Set.of() : Set.copyOf(argumentCorrections);
     }
@@ -48,7 +59,7 @@ public interface RunContinuation {
         List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> calls,
         List<org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse> completed,
         Set<String> argumentCorrections) {
-      this(text, calls, completed, argumentCorrections, 0, null);
+      this(text, calls, completed, argumentCorrections, 0, null, completed.size(), null);
     }
 
     public PendingTools(
@@ -63,7 +74,17 @@ public interface RunContinuation {
           completed,
           argumentCorrections,
           assistantReference == null ? 0 : 1,
-          assistantReference);
+          assistantReference, completed.size(), null);
+    }
+
+    public PendingTools(String text,
+        List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> calls,
+        List<org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse> completed,
+        Set<String> argumentCorrections,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref assistantReference,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref completedReference) {
+      this(text, calls, completed, argumentCorrections, assistantReference == null ? 0 : 1,
+          assistantReference, completed.size(), completedReference);
     }
 
     /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */
