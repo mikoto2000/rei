@@ -19,6 +19,47 @@ import org.springframework.ai.chat.prompt.Prompt;
 @org.junit.jupiter.api.Tag("integration")
 class ContextHistoryAdvisorTest {
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"false,true", "true,true", "false,false", "true,false"})
+  void coveredHistoryAnchorsDoNotRequireReleasedPayloads(boolean useLogs, boolean covered) {
+    var owner = new AgentRunContext("current-run", "chat", dir, "project");
+    var old = new AgentRunContext("old-run", "chat", dir, "project");
+    var turns = ConversationTurnStore.inMemory();
+    turns.start(old, "old request", java.time.Instant.EPOCH);
+    var pointer = Map.of(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_ID, "released-payload",
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_HASH, "0".repeat(64),
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_OWNER, "turn:old-run");
+    turns.recordMetadata(old, pointer);
+    turns.finish(old, ConversationTurnStore.Status.COMPLETED, "old display answer");
+    var logs = new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"),
+        java.time.Clock.systemUTC(), new com.fasterxml.jackson.databind.ObjectMapper()
+            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    if (useLogs) logs.append("chat", "assistant", "old display answer", pointer);
+    var summaries = new ConversationSummaryRepository(dir);
+    if (covered) summaries.save(useLogs ? "chat/log" : "chat",
+        new ConversationSummary("retained complete summary", useLogs ? 4 : 3, java.time.Instant.now()));
+    var advisor = new ContextHistoryAdvisor(turns, WindowedConversationMemory.builder().build(), summaries,
+        useLogs ? logs : null, () -> { throw new IllegalStateException("uncovered payload is required"); });
+    var request = ChatClientRequest.builder().prompt(new Prompt(java.util.List.of(new UserMessage("current request")),
+        org.springframework.ai.openai.OpenAiChatOptions.builder().build()))
+        .context(Map.of(org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID, "chat",
+            AgentRunContext.class.getName(), owner)).build();
+    if (!covered) {
+      org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
+          .hasMessage("uncovered payload is required");
+      return;
+    }
+    var historical = advisor.before(request, null).prompt();
+    var properties = new ContextCompressionProperties();
+    var estimator = TokenEstimator.conservative();
+    var assembler = new ContextAssembler(properties, estimator, summaries,
+        new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
+        (previous, messages, budget, current) -> { throw new AssertionError("already summarized"); }, null, null);
+    assertThat(assembler.assemble(historical, "chat", "current-run", () -> {}).getContents())
+        .contains("retained complete summary", "current request").doesNotContain("old display answer");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1, 2, 3, 4})
   void durableLogAndTurnPointersTakePriorityWithoutDuplicatingTheirDisplayText(int logMode)
       throws Exception {
