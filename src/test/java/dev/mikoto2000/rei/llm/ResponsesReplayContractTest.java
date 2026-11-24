@@ -174,6 +174,7 @@ class ResponsesReplayContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
+    "PLAINTEXT,false,false,false", "PLAINTEXT,true,false,false", "PLAINTEXT,false,true,false", "PLAINTEXT,false,true,true",
     "ENCRYPTED,false,false,false", "NONE,false,false,false", "ENCRYPTED,true,false,false",
         "NONE,true,false,false",
     "ENCRYPTED,false,true,false", "NONE,false,true,false", "ENCRYPTED,false,true,true",
@@ -2376,6 +2377,148 @@ class ResponsesReplayContractTest {
         .hasMessageNotContaining("private-fixture-payload")
         .hasNoCause();
     assertThat(requests).isEmpty();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  @org.junit.jupiter.api.Timeout(180)
+  void oneHundredTwentyNativeToolRoundsKeepLruCompressionAndStorageBounded(boolean plaintext)
+      throws Exception {
+    replayMode = plaintext ? ReasoningReplayMode.PLAINTEXT : ReasoningReplayMode.ENCRYPTED;
+    contentType = "text/event-stream";
+    var mapper = new ObjectMapper();
+    var catalog = mapper.readTree(java.nio.file.Path.of("src/main/resources/tool-discovery-catalog.json").toFile());
+    var groups = new java.util.HashMap<String, Integer>();
+    catalog.forEach(entry -> groups.merge(entry.path("set").asText(), 1, Integer::sum));
+    var specialists = new java.util.ArrayList<String>();
+    var callbacks = new java.util.ArrayList<ToolCallback>();
+    for (var entry : catalog) {
+      String name = entry.path("name").asText();
+      if (!entry.path("basic").asBoolean() && groups.get(entry.path("set").asText()) == 1
+          && entry.path("dependencies").isEmpty()) specialists.add(name);
+      callbacks.add(new ToolCallback() {
+        public ToolDefinition getToolDefinition() {
+          return ToolDefinition.builder().name(name).description("owned operational fixture")
+              .inputSchema("{\"type\":\"object\",\"properties\":{\"round\":{\"type\":\"integer\"},\"files\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}}}}").build();
+        }
+        public String call(String arguments) {
+          executions.incrementAndGet();
+          if (name.equals("writeMultiFile")) {
+            try {
+              var values = mapper.readTree(arguments);
+              java.nio.file.Files.writeString(protocolDirectory.resolve("progress.txt"), values.path("files").get(0).path("content").asText());
+            } catch (java.io.IOException failure) { throw new java.io.UncheckedIOException(failure); }
+          }
+          return "owned result " + name + " " + arguments;
+        }
+      });
+    }
+    assertThat(specialists.size()).isGreaterThanOrEqualTo(60);
+    String large = "x".repeat(16 * 1024);
+    for (int round = 0; round < 120; round++) {
+      String selected = specialists.get(round / 2);
+      String name = round % 2 == 0 ? "searchTools" : selected;
+      String arguments = round % 2 == 0
+          ? mapper.writeValueAsString(Map.of("query", selected, "maxResults", 1))
+          : mapper.writeValueAsString(Map.of("round", round));
+      var output = mapper.createArrayNode();
+      output.addObject().put("type", "reasoning").put("id", "rs_" + round)
+          .put("status", "completed").put("encrypted_content", large + round).putArray("summary");
+      output.addObject().put("type", "function_call").put("id", "fc_" + round)
+          .put("call_id", "call_" + round).put("name", name).put("arguments", arguments)
+          .put("status", "completed");
+      if (round % 2 == 1) output.addObject().put("type", "function_call").put("id", "fc_progress_" + round)
+          .put("call_id", "call_progress_" + round).put("name", "writeMultiFile")
+          .put("arguments", mapper.writeValueAsString(Map.of("files", List.of(Map.of("path", "progress.txt", "content", "owned progress " + round)))))
+          .put("status", "completed");
+      replies.add(sse(response("resp_" + round, output.toString())));
+    }
+    replies.add(sse(done()));
+    var run = new dev.mikoto2000.rei.core.chat.AgentRunContext("long-run", "long-session", protocolDirectory, "project");
+    var budget = new OutputLimitRunBudget(2, 130);
+    assertThat(budget.tryConsumeLlmCall()).isTrue();
+    var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(run.runId(), budget,
+        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+    execution.setRunContext(run);
+    var defaults = controlledOptions(execution, options());
+    var requestOptions = defaults.mutate().toolCallbacks(callbacks)
+        .toolContext(Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution)).build();
+    var properties = new dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties();
+    properties.setThreshold(30_000);
+    properties.setHardLimit(60_000);
+    properties.setRecentTokens(1000);
+    properties.setSummaryTokens(256);
+    var estimator = dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative();
+    var compressionCalls = new AtomicInteger();
+    var assembler = new dev.mikoto2000.rei.core.contextbudget.ContextAssembler(properties, estimator,
+        new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(protocolDirectory),
+        new dev.mikoto2000.rei.core.contextbudget.ToolResultCompressor(
+            new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(protocolDirectory), estimator, 8000, 2000),
+        (previous, messages, limit, active) -> "owned rolling summary " + compressionCalls.incrementAndGet(),
+        null, null);
+    var discoveryProperties = new dev.mikoto2000.rei.llm.discovery.ToolDiscoveryProperties();
+    discoveryProperties.setEnabled(true);
+    discoveryProperties.setMaxActiveTools(36);
+    var discovery = new dev.mikoto2000.rei.llm.discovery.ToolDiscovery(discoveryProperties,
+        new org.springframework.beans.factory.support.DefaultListableBeanFactory()
+            .getBeanProvider(dev.mikoto2000.rei.llm.discovery.ToolDiscoveryStore.class));
+    long start = System.nanoTime();
+    try {
+    new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(model(defaults), assembler)
+        .withToolDiscovery(discovery).stream(new Prompt("owned 120 round operational fixture", requestOptions))
+        .blockLast(Duration.ofSeconds(150));
+    } catch (RuntimeException failure) {
+      var outputs = new java.util.ArrayList<String>();
+      for (var request : requests) for (var item : request.path("input"))
+        if (item.path("type").asText().equals("function_call_output")) outputs.add(item.path("output").asText());
+        else if (item.path("type").asText().equals("message")) outputs.add(item.path("content").toString());
+      java.nio.file.Files.writeString(java.nio.file.Path.of("target/responses-api/longrun-debug.txt"),
+          "callbacks=" + executions.get() + " compression=" + compressionCalls.get() + " requests=" + requests.size() + "\n" + String.join("\n", outputs));
+      throw failure;
+    }
+    long elapsed = System.nanoTime() - start;
+    assertThat(executions).hasValue(120);
+    assertThat(requests).hasSize(121);
+    assertThat(compressionCalls.get()).isGreaterThan(1);
+    assertThat(budget.snapshot().llmCalls()).isEqualTo(121);
+    for (int round = 0; round < 120; round++) {
+      var tools = requests.get(round).path("tools");
+      assertThat(tools.size()).isBetween(32, 36);
+      if (round % 2 == 1) assertThat(tools.toString()).contains(specialists.get(round / 2));
+    }
+    assertThat(requests.getLast().path("tools").toString()).doesNotContain(specialists.getFirst());
+    var scope = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(run);
+    var usage = payloads().usage(scope, run.runId());
+    assertThat(usage.runCumulativeBytes()).isLessThan(8L * 1024 * 1024);
+    var metrics = new java.util.LinkedHashMap<String, Object>();
+    metrics.put("fixtureOnly", true);
+    metrics.put("mode", replayMode.name());
+    metrics.put("toolRounds", 120);
+    metrics.put("modelRequests", requests.size());
+    metrics.put("businessFixtureCallbacks", executions.get());
+    metrics.put("compressionCalls", compressionCalls.get());
+    metrics.put("wallMillis", elapsed / 1_000_000.0);
+    metrics.put("payloadBytes", usage.payloadBytes());
+    metrics.put("runCumulativeBytes", usage.runCumulativeBytes());
+    metrics.put("payloadCount", usage.payloadCount());
+    metrics.put("serializedHttpRequestBytes", requests.stream().mapToLong(node -> node.toString().getBytes(StandardCharsets.UTF_8).length).sum());
+    metrics.put("lastSerializedHttpRequestBytes", requests.getLast().toString().getBytes(StandardCharsets.UTF_8).length);
+    metrics.put("sampledHeapBytesAfterRun", java.lang.management.ManagementFactory.getMemoryMXBean().getHeapMemoryUsage().getUsed());
+    metrics.put("sqliteFileBytes", java.nio.file.Files.size(protocolDirectory.resolve("protocol.db")));
+    var wal = protocolDirectory.resolve("protocol.db-wal");
+    metrics.put("sqliteWalBytes", java.nio.file.Files.exists(wal) ? java.nio.file.Files.size(wal) : 0);
+    var probe = AssistantMessage.builder().content("owned latency probe").build();
+    start = System.nanoTime();
+    var ref = payloads().save(scope, "latency-probe", "one", probe);
+    metrics.put("singleSaveProbeMicros", (System.nanoTime() - start) / 1000.0);
+    start = System.nanoTime();
+    assertThat(payloads().load(scope, ref).getText()).isEqualTo("owned latency probe");
+    metrics.put("singleLoadProbeMicros", (System.nanoTime() - start) / 1000.0);
+    metrics.put("realApiCacheHitAndTtft", "UNMEASURED: owned injected SDK HTTP fixture; no live API authorization");
+    var evidence = java.nio.file.Path.of("target/responses-api/operational-" + replayMode.name() + ".json");
+    java.nio.file.Files.createDirectories(evidence.getParent());
+    mapper.writerWithDefaultPrettyPrinter().writeValue(evidence.toFile(), metrics);
   }
 
   private final List<JsonNode> requests = new CopyOnWriteArrayList<>();
