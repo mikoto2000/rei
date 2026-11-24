@@ -71,7 +71,9 @@ class ContextChatIntegrationTest {
             summaries,
             new ToolResultCompressor(new RawToolResultStore(dir), tokens, 1000, 200),
             (previous, messages, budget, request) -> {
-              assertThat(messages).extracting(org.springframework.ai.chat.messages.Message::getText).contains("recent answer");
+              assertThat(messages)
+                  .extracting(org.springframework.ai.chat.messages.Message::getText)
+                  .contains("recent answer");
               return "summary of earlier decisions";
             },
             events,
@@ -124,11 +126,7 @@ class ContextChatIntegrationTest {
         .chatResponse()
         .blockLast();
     assertThat(sent.get().getContents())
-        .contains(
-            "system rules",
-            "summary of earlier decisions",
-            "edited.java",
-            "current request")
+        .contains("system rules", "summary of earlier decisions", "edited.java", "current request")
         .doesNotContain("historic requirement historic requirement", "recent answer");
     assertThat(observed)
         .extracting(AgentEvent::type)

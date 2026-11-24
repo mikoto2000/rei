@@ -40,10 +40,14 @@ public final class CompressionPolicy {
     }
     // A completed historical turn can be larger than the recent target by itself. Summarize
     // that whole turn rather than separating its request or making it impossible to compress.
-    if (safe == 0 && cut > 0 && completedHistory && !boundaries.isEmpty()
+    if (safe == 0
+        && cut > 0
+        && completedHistory
+        && !boundaries.isEmpty()
         && boundaries.getLast() == messages.size()) return messages.size();
     return safe;
   }
+
   /** Complete protocol prefixes, shared by summarization and hard-limit trimming. */
   static List<Integer> completePrefixes(List<Message> messages) {
     var boundaries = new java.util.ArrayList<Integer>();
@@ -52,23 +56,27 @@ public final class CompressionPolicy {
       var message = messages.get(i);
       if (message instanceof org.springframework.ai.chat.messages.UserMessage) {
         if (!pending.isEmpty()) return boundaries;
-      } else if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
+      } else if (message
+          instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
         if (!pending.isEmpty()) return boundaries;
         for (var call : assistant.getToolCalls()) {
-          if (call.id() == null || call.id().isBlank() || call.name() == null || call.name().isBlank()
+          if (call.id() == null
+              || call.id().isBlank()
+              || call.name() == null
+              || call.name().isBlank()
               || pending.putIfAbsent(call.id(), call.name()) != null) return List.of();
         }
         if (pending.isEmpty()) boundaries.add(i + 1);
       } else if (message instanceof ToolResponseMessage tool) {
         if (pending.isEmpty() || tool.getResponses().isEmpty()) return List.of();
         for (var result : tool.getResponses()) {
-          if (result.id() == null || result.name() == null || !result.name().equals(pending.remove(result.id())))
-            return List.of();
+          if (result.id() == null
+              || result.name() == null
+              || !result.name().equals(pending.remove(result.id()))) return List.of();
         }
         if (pending.isEmpty()) boundaries.add(i + 1);
       }
     }
     return boundaries;
   }
-
 }

@@ -350,14 +350,20 @@ public class ContextAssembler {
 
   /** モデルへ渡す文脈の管理に関する圧縮を処理する。 */
   private void compress(
-      Segment segment, Prompt raw, Runnable check, dev.mikoto2000.rei.llm.ModelCallBudget budget, boolean completedHistory) {
+      Segment segment,
+      Prompt raw,
+      Runnable check,
+      dev.mikoto2000.rei.llm.ModelCallBudget budget,
+      boolean completedHistory) {
     var options = raw.getOptions();
     String model = options == null ? null : options.getModel();
     var settings = compressionSettings.apply(model);
     int count =
         new CompressionPolicy(estimator)
             .prefixToCompress(
-                segment.entries.stream().map(Entry::message).toList(), settings.recentTokens(), completedHistory);
+                segment.entries.stream().map(Entry::message).toList(),
+                settings.recentTokens(),
+                completedHistory);
     if (count == 0) return;
     var prefix = segment.entries.subList(0, count);
     long through = prefix.getLast().sequence();
@@ -419,12 +425,14 @@ public class ContextAssembler {
               - 2048L;
       max = Math.min(max, settings.summaryInputTokens());
       max = compressionRetries.inputLimit(segment.retryKey, configuration, max);
-      var boundaries = CompressionPolicy.completePrefixes(prefix.stream().map(Entry::message).toList());
+      var boundaries =
+          CompressionPolicy.completePrefixes(prefix.stream().map(Entry::message).toList());
       int fitting = 0;
       int scanned = 0;
       long candidateTokens = estimator.text(segment.summary.summary());
       for (int boundary : boundaries) {
-        while (scanned < boundary) candidateTokens += estimator.message(segment.entries.get(scanned++).message());
+        while (scanned < boundary)
+          candidateTokens += estimator.message(segment.entries.get(scanned++).message());
         if (candidateTokens > max) break;
         fitting = boundary;
       }
@@ -433,8 +441,9 @@ public class ContextAssembler {
       // after every page succeeds; input, reasoning/calls and all results remain one unit.
       count = paged ? boundaries.getFirst() : fitting;
       prefix = segment.entries.subList(0, count);
-      before = estimator.text(segment.summary.summary())
-          + prefix.stream().mapToLong(e -> estimator.message(e.message())).sum();
+      before =
+          estimator.text(segment.summary.summary())
+              + prefix.stream().mapToLong(e -> estimator.message(e.message())).sum();
       after = before;
       through = prefix.getLast().sequence();
       var messages = prefix.stream().map(Entry::message).toList();
@@ -612,12 +621,18 @@ public class ContextAssembler {
 
   /** Account for each complete group once, then remove its prefix without repeated array shifts. */
   private static void trimOldest(
-      Segment segment, Map<Long, Long> weights, ProjectionCosts costs, int hard, Runnable check, boolean completedHistory) {
+      Segment segment,
+      Map<Long, Long> weights,
+      ProjectionCosts costs,
+      int hard,
+      Runnable check,
+      boolean completedHistory) {
     var lastIndex = new HashMap<Long, Integer>();
     for (int i = 0; i < segment.entries.size(); i++)
       lastIndex.put(segment.entries.get(i).sequence(), i);
     int from = 0;
-    for (int end : CompressionPolicy.completePrefixes(segment.entries.stream().map(Entry::message).toList())) {
+    for (int end :
+        CompressionPolicy.completePrefixes(segment.entries.stream().map(Entry::message).toList())) {
       if (costs.tokens <= hard || !completedHistory && end == segment.entries.size()) break;
       check.run();
       for (int i = from; i < end; i++) {

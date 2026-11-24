@@ -25,30 +25,65 @@ import org.springframework.ai.chat.prompt.Prompt;
 class ContextAssemblerTest {
   @Test
   void hardLimitNeverDiscardsAnIncompleteMultiCallAndItsSuccessfulPrefix() {
-    var call = AssistantMessage.builder().content("").toolCalls(List.of(
-        new AssistantMessage.ToolCall("one", "function", "readFile", "x".repeat(3000)),
-        new AssistantMessage.ToolCall("two", "function", "readFile", "{}"))).build();
-    var prefix = ToolResponseMessage.builder().responses(List.of(
-        new ToolResponseMessage.ToolResponse("one", "readFile", "saved first result"))).build();
-    var raw = new Prompt(List.of(new SystemMessage("policy"), new UserMessage("current"), call,
-        prefix, new AssistantMessage("later commentary")));
-    var assembler = assembler((previous, messages, budget, request) -> { throw new AssertionError("incomplete transaction must not be summarized"); });
+    var call =
+        AssistantMessage.builder()
+            .content("")
+            .toolCalls(
+                List.of(
+                    new AssistantMessage.ToolCall("one", "function", "readFile", "x".repeat(3000)),
+                    new AssistantMessage.ToolCall("two", "function", "readFile", "{}")))
+            .build();
+    var prefix =
+        ToolResponseMessage.builder()
+            .responses(
+                List.of(
+                    new ToolResponseMessage.ToolResponse("one", "readFile", "saved first result")))
+            .build();
+    var raw =
+        new Prompt(
+            List.of(
+                new SystemMessage("policy"),
+                new UserMessage("current"),
+                call,
+                prefix,
+                new AssistantMessage("later commentary")));
+    var assembler =
+        assembler((previous, messages, budget, request) -> {
+          throw new AssertionError("incomplete transaction must not be summarized");
+        });
     assertThatThrownBy(() -> assembler.assemble(raw, "chat", "run", () -> {}))
         .hasMessageContaining("CONTEXT_HARD_LIMIT");
-    assertThat(raw.getInstructions()).containsExactly(new SystemMessage("policy"), new UserMessage("current"), call, prefix,
-        new AssistantMessage("later commentary"));
+    assertThat(raw.getInstructions())
+        .containsExactly(
+            new SystemMessage("policy"),
+            new UserMessage("current"),
+            call,
+            prefix,
+            new AssistantMessage("later commentary"));
   }
 
   @Test
   void oversizedCompletedHistoricalUnitIsSummarizedWithItsResponse() {
     var seen = new ArrayList<Message>();
-    var assembler = assembler((previous, messages, budget, request) -> { seen.addAll(messages); return "compact complete history"; });
+    var assembler =
+        assembler((previous, messages, budget, request) -> {
+          seen.addAll(messages);
+          return "compact complete history";
+        });
     var oldUser = ContextHistoryAdvisor.historical(new UserMessage("old request ".repeat(500)), 1);
     var oldAnswer = ContextHistoryAdvisor.historical(new AssistantMessage("completed answer"), 2);
-    var result = assembler.assemble(new Prompt(List.of(new SystemMessage("policy"), oldUser, oldAnswer,
-        new UserMessage("current"))), "chat", "run", () -> {});
+    var result =
+        assembler.assemble(
+            new Prompt(
+                List.of(
+                    new SystemMessage("policy"), oldUser, oldAnswer, new UserMessage("current"))),
+            "chat",
+            "run",
+            () -> {});
     assertThat(seen).containsExactly(oldUser, oldAnswer);
-    assertThat(result.getContents()).contains("compact complete history", "current").doesNotContain("completed answer");
+    assertThat(result.getContents())
+        .contains("compact complete history", "current")
+        .doesNotContain("completed answer");
     assertThat(new ConversationSummaryRepository(dir).read("chat").throughSequence()).isEqualTo(2);
   }
 
@@ -234,8 +269,11 @@ class ContextAssemblerTest {
     var history = new ArrayList<Message>();
     history.add(new SystemMessage("system"));
     for (int n = 1; n <= 12; n++) {
-      history.add(ContextHistoryAdvisor.historical(new UserMessage("item" + n + "x".repeat(1000)), n * 2L - 1));
-      history.add(ContextHistoryAdvisor.historical(new AssistantMessage("completed answer " + n), n * 2L));
+      history.add(
+          ContextHistoryAdvisor.historical(
+              new UserMessage("item" + n + "x".repeat(1000)), n * 2L - 1));
+      history.add(
+          ContextHistoryAdvisor.historical(new AssistantMessage("completed answer " + n), n * 2L));
     }
     history.add(new UserMessage("current"));
     var raw = new Prompt(history);
@@ -728,8 +766,11 @@ class ContextAssemblerTest {
     expanded.add(3, ContextHistoryAdvisor.historical(new UserMessage("new ".repeat(500)), 3));
     expanded.add(4, ContextHistoryAdvisor.historical(new AssistantMessage("latest"), 4));
     var result = a.assemble(new Prompt(expanded), "conversation", "run", () -> {});
-    assertThat(result.getContents()).contains("first decision; second decision").doesNotContain("latest");
-    assertThat(new ConversationSummaryRepository(dir).read("conversation").throughSequence()).isEqualTo(4);
+    assertThat(result.getContents())
+        .contains("first decision; second decision")
+        .doesNotContain("latest");
+    assertThat(new ConversationSummaryRepository(dir).read("conversation").throughSequence())
+        .isEqualTo(4);
     assertThat(calls).hasValue(2);
   }
 

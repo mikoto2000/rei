@@ -26,12 +26,13 @@ public interface TokenEstimator {
           total += (long) text(reasoning.text()) + text(reasoning.summary());
         // Count the encoded protocol view conservatively. These are request estimates, not
         // provider-reported reasoning/input usage; never decrypt or truncate opaque data.
-        var payload = switch (part) {
-          case org.springframework.ai.chat.messages.part.TextPart value -> value.payload();
-          case org.springframework.ai.chat.messages.part.ReasoningPart value -> value.payload();
-          case org.springframework.ai.chat.messages.part.ToolCallPart value -> value.payload();
-          default -> null;
-        };
+        var payload =
+            switch (part) {
+              case org.springframework.ai.chat.messages.part.TextPart value -> value.payload();
+              case org.springframework.ai.chat.messages.part.ReasoningPart value -> value.payload();
+              case org.springframework.ai.chat.messages.part.ToolCallPart value -> value.payload();
+              default -> null;
+            };
         if (payload != null)
           total += (long) text(payload.provider()) + text(payload.kind()) + text(payload.data());
         for (var attribute : part.attributes().entrySet())
