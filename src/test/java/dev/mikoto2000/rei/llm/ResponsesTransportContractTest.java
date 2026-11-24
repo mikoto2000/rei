@@ -14,6 +14,66 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 
 /** Exercises the pinned SDK's serialized HTTP request, without external traffic. */
 class ResponsesTransportContractTest {
+  @Test
+  void deploymentAliasCannotReplaceTheResolvedWireModelAtConstruction() {
+    var defaults = options().build();
+    var changed = defaults.mutate().deploymentName("other-deployment").build();
+    assertThatThrownBy(() -> ResponsesAdapter.create(endpoint(defaults), changed, List.of()))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("resolved");
+  }
+  @Test
+  void capabilityCollectionIsImmutableAndHasStableFingerprintOrder() {
+    var mutable = java.util.EnumSet.of(LlmCapabilities.Setting.TEMPERATURE, LlmCapabilities.Setting.TOP_P);
+    supportedSettings = mutable;
+    var frozen = endpoint(options().build());
+    var fingerprint = frozen.fingerprint();
+    mutable.clear();
+    assertThat(frozen.capabilities().supportedSettings()).containsExactly(
+        LlmCapabilities.Setting.TEMPERATURE, LlmCapabilities.Setting.TOP_P);
+    assertThat(frozen.fingerprint()).isEqualTo(fingerprint);
+    assertThatThrownBy(() -> frozen.capabilities().supportedSettings().clear())
+        .isInstanceOf(UnsupportedOperationException.class);
+    supportedSettings = new java.util.LinkedHashSet<>(List.of(
+        LlmCapabilities.Setting.TOP_P, LlmCapabilities.Setting.TEMPERATURE));
+    assertThat(endpoint(options().build()).fingerprint()).isEqualTo(fingerprint);
+  }
+
+  @Test
+  void generatedDefaultNativeOptionsReachFinalHttpJson() {
+    var model = transport(options().model("feature-fixture").maxOutputTokens(123).build());
+    model.call(new Prompt("fixture"));
+    assertThat(requests.getFirst().path("model").asText()).isEqualTo("feature-fixture");
+    assertThat(requests.getFirst().path("max_output_tokens").asInt()).isEqualTo(123);
+  }
+
+  @Test
+  void structuredOutputRequiresDeclaredSupport() {
+    supportedSettings = java.util.Set.of();
+    var options = options().outputSchema("{\"type\":\"object\"}").build();
+    assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("structuredOutput");
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
+  void imageInputRequiresDeclaredSupport() {
+    supportedSettings = java.util.Set.of();
+    var options = options().build();
+    var image = new org.springframework.ai.content.Media(org.springframework.util.MimeTypeUtils.IMAGE_PNG,
+        new org.springframework.core.io.ByteArrayResource(new byte[] {1, 2, 3}));
+    var user = org.springframework.ai.chat.messages.UserMessage.builder().text("look").media(image).build();
+    assertThatThrownBy(() -> transport(options).call(new Prompt(user, options)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("imageInput");
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
+  void namedPublishedToolChoiceUsesNativeFunctionShape() {
+    var options = options().toolCallbacks(callback("fixture_tool", "{\"type\":\"object\"}"))
+        .toolChoice("{\"type\":\"function\",\"name\":\"fixture_tool\"}").build();
+    transport(options).call(new Prompt("fixture", options));
+    assertThat(requests.getFirst().path("tool_choice").path("name").asText()).isEqualTo("fixture_tool");
+  }
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void outputLimitFailureKeepsTokenUsageWithoutReturningPartialOutput(boolean streaming) {
