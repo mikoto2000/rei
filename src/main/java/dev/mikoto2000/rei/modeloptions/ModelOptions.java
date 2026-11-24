@@ -155,6 +155,17 @@ public final class ModelOptions {
     return options.mutate().maxTokens(tokens).build();
   }
 
+  /** Bound a feature's requested output without raising the accepted provider limit. */
+  public static ToolCallingChatOptions capOutputLimit(ToolCallingChatOptions options, int tokens) {
+    Integer configured;
+    if (options instanceof OpenAiResponsesChatOptions responses) configured = responses.getMaxOutputTokens();
+    else if (options instanceof OpenAiChatOptions chat) {
+      var completion = chat.getMaxCompletionTokens();
+      configured = completion == null ? chat.getMaxTokens() : completion;
+    } else configured = options.getMaxTokens();
+    return withOutputLimit(options, configured == null ? tokens : Math.min(configured, tokens));
+  }
+
   /** Structured extractors explicitly use completion-token budgets on Chat Completions. */
   public static ToolCallingChatOptions withCompletionLimit(
       ToolCallingChatOptions options, int tokens) {
