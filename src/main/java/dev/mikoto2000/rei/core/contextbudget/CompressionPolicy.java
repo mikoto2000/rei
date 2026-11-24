@@ -65,7 +65,7 @@ public final class CompressionPolicy {
       } else if (message instanceof ToolResponseMessage tool) {
         if (pending.isEmpty() || tool.getResponses().isEmpty()) return List.of();
         for (var result : tool.getResponses()) {
-          if (result.id() == null || !java.util.Objects.equals(pending.remove(result.id()), result.name()))
+          if (result.id() == null || result.name() == null || !result.name().equals(pending.remove(result.id())))
             return List.of();
         }
         if (pending.isEmpty() && !waitingForAssistant) boundaries.add(i + 1);
