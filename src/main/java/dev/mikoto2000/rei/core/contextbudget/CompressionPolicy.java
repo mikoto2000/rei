@@ -28,8 +28,41 @@ public final class CompressionPolicy {
       tokens += next;
       cut--;
     }
-    while (cut > 0 && cut < messages.size() && messages.get(cut) instanceof ToolResponseMessage)
-      cut--;
-    return cut;
+    int safe = 0;
+    for (int boundary : completePrefixes(messages)) {
+      if (boundary > cut) break;
+      safe = boundary;
+    }
+    return safe;
   }
+  /** Complete protocol prefixes, shared by summarization and hard-limit trimming. */
+  static List<Integer> completePrefixes(List<Message> messages) {
+    var boundaries = new java.util.ArrayList<Integer>();
+    var pending = new java.util.HashMap<String, String>();
+    boolean waitingForAssistant = false;
+    for (int i = 0; i < messages.size(); i++) {
+      var message = messages.get(i);
+      if (message instanceof org.springframework.ai.chat.messages.UserMessage) {
+        if (!pending.isEmpty()) return boundaries;
+        waitingForAssistant = true;
+      } else if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
+        if (!pending.isEmpty()) return boundaries;
+        for (var call : assistant.getToolCalls()) {
+          if (call.id() == null || call.id().isBlank() || call.name() == null || call.name().isBlank()
+              || pending.putIfAbsent(call.id(), call.name()) != null) return List.of();
+        }
+        waitingForAssistant = false;
+        if (pending.isEmpty()) boundaries.add(i + 1);
+      } else if (message instanceof ToolResponseMessage tool) {
+        if (pending.isEmpty() || tool.getResponses().isEmpty()) return List.of();
+        for (var result : tool.getResponses()) {
+          if (result.id() == null || !java.util.Objects.equals(pending.remove(result.id()), result.name()))
+            return List.of();
+        }
+        if (pending.isEmpty() && !waitingForAssistant) boundaries.add(i + 1);
+      }
+    }
+    return boundaries;
+  }
+
 }
