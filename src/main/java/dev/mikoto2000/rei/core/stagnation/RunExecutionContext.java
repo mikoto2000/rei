@@ -72,14 +72,21 @@ public class RunExecutionContext {
                 dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(
                     runContext)))
       throw new IllegalStateException("Protocol checkpoint ownership mismatch");
-    var binding = modelOptions.getToolContext().get(
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
-    var origin = protocolHistory != null ? protocolHistory.origin()
-        : binding instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin supplied
-            ? supplied
-            : new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
-                (String) accepted.message().getMetadata().get("rei.llm.replay-origin-owner"),
-                (String) accepted.message().getMetadata().get("rei.llm.replay-origin-endpoint"));
+    var binding =
+        modelOptions
+            .getToolContext()
+            .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
+    var origin =
+        protocolHistory != null
+            ? protocolHistory.origin()
+            : binding
+                    instanceof
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin supplied
+                ? supplied
+                : new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+                    (String) accepted.message().getMetadata().get("rei.llm.replay-origin-owner"),
+                    (String)
+                        accepted.message().getMetadata().get("rei.llm.replay-origin-endpoint"));
     if (accepted.message() instanceof org.springframework.ai.chat.messages.AssistantMessage)
       origin.requireMatch(accepted.message());
     var entries =
@@ -99,9 +106,13 @@ public class RunExecutionContext {
   /** Save the original resolved input, including media, before sending or decorating it. */
   public void preserveUserMessage(org.springframework.ai.chat.messages.UserMessage message) {
     var context = modelOptions == null ? null : modelOptions.getToolContext();
-    var boundary = context == null ? null : context.get(
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
-    if (boundary instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)
+    var boundary =
+        context == null
+            ? null
+            : context.get(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    if (boundary
+        instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange)
       exchange.withKey("user:" + UUID.randomUUID()).persist(message);
   }
 
