@@ -65,10 +65,13 @@ class ModelProtocolInputSnapshotTest {
                     "rei.llm.replay-origin-endpoint",
                     "endpoint"))
             .build();
+    var previousUser = new UserMessage("prior request");
+    var previousUserRef = old.withKey("input").reference(previousUser);
     var borrowedRef = old.reference(borrowed);
     payloads.historyReplayGrant(
         exchange,
-        List.of(payloads.historyReference(old.scope(), borrowedRef, "history:old")),
+        List.of(payloads.historyReference(old.scope(), previousUserRef, "history:old"),
+            payloads.historyReference(old.scope(), borrowedRef, "history:old")),
         origin);
     var execution = execution(owner, exchange, origin);
     var current = new UserMessage("current request");
@@ -76,8 +79,9 @@ class ModelProtocolInputSnapshotTest {
     List<Message> actualInput =
         List.of(
             new SystemMessage("original instructions"),
-            new UserMessage("prior request"),
-            borrowed,
+            dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(new SystemMessage("retained summary"), 10),
+            dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(previousUser, 1),
+            dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(borrowed, 4),
             current);
     execution.captureModelInput(new Prompt(actualInput, execution.modelOptions()));
     var active =
@@ -113,10 +117,12 @@ class ModelProtocolInputSnapshotTest {
     var restored =
         execution(next, target, new ModelMessagePayloadStore.Origin(target.ownerKey(), "endpoint"));
     restored.restoreProgress(execution.progressSnapshot(), references);
-    assertThat(restored.takeResumeMessages())
-        .containsExactly(actualInput.get(0), actualInput.get(1), borrowed, current, answer);
+    var expected = new java.util.ArrayList<>(actualInput);
+    expected.add(answer);
+    assertThat(restored.takeResumeMessages()).containsExactlyElementsOf(expected);
     assertThat(payloads.load(exchange.scope(), borrowedRef).getMetadata())
-        .containsEntry("rei.llm.replay-origin-owner", old.ownerKey());
+        .containsEntry("rei.llm.replay-origin-owner", old.ownerKey())
+        .doesNotContainKey("rei.historySequence");
     assertThat(execution.protocolHistoryReferences())
         .as("system instructions and prior completed history are not new turn output")
         .hasSize(2);
