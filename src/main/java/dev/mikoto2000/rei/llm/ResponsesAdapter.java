@@ -274,7 +274,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       validateTools(callbacks);
       validateToolChoice(options.getToolChoice(), callbacks);
     }
-    return new Prompt(prompt.getInstructions(), options);
+    return ResponsesReasoningReplay.prepare(new Prompt(prompt.getInstructions(), options), endpoint);
   }
 
   private static void validateToolChoice(Object choice, List<ToolCallback> callbacks) {
