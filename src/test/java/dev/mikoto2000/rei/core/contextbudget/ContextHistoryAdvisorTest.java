@@ -19,7 +19,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 @org.junit.jupiter.api.Tag("integration")
 class ContextHistoryAdvisorTest {
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1, 2})
+  @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1, 2, 3, 4})
   void durableLogAndTurnPointersTakePriorityWithoutDuplicatingTheirDisplayText(int logMode)
       throws Exception {
     var owner = new AgentRunContext("current-run", "chat", dir, "fixture-project");
@@ -51,6 +51,14 @@ class ContextHistoryAdvisorTest {
     writingTurns.start(oldOwner, "old request", java.time.Instant.EPOCH);
     writingTurns.recordMetadata(oldOwner, metadata);
     writingTurns.finish(oldOwner, ConversationTurnStore.Status.COMPLETED, "display fixture");
+    if (logMode == 3) {
+      var secondOwner = new AgentRunContext("second-run", "chat", dir, "fixture-project");
+      var secondRef = payloads.save(scope, "second-run", "one", new AssistantMessage("second payload"));
+      var secondMetadata = payloads.historyReference(scope, secondRef, "turn:second-run");
+      writingTurns.start(secondOwner, "second request", java.time.Instant.EPOCH);
+      writingTurns.recordMetadata(secondOwner, secondMetadata);
+      writingTurns.finish(secondOwner, ConversationTurnStore.Status.COMPLETED, "display fixture");
+    }
     var mapper =
         new com.fasterxml.jackson.databind.ObjectMapper()
             .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
@@ -58,9 +66,12 @@ class ContextHistoryAdvisorTest {
     if (logMode == 1)
       new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper)
           .append("chat", "assistant", "display fixture", metadata);
-    if (logMode == 2)
+    if (logMode == 2 || logMode == 3)
       new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper)
           .append("chat", "assistant", "display fixture");
+    if (logMode == 4)
+      new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper)
+          .appendNotification("chat", "fixture-notification", "display fixture", java.time.Instant.EPOCH, Map.of());
     var turns = new dev.mikoto2000.rei.conversation.SqliteConversationTurnStore(dir);
     var logs =
         new dev.mikoto2000.rei.conversation.ConversationLogStore(
@@ -82,7 +93,19 @@ class ContextHistoryAdvisorTest {
                     AgentRunContext.class.getName(),
                     owner))
             .build();
+    if (logMode == 3) {
+      org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
+          .isInstanceOf(IllegalStateException.class).hasMessage("Model message persistence rejected");
+      return;
+    }
     var messages = advisor.before(request, null).prompt().getInstructions();
+    if (logMode == 4) {
+      assertThat(messages.stream().map(Message::getText)).contains("display fixture").doesNotContain("complete fixture");
+      assertThat(messages.stream().filter(m -> m instanceof AssistantMessage)
+          .flatMap(m -> ((AssistantMessage) m).getParts().stream()))
+          .noneMatch(p -> p instanceof org.springframework.ai.chat.messages.part.ReasoningPart);
+      return;
+    }
     assertThat(messages.stream().map(Message::getText))
         .contains("complete fixture")
         .doesNotContain("display fixture");
