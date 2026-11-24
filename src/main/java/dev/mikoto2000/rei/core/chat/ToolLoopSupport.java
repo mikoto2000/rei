@@ -24,11 +24,7 @@ public final class ToolLoopSupport {
     if (boundary == null) return prompt;
     return withExchange(
         prompt,
-        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
-            boundary.store(),
-            boundary.scope(),
-            boundary.run(),
-            java.util.UUID.randomUUID().toString()));
+        boundary.withKey(java.util.UUID.randomUUID().toString()));
   }
 
   private static Prompt withExchange(
@@ -366,11 +362,7 @@ public final class ToolLoopSupport {
     var prefixPrompt =
         withExchange(
             prompt,
-            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
-                boundary.store(),
-                boundary.scope(),
-                boundary.run(),
-                boundary.key() + "/prefix:" + completed.size()));
+            boundary.withKey(boundary.key() + "/prefix:" + completed.size()));
     var result =
         deliveryMetadata(
             prefixPrompt,

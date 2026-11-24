@@ -99,6 +99,7 @@ public final class ModelMessagePayloadStore {
     public Ref reference(Message message) {
       var ref = store.save(scope, run, key + "/" + message.getMessageType().name(), message);
       store.publish(scope, ref, ReferenceKind.RUN, run);
+      if (observer != null) observer.accept(new Accepted(ref, key, message));
       return ref;
     }
   }
