@@ -271,6 +271,13 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     if (supplied != null && !(supplied instanceof OpenAiResponsesChatOptions))
       throw new IllegalArgumentException("Responses native options required");
     var options = supplied == null ? getOptions() : (OpenAiResponsesChatOptions) supplied;
+    if (endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT
+        && (options.getInclude() != null && !options.getInclude().isEmpty()
+            || options.getMetadata() != null && !options.getMetadata().isEmpty()
+            || options.getServiceTier() != null
+            || options.getPromptCacheKey() != null
+            || options.getSafetyIdentifier() != null))
+      throw new IllegalArgumentException("Responses plaintext platform setting is unsupported");
     requireCapability(options.getVerbosity(), LlmCapabilities.Setting.TEXT_VERBOSITY, "verbosity");
     var defaults = delegate.getOptions();
     var requestTimeout = options.getTimeout();
