@@ -19,6 +19,28 @@ import org.springframework.ai.chat.prompt.Prompt;
 @org.junit.jupiter.api.Tag("integration")
 class ContextHistoryAdvisorTest {
   @Test
+  void assigningHistorySequencePreservesOrderedAssistantPartsAndTypedToolResults() {
+    var reasoning = new org.springframework.ai.chat.messages.part.ReasoningPart(null, "fixture summary",
+        new org.springframework.ai.chat.messages.part.OpaquePayload("fixture", "encrypted_content", "opaque fixture"),
+        Map.of("itemId", "rs_one"));
+    var input = AssistantMessage.builder().parts(java.util.List.of(reasoning,
+        new org.springframework.ai.chat.messages.part.TextPart("fixture commentary", null, Map.of("phase", "commentary")),
+        new org.springframework.ai.chat.messages.part.ToolCallPart(new AssistantMessage.ToolCall("call_one", "function", "fixture", "{}"),
+            null, Map.of("itemId", "fc_one"))))
+        .properties(Map.of("rei.llm.replay-origin-owner", "fixture-owner")).build();
+    var historical = (AssistantMessage) ContextHistoryAdvisor.historical(input, 7);
+    assertThat(historical.getParts()).containsExactlyElementsOf(input.getParts());
+    assertThat(historical.getMetadata()).containsEntry(ContextHistoryAdvisor.SEQUENCE, 7L)
+        .containsEntry("rei.llm.replay-origin-owner", "fixture-owner");
+    var tool = org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(java.util.List.of(
+        new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse("call_one", "fixture", "fixture result")))
+        .metadata(Map.of("rei.reviewBudgetRecovery", true)).build();
+    var result = ContextHistoryAdvisor.historical(tool, 8);
+    assertThat(result).isInstanceOf(org.springframework.ai.chat.messages.ToolResponseMessage.class);
+    assertThat(((org.springframework.ai.chat.messages.ToolResponseMessage) result).getResponses()).isEqualTo(tool.getResponses());
+    assertThat(result.getMetadata()).containsEntry("rei.reviewBudgetRecovery", true).containsEntry(ContextHistoryAdvisor.SEQUENCE, 8L);
+  }
+  @Test
   void coveredMessagesKeepOneAnchorAndUncoveredRunObservations() {
     var logs =
         new dev.mikoto2000.rei.conversation.ConversationLogStore(
