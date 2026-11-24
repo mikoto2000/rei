@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.policy;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunContinuation;
@@ -19,7 +20,7 @@ class ApprovalProtocolHistoryTest {
   @TempDir Path directory;
 
   @Test
-  void restartRestoresExactProtocolHistoryWithoutInliningOpaqueInContinuation() {
+  void restartRestoresExactProtocolHistoryWithoutInliningOpaqueInContinuation() throws Exception {
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + directory.resolve("approval.db"));
     var owner = new AgentRunContext("run", "session", directory, "project");
@@ -39,5 +40,11 @@ class ApprovalProtocolHistoryTest {
     assertThat(restored.getParts()).containsExactlyElementsOf(original.getParts());
     assertThat(restored.getMetadata()).containsAllEntriesOf(original.getMetadata());
     assertThat(entry.document()).doesNotContain("opaque-fixture");
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    var document = json.readTree(entry.document());
+    ((com.fasterxml.jackson.databind.node.ObjectNode) document.path("history").get(0)).remove("payload");
+    var missing = new ApprovalContinuationStore.Entry(entry.approvalId(), entry.runId(), entry.state(),
+        json.writeValueAsString(document), entry.pid(), entry.started());
+    assertThatThrownBy(() -> restarted.saved(missing)).isInstanceOf(IllegalStateException.class);
   }
 }
