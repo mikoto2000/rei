@@ -103,6 +103,7 @@ public final class ToolLoopSupport {
     if (truncated(response))
       return rejectedBatch(prompt, "The output limit interrupted this tool batch. No calls ran.");
     if (hasInvalidToolCallIds(response)) return invalidToolCallIds(prompt);
+    persist(prompt, response.getResult().getOutput());
     response = inheritFileContinuations(prompt, response);
     var lease = RunCancellation.enterChild(prompt);
     try (lease) {
@@ -110,6 +111,17 @@ public final class ToolLoopSupport {
       try (readBudget) {
         return deliveryMetadata(prompt, manager.executeToolCalls(prompt, response));
       }
+    }
+  }
+
+  private static void persist(Prompt prompt, org.springframework.ai.chat.messages.Message message) {
+    if (prompt.getOptions() instanceof ToolCallingChatOptions options
+        && options.getToolContext() != null) {
+      Object value = options.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+      if (value == null) return;
+      if (!(value instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange))
+        throw new IllegalStateException("Invalid model message persistence boundary");
+      exchange.persist(message);
     }
   }
 
@@ -232,6 +244,7 @@ public final class ToolLoopSupport {
               .metadata(metadata)
               .build());
     }
+    if (!history.isEmpty() && history.getLast() instanceof ToolResponseMessage message) persist(prompt, message);
     return ToolExecutionResult.builder().conversationHistory(history).returnDirect(direct).build();
   }
 
@@ -308,6 +321,7 @@ public final class ToolLoopSupport {
     if (response.getResults().size() != 1)
       throw new IllegalArgumentException(
           "Approval continuation requires a single selected generation");
+    persist(prompt, output);
     var executed =
         executePending(
             prompt,
