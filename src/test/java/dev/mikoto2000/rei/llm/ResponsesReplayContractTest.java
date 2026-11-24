@@ -50,6 +50,53 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.class)
+  void mainChatExecutionUsesTheAcceptedNativeOptionsWithoutChatCasts(
+      dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode) {
+    var run = new dev.mikoto2000.rei.core.chat.AgentRunContext(
+        "fixture-run", "fixture-conversation", protocolDirectory, "fixture-project",
+        dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB, mode);
+    var nativeOptions = options().mutate().toolCallbacks(List.of()).toolChoice(null)
+        .toolContext(Map.of(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(protocolStore,
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(run), run.runId(), "main-request")))
+        .build();
+    var nativeModel = model(nativeOptions);
+    var models = new FixedLlmModelProvider() {
+      @Override
+      public org.springframework.ai.model.tool.ToolCallingChatOptions requestOptions(
+          String feature, String selected, boolean streamUsage) {
+        return nativeOptions;
+      }
+    };
+    var holder = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
+    org.mockito.Mockito.when(holder.get()).thenReturn("fixture-model");
+    var client = org.springframework.ai.chat.client.ChatClient.builder(
+        new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(nativeModel)).build();
+    var clients = new FixedLlmChatClientProvider(client) {
+      @Override
+      public org.springframework.ai.chat.client.ChatClient parallelChatClient(
+          dev.mikoto2000.rei.core.chat.AgentRunContext.Mode requested) { return client; }
+    };
+    var service = new dev.mikoto2000.rei.core.chat.ChatExecutionService(
+        clients,
+        holder, models, new LlmProperties(),
+        new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+        java.util.Optional.empty(), java.util.Optional.empty());
+    var result = service.execute(run, "fixture request", new dev.mikoto2000.rei.core.chat.UserInterventionQueue());
+    assertThat(result.success()).as("native main Run: %s", result.stopCode()).isTrue();
+    assertThat(result.text()).isEqualTo("done");
+    assertThat(requests).hasSize(1);
+    assertThat(requests.getFirst().has("max_output_tokens")).isTrue();
+    for (String absent : List.of("max_tokens", "max_completion_tokens", "tools", "tool_choice"))
+      assertThat(requests.getFirst().has(absent)).as(absent).isFalse();
+    var saved = protocolStore.usage(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(run), run.runId());
+    assertThat(saved.payloadCount()).isEqualTo(1);
+    assertThat(saved.runCumulativeBytes()).isPositive();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "ENCRYPTED,endpoint",
     "ENCRYPTED,owner",

@@ -325,6 +325,12 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return model;
   }
 
+  /** Native request options; production availability is checked by the existing provider gate. */
+  public org.springframework.ai.model.tool.ToolCallingChatOptions requestOptions(
+      String feature, String defaultModel, boolean streamUsage) {
+    return chatOptions(feature, defaultModel, streamUsage);
+  }
+
   /** 用途に応じたモデル利用で用いるチャット選択可能な設定を返す。 */
   public OpenAiChatOptions chatOptions(String feature, String defaultModel) {
     return chatOptions(feature, defaultModel, false);
