@@ -10,7 +10,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.responses.OpenAiResponsesChatModel;
 import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 
 /** Exercises the pinned SDK's serialized HTTP request, without external traffic. */
@@ -23,14 +22,21 @@ class ResponsesTransportContractTest {
   private int httpStatus = 200;
   private boolean passThrough;
   private java.time.Duration readTimeout = java.time.Duration.ofMinutes(5);
-  private java.util.Set<LlmCapabilities.Setting> supportedSettings = java.util.Set.of(
-      LlmCapabilities.Setting.STRUCTURED_OUTPUT, LlmCapabilities.Setting.IMAGE_INPUT);
+  private java.util.Set<LlmCapabilities.Setting> supportedSettings =
+      java.util.Set.of(
+          LlmCapabilities.Setting.STRUCTURED_OUTPUT, LlmCapabilities.Setting.IMAGE_INPUT);
 
   @Test
   void declaredSettingsAndNativeUsageDetailsSurviveSerialization() {
     supportedSettings = java.util.EnumSet.allOf(LlmCapabilities.Setting.class);
-    var options = options().temperature(0.2).topP(0.8).reasoningEffort("low")
-        .reasoningSummary("auto").parallelToolCalls(false).build();
+    var options =
+        options()
+            .temperature(0.2)
+            .topP(0.8)
+            .reasoningEffort("low")
+            .reasoningSummary("auto")
+            .parallelToolCalls(false)
+            .build();
     var response = transport(options).call(new Prompt("fixture", options));
     var request = requests.getFirst();
     assertThat(request.path("temperature").asDouble()).isEqualTo(0.2);
@@ -52,7 +58,8 @@ class ResponsesTransportContractTest {
   void rawBodyCannotBypassCapabilityValidation(String field) {
     var options = options().extraBody(java.util.Map.of(field, "untrusted override")).build();
     assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(field);
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(field);
     assertThat(requests).isEmpty();
   }
 
@@ -61,7 +68,8 @@ class ResponsesTransportContractTest {
     var defaults = options().build();
     var runtime = defaults.mutate().maxOutputTokens(null).build();
     assertThatThrownBy(() -> transport(defaults).call(new Prompt("fixture", runtime)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("output limit");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("output limit");
     assertThat(requests).isEmpty();
   }
 
@@ -81,54 +89,73 @@ class ResponsesTransportContractTest {
   @org.junit.jupiter.params.provider.ValueSource(strings = {"duplicate", "name", "schema", "limit"})
   void invalidActualToolDefinitionsFailBeforeHttp(String invalid) {
     var normal = callback("fixture_tool", "{\"type\":\"object\",\"properties\":{}}");
-    var callbacks = switch (invalid) {
-      case "duplicate" -> List.of(normal, normal);
-      case "name" -> List.of(callback("invalid name", "{\"type\":\"object\"}"));
-      case "schema" -> List.of(callback("fixture_tool", "[]"));
-      case "limit" -> java.util.stream.IntStream.range(0, 129)
-          .mapToObj(i -> callback("tool_" + i, "{\"type\":\"object\"}")).toList();
-      default -> throw new AssertionError(invalid);
-    };
+    var callbacks =
+        switch (invalid) {
+          case "duplicate" -> List.of(normal, normal);
+          case "name" -> List.of(callback("invalid name", "{\"type\":\"object\"}"));
+          case "schema" -> List.of(callback("fixture_tool", "[]"));
+          case "limit" ->
+              java.util.stream.IntStream.range(0, 129)
+                  .mapToObj(i -> callback("tool_" + i, "{\"type\":\"object\"}"))
+                  .toList();
+          default -> throw new AssertionError(invalid);
+        };
     var options = options().toolCallbacks(callbacks).build();
     assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("tool");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("tool");
     assertThat(requests).isEmpty();
   }
 
   private org.springframework.ai.tool.ToolCallback callback(String name, String schema) {
     return new org.springframework.ai.tool.ToolCallback() {
-      @Override public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
-        return org.springframework.ai.tool.definition.ToolDefinition.builder().name(name)
-            .description("fixture").inputSchema(schema).build();
+      @Override
+      public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
+        return org.springframework.ai.tool.definition.ToolDefinition.builder()
+            .name(name)
+            .description("fixture")
+            .inputSchema(schema)
+            .build();
       }
-      @Override public String call(String input) { throw new AssertionError("Transport must never execute tools"); }
+
+      @Override
+      public String call(String input) {
+        throw new AssertionError("Transport must never execute tools");
+      }
     };
   }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void nativeClientsClassifySilentLoopbackConnectionsAsTimeout(boolean streaming) throws Exception {
-    var server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+    var server =
+        com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
     var release = new java.util.concurrent.CountDownLatch(1);
-    server.createContext("/v1/responses", exchange -> {
-      try {
-        release.await(5, java.util.concurrent.TimeUnit.SECONDS);
-      } catch (InterruptedException interrupted) {
-        Thread.currentThread().interrupt();
-      } finally {
-        exchange.close();
-      }
-    });
+    server.createContext(
+        "/v1/responses",
+        exchange -> {
+          try {
+            release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+          } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+          } finally {
+            exchange.close();
+          }
+        });
     server.start();
     try {
       passThrough = true;
       readTimeout = java.time.Duration.ofMillis(150);
-      var options = options().baseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1").build();
+      var options =
+          options().baseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1").build();
       var model = transport(options);
-      assertThatThrownBy(() -> {
-        if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
-        else model.call(new Prompt("fixture", options));
-      }).isInstanceOf(IllegalStateException.class).hasMessageContaining("TIMEOUT");
+      assertThatThrownBy(
+              () -> {
+                if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
+                else model.call(new Prompt("fixture", options));
+              })
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("TIMEOUT");
       assertThat(requests).hasSize(1);
     } finally {
       release.countDown();
@@ -138,37 +165,57 @@ class ResponsesTransportContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
-    "401,AUTHENTICATION", "403,AUTHENTICATION", "429,RATE_LIMIT", "500,TRANSIENT", "400,PROVIDER"
+    "401,AUTHENTICATION",
+    "403,AUTHENTICATION",
+    "429,RATE_LIMIT",
+    "500,TRANSIENT",
+    "400,PROVIDER"
   })
   void httpFailuresAreClassifiedWithoutLeakingProviderBodyOrRetrying(int status, String category) {
     httpStatus = status;
-    reply = "{\"error\":{\"message\":\"private-reasoning fixture-secret\",\"type\":\"fixture\",\"code\":\"fixture\"}}";
+    reply =
+        "{\"error\":{\"message\":\"private-reasoning fixture-secret\",\"type\":\"fixture\",\"code\":\"fixture\"}}";
     var options = options().build();
     assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining(category)
-        .hasMessageNotContaining("private-reasoning").hasMessageNotContaining("fixture-secret")
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining(category)
+        .hasMessageNotContaining("private-reasoning")
+        .hasMessageNotContaining("fixture-secret")
         .hasNoCause();
     assertThat(requests).hasSize(1);
   }
 
   @Test
   void sseErrorCannotExposeProviderMessage() {
-    var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(
-        org.springframework.ai.chat.model.MessageAggregator.class);
-    var captured = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(
+                org.springframework.ai.chat.model.MessageAggregator.class);
+    var captured =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     captured.start();
     logger.addAppender(captured);
     try {
-    contentType = "text/event-stream";
-    reply = textDelta() + event("error", "\"code\":\"fixture\",\"message\":\"private-reasoning fixture-secret\",\"param\":null");
-    var options = options().build();
-    assertThatThrownBy(() -> transport(options).stream(new Prompt("fixture", options)).collectList().block())
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("PROVIDER")
-        .hasMessageNotContaining("private-reasoning").hasMessageNotContaining("fixture-secret");
+      contentType = "text/event-stream";
+      reply =
+          textDelta()
+              + event(
+                  "error",
+                  "\"code\":\"fixture\",\"message\":\"private-reasoning fixture-secret\",\"param\":null");
+      var options = options().build();
+      assertThatThrownBy(
+              () -> transport(options).stream(new Prompt("fixture", options)).collectList().block())
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessageContaining("PROVIDER")
+          .hasMessageNotContaining("private-reasoning")
+          .hasMessageNotContaining("fixture-secret");
       for (var logged : captured.list) {
-        assertThat(logged.getFormattedMessage()).doesNotContain("private-reasoning", "fixture-secret");
+        assertThat(logged.getFormattedMessage())
+            .doesNotContain("private-reasoning", "fixture-secret");
         if (logged.getThrowableProxy() != null)
-          assertThat(ch.qos.logback.classic.spi.ThrowableProxyUtil.asString(logged.getThrowableProxy()))
+          assertThat(
+                  ch.qos.logback.classic.spi.ThrowableProxyUtil.asString(
+                      logged.getThrowableProxy()))
               .doesNotContain("private-reasoning", "fixture-secret");
       }
     } finally {
@@ -184,7 +231,8 @@ class ResponsesTransportContractTest {
     var options = options().build();
     var first = transport(options).stream(new Prompt("fixture", options)).take(1).blockFirst();
     assertThat(first.getResult().getOutput().getText()).isEqualTo("done");
-    org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(2))
+    org.awaitility.Awaitility.await()
+        .atMost(java.time.Duration.ofSeconds(2))
         .untilAsserted(() -> assertThat(bodyClosed).isTrue());
   }
 
@@ -193,7 +241,8 @@ class ResponsesTransportContractTest {
     var defaults = options().build();
     var other = defaults.mutate().model("other-model").build();
     assertThatThrownBy(() -> transport(defaults).call(new Prompt("fixture", other)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("model");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("model");
     assertThat(requests).isEmpty();
   }
 
@@ -202,14 +251,14 @@ class ResponsesTransportContractTest {
     var defaults = options().build();
     var other = defaults.mutate().maxRetries(2).build();
     assertThatThrownBy(() -> transport(defaults).call(new Prompt("fixture", other)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("retries");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("retries");
     assertThat(requests).isEmpty();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {
-    "temperature", "topP", "reasoningEffort", "reasoningSummary", "parallelToolCalls"
-  })
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"temperature", "topP", "reasoningEffort", "reasoningSummary", "parallelToolCalls"})
   void unspecifiedCapabilitiesCannotSilentlyAcceptExplicitSettings(String setting) {
     var builder = options();
     switch (setting) {
@@ -222,7 +271,8 @@ class ResponsesTransportContractTest {
     }
     var options = builder.build();
     assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(setting);
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(setting);
     assertThat(requests).isEmpty();
   }
 
@@ -239,9 +289,15 @@ class ResponsesTransportContractTest {
   @Test
   void imageMediaUsesNativeResponsesInputImage() {
     var options = options().build();
-    var image = new org.springframework.ai.content.Media(org.springframework.util.MimeTypeUtils.IMAGE_PNG,
-        new org.springframework.core.io.ByteArrayResource(new byte[] {1, 2, 3}));
-    var user = org.springframework.ai.chat.messages.UserMessage.builder().text("look").media(image).build();
+    var image =
+        new org.springframework.ai.content.Media(
+            org.springframework.util.MimeTypeUtils.IMAGE_PNG,
+            new org.springframework.core.io.ByteArrayResource(new byte[] {1, 2, 3}));
+    var user =
+        org.springframework.ai.chat.messages.UserMessage.builder()
+            .text("look")
+            .media(image)
+            .build();
     transport(options).call(new Prompt(user, options));
     var content = requests.getFirst().path("input").get(0).path("content");
     assertThat(content.get(1).path("type").asText()).isEqualTo("input_image");
@@ -249,14 +305,14 @@ class ResponsesTransportContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {
-    "hostedTools", "truncation", "maxToolCalls", "strict"
-  })
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"hostedTools", "truncation", "maxToolCalls", "strict"})
   void rejectsSettingsOutsideReisInitialContract(String setting) {
     var builder = options();
     switch (setting) {
-      case "hostedTools" -> builder.hostedTools(List.of(
-          org.springframework.ai.openai.responses.HostedTool.WebSearch.of()));
+      case "hostedTools" ->
+          builder.hostedTools(
+              List.of(org.springframework.ai.openai.responses.HostedTool.WebSearch.of()));
       case "truncation" -> builder.truncation("auto");
       case "maxToolCalls" -> builder.maxToolCalls(1);
       case "strict" -> builder.strict(true);
@@ -264,7 +320,8 @@ class ResponsesTransportContractTest {
     }
     var options = builder.build();
     assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(setting);
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(setting);
     assertThat(requests).isEmpty();
   }
 
@@ -285,30 +342,43 @@ class ResponsesTransportContractTest {
     contentType = "text/event-stream";
     reply = textDelta();
     var options = options().build();
-    assertThatThrownBy(() -> transport(options).stream(new Prompt("fixture", options))
-        .collectList().block()).isInstanceOf(IllegalStateException.class)
+    assertThatThrownBy(
+            () -> transport(options).stream(new Prompt("fixture", options)).collectList().block())
+        .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Responses");
   }
 
   @Test
   void incompleteStreamFailsInsteadOfCompletingNormally() {
     contentType = "text/event-stream";
-    reply = textDelta() + event("response.incomplete", "\"response\":"
-        + completed().replaceFirst("\"status\":\"completed\"", "\"status\":\"incomplete\""));
+    reply =
+        textDelta()
+            + event(
+                "response.incomplete",
+                "\"response\":"
+                    + completed()
+                        .replaceFirst("\"status\":\"completed\"", "\"status\":\"incomplete\""));
     var options = options().build();
-    assertThatThrownBy(() -> transport(options).stream(new Prompt("fixture", options))
-        .collectList().block()).isInstanceOf(IllegalStateException.class)
+    assertThatThrownBy(
+            () -> transport(options).stream(new Prompt("fixture", options)).collectList().block())
+        .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("Responses");
   }
 
   private String textDelta() {
-    return event("response.output_text.delta",
+    return event(
+        "response.output_text.delta",
         "\"item_id\":\"msg_fixture\",\"output_index\":0,\"content_index\":0,\"delta\":\"done\",\"logprobs\":[]");
   }
 
   private String event(String type, String fields) {
-    return "event: " + type + "\ndata: {\"type\":\"" + type
-        + "\",\"sequence_number\":1," + fields.replace("\n", "") + "}\n\n";
+    return "event: "
+        + type
+        + "\ndata: {\"type\":\""
+        + type
+        + "\",\"sequence_number\":1,"
+        + fields.replace("\n", "")
+        + "}\n\n";
   }
 
   @Test
@@ -324,46 +394,76 @@ class ResponsesTransportContractTest {
     assertThat(request.path("store").asBoolean(true)).isFalse();
     assertThat(options.getToolChoice()).isEqualTo("none");
     assertThat(request.toString()).doesNotContain("fixture-secret");
-    for (String field : List.of("tools", "tool_choice", "max_tokens", "max_completion_tokens",
-        "previous_response_id", "conversation"))
-      assertThat(request.has(field)).as(field).isFalse();
+    for (String field :
+        List.of(
+            "tools",
+            "tool_choice",
+            "max_tokens",
+            "max_completion_tokens",
+            "previous_response_id",
+            "conversation")) assertThat(request.has(field)).as(field).isFalse();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {
-    "model", "input", "instructions", "tools", "tool_choice", "store", "previous_response_id",
-    "conversation", "max_tokens", "max_completion_tokens", "max_output_tokens", "reasoning",
-    "text", "stream", "include", "parallel_tool_calls", "response_format", "messages",
-    "functions", "function_call", "chat_template_kwargs", "background", "context_management",
-    "truncation"
-  })
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {
+        "model",
+        "input",
+        "instructions",
+        "tools",
+        "tool_choice",
+        "store",
+        "previous_response_id",
+        "conversation",
+        "max_tokens",
+        "max_completion_tokens",
+        "max_output_tokens",
+        "reasoning",
+        "text",
+        "stream",
+        "include",
+        "parallel_tool_calls",
+        "response_format",
+        "messages",
+        "functions",
+        "function_call",
+        "chat_template_kwargs",
+        "background",
+        "context_management",
+        "truncation"
+      })
   void extraBodyCannotOverrideProtectedProtocolFields(String field) {
     var options = options().extraBody(java.util.Map.of(field, "untrusted override")).build();
     assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining(field)
-        .hasMessageNotContaining("untrusted override").hasMessageNotContaining("fixture-secret");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining(field)
+        .hasMessageNotContaining("untrusted override")
+        .hasMessageNotContaining("fixture-secret");
     assertThat(requests).isEmpty();
   }
 
   @Test
   void rejectsChatCompletionsOptionsBeforeSending() {
-    var legacy = org.springframework.ai.openai.OpenAiChatOptions.builder()
-        .model("fixture-model").maxTokens(64).build();
+    var legacy =
+        org.springframework.ai.openai.OpenAiChatOptions.builder()
+            .model("fixture-model")
+            .maxTokens(64)
+            .build();
     assertThatThrownBy(() -> transport(options().build()).call(new Prompt("fixture", legacy)))
-        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("Responses native");
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Responses native");
     assertThat(requests).isEmpty();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {
-    "incomplete", "in_progress", "queued", "cancelled", "unknown"
-  })
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"incomplete", "in_progress", "queued", "cancelled", "unknown"})
   void onlyExplicitlyCompletedResponsesAreSuccessful(String status) {
-    reply = completed().replaceFirst("\"status\":\"completed\"",
-        "\"status\":\"" + status + "\"");
+    reply = completed().replaceFirst("\"status\":\"completed\"", "\"status\":\"" + status + "\"");
     var options = options().build();
     assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("Responses");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Responses");
   }
 
   @Test
@@ -371,59 +471,89 @@ class ResponsesTransportContractTest {
     reply = completed().replaceFirst("\"status\":\"completed\",", "");
     var options = options().build();
     assertThatThrownBy(() -> transport(options).call(new Prompt("fixture", options)))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("Responses");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Responses");
   }
 
   private OpenAiResponsesChatOptions.Builder options() {
     return OpenAiResponsesChatOptions.builder()
         .baseUrl("https://responses-fixture.invalid/v1")
-        .apiKey("fixture-secret").model("fixture-model").maxOutputTokens(64).maxRetries(0);
+        .apiKey("fixture-secret")
+        .model("fixture-model")
+        .maxOutputTokens(64)
+        .maxRetries(0);
   }
 
   private ChatModel transport(OpenAiResponsesChatOptions options) {
     org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer customizer =
-        builder -> builder.interceptor(chain -> {
-          var buffer = new okio.Buffer();
-          chain.request().body().writeTo(buffer);
-          requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
-          urls.add(chain.request().url().toString());
-          if (passThrough) return chain.proceed(chain.request());
-          return new okhttp3.Response.Builder().request(chain.request())
-              .protocol(okhttp3.Protocol.HTTP_1_1).code(httpStatus).message("fixture")
-              .body(responseBody()).build();
-        });
-    var endpoint = new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES,
-        options.getBaseUrl(), "fixture-credential", options.getModel(),
-        new LlmCapabilities(ReasoningReplayMode.NONE, 128, supportedSettings), options.getMaxOutputTokens(),
-        options.getTemperature(), readTimeout);
+        builder ->
+            builder.interceptor(chain -> {
+              var buffer = new okio.Buffer();
+              chain.request().body().writeTo(buffer);
+              requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
+              urls.add(chain.request().url().toString());
+              if (passThrough) return chain.proceed(chain.request());
+              return new okhttp3.Response.Builder()
+                  .request(chain.request())
+                  .protocol(okhttp3.Protocol.HTTP_1_1)
+                  .code(httpStatus)
+                  .message("fixture")
+                  .body(responseBody())
+                  .build();
+            });
+    var endpoint =
+        new ResolvedLlmEndpoint(
+            "fixture",
+            1,
+            LlmApiType.RESPONSES,
+            options.getBaseUrl(),
+            "fixture-credential",
+            options.getModel(),
+            new LlmCapabilities(ReasoningReplayMode.NONE, 128, supportedSettings),
+            options.getMaxOutputTokens(),
+            options.getTemperature(),
+            readTimeout);
     return ResponsesAdapter.create(endpoint, options, List.of(customizer));
   }
 
   private okhttp3.ResponseBody responseBody() {
     var body = okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType));
-    var source = okio.Okio.buffer(new okio.ForwardingSource(body.source()) {
-      @Override
-      public void close() throws java.io.IOException {
-        bodyClosed = true;
-        super.close();
-      }
-    });
+    var source =
+        okio.Okio.buffer(
+            new okio.ForwardingSource(body.source()) {
+              @Override
+              public void close() throws java.io.IOException {
+                bodyClosed = true;
+                super.close();
+              }
+            });
     return new okhttp3.ResponseBody() {
-      @Override public okhttp3.MediaType contentType() { return body.contentType(); }
-      @Override public long contentLength() { return body.contentLength(); }
-      @Override public okio.BufferedSource source() { return source; }
+      @Override
+      public okhttp3.MediaType contentType() {
+        return body.contentType();
+      }
+
+      @Override
+      public long contentLength() {
+        return body.contentLength();
+      }
+
+      @Override
+      public okio.BufferedSource source() {
+        return source;
+      }
     };
   }
 
   private String completed() {
     return """
-        {"id":"resp_fixture","object":"response","created_at":0,"status":"completed",
-         "model":"fixture-model","output":[{"type":"message","id":"msg_fixture",
-         "role":"assistant","status":"completed","phase":"final_answer",
-         "content":[{"type":"output_text","text":"done","annotations":[]}]}],
-         "usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5,
-          "input_tokens_details":{"cached_tokens":1},
-          "output_tokens_details":{"reasoning_tokens":1}}}
-        """;
+    {"id":"resp_fixture","object":"response","created_at":0,"status":"completed",
+     "model":"fixture-model","output":[{"type":"message","id":"msg_fixture",
+     "role":"assistant","status":"completed","phase":"final_answer",
+     "content":[{"type":"output_text","text":"done","annotations":[]}]}],
+     "usage":{"input_tokens":3,"output_tokens":2,"total_tokens":5,
+      "input_tokens_details":{"cached_tokens":1},
+      "output_tokens_details":{"reasoning_tokens":1}}}
+    """;
   }
 }

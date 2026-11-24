@@ -1,22 +1,28 @@
 package dev.mikoto2000.rei.llm;
 
-import java.util.Objects;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Objects;
 import java.util.Set;
 
 /** Only capabilities Rei must validate; an unknown tool limit stays unknown. */
-public record LlmCapabilities(ReasoningReplayMode reasoningReplay, Integer maxTools,
-    Set<Setting> supportedSettings) {
+public record LlmCapabilities(
+    ReasoningReplayMode reasoningReplay, Integer maxTools, Set<Setting> supportedSettings) {
   /** Settings whose explicit use requires a declaration rather than a provider guess. */
   public enum Setting {
-    TEMPERATURE, TOP_P, REASONING_EFFORT, REASONING_SUMMARY, PARALLEL_TOOL_CALLS,
-    STRUCTURED_OUTPUT, IMAGE_INPUT
+    TEMPERATURE,
+    TOP_P,
+    REASONING_EFFORT,
+    REASONING_SUMMARY,
+    PARALLEL_TOOL_CALLS,
+    STRUCTURED_OUTPUT,
+    IMAGE_INPUT
   }
 
   public LlmCapabilities(ReasoningReplayMode reasoningReplay, Integer maxTools) {
     this(reasoningReplay, maxTools, Set.of());
   }
+
   /** Backend-only request context; never an HTTP body field. */
   public static final String MAX_TOOLS_CONTEXT_KEY = "rei.llm.max-tools";
 

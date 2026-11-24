@@ -12,37 +12,45 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 
 /**
- * Sanitizes typed SDK errors before Spring AI's internal aggregator can log them.
- * The SDK continues to own HTTP, SSE decoding, cancellation and resource disposal.
+ * Sanitizes typed SDK errors before Spring AI's internal aggregator can log them. The SDK continues
+ * to own HTTP, SSE decoding, cancellation and resource disposal.
  */
 final class ResponsesSdkBoundary {
   private ResponsesSdkBoundary() {}
 
   static OpenAIClientAsync safe(OpenAIClientAsync client) {
     var service = client.responses();
-    var safeService = (ResponseServiceAsync) Proxy.newProxyInstance(
-        ResponseServiceAsync.class.getClassLoader(), new Class<?>[] {ResponseServiceAsync.class},
-        (proxy, method, arguments) -> {
-          try {
-            if (method.getName().equals("createStreaming")) {
-              @SuppressWarnings("unchecked")
-              var stream = (AsyncStreamResponse<ResponseStreamEvent>) method.invoke(service, arguments);
-              return new SafeStream(stream);
-            }
-            return method.invoke(service, arguments);
-          } catch (InvocationTargetException error) {
-            throw ResponsesTransportException.normalize(error.getCause());
-          }
-        });
-    return (OpenAIClientAsync) Proxy.newProxyInstance(OpenAIClientAsync.class.getClassLoader(),
-        new Class<?>[] {OpenAIClientAsync.class}, (proxy, method, arguments) -> {
-          if (method.getName().equals("responses")) return safeService;
-          try {
-            return method.invoke(client, arguments);
-          } catch (InvocationTargetException error) {
-            throw ResponsesTransportException.normalize(error.getCause());
-          }
-        });
+    var safeService =
+        (ResponseServiceAsync)
+            Proxy.newProxyInstance(
+                ResponseServiceAsync.class.getClassLoader(),
+                new Class<?>[] {ResponseServiceAsync.class},
+                (proxy, method, arguments) -> {
+                  try {
+                    if (method.getName().equals("createStreaming")) {
+                      @SuppressWarnings("unchecked")
+                      var stream =
+                          (AsyncStreamResponse<ResponseStreamEvent>)
+                              method.invoke(service, arguments);
+                      return new SafeStream(stream);
+                    }
+                    return method.invoke(service, arguments);
+                  } catch (InvocationTargetException error) {
+                    throw ResponsesTransportException.normalize(error.getCause());
+                  }
+                });
+    return (OpenAIClientAsync)
+        Proxy.newProxyInstance(
+            OpenAIClientAsync.class.getClassLoader(),
+            new Class<?>[] {OpenAIClientAsync.class},
+            (proxy, method, arguments) -> {
+              if (method.getName().equals("responses")) return safeService;
+              try {
+                return method.invoke(client, arguments);
+              } catch (InvocationTargetException error) {
+                throw ResponsesTransportException.normalize(error.getCause());
+              }
+            });
   }
 
   private record SafeStream(AsyncStreamResponse<ResponseStreamEvent> delegate)
@@ -64,27 +72,31 @@ final class ResponsesSdkBoundary {
     }
 
     @Override
-    public AsyncStreamResponse<ResponseStreamEvent> subscribe(Handler<? super ResponseStreamEvent> handler) {
+    public AsyncStreamResponse<ResponseStreamEvent> subscribe(
+        Handler<? super ResponseStreamEvent> handler) {
       delegate.subscribe(safeHandler(handler));
       return this;
     }
 
     @Override
-    public AsyncStreamResponse<ResponseStreamEvent> subscribe(Handler<? super ResponseStreamEvent> handler,
-        Executor executor) {
+    public AsyncStreamResponse<ResponseStreamEvent> subscribe(
+        Handler<? super ResponseStreamEvent> handler, Executor executor) {
       delegate.subscribe(safeHandler(handler), executor);
       return this;
     }
 
     @Override
     public CompletableFuture<Void> onCompleteFuture() {
-      return delegate.onCompleteFuture().handle((unused, error) -> {
-        if (error != null) {
-          while (error instanceof CompletionException && error.getCause() != null) error = error.getCause();
-          throw new CompletionException(ResponsesTransportException.normalize(error));
-        }
-        return null;
-      });
+      return delegate
+          .onCompleteFuture()
+          .handle((unused, error) -> {
+            if (error != null) {
+              while (error instanceof CompletionException && error.getCause() != null)
+                error = error.getCause();
+              throw new CompletionException(ResponsesTransportException.normalize(error));
+            }
+            return null;
+          });
     }
 
     @Override

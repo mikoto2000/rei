@@ -11,34 +11,78 @@ import reactor.core.publisher.Flux;
 
 /** Responses wire boundary. Not registered for production before durable integration. */
 final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
-  private static final Set<String> PROTECTED_FIELDS = Set.of(
-      "model", "input", "instructions", "tools", "tool_choice", "store", "previous_response_id",
-      "conversation", "max_tokens", "max_completion_tokens", "max_output_tokens", "reasoning",
-      "text", "stream", "include", "parallel_tool_calls", "response_format", "messages",
-      "functions", "function_call", "chat_template_kwargs", "background", "context_management",
-      "truncation", "temperature", "top_p", "verbosity");
+  private static final Set<String> PROTECTED_FIELDS =
+      Set.of(
+          "model",
+          "input",
+          "instructions",
+          "tools",
+          "tool_choice",
+          "store",
+          "previous_response_id",
+          "conversation",
+          "max_tokens",
+          "max_completion_tokens",
+          "max_output_tokens",
+          "reasoning",
+          "text",
+          "stream",
+          "include",
+          "parallel_tool_calls",
+          "response_format",
+          "messages",
+          "functions",
+          "function_call",
+          "chat_template_kwargs",
+          "background",
+          "context_management",
+          "truncation",
+          "temperature",
+          "top_p",
+          "verbosity");
 
   private final ResolvedLlmEndpoint endpoint;
   private final OpenAiResponsesChatModel delegate;
 
-  static ResponsesAdapter create(ResolvedLlmEndpoint endpoint, OpenAiResponsesChatOptions options,
-      java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> customizers) {
+  static ResponsesAdapter create(
+      ResolvedLlmEndpoint endpoint,
+      OpenAiResponsesChatOptions options,
+      java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
+          customizers) {
     if (options.getMaxRetries() != 0)
-      throw new IllegalArgumentException("Responses SDK retries must stay zero at client construction");
+      throw new IllegalArgumentException(
+          "Responses SDK retries must stay zero at client construction");
     options = options.mutate().timeout(endpoint.readTimeout()).build();
-    var transportCustomizers = new java.util.ArrayList<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>();
-    transportCustomizers.add(builder -> builder.interceptor(new ChatStreamTimeoutInterceptor(endpoint.readTimeout())));
+    var transportCustomizers =
+        new java.util.ArrayList<
+            org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>();
+    transportCustomizers.add(
+        builder -> builder.interceptor(new ChatStreamTimeoutInterceptor(endpoint.readTimeout())));
     transportCustomizers.addAll(customizers);
-    var client = org.springframework.ai.openai.setup.OpenAiSetup.setupAsyncClient(
-        options.getBaseUrl(), options.getApiKey(), options.getCredential(),
-        options.getMicrosoftDeploymentName(), options.getMicrosoftFoundryServiceVersion(),
-        options.getOrganizationId(), options.isMicrosoftFoundry(), false, options.getModel(),
-        options.getTimeout() == null ? endpoint.readTimeout() : options.getTimeout(),
-        0, options.getProxy(), options.getCustomHeaders(),
-        io.micrometer.observation.ObservationRegistry.NOOP, null, transportCustomizers);
-    var model = OpenAiResponsesChatModel.builder().options(options)
-        .openAiClientAsync(ResponsesSdkBoundary.safe(client))
-        .httpClientBuilderCustomizers(transportCustomizers).build();
+    var client =
+        org.springframework.ai.openai.setup.OpenAiSetup.setupAsyncClient(
+            options.getBaseUrl(),
+            options.getApiKey(),
+            options.getCredential(),
+            options.getMicrosoftDeploymentName(),
+            options.getMicrosoftFoundryServiceVersion(),
+            options.getOrganizationId(),
+            options.isMicrosoftFoundry(),
+            false,
+            options.getModel(),
+            options.getTimeout() == null ? endpoint.readTimeout() : options.getTimeout(),
+            0,
+            options.getProxy(),
+            options.getCustomHeaders(),
+            io.micrometer.observation.ObservationRegistry.NOOP,
+            null,
+            transportCustomizers);
+    var model =
+        OpenAiResponsesChatModel.builder()
+            .options(options)
+            .openAiClientAsync(ResponsesSdkBoundary.safe(client))
+            .httpClientBuilderCustomizers(transportCustomizers)
+            .build();
     return new ResponsesAdapter(endpoint, model);
   }
 
@@ -53,9 +97,14 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   public OpenAiResponsesChatOptions options(ResolvedLlmEndpoint endpoint) {
     if (endpoint.apiType() != LlmApiType.RESPONSES)
       throw new IllegalArgumentException("Responses endpoint required");
-    return delegate.getOptions().mutate().model(endpoint.model())
-        .maxOutputTokens(endpoint.maxOutputTokens()).temperature(endpoint.temperature())
-        .maxRetries(0).build();
+    return delegate
+        .getOptions()
+        .mutate()
+        .model(endpoint.model())
+        .maxOutputTokens(endpoint.maxOutputTokens())
+        .temperature(endpoint.temperature())
+        .maxRetries(0)
+        .build();
   }
 
   @Override
@@ -72,17 +121,28 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       throw new IllegalArgumentException("Responses model differs from the bound endpoint");
     if (options.getMaxRetries() != 0)
       throw new IllegalArgumentException("Responses SDK retries must stay zero");
-    if (options.getMaxOutputTokens() == null || options.getMaxOutputTokens() < 1
-        || (endpoint.maxOutputTokens() != null && options.getMaxOutputTokens() > endpoint.maxOutputTokens()))
+    if (options.getMaxOutputTokens() == null
+        || options.getMaxOutputTokens() < 1
+        || (endpoint.maxOutputTokens() != null
+            && options.getMaxOutputTokens() > endpoint.maxOutputTokens()))
       throw new IllegalArgumentException("Responses output limit must respect the resolved bound");
     requireCapability(options.getTemperature(), LlmCapabilities.Setting.TEMPERATURE, "temperature");
     requireCapability(options.getTopP(), LlmCapabilities.Setting.TOP_P, "topP");
-    requireCapability(options.getReasoningEffort(), LlmCapabilities.Setting.REASONING_EFFORT, "reasoningEffort");
-    requireCapability(options.getReasoningSummary(), LlmCapabilities.Setting.REASONING_SUMMARY, "reasoningSummary");
-    requireCapability(options.getParallelToolCalls(), LlmCapabilities.Setting.PARALLEL_TOOL_CALLS, "parallelToolCalls");
-    requireCapability(options.getResponseFormat(), LlmCapabilities.Setting.STRUCTURED_OUTPUT, "structuredOutput");
+    requireCapability(
+        options.getReasoningEffort(), LlmCapabilities.Setting.REASONING_EFFORT, "reasoningEffort");
+    requireCapability(
+        options.getReasoningSummary(),
+        LlmCapabilities.Setting.REASONING_SUMMARY,
+        "reasoningSummary");
+    requireCapability(
+        options.getParallelToolCalls(),
+        LlmCapabilities.Setting.PARALLEL_TOOL_CALLS,
+        "parallelToolCalls");
+    requireCapability(
+        options.getResponseFormat(), LlmCapabilities.Setting.STRUCTURED_OUTPUT, "structuredOutput");
     for (var message : prompt.getInstructions())
-      if (message instanceof org.springframework.ai.chat.messages.UserMessage user && !user.getMedia().isEmpty())
+      if (message instanceof org.springframework.ai.chat.messages.UserMessage user
+          && !user.getMedia().isEmpty())
         requireCapability(Boolean.TRUE, LlmCapabilities.Setting.IMAGE_INPUT, "imageInput");
     if (options.getHostedTools() != null && !options.getHostedTools().isEmpty())
       throw new IllegalArgumentException("Responses hostedTools are not supported");
@@ -105,12 +165,14 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   }
 
   private void validateTools(java.util.List<org.springframework.ai.tool.ToolCallback> callbacks) {
-    int maximum = endpoint.capabilities().maxTools() == null ? 128 : endpoint.capabilities().maxTools();
+    int maximum =
+        endpoint.capabilities().maxTools() == null ? 128 : endpoint.capabilities().maxTools();
     if (callbacks.size() > maximum)
       throw new IllegalArgumentException("Responses tool count exceeds endpoint limit");
     var names = new java.util.HashSet<String>();
-    var mapper = new com.fasterxml.jackson.databind.ObjectMapper()
-        .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+    var mapper =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
     for (var callback : callbacks) {
       var definition = callback.getToolDefinition();
       if (!definition.name().matches("[A-Za-z0-9_-]{1,64}") || !names.add(definition.name()))
@@ -143,23 +205,38 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   }
 
   private static void requireCompleted(ChatResponse response) {
-    if (!"completed".equals(response.getMetadata().get(
-        org.springframework.ai.openai.responses.OpenAiResponsesMetadata.STATUS)))
+    if (!"completed"
+        .equals(
+            response
+                .getMetadata()
+                .get(org.springframework.ai.openai.responses.OpenAiResponsesMetadata.STATUS)))
       throw new IllegalStateException("Responses did not complete successfully");
   }
 
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
-    return Flux.defer(() -> {
-      var completed = new java.util.concurrent.atomic.AtomicBoolean();
-      return delegate.stream(prepare(prompt)).doOnNext(response -> {
-        if (response.getMetadata().containsKey(
-            org.springframework.ai.openai.responses.OpenAiResponsesMetadata.STATUS)) {
-          requireCompleted(response);
-          completed.set(true);
-        }
-      }).concatWith(Flux.defer(() -> completed.get() ? Flux.empty()
-          : Flux.error(new IllegalStateException("Responses stream ended without completion"))));
-    }).onErrorMap(ResponsesTransportException::normalize);
+    return Flux.defer(
+            () -> {
+              var completed = new java.util.concurrent.atomic.AtomicBoolean();
+              return delegate.stream(prepare(prompt))
+                  .doOnNext(response -> {
+                    if (response
+                        .getMetadata()
+                        .containsKey(
+                            org.springframework.ai.openai.responses.OpenAiResponsesMetadata
+                                .STATUS)) {
+                      requireCompleted(response);
+                      completed.set(true);
+                    }
+                  })
+                  .concatWith(
+                      Flux.defer(() ->
+                          completed.get()
+                              ? Flux.empty()
+                              : Flux.error(
+                                  new IllegalStateException(
+                                      "Responses stream ended without completion"))));
+            })
+        .onErrorMap(ResponsesTransportException::normalize);
   }
 }
