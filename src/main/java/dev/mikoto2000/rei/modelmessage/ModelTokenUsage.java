@@ -8,13 +8,8 @@ public record ModelTokenUsage(Long input, Long output, Long total, Long cached, 
 
   /** Backend numeric metadata survives stream aggregation and takes precedence over its totals. */
   public static ModelTokenUsage from(org.springframework.ai.chat.model.ChatResponse response) {
-    if (response != null && response.getResult() != null) {
-      var metadata = response.getResult().getOutput().getMetadata();
-      if (metadata.containsKey(METADATA_KEY)) {
-        if (metadata.get(METADATA_KEY) instanceof ModelTokenUsage numeric) return numeric;
-        throw new IllegalArgumentException("Invalid model token usage");
-      }
-    }
+    var numeric = backend(response);
+    if (numeric != null) return numeric;
     var usage = response == null || response.getMetadata() == null
         ? null : response.getMetadata().getUsage();
     if (usage == null || usage instanceof org.springframework.ai.chat.metadata.EmptyUsage)
@@ -23,9 +18,26 @@ public record ModelTokenUsage(Long input, Long output, Long total, Long cached, 
         number(usage.getTotalTokens()), null, null);
   }
 
+  private static ModelTokenUsage backend(org.springframework.ai.chat.model.ChatResponse response) {
+    if (response != null && response.getResult() != null) {
+      var metadata = response.getResult().getOutput().getMetadata();
+      if (metadata.containsKey(METADATA_KEY)) {
+        if (metadata.get(METADATA_KEY) instanceof ModelTokenUsage numeric) return numeric;
+        throw new IllegalArgumentException("Invalid model token usage");
+      }
+    }
+    return null;
+  }
+
   /** Preserve the existing integer budget contract without rounding or overflow. */
   public static Integer totalTokens(org.springframework.ai.chat.model.ChatResponse response) {
-    Long total = from(response).total();
+    var numeric = backend(response);
+    if (numeric == null) {
+      var usage = response == null || response.getMetadata() == null
+          ? null : response.getMetadata().getUsage();
+      return usage == null ? null : usage.getTotalTokens();
+    }
+    Long total = numeric.total();
     if (total == null) return null;
     if (total > Integer.MAX_VALUE)
       throw new IllegalArgumentException("Model token usage exceeds accounting range");

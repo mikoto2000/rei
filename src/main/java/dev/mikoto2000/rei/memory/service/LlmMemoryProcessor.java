@@ -205,8 +205,8 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
       if (budget != null) {
         reported = true;
         var response = aggregate.get();
-        var usage = response == null ? null : response.getMetadata().getUsage();
-        budget.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+        budget.recordTotalTokens(
+            dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(response));
       }
       if (outputLimited.get()) throw new AutoSleepExecution.Failure("OUTPUT_INVALID", null);
       return result.toString();

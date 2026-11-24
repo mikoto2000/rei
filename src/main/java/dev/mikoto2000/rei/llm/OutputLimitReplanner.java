@@ -86,8 +86,7 @@ public class OutputLimitReplanner {
       throw error;
     }
     if (usageRecorder != null) {
-      var usage = response == null ? null : response.getMetadata().getUsage();
-      usageRecorder.accept(usage == null ? null : usage.getTotalTokens());
+      usageRecorder.accept(dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(response));
     }
     Objects.requireNonNull(response, "Replan model returned no response");
     var generation = response.getResult();

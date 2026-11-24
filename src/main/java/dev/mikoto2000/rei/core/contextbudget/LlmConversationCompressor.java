@@ -255,11 +255,13 @@ public class LlmConversationCompressor implements ConversationCompressor {
       var usage = response == null ? null : response.getMetadata().getUsage();
       if (execution != null) {
         reported = true;
-        execution.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+        execution.recordTotalTokens(
+            dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(response));
         execution.checkActive();
       } else if (standalone != null) {
         reported = true;
-        standalone.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+        standalone.recordTotalTokens(
+            dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(response));
       }
       if (outputLimited.get())
         throw new ContextCompressionException(ContextCompressionException.Reason.OUTPUT_LIMIT);

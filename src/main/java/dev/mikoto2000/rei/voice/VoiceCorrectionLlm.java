@@ -104,8 +104,8 @@ public final class VoiceCorrectionLlm {
     var output = generation == null ? null : generation.getOutput();
     if (output == null || !output.getToolCalls().isEmpty())
       throw new IllegalStateException("invalid_output");
-    var usage = response.getMetadata().getUsage();
-    budget.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+    budget.recordTotalTokens(
+        dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(response));
     if (budget.usageUnknown() || budget.tokenExceeded())
       throw new IllegalStateException("correction_budget");
     return output.getText();
