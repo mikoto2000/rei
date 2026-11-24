@@ -127,8 +127,8 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
       return List.of();
     }
     if (budget != null) {
-      var usage = response == null ? null : response.getMetadata().getUsage();
-      budget.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+      budget.recordTotalTokens(
+          dev.mikoto2000.rei.modelmessage.ModelTokenUsage.totalTokens(response));
     }
     var generation = response == null ? null : response.getResult();
     var output = generation == null ? null : generation.getOutput();
