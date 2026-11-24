@@ -10,7 +10,7 @@ final class ResponsesReasoningReplay {
   static final String OWNER_CONTEXT_KEY = "rei.llm.replay-owner";
   static final String ORIGIN_OWNER = "rei.llm.replay-origin-owner";
   static final String ORIGIN_ENDPOINT = "rei.llm.replay-origin-endpoint";
-  static final String USAGE_KEY = "rei.llm.responses-usage";
+  static final String USAGE_KEY = dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY;
 
   private ResponsesReasoningReplay() {}
 
@@ -73,7 +73,12 @@ final class ResponsesReasoningReplay {
               }
               // Spring's MessageAggregator rebuilds Usage from three totals. Its message
               // metadata is retained, so carry only the normalized numeric details here.
-              if (usage != null) metadata.put(USAGE_KEY, usage);
+              metadata.put(
+                  USAGE_KEY,
+                  usage == null
+                      ? new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(
+                          null, null, null, null, null)
+                      : usage);
               return new org.springframework.ai.chat.model.Generation(
                   output.mutate().properties(metadata).build(), generation.getMetadata());
             })

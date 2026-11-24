@@ -6,8 +6,8 @@
 | --- | --- | --- | --- | --- | --- |
 | 0 | MERGED | codex/responses-api-phase-0-foundation / 削除済み | [#628](https://github.com/mikoto2000/rei/pull/628) | d0e3626f9565035cab20cc045dd3ba070985d3fe | PR・マージ後CI成功。全件7,718、成功7,706、skip12、failure/error0 |
 | 1 | MERGED | codex/responses-api-phase-1-transport / 削除済み | [#629](https://github.com/mikoto2000/rei/pull/629) | 10542db848d9317c7eaaab06869e63e7ab571d5b | 最終CI全件7,818、成功7,806、期待skip12、failure/error0。品質ゲート成功 |
-| 2 | IN_PROGRESS | codex/responses-api-phase-2-openai-replay / .worktrees/responses-api-phase-2 | [#630](https://github.com/mikoto2000/rei/pull/630) | 未マージ | 関連159件・修正後architecture成功。最新headの全回帰・品質ゲート確認後にmerge |
-| 3 | NOT_STARTED | — | — | — | 未実施 |
+| 2 | MERGED | codex/responses-api-phase-2-openai-replay / 削除済み | [#630](https://github.com/mikoto2000/rei/pull/630) | a95593f48d0b4f760091d79eaf2cbc411e9a2f49 | PR・マージ後CI7,861件、成功7,849、期待skip12、failure/error0。関連859件・全品質ゲート成功 |
+| 3 | IN_PROGRESS | codex/responses-api-phase-3-message-persistence / .worktrees/responses-api-phase-3 | [#631](https://github.com/mikoto2000/rei/pull/631) | 未マージ | 最新関連570件、failure/error/skip0。Checkstyle/SpotBugs0、architecture・build成功。PR #631、最新headの全件CI・差分レビューを確認中 |
 | 4 | NOT_STARTED | — | — | — | 未実施 |
 | 5 | NOT_STARTED | — | — | — | 未実施 |
 | 6 | NOT_STARTED | — | — | — | 未実施 |
@@ -204,3 +204,99 @@ PR差分レビューで、Spring MessageAggregatorがnative cached/reasoning内�
 それぞれ検証する。正常完了・出力上限・整合性エラーで内訳を保持し、未提供値を推測しない。
 全回帰snapshot ab6e3b45ではarchitecture依存1件を検出した。予算を緩和せず共有境界内の判定へ修正し、
 production snapshotの独立architecture検証は成功した。snapshot全回帰の結果と修正後の結果は区別する。
+
+### Phase 2 の完了確認
+
+PR #630をhead a276eaf3の全チェック成功後、通常merge a95593f4で統合した。
+PR CI: static45321007826、Client45321007866、Java45321007834 attempt2がすべて成功。
+JavaはA3,811+B4,050=7,861、成功7,849、failure/error0、既存期待skip12。
+集約138214725669でテストID・クラス割当・重複・欠落・skipを照合した。
+ローカル最新sourceの関連859件とSpotless/Checkstyle0/SpotBugs0・解析error0/architecture/packageも成功。
+独立した同一条件のB4,050件も成功し、skip10・failure/error0・12分22秒だった。
+
+初回Bは既存の実行制限を超えて応答せず、ログも未公開だった。通常キャンセルにも応答しなかったため、
+GitHub公式の復旧手順でこのCI実行だけを停止し、同じheadのBと依存集約を再実行して成功した。
+ソース・制限・skip・予算・保護ルールは変更していない。停止原因は未確定として記録した。
+修正前snapshot ab6e3b45の全回帰7,860件はarchitecture依存1件が失敗した結果のまま保存し、
+修正後の全件成功や最新sourceの結果と混同していない。
+
+マージ後のexact main a95593f4でも、static45325944502、Client45325944554、Java45325944603がすべて成功。
+集約138219711283でA3,811+B4,050=7,861、期待skip12、割当・ID照合の成功を確認した。
+検証済みheadとmainのtree一致を確認し、専用worktreeは通常削除、local/remote作業branchも削除した。
+元worktreeの未追跡設計書・review/と他のworktreeは保持した。
+
+## Phase 3: モデルメッセージの永続化（実装・検証中）
+
+基準 main は Phase 2 merge `a95593f48d0b4f760091d79eaf2cbc411e9a2f49`。
+専用 worktree とブランチで継続し、元 worktree の利用者ファイル・外部設定・本番 DB は変更しない。
+
+### 実装済み
+
+- ModelMessageCodec: 明示的な version 1 JSON、ordered parts、opaque bytes/ID、全4role、画像、型付き配信情報、
+  backend owner/fingerprint、共通の5数値 usage。strict JSON、許可 part/metadata、UTF-8 8 MiB等の容量上限、
+  raw stream chunk の拒否、旧 StoredMessage の限定的な互換読み込み。
+- ModelMessagePayloadStore: qualified memory DB 内の専用 version 3 schema。所有者は project/root/conversation、
+  origin run は別。内容ハッシュ、実長、所有者、冪等キーを照合し、本文 GC 後もキーの再利用を拒否する。
+- 容量判定・本文・receipt・Run 累積量を SQLite の同一トランザクションで保存する。
+  初期値はメッセージ8 MiB、Run 生涯64 MiB、現在の本文合計512 MiB、staging 猶予1時間。
+  DB/WAL/index/receipt の物理容量は本文量と分け、Phase 6 の実測対象とする。
+- HISTORY/RUN/APPROVAL/CHECKPOINT の参照と保存途中の猶予を区別する。期限切れ孤立 payload の遅い公開は拒否。
+  公開済みのどの参照も GC から保護する。独立 Scheduler は作らず、既存の maintenance CLI へ GC を追加。
+- 既存 ToolLoopSupport の明示的 Exchange により、元 assistant の保存・RUN 参照公開を callback より先に行い、
+  配信 metadata 付き結果を保存してから次の履歴を返す。保存失敗は例外として上へ返し、別の実行ループ・再試行を追加しない。
+- ConversationLog/Turn は本文を複製せず3文字列の pointer を持つ。ログの metadata 付き append は同期保存の失敗を返す。
+  Turn の既存 recordMetadata を再利用し、履歴は公開済み pointer を優先する。テキストのみのログに対応する Turn の
+  pointer も優先し、二重追加しない。参照が失われた場合に本文 fallback で継続しない。旧完了会話は従来どおり読める。
+- history sequence 付与時に reasoning/tool attributes や ToolResponse の型が失われる処理を修正。
+- native usage を共通 immutable record へ昇格。不正な typed JSON、負数、小数、overflow、合計・内訳不整合を
+  Spring の mapper より前に拒否する。数値が未提供なら補完しない。
+
+### ここまでの検証
+
+| 対象 | 結果 |
+| --- | --- |
+| native Responses / Codec の usage 検証 | 最新207件成功、failure/error/skip0。JSON/SSE・実SQLite・usage未取得/ゼロの区別を含む |
+| クリーンコンパイル後の Responses / SQLite / architecture snapshot | 217件成功、failure/error/skip0。後続変更前の snapshot |
+| 最新の Codec / SQLite / ToolLoop / history / log / maintenance 開発選別 | 103件成功、failure/error/skip0 |
+| 別プロセスによる保存・復元 | Writer JVM の終了後に Reader JVM で全 parts・opaque・call ID を復元 |
+| 並行・障害注入 | 8 writer と GC、上限の競合、DB途中保存失敗、DDL途中移行失敗、将来 Schema、本文改ざんを検証 |
+| 実保存先の再生成 | payload SQLite・Turn SQLite・JSONL を保存し、全 Store を作り直して参照優先を検証 |
+| Maven 最新関連回帰 | 570件成功、failure/error/skip0 |
+| Checkstyle / SpotBugs | 指摘0件、解析エラー0件 |
+| Spotless / architecture / package・repackage | 全成功。予算・除外の変更なし |
+| 実 API / 本番移行 / 運用プロセス操作 | 未実施 |
+
+Red の fixture 準備での不備（Windows の長い子 JVM classpath、isolated javac の -parameters不足、
+maintenance test の storage.db未準備）は、期待した仕様上の Red と区別し、修正後の Red/Green を記録した。
+初回 clean はログを target 内に置いたため Windows のロックで停止した。ログと TDD evidence を外へ保存してから
+クリーンビルドを再実行し成功した。検証ゲートの緩和、強制削除、本番プロセスへの操作は行っていない。
+
+初回の関連 Maven 検証は554件、成功553、failure1、error/skip0。失敗は architecture の新しい
+Configuration 依存3本と新コマンドから既存循環領域への依存1本で、機能テストは成功した。
+baseline や予算を増やさず、lazy component と ObjectProvider の注入、既存コマンドの実行境界へ変更して
+同じ検証で architecture 成功を確認。続く SpotBugs の6件（nullable/constructor/注入可視性）と反射注入の指摘2件も修正し、561件と全品質ゲートが成功した。
+その後、native SSE 集約が未提供 usage をゼロに変える再現テストを追加。明示的な null の5数値を backend metadata へ保持し、未取得とゼロを区別した最終565件・全品質ゲートが成功した。
+接続開始の RuntimeException が内部設定・causeを露出するケースも Red/Green で修正した。初回の失敗を成功と読み替えない。
+
+### 有効化境界と次の作業
+
+Phase 3 の fixture は明示的な per-iteration Exchange と参照契約を検証する。
+全クライアントへの Run/iteration identity の供給、承認・Checkpoint の full-parts 参照、操作台帳との再開照合、
+圧縮・終了・削除 lifecycle の参照解放は Phase 4 の有効化条件として残す。本番 Responses の生成は引き続き拒否する。
+
+Phase 3 の関連回帰・全品質ゲートは成功し、PR #631 を作成した。差分レビュー、最新 head の全 CI、通常 merge、merge 後 CI、
+専用 worktree の後片付けが未完了。これらを完了してから最新 main を基準に Phase 4 を開始する。
+
+
+### Phase 3 の PR 差分レビュー
+
+PR #631 の全20ファイルを確認し、assistant call ID の重複・空白が保存時に通る非対称性を検出した。
+ToolResponse と旧形式に加え、現行 assistant の encode/decode でも拒否する3件の Red を確認し、
+da74dfb6 → 7600c0cc で修正した。native/Codec 207件、修正後の関連568件と全品質ゲートが成功した。
+API固有処理・DB・ツール実行の分離、所有者/ハッシュ/参照の照合、旧完了会話、容量・GC、
+未検証Responsesの本番拒否を照合した。全件CI・通常merge・merge後確認・cleanupは引き続き未完了。
+
+
+追加レビューで、同時刻の複数Turnからprotocol参照を選ぶ曖昧性と、同じ表示文の通知への誤付与を2件で再現した。
+4e4057ad → 4f6a18c6 で、参照を含む時刻の対応が複数なら停止し、通知を補完対象から除外した。
+関連108件、最新Maven関連570件と全品質ゲートが成功した。既存の参照を持たない旧履歴の順序は維持する。

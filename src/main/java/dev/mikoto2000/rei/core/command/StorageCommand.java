@@ -657,12 +657,37 @@ public final class StorageCommand {
         MaintenanceStatus.class,
         Checkpoint.class,
         IncrementalVacuum.class,
+        ModelMessagesGc.class,
         Vacuum.class
       },
       description = "storage.dbの観測と明示的な容量回収")
   public static final class Maintenance {
     /** 親。 */
     @ParentCommand StorageCommand parent;
+  }
+
+  @Command(name = "model-messages-gc", description = "参照がなく保存猶予期限を過ぎたモデルメッセージだけを回収します")
+  public static final class ModelMessagesGc implements java.util.concurrent.Callable<Integer> {
+    @ParentCommand Maintenance parent;
+    @Spec picocli.CommandLine.Model.CommandSpec spec;
+
+    @Override
+    public Integer call() {
+      return parent.parent.collectModelMessages(
+          spec.commandLine().getOut(), spec.commandLine().getErr());
+    }
+  }
+
+  private Integer collectModelMessages(java.io.PrintWriter out, java.io.PrintWriter errorOutput) {
+    try {
+      if (maintenance == null)
+        throw new IllegalStateException("Storage maintenance has not initialized");
+      out.printf("collected_model_messages=%d%n", maintenance.collectModelMessageOrphans());
+      return 0;
+    } catch (RuntimeException error) {
+      errorOutput.println("[error] " + dev.mikoto2000.rei.event.FailureMessages.describe(error));
+      return 2;
+    }
   }
 
   /** 共通の実行基盤に必要な保守操作を扱う。 */

@@ -48,6 +48,9 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   /** ログ一覧。 */
   private final Function<String, List<ConversationLogEntry>> readHistory;
 
+  private java.util.function.Supplier<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore>
+      payloads;
+
   /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ContextHistoryAdvisor(
       ConversationTurnStore turns,
@@ -62,12 +65,31 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       ConversationMemory memory,
       ConversationSummaryRepository summaries,
       dev.mikoto2000.rei.conversation.ConversationLogStore logs) {
+    this(turns, memory, summaries, logs, () -> null);
+  }
+
+  public ContextHistoryAdvisor(
+      ConversationTurnStore turns,
+      ConversationMemory memory,
+      ConversationSummaryRepository summaries,
+      dev.mikoto2000.rei.conversation.ConversationLogStore logs,
+      java.util.function.Supplier<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore>
+          payloads) {
     this.readTurns = conversation -> turns.read(conversation);
     this.readLegacyMemory = id -> memory.get(id);
     this.rememberInput = (id, messages) -> memory.add(id, messages);
     this.rememberOutput = (id, message) -> memory.add(id, message);
     this.summaries = summaries;
     this.readHistory = id -> logs == null ? List.of() : logs.readConversation(id);
+    this.payloads = payloads == null ? () -> null : payloads;
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void configureModelMessagePayloads(
+      org.springframework.beans.factory.ObjectProvider<
+              dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore>
+          payloads) {
+    this.payloads = payloads::getObject;
   }
 
   /** 他の補助処理と組み合わせる際の適用順序を返す。 */
@@ -114,10 +136,18 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       long through = summaries.read(historyKey).throughSequence();
       var hiddenAt = cancelled.indexedTimestampFilter();
       var timeline = new java.util.TreeMap<java.time.Instant, ConversationTurnStore.Turn>();
+      var ambiguousProtocolTimes = new java.util.HashSet<java.time.Instant>();
       for (var turn : history)
         if (turn.createdAt() != null
             && !dev.mikoto2000.rei.conversation.ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(
-                turn.source())) timeline.putIfAbsent(turn.createdAt(), turn);
+                turn.source())) {
+          var previous = timeline.putIfAbsent(turn.createdAt(), turn);
+          if (previous != null
+              && (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(
+                      previous.metadata())
+                  || dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(
+                      turn.metadata()))) ambiguousProtocolTimes.add(turn.createdAt());
+        }
       var currentTurn =
           owner == null
               ? Optional.<ConversationTurnStore.Turn>empty()
@@ -153,7 +183,24 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                       .content(entry.content())
                       .properties(properties)
                       .build();
-          messages.add(historical(message, sequence));
+          var modelMetadata = entry.metadata();
+          if ("assistant".equals(entry.speaker())
+              && !dev.mikoto2000.rei.conversation.ConversationLogStore.BEHAVIOR_NOTIFICATION.equals(
+                  entry.source())
+              && !dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(
+                  modelMetadata)
+              && entry.timestamp() != null) {
+            var previousTurn = timeline.floorEntry(entry.timestamp().toInstant());
+            if (previousTurn != null && ambiguousProtocolTimes.contains(previousTurn.getKey()))
+              throw new IllegalStateException("Model message persistence rejected");
+            var savedTurn = previousTurn == null ? null : previousTurn.getValue();
+            if (savedTurn != null
+                && savedTurn.completed()
+                && entry.content().equals(savedTurn.assistantMessage()))
+              modelMetadata = savedTurn.metadata();
+          }
+          messages.add(
+              historical(restore(owner, modelMetadata, entry.speaker(), message), sequence));
           historyAnchor = true;
         }
         // Carry completed run observations alongside the original final answer without rewriting
@@ -202,16 +249,22 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                   new AssistantMessage(
                       "Prior run observations (historical data):\n" + runSummary.summary()),
                   i * 3L + 2));
-        if (turn.assistantMessage() != null && !turn.assistantMessage().isBlank()) {
+        if ((turn.assistantMessage() != null && !turn.assistantMessage().isBlank())
+            || dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(
+                turn.metadata())) {
           var properties = new HashMap<String, Object>(turn.metadata());
           if (turn.source() != null) properties.put("source", turn.source());
           if (turn.sourceId() != null) properties.put("sourceId", turn.sourceId());
           messages.add(
               historical(
-                  AssistantMessage.builder()
-                      .content(turn.assistantMessage())
-                      .properties(properties)
-                      .build(),
+                  restore(
+                      owner,
+                      turn.metadata(),
+                      "assistant",
+                      AssistantMessage.builder()
+                          .content(java.util.Objects.toString(turn.assistantMessage(), ""))
+                          .properties(properties)
+                          .build()),
                   i * 3L + 3));
         }
       }
@@ -245,6 +298,24 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         .build();
   }
 
+  private Message restore(
+      AgentRunContext owner, Map<String, String> metadata, String speaker, Message fallback) {
+    if (!dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(metadata))
+      return fallback;
+    if (owner == null) throw new IllegalStateException("Model message persistence rejected");
+    var store = payloads.get();
+    if (store == null) throw new IllegalStateException("Model message persistence rejected");
+    var restored =
+        store
+            .restoreHistory(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner),
+                metadata)
+            .orElseThrow();
+    if (!restored.getMessageType().name().equalsIgnoreCase(speaker))
+      throw new IllegalStateException("Model message persistence rejected");
+    return restored;
+  }
+
   /** モデルへ渡す文脈の管理の実行結果を受け取り、後続の処理へ反映する。 */
   @Override
   public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
@@ -268,7 +339,15 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     Map<String, Object> metadata = new HashMap<>(message.getMetadata());
     metadata.put(SEQUENCE, sequence);
     if (message instanceof UserMessage user) return user.mutate().metadata(metadata).build();
-    return AssistantMessage.builder().content(message.getText()).properties(metadata).build();
+    if (message instanceof AssistantMessage assistant)
+      return assistant.mutate().properties(metadata).build();
+    if (message instanceof org.springframework.ai.chat.messages.ToolResponseMessage tool)
+      return org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+          .responses(tool.getResponses())
+          .metadata(metadata)
+          .build();
+    if (message instanceof SystemMessage system) return system.mutate().metadata(metadata).build();
+    throw new IllegalArgumentException("Unsupported historical model message");
   }
 
   /** モデルへ渡す文脈の管理で用いる発生順序を返す。 */

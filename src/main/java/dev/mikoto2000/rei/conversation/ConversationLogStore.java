@@ -103,10 +103,32 @@ public class ConversationLogStore {
 
   /** 既存の記録へ経緯を残すため、会話ログ保存先を追記する。 */
   public void append(String conversationId, String speaker, String content) {
+    append(conversationId, speaker, content, java.util.Map.of(), false);
+  }
+
+  /**
+   * Commit pointer metadata durably; failures must prevent callers from treating a reference as
+   * published.
+   */
+  public void append(
+      String conversationId,
+      String speaker,
+      String content,
+      java.util.Map<String, String> metadata) {
+    append(conversationId, speaker, content, java.util.Map.copyOf(metadata), true);
+  }
+
+  private void append(
+      String conversationId,
+      String speaker,
+      String content,
+      java.util.Map<String, String> metadata,
+      boolean durable) {
     if (conversationId == null
         || conversationId.isBlank()
         || content == null
-        || content.isBlank()) {
+        || (content.isBlank() && (!durable || metadata.isEmpty()))) {
+      if (durable) throw new IllegalStateException("Cannot persist conversation log reference");
       return;
     }
     OffsetDateTime timestamp = OffsetDateTime.now(clock);
@@ -126,16 +148,39 @@ public class ConversationLogStore {
                 + 1;
         ConversationLogEntry entry =
             new ConversationLogEntry(
-                id, scopeOf(id), normalizeSpeaker(speaker), timestamp, content, nextSequence);
+                id,
+                scopeOf(id),
+                normalizeSpeaker(speaker),
+                timestamp,
+                content,
+                nextSequence,
+                null,
+                null,
+                metadata);
         Files.createDirectories(directory);
-        Files.writeString(
-            file,
-            writeEntry.write(entry) + System.lineSeparator(),
-            StandardCharsets.UTF_8,
-            StandardOpenOption.CREATE,
-            StandardOpenOption.APPEND);
+        if (durable) {
+          byte[] bytes =
+              (writeEntry.write(entry) + System.lineSeparator()).getBytes(StandardCharsets.UTF_8);
+          try (var channel =
+              java.nio.channels.FileChannel.open(
+                  file,
+                  StandardOpenOption.CREATE,
+                  StandardOpenOption.WRITE,
+                  StandardOpenOption.APPEND)) {
+            var buffer = java.nio.ByteBuffer.wrap(bytes);
+            while (buffer.hasRemaining()) channel.write(buffer);
+            channel.force(true);
+          }
+        } else
+          Files.writeString(
+              file,
+              writeEntry.write(entry) + System.lineSeparator(),
+              StandardCharsets.UTF_8,
+              StandardOpenOption.CREATE,
+              StandardOpenOption.APPEND);
         contextSequences.put(id, nextSequence);
       } catch (IOException e) {
+        if (durable) throw new IllegalStateException("Cannot persist conversation log reference");
         log.warn("Failed to append conversation log: {}", file, e);
       }
     }

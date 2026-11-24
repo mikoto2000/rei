@@ -17,6 +17,150 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 
 /** ツール繰り返し補助の結果と状態の契約を検証するテスト。 */
 class ToolLoopSupportTest {
+  @Test
+  void missingGenerationFailsBeforePersistenceOrDispatchWithAnExplicitError() {
+    var callback = persistenceCallback(new java.util.concurrent.atomic.AtomicInteger());
+    var prompt = new Prompt("fixture", OpenAiChatOptions.builder().toolCallbacks(callback).build());
+    assertThatThrownBy(() -> new ToolLoopSupport().execute(prompt, new ChatResponse(List.of())))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Missing generation for tool calls")
+        .hasNoCause();
+    org.mockito.Mockito.verify(callback, org.mockito.Mockito.never())
+        .call(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void assistantPersistenceFailurePreventsToolDispatch() {
+    var store =
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class);
+    org.mockito.Mockito.when(
+            store.save(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.any()))
+        .thenThrow(new IllegalStateException("Model message persistence rejected"));
+    var callback = persistenceCallback(new java.util.concurrent.atomic.AtomicInteger());
+    var prompt = persistencePrompt(store, callback);
+    assertThatThrownBy(() -> new ToolLoopSupport().execute(prompt, persistenceResponse()))
+        .hasMessage("Model message persistence rejected");
+    org.mockito.Mockito.verify(callback, org.mockito.Mockito.never())
+        .call(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void resultPersistenceFailureStopsTheLoopAfterTheExecutedCallback() {
+    var store =
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class);
+    var ref =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref("fixture", "a".repeat(64));
+    org.mockito.Mockito.when(
+            store.save(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.isA(
+                    org.springframework.ai.chat.messages.AssistantMessage.class)))
+        .thenReturn(ref);
+    org.mockito.Mockito.when(
+            store.save(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.isA(
+                    org.springframework.ai.chat.messages.ToolResponseMessage.class)))
+        .thenThrow(new IllegalStateException("Model message persistence rejected"));
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    var callback = persistenceCallback(calls);
+    assertThatThrownBy(() ->
+            new ToolLoopSupport()
+                .execute(persistencePrompt(store, callback), persistenceResponse()))
+        .hasMessage("Model message persistence rejected");
+    assertThat(calls).hasValue(1);
+    var ordered = org.mockito.Mockito.inOrder(store, callback);
+    ordered
+        .verify(store)
+        .save(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.eq("run"),
+            org.mockito.ArgumentMatchers.eq("iteration/ASSISTANT"),
+            org.mockito.ArgumentMatchers.isA(
+                org.springframework.ai.chat.messages.AssistantMessage.class));
+    ordered
+        .verify(store)
+        .publish(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.eq(ref),
+            org.mockito.ArgumentMatchers.eq(
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN),
+            org.mockito.ArgumentMatchers.eq("run"));
+    ordered
+        .verify(callback)
+        .call(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+    ordered
+        .verify(store)
+        .save(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.eq("run"),
+            org.mockito.ArgumentMatchers.eq("iteration/TOOL"),
+            org.mockito.ArgumentMatchers.isA(
+                org.springframework.ai.chat.messages.ToolResponseMessage.class));
+  }
+
+  private static ToolCallback persistenceCallback(java.util.concurrent.atomic.AtomicInteger calls) {
+    var callback = org.mockito.Mockito.mock(ToolCallback.class);
+    org.mockito.Mockito.when(callback.getToolDefinition())
+        .thenReturn(
+            ToolDefinition.builder()
+                .name("fixture")
+                .description("fixture")
+                .inputSchema("{}")
+                .build());
+    org.mockito.Mockito.when(callback.getToolMetadata())
+        .thenReturn(org.springframework.ai.tool.metadata.ToolMetadata.builder().build());
+    org.mockito.Mockito.when(
+            callback.call(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+        .thenAnswer(ignored -> {
+          calls.incrementAndGet();
+          return "fixture result";
+        });
+    return callback;
+  }
+
+  private static Prompt persistencePrompt(
+      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore store, ToolCallback callback) {
+    var exchange =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
+            store,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
+                "project", "root", "conversation"),
+            "run",
+            "iteration");
+    return new Prompt(
+        "fixture request",
+        OpenAiChatOptions.builder()
+            .toolCallbacks(callback)
+            .toolContext(
+                Map.of(
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+                    exchange))
+            .build());
+  }
+
+  private static ChatResponse persistenceResponse() {
+    return new ChatResponse(
+        List.of(
+            new org.springframework.ai.chat.model.Generation(
+                org.springframework.ai.chat.messages.AssistantMessage.builder()
+                    .content("fixture commentary")
+                    .toolCalls(
+                        List.of(
+                            new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                                "call_one", "function", "fixture", "{}")))
+                    .build())));
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "readMultiFile,CONTEXT_BUDGET_INSUFFICIENT,true",

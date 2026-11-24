@@ -27,6 +27,170 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 /** Native SDK input/output round trips; no external API or business tool is used. */
 @org.junit.jupiter.api.Timeout(30)
 class ResponsesReplayContractTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "missing,false",
+    "missing,true",
+    "zero,false",
+    "zero,true"
+  })
+  void missingNativeUsageRemainsUnknownThroughAggregationAndPersistence(
+      String kind, boolean streaming) throws Exception {
+    var mapper = new ObjectMapper();
+    var raw = (com.fasterxml.jackson.databind.node.ObjectNode) mapper.readTree(reasoningDone());
+    var expected =
+        new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(null, null, null, null, null);
+    if (kind.equals("missing")) raw.remove("usage");
+    else {
+      var usage =
+          raw.putObject("usage")
+              .put("input_tokens", 0)
+              .put("output_tokens", 0)
+              .put("total_tokens", 0);
+      usage.putObject("input_tokens_details").put("cached_tokens", 0);
+      usage.putObject("output_tokens_details").put("reasoning_tokens", 0);
+      expected = new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(0L, 0L, 0L, 0L, 0L);
+    }
+    contentType = streaming ? "text/event-stream" : "application/json";
+    replies.add(streaming ? sse(raw.toString()) : raw.toString());
+    var options = options();
+    var model = model(options);
+    var prompt = new Prompt("fixture", options);
+    org.springframework.ai.chat.model.ChatResponse response;
+    if (streaming) {
+      var completed =
+          new java.util.concurrent.atomic.AtomicReference<
+              org.springframework.ai.chat.model.ChatResponse>();
+      new org.springframework.ai.chat.model.MessageAggregator()
+          .aggregate(model.stream(prompt), completed::set)
+          .blockLast(Duration.ofSeconds(10));
+      response = completed.get();
+    } else response = model.call(prompt);
+    assertThat(ResponsesTransportException.usage(response)).isEqualTo(expected);
+    var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
+    var restored = codec.decode(codec.encode(response.getResult().getOutput()));
+    assertThat(restored.getMetadata())
+        .containsEntry(dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY, expected);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "negative,false",
+    "negative,true",
+    "sum,false",
+    "cached,true",
+    "reasoning,false",
+    "fraction,false",
+    "fraction,true",
+    "overflow,false",
+    "typed,false",
+    "cachedFraction,true",
+    "detailType,true",
+    "cachedOverflow,false"
+  })
+  void invalidNativeUsageCannotBeRoundedStoredOrDispatched(String changed, boolean streaming)
+      throws Exception {
+    String raw =
+        switch (changed) {
+          case "negative" -> toolResponse().replace("\"input_tokens\":3", "\"input_tokens\":-1");
+          case "sum" -> toolResponse().replace("\"total_tokens\":5", "\"total_tokens\":4");
+          case "cached" -> toolResponse().replace("\"cached_tokens\":1", "\"cached_tokens\":4");
+          case "reasoning" ->
+              toolResponse().replace("\"reasoning_tokens\":1", "\"reasoning_tokens\":3");
+          case "fraction" -> toolResponse().replace("\"total_tokens\":5", "\"total_tokens\":5.5");
+          case "overflow" ->
+              toolResponse().replace("\"input_tokens\":3", "\"input_tokens\":18446744073709551619");
+          case "typed" -> toolResponse().replace("\"input_tokens\":3", "\"input_tokens\":\"3\"");
+          case "cachedFraction" ->
+              toolResponse().replace("\"cached_tokens\":1", "\"cached_tokens\":1.5");
+          case "detailType" ->
+              toolResponse()
+                  .replace(
+                      "\"input_tokens_details\":{\"cached_tokens\":1}",
+                      "\"input_tokens_details\":\"private-fixture\"");
+          case "cachedOverflow" ->
+              toolResponse()
+                  .replace("\"cached_tokens\":1", "\"cached_tokens\":18446744073709551617");
+          default -> throw new AssertionError(changed);
+        };
+    contentType = streaming ? "text/event-stream" : "application/json";
+    replies.add(streaming ? sse(raw) : raw);
+    var options = options();
+    var model = model(options);
+    var failure =
+        org.assertj.core.api.Assertions.catchThrowable(() -> {
+          if (streaming) {
+            var run =
+                new dev.mikoto2000.rei.core.chat.AgentRunContext(
+                    "usage-run",
+                    "session",
+                    java.nio.file.Path.of("."),
+                    "project",
+                    dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL,
+                    dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE);
+            new dev.mikoto2000.rei.core.chat.BoundedToolLoop()
+                .run(model, new Prompt("fixture", options), 2, run, () -> {})
+                .block(Duration.ofSeconds(10));
+          } else
+            new ToolLoopSupport()
+                .execute(
+                    new Prompt("fixture", options), model.call(new Prompt("fixture", options)));
+        });
+    assertThat(executions.get()).isZero();
+    assertThat(failure)
+        .isInstanceOf(ResponsesTransportException.class)
+        .hasMessageContaining("INVALID_RESPONSE")
+        .hasNoCause();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void nativeAssistantSurvivesSqliteRestartAndReplaysWithoutLosingUsageOrPayload(
+      boolean streaming, @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory)
+      throws Exception {
+    contentType = streaming ? "text/event-stream" : "application/json";
+    replies.add(streaming ? sse(reasoningDone()) : reasoningDone());
+    var options = options();
+    var model = model(options);
+    org.springframework.ai.chat.model.ChatResponse response;
+    if (streaming) {
+      var completed =
+          new java.util.concurrent.atomic.AtomicReference<
+              org.springframework.ai.chat.model.ChatResponse>();
+      new org.springframework.ai.chat.model.MessageAggregator()
+          .aggregate(model.stream(new Prompt("fixture", options)), completed::set)
+          .blockLast(Duration.ofSeconds(10));
+      response = completed.get();
+    } else response = model.call(new Prompt("fixture", options));
+    var original = response.getResult().getOutput();
+    var codec = new dev.mikoto2000.rei.modelmessage.ModelMessageCodec();
+    var source = new org.sqlite.SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + directory.resolve("messages.db"));
+    var store = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
+    var scope =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
+            "fixture-project", directory.toString(), "fixture-conversation");
+    var ref = store.save(scope, "fixture-run", "assistant", original);
+    var pointer = store.historyReference(scope, ref, "fixture-history");
+    var restored =
+        (AssistantMessage)
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source)
+                .restoreHistory(scope, pointer)
+                .orElseThrow();
+    assertThat(codec.encode(restored)).containsExactly(codec.encode(original));
+    assertThat(restored.getParts()).containsExactlyElementsOf(original.getParts());
+    var restoredResponse =
+        new org.springframework.ai.chat.model.ChatResponse(
+            List.of(new org.springframework.ai.chat.model.Generation(restored)));
+    assertThat(ResponsesTransportException.usage(restoredResponse))
+        .isEqualTo(new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(3L, 2L, 5L, 1L, 1L));
+    contentType = "application/json";
+    model.call(new Prompt(List.of(new UserMessage("fixture"), restored), options));
+    assertThat(requests).hasSize(2);
+    assertThat(requests.getLast().path("input").get(1).path("encrypted_content").asText())
+        .isEqualTo("opaque-bound");
+  }
+
   @Test
   void outputLimitReachesTheExistingRunHandoffAndTokenBudgetWithoutDispatch() throws Exception {
     contentType = "text/event-stream";
@@ -446,7 +610,7 @@ class ResponsesReplayContractTest {
         .isInstanceOf(ResponsesTransportException.class)
         .hasMessageContaining("INVALID_RESPONSE");
     assertThat(((ResponsesTransportException) failure).usage())
-        .isEqualTo(new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
+        .isEqualTo(new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(3L, 2L, 5L, 1L, 1L));
   }
 
   @org.junit.jupiter.params.ParameterizedTest
@@ -500,7 +664,7 @@ class ResponsesReplayContractTest {
         .blockLast(Duration.ofSeconds(10));
     var first = completed.get();
     assertThat(ResponsesTransportException.usage(first))
-        .isEqualTo(new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
+        .isEqualTo(new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(3L, 2L, 5L, 1L, 1L));
     assertThat(first.getResult().getOutput().getMetadata().get("rei.llm.replay-origin-owner"))
         .isEqualTo("fixture-owner");
     assertThat(first.getResult().getOutput().getParts()).hasSize(5);

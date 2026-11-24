@@ -175,7 +175,8 @@ class ResponsesTransportContractTest {
                     if (chunk.getMetadata().getUsage().getTotalTokens() > 0)
                       assertThat(ResponsesTransportException.usage(chunk.getMetadata().getUsage()))
                           .isEqualTo(
-                              new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
+                              new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(
+                                  3L, 2L, 5L, 1L, 1L));
                   }),
               completed::set)
           .blockLast();
@@ -184,7 +185,7 @@ class ResponsesTransportContractTest {
     assertThat(OutputLimitDetector.isOutputLimitReached(result)).isTrue();
     assertThat(result.getMetadata().getUsage().getTotalTokens()).isEqualTo(5);
     assertThat(ResponsesTransportException.usage(result))
-        .isEqualTo(new ResponsesTransportException.TokenUsage(3L, 2L, 5L, 1L, 1L));
+        .isEqualTo(new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(3L, 2L, 5L, 1L, 1L));
     assertThat(result.hasToolCalls()).isFalse();
   }
 
