@@ -468,7 +468,8 @@ public class LlmChatClientProvider {
                           .withToolDiscovery(toolDiscovery))
                   .defaultAdvisors(new RunAwareToolCallingAdvisor())
                   .defaultOptions(
-                      dev.mikoto2000.rei.modeloptions.ModelOptions.withTools(options, callbacks).mutate());
+                      dev.mikoto2000.rei.modeloptions.ModelOptions.withTools(options, callbacks)
+                          .mutate());
           if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY)
             builder.defaultSystem(
                 dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.INSTRUCTIONS);

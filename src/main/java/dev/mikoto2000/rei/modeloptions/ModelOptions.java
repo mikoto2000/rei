@@ -13,8 +13,8 @@ public final class ModelOptions {
   private ModelOptions() {}
 
   /** Select explicitly published callbacks using the native automatic function-call shape. */
-  public static ToolCallingChatOptions withTools(ToolCallingChatOptions options,
-      List<org.springframework.ai.tool.ToolCallback> callbacks) {
+  public static ToolCallingChatOptions withTools(
+      ToolCallingChatOptions options, List<org.springframework.ai.tool.ToolCallback> callbacks) {
     if (callbacks.isEmpty()) return withoutTools(options);
     if (options instanceof OpenAiResponsesChatOptions responses)
       return responses.mutate().toolCallbacks(callbacks).toolChoice("auto").build();
