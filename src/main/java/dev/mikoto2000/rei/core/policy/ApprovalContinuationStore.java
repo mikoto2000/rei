@@ -251,6 +251,12 @@ public class ApprovalContinuationStore {
         != 1) throw new IllegalStateException("Approval already has a continuation");
   }
 
+  public void save(String id, AgentRunContext owner, String request, List<Message> history,
+      RunContinuation.PendingTools pending, OutputLimitRunBudget.Snapshot budget, boolean managed,
+      ModelMessagePayloadStore.History protocolHistory) {
+    save(id, owner, request, history, pending, budget, managed);
+  }
+
   /** 行。 */
   private static final org.springframework.jdbc.core.RowMapper<Entry> ROW =
       (rs, n) ->

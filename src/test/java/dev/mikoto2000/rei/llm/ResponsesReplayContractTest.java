@@ -607,6 +607,8 @@ class ResponsesReplayContractTest {
     var currentOptions = models.requestOptions(LlmFeature.CHAT, null, true, current).mutate().toolCallbacks(callbacks).build();
     var currentExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
         currentOptions.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var currentInput = new UserMessage("current request");
+    var currentInputRef = currentExchange.withKey("current-input").reference(currentInput);
     var origin = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin) currentOptions.getToolContext()
         .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
     var grant = protocolStore.historyReplayGrant(currentExchange, List.of(pointer), origin);
@@ -620,7 +622,7 @@ class ResponsesReplayContractTest {
     String firstResult = callbacks.getFirst().call(firstCall.arguments());
     var completed = new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
         firstCall.id(), firstCall.name(), firstResult);
-    var prefixRef = currentExchange.withKey("prefix").reference(
+    var prefixRef = currentExchange.withKey(currentExchange.key() + "/prefix:1").reference(
         org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(List.of(completed)).build());
     var pending = new dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools(pendingMessage.getText(),
         pendingMessage.getToolCalls(), List.of(completed), java.util.Set.of(), pendingRef, prefixRef);
@@ -630,9 +632,13 @@ class ResponsesReplayContractTest {
     var budget = new OutputLimitRunBudget(2, 8);
     budget.tryConsumeLlmCall();
     budget.tryConsumeLlmCall();
+    var ownHistory = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(1, current.runId(), origin,
+        List.of(new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("current-input/USER", currentInputRef),
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(currentExchange.key() + "/ASSISTANT", pendingRef),
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(currentExchange.key() + "/TOOL", prefixRef)));
     approvals.save("approval", current, "current request", List.of(
         dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(original, 4),
-        new UserMessage("current request")), pending, budget.snapshot(), false);
+        currentInput), pending, budget.snapshot(), false, ownHistory);
     for (var kind : java.util.List.of(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY,
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN))
       protocolStore.release(previousExchange.scope(), originalRef, kind,
@@ -641,6 +647,8 @@ class ResponsesReplayContractTest {
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, current.runId());
     var restarted = new dev.mikoto2000.rei.core.policy.ApprovalContinuationStore(source);
     var saved = restarted.saved(restarted.find("approval").orElseThrow());
+    assertThat(saved.protocolHistory()).as("own input and protocol trace survive approval storage restart")
+        .isEqualTo(ownHistory);
     var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(current.runId(),
         new OutputLimitRunBudget(2, 8), new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
         new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
@@ -658,6 +666,7 @@ class ResponsesReplayContractTest {
       return;
     }
     execution.setModelOptions(currentOptions);
+    assertThat(execution.progressSnapshot().protocolHistory()).isEqualTo(ownHistory);
     assertThat(execution.modelOptions().getToolContext()
         .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY))
         .as("restore verified replay authority before remaining callback dispatch").isNotNull();
