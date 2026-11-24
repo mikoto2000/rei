@@ -20,6 +20,53 @@ class ModelMessagePayloadStoreTest {
   private final ModelMessagePayloadStore.Scope owner =
       new ModelMessagePayloadStore.Scope("project", "root", "conversation");
 
+  @Test
+  void springLeavesPayloadSchemaUninitializedUntilUsedAndInjectsExistingHistoryAndMaintenance() throws Exception {
+    try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(temporary)) { migration.prepare(); }
+    var turns = dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory();
+    try (var context = new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {
+      context.registerBean("memoryConsolidationDataSource", javax.sql.DataSource.class, this::source);
+      context.register(ModelMessagePayloadStore.class);
+      context.registerBean(dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.class, () ->
+          new dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor(turns,
+              dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build(),
+              new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(temporary)));
+      context.registerBean(dev.mikoto2000.rei.storage.StorageMaintenance.class, () ->
+          new dev.mikoto2000.rei.storage.StorageMaintenance(new dev.mikoto2000.rei.storage.StorageObjectRegistry(temporary)));
+      context.refresh();
+      try (var db = source().getConnection(); var query = db.createStatement();
+          var row = query.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE name='model_message_schema'")) {
+        assertThat(row.next()).isTrue();
+        assertThat(row.getInt(1)).isZero();
+      }
+      var store = context.getBean(ModelMessagePayloadStore.class);
+      var current = new dev.mikoto2000.rei.core.chat.AgentRunContext("current", "conversation", temporary);
+      var old = new dev.mikoto2000.rei.core.chat.AgentRunContext("old", "conversation", temporary);
+      var scope = ModelMessagePayloadStore.Scope.forOwner(current);
+      var input = AssistantMessage.builder().parts(message().getParts().subList(0, 2))
+          .properties(message().getMetadata()).build();
+      var ref = store.save(scope, "old", "one", input);
+      var metadata = store.historyReference(scope, ref, "turn:old");
+      turns.start(old, "old request");
+      turns.recordMetadata(old, metadata);
+      turns.finish(old, dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED, "display fixture");
+      var request = org.springframework.ai.chat.client.ChatClientRequest.builder()
+          .prompt(new org.springframework.ai.chat.prompt.Prompt(new org.springframework.ai.chat.messages.UserMessage("current request")))
+          .context(Map.of(org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID, "conversation",
+              dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName(), current)).build();
+      var messages = context.getBean(dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.class)
+          .before(request, null).prompt().getInstructions();
+      var restored = (AssistantMessage) messages.stream().filter(m -> m instanceof AssistantMessage).findFirst().orElseThrow();
+      assertThat(restored.getParts()).containsExactlyElementsOf(input.getParts());
+      store.save(scope, "old", "orphan", input);
+      try (var db = source().getConnection(); var query = db.createStatement()) {
+        query.executeUpdate("UPDATE model_message_payloads SET staged_until=0");
+      }
+      assertThat(context.getBean(dev.mikoto2000.rei.storage.StorageMaintenance.class).collectModelMessageOrphans()).isEqualTo(1);
+      assertThat(((AssistantMessage) store.load(scope, ref)).getParts()).containsExactlyElementsOf(input.getParts());
+    }
+  }
+
   static class Time extends java.time.Clock {
     java.time.Instant now = java.time.Instant.parse("2026-11-24T00:00:00Z");
 
@@ -282,32 +329,49 @@ class ModelMessagePayloadStoreTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-  void theExistingToolLoopUsesRealDurableAssistantAndResultBoundaries(boolean resultCapacityFailure) {
+  void theExistingToolLoopUsesRealDurableAssistantAndResultBoundaries(
+      boolean resultCapacityFailure) {
     int assistantSize = new ModelMessageCodec().encode(message()).length;
     var store = store(new Time(), resultCapacityFailure ? assistantSize : 100_000, 1_000_000);
     var calls = new java.util.concurrent.atomic.AtomicInteger();
-    var callback = new org.springframework.ai.tool.ToolCallback() {
-      @Override public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
-        return org.springframework.ai.tool.definition.ToolDefinition.builder().name("fixture")
-            .description("fixture").inputSchema("{}").build();
-      }
-      @Override public String call(String arguments) {
-        assertThat(store.usage(owner, "run").referenceCount()).isEqualTo(1);
-        var saved = store.save(owner, "run", "iteration/ASSISTANT", message());
-        assertThat(((AssistantMessage) store.load(owner, saved)).getParts()).containsExactlyElementsOf(message().getParts());
-        calls.incrementAndGet();
-        return "fixture result";
-      }
-    };
-    var prompt = new org.springframework.ai.chat.prompt.Prompt("fixture request",
-        org.springframework.ai.openai.OpenAiChatOptions.builder().toolCallbacks(callback)
-            .toolContext(Map.of(ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
-                new ModelMessagePayloadStore.Exchange(store, owner, "run", "iteration"))).build());
-    var response = new org.springframework.ai.chat.model.ChatResponse(List.of(
-        new org.springframework.ai.chat.model.Generation(message())));
+    var callback =
+        new org.springframework.ai.tool.ToolCallback() {
+          @Override
+          public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
+            return org.springframework.ai.tool.definition.ToolDefinition.builder()
+                .name("fixture")
+                .description("fixture")
+                .inputSchema("{}")
+                .build();
+          }
+
+          @Override
+          public String call(String arguments) {
+            assertThat(store.usage(owner, "run").referenceCount()).isEqualTo(1);
+            var saved = store.save(owner, "run", "iteration/ASSISTANT", message());
+            assertThat(((AssistantMessage) store.load(owner, saved)).getParts())
+                .containsExactlyElementsOf(message().getParts());
+            calls.incrementAndGet();
+            return "fixture result";
+          }
+        };
+    var prompt =
+        new org.springframework.ai.chat.prompt.Prompt(
+            "fixture request",
+            org.springframework.ai.openai.OpenAiChatOptions.builder()
+                .toolCallbacks(callback)
+                .toolContext(
+                    Map.of(
+                        ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+                        new ModelMessagePayloadStore.Exchange(store, owner, "run", "iteration")))
+                .build());
+    var response =
+        new org.springframework.ai.chat.model.ChatResponse(
+            List.of(new org.springframework.ai.chat.model.Generation(message())));
     var loop = new dev.mikoto2000.rei.core.chat.ToolLoopSupport();
     if (resultCapacityFailure) {
-      assertThatThrownBy(() -> loop.execute(prompt, response)).hasMessage("Model message persistence rejected");
+      assertThatThrownBy(() -> loop.execute(prompt, response))
+          .hasMessage("Model message persistence rejected");
       assertThat(calls).hasValue(1);
       assertThat(store.usage(owner, "run").payloadCount()).isEqualTo(1);
     } else {
@@ -409,12 +473,18 @@ class ModelMessagePayloadStoreTest {
     var store = store(time, 100_000, 1_000_000);
     store.save(owner, "run", "orphan", message());
     var protectedRef = store.save(owner, "run", "protected", message());
-    store.publish(owner, protectedRef, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
+    store.publish(
+        owner, protectedRef, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
     time.expire();
-    try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(temporary)) { migration.prepare(); }
-    var maintenance = new dev.mikoto2000.rei.storage.StorageMaintenance(
-        new dev.mikoto2000.rei.storage.StorageObjectRegistry(temporary), store::collectExpired);
-    var command = new picocli.CommandLine(new dev.mikoto2000.rei.core.command.StorageCommand(null, null, maintenance, null));
+    try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(temporary)) {
+      migration.prepare();
+    }
+    var maintenance =
+        new dev.mikoto2000.rei.storage.StorageMaintenance(
+            new dev.mikoto2000.rei.storage.StorageObjectRegistry(temporary), store::collectExpired);
+    var command =
+        new picocli.CommandLine(
+            new dev.mikoto2000.rei.core.command.StorageCommand(null, null, maintenance, null));
     var output = new java.io.StringWriter();
     command.setOut(new java.io.PrintWriter(output));
     command.setErr(new java.io.PrintWriter(output));
@@ -544,17 +614,21 @@ class ModelMessagePayloadStoreTest {
     var metadata = store.historyReference(owner, ref, "turn:run:one");
     assertThat(metadata).hasSize(3).doesNotContainValue("opaque fixture bytes");
     var restarted = new ModelMessagePayloadStore(source());
-    assertThat(((AssistantMessage) restarted.restoreHistory(owner, metadata).orElseThrow()).getParts())
+    assertThat(
+            ((AssistantMessage) restarted.restoreHistory(owner, metadata).orElseThrow()).getParts())
         .containsExactlyElementsOf(message().getParts());
     assertThat(restarted.restoreHistory(null, Map.of("source", "legacy"))).isEmpty();
     var partial = new java.util.HashMap<>(metadata);
     partial.remove(ModelMessagePayloadStore.HISTORY_HASH);
-    assertThatThrownBy(() -> restarted.restoreHistory(owner, partial)).hasMessage("Model message persistence rejected");
+    assertThatThrownBy(() -> restarted.restoreHistory(owner, partial))
+        .hasMessage("Model message persistence rejected");
     var unpublished = new java.util.HashMap<>(metadata);
     unpublished.put(ModelMessagePayloadStore.HISTORY_OWNER, "different-owner");
-    assertThatThrownBy(() -> restarted.restoreHistory(owner, unpublished)).hasMessage("Model message persistence rejected");
+    assertThatThrownBy(() -> restarted.restoreHistory(owner, unpublished))
+        .hasMessage("Model message persistence rejected");
     store.release(owner, ref, ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:run:one");
-    assertThatThrownBy(() -> restarted.restoreHistory(owner, metadata)).hasMessage("Model message persistence rejected");
+    assertThatThrownBy(() -> restarted.restoreHistory(owner, metadata))
+        .hasMessage("Model message persistence rejected");
   }
 
   @Test
