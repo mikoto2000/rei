@@ -29,7 +29,7 @@ class LlmImagePromptEnhancerTest {
     LlmModelProvider modelProvider = mock(LlmModelProvider.class);
     ModelHolderService modelHolderService = mock(ModelHolderService.class);
     when(modelHolderService.get()).thenReturn("default-chat-model");
-    when(modelProvider.chatOptions(LlmFeature.IMAGE_PROMPT, "default-chat-model"))
+    when(modelProvider.requestOptions(LlmFeature.IMAGE_PROMPT, "default-chat-model", false))
         .thenReturn(OpenAiChatOptions.builder().model("prompt-model").maxTokens(8192).build());
     when(modelProvider.chatModel(LlmFeature.IMAGE_PROMPT)).thenReturn(chatModel);
     when(chatModel.call(any(Prompt.class)))

@@ -10,7 +10,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.stereotype.Component;
 
 /** 言語モデルSummarizationを外部の接続先へ依頼する窓口。 */
@@ -20,7 +20,7 @@ public class LlmSummarizationClient implements SummarizationClient {
   /** モデル提供元。 */
   private final Supplier<ChatModel> featureModel;
 
-  private final Function<String, OpenAiChatOptions> optionsForModel;
+  private final Function<String, ToolCallingChatOptions> optionsForModel;
 
   /** モデル保持先サービス。 */
   private final Supplier<String> readSelectedModel;
@@ -30,7 +30,7 @@ public class LlmSummarizationClient implements SummarizationClient {
       LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
     this.featureModel = () -> modelProvider.chatModel(LlmFeature.WEB_PAGE_SUMMARY);
     this.optionsForModel =
-        selected -> modelProvider.chatOptions(LlmFeature.WEB_PAGE_SUMMARY, selected, false);
+        selected -> dev.mikoto2000.rei.modeloptions.ModelOptions.singleRequest(modelProvider.requestOptions(LlmFeature.WEB_PAGE_SUMMARY, selected, false));
     this.readSelectedModel = () -> modelHolderService.get();
   }
 

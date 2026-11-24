@@ -105,6 +105,33 @@ public final class ModelOptions {
     }
   }
 
+  /** A one-shot feature call owns no conversation replay or durable tool-loop authority. */
+  public static ToolCallingChatOptions singleRequest(ToolCallingChatOptions options) {
+    return singleRequest(options, java.util.Map.of());
+  }
+
+  public static ToolCallingChatOptions singleRequest(ToolCallingChatOptions options, java.util.Map<String,Object> callerContext) {
+    var clean = withoutTools(options);
+    var context = new java.util.HashMap<String, Object>(callerContext);
+    for (String key : List.of("rei.llm.replay-owner", ENDPOINT_CONTEXT_KEY, MAX_TOOLS_CONTEXT_KEY,
+        PREPARATION_CONTEXT_KEY,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY)) context.remove(key);
+    if (!(clean instanceof OpenAiResponsesChatOptions)) {
+      if (clean.getToolContext()!=null) context.putAll(clean.getToolContext());
+      return clean.mutate().toolContext(null).toolContext(context).build();
+    }
+    if (clean.getToolContext() != null) context.putAll(clean.getToolContext());
+    for (String key : List.of("rei.llm.replay-owner",
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY))
+      if (context.containsKey(key)) throw new IllegalArgumentException("A feature request cannot inherit replay authority");
+    context.put("rei.llm.replay-owner", "feature:" + java.util.UUID.randomUUID());
+    return clean.mutate().toolContext(null).toolContext(context).build();
+  }
+
   /** Select explicitly published callbacks using the native automatic function-call shape. */
   public static ToolCallingChatOptions withTools(
       ToolCallingChatOptions options, List<org.springframework.ai.tool.ToolCallback> callbacks) {
