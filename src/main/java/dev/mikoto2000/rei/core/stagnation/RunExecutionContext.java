@@ -355,7 +355,13 @@ public class RunExecutionContext {
         || !dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner)
             .equals(exchange.scope()))
       throw new IllegalStateException("Protocol Run cleanup ownership mismatch");
-    exchange.store().releaseRun(exchange.scope(), runId);
+    try {
+      exchange.store().releaseRun(exchange.scope(), runId);
+    } catch (RuntimeException retentionFailure) {
+      // The durable outcome is already committed. Keep the conservative lease on cleanup failure.
+      org.slf4j.LoggerFactory.getLogger(RunExecutionContext.class)
+          .warn("Completed model message leases retained after cleanup failure");
+    }
   }
 
   /** Save the original resolved input, including media, before sending or decorating it. */
