@@ -93,7 +93,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   private final java.util.function.Supplier<java.time.Duration> readTimeout;
   private final java.util.function.IntSupplier defaultOutputTokens;
   private final Integer defaultMaxTools;
-  private java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
+  private java.util.List<
+          org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
       responsesFixtureCustomizers;
 
   /** 実行状況の通知を生成する窓口。 */
@@ -153,7 +154,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
       baseUrl = defaults.getBaseUrl();
       if (temperature == null) temperature = defaults.getTemperature();
     }
-    var api = server == null || server.getApi() == null ? LlmApiType.CHAT_COMPLETIONS : server.getApi();
+    var api =
+        server == null || server.getApi() == null ? LlmApiType.CHAT_COMPLETIONS : server.getApi();
     if (api == LlmApiType.RESPONSES && server.getReasoningReplay() == null)
       throw new IllegalStateException("Responses replay mode is required");
     return new ResolvedLlmEndpoint(
@@ -163,8 +165,10 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         baseUrl,
         custom ? "feature:" + feature : "default",
         model,
-        new LlmCapabilities(api == LlmApiType.RESPONSES ? server.getReasoningReplay() : ReasoningReplayMode.NONE,
-            maxTools(server), api == LlmApiType.RESPONSES ? server.getSupportedSettings() : java.util.Set.of()),
+        new LlmCapabilities(
+            api == LlmApiType.RESPONSES ? server.getReasoningReplay() : ReasoningReplayMode.NONE,
+            maxTools(server),
+            api == LlmApiType.RESPONSES ? server.getSupportedSettings() : java.util.Set.of()),
         maxOutputTokens(server),
         temperature,
         readTimeout.get());
@@ -175,8 +179,10 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
 
   /** Owned transport fixture only; never reachable from configuration or production wiring. */
   static LlmModelProvider forResponsesFixture(
-      ChatModel defaults, LlmProperties properties,
-      java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> customizers) {
+      ChatModel defaults,
+      LlmProperties properties,
+      java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
+          customizers) {
     var provider = new LlmModelProvider(defaults, properties);
     provider.responsesFixtureCustomizers = java.util.List.copyOf(customizers);
     return provider;
@@ -220,7 +226,9 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         throw new IllegalStateException("Responses voice correction is unavailable");
       server = resolvedServer(LlmFeature.CHAT);
     }
-    if (server != null && server.getApi() == LlmApiType.RESPONSES && responsesFixtureCustomizers != null) return;
+    if (server != null
+        && server.getApi() == LlmApiType.RESPONSES
+        && responsesFixtureCustomizers != null) return;
     if ((server != null && server.getApi() == LlmApiType.RESPONSES)
         || ((server == null || !server.hasCustomServer() || server.isFallbackToDefault())
             && defaultChatModel != null
@@ -267,19 +275,30 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   private ChatModel createFeatureModel(String feature) {
     var nativeServer = resolvedServer(feature);
     if (nativeServer != null && nativeServer.getApi() == LlmApiType.RESPONSES) {
-      if (!nativeServer.hasCustomServer() || nativeServer.getModel() == null || nativeServer.getModel().isBlank()
+      if (!nativeServer.hasCustomServer()
+          || nativeServer.getModel() == null
+          || nativeServer.getModel().isBlank()
           || nativeServer.isFallbackToDefault())
-        throw new IllegalStateException("Responses requires an explicit endpoint/model without fallback");
+        throw new IllegalStateException(
+            "Responses requires an explicit endpoint/model without fallback");
       var endpoint = resolvedEndpoint(feature);
       var host = java.net.URI.create(endpoint.baseUrl()).getHost();
-      if (host == null || !(host.endsWith(".invalid") || java.util.Set.of("localhost", "127.0.0.1", "::1", "[::1]").contains(host)))
+      if (host == null
+          || !(host.endsWith(".invalid")
+              || java.util.Set.of("localhost", "127.0.0.1", "::1", "[::1]").contains(host)))
         throw new IllegalStateException("Responses fixture endpoint must be owned locally");
       if (endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT)
         throw new IllegalStateException("Responses plaintext replay is unavailable");
-      var builder = org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
-          .baseUrl(endpoint.baseUrl()).apiKey(nativeServer.getApiKey() == null ? "fixture-key" : nativeServer.getApiKey())
-          .model(endpoint.model()).temperature(endpoint.temperature()).maxOutputTokens(endpoint.maxOutputTokens())
-          .maxRetries(0).timeout(endpoint.readTimeout()).strict(false);
+      var builder =
+          org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+              .baseUrl(endpoint.baseUrl())
+              .apiKey(nativeServer.getApiKey() == null ? "fixture-key" : nativeServer.getApiKey())
+              .model(endpoint.model())
+              .temperature(endpoint.temperature())
+              .maxOutputTokens(endpoint.maxOutputTokens())
+              .maxRetries(0)
+              .timeout(endpoint.readTimeout())
+              .strict(false);
       var context = new java.util.HashMap<String, Object>();
       context.put(ResolvedLlmEndpoint.CONTEXT_KEY, endpoint);
       if (endpoint.capabilities().maxTools() != null)
@@ -365,32 +384,48 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     return model;
   }
 
-  private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> modelPayloads;
+  private org.springframework.beans.factory.ObjectProvider<
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore>
+      modelPayloads;
 
   @Autowired
-  void configureModelMessagePayloads(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> payloads) {
+  void configureModelMessagePayloads(
+      org.springframework.beans.factory.ObjectProvider<
+              dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore>
+          payloads) {
     modelPayloads = payloads;
   }
 
   /** Accepted Run options; no provider state is added to the public Run context. */
   public org.springframework.ai.model.tool.ToolCallingChatOptions requestOptions(
-      String feature, String selected, boolean streamUsage, dev.mikoto2000.rei.tooldelivery.ReadingRun owner) {
+      String feature,
+      String selected,
+      boolean streamUsage,
+      dev.mikoto2000.rei.tooldelivery.ReadingRun owner) {
     var options = requestOptions(feature, selected, streamUsage);
-    if (!(options instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)) return options;
+    if (!(options instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions))
+      return options;
     var context = new java.util.HashMap<String, Object>();
     if (options.getToolContext() != null) context.putAll(options.getToolContext());
     if (!(context.get(ResolvedLlmEndpoint.CONTEXT_KEY) instanceof ResolvedLlmEndpoint endpoint)
         || endpoint.apiType() != LlmApiType.RESPONSES)
       throw new IllegalStateException("Native Run endpoint snapshot is unavailable");
-    for (String key : java.util.List.of(ResponsesReasoningReplay.OWNER_CONTEXT_KEY,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY))
-      if (context.containsKey(key)) throw new IllegalStateException("Native Run options must not inherit protocol authority");
-    if (modelPayloads == null) throw new IllegalStateException("Native model payload storage is unavailable");
+    for (String key :
+        java.util.List.of(
+            ResponsesReasoningReplay.OWNER_CONTEXT_KEY,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY))
+      if (context.containsKey(key))
+        throw new IllegalStateException("Native Run options must not inherit protocol authority");
+    if (modelPayloads == null)
+      throw new IllegalStateException("Native model payload storage is unavailable");
     var exchange = modelPayloads.getObject().newExchange(owner);
-    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
-        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(exchange.ownerKey(), endpoint.fingerprint()));
-    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
+    context.put(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+            exchange.ownerKey(), endpoint.fingerprint()));
+    context.put(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
     return options.mutate().toolContext(null).toolContext(context).build();
   }
 
@@ -400,7 +435,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     requireAvailableProtocol(feature);
     var server = resolvedServer(feature);
     if (server != null && server.getApi() == LlmApiType.RESPONSES) {
-      if (!(chatModel(feature).getOptions() instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions options))
+      if (!(chatModel(feature).getOptions()
+          instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions options))
         throw new IllegalStateException("Responses native request options are unavailable");
       return options.mutate().build();
     }
@@ -472,35 +508,38 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   }
 
   private final Map<String, ChatModel> privateSecretaryModels = new ConcurrentHashMap<>();
+  private final Object privateSecretaryModelLock = new Object();
 
   /** No capture, fallback, memory advisors, observations or tool callbacks for private evidence. */
-  public synchronized ChatModel privateSecretaryModel(String expectedFingerprint) {
-    var server = featureSettings.apply("secretary-reply");
-    var descriptor = privateSecretaryDescriptor(server);
-    if (descriptor == null || !descriptor.fingerprint().equals(expectedFingerprint))
-      throw new IllegalStateException("Private model configuration changed or unavailable");
-    if (privateSecretaryModels.containsKey(expectedFingerprint))
-      return privateSecretaryModels.get(expectedFingerprint);
-    if (!privateSecretaryModels.isEmpty())
-      throw new IllegalStateException("Private model changes require restarting the application");
-    var options =
-        chatOptionsBuilder(server, server.getModel())
-            .maxRetries(0)
-            .timeout(java.time.Duration.ofSeconds(45))
-            .baseUrl(OpenAiCompatibleEndpoint.baseUrl(server.getBaseUrl()))
-            .apiKey(
-                server.getApiKey() == null || server.getApiKey().isBlank()
-                    ? "dummy-key"
-                    : server.getApiKey())
-            .build();
-    var model =
-        OpenAiChatModel.builder()
-            .options(options)
-            .observationRegistry(ObservationRegistry.NOOP)
-            .build();
-    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
-    privateSecretaryModels.put(expectedFingerprint, model);
-    return model;
+  public ChatModel privateSecretaryModel(String expectedFingerprint) {
+    synchronized (privateSecretaryModelLock) {
+      var server = featureSettings.apply("secretary-reply");
+      var descriptor = privateSecretaryDescriptor(server);
+      if (descriptor == null || !descriptor.fingerprint().equals(expectedFingerprint))
+        throw new IllegalStateException("Private model configuration changed or unavailable");
+      if (privateSecretaryModels.containsKey(expectedFingerprint))
+        return privateSecretaryModels.get(expectedFingerprint);
+      if (!privateSecretaryModels.isEmpty())
+        throw new IllegalStateException("Private model changes require restarting the application");
+      var options =
+          chatOptionsBuilder(server, server.getModel())
+              .maxRetries(0)
+              .timeout(java.time.Duration.ofSeconds(45))
+              .baseUrl(OpenAiCompatibleEndpoint.baseUrl(server.getBaseUrl()))
+              .apiKey(
+                  server.getApiKey() == null || server.getApiKey().isBlank()
+                      ? "dummy-key"
+                      : server.getApiKey())
+              .build();
+      var model =
+          OpenAiChatModel.builder()
+              .options(options)
+              .observationRegistry(ObservationRegistry.NOOP)
+              .build();
+      dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+      privateSecretaryModels.put(expectedFingerprint, model);
+      return model;
+    }
   }
 
   /** 新たな対象を利用できるよう、開始AI互換応答生成に使うモデルを作成する。 */
