@@ -29,31 +29,59 @@ class ToolLoopPartsTest {
     source.setUrl("jdbc:sqlite:" + directory.resolve("messages.db"));
     var owner = new AgentRunContext("run", "session", directory);
     var store = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
-    var boundary = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(store,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner), "run", "iteration");
-    var options = ((org.springframework.ai.model.tool.ToolCallingChatOptions) prompt.getOptions()).mutate()
-        .toolContext(Map.of(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, boundary)).build();
+    var boundary =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
+            store,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(owner),
+            "run",
+            "iteration");
+    var options =
+        ((org.springframework.ai.model.tool.ToolCallingChatOptions) prompt.getOptions())
+            .mutate()
+            .toolContext(
+                Map.of(
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+                    boundary))
+            .build();
     return new Prompt(prompt.getInstructions(), options);
   }
+
   @Test
   void protocolPartsCannotReachToolsWithoutDurablePersistence() {
     var executions = new AtomicInteger();
-    var callback = new ToolCallback() {
-      public ToolDefinition getToolDefinition() {
-        return ToolDefinition.builder().name("fixture_tool").description("fixture")
-            .inputSchema("{\"type\":\"object\"}").build();
-      }
-      public String call(String input) { executions.incrementAndGet(); return "fixture"; }
-    };
-    var assistant = AssistantMessage.builder().parts(List.of(
-        new ReasoningPart("", "", new OpaquePayload("fixture", "encrypted_content", "opaque-fixture"),
-            Map.of("itemId", "reasoning")),
-        ToolCallPart.of(new AssistantMessage.ToolCall("call", "function", "fixture_tool", "{}"))))
-        .build();
+    var callback =
+        new ToolCallback() {
+          public ToolDefinition getToolDefinition() {
+            return ToolDefinition.builder()
+                .name("fixture_tool")
+                .description("fixture")
+                .inputSchema("{\"type\":\"object\"}")
+                .build();
+          }
+
+          public String call(String input) {
+            executions.incrementAndGet();
+            return "fixture";
+          }
+        };
+    var assistant =
+        AssistantMessage.builder()
+            .parts(
+                List.of(
+                    new ReasoningPart(
+                        "",
+                        "",
+                        new OpaquePayload("fixture", "encrypted_content", "opaque-fixture"),
+                        Map.of("itemId", "reasoning")),
+                    ToolCallPart.of(
+                        new AssistantMessage.ToolCall("call", "function", "fixture_tool", "{}"))))
+            .build();
     var prompt = new Prompt("fixture", OpenAiChatOptions.builder().toolCallbacks(callback).build());
-    assertThatThrownBy(() -> new ToolLoopSupport().execute(prompt,
-        new ChatResponse(List.of(new Generation(assistant)))))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("persistence");
+    assertThatThrownBy(() ->
+            new ToolLoopSupport()
+                .execute(prompt, new ChatResponse(List.of(new Generation(assistant)))))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("persistence");
     assertThat(executions).hasValue(0);
   }
 
@@ -162,7 +190,8 @@ class ToolLoopPartsTest {
             List.of(new org.springframework.ai.chat.messages.UserMessage("fixture"), page),
             OpenAiChatOptions.builder().toolCallbacks(callback).build());
     var result =
-        new ToolLoopSupport().execute(durable(prompt), new ChatResponse(List.of(new Generation(assistant))));
+        new ToolLoopSupport()
+            .execute(durable(prompt), new ChatResponse(List.of(new Generation(assistant))));
     assertThat(seen.get()).contains("\"offset\":48", "\"expectedVersion\":\"" + version + "\"");
     var saved = (AssistantMessage) result.conversationHistory().get(2);
     assertThat(saved.getParts()).hasSize(3);
@@ -218,7 +247,8 @@ class ToolLoopPartsTest {
             .build();
     var prompt = new Prompt("fixture", OpenAiChatOptions.builder().toolCallbacks(callback).build());
     var result =
-        new ToolLoopSupport().execute(durable(prompt), new ChatResponse(List.of(new Generation(assistant))));
+        new ToolLoopSupport()
+            .execute(durable(prompt), new ChatResponse(List.of(new Generation(assistant))));
     assertThat(executions.get()).isEqualTo(2);
     var saved = (AssistantMessage) result.conversationHistory().get(1);
     assertThat(saved.getParts()).containsExactlyElementsOf(assistant.getParts());

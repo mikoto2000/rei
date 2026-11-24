@@ -22,19 +22,25 @@ public final class ToolLoopSupport {
   public static Prompt newIteration(Prompt prompt) {
     var boundary = exchange(prompt);
     if (boundary == null) return prompt;
-    return withExchange(prompt, new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
-        boundary.store(), boundary.scope(), boundary.run(), java.util.UUID.randomUUID().toString()));
+    return withExchange(
+        prompt,
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
+            boundary.store(),
+            boundary.scope(),
+            boundary.run(),
+            java.util.UUID.randomUUID().toString()));
   }
 
-  private static Prompt withExchange(Prompt prompt,
-      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange boundary) {
+  private static Prompt withExchange(
+      Prompt prompt, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange boundary) {
     if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
       throw new IllegalStateException("Missing model message persistence options");
     var values = options.getToolContext();
-    if (values == null) throw new IllegalStateException("Missing model message persistence context");
+    if (values == null)
+      throw new IllegalStateException("Missing model message persistence context");
     var context = new java.util.HashMap<String, Object>(values);
-    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
-        boundary);
+    context.put(
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, boundary);
     return new Prompt(prompt.getInstructions(), options.mutate().toolContext(context).build());
   }
 
@@ -165,23 +171,26 @@ public final class ToolLoopSupport {
   private static dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref persist(
       Prompt prompt, org.springframework.ai.chat.messages.Message message) {
     var boundary = exchange(prompt);
-    if (boundary == null && dev.mikoto2000.rei.modelmessage.ModelMessageCodec.requiresPayload(message))
+    if (boundary == null
+        && dev.mikoto2000.rei.modelmessage.ModelMessageCodec.requiresPayload(message))
       throw new IllegalStateException("Model message persistence required before tool dispatch");
     return boundary == null ? null : boundary.reference(message);
   }
 
-  private static void requireSavedOrigin(Prompt prompt, org.springframework.ai.chat.messages.AssistantMessage message) {
+  private static void requireSavedOrigin(
+      Prompt prompt, org.springframework.ai.chat.messages.AssistantMessage message) {
     var origin = message.getMetadata();
-    if (!origin.containsKey("rei.llm.replay-origin-owner") && !origin.containsKey("rei.llm.replay-origin-endpoint")) return;
+    if (!origin.containsKey("rei.llm.replay-origin-owner")
+        && !origin.containsKey("rei.llm.replay-origin-endpoint")) return;
     var options = prompt.getOptions();
     var context = options instanceof ToolCallingChatOptions tools ? tools.getToolContext() : null;
     if (context == null
-        || !(context.get(dev.mikoto2000.rei.llm.ResolvedLlmEndpoint.CONTEXT_KEY)
-            instanceof dev.mikoto2000.rei.llm.ResolvedLlmEndpoint endpoint)
-        || !(context.get("rei.llm.replay-owner") instanceof String owner) || owner.isBlank()
-        || !owner.equals(origin.get("rei.llm.replay-origin-owner"))
-        || !endpoint.fingerprint().equals(origin.get("rei.llm.replay-origin-endpoint")))
+          || !(context.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY)
+              instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin binding)
+          || (context.containsKey("rei.llm.replay-owner")
+              && !binding.owner().equals(context.get("rei.llm.replay-owner"))))
       throw new IllegalStateException("Model message origin mismatch");
+      binding.requireMatch(message);
   }
 
   private static boolean truncated(ChatResponse response) {
@@ -236,8 +245,11 @@ public final class ToolLoopSupport {
     return deliveryMetadata(prompt, result, argumentCorrections, null);
   }
 
-  private ToolExecutionResult deliveryMetadata(Prompt prompt, ToolExecutionResult result,
-      java.util.Set<String> argumentCorrections, ToolResponseMessage savedPrefix) {
+  private ToolExecutionResult deliveryMetadata(
+      Prompt prompt,
+      ToolExecutionResult result,
+      java.util.Set<String> argumentCorrections,
+      ToolResponseMessage savedPrefix) {
     if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return result;
     var toolCallbacks = options.getToolCallbacks();
     if (toolCallbacks == null) return result;
@@ -314,10 +326,18 @@ public final class ToolLoopSupport {
     return ToolExecutionResult.builder().conversationHistory(history).returnDirect(direct).build();
   }
 
-  private static void restorePrefixDelivery(java.util.Map<String, Object> metadata, ToolResponseMessage prefix) {
-    var ids = prefix.getResponses().stream().map(ToolResponseMessage.ToolResponse::id)
-        .collect(java.util.stream.Collectors.toSet());
-    for (var key : java.util.List.of("rei.deliveryPolicies", "rei.losslessPages", "rei.reviewReceipts", "rei.fileReadBudgets")) {
+  private static void restorePrefixDelivery(
+      java.util.Map<String, Object> metadata, ToolResponseMessage prefix) {
+    var ids =
+        prefix.getResponses().stream()
+            .map(ToolResponseMessage.ToolResponse::id)
+            .collect(java.util.stream.Collectors.toSet());
+    for (var key :
+        java.util.List.of(
+            "rei.deliveryPolicies",
+            "rei.losslessPages",
+            "rei.reviewReceipts",
+            "rei.fileReadBudgets")) {
       var merged = new java.util.HashMap<String, Object>();
       if (metadata.get(key) instanceof java.util.Map<?, ?> current)
         current.forEach((id, value) -> {
@@ -333,17 +353,35 @@ public final class ToolLoopSupport {
   }
 
   private dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref preserveApprovalPrefix(
-      Prompt prompt, RunContinuation.PendingTools pending,
-      java.util.List<ToolResponseMessage.ToolResponse> completed, java.util.Set<String> corrections,
+      Prompt prompt,
+      RunContinuation.PendingTools pending,
+      java.util.List<ToolResponseMessage.ToolResponse> completed,
+      java.util.Set<String> corrections,
       ToolResponseMessage savedPrefix) {
     if (pending.assistantReference() == null || completed.isEmpty()) return null;
-    var boundary = java.util.Objects.requireNonNull(exchange(prompt), "Missing model message persistence boundary");
-    var prefixPrompt = withExchange(prompt, new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
-        boundary.store(), boundary.scope(), boundary.run(), boundary.key() + "/prefix:" + completed.size()));
-    var result = deliveryMetadata(prefixPrompt, ToolExecutionResult.builder()
-        .conversationHistory(java.util.List.of(ToolResponseMessage.builder().responses(completed).build()))
-        .returnDirect(false).build(), corrections, savedPrefix);
-    return java.util.Objects.requireNonNull(exchange(prefixPrompt)).reference(result.conversationHistory().getLast());
+    var boundary =
+        java.util.Objects.requireNonNull(
+            exchange(prompt), "Missing model message persistence boundary");
+    var prefixPrompt =
+        withExchange(
+            prompt,
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange(
+                boundary.store(),
+                boundary.scope(),
+                boundary.run(),
+                boundary.key() + "/prefix:" + completed.size()));
+    var result =
+        deliveryMetadata(
+            prefixPrompt,
+            ToolExecutionResult.builder()
+                .conversationHistory(
+                    java.util.List.of(ToolResponseMessage.builder().responses(completed).build()))
+                .returnDirect(false)
+                .build(),
+            corrections,
+            savedPrefix);
+    return java.util.Objects.requireNonNull(exchange(prefixPrompt))
+        .reference(result.conversationHistory().getLast());
   }
 
   private static boolean declaredRejection(ToolResponseMessage.ToolResponse response) {
@@ -554,10 +592,19 @@ public final class ToolLoopSupport {
       if (replay) requireSavedOrigin(prompt, assistant);
     }
     if (pending.completedReference() != null) {
-      var boundary = java.util.Objects.requireNonNull(exchange(prompt), "Missing model message persistence boundary");
-      var saved = boundary.store().load(boundary.scope(), pending.completedReference(),
-          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, boundary.run());
-      if (!(saved instanceof ToolResponseMessage tool) || !tool.getResponses().equals(pending.completed()))
+      var boundary =
+          java.util.Objects.requireNonNull(
+              exchange(prompt), "Missing model message persistence boundary");
+      var saved =
+          boundary
+              .store()
+              .load(
+                  boundary.scope(),
+                  pending.completedReference(),
+                  dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+                  boundary.run());
+      if (!(saved instanceof ToolResponseMessage tool)
+          || !tool.getResponses().equals(pending.completed()))
         throw new IllegalStateException("Invalid completed model message reference");
       savedPrefix = tool;
     }
@@ -597,7 +644,8 @@ public final class ToolLoopSupport {
             calls,
             pending.completed(),
             pending.argumentCorrections(),
-            pending.assistantReference(), pending.completedReference());
+            pending.assistantReference(),
+            pending.completedReference());
     // 承認待ちに入る前に成功した呼び出しは再実行せず、未完了の続きだけを処理する。
     for (int i = completed.size(); i < pending.calls().size(); i++) {
       var call = pending.calls().get(i);
@@ -664,7 +712,8 @@ public final class ToolLoopSupport {
                     java.util.List.copyOf(completed),
                     argumentCorrections,
                     pending.assistantReference(),
-                    preserveApprovalPrefix(prompt, pending, completed, argumentCorrections, savedPrefix))))
+                    preserveApprovalPrefix(
+                        prompt, pending, completed, argumentCorrections, savedPrefix))))
               throw new RunWaitingException();
           }
         }
@@ -692,6 +741,7 @@ public final class ToolLoopSupport {
             .conversationHistory(history)
             .returnDirect(direct && argumentCorrections.isEmpty())
             .build(),
-        argumentCorrections, savedPrefix);
+        argumentCorrections,
+        savedPrefix);
   }
 }

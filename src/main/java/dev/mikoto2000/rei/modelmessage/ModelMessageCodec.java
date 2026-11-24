@@ -29,13 +29,15 @@ public final class ModelMessageCodec {
     if (assistant.getMetadata().containsKey("rei.llm.replay-origin-owner")
         || assistant.getMetadata().containsKey("rei.llm.replay-origin-endpoint")
         || assistant.getMetadata().containsKey(ModelTokenUsage.METADATA_KEY)) return true;
-    return assistant.getParts().stream().anyMatch(part -> {
-      if (!part.attributes().isEmpty()) return true;
-      if (part instanceof TextPart text) return text.payload() != null;
-      if (part instanceof ToolCallPart call) return call.payload() != null;
-      return true;
-    });
+    return assistant.getParts().stream()
+        .anyMatch(part -> {
+          if (!part.attributes().isEmpty()) return true;
+          if (part instanceof TextPart text) return text.payload() != null;
+          if (part instanceof ToolCallPart call) return call.payload() != null;
+          return true;
+        });
   }
+
   private static final Set<String> METADATA =
       Set.of(
           "rei.llm.replay-origin-owner",

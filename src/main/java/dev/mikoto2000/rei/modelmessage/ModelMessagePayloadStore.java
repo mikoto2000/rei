@@ -13,6 +13,21 @@ import org.springframework.ai.chat.messages.Message;
 @org.springframework.context.annotation.Lazy
 public final class ModelMessagePayloadStore {
   public static final String EXCHANGE_CONTEXT_KEY = "rei.modelMessageExchange";
+  public static final String ORIGIN_CONTEXT_KEY = "rei.modelMessageOrigin";
+
+  /** Provider-resolved compatibility values; no connection details or credentials. */
+  public record Origin(String owner, String endpoint) {
+    public Origin {
+      identifier(owner);
+      identifier(endpoint);
+    }
+
+    public void requireMatch(Message message) {
+      if (!owner.equals(message.getMetadata().get("rei.llm.replay-origin-owner"))
+          || !endpoint.equals(message.getMetadata().get("rei.llm.replay-origin-endpoint")))
+        throw new IllegalStateException("Model message origin mismatch");
+    }
+  }
   public static final String HISTORY_ID = "rei.modelMessage.id";
   public static final String HISTORY_HASH = "rei.modelMessage.sha256";
   public static final String HISTORY_OWNER = "rei.modelMessage.historyOwner";

@@ -19,14 +19,22 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 class ToolLoopSupportTest {
   @Test
   void legacyPendingToolsCannotBeUpgradedIntoAProtectedProtocolRun() {
-    var store = org.mockito.Mockito.mock(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class);
+    var store =
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.class);
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     var prompt = persistencePrompt(store, persistenceCallback(calls));
-    var pending = new RunContinuation.PendingTools("legacy", List.of(
-        new org.springframework.ai.chat.messages.AssistantMessage.ToolCall("call", "function", "fixture", "{}")), List.of());
-    var context = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.class);
+    var pending =
+        new RunContinuation.PendingTools(
+            "legacy",
+            List.of(
+                new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                    "call", "function", "fixture", "{}")),
+            List.of());
+    var context =
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.class);
     assertThatThrownBy(() -> new ToolLoopSupport().executePending(prompt, pending, context))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("Legacy pending");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Legacy pending");
     assertThat(calls).hasValue(0);
     org.mockito.Mockito.verifyNoInteractions(store);
   }
