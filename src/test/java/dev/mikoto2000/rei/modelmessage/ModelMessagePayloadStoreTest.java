@@ -241,6 +241,21 @@ class ModelMessagePayloadStoreTest {
     assertThat(store.usage(other, "run").runCumulativeBytes()).isEqualTo(size);
   }
 
+  @Test
+  void collectionDoesNotAllowAnIdempotencyKeyToBeReusedEvenByAnotherStoreInstance() {
+    var time = new Time();
+    var store = store(time, 100_000, 1_000_000);
+    store.save(owner, "run", "one", message());
+    time.expire();
+    assertThat(store.collectExpired()).isEqualTo(1);
+    var restarted = store(time, 100_000, 1_000_000);
+    assertThatThrownBy(() -> restarted.save(owner, "run", "one", message()))
+        .hasMessage("Model message persistence rejected");
+    assertThatThrownBy(() -> restarted.save(owner, "run", "one", new AssistantMessage("different")))
+        .hasMessage("Model message persistence rejected");
+    assertThat(restarted.usage(owner, "run").payloadCount()).isZero();
+  }
+
   SQLiteDataSource source() {
     var config = new org.sqlite.SQLiteConfig();
     config.setBusyTimeout(5000);
