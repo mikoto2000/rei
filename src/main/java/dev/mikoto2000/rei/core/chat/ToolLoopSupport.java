@@ -117,6 +117,7 @@ public final class ToolLoopSupport {
             .map(generation -> {
               var output = generation.getOutput();
               var calls = FileReadContinuation.inherit(prompt, output.getToolCalls());
+              if (java.util.Objects.equals(calls, output.getToolCalls())) return generation;
               return new org.springframework.ai.chat.model.Generation(
                   output.mutate().toolCalls(calls).build(), generation.getMetadata());
             })
