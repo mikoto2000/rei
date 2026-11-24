@@ -150,7 +150,7 @@ class ResponsesTransportContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-  void outputLimitFailureKeepsTokenUsageWithoutReturningPartialOutput(boolean streaming) {
+  void outputLimitUsesExistingLengthRecoveryAndKeepsNumericUsage(boolean streaming) {
     var incomplete =
         completed()
             .replaceFirst(
@@ -163,18 +163,16 @@ class ResponsesTransportContractTest {
             : incomplete;
     var options = options().build();
     var model = transport(options);
-    assertThatThrownBy(
-            () -> {
-              if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
-              else model.call(new Prompt("fixture", options));
-            })
-        .isInstanceOfSatisfying(
-            ResponsesTransportException.class,
-            error -> {
-              assertThat(error.category())
-                  .isEqualTo(ResponsesTransportException.Category.OUTPUT_LIMIT);
-              assertUsage(error);
-            });
+    org.springframework.ai.chat.model.ChatResponse result;
+    if (streaming) {
+      var completed = new java.util.concurrent.atomic.AtomicReference<org.springframework.ai.chat.model.ChatResponse>();
+      new org.springframework.ai.chat.model.MessageAggregator().aggregate(
+          model.stream(new Prompt("fixture", options)), completed::set).blockLast();
+      result = completed.get();
+    } else result = model.call(new Prompt("fixture", options));
+    assertThat(OutputLimitDetector.isOutputLimitReached(result)).isTrue();
+    assertThat(result.getMetadata().getUsage().getTotalTokens()).isEqualTo(5);
+    assertThat(result.hasToolCalls()).isFalse();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
