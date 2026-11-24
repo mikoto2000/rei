@@ -14,6 +14,24 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 
 /** Exercises the pinned SDK's serialized HTTP request, without external traffic. */
 class ResponsesTransportContractTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"baseUrl", "apiKey", "organization", "headers", "outputLimit"})
+  void runtimeOptionsCannotChangeBoundConnectionOrLimits(String field) {
+    var defaults = options().build();
+    var builder = defaults.mutate();
+    switch (field) {
+      case "baseUrl" -> builder.baseUrl("https://other.invalid/v1");
+      case "apiKey" -> builder.apiKey("other-secret");
+      case "organization" -> builder.organizationId("other-organization");
+      case "headers" -> builder.customHeaders(java.util.Map.of("Authorization", "other-secret"));
+      case "outputLimit" -> builder.maxOutputTokens(128);
+      default -> throw new AssertionError(field);
+    }
+    var runtime = builder.build();
+    assertThatThrownBy(() -> transport(defaults).call(new Prompt("fixture", runtime)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageNotContaining("other-secret");
+    assertThat(requests).isEmpty();
+  }
   private final List<JsonNode> requests = new CopyOnWriteArrayList<>();
   private final List<String> urls = new CopyOnWriteArrayList<>();
   private String reply = completed();
