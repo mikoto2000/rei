@@ -163,7 +163,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     String authority =
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
             saved.projectId(), saved.taskId(), saved.revision());
-    return saved.protocolHistory().entries().stream()
+    return saved.protocolHistory().protectedEntries().stream()
         .map(entry ->
             new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference(
                 entry.reference(),
