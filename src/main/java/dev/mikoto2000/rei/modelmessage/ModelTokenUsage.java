@@ -47,9 +47,7 @@ public record ModelTokenUsage(Long input, Long output, Long total, Long cached, 
       return usage == null ? null : usage.getTotalTokens();
     }
     Long total = numeric.total();
-    if (total == null) return null;
-    if (total > Integer.MAX_VALUE)
-      throw new IllegalArgumentException("Model token usage exceeds accounting range");
+    if (total == null || total > Integer.MAX_VALUE) return null;
     return total.intValue();
   }
 
