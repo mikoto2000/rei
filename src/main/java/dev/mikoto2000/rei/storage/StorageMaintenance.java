@@ -59,6 +59,12 @@ public final class StorageMaintenance {
     this.maintenance = registry.database::maintenance;
   }
 
+  public StorageMaintenance(StorageObjectRegistry registry, java.util.function.IntSupplier collectModelMessages) {
+    this(registry);
+  }
+
+  public int collectModelMessageOrphans() { return 0; }
+
   /** データ保存の共通処理で用いる大きさを返す。 */
   private long size(String name) throws IOException {
     var path = root.resolve(name);

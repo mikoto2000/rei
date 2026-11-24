@@ -404,6 +404,27 @@ class ModelMessagePayloadStoreTest {
   }
 
   @Test
+  void existingStorageMaintenanceCommandCollectsOnlyExpiredUnreferencedBodies() throws Exception {
+    var time = new Time();
+    var store = store(time, 100_000, 1_000_000);
+    store.save(owner, "run", "orphan", message());
+    var protectedRef = store.save(owner, "run", "protected", message());
+    store.publish(owner, protectedRef, ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, "checkpoint");
+    time.expire();
+    try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(temporary)) { migration.prepare(); }
+    var maintenance = new dev.mikoto2000.rei.storage.StorageMaintenance(
+        new dev.mikoto2000.rei.storage.StorageObjectRegistry(temporary), store::collectExpired);
+    var command = new picocli.CommandLine(new dev.mikoto2000.rei.core.command.StorageCommand(null, null, maintenance, null));
+    var output = new java.io.StringWriter();
+    command.setOut(new java.io.PrintWriter(output));
+    command.setErr(new java.io.PrintWriter(output));
+    assertThat(command.execute("maintenance", "model-messages-gc")).isZero();
+    assertThat(output.toString()).contains("collected_model_messages=1");
+    assertThat(store.load(owner, protectedRef)).isInstanceOf(AssistantMessage.class);
+    assertThat(store.usage(owner, "run").payloadCount()).isEqualTo(1);
+  }
+
+  @Test
   void everyDurableReferenceKindProtectsAcrossStoreRestart() {
     var time = new Time();
     var store = store(time, 100_000, 1_000_000);
