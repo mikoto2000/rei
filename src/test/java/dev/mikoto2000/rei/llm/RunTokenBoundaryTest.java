@@ -55,6 +55,46 @@ class RunTokenBoundaryTest {
         ChatResponseMetadata.builder().usage(new DefaultUsage(1, tokens - 1)).build());
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"false,false", "false,true", "true,false", "true,true"})
+  void canonicalUsageStopsParentAndChildBeforeToolDispatch(boolean child, boolean unknown) {
+    var count = new AtomicInteger();
+    ToolCallback tool = new ToolCallback() {
+      public ToolDefinition getToolDefinition() {
+        return ToolDefinition.builder().name("readMultiFile").description("read")
+            .inputSchema("{}").build();
+      }
+      public String call(String input) { count.incrementAndGet(); return "read"; }
+    };
+    var numeric = unknown
+        ? new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(null, null, null, null, null)
+        : new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(1L, 10L, 11L, null, null);
+    var raw = response(3, List.of(
+        new AssistantMessage.ToolCall("call", "function", "readMultiFile", "{}")));
+    var protectedResponse = new ChatResponse(List.of(new Generation(
+        raw.getResult().getOutput().mutate().properties(Map.of(
+            dev.mikoto2000.rei.modelmessage.ModelTokenUsage.METADATA_KEY, numeric)).build())),
+        raw.getMetadata());
+    var model = mock(ChatModel.class);
+    when(model.stream(any(Prompt.class))).thenReturn(Flux.just(protectedResponse))
+        .thenReturn(Flux.just(response(3, List.of())));
+    var context = run(new OutputLimitRunBudget(0, 10, null, 10));
+    var prompt = new Prompt("read", ToolCallingChatOptions.builder().toolCallbacks(tool)
+        .toolContext(Map.of(RunExecutionContext.KEY, context)).build());
+    Runnable request;
+    if (child) {
+      request = () -> new BoundedToolLoop().runWithHistory(model, prompt,
+          new AtomicInteger(2), new AgentRunContext("child", "subagent:child", Path.of(".")),
+          () -> {}, context.sharedLlmReservation()).block();
+    } else {
+      context.consumeNextLlmCall();
+      request = () -> new StagnationChatModel(model).stream(prompt).collectList().block();
+    }
+    assertThatThrownBy(request::run).hasMessageContaining(
+        unknown ? "TOKEN_USAGE_UNKNOWN" : "TOKEN_BUDGET_EXCEEDED");
+    assertThat(count).hasValue(0);
+  }
+
   /** 用途に応じたモデル利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void overLimitParentResponseCannotExecuteRequestedTool() {
