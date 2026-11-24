@@ -335,7 +335,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       var response = delegate.call(request);
       requireCompleted(response);
       var bound = ResponsesReasoningReplay.bind(response, request, endpoint);
-      ResponsesReasoningReplay.validateComplete(bound, request, endpoint);
+      validateComplete(bound, request);
       return bound;
     } catch (RuntimeException error) {
       throw ResponsesTransportException.normalize(error);
@@ -354,6 +354,41 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
               : ResponsesTransportException.Category.INCOMPLETE;
     throw new ResponsesTransportException(
         category, ResponsesTransportException.usage(metadata.getUsage()));
+  }
+
+  private void validateComplete(ChatResponse response, Prompt request) {
+    ResponsesReasoningReplay.validateComplete(response, request, endpoint);
+    var itemIds = new java.util.HashSet<String>();
+    var callIds = new java.util.HashSet<String>();
+    try {
+      for (var generation : response.getResults()) {
+        for (var part : generation.getOutput().getParts()) {
+          if (!(part instanceof org.springframework.ai.chat.messages.part.TextPart
+              || part instanceof org.springframework.ai.chat.messages.part.ReasoningPart
+              || part instanceof org.springframework.ai.chat.messages.part.ToolCallPart)
+              || org.springframework.ai.chat.messages.part.StreamingParts.isPartial(part))
+            throw new IllegalArgumentException();
+          var status = part.attributes().get(OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE);
+          if (status != null && !"completed".equals(status)) throw new IllegalArgumentException();
+          if (part instanceof org.springframework.ai.chat.messages.part.TextPart) continue;
+          var itemId = part.attributes().get(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE);
+          if (itemId == null || itemId.isBlank() || !itemIds.add(itemId))
+            throw new IllegalArgumentException();
+          if (part instanceof org.springframework.ai.chat.messages.part.ToolCallPart call) {
+            var value = call.toolCall();
+            if (value.id() == null || value.id().isBlank() || !callIds.add(value.id())
+                || !"function".equals(value.type()) || value.name() == null || value.name().isBlank()
+                || value.arguments() == null || value.arguments().length() > 4_194_304)
+              throw new IllegalArgumentException();
+            var arguments = JSON.readTree(value.arguments());
+            if (arguments == null || !arguments.isObject()) throw new IllegalArgumentException();
+          }
+        }
+      }
+    } catch (IllegalArgumentException | JsonProcessingException invalid) {
+      throw new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE,
+          ResponsesTransportException.usage(response.getMetadata().getUsage()));
+    }
   }
 
   @Override
@@ -377,7 +412,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                     if (!completed.get() || result == null)
                       return Flux.error(new ResponsesTransportException(
                           ResponsesTransportException.Category.INVALID_RESPONSE));
-                    ResponsesReasoningReplay.validateComplete(result, request, endpoint);
+                    validateComplete(result, request);
                     return Flux.empty();
                   }));
             })
