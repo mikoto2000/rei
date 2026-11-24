@@ -16,54 +16,112 @@ import org.springframework.ai.chat.messages.part.ToolCallPart;
 import org.sqlite.SQLiteDataSource;
 
 class ModelMessagePayloadStoreTest {
+  @Test
+  void connectionRuntimeFailuresDoNotExposeConfigurationOrCauses() {
+    var source = new org.springframework.jdbc.datasource.AbstractDataSource() {
+      @Override public java.sql.Connection getConnection() {
+        throw new IllegalStateException("PRIVATE_DATABASE_CONFIG_FIXTURE", new RuntimeException("PRIVATE_CAUSE_FIXTURE"));
+      }
+      @Override public java.sql.Connection getConnection(String username, String password) {
+        return getConnection();
+      }
+    };
+    assertThatThrownBy(() -> new ModelMessagePayloadStore(source))
+        .isInstanceOf(IllegalStateException.class).hasMessage("Model message persistence rejected").hasNoCause();
+  }
   @TempDir Path temporary;
   private final ModelMessagePayloadStore.Scope owner =
       new ModelMessagePayloadStore.Scope("project", "root", "conversation");
 
   @Test
-  void springLeavesPayloadSchemaUninitializedUntilUsedAndInjectsExistingHistoryAndMaintenance() throws Exception {
-    try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(temporary)) { migration.prepare(); }
+  void springLeavesPayloadSchemaUninitializedUntilUsedAndInjectsExistingHistoryAndMaintenance()
+      throws Exception {
+    try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(temporary)) {
+      migration.prepare();
+    }
     var turns = dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory();
-    try (var context = new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {
-      context.registerBean("memoryConsolidationDataSource", javax.sql.DataSource.class, this::source);
+    try (var context =
+        new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {
+      context.registerBean(
+          "memoryConsolidationDataSource", javax.sql.DataSource.class, this::source);
       context.register(ModelMessagePayloadStore.class);
-      context.registerBean(dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.class, () ->
-          new dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor(turns,
-              dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build(),
-              new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(temporary)));
-      context.registerBean(dev.mikoto2000.rei.storage.StorageMaintenance.class, () ->
-          new dev.mikoto2000.rei.storage.StorageMaintenance(new dev.mikoto2000.rei.storage.StorageObjectRegistry(temporary)));
+      context.registerBean(
+          dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.class,
+          () ->
+              new dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor(
+                  turns,
+                  dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build(),
+                  new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(
+                      temporary)));
+      context.registerBean(
+          dev.mikoto2000.rei.storage.StorageMaintenance.class,
+          () ->
+              new dev.mikoto2000.rei.storage.StorageMaintenance(
+                  new dev.mikoto2000.rei.storage.StorageObjectRegistry(temporary)));
       context.refresh();
-      try (var db = source().getConnection(); var query = db.createStatement();
-          var row = query.executeQuery("SELECT COUNT(*) FROM sqlite_master WHERE name='model_message_schema'")) {
+      try (var db = source().getConnection();
+          var query = db.createStatement();
+          var row =
+              query.executeQuery(
+                  "SELECT COUNT(*) FROM sqlite_master WHERE name='model_message_schema'")) {
         assertThat(row.next()).isTrue();
         assertThat(row.getInt(1)).isZero();
       }
       var store = context.getBean(ModelMessagePayloadStore.class);
-      var current = new dev.mikoto2000.rei.core.chat.AgentRunContext("current", "conversation", temporary);
+      var current =
+          new dev.mikoto2000.rei.core.chat.AgentRunContext("current", "conversation", temporary);
       var old = new dev.mikoto2000.rei.core.chat.AgentRunContext("old", "conversation", temporary);
       var scope = ModelMessagePayloadStore.Scope.forOwner(current);
-      var input = AssistantMessage.builder().parts(message().getParts().subList(0, 2))
-          .properties(message().getMetadata()).build();
+      var input =
+          AssistantMessage.builder()
+              .parts(message().getParts().subList(0, 2))
+              .properties(message().getMetadata())
+              .build();
       var ref = store.save(scope, "old", "one", input);
       var metadata = store.historyReference(scope, ref, "turn:old");
       turns.start(old, "old request");
       turns.recordMetadata(old, metadata);
-      turns.finish(old, dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED, "display fixture");
-      var request = org.springframework.ai.chat.client.ChatClientRequest.builder()
-          .prompt(new org.springframework.ai.chat.prompt.Prompt(new org.springframework.ai.chat.messages.UserMessage("current request")))
-          .context(Map.of(org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID, "conversation",
-              dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName(), current)).build();
-      var messages = context.getBean(dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.class)
-          .before(request, null).prompt().getInstructions();
-      var restored = (AssistantMessage) messages.stream().filter(m -> m instanceof AssistantMessage).findFirst().orElseThrow();
+      turns.finish(
+          old,
+          dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED,
+          "display fixture");
+      var request =
+          org.springframework.ai.chat.client.ChatClientRequest.builder()
+              .prompt(
+                  new org.springframework.ai.chat.prompt.Prompt(
+                      new org.springframework.ai.chat.messages.UserMessage("current request")))
+              .context(
+                  Map.of(
+                      org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                      "conversation",
+                      dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName(),
+                      current))
+              .build();
+      var messages =
+          context
+              .getBean(dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.class)
+              .before(request, null)
+              .prompt()
+              .getInstructions();
+      var restored =
+          (AssistantMessage)
+              messages.stream()
+                  .filter(m -> m instanceof AssistantMessage)
+                  .findFirst()
+                  .orElseThrow();
       assertThat(restored.getParts()).containsExactlyElementsOf(input.getParts());
       store.save(scope, "old", "orphan", input);
-      try (var db = source().getConnection(); var query = db.createStatement()) {
+      try (var db = source().getConnection();
+          var query = db.createStatement()) {
         query.executeUpdate("UPDATE model_message_payloads SET staged_until=0");
       }
-      assertThat(context.getBean(dev.mikoto2000.rei.storage.StorageMaintenance.class).collectModelMessageOrphans()).isEqualTo(1);
-      assertThat(((AssistantMessage) store.load(scope, ref)).getParts()).containsExactlyElementsOf(input.getParts());
+      assertThat(
+              context
+                  .getBean(dev.mikoto2000.rei.storage.StorageMaintenance.class)
+                  .collectModelMessageOrphans())
+          .isEqualTo(1);
+      assertThat(((AssistantMessage) store.load(scope, ref)).getParts())
+          .containsExactlyElementsOf(input.getParts());
     }
   }
 
