@@ -35,6 +35,7 @@ import java.util.UUID;
 public class RunExecutionContext {
   private org.springframework.ai.model.tool.ToolCallingChatOptions modelOptions;
   private List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference> resumeReplayReferences = List.of();
+  private dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History resumeProtocolHistory;
 
   /** Capture once at acceptance; each request receives a copy of the same effective options. */
   public void setModelOptions(org.springframework.ai.model.tool.ToolCallingChatOptions options) {
@@ -62,7 +63,10 @@ public class RunExecutionContext {
   }
 
   private void restoreReplayAuthority() {
-    if (resumeReplayReferences.isEmpty()) return;
+    if (resumeReplayReferences.isEmpty()) {
+      if (resumeProtocolHistory != null) throw new IllegalStateException("Native continuation references unavailable");
+      return;
+    }
     var context = modelOptions.getToolContext();
     var boundary = context == null ? null : context.get(
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
@@ -77,6 +81,20 @@ public class RunExecutionContext {
     var restored = new java.util.HashMap<>(java.util.Objects.requireNonNull(context));
     restored.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY, grant);
     modelOptions = modelOptions.mutate().toolContext(null).toolContext(restored).build();
+    if (resumeProtocolHistory != null) {
+      if (!exchange.run().equals(resumeProtocolHistory.run()) || !origin.equals(resumeProtocolHistory.origin()))
+        throw new IllegalStateException("Native continuation trace mismatch");
+      for (var entry : resumeProtocolHistory.entries()) {
+        var message = exchange.store().load(exchange.scope(), entry.reference(),
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, exchange.run());
+        if (message instanceof org.springframework.ai.chat.messages.AssistantMessage) origin.requireMatch(message);
+      }
+      protocolHistory = resumeProtocolHistory;
+    }
+  }
+
+  public synchronized dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistorySnapshot() {
+    return protocolHistory;
   }
 
   private dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory;
@@ -1088,6 +1106,7 @@ public class RunExecutionContext {
       resumeMessages = List.copyOf(saved.messages());
       pendingApprovalTools = saved.pendingTools();
       resumeReplayReferences = saved.replayReferences() == null ? List.of() : saved.replayReferences();
+      resumeProtocolHistory = saved.protocolHistory();
       if (modelOptions != null) restoreReplayAuthority();
     }
   }

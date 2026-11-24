@@ -306,6 +306,10 @@ public final class ModelMessagePayloadStore {
   }
 
   /** Protect every validated pointer before the existing checkpoint writer makes it visible. */
+  public void protectContinuation(Scope scope, History history, String owner) {
+    protectReferences(scope, history, ReferenceKind.APPROVAL, owner);
+  }
+
   public void protectCheckpoint(Scope scope, History history, String owner) {
     protectReferences(scope, history, ReferenceKind.CHECKPOINT, owner);
   }
