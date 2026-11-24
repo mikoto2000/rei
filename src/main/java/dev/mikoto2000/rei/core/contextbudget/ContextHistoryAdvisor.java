@@ -323,9 +323,11 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       toolContext.put("rei.historySource", "log");
       if (historyGrant != null) {
         var existing = toolContext.get(ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY);
-        toolContext.put(ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY,
+        toolContext.put(
+            ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY,
             existing instanceof ModelMessagePayloadStore.HistoryReplayGrant checkpoint
-                ? historyGrant.merge(checkpoint) : historyGrant);
+                ? historyGrant.merge(checkpoint)
+                : historyGrant);
       }
       copy = options.mutate().toolContext(toolContext).build();
       return request.mutate().context(context).prompt(new Prompt(messages, copy)).build();

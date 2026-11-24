@@ -397,15 +397,21 @@ public final class ModelMessagePayloadStore {
                   history.run())
               != 1) throw rejected();
           if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
-            if (history.origin().owner().equals(message.getMetadata().get("rei.llm.replay-origin-owner")))
+            if (history
+                .origin()
+                .owner()
+                .equals(message.getMetadata().get("rei.llm.replay-origin-owner")))
               history.origin().requireMatch(message);
             else {
-              try (var query = db.prepareStatement("SELECT run FROM model_message_payloads WHERE id=?")) {
+              try (var query =
+                  db.prepareStatement("SELECT run FROM model_message_payloads WHERE id=?")) {
                 bind(query, entry.reference().id());
                 try (var rows = query.executeQuery()) {
                   if (!rows.next()) throw rejected();
-                  new Origin(new Exchange(this, scope, rows.getString(1), "checkpoint").ownerKey(),
-                      history.origin().endpoint()).requireMatch(assistant);
+                  new Origin(
+                          new Exchange(this, scope, rows.getString(1), "checkpoint").ownerKey(),
+                          history.origin().endpoint())
+                      .requireMatch(assistant);
                 }
               }
             }

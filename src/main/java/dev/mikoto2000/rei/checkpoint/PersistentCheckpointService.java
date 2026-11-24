@@ -155,16 +155,21 @@ public class PersistentCheckpointService implements AutoCloseable {
   }
 
   /** Body-free replay references derived only from the active, ownership-checked checkpoint. */
-  public List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference> protocolReferences(
-      AgentRunContext owner) {
+  public List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
+      protocolReferences(AgentRunContext owner) {
     progress(owner);
     var saved = active.get(owner.runId());
     if (saved == null || saved.protocolHistory() == null) return List.of();
-    String authority = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
-        saved.projectId(), saved.taskId(), saved.revision());
-    return saved.protocolHistory().entries().stream().map(entry ->
-        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference(entry.reference(),
-            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT, authority)).toList();
+    String authority =
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
+            saved.projectId(), saved.taskId(), saved.revision());
+    return saved.protocolHistory().entries().stream()
+        .map(entry ->
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference(
+                entry.reference(),
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.CHECKPOINT,
+                authority))
+        .toList();
   }
 
   /** Bounded, confirmed skill outputs for repairing progress recorded by older classifiers. */
