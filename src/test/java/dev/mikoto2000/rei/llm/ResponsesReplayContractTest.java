@@ -2486,6 +2486,9 @@ class ResponsesReplayContractTest {
       var tools = requests.get(round).path("tools");
       assertThat(tools.size()).isBetween(32, 36);
       if (round % 2 == 1) assertThat(tools.toString()).contains(specialists.get(round / 2));
+      if (round > 0) assertThat(requests.get(round).path("input").toString())
+          .as("newest complete tool output must survive every compression")
+          .contains("call_" + (round - 1));
     }
     assertThat(requests.getLast().path("tools").toString()).doesNotContain(specialists.getFirst());
     var scope = dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope.forOwner(run);
