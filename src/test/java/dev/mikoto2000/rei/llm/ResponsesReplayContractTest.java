@@ -345,12 +345,18 @@ class ResponsesReplayContractTest {
     String conversation=ConversationIds.blueskyReply("fixture.bsky.social");
     if(preseedForeign) memory.add(conversation,org.springframework.ai.chat.messages.AssistantMessage.builder()
         .parts(List.of(new org.springframework.ai.chat.messages.part.ReasoningPart(null,"",
-            new org.springframework.ai.chat.messages.part.OpaquePayload("openai","encrypted_content","foreign-private-opaque"),Map.of("id","rs_foreign")),
-            org.springframework.ai.chat.messages.part.TextPart.of("foreign visible answer")))
-        .properties(Map.of("rei.llm.replay-origin-owner","foreign-owner","rei.llm.replay-origin-endpoint","foreign-endpoint")).build());
+            new org.springframework.ai.chat.messages.part.OpaquePayload(org.springframework.ai.openai.responses.OpenAiResponsesMetadata.PROVIDER,
+                org.springframework.ai.openai.responses.OpenAiResponsesMetadata.ENCRYPTED_CONTENT_KIND,"foreign-private-opaque"),
+            Map.of(org.springframework.ai.openai.responses.OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE,"rs_foreign",
+                org.springframework.ai.openai.responses.OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE,"completed")),
+            new org.springframework.ai.chat.messages.part.TextPart("foreign visible answer",null,
+                Map.of(org.springframework.ai.openai.responses.OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE,"msg_foreign",
+                    org.springframework.ai.openai.responses.OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE,"completed"))))
+        .properties(Map.of("rei.llm.replay-origin-owner","0".repeat(64),"rei.llm.replay-origin-endpoint",models.resolvedEndpoint(LlmFeature.BLUESKY_REPLY).fingerprint())).build());
     var client=org.springframework.ai.chat.client.ChatClient.builder(
         new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.BLUESKY_REPLY)))
-        .defaultAdvisors(dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor.builder(memory).build()).build();
+        .defaultAdvisors(new dev.mikoto2000.rei.core.chat.RunScopedAdvisor(
+            dev.mikoto2000.rei.chatmemory.ConversationMemoryAdvisor.builder(memory).build())).build();
     var holder=org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
     org.mockito.Mockito.when(holder.get()).thenReturn("fixture-model");
     var generator=new dev.mikoto2000.rei.bluesky.BlueskyReplyTextGenerator(new FixedLlmChatClientProvider(client),holder,models,new dev.mikoto2000.rei.bluesky.BlueskyProperties());

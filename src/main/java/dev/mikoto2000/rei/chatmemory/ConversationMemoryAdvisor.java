@@ -79,7 +79,16 @@ public final class ConversationMemoryAdvisor implements BaseChatMemoryAdvisor {
     String conversationId = getConversationId(chatClientRequest.context());
 
     // 1. Retrieve the chat memory for the current conversation.
+    var options = chatClientRequest.prompt().getOptions();
+    var toolContext = options instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools
+        ? tools.getToolContext() : null;
+    boolean visibleHistoryOnly = toolContext != null && Boolean.TRUE.equals(toolContext.get(
+        dev.mikoto2000.rei.modeloptions.ModelOptions.SINGLE_REQUEST_CONTEXT_KEY));
+    var context = new java.util.HashMap<>(chatClientRequest.context());
+    if (visibleHistoryOnly) context.put(dev.mikoto2000.rei.modeloptions.ModelOptions.SINGLE_REQUEST_CONTEXT_KEY, true);
+    else context.remove(dev.mikoto2000.rei.modeloptions.ModelOptions.SINGLE_REQUEST_CONTEXT_KEY);
     List<Message> memoryMessages = this.chatMemory.get(conversationId);
+    if (visibleHistoryOnly) memoryMessages = visibleHistory(memoryMessages);
 
     // 2. Advise the request messages list.
     List<Message> promptMessages = chatClientRequest.prompt().getInstructions();
@@ -102,6 +111,7 @@ public final class ConversationMemoryAdvisor implements BaseChatMemoryAdvisor {
     ChatClientRequest processedChatClientRequest =
         chatClientRequest
             .mutate()
+            .context(context)
             .prompt(chatClientRequest.prompt().mutate().messages(processedMessages).build())
             .build();
 
@@ -110,6 +120,18 @@ public final class ConversationMemoryAdvisor implements BaseChatMemoryAdvisor {
     this.chatMemory.add(conversationId, userMessage);
 
     return processedChatClientRequest;
+  }
+
+  /** One-shot feature calls retain dialogue text without persisting protocol replay authority. */
+  private static List<Message> visibleHistory(List<Message> messages) {
+    var result = new ArrayList<Message>();
+    for (var message : messages) {
+      if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
+        String text = java.util.Objects.toString(assistant.getText(), "");
+        if (!text.isBlank()) result.add(new org.springframework.ai.chat.messages.AssistantMessage(text));
+      } else result.add(message);
+    }
+    return List.copyOf(result);
   }
 
   private static boolean isMemoryAlreadyInPrompt(
@@ -148,6 +170,9 @@ public final class ConversationMemoryAdvisor implements BaseChatMemoryAdvisor {
     if (response != null) {
       assistantMessages = response.getResults().stream().map(g -> (Message) g.getOutput()).toList();
     }
+    if (Boolean.TRUE.equals(chatClientResponse.context().get(
+        dev.mikoto2000.rei.modeloptions.ModelOptions.SINGLE_REQUEST_CONTEXT_KEY)))
+      assistantMessages = visibleHistory(assistantMessages);
     this.chatMemory.add(this.getConversationId(chatClientResponse.context()), assistantMessages);
     return chatClientResponse;
   }

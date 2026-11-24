@@ -10,6 +10,7 @@ public final class ModelOptions {
   public static final String ENDPOINT_CONTEXT_KEY = "rei.llm.resolved-endpoint";
   public static final String MAX_TOOLS_CONTEXT_KEY = "rei.llm.max-tools";
   public static final String PREPARATION_CONTEXT_KEY = "rei.modelOptions.preparation-fingerprint";
+  public static final String SINGLE_REQUEST_CONTEXT_KEY = "rei.modelOptions.single-request";
 
   private ModelOptions() {}
 
@@ -120,6 +121,7 @@ public final class ModelOptions {
             ENDPOINT_CONTEXT_KEY,
             MAX_TOOLS_CONTEXT_KEY,
             PREPARATION_CONTEXT_KEY,
+            SINGLE_REQUEST_CONTEXT_KEY,
             dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
             dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
             dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY))
@@ -139,6 +141,7 @@ public final class ModelOptions {
       if (context.containsKey(key))
         throw new IllegalArgumentException("A feature request cannot inherit replay authority");
     context.put("rei.llm.replay-owner", "feature:" + java.util.UUID.randomUUID());
+    context.put(SINGLE_REQUEST_CONTEXT_KEY, true);
     return clean.mutate().toolContext(null).toolContext(context).build();
   }
 
