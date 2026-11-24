@@ -334,6 +334,13 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     try {
       var response = delegate.call(request);
       requireCompleted(response);
+      if (OutputLimitDetector.isOutputLimitReached(response)) {
+        var generations = response.getResults().stream().map(generation ->
+            new org.springframework.ai.chat.model.Generation(
+                new org.springframework.ai.chat.messages.AssistantMessage(
+                    java.util.Objects.toString(generation.getOutput().getText(), "")), generation.getMetadata())).toList();
+        return new ChatResponse(generations, response.getMetadata());
+      }
       var bound = ResponsesReasoningReplay.bind(response, request, endpoint);
       validateComplete(bound, request);
       return bound;
@@ -346,6 +353,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     var metadata = response.getMetadata();
     var status = metadata.get(OpenAiResponsesMetadata.STATUS);
     if ("completed".equals(status)) return;
+    // Spring AI maps this exact native reason to LENGTH. Existing Rei recovery owns
+    // continuation; no partial reasoning/function item is admitted as a completed turn.
+    if ("incomplete".equals(status)
+        && "max_output_tokens".equals(metadata.get(OpenAiResponsesMetadata.INCOMPLETE_REASON))
+        && OutputLimitDetector.isOutputLimitReached(response)) return;
     var category = ResponsesTransportException.Category.INVALID_RESPONSE;
     if ("incomplete".equals(status))
       category =
@@ -412,7 +424,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                     if (!completed.get() || result == null)
                       return Flux.error(new ResponsesTransportException(
                           ResponsesTransportException.Category.INVALID_RESPONSE));
-                    validateComplete(result, request);
+                    if (!OutputLimitDetector.isOutputLimitReached(result)) validateComplete(result, request);
                     return Flux.empty();
                   }));
             })
