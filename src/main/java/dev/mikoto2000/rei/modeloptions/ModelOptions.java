@@ -106,6 +106,28 @@ public final class ModelOptions {
     }
   }
 
+  /** Opaque digest for approval invalidation; connection credentials must never leave this method. */
+  public static String connectionFingerprint(ToolCallingChatOptions options) {
+    String baseUrl,apiKey;
+    if(options instanceof OpenAiResponsesChatOptions responses) {
+      baseUrl=responses.getBaseUrl();apiKey=responses.getApiKey();
+    } else if(options instanceof OpenAiChatOptions chat) {
+      baseUrl=chat.getBaseUrl();apiKey=chat.getApiKey();
+    } else throw new IllegalArgumentException("Unknown connection option protocol");
+    try {
+      var digest=java.security.MessageDigest.getInstance("SHA-256");
+      for(var value:java.util.Arrays.asList(options.getClass().getName(),baseUrl,apiKey,options.getModel(),
+          options.getToolContext()==null ? null : options.getToolContext().get(ENDPOINT_CONTEXT_KEY))) {
+        digest.update((byte)(value==null ? 0 : 1));
+        if(value!=null) {
+          byte[] bytes=value.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+          digest.update(java.nio.ByteBuffer.allocate(Integer.BYTES).putInt(bytes.length).array());digest.update(bytes);
+        }
+      }
+      return java.util.HexFormat.of().formatHex(digest.digest());
+    } catch(java.security.NoSuchAlgorithmException impossible) {throw new IllegalStateException(impossible);}
+  }
+
   /** A one-shot feature call owns no conversation replay or durable tool-loop authority. */
   public static ToolCallingChatOptions singleRequest(ToolCallingChatOptions options) {
     return singleRequest(options, java.util.Map.of());

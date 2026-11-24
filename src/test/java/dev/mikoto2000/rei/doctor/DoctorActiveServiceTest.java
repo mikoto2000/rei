@@ -270,7 +270,7 @@ class DoctorActiveServiceTest {
                 .apiKey("CONFIG-SECRET")
                 .baseUrl("http://localhost/v1")
                 .build());
-    when(models.chatOptions(anyString(), anyString())).thenAnswer(call -> configured.get());
+    when(models.requestOptions(anyString(), anyString(),eq(false))).thenAnswer(call -> configured.get());
     doAnswer(
             call -> {
               assertFalse(((String) call.getArgument(1)).contains("SECRET"));

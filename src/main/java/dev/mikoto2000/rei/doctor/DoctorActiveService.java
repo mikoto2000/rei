@@ -46,6 +46,8 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
@@ -102,7 +104,7 @@ public class DoctorActiveService {
   /** モデル一覧。 */
   private final Supplier<ChatModel> subAgentModel;
 
-  private final Function<String, OpenAiChatOptions> optionsForModel;
+  private final Function<String, ToolCallingChatOptions> optionsForModel;
 
   /** 選択中モデル。 */
   private final Supplier<String> readSelectedModel;
@@ -179,7 +181,7 @@ public class DoctorActiveService {
     this.passiveReport = details -> DoctorService.render(passive.passive(details));
     this.environment = environment;
     this.subAgentModel = () -> models.subAgentChatModel();
-    this.optionsForModel = selected -> models.chatOptions(LlmFeature.CHAT, selected);
+    this.optionsForModel = selected -> models.requestOptions(LlmFeature.CHAT, selected,false);
     this.readSelectedModel = () -> selectedModel.get();
     this.connectivityProbe =
         request -> http.connectivity(request.endpoint(), request.timeout(), request.checkActive());
@@ -211,7 +213,7 @@ public class DoctorActiveService {
       String call,
       String target,
       boolean enabled,
-      OpenAiChatOptions inferenceOptions) {}
+      ToolCallingChatOptions inferenceOptions) {}
 
   /** 実行環境の診断で用いる活動中を返す。 */
   public Report active(RunExecutionContext run, DoctorRequest request) {
@@ -251,21 +253,12 @@ public class DoctorActiveService {
             case CLAUDE -> claudeEnabled.getAsBoolean();
             default -> true;
           };
-      OpenAiChatOptions inferenceOptions = null;
+      ToolCallingChatOptions inferenceOptions = null;
       String connectionIdentity = "";
       if (check == DoctorRequest.Check.INFERENCE) {
         var defaults = optionsForModel.apply(target);
-        var inferenceBuilder = defaults == null ? OpenAiChatOptions.builder() : defaults.mutate();
-        if (defaults == null) inferenceBuilder.model(target);
-        inferenceOptions = inferenceBuilder.build();
-        connectionIdentity =
-            Objects.toString(configuredEndpoint.get(), "")
-                + "|"
-                + Objects.toString(inferenceOptions.getBaseUrl(), "")
-                + "|"
-                + Objects.toString(inferenceOptions.getApiKey(), "")
-                + "|"
-                + Objects.toString(inferenceOptions.getModel(), "");
+        inferenceOptions=defaults==null ? OpenAiChatOptions.builder().model(target).build() : defaults.mutate().build();
+        connectionIdentity=Objects.toString(configuredEndpoint.get(),"")+"|"+ModelOptions.connectionFingerprint(inferenceOptions);
       }
       String fingerprint =
           ImplementationProposal.sha256(
@@ -429,23 +422,11 @@ public class DoctorActiveService {
 
   /** 実行環境の診断で用いる推定を返す。 */
   private DoctorResult inference(
-      RunExecutionContext run, OpenAiChatOptions captured, Duration timeout) {
+      RunExecutionContext run, ToolCallingChatOptions captured, Duration timeout) {
     var model = subAgentModel.get();
     ToolLoopSupport.requireNoDefaultTools(model);
-    var options = captured.mutate();
-    var bounded =
-        options
-            .maxCompletionTokens(null)
-            .maxTokens(16)
-            .toolCallbacks(List.of())
-            .toolChoice("none")
-            .toolContext(
-                Map.of(
-                    RunExecutionContext.KEY,
-                    run,
-                    AgentRunContext.class.getName(),
-                    run.runContext()))
-            .build();
+    var isolated=ModelOptions.singleRequest(captured,Map.of(RunExecutionContext.KEY,run,AgentRunContext.class.getName(),run.runContext()));
+    var bounded=ModelOptions.withTokenLimit(isolated,16);
     var inference =
         new BoundedToolLoop()
             .runWithHistory(
