@@ -626,7 +626,7 @@ public class ChatExecutionService {
       if (checkpoints != null) checkpoints.start(context, promptText);
       execution.capturePlanBaseline();
       if (checkpoints != null && checkpoints.hasProgressHistory(context)) {
-        execution.restoreProgress(checkpoints.progress(context));
+        execution.restoreProgress(checkpoints.progress(context), checkpoints.protocolReferences(context));
         if (execution.needsProgressReconciliation()) {
           boolean corrected = false;
           for (String result : checkpoints.recentSkillResults(context))
