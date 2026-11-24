@@ -19,9 +19,10 @@ class ResponsesTransportContractTest {
   void underlyingHttpLayerCannotReplayAResponsesRequest(int status, boolean streaming) throws Exception {
     var server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
     var received = new java.util.concurrent.atomic.AtomicInteger();
+    var wireBodies = new CopyOnWriteArrayList<JsonNode>();
     server.createContext("/v1/responses", exchange -> {
       received.incrementAndGet();
-      exchange.getRequestBody().readAllBytes();
+      wireBodies.add(new ObjectMapper().readTree(exchange.getRequestBody().readAllBytes()));
       var error = "{\"error\":{\"message\":\"fixture failure\",\"type\":\"fixture\"}}"
           .getBytes(java.nio.charset.StandardCharsets.UTF_8);
       exchange.getResponseHeaders().set("Content-Type", "application/json");
@@ -40,6 +41,7 @@ class ResponsesTransportContractTest {
         else model.call(new Prompt("fixture", options));
       }).isInstanceOf(ResponsesTransportException.class);
       assertThat(received.get()).isEqualTo(1);
+      assertThat(wireBodies).containsExactly(requests.getFirst());
     } finally {
       server.stop(0);
     }
@@ -294,6 +296,7 @@ class ResponsesTransportContractTest {
   private int httpStatus = 200;
   private boolean passThrough;
   private java.time.Duration readTimeout = java.time.Duration.ofMinutes(5);
+  private java.time.Duration sharedReadTimeout;
   private java.util.Set<LlmCapabilities.Setting> supportedSettings =
       java.util.Set.of(
           LlmCapabilities.Setting.STRUCTURED_OUTPUT, LlmCapabilities.Setting.IMAGE_INPUT);
@@ -421,9 +424,11 @@ class ResponsesTransportContractTest {
     try {
       passThrough = true;
       readTimeout = java.time.Duration.ofMillis(150);
+      sharedReadTimeout = java.time.Duration.ofSeconds(5);
       var options =
           options().baseUrl("http://127.0.0.1:" + server.getAddress().getPort() + "/v1").build();
       var model = transport(options);
+      long started = System.nanoTime();
       assertThatThrownBy(
               () -> {
                 if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
@@ -431,6 +436,8 @@ class ResponsesTransportContractTest {
               })
           .isInstanceOf(IllegalStateException.class)
           .hasMessageContaining("TIMEOUT");
+      assertThat(java.time.Duration.ofNanos(System.nanoTime() - started))
+          .isLessThan(java.time.Duration.ofSeconds(3));
       assertThat(requests).hasSize(1);
     } finally {
       release.countDown();
@@ -784,7 +791,11 @@ class ResponsesTransportContractTest {
                   .body(responseBody())
                   .build();
             });
-    return ResponsesAdapter.create(endpoint(options), options, List.of(customizer));
+    var customizers = new java.util.ArrayList<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>();
+    customizers.add(customizer);
+    if (sharedReadTimeout != null)
+      customizers.add(builder -> builder.interceptor(new ChatStreamTimeoutInterceptor(sharedReadTimeout)));
+    return ResponsesAdapter.create(endpoint(options), options, customizers);
   }
 
   private ResolvedLlmEndpoint endpoint(OpenAiResponsesChatOptions options) {

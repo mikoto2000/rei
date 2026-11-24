@@ -88,9 +88,15 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
           "Responses SDK retries must stay zero at client construction");
     options = options.mutate().timeout(endpoint.readTimeout()).build();
     var transportCustomizers = new ArrayList<OpenAiHttpClientBuilderCustomizer>();
-    transportCustomizers.add(
-        builder -> builder.interceptor(new ChatStreamTimeoutInterceptor(endpoint.readTimeout())));
     transportCustomizers.addAll(customizers);
+    transportCustomizers.add(
+        builder -> builder.interceptor(chain -> {
+          var request = chain.request();
+          var body = request.body();
+          if (body != null)
+            request = request.newBuilder().method(request.method(), nonReplayable(body)).build();
+          return chain.proceed(request);
+        }).interceptor(new ChatStreamTimeoutInterceptor(endpoint.readTimeout())));
     var client =
         OpenAiSetup.setupAsyncClient(
             options.getBaseUrl(),
@@ -135,6 +141,16 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             .httpClientBuilderCustomizers(transportCustomizers)
             .build();
     return new ResponsesAdapter(endpoint, model);
+  }
+
+  private static okhttp3.RequestBody nonReplayable(okhttp3.RequestBody body) {
+    return new okhttp3.RequestBody() {
+      @Override public okhttp3.MediaType contentType() { return body.contentType(); }
+      @Override public long contentLength() throws java.io.IOException { return body.contentLength(); }
+      @Override public boolean isOneShot() { return true; }
+      @Override public boolean isDuplex() { return body.isDuplex(); }
+      @Override public void writeTo(okio.BufferedSink sink) throws java.io.IOException { body.writeTo(sink); }
+    };
   }
 
   private ResponsesAdapter(ResolvedLlmEndpoint endpoint, OpenAiResponsesChatModel delegate) {
