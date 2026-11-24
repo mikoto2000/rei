@@ -15,6 +15,20 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 /** Exercises the pinned SDK's serialized HTTP request, without external traffic. */
 class ResponsesTransportContractTest {
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void outputLimitFailureKeepsTokenUsageWithoutReturningPartialOutput(boolean streaming) {
+    var incomplete = completed().replaceFirst("\"status\":\"completed\"",
+        "\"status\":\"incomplete\",\"incomplete_details\":{\"reason\":\"max_output_tokens\"}");
+    contentType = streaming ? "text/event-stream" : "application/json";
+    reply = streaming ? textDelta() + event("response.incomplete", "\"response\":" + incomplete) : incomplete;
+    var options = options().build();
+    var model = transport(options);
+    assertThatThrownBy(() -> {
+      if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
+      else model.call(new Prompt("fixture", options));
+    }).isInstanceOf(ResponsesTransportException.class).hasMessageContaining("OUTPUT_LIMIT");
+  }
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"baseUrl", "model", "maxOutputTokens", "temperature"})
   void clientConstructionRequiresTheResolvedDescriptor(String field) {
     var options = options().build();
