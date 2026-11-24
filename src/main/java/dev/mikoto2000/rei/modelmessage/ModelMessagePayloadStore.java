@@ -84,7 +84,7 @@ public final class ModelMessagePayloadStore {
     transaction(db -> {
       execute(db, "CREATE TABLE IF NOT EXISTS model_message_schema(version INTEGER NOT NULL)");
       long version = scalar(db, "SELECT COALESCE(MAX(version),0) FROM model_message_schema");
-      if (version < 0 || version > 2) throw rejected();
+      if (version < 0 || version > 3) throw rejected();
       if (version == 0) {
         execute(db, "CREATE TABLE model_message_payloads(id TEXT PRIMARY KEY,project TEXT NOT NULL,root_run TEXT NOT NULL,conversation TEXT NOT NULL,run TEXT NOT NULL,message_key TEXT NOT NULL,sha256 TEXT NOT NULL,payload BLOB NOT NULL,size INTEGER NOT NULL,UNIQUE(project,root_run,conversation,run,message_key))");
         execute(db, "INSERT INTO model_message_schema(version) VALUES(1)");
@@ -98,11 +98,17 @@ public final class ModelMessagePayloadStore {
         execute(db, "CREATE INDEX model_message_payloads_gc ON model_message_payloads(staged_until)");
         execute(db, "UPDATE model_message_schema SET version=2");
       }
+      if (version <= 2) {
+        execute(db, "CREATE TABLE model_message_receipts(project TEXT NOT NULL,root_run TEXT NOT NULL,conversation TEXT NOT NULL,run TEXT NOT NULL,message_key TEXT NOT NULL,payload_id TEXT NOT NULL,sha256 TEXT NOT NULL,PRIMARY KEY(project,root_run,conversation,run,message_key))");
+        execute(db, "INSERT INTO model_message_receipts SELECT project,root_run,conversation,run,message_key,id,sha256 FROM model_message_payloads");
+        execute(db, "UPDATE model_message_schema SET version=3");
+      }
       if (scalar(db, "SELECT COUNT(*) FROM model_message_schema") != 1) throw rejected();
       // Verify even existing schemas before accepting a write; do not reinterpret future versions.
       execute(db, "SELECT id,project,root_run,conversation,run,message_key,sha256,payload,size,staged_until FROM model_message_payloads LIMIT 0");
       execute(db, "SELECT payload_id,kind,owner FROM model_message_references LIMIT 0");
       execute(db, "SELECT project,root_run,conversation,run,bytes FROM model_message_run_usage LIMIT 0");
+      execute(db, "SELECT project,root_run,conversation,run,message_key,payload_id,sha256 FROM model_message_receipts LIMIT 0");
       return null;
     });
   }
@@ -114,7 +120,7 @@ public final class ModelMessagePayloadStore {
     byte[] bytes = codec.encode(message);
     String hash = digest(bytes);
     return transaction(db -> {
-      try (var query = db.prepareStatement("SELECT id,sha256 FROM model_message_payloads WHERE project=? AND root_run=? AND conversation=? AND run=? AND message_key=?")) {
+      try (var query = db.prepareStatement("SELECT payload_id,sha256 FROM model_message_receipts WHERE project=? AND root_run=? AND conversation=? AND run=? AND message_key=?")) {
         bind(query, scope.project(), scope.rootRun(), scope.conversation(), run, key);
         try (var row = query.executeQuery()) {
           if (row.next()) {
@@ -135,6 +141,10 @@ public final class ModelMessagePayloadStore {
         bind(insert, ref.id(), scope.project(), scope.rootRun(), scope.conversation(), run, key, hash, bytes, bytes.length,
             Math.addExact(clock.millis(), limits.stagingLifetime().toMillis()));
         insert.executeUpdate();
+      }
+      try (var receipt = db.prepareStatement("INSERT INTO model_message_receipts(project,root_run,conversation,run,message_key,payload_id,sha256) VALUES(?,?,?,?,?,?,?)")) {
+        bind(receipt, scope.project(), scope.rootRun(), scope.conversation(), run, key, ref.id(), hash);
+        receipt.executeUpdate();
       }
       try (var update = db.prepareStatement("INSERT INTO model_message_run_usage(project,root_run,conversation,run,bytes) VALUES(?,?,?,?,?) ON CONFLICT(project,root_run,conversation,run) DO UPDATE SET bytes=excluded.bytes")) {
         bind(update, scope.project(), scope.rootRun(), scope.conversation(), run, Math.addExact(runBytes, bytes.length));
