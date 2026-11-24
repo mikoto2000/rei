@@ -665,7 +665,8 @@ class ResponsesReplayContractTest {
       assertThat(requests).hasSize(2);
       return;
     }
-    execution.setModelOptions(currentOptions);
+    execution.setModelOptions(models.requestOptions(LlmFeature.CHAT, null, true, current)
+        .mutate().toolCallbacks(callbacks).build());
     assertThat(execution.progressSnapshot().protocolHistory()).isEqualTo(ownHistory);
     assertThat(execution.modelOptions().getToolContext()
         .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY))
@@ -673,6 +674,8 @@ class ResponsesReplayContractTest {
     var resumed = new ToolLoopSupport().executePending(new Prompt(saved.messages(), execution.modelOptions()),
         saved.pendingTools(), execution);
     assertThat(executions).as("reuse the first successful prefix and execute only the remaining call").hasValue(2);
+    assertThat(execution.protocolHistorySnapshot().entries()).as("reuse original iteration across approval restart")
+        .hasSize(3).element(1).isEqualTo(ownHistory.entries().get(1));
     var result = models.chatModel(LlmFeature.CHAT).call(new Prompt(resumed.conversationHistory(), execution.modelOptions()));
     assertThat(result.getResult().getOutput().getText()).isEqualTo("done");
     assertThat(requests).hasSize(3);
