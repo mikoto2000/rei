@@ -82,6 +82,7 @@ public final class ModelMessageCodec {
         : part instanceof ReasoningPart reasoning ? reasoning.payload() : ((ToolCallPart) part).payload();
     if (payload != null) node.putObject("payload").put("provider", payload.provider())
         .put("kind", payload.kind()).put("data", payload.data());
+    decodePart(node);
     return node;
   }
 
