@@ -40,7 +40,7 @@ public class RunExecutionContext {
     if (modelOptions != null || options == null)
       throw new IllegalStateException("Run model options cannot be replaced");
     modelOptions = options.mutate().build();
-    var boundary = modelOptions.getToolContext().get(
+    var boundary = modelOptions.getToolContext() == null ? null : modelOptions.getToolContext().get(
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
     if (boundary instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange) {
       var context = new java.util.HashMap<>(modelOptions.getToolContext());
