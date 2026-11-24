@@ -15,6 +15,41 @@ import org.springframework.ai.chat.messages.part.ToolCallPart;
 
 class ModelMessageCodecTest {
   @Test
+  void rawStringPoliciesCannotBecomeTrustedDeliveryMetadata() {
+    var message = org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(List.of(
+        new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse("call_one", "fixture", "fixture")))
+        .metadata(Map.of("rei.deliveryPolicies", Map.of("call_one", "FILE_CONTENT"))).build();
+    assertThatThrownBy(() -> new ModelMessageCodec().encode(message))
+        .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid model message schema").hasNoCause();
+  }
+
+  @Test
+  void duplicateToolOutputsCannotBePublished() {
+    var result = new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse("call_one", "fixture", "fixture");
+    assertThatThrownBy(() -> new ModelMessageCodec().encode(
+        org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(List.of(result, result)).build()))
+        .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid model message schema").hasNoCause();
+  }
+
+  static java.util.stream.Stream<String> invalidDelivery() {
+    return java.util.stream.Stream.of(
+        "{\"policies\":{\"foreign_call\":\"FILE_CONTENT\"}}",
+        "{\"policies\":{\"call_one\":42}}",
+        "{\"pages\":{\"call_one\":{\"ref\":\"fixture\",\"offset\":-1}}}",
+        "{\"receipts\":{\"call_one\":{\"serializedHash\":\"invalid\"}}}",
+        "{\"receipts\":{\"call_one\":{\"serializedHash\":\"" + "a".repeat(64) + "\",\"@class\":\"private-fixture\"}}}",
+        "{\"fileReadBudgets\":{\"call_one\":{\"tokens\":-1}}}",
+        "{\"fileReadBudgets\":{\"call_one\":{\"tokens\":1.5}}}");
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.MethodSource("invalidDelivery")
+  void malformedOrDanglingDeliveryEvidenceFailsClosed(String delivery) {
+    String document = "{\"schemaVersion\":1,\"role\":\"tool\",\"parts\":[{\"type\":\"tool_result\",\"callId\":\"call_one\",\"name\":\"fixture\",\"data\":\"fixture\"}],\"metadata\":{\"delivery\":" + delivery + "}}";
+    assertThatThrownBy(() -> new ModelMessageCodec().decode(document.getBytes(StandardCharsets.UTF_8)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid model message schema").hasNoCause();
+  }
+  @Test
   void toolResultsKeepCallReferencesModelProjectionAndTypedDeliveryMetadata() {
     var delivery = new dev.mikoto2000.rei.tooldelivery.ToolResultMetadata(
         Map.of("call_one", "FILE_CONTENT", "call_two", "GENERAL"),
