@@ -52,6 +52,59 @@ class ResponsesReplayContractTest {
   private String contentType = "application/json";
 
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void existingDiscoveryLoopUsesTheOriginalRequestSnapshot(boolean unpublishedSibling) throws Exception {
+    contentType = "text/event-stream";
+    var mapper = new ObjectMapper();
+    var output = mapper.createArrayNode();
+    output.add(mapper.readTree("""
+        {"type":"reasoning","id":"rs_search","summary":[],"encrypted_content":"opaque-search","status":"completed"}
+        """));
+    var search = mapper.createObjectNode().put("type", "function_call").put("id", "fc_search")
+        .put("call_id", "call_search").put("name", "searchTools").put("status", "completed")
+        .put("arguments", "{\"query\":\"googleCalendarListEventsForDate\",\"maxResults\":1}");
+    output.add(search);
+    if (unpublishedSibling) output.add(search.deepCopy().put("id", "fc_unpublished")
+        .put("call_id", "call_unpublished").put("name", "googleCalendarListEventsForDate").put("arguments", "{}"));
+    replies.add(sse(response("resp_search", output.toString())));
+    replies.add(sse(done()));
+    var budget = new OutputLimitRunBudget(3, 10);
+    budget.tryConsumeLlmCall();
+    var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("run", budget,
+        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(java.nio.file.Path.of(".")),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), event -> {});
+    execution.setRunContext(new dev.mikoto2000.rei.core.chat.AgentRunContext("run", "session", java.nio.file.Path.of("."),
+        "project", dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL,
+        dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE));
+    var callbacks = java.nio.file.Files.readAllLines(java.nio.file.Path.of("docs/tool-discovery-classification.csv"))
+        .stream().skip(1).filter(line -> !line.isBlank()).<ToolCallback>map(line -> new ToolCallback() {
+          public ToolDefinition getToolDefinition() { return ToolDefinition.builder().name(line.split(",")[0])
+              .description("fixture").inputSchema("{\"type\":\"object\",\"properties\":{}}").build(); }
+          public String call(String arguments) { executions.incrementAndGet(); return "fixture"; }
+        }).toList();
+    var defaults = options();
+    var requestOptions = defaults.mutate().toolCallbacks(callbacks)
+        .toolContext(Map.of(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, owner,
+            dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution)).build();
+    var discoveryProperties = new dev.mikoto2000.rei.llm.discovery.ToolDiscoveryProperties();
+    discoveryProperties.setEnabled(true);
+    var discovery = new dev.mikoto2000.rei.llm.discovery.ToolDiscovery(discoveryProperties,
+        new org.springframework.beans.factory.support.DefaultListableBeanFactory()
+            .getBeanProvider(dev.mikoto2000.rei.llm.discovery.ToolDiscoveryStore.class));
+    new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(model(defaults)).withToolDiscovery(discovery)
+        .stream(new Prompt("fixture", requestOptions)).blockLast(Duration.ofSeconds(10));
+    assertThat(executions.get()).isZero();
+    assertThat(requests).hasSize(2);
+    assertThat(requests.getFirst().path("tools")).hasSize(32);
+    assertThat(requests.getFirst().path("tools").toString()).doesNotContain("googleCalendarListEventsForDate");
+    assertThat(requests.getLast().path("tools")).hasSize(unpublishedSibling ? 32 : 33);
+    if (!unpublishedSibling) {
+      assertThat(requests.getLast().path("tools").toString()).contains("googleCalendarListEventsForDate");
+      assertThat(requests.getLast().path("input").toString()).contains("opaque-search", "call_search");
+    }
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({"status,false", "status,true", "duplicateItem,false", "duplicateItem,true",
       "duplicateCall,false", "duplicateCall,true", "arguments,false", "arguments,true", "hosted,false", "hosted,true"})
   void malformedCompletedOutputCannotDispatch(String changed, boolean streaming) throws Exception {
