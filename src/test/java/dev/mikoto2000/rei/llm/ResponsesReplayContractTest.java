@@ -317,6 +317,7 @@ class ResponsesReplayContractTest {
     assertThat(provider.chatModel(LlmFeature.CHAT).call(new Prompt("fixture", options))
         .getResult().getOutput().getText()).isEqualTo("done");
     assertThat(requests).hasSize(1);
+    assertThat(requests.getFirst().has("include")).isFalse();
   }
 
   @Test
@@ -2681,6 +2682,7 @@ class ResponsesReplayContractTest {
     assertThat(restored.getParts()).containsExactlyElementsOf(parts);
     contentType = "application/json";
     model.call(new Prompt(List.of(new UserMessage("fixture"), restored), options));
+    assertThat(requests).allSatisfy(request -> assertThat(request.has("include")).isFalse());
     var input = requests.getLast().path("input");
     for (int position : List.of(1, 4)) {
       assertThat(input.get(position).path("type").asText()).isEqualTo("reasoning");
