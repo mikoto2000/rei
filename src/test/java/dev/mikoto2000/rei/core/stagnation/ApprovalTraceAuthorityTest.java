@@ -30,26 +30,72 @@ class ApprovalTraceAuthorityTest {
     var old = payloads.newExchange(new AgentRunContext("old", "chat", directory, "project"));
     var exchange = payloads.newExchange(current);
     var origin = new ModelMessagePayloadStore.Origin(exchange.ownerKey(), "endpoint");
-    var oldMessage = AssistantMessage.builder().content("saved checkpoint result").properties(Map.of(
-        "rei.llm.replay-origin-owner", old.ownerKey(), "rei.llm.replay-origin-endpoint", "endpoint")).build();
+    var oldMessage =
+        AssistantMessage.builder()
+            .content("saved checkpoint result")
+            .properties(
+                Map.of(
+                    "rei.llm.replay-origin-owner",
+                    old.ownerKey(),
+                    "rei.llm.replay-origin-endpoint",
+                    "endpoint"))
+            .build();
     var oldReference = old.reference(oldMessage);
-    var currentReference = exchange.reference(AssistantMessage.builder().content("pending approval").properties(Map.of(
-        "rei.llm.replay-origin-owner", origin.owner(), "rei.llm.replay-origin-endpoint", origin.endpoint())).build());
-    var references = List.of(oldReference, currentReference).stream().map(ref -> {
-      payloads.publish(exchange.scope(), ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, "approval");
-      return new ModelMessagePayloadStore.ReplayReference(ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, "approval");
-    }).toList();
-    var history = new ModelMessagePayloadStore.History(1, current.runId(), origin,
-        List.of(new ModelMessagePayloadStore.History.Entry(old.key() + "/ASSISTANT", oldReference),
-            new ModelMessagePayloadStore.History.Entry(exchange.key() + "/ASSISTANT", currentReference)));
-    var execution = new RunExecutionContext(current.runId(), new OutputLimitRunBudget(2, 8),
-        new ProgressEvaluator(directory), new AgentEventFactory(Clock.systemUTC()), ignored -> {});
+    var currentReference =
+        exchange.reference(
+            AssistantMessage.builder()
+                .content("pending approval")
+                .properties(
+                    Map.of(
+                        "rei.llm.replay-origin-owner",
+                        origin.owner(),
+                        "rei.llm.replay-origin-endpoint",
+                        origin.endpoint()))
+                .build());
+    var references =
+        List.of(oldReference, currentReference).stream()
+            .map(ref -> {
+              payloads.publish(
+                  exchange.scope(),
+                  ref,
+                  ModelMessagePayloadStore.ReferenceKind.APPROVAL,
+                  "approval");
+              return new ModelMessagePayloadStore.ReplayReference(
+                  ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, "approval");
+            })
+            .toList();
+    var history =
+        new ModelMessagePayloadStore.History(
+            1,
+            current.runId(),
+            origin,
+            List.of(
+                new ModelMessagePayloadStore.History.Entry(old.key() + "/ASSISTANT", oldReference),
+                new ModelMessagePayloadStore.History.Entry(
+                    exchange.key() + "/ASSISTANT", currentReference)));
+    var execution =
+        new RunExecutionContext(
+            current.runId(),
+            new OutputLimitRunBudget(2, 8),
+            new ProgressEvaluator(directory),
+            new AgentEventFactory(Clock.systemUTC()),
+            ignored -> {});
     execution.setRunContext(current);
-    execution.resume(new RunContinuation.Saved("fixture", List.of(oldMessage),
-        new OutputLimitRunBudget(2, 8).snapshot(), null, references, history));
-    execution.setModelOptions(ToolCallingChatOptions.builder().toolContext(Map.of(
-        ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange,
-        ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY, origin)).build());
+    execution.resume(
+        new RunContinuation.Saved(
+            "fixture",
+            List.of(oldMessage),
+            new OutputLimitRunBudget(2, 8).snapshot(),
+            null,
+            references,
+            history));
+    execution.setModelOptions(
+        ToolCallingChatOptions.builder()
+            .toolContext(
+                Map.of(
+                    ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange,
+                    ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY, origin))
+            .build());
     assertThat(execution.protocolHistorySnapshot()).isEqualTo(history);
     assertThat(payloads.load(exchange.scope(), oldReference).getMetadata())
         .containsEntry("rei.llm.replay-origin-owner", old.ownerKey());
