@@ -53,17 +53,21 @@ public class PersistentCheckpointRepository {
   }
 
   private org.springframework.beans.factory.ObjectProvider<
-      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> protocolPayloads;
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore>
+      protocolPayloads;
 
   /** Lazily resolved only for checkpoints containing protocol payload references. */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  void configureModelMessagePayloads(org.springframework.beans.factory.ObjectProvider<
-      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore> payloads) {
+  void configureModelMessagePayloads(
+      org.springframework.beans.factory.ObjectProvider<
+              dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore>
+          payloads) {
     protocolPayloads = payloads;
   }
 
   private dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore protocolPayloads() {
-    if (protocolPayloads == null) throw new IllegalStateException("Protocol checkpoint storage unavailable");
+    if (protocolPayloads == null)
+      throw new IllegalStateException("Protocol checkpoint storage unavailable");
     return protocolPayloads.getObject();
   }
 
@@ -537,17 +541,23 @@ public class PersistentCheckpointRepository {
       throw CheckpointException.snapshotCapacity(incomingBytes, settings.getMaxSnapshotBytes());
     // Cross-DB order deliberately favors extra protection if this save fails.
     if (checkpointReferences != null) checkpointReferences.protect().accept(next);
-    if (next.progress() != null && next.progress().protocolHistory() != null) {
-      var history = next.progress().protocolHistory();
-      if (!history.run().equals(next.runId()) && !history.run().equals(next.originalRunId())
+    if (next.protocolHistory() != null) {
+      var history = next.protocolHistory();
+      if (!history.run().equals(next.runId())
+          && !history.run().equals(next.originalRunId())
           && !history.run().equals(next.resumedFromRunId()))
         throw new IllegalStateException("Protocol checkpoint ownership mismatch");
-      var scope = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
-          "project:" + next.projectId(), java.nio.file.Path.of(next.projectRoot()).toAbsolutePath().normalize().toString(),
-          next.sessionId());
-      protocolPayloads().protectCheckpoint(scope, history,
-          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
-              next.projectId(), next.taskId(), next.revision()));
+      var scope =
+          new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Scope(
+              "project:" + next.projectId(),
+              java.nio.file.Path.of(next.projectRoot()).toAbsolutePath().normalize().toString(),
+              next.sessionId());
+      protocolPayloads()
+          .protectCheckpoint(
+              scope,
+              history,
+              dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
+                  next.projectId(), next.taskId(), next.revision()));
     }
     var removed = new ArrayList<HistoricalRow>();
     var saved =
@@ -704,7 +714,8 @@ public class PersistentCheckpointRepository {
                             row.getString("task"),
                             row.getLong("revision"),
                             row.getLong("bytes"),
-                            row.getString("created"), row.getBoolean("protocol")))
+                            row.getString("created"),
+                            row.getBoolean("protocol")))
                     .list());
             db.sql("DELETE FROM checkpoint_revisions").update();
             db.sql("DELETE FROM checkpoint_heads").update();
@@ -903,7 +914,8 @@ public class PersistentCheckpointRepository {
                     row.getString("task"),
                     row.getLong("revision"),
                     row.getLong("bytes"),
-                    row.getString("created"), row.getBoolean("protocol")))
+                    row.getString("created"),
+                    row.getBoolean("protocol")))
             .list();
     for (var row : all) {
       var task = new TaskKey(row.project(), row.task());
@@ -1032,9 +1044,13 @@ public class PersistentCheckpointRepository {
 
   /** 後続の処理が利用できるよう、参照先一覧を解放する。 */
   private void releaseReferences(List<HistoricalRow> removed) {
-    var protocolOwners = removed.stream().filter(HistoricalRow::protocol)
-        .map(row -> dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
-            row.project(), row.task(), row.revision())).toList();
+    var protocolOwners =
+        removed.stream()
+            .filter(HistoricalRow::protocol)
+            .map(row ->
+                dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.checkpointOwner(
+                    row.project(), row.task(), row.revision()))
+            .toList();
     if (!protocolOwners.isEmpty())
       try {
         protocolPayloads().releaseCheckpointHistory(protocolOwners);
