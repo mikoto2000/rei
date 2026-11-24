@@ -189,10 +189,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       throw new IllegalArgumentException("Responses model differs from the bound endpoint");
     if (options.getMaxRetries() != 0)
       throw new IllegalArgumentException("Responses SDK retries must stay zero");
-    if (options.getMaxOutputTokens() == null
-        || options.getMaxOutputTokens() < 1
-        || (endpoint.maxOutputTokens() != null
-            && options.getMaxOutputTokens() > endpoint.maxOutputTokens()))
+    var outputLimit = options.getMaxOutputTokens();
+    var resolvedLimit = endpoint.maxOutputTokens();
+    if (outputLimit == null
+        || outputLimit < 1
+        || (resolvedLimit != null && outputLimit > resolvedLimit))
       throw new IllegalArgumentException("Responses output limit must respect the resolved bound");
     requireCapability(options.getTemperature(), LlmCapabilities.Setting.TEMPERATURE, "temperature");
     requireCapability(options.getTopP(), LlmCapabilities.Setting.TOP_P, "topP");
@@ -211,7 +212,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     for (var message : prompt.getInstructions())
       if (message instanceof UserMessage user && !user.getMedia().isEmpty())
         requireCapability(Boolean.TRUE, LlmCapabilities.Setting.IMAGE_INPUT, "imageInput");
-    if (options.getHostedTools() != null && !options.getHostedTools().isEmpty())
+    var hostedTools = options.getHostedTools();
+    if (hostedTools != null && !hostedTools.isEmpty())
       throw new IllegalArgumentException("Responses hostedTools are not supported");
     if (options.getTruncation() != null && !"disabled".equals(options.getTruncation()))
       throw new IllegalArgumentException("Responses truncation must stay disabled");
@@ -262,8 +264,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   }
 
   private void validateTools(List<ToolCallback> callbacks) {
-    int maximum =
-        endpoint.capabilities().maxTools() == null ? 128 : endpoint.capabilities().maxTools();
+    var configuredMaximum = endpoint.capabilities().maxTools();
+    int maximum = configuredMaximum == null ? 128 : configuredMaximum;
     if (callbacks.size() > maximum)
       throw new IllegalArgumentException("Responses tool count exceeds endpoint limit");
     var names = new java.util.HashSet<String>();
@@ -316,10 +318,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
 
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
+    var request = prepare(prompt);
     return Flux.defer(
             () -> {
               var completed = new AtomicBoolean();
-              return delegate.stream(prepare(prompt))
+              return delegate.stream(request)
                   .doOnNext(response -> {
                     if (response.getMetadata().containsKey(OpenAiResponsesMetadata.STATUS)) {
                       requireCompleted(response);
@@ -331,8 +334,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
                           completed.get()
                               ? Flux.empty()
                               : Flux.error(
-                                  new IllegalStateException(
-                                      "Responses stream ended without completion"))));
+                                  new ResponsesTransportException(
+                                      ResponsesTransportException.Category.INVALID_RESPONSE))));
             })
         .onErrorMap(ResponsesTransportException::normalize);
   }

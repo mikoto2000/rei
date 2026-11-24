@@ -74,7 +74,7 @@ final class ResponsesTransportException extends IllegalStateException {
     return category;
   }
 
-  static RuntimeException normalize(Throwable error) {
+  static ResponsesTransportException normalize(Throwable error) {
     error = reactor.core.Exceptions.unwrap(error);
     while (error instanceof java.util.concurrent.CompletionException && error.getCause() != null)
       error = error.getCause();
@@ -98,7 +98,6 @@ final class ResponsesTransportException extends IllegalStateException {
     if (error instanceof com.openai.errors.OpenAIException
         || error instanceof org.springframework.ai.openai.responses.OpenAiResponsesException)
       return new ResponsesTransportException(Category.PROVIDER);
-    if (error instanceof RuntimeException runtime) return runtime;
     return new ResponsesTransportException(Category.PROVIDER);
   }
 }
