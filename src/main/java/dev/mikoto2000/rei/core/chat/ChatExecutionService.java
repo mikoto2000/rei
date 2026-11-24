@@ -160,7 +160,7 @@ public class ChatExecutionService {
   /** モデル提供元。 */
   private final Function<String, ChatModel> privateSecretaryModel;
 
-  private final Function<String, ToolCallingChatOptions> optionsForModel;
+  private final java.util.function.BiFunction<String, AgentRunContext, ToolCallingChatOptions> optionsForModel;
 
   /** 言語モデル設定。 */
   private final Supplier<LlmProperties.OutputLimit> outputLimits;
@@ -374,7 +374,7 @@ public class ChatExecutionService {
     this.readSelectedModel = () -> currentModelHolder.get();
     this.privateSecretaryModel = expected -> modelProvider.privateSecretaryModel(expected);
     this.optionsForModel =
-        selected -> modelProvider.requestOptions(LlmFeature.CHAT, selected, true);
+        (selected, owner) -> modelProvider.requestOptions(LlmFeature.CHAT, selected, true, owner);
     this.outputLimits = () -> llmProperties.getOutputLimit();
     this.beginCancellation = () -> cancellationService.begin(Thread.currentThread());
     this.registerCancellation = disposable -> cancellationService.register(disposable);
@@ -620,7 +620,7 @@ public class ChatExecutionService {
 
     try {
       if (!structuredCommand)
-        execution.setModelOptions(optionsForModel.apply(readSelectedModel.get()));
+        execution.setModelOptions(optionsForModel.apply(readSelectedModel.get(), context));
       if (resumed == null) turns.startOrdered(context, promptText, clock.instant());
       if (checkpoints != null) checkpoints.start(context, promptText);
       execution.capturePlanBaseline();

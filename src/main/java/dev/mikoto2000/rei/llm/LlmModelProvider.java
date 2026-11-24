@@ -375,7 +375,23 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   /** Accepted Run options; no provider state is added to the public Run context. */
   public org.springframework.ai.model.tool.ToolCallingChatOptions requestOptions(
       String feature, String selected, boolean streamUsage, dev.mikoto2000.rei.tooldelivery.ReadingRun owner) {
-    return requestOptions(feature, selected, streamUsage);
+    var options = requestOptions(feature, selected, streamUsage);
+    if (!(options instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)) return options;
+    var context = new java.util.HashMap<String, Object>();
+    if (options.getToolContext() != null) context.putAll(options.getToolContext());
+    if (!(context.get(ResolvedLlmEndpoint.CONTEXT_KEY) instanceof ResolvedLlmEndpoint endpoint)
+        || endpoint.apiType() != LlmApiType.RESPONSES)
+      throw new IllegalStateException("Native Run endpoint snapshot is unavailable");
+    for (String key : java.util.List.of(ResponsesReasoningReplay.OWNER_CONTEXT_KEY,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY))
+      if (context.containsKey(key)) throw new IllegalStateException("Native Run options must not inherit protocol authority");
+    if (modelPayloads == null) throw new IllegalStateException("Native model payload storage is unavailable");
+    var exchange = modelPayloads.get().newExchange(owner);
+    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(exchange.ownerKey(), endpoint.fingerprint()));
+    context.put(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, exchange);
+    return options.mutate().toolContext(null).toolContext(context).build();
   }
 
   /** Native request options; production availability is checked by the existing provider gate. */

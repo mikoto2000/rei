@@ -69,6 +69,13 @@ public final class ModelMessagePayloadStore {
    * caller.
    */
   public record Exchange(ModelMessagePayloadStore store, Scope scope, String run, String key) {
+    public String ownerKey() {
+      validate(scope);
+      identifier(run);
+      return digest(String.join("\0", scope.project(), scope.root(), scope.conversation(), run)
+          .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     public void persist(Message message) {
       reference(message);
     }
@@ -78,6 +85,14 @@ public final class ModelMessagePayloadStore {
       store.publish(scope, ref, ReferenceKind.RUN, run);
       return ref;
     }
+  }
+
+  /** Validate the accepted owner before any model request or later payload save. */
+  public Exchange newExchange(dev.mikoto2000.rei.tooldelivery.ReadingRun owner) {
+    var scope = Scope.forOwner(owner);
+    validate(scope);
+    identifier(owner.runId());
+    return new Exchange(this, scope, owner.runId(), UUID.randomUUID().toString());
   }
 
   public record Scope(String project, String root, String conversation) {

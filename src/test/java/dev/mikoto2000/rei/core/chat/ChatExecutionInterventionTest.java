@@ -61,7 +61,7 @@ class ChatExecutionInterventionTest {
     when(clients.parallelChatClient(AgentRunContext.Mode.CONVERSATION))
         .thenReturn(ChatClient.builder(model).build());
     var models = mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
-    when(models.requestOptions(anyString(), any(), eq(true)))
+    when(models.requestOptions(anyString(), any(), eq(true), any()))
         .thenReturn(
             org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build());
     var holder = mock(ModelHolderService.class);
@@ -124,7 +124,7 @@ class ChatExecutionInterventionTest {
     var clients = mock(dev.mikoto2000.rei.llm.LlmChatClientProvider.class);
     when(clients.parallelChatClient(mode)).thenReturn(ChatClient.builder(model).build());
     var models = mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
-    when(models.requestOptions(anyString(), any(), eq(true)))
+    when(models.requestOptions(anyString(), any(), eq(true), any()))
         .thenReturn(
             org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build());
     var holder = mock(ModelHolderService.class);
