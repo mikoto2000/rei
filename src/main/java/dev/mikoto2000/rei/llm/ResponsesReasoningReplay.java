@@ -78,7 +78,7 @@ final class ResponsesReasoningReplay {
         var itemId = reasoning.attributes().get(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE);
         if (itemId == null || itemId.isBlank())
           throw new IllegalArgumentException("Responses reasoning item id is required");
-        if (!(metadata.get(ORIGIN_OWNER) instanceof String originOwner)
+        if (!(metadata.get(ORIGIN_OWNER) instanceof String)
             || !(metadata.get(ORIGIN_ENDPOINT) instanceof String originEndpoint))
           throw new IllegalArgumentException("Responses reasoning replay origin is required");
         if (!ownerPermitted)
