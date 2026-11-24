@@ -684,9 +684,10 @@ public final class SubAgentRunner {
                     .toList();
             if (callbacks.size() != effective.size())
               throw new IllegalStateException("Tool unavailable");
+            var factory = runOptionsFactory;
+            var selectedOptions = factory == null ? options.apply(d.model()) : factory.apply(d.model(), owner);
             ToolCallingChatOptions runOptions =
-                options
-                    .apply(d.model())
+                selectedOptions
                     .mutate()
                     .toolCallbacks(callbacks)
                     // The builder merges maps, so discard inherited context before adding child
