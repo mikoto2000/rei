@@ -274,7 +274,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       validateTools(callbacks);
       validateToolChoice(options.getToolChoice(), callbacks);
     }
-    return new Prompt(prompt.getInstructions(), options);
+    return ResponsesReasoningReplay.prepare(
+        new Prompt(prompt.getInstructions(), options), endpoint);
   }
 
   private static void validateToolChoice(Object choice, List<ToolCallback> callbacks) {
@@ -334,7 +335,20 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     try {
       var response = delegate.call(request);
       requireCompleted(response);
-      return response;
+      if (OutputLimitDetector.isOutputLimitReached(response)) {
+        var generations =
+            response.getResults().stream()
+                .map(generation ->
+                    new org.springframework.ai.chat.model.Generation(
+                        new org.springframework.ai.chat.messages.AssistantMessage(
+                            java.util.Objects.toString(generation.getOutput().getText(), "")),
+                        generation.getMetadata()))
+                .toList();
+        return new ChatResponse(generations, response.getMetadata());
+      }
+      var bound = ResponsesReasoningReplay.bind(response, request, endpoint);
+      validateComplete(bound, request);
+      return bound;
     } catch (RuntimeException error) {
       throw ResponsesTransportException.normalize(error);
     }
@@ -344,6 +358,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     var metadata = response.getMetadata();
     var status = metadata.get(OpenAiResponsesMetadata.STATUS);
     if ("completed".equals(status)) return;
+    // Spring AI maps this exact native reason to LENGTH. Existing Rei recovery owns
+    // continuation; no partial reasoning/function item is admitted as a completed turn.
+    if ("incomplete".equals(status)
+        && "max_output_tokens".equals(metadata.get(OpenAiResponsesMetadata.INCOMPLETE_REASON))
+        && OutputLimitDetector.isOutputLimitReached(response)) return;
     var category = ResponsesTransportException.Category.INVALID_RESPONSE;
     if ("incomplete".equals(status))
       category =
@@ -354,26 +373,75 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
         category, ResponsesTransportException.usage(metadata.getUsage()));
   }
 
+  private void validateComplete(ChatResponse response, Prompt request) {
+    ResponsesReasoningReplay.validateComplete(response, request, endpoint);
+    var itemIds = new java.util.HashSet<String>();
+    var callIds = new java.util.HashSet<String>();
+    try {
+      for (var generation : response.getResults()) {
+        for (var part : generation.getOutput().getParts()) {
+          if (!(part instanceof org.springframework.ai.chat.messages.part.TextPart
+                  || part instanceof org.springframework.ai.chat.messages.part.ReasoningPart
+                  || part instanceof org.springframework.ai.chat.messages.part.ToolCallPart)
+              || org.springframework.ai.chat.messages.part.StreamingParts.isPartial(part))
+            throw new IllegalArgumentException();
+          var status = part.attributes().get(OpenAiResponsesMetadata.ITEM_STATUS_ATTRIBUTE);
+          if (status != null && !"completed".equals(status)) throw new IllegalArgumentException();
+          if (part instanceof org.springframework.ai.chat.messages.part.TextPart) continue;
+          var itemId = part.attributes().get(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE);
+          if (itemId == null || itemId.isBlank() || !itemIds.add(itemId))
+            throw new IllegalArgumentException();
+          if (part instanceof org.springframework.ai.chat.messages.part.ToolCallPart call) {
+            var value = call.toolCall();
+            if (value.id() == null
+                || value.id().isBlank()
+                || !callIds.add(value.id())
+                || !"function".equals(value.type())
+                || value.name() == null
+                || value.name().isBlank()
+                || value.arguments() == null
+                || value.arguments().length() > 4_194_304) throw new IllegalArgumentException();
+            var arguments = JSON.readTree(value.arguments());
+            if (arguments == null || !arguments.isObject()) throw new IllegalArgumentException();
+          }
+        }
+      }
+    } catch (IllegalArgumentException | JsonProcessingException invalid) {
+      throw new ResponsesTransportException(
+          ResponsesTransportException.Category.INVALID_RESPONSE,
+          ResponsesTransportException.usage(response));
+    }
+  }
+
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
     var request = prepare(prompt);
     return Flux.defer(
             () -> {
               var completed = new AtomicBoolean();
-              return delegate.stream(request)
-                  .doOnNext(response -> {
-                    if (response.getMetadata().containsKey(OpenAiResponsesMetadata.STATUS)) {
-                      requireCompleted(response);
-                      completed.set(true);
-                    }
-                  })
+              var aggregated = new java.util.concurrent.atomic.AtomicReference<ChatResponse>();
+              var chunks =
+                  delegate.stream(request)
+                      .doOnNext(response -> {
+                        if (response.getMetadata().containsKey(OpenAiResponsesMetadata.STATUS)) {
+                          requireCompleted(response);
+                          completed.set(true);
+                        }
+                      })
+                      .map(response -> ResponsesReasoningReplay.bind(response, request, endpoint));
+              return new org.springframework.ai.chat.model.MessageAggregator()
+                  .aggregate(chunks, aggregated::set)
                   .concatWith(
-                      Flux.defer(() ->
-                          completed.get()
-                              ? Flux.empty()
-                              : Flux.error(
-                                  new ResponsesTransportException(
-                                      ResponsesTransportException.Category.INVALID_RESPONSE))));
+                      Flux.defer(() -> {
+                        var result = aggregated.get();
+                        if (!completed.get() || result == null)
+                          return Flux.error(
+                              new ResponsesTransportException(
+                                  ResponsesTransportException.Category.INVALID_RESPONSE));
+                        if (!OutputLimitDetector.isOutputLimitReached(result))
+                          validateComplete(result, request);
+                        return Flux.empty();
+                      }));
             })
         .onErrorMap(ResponsesTransportException::normalize);
   }

@@ -100,6 +100,8 @@ public final class ToolLoopSupport {
 
   /** 要求された処理を実行する。 */
   public ToolExecutionResult execute(Prompt prompt, ChatResponse response) {
+    if (truncated(response))
+      return rejectedBatch(prompt, "The output limit interrupted this tool batch. No calls ran.");
     if (hasInvalidToolCallIds(response)) return invalidToolCallIds(prompt);
     response = inheritFileContinuations(prompt, response);
     var lease = RunCancellation.enterChild(prompt);
@@ -111,14 +113,42 @@ public final class ToolLoopSupport {
     }
   }
 
+  private static boolean truncated(ChatResponse response) {
+    var generation = response.getResult();
+    return generation != null
+        && "length"
+            .equalsIgnoreCase(
+                java.util.Objects.toString(generation.getMetadata().getFinishReason(), "").strip());
+  }
+
   private ChatResponse inheritFileContinuations(Prompt prompt, ChatResponse response) {
     var generations =
         response.getResults().stream()
             .map(generation -> {
               var output = generation.getOutput();
               var calls = FileReadContinuation.inherit(prompt, output.getToolCalls());
+              if (java.util.Objects.equals(calls, output.getToolCalls())) return generation;
+              var replacements = calls.iterator();
+              var parts =
+                  output.getParts().stream()
+                      .map(part -> {
+                        if (part
+                                instanceof
+                                org.springframework.ai.chat.messages.part.ToolCallPart call
+                            && !org.springframework.ai.chat.messages.part.StreamingParts.isPartial(
+                                call))
+                          return (org.springframework.ai.chat.messages.part.MessagePart)
+                              new org.springframework.ai.chat.messages.part.ToolCallPart(
+                                  replacements.next(), call.payload(), call.attributes());
+                        return part;
+                      })
+                      .toList();
               return new org.springframework.ai.chat.model.Generation(
-                  output.mutate().toolCalls(calls).build(), generation.getMetadata());
+                  org.springframework.ai.chat.messages.AssistantMessage.builder()
+                      .parts(parts)
+                      .properties(output.getMetadata())
+                      .build(),
+                  generation.getMetadata());
             })
             .toList();
     return new ChatResponse(generations, response.getMetadata());
@@ -251,6 +281,8 @@ public final class ToolLoopSupport {
       Prompt prompt,
       ChatResponse response,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
+    if (truncated(response))
+      return rejectedBatch(prompt, "The output limit interrupted this tool batch. No calls ran.");
     for (var candidate : response.getResults()) {
       var candidateIds = new java.util.HashSet<String>();
       for (var call : candidate.getOutput().getToolCalls()) {
@@ -276,14 +308,23 @@ public final class ToolLoopSupport {
     if (response.getResults().size() != 1)
       throw new IllegalArgumentException(
           "Approval continuation requires a single selected generation");
-    return executePending(
-        prompt,
-        new RunContinuation.PendingTools(
-            java.util.Objects.toString(output.getText(), ""),
-            output.getToolCalls(),
-            java.util.List.of()),
-        context,
-        false);
+    var executed =
+        executePending(
+            prompt,
+            new RunContinuation.PendingTools(
+                java.util.Objects.toString(output.getText(), ""),
+                output.getToolCalls(),
+                java.util.List.of()),
+            context,
+            false);
+    // The execution view may repair arguments, but the model's original ordered parts
+    // remain the source for the next protocol request.
+    var history = new java.util.ArrayList<>(executed.conversationHistory());
+    history.set(prompt.getInstructions().size(), output);
+    return ToolExecutionResult.builder()
+        .conversationHistory(history)
+        .returnDirect(executed.returnDirect())
+        .build();
   }
 
   static ToolExecutionResult rejectedBatch(Prompt prompt, String guidance) {

@@ -5,8 +5,8 @@
 | Phase | 状態 | ブランチ / worktree | PR | マージコミット | 検証 |
 | --- | --- | --- | --- | --- | --- |
 | 0 | MERGED | codex/responses-api-phase-0-foundation / 削除済み | [#628](https://github.com/mikoto2000/rei/pull/628) | d0e3626f9565035cab20cc045dd3ba070985d3fe | PR・マージ後CI成功。全件7,718、成功7,706、skip12、failure/error0 |
-| 1 | IN_PROGRESS | codex/responses-api-phase-1-transport / .worktrees/responses-api-phase-1 | [#629](https://github.com/mikoto2000/rei/pull/629) | 未マージ | 最終関連376件/対象104件成功、品質ゲート成功、全件CI待ち |
-| 2 | NOT_STARTED | — | — | — | 未実施 |
+| 1 | MERGED | codex/responses-api-phase-1-transport / 削除済み | [#629](https://github.com/mikoto2000/rei/pull/629) | 10542db848d9317c7eaaab06869e63e7ab571d5b | 最終CI全件7,818、成功7,806、期待skip12、failure/error0。品質ゲート成功 |
+| 2 | IN_PROGRESS | codex/responses-api-phase-2-openai-replay / .worktrees/responses-api-phase-2 | [#630](https://github.com/mikoto2000/rei/pull/630) | 未マージ | 関連159件・修正後architecture成功。最新headの全回帰・品質ゲート確認後にmerge |
 | 3 | NOT_STARTED | — | — | — | 未実施 |
 | 4 | NOT_STARTED | — | — | — | 未実施 |
 | 5 | NOT_STARTED | — | — | — | 未実施 |
@@ -106,11 +106,11 @@ main CI: Java45296798561、Client45296798127、static45296798041もすべて成�
 Windowsで通常削除後に残った自作のignored build artifactsだけは、検証済みのworkspace内targetへ保存した。
 元worktreeの未追跡設計書・review/を保持するため、元mainは無理に更新せず次phaseをorigin/mainから作成した。
 
-## Phase 1: 基本通信（進行中）
+## Phase 1: 基本通信（マージ・後片付け完了）
 
 基準main: d0e3626f。Spring AI2.1.0/OpenAI SDK4.101.0を引き続き使用する。
 TDDで実JSON・native SSE・loopback HTTPのfixtureを追加し、最終対象104件が成功、skip/failure/error0。
-PRは[#629](https://github.com/mikoto2000/rei/pull/629)。最終headの全件CI確認後に通常mergeする。
+PRは[#629](https://github.com/mikoto2000/rei/pull/629)。最終headの全件CI確認後に通常mergeした。
 
 | 境界 | Redで検出した問題 | Greenと契約 |
 | --- | --- | --- |
@@ -155,7 +155,7 @@ SDK response本文やcauseを保持せず、失敗時にも提供済みのinput/
 | 最終対象の独立検証 | 104件、failure/error/skip0 |
 | 最終Checkstyle / SpotBugs | 指摘0 / 指摘0・解析error0 |
 | 最終Spotless / architecture / package | すべて成功。既存ゲート・予算・除外の変更なし |
-| 最終headのPR CI | 確認中。全件の成否・期待skip・対象SHAを照合してからmerge |
+| 最終headのPR CI | head aa0518ef。A3,811+B4,007=7,818、成功7,806、failure/error0、期待skip12。ID/重複/欠落照合成功 |
 | 実API・本番操作・長時間性能 | 未実施。production Responsesは引き続き拒否 |
 
 SpotBugsのnullable getter再取得3件と広いRuntimeException投げ直し3件は、値の一度取得と
@@ -163,3 +163,44 @@ SpotBugsのnullable getter再取得3件と広いRuntimeException投げ直し3件
 実loopbackではSDK retry:0でも408/503が2回届くRedを4ケースで確認し、本文をnon-replayableと宣言して
 同期/非同期とも1回へ修正した。受信JSONは元のSDK JSONと一致する。共有5秒timeoutよりresolved150msが優先する。
 通常ログへprovider本文や推論を出さないログ捕捉テストも維持する。
+
+### Phase 1 のマージ後確認
+
+通常merge10542db8と検証済みhead aa0518efのtree一致を確認した。
+マージ後のstatic45312908900、Client45312908970、Java45312908991はすべて成功した。
+専用worktreeは通常のgit worktree removeで削除し、local/remote作業branchの削除も確認済み。
+元worktreeの利用者の未追跡設計書・review/は保持した。
+
+## Phase 2: 暗号化推論再送・既存ツール実行（検証中）
+
+基準main10542db8。native SDKを通すHTTP JSON/SSE fixtureと既存実行ループを使用する。
+本番経路では引き続きResponsesを拒否する。DB移行・実API・本番設定変更は実施していない。
+
+| Redで検出した問題 | Green / 結合試験 |
+| --- | --- |
+| 同じtoolCalls setterでitem属性・パーツ順序が失われる | 不要な再構築を避け、複数reasoning/text/toolの順序を保持 |
+| ファイル継続引数の補完時にitem属性が落ちる | 変更するToolCallPartだけ置換し、payloadと属性・位置を保持 |
+| 引数補正経路でreasoningが履歴から消える | 同期中の実行viewと元assistantを区別。元partsを次要求へ保持 |
+| 必須payload/item id欠損、provider/kind不一致をnative mapperが省略する | HTTP前に明示失敗。payload bytesの完全一致を確認 |
+| 別owner/endpoint/model/世代への再送が可能 | 明示backend ownerとfingerprintを照合。キーだけの更新は許容 |
+| completedでも再送必須情報が欠けた応答からツールが動く | 完全parts検証を正常完了の前に実施。同期・streamとも実行0件 |
+| 重複id・未完了function・壊れたJSON・hosted itemを受理する | terminal応答の整合性検証で拒否 |
+| partial/unknown saved partを省略・再送できる | input境界で拒否。欠損をnoneで回避しない |
+| max_output_tokensが既存出力上限回復へ届かない | native LENGTHとusageを既存処理へ接続。truncated batchは共有境界でも拒否 |
+
+動的公開は既存StagnationChatModelで32→33件を確認し、searchToolsの効果が次要求から適用される。
+未公開siblingを含む応答は検索自体より前に拒否し、次要求は32件を維持する。
+DENY/REQUIRE_APPROVALは既存guardを通り、業務callbackは実行されない。
+BoundedToolLoopでもEOF、failed、incomplete、cancelled、output limit、buffer中のキャンセルで実行0件。
+独自agent loop、独自HTTP client/SSE parser、interceptorのJSON書き換えは追加していない。
+
+短いTDDはRed/Greenの独立commitで記録した。関連最終159件、failure/error/skip0。
+全回帰・静的解析・architecture・PR/CIの結果は確認後に追記する。
+承認待ちの完全なparts保存・プロセス再起動後の復元・実Runの所有者接続はPhase 3・4で実装し、
+このphaseのin-memory fixtureの結果を永続化済み・本番利用可能とは扱わない。
+
+PR差分レビューで、Spring MessageAggregatorがnative cached/reasoning内訳を落とすことを追加Redで検出した。
+標準集約器の再実装はせず、raw terminalのnative usageと、集約をまたぐbackend metadataの正規化5数値を
+それぞれ検証する。正常完了・出力上限・整合性エラーで内訳を保持し、未提供値を推測しない。
+全回帰snapshot ab6e3b45ではarchitecture依存1件を検出した。予算を緩和せず共有境界内の判定へ修正し、
+production snapshotの独立architecture検証は成功した。snapshot全回帰の結果と修正後の結果は区別する。
