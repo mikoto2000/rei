@@ -185,8 +185,9 @@ public final class ModelOptions {
   public static ToolCallingChatOptions withOutputLimit(ToolCallingChatOptions options, int tokens) {
     if (tokens < 1) throw new IllegalArgumentException("Output limit must be positive");
     if (options instanceof OpenAiResponsesChatOptions responses) {
+      var configured=responses.getMaxOutputTokens();
       var builder = responses.mutate();
-      builder.maxOutputTokens(tokens);
+      builder.maxOutputTokens(configured==null ? tokens : Math.min(configured,tokens));
       return builder.build();
     }
     if (options instanceof OpenAiChatOptions chat && chat.getMaxCompletionTokens() != null)
