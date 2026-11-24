@@ -55,7 +55,12 @@ public final class ModelMessageCodec {
     var parts = root.putArray("parts");
     if (message instanceof AssistantMessage assistant) {
       if (assistant.getParts().size() > 1024) throw invalid();
-      assistant.getParts().forEach(part -> parts.add(encodePart(part)));
+      var ids = new java.util.HashSet<String>();
+      assistant.getParts().forEach(part -> {
+        var encoded = encodePart(part);
+        if (part instanceof ToolCallPart call && !ids.add(call.toolCall().id())) throw invalid();
+        parts.add(encoded);
+      });
     } else if (message instanceof ToolResponseMessage tool) {
       if (tool.getResponses().size() > 1024) throw invalid();
       var ids = new java.util.HashSet<String>();
@@ -121,7 +126,9 @@ public final class ModelMessageCodec {
           media.add(decodeMedia(part));
         } else if (!role.equals("tool")) {
           if (!media.isEmpty()) throw invalid();
-          parts.add(decodePart(part));
+          var decoded = decodePart(part);
+          if (decoded instanceof ToolCallPart call && !ids.add(call.toolCall().id())) throw invalid();
+          parts.add(decoded);
         } else {
           var result = decodeResult(part);
           if (!ids.add(result.id())) throw invalid();
@@ -468,11 +475,13 @@ public final class ModelMessageCodec {
       case "tool_call" -> {
         var call = node.path("call");
         fields(call, Set.of("id", "type", "name", "arguments"));
+        String id = required(call, "id"), name = required(call, "name");
+        if (id.isBlank() || name.isBlank()) throw invalid();
         yield new ToolCallPart(
             new AssistantMessage.ToolCall(
-                required(call, "id"),
+                id,
                 required(call, "type"),
-                required(call, "name"),
+                name,
                 required(call, "arguments")),
             payload,
             attributes);
