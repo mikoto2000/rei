@@ -20,6 +20,55 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 /** 出力上限Replannerの結果と状態の契約を検証するテスト。 */
 class OutputLimitReplannerTest {
 
+  @Test
+  void nativePlannerUsesItsOwnOptionsWithoutConversationReplayAuthority() {
+    var model=Mockito.mock(ChatModel.class);
+    var provider=Mockito.mock(LlmModelProvider.class);
+    var holder=Mockito.mock(ModelHolderService.class);
+    when(holder.get()).thenReturn("main");
+    var base=org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
+        .model("native-planner").maxOutputTokens(73).build();
+    when(provider.requestOptions(LlmFeature.OUTPUT_LIMIT_PLANNER,"main",false)).thenReturn(base);
+    when(provider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER)).thenReturn(model);
+    var owners=new java.util.ArrayList<Object>();
+    when(model.call(any(Prompt.class))).thenAnswer(invocation->{
+      Prompt prompt=invocation.getArgument(0);
+      assertThat(prompt.getOptions()).isInstanceOf(org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.class);
+      var sent=(org.springframework.ai.openai.responses.OpenAiResponsesChatOptions)prompt.getOptions();
+      assertThat(sent.getMaxOutputTokens()).isEqualTo(73);
+      assertThat(sent.getToolCallbacks()).isEmpty();
+      owners.add(sent.getToolContext().get("rei.llm.replay-owner"));
+      assertThat(owners.getLast()).asString().startsWith("feature:");
+      return response("{\"subgoals\":[{\"id\":\"one\",\"goal\":\"part\"}],\"finalGoal\":\"final\"}");
+    });
+    var planner=new OutputLimitReplanner(provider,holder,new LlmProperties());
+    for(int attempt=0;attempt<2;attempt++) assertThat(planner.replan(new OutputLimitReplanRequest("task","goal","progress","partial",1,2,3)).subgoals()).hasSize(1);
+    assertThat(owners).hasSize(2).doesNotHaveDuplicates();
+    assertThat(base.getToolContext()).isNull();
+  }
+
+  @Test
+  void aPlannerWithoutAUsageCallbackStillRejectsAmbientDefaultTools() {
+    var model=Mockito.mock(ChatModel.class);
+    var provider=Mockito.mock(LlmModelProvider.class);
+    var holder=Mockito.mock(ModelHolderService.class);
+    when(holder.get()).thenReturn("main");
+    when(provider.requestOptions(LlmFeature.OUTPUT_LIMIT_PLANNER,"main",false))
+        .thenReturn(OpenAiChatOptions.builder().model("planner").build());
+    when(provider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER,"main"))
+        .thenReturn(OpenAiChatOptions.builder().model("planner").build());
+    when(provider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER)).thenReturn(model);
+    var callback=Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
+    when(callback.getToolDefinition()).thenReturn(org.springframework.ai.tool.definition.ToolDefinition.builder()
+        .name("ambient").description("fixture").inputSchema("{\"type\":\"object\"}").build());
+    when(model.getOptions()).thenReturn(OpenAiChatOptions.builder().toolCallbacks(List.of(callback)).build());
+    when(model.call(any(Prompt.class))).thenReturn(response("{\"subgoals\":[{\"id\":\"one\",\"goal\":\"part\"}],\"finalGoal\":\"final\"}"));
+    org.assertj.core.api.Assertions.assertThatThrownBy(()->new OutputLimitReplanner(provider,holder,new LlmProperties())
+        .replan(new OutputLimitReplanRequest("task","goal","progress","partial",1,2,3)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("default tools");
+    Mockito.verify(model,Mockito.never()).call(any(Prompt.class));
+  }
+
   /** 必須文脈を送信することを確認する。 */
   @Test
   void sendsRequiredContextToPlannerLlm() {
