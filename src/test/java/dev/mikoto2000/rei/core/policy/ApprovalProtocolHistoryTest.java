@@ -80,14 +80,26 @@ class ApprovalProtocolHistoryTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {"document", "database"})
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"document", "database", "lookup"})
   void retentionFailureCannotRewriteAnAlreadyCommittedApprovalOutcome(String failure) {
     var fixture = terminalFixture();
     var db = org.springframework.jdbc.core.simple.JdbcClient.create(fixture.source());
     if (failure.equals("document"))
       db.sql("UPDATE approval_continuations SET document=? WHERE approval='approval'")
           .param("PRIVATE-corrupt-document").update();
-    else db.sql("DROP TABLE model_message_references").update();
+    else if (failure.equals("database")) db.sql("DROP TABLE model_message_references").update();
+    else {
+      var unavailable = java.lang.reflect.Proxy.newProxyInstance(
+          org.springframework.jdbc.core.simple.JdbcClient.class.getClassLoader(),
+          new Class<?>[] {org.springframework.jdbc.core.simple.JdbcClient.class},
+          (proxy, method, arguments) -> {
+            if (method.getName().equals("sql") && arguments[0] instanceof String sql
+                && sql.startsWith("SELECT * FROM approval_continuations"))
+              throw new IllegalStateException("PRIVATE-lookup-failure");
+            return method.invoke(db, arguments);
+          });
+      org.springframework.test.util.ReflectionTestUtils.setField(fixture.store(), "db", unavailable);
+    }
     var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
     var captured = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     captured.start();
@@ -95,7 +107,8 @@ class ApprovalProtocolHistoryTest {
     try {
       org.assertj.core.api.Assertions.assertThatCode(() -> fixture.store().state("approval", "COMPLETED"))
           .doesNotThrowAnyException();
-      assertThat(fixture.store().find("approval").orElseThrow().state()).isEqualTo("COMPLETED");
+      assertThat(db.sql("SELECT state FROM approval_continuations WHERE approval='approval'")
+          .query(String.class).single()).isEqualTo("COMPLETED");
       if (failure.equals("document")) assertThat(approvalPins(fixture.source(), "approval")).isEqualTo(1);
       for (var logged : captured.list) {
         assertThat(logged.getFormattedMessage()).doesNotContain("PRIVATE-");
