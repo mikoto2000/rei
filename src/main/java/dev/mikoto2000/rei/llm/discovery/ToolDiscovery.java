@@ -95,12 +95,10 @@ public final class ToolDiscovery {
 
   private int maximum(Prompt prompt) {
     int maximum = maxActiveTools;
-    if (prompt.getOptions() instanceof ToolCallingChatOptions options
-        && options.getToolContext() != null) {
-      var configured =
-          options
-              .getToolContext()
-              .get(dev.mikoto2000.rei.llm.LlmCapabilities.MAX_TOOLS_CONTEXT_KEY);
+    if (prompt.getOptions() instanceof ToolCallingChatOptions options) {
+      var context = options.getToolContext();
+      if (context == null) return maximum;
+      var configured = context.get(dev.mikoto2000.rei.llm.LlmCapabilities.MAX_TOOLS_CONTEXT_KEY);
       if (configured != null) {
         if (!(configured instanceof Integer bound) || bound < 1)
           throw new IllegalArgumentException("Invalid explicit endpoint tool limit");
