@@ -534,28 +534,34 @@ public class ApprovalContinuationStore {
   }
 
   private void retirePayloadReferences(Entry entry) {
-    var document = document(entry);
-    var pending = document.pending();
-    boolean hasPayload = document.protocolHistory() != null
-        || pending != null && (pending.assistantReference() != null || pending.completedReference() != null)
-        || document.history() != null && document.history().stream().anyMatch(message -> message.payload() != null);
-    if (!hasPayload) return;
-    var scope = ModelMessagePayloadStore.Scope.forOwner(document.owner());
-    Runnable retire = () -> {
-      try {
-        payloads.obtain().releaseApproval(scope, entry.approvalId());
-      } catch (RuntimeException retained) {
-        org.slf4j.LoggerFactory.getLogger(ApprovalContinuationStore.class)
-            .warn("Terminal approval model message references retained after cleanup failure");
-      }
-    };
-    if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
-      if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) return;
-      org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
-          new org.springframework.transaction.support.TransactionSynchronization() {
-            @Override public void afterCommit() { retire.run(); }
-          });
-    } else retire.run();
+    try {
+      var document = document(entry);
+      var pending = document.pending();
+      var history = document.history();
+      boolean hasPayload = document.protocolHistory() != null
+          || pending != null && (pending.assistantReference() != null || pending.completedReference() != null)
+          || history != null && history.stream().anyMatch(message -> message.payload() != null);
+      if (!hasPayload) return;
+      var scope = ModelMessagePayloadStore.Scope.forOwner(document.owner());
+      Runnable retire = () -> {
+        try {
+          payloads.obtain().releaseApproval(scope, entry.approvalId());
+        } catch (RuntimeException retained) {
+          org.slf4j.LoggerFactory.getLogger(ApprovalContinuationStore.class)
+              .warn("Terminal approval model message references retained after cleanup failure");
+        }
+      };
+      if (org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) return;
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization() {
+              @Override public void afterCommit() { retire.run(); }
+            });
+      } else retire.run();
+    } catch (RuntimeException retained) {
+      org.slf4j.LoggerFactory.getLogger(ApprovalContinuationStore.class)
+          .warn("Terminal approval model message references retained after cleanup failure");
+    }
   }
 
   /** 終了時の状態を確定するため、実行を完了させる。 */
