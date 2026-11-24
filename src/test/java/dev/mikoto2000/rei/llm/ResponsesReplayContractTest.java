@@ -680,6 +680,8 @@ class ResponsesReplayContractTest {
     var budget = new OutputLimitRunBudget(2, 8);
     budget.tryConsumeLlmCall();
     budget.tryConsumeLlmCall();
+    var systemRef = currentExchange.withKey("instructions").reference(
+        new org.springframework.ai.chat.messages.SystemMessage("original approval instructions"));
     var ownHistory =
         new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
             1,
@@ -691,7 +693,11 @@ class ResponsesReplayContractTest {
                 new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
                     currentExchange.key() + "/ASSISTANT", pendingRef),
                 new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
-                    currentExchange.key() + "/TOOL", prefixRef)));
+                    currentExchange.key() + "/TOOL", prefixRef)),
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Input(List.of(
+                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("instructions/SYSTEM", systemRef),
+                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("prior/ASSISTANT", originalRef),
+                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("current-input/USER", currentInputRef)), 1));
     approvals.save(
         "approval",
         current,
@@ -719,6 +725,8 @@ class ResponsesReplayContractTest {
         originalRef,
         dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
         current.runId());
+    protocolStore.release(currentExchange.scope(), systemRef,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, current.runId());
     var restarted = new dev.mikoto2000.rei.core.policy.ApprovalContinuationStore(source);
     var saved = restarted.saved(restarted.find("approval").orElseThrow());
     assertThat(saved.protocolHistory())
@@ -753,6 +761,9 @@ class ResponsesReplayContractTest {
             .toolCallbacks(callbacks)
             .build());
     assertThat(execution.progressSnapshot().protocolHistory()).isEqualTo(ownHistory);
+    assertThat(protocolStore.load(currentExchange.scope(), systemRef,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, current.runId()).getText())
+        .as("restore all input leases before approval callbacks").isEqualTo("original approval instructions");
     assertThat(
             execution
                 .modelOptions()
