@@ -29,26 +29,38 @@ public class ConversationLogStore {
   public static final String PROTOCOL_COUNT = "rei.modelMessage.historyCount";
 
   /** Commit internal body-free pointers in the existing monotonic log sequence domain. */
-  public java.util.Map<String, String> appendProtocolHistory(String conversation, String run,
-      List<java.util.Map<String, String>> pointers) {
-    if (conversation == null || conversation.isBlank() || run == null || run.isBlank()
-        || run.length() > 1024 || run.indexOf('\0') >= 0 || pointers == null
-        || pointers.isEmpty() || pointers.size() > 256)
+  public java.util.Map<String, String> appendProtocolHistory(
+      String conversation, String run, List<java.util.Map<String, String>> pointers) {
+    if (conversation == null
+        || conversation.isBlank()
+        || run == null
+        || run.isBlank()
+        || run.length() > 1024
+        || run.indexOf('\0') >= 0
+        || pointers == null
+        || pointers.isEmpty()
+        || pointers.size() > 256)
       throw new IllegalStateException("Cannot persist conversation protocol history");
     var batch = pointers.stream().map(java.util.Map::copyOf).toList();
     for (var pointer : batch)
-      if (pointer.size() != 5 || !run.equals(pointer.get("rei.modelMessage.run"))
-          || !java.util.Set.of("user", "assistant", "tool").contains(pointer.getOrDefault("rei.modelMessage.role", ""))
+      if (pointer.size() != 5
+          || !run.equals(pointer.get("rei.modelMessage.run"))
+          || !java.util.Set.of("user", "assistant", "tool")
+              .contains(pointer.getOrDefault("rei.modelMessage.role", ""))
           || pointer.getOrDefault("rei.modelMessage.id", "").isBlank()
           || !pointer.getOrDefault("rei.modelMessage.sha256", "").matches("[0-9a-f]{64}")
           || pointer.getOrDefault("rei.modelMessage.historyOwner", "").isBlank())
         throw new IllegalStateException("Cannot persist conversation protocol history");
-    if (batch.stream().map(pointer -> pointer.get("rei.modelMessage.id")).distinct().count() != batch.size())
+    if (batch.stream().map(pointer -> pointer.get("rei.modelMessage.id")).distinct().count()
+        != batch.size())
       throw new IllegalStateException("Cannot persist conversation protocol history");
     synchronized (writeLock) {
-      var existing = readConversation(conversation).stream()
-          .filter(entry -> PROTOCOL_SPEAKER.equals(entry.speaker())
-              && run.equals(entry.metadata().get("rei.modelMessage.run"))).toList();
+      var existing =
+          readConversation(conversation).stream()
+              .filter(entry ->
+                  PROTOCOL_SPEAKER.equals(entry.speaker())
+                      && run.equals(entry.metadata().get("rei.modelMessage.run")))
+              .toList();
       if (existing.size() > batch.size())
         throw new IllegalStateException("Conversation protocol history changed");
       for (int i = 0; i < existing.size(); i++)
@@ -59,12 +71,21 @@ public class ConversationLogStore {
       for (int i = existing.size(); i < batch.size(); i++) {
         append(conversation, PROTOCOL_SPEAKER, "", batch.get(i));
         last = contextSequences.getOrDefault(conversation.strip(), 0L);
-        if (last < 1) throw new IllegalStateException("Cannot persist conversation protocol history");
+        if (last < 1)
+          throw new IllegalStateException("Cannot persist conversation protocol history");
         if (first == 0) first = last;
       }
-      return java.util.Map.of(PROTOCOL_VERSION, "1", PROTOCOL_FIRST, Long.toString(first),
-          PROTOCOL_LAST, Long.toString(last), PROTOCOL_COUNT, Integer.toString(batch.size()),
-          "rei.modelMessage.run", run);
+      return java.util.Map.of(
+          PROTOCOL_VERSION,
+          "1",
+          PROTOCOL_FIRST,
+          Long.toString(first),
+          PROTOCOL_LAST,
+          Long.toString(last),
+          PROTOCOL_COUNT,
+          Integer.toString(batch.size()),
+          "rei.modelMessage.run",
+          run);
     }
   }
 
@@ -403,7 +424,8 @@ public class ConversationLogStore {
   /** 必要な内容を参照できるよう、全対象を読み取る。 */
   public List<ConversationLogEntry> readAll() {
     return readDirectory(directoryFor(null)).stream()
-        .filter(entry -> !PROTOCOL_SPEAKER.equals(entry.speaker())).toList();
+        .filter(entry -> !PROTOCOL_SPEAKER.equals(entry.speaker()))
+        .toList();
   }
 
   /**
@@ -468,7 +490,8 @@ public class ConversationLogStore {
             entry -> {
               if (entry.conversationId() != null
                   && entry.conversationId().startsWith("project:" + projectId + ":")
-                  && entry.timestamp() != null && !PROTOCOL_SPEAKER.equals(entry.speaker())) visitor.accept(entry);
+                  && entry.timestamp() != null
+                  && !PROTOCOL_SPEAKER.equals(entry.speaker())) visitor.accept(entry);
             });
       }
     } catch (IOException error) {

@@ -42,9 +42,12 @@ public final class ModelMessagePayloadStore {
     }
 
     /** Pure send-view check; database access occurs only when the backend creates this grant. */
-    public boolean permits(org.springframework.ai.chat.messages.AssistantMessage message,
-        String owner, String endpoint) {
-      if (message == null || !target.owner().equals(owner) || !target.endpoint().equals(endpoint)) return false;
+    public boolean permits(
+        org.springframework.ai.chat.messages.AssistantMessage message,
+        String owner,
+        String endpoint) {
+      if (message == null || !target.owner().equals(owner) || !target.endpoint().equals(endpoint))
+        return false;
       try {
         return messages.contains(replayHash(message));
       } catch (IllegalArgumentException invalid) {
@@ -52,38 +55,54 @@ public final class ModelMessagePayloadStore {
       }
     }
 
-    @Override public String toString() { return "HistoryReplayGrant[messageCount=" + messages.size() + "]"; }
+    @Override
+    public String toString() {
+      return "HistoryReplayGrant[messageCount=" + messages.size() + "]";
+    }
   }
 
   private static String replayHash(org.springframework.ai.chat.messages.AssistantMessage message) {
     var metadata = new java.util.HashMap<>(message.getMetadata());
     metadata.remove("rei.historySequence");
-    var original = org.springframework.ai.chat.messages.AssistantMessage.builder()
-        .parts(message.getParts()).properties(metadata).build();
+    var original =
+        org.springframework.ai.chat.messages.AssistantMessage.builder()
+            .parts(message.getParts())
+            .properties(metadata)
+            .build();
     return digest(new ModelMessageCodec().encode(original));
   }
 
   public HistoryReplayGrant historyReplayGrant(
       Exchange target, java.util.List<java.util.Map<String, String>> references, Origin origin) {
-    if (target == null || target.store() != this || origin == null
+    if (target == null
+        || target.store() != this
+        || origin == null
         || !target.ownerKey().equals(origin.owner())) throw rejected();
     var pointers = java.util.List.copyOf(references);
     return transaction(db -> {
       var messages = new java.util.HashSet<String>();
-      try (var sourceRun = db.prepareStatement("SELECT run FROM model_message_payloads WHERE id=?");
-          var lease = db.prepareStatement("INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,'RUN',?)")) {
+      try (var sourceRun =
+              db.prepareStatement("SELECT run FROM model_message_payloads WHERE id=?");
+          var lease =
+              db.prepareStatement(
+                  "INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,'RUN',?)")) {
         for (var pointer : pointers) {
           String historyOwner = pointer.get(HISTORY_OWNER);
           identifier(historyOwner);
           var ref = new Ref(pointer.get(HISTORY_ID), pointer.get(HISTORY_HASH));
           var message = codec.decode(read(db, target.scope(), ref));
-          if (scalar(db, "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='HISTORY' AND owner=?",
-              ref.id(), historyOwner) != 1) throw rejected();
+          if (scalar(
+                  db,
+                  "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='HISTORY' AND owner=?",
+                  ref.id(),
+                  historyOwner)
+              != 1) throw rejected();
           if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant) {
             bind(sourceRun, ref.id());
             try (var rows = sourceRun.executeQuery()) {
               if (!rows.next()) throw rejected();
-              var sourceOwner = new Exchange(this, target.scope(), rows.getString(1), "history").ownerKey();
+              var sourceOwner =
+                  new Exchange(this, target.scope(), rows.getString(1), "history").ownerKey();
               new Origin(sourceOwner, origin.endpoint()).requireMatch(assistant);
             }
             messages.add(replayHash(assistant));
@@ -286,9 +305,18 @@ public final class ModelMessagePayloadStore {
     var result = new java.util.ArrayList<java.util.Map<String, String>>();
     for (int i = 0; i < history.entries().size(); i++) {
       var ref = history.entries().get(i).reference();
-      result.add(java.util.Map.of(HISTORY_ID, ref.id(), HISTORY_HASH, ref.sha256(),
-          HISTORY_OWNER, owner, HISTORY_RUN, history.run(), HISTORY_ROLE,
-          roles.get(i)));
+      result.add(
+          java.util.Map.of(
+              HISTORY_ID,
+              ref.id(),
+              HISTORY_HASH,
+              ref.sha256(),
+              HISTORY_OWNER,
+              owner,
+              HISTORY_RUN,
+              history.run(),
+              HISTORY_ROLE,
+              roles.get(i)));
     }
     return java.util.List.copyOf(result);
   }
@@ -299,12 +327,17 @@ public final class ModelMessagePayloadStore {
     identifier(owner);
     return transaction(db -> {
       var roles = new java.util.ArrayList<String>();
-      try (var insert = db.prepareStatement(
-          "INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,?,?)")) {
+      try (var insert =
+          db.prepareStatement(
+              "INSERT OR IGNORE INTO model_message_references(payload_id,kind,owner) VALUES(?,?,?)")) {
         for (var entry : history.entries()) {
           var message = codec.decode(read(db, scope, entry.reference()));
-          if (scalar(db, "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='RUN' AND owner=?",
-              entry.reference().id(), history.run()) != 1) throw rejected();
+          if (scalar(
+                  db,
+                  "SELECT COUNT(*) FROM model_message_references WHERE payload_id=? AND kind='RUN' AND owner=?",
+                  entry.reference().id(),
+                  history.run())
+              != 1) throw rejected();
           if (message instanceof org.springframework.ai.chat.messages.AssistantMessage)
             history.origin().requireMatch(message);
           roles.add(message.getMessageType().name().toLowerCase(java.util.Locale.ROOT));

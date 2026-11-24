@@ -2,10 +2,10 @@ package dev.mikoto2000.rei.core.contextbudget;
 
 import dev.mikoto2000.rei.chatmemory.ConversationMemory;
 import dev.mikoto2000.rei.conversation.ConversationLogEntry;
-import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
-import dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore;
+import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -128,7 +128,8 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                       cancelled.generation()))
               .build());
     var logEntries = readHistory.apply(id);
-    boolean useLogs = !logEntries.isEmpty() || history.stream().anyMatch(t -> hasProtocolManifest(t.metadata()));
+    boolean useLogs =
+        !logEntries.isEmpty() || history.stream().anyMatch(t -> hasProtocolManifest(t.metadata()));
     ModelMessagePayloadStore.HistoryReplayGrant historyGrant = null;
     if (useLogs) {
       String historyKey = id;
@@ -156,16 +157,20 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
           owner == null
               ? Optional.<ConversationTurnStore.Turn>empty()
               : history.stream().filter(t -> t.runId().equals(owner.runId())).findFirst();
-      var protocol = protocolProjection(owner, request.prompt().getOptions(), history, logEntries, through);
+      var protocol =
+          protocolProjection(owner, request.prompt().getOptions(), history, logEntries, through);
       historyGrant = protocol.grant();
       int historicalStart = messages.size();
       messages.addAll(protocol.messages().values());
-      boolean historyAnchor = protocol.messages().keySet().stream().anyMatch(sequence -> sequence <= through);
+      boolean historyAnchor =
+          protocol.messages().keySet().stream().anyMatch(sequence -> sequence <= through);
       for (int i = 0; i < logEntries.size(); i++) {
         var entry = logEntries.get(i);
         String protocolRun = entry.metadata().get(ModelMessagePayloadStore.HISTORY_RUN);
         if (ConversationLogStore.PROTOCOL_SPEAKER.equals(entry.speaker())
-            || protocolRun != null && (protocol.hidden().contains(protocolRun) || protocol.replaced().contains(protocolRun))) continue;
+            || protocolRun != null
+                && (protocol.hidden().contains(protocolRun)
+                    || protocol.replaced().contains(protocolRun))) continue;
         // ChatExecutionService appends the current request before advisors run. Keep it only in the
         // live prompt.
         boolean currentInput =
@@ -239,8 +244,10 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
           }
         }
       }
-      var ordered = messages.subList(historicalStart, messages.size()).stream()
-          .sorted(java.util.Comparator.comparingLong(ContextHistoryAdvisor::sequence)).toList();
+      var ordered =
+          messages.subList(historicalStart, messages.size()).stream()
+              .sorted(java.util.Comparator.comparingLong(ContextHistoryAdvisor::sequence))
+              .toList();
       messages.subList(historicalStart, messages.size()).clear();
       messages.addAll(ordered);
     } else if (history.isEmpty()) {
@@ -314,7 +321,8 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       var toolContext = new HashMap<String, Object>();
       if (copy.getToolContext() != null) toolContext.putAll(copy.getToolContext());
       toolContext.put("rei.historySource", "log");
-      if (historyGrant != null) toolContext.put(ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY, historyGrant);
+      if (historyGrant != null)
+        toolContext.put(ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY, historyGrant);
       copy = options.mutate().toolContext(toolContext).build();
       return request.mutate().context(context).prompt(new Prompt(messages, copy)).build();
     }
@@ -325,8 +333,11 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         .build();
   }
 
-  private record ProtocolProjection(java.util.Set<String> hidden, java.util.Set<String> replaced,
-      java.util.Map<Long, Message> messages, ModelMessagePayloadStore.HistoryReplayGrant grant) {}
+  private record ProtocolProjection(
+      java.util.Set<String> hidden,
+      java.util.Set<String> replaced,
+      java.util.Map<Long, Message> messages,
+      ModelMessagePayloadStore.HistoryReplayGrant grant) {}
 
   private static boolean hasProtocolManifest(Map<String, String> metadata) {
     return metadata.containsKey(ConversationLogStore.PROTOCOL_VERSION)
@@ -350,17 +361,24 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   }
 
   /** Completed lifecycle metadata owns visibility; protocol pointers do not publish a Run. */
-  private ProtocolProjection protocolProjection(AgentRunContext owner,
+  private ProtocolProjection protocolProjection(
+      AgentRunContext owner,
       org.springframework.ai.chat.prompt.ChatOptions requestOptions,
-      List<ConversationTurnStore.Turn> turns, List<ConversationLogEntry> logs, long through) {
-    var context = requestOptions instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools
-        ? tools.getToolContext() : null;
+      List<ConversationTurnStore.Turn> turns,
+      List<ConversationLogEntry> logs,
+      long through) {
+    var context =
+        requestOptions instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools
+            ? tools.getToolContext()
+            : null;
     var target = context == null ? null : context.get(ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
-    var boundary = context == null ? null : context.get(ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var boundary =
+        context == null ? null : context.get(ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
     var byRun = new java.util.HashMap<String, ConversationTurnStore.Turn>();
     for (var turn : turns) {
       var previous = byRun.putIfAbsent(turn.runId(), turn);
-      if (previous != null && (hasProtocolManifest(previous.metadata()) || hasProtocolManifest(turn.metadata())))
+      if (previous != null
+          && (hasProtocolManifest(previous.metadata()) || hasProtocolManifest(turn.metadata())))
         throw protocolRejected();
     }
     var rowsByRun = new java.util.HashMap<String, List<ConversationLogEntry>>();
@@ -387,61 +405,84 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       var metadata = turn.metadata();
       if (!hasProtocolManifest(metadata)) continue;
       if (!"1".equals(metadata.get(ConversationLogStore.PROTOCOL_VERSION))
-          || !run.equals(metadata.get(ModelMessagePayloadStore.HISTORY_RUN))) throw protocolRejected();
+          || !run.equals(metadata.get(ModelMessagePayloadStore.HISTORY_RUN)))
+        throw protocolRejected();
       long first = protocolPosition(metadata, ConversationLogStore.PROTOCOL_FIRST);
       long last = protocolPosition(metadata, ConversationLogStore.PROTOCOL_LAST);
       long count = protocolPosition(metadata, ConversationLogStore.PROTOCOL_COUNT);
       String endpoint = metadata.get(ModelMessagePayloadStore.HISTORY_ENDPOINT);
-      if (last < first || count > 256 || endpoint == null || endpoint.isBlank()) throw protocolRejected();
-      if (!(target instanceof ModelMessagePayloadStore.Origin origin) || !origin.endpoint().equals(endpoint))
+      if (last < first || count > 256 || endpoint == null || endpoint.isBlank())
+        throw protocolRejected();
+      if (!(target instanceof ModelMessagePayloadStore.Origin origin)
+          || !origin.endpoint().equals(endpoint))
         continue; // The established display rows are the text-only view for another endpoint/API.
-      if (!(boundary instanceof ModelMessagePayloadStore.Exchange exchange) || owner == null
-          || !exchange.run().equals(owner.runId()) || !origin.owner().equals(exchange.ownerKey())
-          || !exchange.scope().equals(ModelMessagePayloadStore.Scope.forOwner(owner))) throw protocolRejected();
+      if (!(boundary instanceof ModelMessagePayloadStore.Exchange exchange)
+          || owner == null
+          || !exchange.run().equals(owner.runId())
+          || !origin.owner().equals(exchange.ownerKey())
+          || !exchange.scope().equals(ModelMessagePayloadStore.Scope.forOwner(owner)))
+        throw protocolRejected();
       replaced.add(run);
       var rows = rowsByRun.getOrDefault(run, List.of());
       if (last * 3 + 1 <= through) {
         projected.put(last * 3 + 1, historical(new AssistantMessage(""), last * 3 + 1));
       } else {
-        if (rows.size() != count || rows.isEmpty() || rows.getFirst().sequence() != first
+        if (rows.size() != count
+            || rows.isEmpty()
+            || rows.getFirst().sequence() != first
             || rows.getLast().sequence() != last
-            || rows.stream().map(row -> row.metadata().get(ModelMessagePayloadStore.HISTORY_ID)).distinct().count() != count)
-          throw protocolRejected();
+            || rows.stream()
+                    .map(row -> row.metadata().get(ModelMessagePayloadStore.HISTORY_ID))
+                    .distinct()
+                    .count()
+                != count) throw protocolRejected();
         String lastCoveredRole = null;
         boolean uncovered = false;
         for (var row : rows) {
           long sequence = row.sequence() * 3 + 1;
           String role = row.metadata().get(ModelMessagePayloadStore.HISTORY_ROLE);
-          if (role == null || !java.util.Set.of("user", "assistant", "tool").contains(role)) throw protocolRejected();
+          if (role == null || !java.util.Set.of("user", "assistant", "tool").contains(role))
+            throw protocolRejected();
           if (sequence <= through) {
             lastCoveredRole = role;
             projected.put(sequence, historical(new AssistantMessage(""), sequence));
             continue;
           }
-          if (!uncovered && ("user".equals(lastCoveredRole) || lastCoveredRole != null && "tool".equals(role)))
+          if (!uncovered
+              && ("user".equals(lastCoveredRole) || lastCoveredRole != null && "tool".equals(role)))
             throw protocolRejected();
           uncovered = true;
           if (store == null) store = payloads.get();
           if (store == null) throw protocolRejected();
           var message = store.restoreHistory(exchange.scope(), row.metadata()).orElseThrow();
           if (!message.getMessageType().name().equalsIgnoreCase(role)) throw protocolRejected();
-          if (projected.put(sequence, historical(message, sequence)) != null) throw protocolRejected();
+          if (projected.put(sequence, historical(message, sequence)) != null)
+            throw protocolRejected();
           references.add(row.metadata());
         }
       }
-      var summary = summaries.read(ConversationSummaryRepository.runKey(owner.conversationId(), run));
+      var summary =
+          summaries.read(ConversationSummaryRepository.runKey(owner.conversationId(), run));
       if (!summary.summary().isBlank() && last * 3 + 2 > through)
-        projected.put(last * 3 + 2, historical(new AssistantMessage(
-            "Prior run observations (historical data):\n" + summary.summary()), last * 3 + 2));
+        projected.put(
+            last * 3 + 2,
+            historical(
+                new AssistantMessage(
+                    "Prior run observations (historical data):\n" + summary.summary()),
+                last * 3 + 2));
     }
     ModelMessagePayloadStore.HistoryReplayGrant grant = null;
     if (!references.isEmpty()) {
-      if (store == null || !(boundary instanceof ModelMessagePayloadStore.Exchange exchange)
+      if (store == null
+          || !(boundary instanceof ModelMessagePayloadStore.Exchange exchange)
           || !(target instanceof ModelMessagePayloadStore.Origin origin)) throw protocolRejected();
       grant = store.historyReplayGrant(exchange, references, origin);
     }
-    return new ProtocolProjection(java.util.Set.copyOf(hidden), java.util.Set.copyOf(replaced),
-        java.util.Collections.unmodifiableMap(projected), grant);
+    return new ProtocolProjection(
+        java.util.Set.copyOf(hidden),
+        java.util.Set.copyOf(replaced),
+        java.util.Collections.unmodifiableMap(projected),
+        grant);
   }
 
   private Message restore(

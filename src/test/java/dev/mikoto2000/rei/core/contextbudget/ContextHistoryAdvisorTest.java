@@ -19,119 +19,235 @@ import org.springframework.ai.chat.prompt.Prompt;
 @org.junit.jupiter.api.Tag("integration")
 class ContextHistoryAdvisorTest {
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.CsvSource({"COMPLETED,true,ok", "COMPLETED,false,ok", "FAILED,true,ok", "CANCELLED,true,ok", "RUNNING,true,ok",
-      "COMPLETED,true,covered", "COMPLETED,true,missing", "COMPLETED,true,count", "COMPLETED,true,range", "COMPLETED,true,version", "COMPLETED,true,scope", "COMPLETED,true,legacyApi", "COMPLETED,true,missingLog", "COMPLETED,true,coveredMissingLog"})
+  @org.junit.jupiter.params.provider.CsvSource({
+    "COMPLETED,true,ok",
+    "COMPLETED,false,ok",
+    "FAILED,true,ok",
+    "CANCELLED,true,ok",
+    "RUNNING,true,ok",
+    "COMPLETED,true,covered",
+    "COMPLETED,true,missing",
+    "COMPLETED,true,count",
+    "COMPLETED,true,range",
+    "COMPLETED,true,version",
+    "COMPLETED,true,scope",
+    "COMPLETED,true,legacyApi",
+    "COMPLETED,true,missingLog",
+    "COMPLETED,true,coveredMissingLog"
+  })
   void committedProtocolRowsUseTheirCompletedTurnAndEndpointView(
       ConversationTurnStore.Status status, boolean compatible, String scenario) throws Exception {
     var old = new AgentRunContext("old", "chat", dir, "project");
-    var current = new AgentRunContext("current", "chat", dir, scenario.equals("scope") ? "other-project" : "project");
+    var current =
+        new AgentRunContext(
+            "current", "chat", dir, scenario.equals("scope") ? "other-project" : "project");
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + dir.resolve("protocol.db"));
     var payloads = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source);
     var previousExchange = payloads.newExchange(old);
-    var original = AssistantMessage.builder().parts(java.util.List.of(
-        new org.springframework.ai.chat.messages.part.ReasoningPart(null, null,
-            new org.springframework.ai.chat.messages.part.OpaquePayload(
-                org.springframework.ai.openai.responses.OpenAiResponsesMetadata.PROVIDER,
-                org.springframework.ai.openai.responses.OpenAiResponsesMetadata.ENCRYPTED_CONTENT_KIND,
-                "opaque-native-history"), Map.of(
-                    org.springframework.ai.openai.responses.OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE, "rs_old")),
-        org.springframework.ai.chat.messages.part.TextPart.of("old actual answer")))
-        .properties(Map.of("rei.llm.replay-origin-owner", previousExchange.ownerKey(),
-            "rei.llm.replay-origin-endpoint", "endpoint-a")).build();
+    var original =
+        AssistantMessage.builder()
+            .parts(
+                java.util.List.of(
+                    new org.springframework.ai.chat.messages.part.ReasoningPart(
+                        null,
+                        null,
+                        new org.springframework.ai.chat.messages.part.OpaquePayload(
+                            org.springframework.ai.openai.responses.OpenAiResponsesMetadata
+                                .PROVIDER,
+                            org.springframework.ai.openai.responses.OpenAiResponsesMetadata
+                                .ENCRYPTED_CONTENT_KIND,
+                            "opaque-native-history"),
+                        Map.of(
+                            org.springframework.ai.openai.responses.OpenAiResponsesMetadata
+                                .ITEM_ID_ATTRIBUTE,
+                            "rs_old")),
+                    org.springframework.ai.chat.messages.part.TextPart.of("old actual answer")))
+            .properties(
+                Map.of(
+                    "rei.llm.replay-origin-owner",
+                    previousExchange.ownerKey(),
+                    "rei.llm.replay-origin-endpoint",
+                    "endpoint-a"))
+            .build();
     var userRef = previousExchange.withKey("input").reference(new UserMessage("old actual input"));
     var assistantRef = previousExchange.withKey("answer").reference(original);
-    var pointers = payloads.historyReferences(previousExchange.scope(),
-        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(1, old.runId(),
-            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(previousExchange.ownerKey(), "endpoint-a"),
-            java.util.List.of(new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("input", userRef),
-                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry("answer", assistantRef))), "turn:old");
-    var logs = new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"),
-        java.time.Clock.systemUTC(), new com.fasterxml.jackson.databind.ObjectMapper()
-            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    var pointers =
+        payloads.historyReferences(
+            previousExchange.scope(),
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History(
+                1,
+                old.runId(),
+                new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+                    previousExchange.ownerKey(), "endpoint-a"),
+                java.util.List.of(
+                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                        "input", userRef),
+                    new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History.Entry(
+                        "answer", assistantRef))),
+            "turn:old");
+    var logs =
+        new dev.mikoto2000.rei.conversation.ConversationLogStore(
+            dir.resolve("logs"),
+            java.time.Clock.systemUTC(),
+            new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
     var turns = ConversationTurnStore.inMemory();
     turns.start(old, "old display request", java.time.Instant.EPOCH);
     logs.append("chat", "user", "old display request", Map.of("rei.modelMessage.run", old.runId()));
-    var manifest = new java.util.HashMap<>(logs.appendProtocolHistory("chat", old.runId(), pointers));
+    var manifest =
+        new java.util.HashMap<>(logs.appendProtocolHistory("chat", old.runId(), pointers));
     manifest.put("rei.modelMessage.endpoint", "endpoint-a");
     turns.recordMetadata(old, manifest);
-    if (status != ConversationTurnStore.Status.RUNNING) turns.finish(old, status, "old display answer");
-    logs.append("chat", "assistant", "old display answer", Map.of("rei.modelMessage.run", old.runId()));
+    if (status != ConversationTurnStore.Status.RUNNING)
+      turns.finish(old, status, "old display answer");
+    logs.append(
+        "chat", "assistant", "old display answer", Map.of("rei.modelMessage.run", old.runId()));
     var currentExchange = payloads.newExchange(current);
-    var origin = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
-        currentExchange.ownerKey(), compatible ? "endpoint-a" : "endpoint-b");
-    var options = org.springframework.ai.model.tool.ToolCallingChatOptions.builder().toolContext(Map.of(
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY, currentExchange,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY, origin)).build();
+    var origin =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+            currentExchange.ownerKey(), compatible ? "endpoint-a" : "endpoint-b");
+    var options =
+        org.springframework.ai.model.tool.ToolCallingChatOptions.builder()
+            .toolContext(
+                Map.of(
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
+                        currentExchange,
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
+                        origin))
+            .build();
     var loads = new java.util.concurrent.atomic.AtomicInteger();
     var summaries = new ConversationSummaryRepository(dir);
-    if (scenario.equals("legacyApi")) options = org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build();
-    if (scenario.equals("count")) turns.recordMetadata(old, Map.of(dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_COUNT, "3"));
-    if (scenario.equals("range")) turns.recordMetadata(old, Map.of(dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_FIRST, "1"));
-    if (scenario.equals("version")) turns.recordMetadata(old, Map.of(dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_VERSION, "2"));
+    if (scenario.equals("legacyApi"))
+      options = org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build();
+    if (scenario.equals("count"))
+      turns.recordMetadata(
+          old, Map.of(dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_COUNT, "3"));
+    if (scenario.equals("range"))
+      turns.recordMetadata(
+          old, Map.of(dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_FIRST, "1"));
+    if (scenario.equals("version"))
+      turns.recordMetadata(
+          old, Map.of(dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_VERSION, "2"));
     if (scenario.equals("missing") || scenario.startsWith("covered"))
-      for (var pointer : pointers) payloads.release(previousExchange.scope(),
-          new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref(
-              pointer.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_ID),
-              pointer.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_HASH)),
-          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY, "turn:old");
+      for (var pointer : pointers)
+        payloads.release(
+            previousExchange.scope(),
+            new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Ref(
+                pointer.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_ID),
+                pointer.get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_HASH)),
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY,
+            "turn:old");
     if (scenario.startsWith("covered")) {
-      for (var ref : java.util.List.of(userRef, assistantRef)) payloads.release(previousExchange.scope(), ref,
-          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, old.runId());
-      try (var db = java.sql.DriverManager.getConnection(source.getUrl()); var statement = db.createStatement()) {
+      for (var ref : java.util.List.of(userRef, assistantRef))
+        payloads.release(
+            previousExchange.scope(),
+            ref,
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+            old.runId());
+      try (var db = java.sql.DriverManager.getConnection(source.getUrl());
+          var statement = db.createStatement()) {
         statement.executeUpdate("UPDATE model_message_payloads SET staged_until=0");
       }
       assertThat(payloads.collectExpired()).isEqualTo(2);
-      summaries.save("chat/log", new ConversationSummary("retained native summary", 10, java.time.Instant.now()));
+      summaries.save(
+          "chat/log",
+          new ConversationSummary("retained native summary", 10, java.time.Instant.now()));
     }
-    var visibleLogs = scenario.endsWith("MissingLog") || scenario.equals("missingLog")
-        ? new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("empty-log-view"),
-            java.time.Clock.systemUTC(), new com.fasterxml.jackson.databind.ObjectMapper()) {
-          @Override public java.util.List<dev.mikoto2000.rei.conversation.ConversationLogEntry> readConversation(String id) {
-            return java.util.List.of();
-          }
-        } : logs;
-    var advisor = new ContextHistoryAdvisor(turns, WindowedConversationMemory.builder().build(),
-        summaries, visibleLogs, () -> { loads.incrementAndGet(); return payloads; });
-    var request = ChatClientRequest.builder().prompt(new Prompt(new UserMessage("current request"), options))
-        .context(Map.of(org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID, "chat",
-            AgentRunContext.class.getName(), current)).build();
-    if (java.util.Set.of("missing", "count", "range", "version", "scope", "missingLog").contains(scenario)) {
+    var visibleLogs =
+        scenario.endsWith("MissingLog") || scenario.equals("missingLog")
+            ? new dev.mikoto2000.rei.conversation.ConversationLogStore(
+                dir.resolve("empty-log-view"),
+                java.time.Clock.systemUTC(),
+                new com.fasterxml.jackson.databind.ObjectMapper()) {
+              @Override
+              public java.util.List<dev.mikoto2000.rei.conversation.ConversationLogEntry>
+                  readConversation(String id) {
+                return java.util.List.of();
+              }
+            }
+            : logs;
+    var advisor =
+        new ContextHistoryAdvisor(
+            turns,
+            WindowedConversationMemory.builder().build(),
+            summaries,
+            visibleLogs,
+            () -> {
+              loads.incrementAndGet();
+              return payloads;
+            });
+    var request =
+        ChatClientRequest.builder()
+            .prompt(new Prompt(new UserMessage("current request"), options))
+            .context(
+                Map.of(
+                    org.springframework.ai.chat.client.advisor.api.MemoryAdvisor.CONVERSATION_ID,
+                    "chat",
+                    AgentRunContext.class.getName(),
+                    current))
+            .build();
+    if (java.util.Set.of("missing", "count", "range", "version", "scope", "missingLog")
+        .contains(scenario)) {
       org.assertj.core.api.Assertions.assertThatThrownBy(() -> advisor.before(request, null))
-          .isInstanceOf(IllegalStateException.class).hasMessage("Model message persistence rejected");
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessage("Model message persistence rejected");
       return;
     }
     var projected = advisor.before(request, null).prompt();
     if (scenario.startsWith("covered")) {
-      assertThat(projected.getContents()).doesNotContain("old actual", "old display", "opaque-native-history");
+      assertThat(projected.getContents())
+          .doesNotContain("old actual", "old display", "opaque-native-history");
       assertThat(loads).hasValue(0);
-      assertThat(projected.getInstructions()).anySatisfy(message -> assertThat(ContextHistoryAdvisor.sequence(message)).isEqualTo(10));
+      assertThat(projected.getInstructions())
+          .anySatisfy(message -> assertThat(ContextHistoryAdvisor.sequence(message)).isEqualTo(10));
       var estimator = TokenEstimator.conservative();
-      var assembler = new ContextAssembler(new ContextCompressionProperties(), estimator, summaries,
-          new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
-          (previous, messages, budget, active) -> { throw new AssertionError("summary already committed"); }, null, null);
+      var assembler =
+          new ContextAssembler(
+              new ContextCompressionProperties(),
+              estimator,
+              summaries,
+              new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
+              (previous, messages, budget, active) -> {
+                throw new AssertionError("summary already committed");
+              },
+              null,
+              null);
       assertThat(assembler.assemble(projected, "chat", current.runId(), () -> {}).getContents())
-          .contains("retained native summary", "current request").doesNotContain("old actual", "opaque-native-history");
+          .contains("retained native summary", "current request")
+          .doesNotContain("old actual", "opaque-native-history");
       return;
     }
     if (status != ConversationTurnStore.Status.COMPLETED) {
-      assertThat(projected.getContents()).doesNotContain("old actual", "old display", "opaque-native-history");
+      assertThat(projected.getContents())
+          .doesNotContain("old actual", "old display", "opaque-native-history");
       assertThat(loads).hasValue(0);
     } else if (!compatible || scenario.equals("legacyApi")) {
-      assertThat(projected.getContents()).contains("old display request", "old display answer", "current request")
+      assertThat(projected.getContents())
+          .contains("old display request", "old display answer", "current request")
           .doesNotContain("old actual", "opaque-native-history");
       assertThat(loads).hasValue(0);
-      assertThat(projected.getInstructions().stream().filter(AssistantMessage.class::isInstance)
-          .map(AssistantMessage.class::cast).flatMap(message -> message.getParts().stream()))
+      assertThat(
+              projected.getInstructions().stream()
+                  .filter(AssistantMessage.class::isInstance)
+                  .map(AssistantMessage.class::cast)
+                  .flatMap(message -> message.getParts().stream()))
           .noneMatch(org.springframework.ai.chat.messages.part.ReasoningPart.class::isInstance);
     } else {
-      assertThat(projected.getInstructions()).extracting(Message::getText)
+      assertThat(projected.getInstructions())
+          .extracting(Message::getText)
           .containsExactly("old actual input", "old actual answer", "current request");
       var restored = (AssistantMessage) projected.getInstructions().get(1);
       assertThat(restored.getParts()).containsExactlyElementsOf(original.getParts());
-      var granted = (org.springframework.ai.model.tool.ToolCallingChatOptions) projected.getOptions();
-      var grant = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HistoryReplayGrant)
-          granted.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY);
+      var granted =
+          (org.springframework.ai.model.tool.ToolCallingChatOptions) projected.getOptions();
+      var grant =
+          (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HistoryReplayGrant)
+              granted
+                  .getToolContext()
+                  .get(
+                      dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore
+                          .HISTORY_GRANT_CONTEXT_KEY);
       assertThat(grant).isNotNull();
       assertThat(grant.permits(restored, currentExchange.ownerKey(), origin.endpoint())).isTrue();
     }

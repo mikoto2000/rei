@@ -187,23 +187,50 @@ class ModelProtocolHistoryTest {
   }
 
   @Test
-  void completedHistoryPointersProtectEveryOriginalMessageBeforeDocumentPublication() throws Exception {
+  void completedHistoryPointersProtectEveryOriginalMessageBeforeDocumentPublication()
+      throws Exception {
     var fixture = fixture();
     fixture.execution().preserveUserMessage(new UserMessage("private original request"));
-    fixture.exchange().persist(AssistantMessage.builder().content("private final answer")
-        .properties(Map.of("rei.llm.replay-origin-owner", fixture.exchange().ownerKey(),
-            "rei.llm.replay-origin-endpoint", "endpoint")).build());
+    fixture
+        .exchange()
+        .persist(
+            AssistantMessage.builder()
+                .content("private final answer")
+                .properties(
+                    Map.of(
+                        "rei.llm.replay-origin-owner",
+                        fixture.exchange().ownerKey(),
+                        "rei.llm.replay-origin-endpoint",
+                        "endpoint"))
+                .build());
     var pointers = fixture.execution().protocolHistoryReferences();
     assertThat(pointers).hasSize(2);
-    assertThat(pointers.toString()).doesNotContain("private original request", "private final answer");
-    var restored = pointers.stream().map(pointer -> fixture.exchange().store()
-        .restoreHistory(fixture.exchange().scope(), pointer).orElseThrow()).toList();
-    assertThat(restored).extracting(message -> message.getMessageType().name())
+    assertThat(pointers.toString())
+        .doesNotContain("private original request", "private final answer");
+    var restored =
+        pointers.stream()
+            .map(pointer ->
+                fixture
+                    .exchange()
+                    .store()
+                    .restoreHistory(fixture.exchange().scope(), pointer)
+                    .orElseThrow())
+            .toList();
+    assertThat(restored)
+        .extracting(message -> message.getMessageType().name())
         .containsExactly("USER", "ASSISTANT");
     for (var entry : fixture.execution().progressSnapshot().protocolHistory().entries())
-      fixture.exchange().store().release(fixture.exchange().scope(), entry.reference(),
-          ModelMessagePayloadStore.ReferenceKind.RUN, "run");
-    try (var db = java.sql.DriverManager.getConnection("jdbc:sqlite:" + directory.resolve("protocol.db"));
+      fixture
+          .exchange()
+          .store()
+          .release(
+              fixture.exchange().scope(),
+              entry.reference(),
+              ModelMessagePayloadStore.ReferenceKind.RUN,
+              "run");
+    try (var db =
+            java.sql.DriverManager.getConnection(
+                "jdbc:sqlite:" + directory.resolve("protocol.db"));
         var statement = db.createStatement()) {
       statement.executeUpdate("UPDATE model_message_payloads SET staged_until=0");
     }

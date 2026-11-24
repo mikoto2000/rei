@@ -788,9 +788,7 @@ public class ChatExecutionService {
               new java.util.HashMap<>(
                   conversationLogStore.appendProtocolHistory(
                       context.conversationId(), context.runId(), protocolPointers));
-          manifest.put(
-              "rei.modelMessage.endpoint",
-              execution.protocolHistoryEndpoint());
+          manifest.put("rei.modelMessage.endpoint", execution.protocolHistoryEndpoint());
           turns.recordMetadata(context, manifest);
         }
         appendConversationLog(context, execution, "assistant", result.text());

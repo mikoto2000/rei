@@ -432,98 +432,179 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.EnumSource(value = ReasoningReplayMode.class, names = {"ENCRYPTED", "NONE"})
-  void completedHistoryReplayRequiresExactStoredMessagesAndTheTargetRun(ReasoningReplayMode replay) throws Exception {
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = ReasoningReplayMode.class,
+      names = {"ENCRYPTED", "NONE"})
+  void completedHistoryReplayRequiresExactStoredMessagesAndTheTargetRun(ReasoningReplayMode replay)
+      throws Exception {
     var properties = nativeProperties();
     var server = properties.feature(LlmFeature.CHAT);
     server.setReasoningReplay(replay);
     properties.setFeature(LlmFeature.CHAT, server);
     var models = nativeProvider(properties);
-    var previous = new dev.mikoto2000.rei.core.chat.AgentRunContext(
-        "previous", "chat", protocolDirectory, "project");
+    var previous =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "previous", "chat", protocolDirectory, "project");
     var previousOptions = models.requestOptions(LlmFeature.CHAT, null, true, previous);
-    var previousExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
-        previousOptions.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
-    var completed = reasoningDone().replace("{\"type\":\"reasoning\",\"id\":\"rs_bound\"",
-        "{\"type\":\"reasoning\",\"id\":\"rs_extra\",\"summary\":[],\"encrypted_content\":\"opaque-extra+/=\",\"status\":\"completed\"},{\"type\":\"reasoning\",\"id\":\"rs_bound\"");
+    var previousExchange =
+        (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
+            previousOptions
+                .getToolContext()
+                .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var completed =
+        reasoningDone()
+            .replace(
+                "{\"type\":\"reasoning\",\"id\":\"rs_bound\"",
+                "{\"type\":\"reasoning\",\"id\":\"rs_extra\",\"summary\":[],\"encrypted_content\":\"opaque-extra+/=\",\"status\":\"completed\"},{\"type\":\"reasoning\",\"id\":\"rs_bound\"");
     replies.add(replay == ReasoningReplayMode.ENCRYPTED ? completed : done());
-    var first = models.chatModel(LlmFeature.CHAT).call(new Prompt("first", previousOptions))
-        .getResult().getOutput();
+    var first =
+        models
+            .chatModel(LlmFeature.CHAT)
+            .call(new Prompt("first", previousOptions))
+            .getResult()
+            .getOutput();
     var reference = previousExchange.reference(first);
-    var pointer = protocolStore.historyReference(previousExchange.scope(), reference, "completed:previous");
-    var current = new dev.mikoto2000.rei.core.chat.AgentRunContext(
-        "current", "chat", protocolDirectory, "project");
+    var pointer =
+        protocolStore.historyReference(previousExchange.scope(), reference, "completed:previous");
+    var current =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "current", "chat", protocolDirectory, "project");
     var currentOptions = models.requestOptions(LlmFeature.CHAT, null, true, current);
-    var currentExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
-        currentOptions.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
-    var origin = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin) currentOptions.getToolContext()
-        .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
+    var currentExchange =
+        (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
+            currentOptions
+                .getToolContext()
+                .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var origin =
+        (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin)
+            currentOptions
+                .getToolContext()
+                .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
     var grant = protocolStore.historyReplayGrant(currentExchange, List.of(pointer), origin);
-    var granted = currentOptions.mutate().toolContext(Map.of(
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY, grant)).build();
-    var historical = dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(first, 4);
-    var response = models.chatModel(LlmFeature.CHAT).call(new Prompt(
-        List.of(historical, new UserMessage("second")), granted));
+    var granted =
+        currentOptions
+            .mutate()
+            .toolContext(
+                Map.of(
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore
+                        .HISTORY_GRANT_CONTEXT_KEY,
+                    grant))
+            .build();
+    var historical =
+        dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor.historical(first, 4);
+    var response =
+        models
+            .chatModel(LlmFeature.CHAT)
+            .call(new Prompt(List.of(historical, new UserMessage("second")), granted));
     assertThat(response.getResult().getOutput().getText()).isEqualTo("done");
     assertThat(requests).hasSize(2);
-    assertThat(first.getMetadata()).containsEntry(ResponsesReasoningReplay.ORIGIN_OWNER, previousExchange.ownerKey());
+    assertThat(first.getMetadata())
+        .containsEntry(ResponsesReasoningReplay.ORIGIN_OWNER, previousExchange.ownerKey());
     if (replay == ReasoningReplayMode.ENCRYPTED)
-      assertThat(requests.getLast().path("input").toString()).contains("opaque-extra+/=", "opaque-bound");
+      assertThat(requests.getLast().path("input").toString())
+          .contains("opaque-extra+/=", "opaque-bound");
     assertThat(grant.toString()).doesNotContain("opaque-extra", "opaque-bound");
 
     var changedParts = new java.util.ArrayList<>(first.getParts());
     changedParts.add(org.springframework.ai.chat.messages.part.TextPart.of("unapproved addition"));
-    var changed = AssistantMessage.builder().parts(changedParts).properties(first.getMetadata()).build();
-    assertThatThrownBy(() -> models.chatModel(LlmFeature.CHAT).call(new Prompt(
-        List.of(changed, new UserMessage("second")), granted))).isInstanceOf(IllegalArgumentException.class);
-    var other = new dev.mikoto2000.rei.core.chat.AgentRunContext(
-        "other", "chat", protocolDirectory, "project");
-    var wrongTarget = models.requestOptions(LlmFeature.CHAT, null, true, other).mutate()
-        .toolContext(Map.of(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY, grant)).build();
-    assertThatThrownBy(() -> models.chatModel(LlmFeature.CHAT).call(new Prompt(
-        List.of(historical, new UserMessage("second")), wrongTarget))).isInstanceOf(IllegalArgumentException.class);
+    var changed =
+        AssistantMessage.builder().parts(changedParts).properties(first.getMetadata()).build();
+    assertThatThrownBy(() ->
+            models
+                .chatModel(LlmFeature.CHAT)
+                .call(new Prompt(List.of(changed, new UserMessage("second")), granted)))
+        .isInstanceOf(IllegalArgumentException.class);
+    var other =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "other", "chat", protocolDirectory, "project");
+    var wrongTarget =
+        models
+            .requestOptions(LlmFeature.CHAT, null, true, other)
+            .mutate()
+            .toolContext(
+                Map.of(
+                    dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore
+                        .HISTORY_GRANT_CONTEXT_KEY,
+                    grant))
+            .build();
+    assertThatThrownBy(() ->
+            models
+                .chatModel(LlmFeature.CHAT)
+                .call(new Prompt(List.of(historical, new UserMessage("second")), wrongTarget)))
+        .isInstanceOf(IllegalArgumentException.class);
     var unpublished = previousExchange.withKey("unpublished").reference(first);
-    var runOnlyPointer = Map.of(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_ID, unpublished.id(),
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_HASH, unpublished.sha256(),
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_OWNER, "completed:previous");
-    assertThatThrownBy(() -> protocolStore.historyReplayGrant(currentExchange, List.of(runOnlyPointer), origin))
+    var runOnlyPointer =
+        Map.of(
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_ID,
+            unpublished.id(),
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_HASH,
+            unpublished.sha256(),
+            dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_OWNER,
+            "completed:previous");
+    assertThatThrownBy(() ->
+            protocolStore.historyReplayGrant(currentExchange, List.of(runOnlyPointer), origin))
         .isInstanceOf(IllegalStateException.class);
-    var child = new dev.mikoto2000.rei.core.chat.AgentRunContext(
-        "child", "child-chat", protocolDirectory, "project");
+    var child =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext(
+            "child", "child-chat", protocolDirectory, "project");
     var childOptions = models.requestOptions(LlmFeature.CHAT, null, true, child);
-    var childExchange = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
-        childOptions.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
-    var childOrigin = (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin)
-        childOptions.getToolContext().get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
-    assertThatThrownBy(() -> protocolStore.historyReplayGrant(childExchange, List.of(pointer), childOrigin))
+    var childExchange =
+        (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange)
+            childOptions
+                .getToolContext()
+                .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+    var childOrigin =
+        (dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin)
+            childOptions
+                .getToolContext()
+                .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY);
+    assertThatThrownBy(
+            () -> protocolStore.historyReplayGrant(childExchange, List.of(pointer), childOrigin))
         .isInstanceOf(IllegalStateException.class);
-    var incompatible = new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
-        origin.owner(), "different-endpoint");
-    assertThatThrownBy(() -> protocolStore.historyReplayGrant(currentExchange, List.of(pointer), incompatible))
+    var incompatible =
+        new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Origin(
+            origin.owner(), "different-endpoint");
+    assertThatThrownBy(
+            () -> protocolStore.historyReplayGrant(currentExchange, List.of(pointer), incompatible))
         .isInstanceOf(IllegalStateException.class);
     assertThat(requests).hasSize(2);
-    protocolStore.release(previousExchange.scope(), reference,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY, "completed:previous");
-    protocolStore.release(previousExchange.scope(), reference,
-        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN, previous.runId());
-    try (var db = java.sql.DriverManager.getConnection("jdbc:sqlite:" + protocolDirectory.resolve("protocol.db"));
+    protocolStore.release(
+        previousExchange.scope(),
+        reference,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.HISTORY,
+        "completed:previous");
+    protocolStore.release(
+        previousExchange.scope(),
+        reference,
+        dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
+        previous.runId());
+    try (var db =
+            java.sql.DriverManager.getConnection(
+                "jdbc:sqlite:" + protocolDirectory.resolve("protocol.db"));
         var statement = db.createStatement()) {
       statement.executeUpdate("UPDATE model_message_payloads SET staged_until=0");
     }
-    assertThat(protocolStore.collectExpired()).as("accepted target Run owns a lease on borrowed history").isZero();
+    assertThat(protocolStore.collectExpired())
+        .as("accepted target Run owns a lease on borrowed history")
+        .isZero();
   }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-  void completedHistoryFlowsThroughRealCoreAdvisorsAndTheNativeSdk(boolean compatible) throws Exception {
+  void completedHistoryFlowsThroughRealCoreAdvisorsAndTheNativeSdk(boolean compatible)
+      throws Exception {
     contentType = "text/event-stream";
     replies.add(sse(reasoningDone()));
     replies.add(sse(done()));
     var turns = dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory();
-    var logs = new dev.mikoto2000.rei.conversation.ConversationLogStore(
-        protocolDirectory.resolve("logs"), java.time.Clock.systemUTC(),
-        new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
-    var summaries = new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(protocolDirectory);
+    var logs =
+        new dev.mikoto2000.rei.conversation.ConversationLogStore(
+            protocolDirectory.resolve("logs"),
+            java.time.Clock.systemUTC(),
+            new ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    var summaries =
+        new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(protocolDirectory);
     var memory = dev.mikoto2000.rei.chatmemory.WindowedConversationMemory.builder().build();
     for (int i = 0; i < 2; i++) {
       var properties = nativeProperties();
@@ -533,22 +614,42 @@ class ResponsesReplayContractTest {
         properties.setFeature(LlmFeature.CHAT, server);
       }
       var models = nativeProvider(properties);
-      var client = org.springframework.ai.chat.client.ChatClient.builder(
-          new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.CHAT)))
-          .defaultAdvisors(new dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor(
-              turns, memory, summaries, logs, () -> protocolStore)).build();
+      var client =
+          org.springframework.ai.chat.client.ChatClient.builder(
+                  new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
+                      models.chatModel(LlmFeature.CHAT)))
+              .defaultAdvisors(
+                  new dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor(
+                      turns, memory, summaries, logs, () -> protocolStore))
+              .build();
       var clients = new FixedLlmChatClientProvider(client);
-      var holder = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
+      var holder =
+          org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
       org.mockito.Mockito.when(holder.get()).thenReturn("fixture-model");
-      var service = new dev.mikoto2000.rei.core.chat.ChatExecutionService(clients, holder, models,
-          new LlmProperties(), new dev.mikoto2000.rei.core.service.CommandCancellationService(),
-          java.util.Optional.empty(), java.util.Optional.empty());
-      org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "setConversationLogStore", logs);
-      org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "setConversationTurnStore", turns);
-      var run = new dev.mikoto2000.rei.core.chat.AgentRunContext(
-          i == 0 ? "first" : "second", "fixture-conversation", protocolDirectory, "fixture-project");
-      var result = service.execute(run, i == 0 ? "first request" : "second request",
-          new dev.mikoto2000.rei.core.chat.UserInterventionQueue());
+      var service =
+          new dev.mikoto2000.rei.core.chat.ChatExecutionService(
+              clients,
+              holder,
+              models,
+              new LlmProperties(),
+              new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+              java.util.Optional.empty(),
+              java.util.Optional.empty());
+      org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+          service, "setConversationLogStore", logs);
+      org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+          service, "setConversationTurnStore", turns);
+      var run =
+          new dev.mikoto2000.rei.core.chat.AgentRunContext(
+              i == 0 ? "first" : "second",
+              "fixture-conversation",
+              protocolDirectory,
+              "fixture-project");
+      var result =
+          service.execute(
+              run,
+              i == 0 ? "first request" : "second request",
+              new dev.mikoto2000.rei.core.chat.UserInterventionQueue());
       assertThat(result.success()).as("native Run %s: %s", run.runId(), result.stopCode()).isTrue();
     }
     assertThat(requests).hasSize(2);
@@ -556,11 +657,16 @@ class ResponsesReplayContractTest {
     assertThat(input.toString()).contains("first request", "second request", "done");
     if (compatible) {
       assertThat(input.toString()).contains("opaque-bound");
-      assertThat(java.util.stream.StreamSupport.stream(input.spliterator(), false)
-          .filter(item -> "reasoning".equals(item.path("type").asText())).count()).isEqualTo(1);
+      assertThat(
+              java.util.stream.StreamSupport.stream(input.spliterator(), false)
+                  .filter(item -> "reasoning".equals(item.path("type").asText()))
+                  .count())
+          .isEqualTo(1);
     } else assertThat(input.toString()).doesNotContain("opaque-bound", "encrypted_content");
-    assertThat(turns.read("fixture-conversation")).allMatch(dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn::completed);
-    assertThat(logs.readAll()).extracting(dev.mikoto2000.rei.conversation.ConversationLogEntry::content)
+    assertThat(turns.read("fixture-conversation"))
+        .allMatch(dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn::completed);
+    assertThat(logs.readAll())
+        .extracting(dev.mikoto2000.rei.conversation.ConversationLogEntry::content)
         .containsExactly("first request", "done", "second request", "done");
   }
 
@@ -604,12 +710,17 @@ class ResponsesReplayContractTest {
             new dev.mikoto2000.rei.core.service.CommandCancellationService(),
             java.util.Optional.empty(),
             java.util.Optional.empty());
-    var logs = new dev.mikoto2000.rei.conversation.ConversationLogStore(
-        protocolDirectory.resolve("logs"), java.time.Clock.systemUTC(),
-        new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    var logs =
+        new dev.mikoto2000.rei.conversation.ConversationLogStore(
+            protocolDirectory.resolve("logs"),
+            java.time.Clock.systemUTC(),
+            new ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
     var turns = dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory();
-    org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "setConversationLogStore", logs);
-    org.springframework.test.util.ReflectionTestUtils.invokeMethod(service, "setConversationTurnStore", turns);
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+        service, "setConversationLogStore", logs);
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+        service, "setConversationTurnStore", turns);
     var result =
         service.execute(
             run, "fixture request", new dev.mikoto2000.rei.core.chat.UserInterventionQueue());
@@ -625,17 +736,29 @@ class ResponsesReplayContractTest {
             run.runId());
     assertThat(saved.payloadCount()).as("original input and final assistant").isEqualTo(2);
     assertThat(saved.runCumulativeBytes()).isPositive();
-    var protocolRows = logs.readConversation(run.conversationId()).stream().filter(entry ->
-        dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_SPEAKER.equals(entry.speaker())).toList();
+    var protocolRows =
+        logs.readConversation(run.conversationId()).stream()
+            .filter(entry ->
+                dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_SPEAKER.equals(
+                    entry.speaker()))
+            .toList();
     assertThat(protocolRows).as("real main path publishes every protocol pointer").hasSize(2);
-    assertThat(protocolRows).extracting(entry -> entry.metadata().get("rei.modelMessage.role"))
+    assertThat(protocolRows)
+        .extracting(entry -> entry.metadata().get("rei.modelMessage.role"))
         .containsExactly("user", "assistant");
-    assertThat(turns.read(run.conversationId()).getFirst().metadata()).containsAllEntriesOf(Map.of(
-        dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_VERSION, "1",
-        dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_COUNT, "2",
-        "rei.modelMessage.run", run.runId(),
-        "rei.modelMessage.endpoint", models.resolvedEndpoint(LlmFeature.CHAT).fingerprint()));
-    assertThat(logs.readAll()).extracting(dev.mikoto2000.rei.conversation.ConversationLogEntry::content)
+    assertThat(turns.read(run.conversationId()).getFirst().metadata())
+        .containsAllEntriesOf(
+            Map.of(
+                dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_VERSION,
+                "1",
+                dev.mikoto2000.rei.conversation.ConversationLogStore.PROTOCOL_COUNT,
+                "2",
+                "rei.modelMessage.run",
+                run.runId(),
+                "rei.modelMessage.endpoint",
+                models.resolvedEndpoint(LlmFeature.CHAT).fingerprint()));
+    assertThat(logs.readAll())
+        .extracting(dev.mikoto2000.rei.conversation.ConversationLogEntry::content)
         .containsExactly("fixture request", "done");
   }
 
