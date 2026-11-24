@@ -9,7 +9,8 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import dev.mikoto2000.rei.modeloptions.ModelOptions;
 
 /**
  * 言語モデル作業習慣メッセージの内容を生成する。
@@ -21,14 +22,14 @@ public final class LlmBehaviorMessageGenerator implements BehaviorMessageGenerat
   private final Supplier<ChatModel> model;
 
   /** 選択可能な設定。 */
-  private final Supplier<OpenAiChatOptions> options;
+  private final Supplier<? extends ToolCallingChatOptions> options;
 
   /** 文字。 */
   private final Supplier<String> character;
 
   /** 指定された値や利用先を使って、LlmBehaviorMessageGeneratorを初期化する。 */
   public LlmBehaviorMessageGenerator(
-      Supplier<ChatModel> model, Supplier<OpenAiChatOptions> options, Supplier<String> character) {
+      Supplier<ChatModel> model, Supplier<? extends ToolCallingChatOptions> options, Supplier<String> character) {
     this.model = model;
     this.options = options;
     this.character = character;
@@ -65,7 +66,7 @@ public final class LlmBehaviorMessageGenerator implements BehaviorMessageGenerat
         「予定が残っている」「仕事に遅れる」等を付け足さず、観測された娯楽傾向だけを根拠に区切りを促してください。
         ツールは使わず、JSONや内部ラベルや分析過程を出力しないでください。
         """;
-    var requestOptions = options.get().mutate().toolChoice(null).toolCallbacks(List.of()).build();
+    var requestOptions = ModelOptions.withToolChoice(ModelOptions.singleRequest(options.get()),null);
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(requestOptions);
     var chat = model.get();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(chat);

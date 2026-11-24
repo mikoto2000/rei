@@ -26,6 +26,6 @@ class NativeBehaviorOptionsTest {
       .newInstance((Supplier<ChatModel>)()->model,(Supplier<OpenAiResponsesChatOptions>)()->options,(Supplier<String>)()->"persona");
   assertThat(generator.generate(new BehaviorNotification("fixture",assess(3600,record(0,3600,"social")))))
       .isEqualTo("ここで区切りをつけよう。");
-  assertThat(options.getToolContext()).doesNotContainKey("rei.llm.replay-owner");
+  assertThat(options.getToolContext()).isNullOrEmpty();
  }
 }
