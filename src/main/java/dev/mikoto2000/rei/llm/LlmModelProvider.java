@@ -442,6 +442,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
     for (String key :
         java.util.List.of(
             ResponsesReasoningReplay.OWNER_CONTEXT_KEY,
+            dev.mikoto2000.rei.modeloptions.ModelOptions.PREPARATION_CONTEXT_KEY,
             dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ORIGIN_CONTEXT_KEY,
             dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY,
             dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.HISTORY_GRANT_CONTEXT_KEY))
