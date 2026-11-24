@@ -161,7 +161,16 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                       .content(entry.content())
                       .properties(properties)
                       .build();
-          messages.add(historical(restore(owner, entry.metadata(), entry.speaker(), message), sequence));
+          var modelMetadata = entry.metadata();
+          if ("assistant".equals(entry.speaker())
+              && !dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.hasHistoryReference(modelMetadata)
+              && entry.timestamp() != null) {
+            var previousTurn = timeline.floorEntry(entry.timestamp().toInstant());
+            var savedTurn = previousTurn == null ? null : previousTurn.getValue();
+            if (savedTurn != null && savedTurn.completed() && entry.content().equals(savedTurn.assistantMessage()))
+              modelMetadata = savedTurn.metadata();
+          }
+          messages.add(historical(restore(owner, modelMetadata, entry.speaker(), message), sequence));
           historyAnchor = true;
         }
         // Carry completed run observations alongside the original final answer without rewriting
