@@ -19,6 +19,36 @@ class ResponsesTransportContractTest {
   private final List<String> urls = new CopyOnWriteArrayList<>();
   private String reply = completed();
   private String contentType = "application/json";
+  private boolean bodyClosed;
+
+  @Test
+  void cancellationClosesNativeSseBodyAndDoesNotRequireCompletion() {
+    contentType = "text/event-stream";
+    reply = textDelta();
+    var options = options().build();
+    var first = transport(options).stream(new Prompt("fixture", options)).take(1).blockFirst();
+    assertThat(first.getResult().getOutput().getText()).isEqualTo("done");
+    org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(2))
+        .untilAsserted(() -> assertThat(bodyClosed).isTrue());
+  }
+
+  @Test
+  void nativeOptionsCannotSwitchTheBoundModel() {
+    var defaults = options().build();
+    var other = defaults.mutate().model("other-model").build();
+    assertThatThrownBy(() -> transport(defaults).call(new Prompt("fixture", other)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("model");
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
+  void nativeOptionsCannotEnableHiddenSdkRetries() {
+    var defaults = options().build();
+    var other = defaults.mutate().maxRetries(2).build();
+    assertThatThrownBy(() -> transport(defaults).call(new Prompt("fixture", other)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("retries");
+    assertThat(requests).isEmpty();
+  }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {
@@ -203,8 +233,7 @@ class ResponsesTransportContractTest {
           urls.add(chain.request().url().toString());
           return new okhttp3.Response.Builder().request(chain.request())
               .protocol(okhttp3.Protocol.HTTP_1_1).code(200).message("OK")
-              .body(okhttp3.ResponseBody.create(reply,
-                  okhttp3.MediaType.get(contentType))).build();
+              .body(responseBody()).build();
         })).build();
     var endpoint = new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES,
         options.getBaseUrl(), "fixture-credential", options.getModel(),
@@ -212,6 +241,22 @@ class ResponsesTransportContractTest {
             LlmCapabilities.Setting.STRUCTURED_OUTPUT, LlmCapabilities.Setting.IMAGE_INPUT)), options.getMaxOutputTokens(),
         options.getTemperature(), java.time.Duration.ofMinutes(5));
     return new ResponsesAdapter(endpoint, model);
+  }
+
+  private okhttp3.ResponseBody responseBody() {
+    var body = okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType));
+    var source = okio.Okio.buffer(new okio.ForwardingSource(body.source()) {
+      @Override
+      public void close() throws java.io.IOException {
+        bodyClosed = true;
+        super.close();
+      }
+    });
+    return new okhttp3.ResponseBody() {
+      @Override public okhttp3.MediaType contentType() { return body.contentType(); }
+      @Override public long contentLength() { return body.contentLength(); }
+      @Override public okio.BufferedSource source() { return source; }
+    };
   }
 
   private String completed() {
