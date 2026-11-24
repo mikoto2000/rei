@@ -86,6 +86,12 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     var model =
         OpenAiResponsesChatModel.builder()
             .options(options)
+            .openAiClient(ResponsesSdkBoundary.safe(org.springframework.ai.openai.setup.OpenAiSetup.setupSyncClient(
+                options.getBaseUrl(), options.getApiKey(), options.getCredential(),
+                options.getMicrosoftDeploymentName(), options.getMicrosoftFoundryServiceVersion(),
+                options.getOrganizationId(), options.isMicrosoftFoundry(), false, options.getModel(),
+                options.getTimeout(), 0, options.getProxy(), options.getCustomHeaders(),
+                io.micrometer.observation.ObservationRegistry.NOOP, null, transportCustomizers)))
             .openAiClientAsync(ResponsesSdkBoundary.safe(client))
             .httpClientBuilderCustomizers(transportCustomizers)
             .build();
@@ -252,7 +258,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
           ? ("max_output_tokens".equals(response.getMetadata().get(
               org.springframework.ai.openai.responses.OpenAiResponsesMetadata.INCOMPLETE_REASON))
               ? ResponsesTransportException.Category.OUTPUT_LIMIT : ResponsesTransportException.Category.INCOMPLETE)
-          : ResponsesTransportException.Category.INVALID_RESPONSE);
+          : ResponsesTransportException.Category.INVALID_RESPONSE,
+          ResponsesTransportException.usage(response.getMetadata().getUsage()));
   }
 
   @Override

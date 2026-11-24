@@ -18,6 +18,34 @@ import java.util.concurrent.Executor;
 final class ResponsesSdkBoundary {
   private ResponsesSdkBoundary() {}
 
+  static com.openai.client.OpenAIClient safe(com.openai.client.OpenAIClient client) {
+    var service = client.responses();
+    var safeService = (com.openai.services.blocking.ResponseService) Proxy.newProxyInstance(
+        com.openai.services.blocking.ResponseService.class.getClassLoader(),
+        new Class<?>[] {com.openai.services.blocking.ResponseService.class}, (proxy, method, arguments) -> {
+          try {
+            var result = method.invoke(service, arguments);
+            if (result instanceof com.openai.models.responses.Response response
+                && response.status().filter(com.openai.models.responses.ResponseStatus.FAILED::equals).isPresent())
+              throw new ResponsesTransportException(ResponsesTransportException.Category.PROVIDER,
+                  ResponsesTransportException.usage(response.usage().orElse(null)));
+            return result;
+          } catch (InvocationTargetException error) {
+            throw ResponsesTransportException.normalize(error.getCause());
+          }
+        });
+    return (com.openai.client.OpenAIClient) Proxy.newProxyInstance(
+        com.openai.client.OpenAIClient.class.getClassLoader(), new Class<?>[] {com.openai.client.OpenAIClient.class},
+        (proxy, method, arguments) -> {
+          if (method.getName().equals("responses")) return safeService;
+          try {
+            return method.invoke(client, arguments);
+          } catch (InvocationTargetException error) {
+            throw ResponsesTransportException.normalize(error.getCause());
+          }
+        });
+  }
+
   static OpenAIClientAsync safe(OpenAIClientAsync client) {
     var service = client.responses();
     var safeService =
@@ -59,7 +87,10 @@ final class ResponsesSdkBoundary {
       return new Handler<>() {
         @Override
         public void onNext(ResponseStreamEvent event) {
-          if (event.isError() || event.isFailed())
+          if (event.isFailed())
+            throw new ResponsesTransportException(ResponsesTransportException.Category.PROVIDER,
+                ResponsesTransportException.usage(event.failed().orElseThrow().response().usage().orElse(null)));
+          if (event.isError())
             throw new ResponsesTransportException(ResponsesTransportException.Category.PROVIDER);
           handler.onNext(event);
         }

@@ -16,16 +16,46 @@ final class ResponsesTransportException extends IllegalStateException {
   }
 
   private final Category category;
+  private final TokenUsage usage;
 
   record TokenUsage(Long input, Long output, Long total, Long cached, Long reasoning) {}
 
   TokenUsage usage() {
-    return null;
+    return usage;
   }
 
   ResponsesTransportException(Category category) {
+    this(category, null);
+  }
+
+  ResponsesTransportException(Category category, TokenUsage usage) {
     super("Responses transport failed: " + category);
     this.category = category;
+    this.usage = usage;
+  }
+
+  static TokenUsage usage(com.openai.models.responses.ResponseUsage usage) {
+    if (usage == null) return null;
+    var inputDetails = usage._inputTokensDetails().asKnown().orElse(null);
+    var outputDetails = usage._outputTokensDetails().asKnown().orElse(null);
+    return new TokenUsage(
+        usage._inputTokens().asNumber().map(Number::longValue).orElse(null),
+        usage._outputTokens().asNumber().map(Number::longValue).orElse(null),
+        usage._totalTokens().asNumber().map(Number::longValue).orElse(null),
+        inputDetails == null ? null : inputDetails._cachedTokens().asNumber().map(Number::longValue).orElse(null),
+        outputDetails == null ? null : outputDetails._reasoningTokens().asNumber().map(Number::longValue).orElse(null));
+  }
+
+  static TokenUsage usage(org.springframework.ai.chat.metadata.Usage usage) {
+    if (usage == null || usage instanceof org.springframework.ai.chat.metadata.EmptyUsage) return null;
+    if (usage.getNativeUsage() instanceof com.openai.models.responses.ResponseUsage nativeUsage)
+      return usage(nativeUsage);
+    return new TokenUsage(number(usage.getPromptTokens()), number(usage.getCompletionTokens()),
+        number(usage.getTotalTokens()), null, null);
+  }
+
+  private static Long number(Integer value) {
+    return value == null ? null : value.longValue();
   }
 
   Category category() {
