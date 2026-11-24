@@ -799,6 +799,40 @@ class ResponsesReplayContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void inputCheckpointFailureDoesNotSendOrInventUnknownProviderUsage(boolean assembled) throws Exception {
+    var models = nativeProvider(nativeProperties());
+    var owner = new dev.mikoto2000.rei.core.chat.AgentRunContext("input-failure", "chat", protocolDirectory, "project");
+    var budget = new OutputLimitRunBudget(2, 8, null, 1000);
+    budget.tryConsumeLlmCall();
+    var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(owner.runId(), budget,
+        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+    execution.setRunContext(owner);
+    var options = models.requestOptions(LlmFeature.CHAT, null, true, owner);
+    var values = new java.util.HashMap<>(options.getToolContext());
+    values.put(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution);
+    execution.setModelOptions(options.mutate().toolContext(null).toolContext(values).build());
+    execution.preserveUserMessage(new UserMessage("original input"));
+    execution.setToolResultsCheckpoint(ignored -> { throw new IllegalStateException("input checkpoint unavailable"); });
+    dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler = null;
+    if (assembled) {
+      assembler = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.contextbudget.ContextAssembler.class);
+      org.mockito.Mockito.when(assembler.assemble(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString(),
+          org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any())).thenAnswer(call -> call.getArgument(0));
+      org.mockito.Mockito.when(assembler.reviewContinuation(org.mockito.ArgumentMatchers.any())).thenReturn("");
+    }
+    var controlled = new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(models.chatModel(LlmFeature.CHAT), assembler);
+    var failure = org.assertj.core.api.Assertions.catchThrowable(() -> controlled.stream(new Prompt("original input", execution.modelOptions()))
+        .blockLast(Duration.ofSeconds(10)));
+    assertThat(requests).isEmpty();
+    assertThat(executions).hasValue(0);
+    assertThat(budget.snapshot().usageUnknown()).as("no transport started, so usage is not unknown").isFalse();
+    assertThat(failure).isInstanceOf(IllegalStateException.class).hasMessage("input checkpoint unavailable");
+    assertThat(execution.protocolHistorySnapshot().input()).isNull();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void actualNativeSendPersistsItsCompleteInputBeforeHttp(boolean assembled) throws Exception {
     contentType = "text/event-stream";
     replies.add(sse(done()));
