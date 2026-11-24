@@ -53,6 +53,22 @@ class ResponsesReplayContractTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void partialOrHostedSavedPartsCannotBeSilentlyDroppedOrReplayed(boolean partial) {
+    org.springframework.ai.chat.messages.part.MessagePart part = partial
+        ? org.springframework.ai.chat.messages.part.StreamingParts.partial(
+            org.springframework.ai.chat.messages.part.ToolCallPart.of(
+                new AssistantMessage.ToolCall("call_partial", "function", "fixture_tool", "{")), 0)
+        : new org.springframework.ai.chat.messages.part.UnknownPart("openai", "web_search_call",
+            "{\"type\":\"web_search_call\",\"id\":\"ws_one\",\"status\":\"completed\"}", null, Map.of());
+    var assistant = AssistantMessage.builder().part(part).build();
+    var options = options();
+    assertThatThrownBy(() -> model(options).call(new Prompt(List.of(new UserMessage("fixture"), assistant), options)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("part");
+    assertThat(requests).isEmpty();
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void existingDiscoveryLoopUsesTheOriginalRequestSnapshot(boolean unpublishedSibling) throws Exception {
     contentType = "text/event-stream";
     var mapper = new ObjectMapper();
