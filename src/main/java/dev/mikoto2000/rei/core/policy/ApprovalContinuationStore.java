@@ -38,6 +38,7 @@ public class ApprovalContinuationStore {
    * @param calls 呼び出し回数
    * @param responses 応答一覧
    * @param delivery 登録済みツール結果の配信情報（旧形式では未指定）
+   * @param payload 完全なモデルメッセージへの検証済み参照（旧形式では未指定）
    */
   public record StoredMessage(
       String kind,
@@ -146,7 +147,7 @@ public class ApprovalContinuationStore {
                 var scope = ModelMessagePayloadStore.Scope.forOwner(owner);
                 var ref = payloads.get().save(scope, owner.runId(), "approval:" + id + "/history:" + index, m);
                 payloads.get().publish(scope, ref, ModelMessagePayloadStore.ReferenceKind.APPROVAL, id);
-                return new StoredMessage(m.getMessageType().name(), "", List.of(), List.of(), null, ref);
+                return new StoredMessage("MODEL_" + m.getMessageType().name(), "", List.of(), List.of(), null, ref);
               }
               if (m instanceof AssistantMessage a)
                 return new StoredMessage(
@@ -259,7 +260,7 @@ public class ApprovalContinuationStore {
               if (m.payload() != null) {
                 var message = payloads.get().load(ModelMessagePayloadStore.Scope.forOwner(d.owner()),
                     m.payload(), ModelMessagePayloadStore.ReferenceKind.APPROVAL, entry.approvalId());
-                if (!message.getMessageType().name().equals(m.kind()))
+                if (!("MODEL_" + message.getMessageType().name()).equals(m.kind()))
                   throw new IllegalStateException("Model message persistence rejected");
                 return message;
               }
