@@ -425,7 +425,9 @@ public final class ModelMessagePayloadStore {
     validate(scope);
     identifier(run);
     return transaction(db -> {
-      try (var delete = db.prepareStatement("DELETE FROM model_message_references WHERE kind='RUN' AND owner=? AND payload_id IN (SELECT id FROM model_message_payloads WHERE project=? AND root_path=? AND conversation=?)")) {
+      try (var delete =
+          db.prepareStatement(
+              "DELETE FROM model_message_references WHERE kind='RUN' AND owner=? AND payload_id IN (SELECT id FROM model_message_payloads WHERE project=? AND root_path=? AND conversation=?)")) {
         bind(delete, run, scope.project(), scope.root(), scope.conversation());
         return delete.executeUpdate();
       }

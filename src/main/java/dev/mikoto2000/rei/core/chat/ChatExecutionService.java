@@ -945,7 +945,8 @@ public class ChatExecutionService {
               && autoSleep != null
               && context.mode() == AgentRunContext.Mode.EXCLUSIVE
               && !structuredCommand) autoSleep.afterTerminal(context);
-          if (!suspended && !execution.isCancelled()
+          if (!suspended
+              && !execution.isCancelled()
               && turnStatus == ConversationTurnStore.Status.COMPLETED)
             execution.releaseProtocolRunReferences();
         } finally {
