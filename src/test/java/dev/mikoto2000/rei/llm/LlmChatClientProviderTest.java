@@ -17,6 +17,58 @@ import org.springframework.beans.factory.ObjectProvider;
 
 /** 言語モデルモデルへ対話を依頼する窓口提供元の結果と状態の契約を検証するテスト。 */
 class LlmChatClientProviderTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"chat", "read-only", "conversation", "memory", "voice-correction"})
+  void nativeDefaultsUseTheProtocolNeutralFactory(String feature) {
+    var models = mock(LlmModelProvider.class);
+    var model = mock(ChatModel.class);
+    when(models.chatModel(org.mockito.ArgumentMatchers.anyString())).thenReturn(model);
+    when(models.subAgentChatModel()).thenReturn(model);
+    when(models.memoryChatModel()).thenReturn(model);
+    when(models.voiceCorrectionChatModel()).thenReturn(model);
+    when(models.requestOptions(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.isNull(),
+        org.mockito.ArgumentMatchers.eq(false))).thenReturn(
+            org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder().model("native-fixture").build());
+    when(models.chatOptions(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.isNull()))
+        .thenThrow(new AssertionError("Native client cannot request Chat Completions options"));
+    var system = mock(SystemPromptService.class);
+    when(system.systemPrompt()).thenReturn("system");
+    var provider =
+        new LlmChatClientProvider(
+            models,
+            new CoreProperties("system", 100),
+            system,
+            mock(ConversationMemory.class),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            null,
+            null);
+    var client = switch (feature) {
+      case "read-only" -> provider.parallelChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY);
+      case "conversation" -> provider.parallelChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.CONVERSATION);
+      default -> provider.chatClient(feature);
+    };
+    assertThat(client).isNotNull();
+    org.mockito.Mockito.verify(models).requestOptions(
+        feature.equals("read-only") || feature.equals("conversation") ? LlmFeature.CHAT : feature, null, false);
+  }
+
   @Test
   void exposesHolidayToolsInFeatureClient() throws Exception {
     var models = mock(LlmModelProvider.class);
