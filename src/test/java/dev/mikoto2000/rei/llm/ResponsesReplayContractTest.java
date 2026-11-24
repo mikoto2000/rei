@@ -49,6 +49,51 @@ class ResponsesReplayContractTest {
     return context;
   }
 
+  @Test
+  void configuredNativeModelOptionsAndClientShareOneImmutableEndpointSnapshot() {
+    var source = new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(Map.ofEntries(
+        Map.entry("rei.llm.features.chat.api", "responses"),
+        Map.entry("rei.llm.features.chat.base-url", "https://fixture.invalid"),
+        Map.entry("rei.llm.features.chat.api-key", "fixture-secret"),
+        Map.entry("rei.llm.features.chat.model", "fixture-model"),
+        Map.entry("rei.llm.features.chat.max-output-tokens", "41"),
+        Map.entry("rei.llm.features.chat.temperature", "0.2"),
+        Map.entry("rei.llm.features.chat.reasoning-replay", "encrypted"),
+        Map.entry("rei.llm.features.chat.max-tools", "16"),
+        Map.entry("rei.llm.features.chat.endpoint-generation", "7"),
+        Map.entry("rei.llm.features.chat.supported-settings", "temperature")));
+    var properties = new org.springframework.boot.context.properties.bind.Binder(source)
+        .bindOrCreate("rei.llm", LlmProperties.class);
+    var provider = LlmModelProvider.forResponsesFixture(
+        org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class), properties, httpCustomizers());
+    var endpoint = provider.resolvedEndpoint(LlmFeature.CHAT);
+    assertThat(endpoint.apiType()).isEqualTo(LlmApiType.RESPONSES);
+    assertThat(endpoint.generation()).isEqualTo(7);
+    assertThat(endpoint.capabilities().reasoningReplay()).isEqualTo(ReasoningReplayMode.ENCRYPTED);
+    assertThat(endpoint.capabilities().maxTools()).isEqualTo(16);
+    var client = provider.chatModel(LlmFeature.CHAT);
+    var changed = properties.feature(LlmFeature.CHAT);
+    changed.setModel("later-model");
+    changed.setReasoningReplay(ReasoningReplayMode.NONE);
+    changed.setSupportedSettings(java.util.Set.of());
+    properties.setFeature(LlmFeature.CHAT, changed);
+    var options = provider.requestOptions(LlmFeature.CHAT, "selected-model", true);
+    assertThat(options).isInstanceOf(OpenAiResponsesChatOptions.class);
+    assertThat(options.getModel()).isEqualTo(endpoint.model());
+    assertThat(provider.resolvedEndpoint(LlmFeature.CHAT)).isEqualTo(endpoint);
+    assertThat(provider.chatModel(LlmFeature.CHAT)).isSameAs(client);
+    var response = client.call(new Prompt("fixture", options.mutate()
+        .toolContext(Map.of(ResponsesReasoningReplay.OWNER_CONTEXT_KEY, owner)).build()));
+    assertThat(response.getResult().getOutput().getText()).isEqualTo("done");
+    assertThat(requests).hasSize(1);
+    assertThat(requests.getFirst().path("model").asText()).isEqualTo("fixture-model");
+    assertThat(requests.getFirst().path("temperature").asDouble()).isEqualTo(0.2);
+    assertThat(requests.getFirst().path("max_output_tokens").asInt()).isEqualTo(41);
+    assertThat(requests.getFirst().path("store").asBoolean(true)).isFalse();
+    assertThat(requests.getFirst().has("max_tokens")).isFalse();
+    assertThat(requests.getFirst().has("max_completion_tokens")).isFalse();
+  }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
       dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.class)
@@ -1110,24 +1155,19 @@ class ResponsesReplayContractTest {
   }
 
   private ResponsesAdapter model(OpenAiResponsesChatOptions options) {
-    var endpoint = endpoint(options);
-    return ResponsesAdapter.create(
-        endpoint,
-        options,
-        List.of(builder ->
-            builder.interceptor(chain -> {
-              var buffer = new okio.Buffer();
-              chain.request().body().writeTo(buffer);
-              requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
-              var reply = replies.isEmpty() ? done() : replies.removeFirst();
-              return new okhttp3.Response.Builder()
-                  .request(chain.request())
-                  .protocol(okhttp3.Protocol.HTTP_1_1)
-                  .code(200)
-                  .message("fixture")
-                  .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType)))
-                  .build();
-            })));
+    return ResponsesAdapter.create(endpoint(options), options, httpCustomizers());
+  }
+
+  private List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> httpCustomizers() {
+    return List.of(builder -> builder.interceptor(chain -> {
+      var buffer = new okio.Buffer();
+      chain.request().body().writeTo(buffer);
+      requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
+      var reply = replies.isEmpty() ? done() : replies.removeFirst();
+      return new okhttp3.Response.Builder().request(chain.request()).protocol(okhttp3.Protocol.HTTP_1_1)
+          .code(200).message("fixture")
+          .body(okhttp3.ResponseBody.create(reply, okhttp3.MediaType.get(contentType))).build();
+    }));
   }
 
   private String done() {

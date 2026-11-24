@@ -165,6 +165,13 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   private final Map<String, ModelOutageGuard> outageGuards = new ConcurrentHashMap<>();
   private final java.time.Duration outageCooldown;
 
+  /** Owned transport fixture only; never reachable from configuration or production wiring. */
+  static LlmModelProvider forResponsesFixture(
+      ChatModel defaults, LlmProperties properties,
+      java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> customizers) {
+    return new LlmModelProvider(defaults, properties);
+  }
+
   /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public LlmModelProvider(ChatModel defaultChatModel, LlmProperties properties) {
     this(defaultChatModel, properties, null, null);
