@@ -3,7 +3,8 @@ package dev.mikoto2000.rei.llm;
 import dev.mikoto2000.rei.modelmessage.ModelTokenUsage;
 
 /** Safe transport failure. Provider messages, bodies and causes must not escape this boundary. */
-final class ResponsesTransportException extends IllegalStateException {
+final class ResponsesTransportException extends IllegalStateException
+    implements dev.mikoto2000.rei.toolcontract.ExternalReadFailure {
   @java.io.Serial private static final long serialVersionUID = 1L;
 
   enum Category {
@@ -11,10 +12,41 @@ final class ResponsesTransportException extends IllegalStateException {
     RATE_LIMIT,
     TRANSIENT,
     PROVIDER,
+    REFUSAL,
     TIMEOUT,
     OUTPUT_LIMIT,
     INCOMPLETE,
     INVALID_RESPONSE
+  }
+
+  /** Fixed codes survive existing user diagnostics without exposing SDK bodies or causes. */
+  @Override public String diagnosticCode() {
+    return switch(category) {
+      case AUTHENTICATION -> "authentication_failed";
+      case RATE_LIMIT -> "rate_limited";
+      case TRANSIENT -> "provider_unavailable";
+      case PROVIDER -> "provider_failure";
+      case TIMEOUT -> "timeout";
+      case OUTPUT_LIMIT -> "output_limit";
+      case INCOMPLETE -> "response_incomplete";
+      case REFUSAL -> "model_refusal";
+      case INVALID_RESPONSE -> "invalid_response";
+    };
+  }
+
+  /** Only host-defined guidance crosses the shared diagnostic boundary. */
+  @Override public String diagnosticMessage() {
+    return switch(category) {
+      case AUTHENTICATION -> "LLM の認証に失敗しました。接続先と認証設定を確認してください。";
+      case RATE_LIMIT -> "LLM の呼び出し制限に達しました。利用枠と実行予算を確認してください。";
+      case TRANSIENT -> "LLM へ接続できませんでした。接続先の稼働状況と実行結果を確認してください。";
+      case PROVIDER -> "LLM が要求を処理できませんでした。明示した API とモデルの設定を確認してください。";
+      case TIMEOUT -> "LLM の応答待ちがタイムアウトしました。保存済みの状態と接続先を確認してください。";
+      case OUTPUT_LIMIT -> "LLM の出力上限に達しました。不完全な応答を使わず、出力設定と保存済みの状態を確認してください。";
+      case INCOMPLETE -> "LLM の応答が完了しませんでした。不完全な応答を使わず、保存済みの状態を確認してください。";
+      case REFUSAL -> "LLM が要求への回答を拒否しました。要求内容を確認してください。";
+      case INVALID_RESPONSE -> "LLM の応答形式を検証できませんでした。API と SDK の互換性を確認してください。";
+    };
   }
 
   private final Category category;

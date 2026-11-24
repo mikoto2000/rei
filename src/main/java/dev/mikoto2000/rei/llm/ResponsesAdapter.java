@@ -418,7 +418,16 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     }
   }
 
+  private static void requireNoRefusal(ChatResponse response) {
+    for(var generation:response.getResults()) {
+      var refusal=generation.getMetadata().get(OpenAiResponsesMetadata.REFUSAL);
+      if(refusal instanceof String text && !text.isBlank())
+        throw new ResponsesTransportException(ResponsesTransportException.Category.REFUSAL,ResponsesTransportException.usage(response));
+    }
+  }
+
   private static void requireCompleted(ChatResponse response) {
+    requireNoRefusal(response);
     var metadata = response.getMetadata();
     var status = metadata.get(OpenAiResponsesMetadata.STATUS);
     if ("completed".equals(status)) return;
@@ -487,6 +496,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
               var chunks =
                   delegate.stream(request)
                       .doOnNext(response -> {
+                        requireNoRefusal(response);
                         if (response.getMetadata().containsKey(OpenAiResponsesMetadata.STATUS)) {
                           requireCompleted(response);
                           completed.set(true);
