@@ -238,6 +238,25 @@ class ModelProtocolHistoryTest {
   }
 
   @Test
+  void midLoopGuidanceIsDurableBeforeItsAppliedNotification() {
+    var fixture = fixture();
+    fixture.execution().preserveUserMessage(new UserMessage("original request"));
+    var queue = new dev.mikoto2000.rei.core.chat.UserInterventionQueue();
+    queue.offer("human intervention");
+    fixture.execution().setInterventions(queue, text -> {
+      var history = fixture.execution().protocolHistorySnapshot();
+      assertThat(history.entries()).hasSize(2);
+      assertThat(fixture.exchange().store().load(fixture.exchange().scope(),
+          history.entries().getLast().reference(), ModelMessagePayloadStore.ReferenceKind.RUN,
+          "run").getText()).isEqualTo(text);
+    });
+    assertThat(fixture.execution().applyInterventions()).extracting(Message -> Message.getText())
+        .containsExactly("human intervention");
+    assertThat(fixture.execution().applyInterventions()).isEmpty();
+    assertThat(fixture.execution().protocolHistorySnapshot().entries()).hasSize(2);
+  }
+
+  @Test
   void originalMediaBytesRemainRecoverableAfterTheAttachmentChanges() throws Exception {
     var fixture = fixture();
     var image = directory.resolve("attachment.png");
