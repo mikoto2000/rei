@@ -334,7 +334,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     try {
       var response = delegate.call(request);
       requireCompleted(response);
-      return response;
+      return ResponsesReasoningReplay.bind(response, request, endpoint);
     } catch (RuntimeException error) {
       throw ResponsesTransportException.normalize(error);
     }
