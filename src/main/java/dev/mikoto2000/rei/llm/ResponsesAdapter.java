@@ -247,7 +247,12 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             response
                 .getMetadata()
                 .get(org.springframework.ai.openai.responses.OpenAiResponsesMetadata.STATUS)))
-      throw new IllegalStateException("Responses did not complete successfully");
+      throw new ResponsesTransportException("incomplete".equals(response.getMetadata().get(
+          org.springframework.ai.openai.responses.OpenAiResponsesMetadata.STATUS))
+          ? ("max_output_tokens".equals(response.getMetadata().get(
+              org.springframework.ai.openai.responses.OpenAiResponsesMetadata.INCOMPLETE_REASON))
+              ? ResponsesTransportException.Category.OUTPUT_LIMIT : ResponsesTransportException.Category.INCOMPLETE)
+          : ResponsesTransportException.Category.INVALID_RESPONSE);
   }
 
   @Override

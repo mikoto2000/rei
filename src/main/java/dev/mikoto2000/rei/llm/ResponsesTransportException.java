@@ -9,7 +9,10 @@ final class ResponsesTransportException extends IllegalStateException {
     RATE_LIMIT,
     TRANSIENT,
     PROVIDER,
-    TIMEOUT
+    TIMEOUT,
+    OUTPUT_LIMIT,
+    INCOMPLETE,
+    INVALID_RESPONSE
   }
 
   private final Category category;
