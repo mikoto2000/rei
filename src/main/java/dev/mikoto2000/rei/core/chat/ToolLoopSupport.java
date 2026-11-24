@@ -122,8 +122,8 @@ public final class ToolLoopSupport {
       var toolContext = options.getToolContext();
       if (toolContext == null) return;
       Object value =
-          toolContext
-              .get(dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
+          toolContext.get(
+              dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.EXCHANGE_CONTEXT_KEY);
       if (value == null) return;
       if (!(value
           instanceof dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.Exchange exchange))

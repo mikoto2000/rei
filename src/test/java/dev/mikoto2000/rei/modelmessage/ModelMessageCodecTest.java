@@ -364,7 +364,9 @@ class ModelMessageCodecTest {
   static java.util.stream.Stream<String> invalidDocuments() {
     String empty = "{\"schemaVersion\":1,\"role\":\"assistant\",\"parts\":[],\"metadata\":{}}";
     return java.util.stream.Stream.of(
-        "", "null", "[]",
+        "",
+        "null",
+        "[]",
         empty + "{}",
         empty.replace("\"schemaVersion\":1", "\"schemaVersion\":2,\"schemaVersion\":1"),
         empty.replace("\"schemaVersion\":1", "\"schemaVersion\":\"1\""),

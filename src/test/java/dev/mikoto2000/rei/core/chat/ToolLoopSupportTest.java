@@ -22,10 +22,13 @@ class ToolLoopSupportTest {
     var callback = persistenceCallback(new java.util.concurrent.atomic.AtomicInteger());
     var prompt = new Prompt("fixture", OpenAiChatOptions.builder().toolCallbacks(callback).build());
     assertThatThrownBy(() -> new ToolLoopSupport().execute(prompt, new ChatResponse(List.of())))
-        .isInstanceOf(IllegalArgumentException.class).hasMessage("Missing generation for tool calls").hasNoCause();
-    org.mockito.Mockito.verify(callback, org.mockito.Mockito.never()).call(
-        org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("Missing generation for tool calls")
+        .hasNoCause();
+    org.mockito.Mockito.verify(callback, org.mockito.Mockito.never())
+        .call(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any());
   }
+
   @Test
   void assistantPersistenceFailurePreventsToolDispatch() {
     var store =

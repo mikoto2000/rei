@@ -85,7 +85,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   }
 
   @org.springframework.beans.factory.annotation.Autowired
-  private void configureModelMessagePayloads(
+  void configureModelMessagePayloads(
       org.springframework.beans.factory.ObjectProvider<
               dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore>
           payloads) {

@@ -18,17 +18,25 @@ import org.sqlite.SQLiteDataSource;
 class ModelMessagePayloadStoreTest {
   @Test
   void connectionRuntimeFailuresDoNotExposeConfigurationOrCauses() {
-    var source = new org.springframework.jdbc.datasource.AbstractDataSource() {
-      @Override public java.sql.Connection getConnection() {
-        throw new IllegalStateException("PRIVATE_DATABASE_CONFIG_FIXTURE", new RuntimeException("PRIVATE_CAUSE_FIXTURE"));
-      }
-      @Override public java.sql.Connection getConnection(String username, String password) {
-        return getConnection();
-      }
-    };
+    var source =
+        new org.springframework.jdbc.datasource.AbstractDataSource() {
+          @Override
+          public java.sql.Connection getConnection() {
+            throw new IllegalStateException(
+                "PRIVATE_DATABASE_CONFIG_FIXTURE", new RuntimeException("PRIVATE_CAUSE_FIXTURE"));
+          }
+
+          @Override
+          public java.sql.Connection getConnection(String username, String password) {
+            return getConnection();
+          }
+        };
     assertThatThrownBy(() -> new ModelMessagePayloadStore(source))
-        .isInstanceOf(IllegalStateException.class).hasMessage("Model message persistence rejected").hasNoCause();
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("Model message persistence rejected")
+        .hasNoCause();
   }
+
   @TempDir Path temporary;
   private final ModelMessagePayloadStore.Scope owner =
       new ModelMessagePayloadStore.Scope("project", "root", "conversation");
