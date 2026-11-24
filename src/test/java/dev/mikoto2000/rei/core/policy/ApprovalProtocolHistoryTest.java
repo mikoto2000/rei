@@ -79,6 +79,36 @@ class ApprovalProtocolHistoryTest {
         .query(Long.class).single()).isZero();
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"document", "database"})
+  void retentionFailureCannotRewriteAnAlreadyCommittedApprovalOutcome(String failure) {
+    var fixture = terminalFixture();
+    var db = org.springframework.jdbc.core.simple.JdbcClient.create(fixture.source());
+    if (failure.equals("document"))
+      db.sql("UPDATE approval_continuations SET document=? WHERE approval='approval'")
+          .param("PRIVATE-corrupt-document").update();
+    else db.sql("DROP TABLE model_message_references").update();
+    var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+    var captured = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    captured.start();
+    logger.addAppender(captured);
+    try {
+      org.assertj.core.api.Assertions.assertThatCode(() -> fixture.store().state("approval", "COMPLETED"))
+          .doesNotThrowAnyException();
+      assertThat(fixture.store().find("approval").orElseThrow().state()).isEqualTo("COMPLETED");
+      if (failure.equals("document")) assertThat(approvalPins(fixture.source(), "approval")).isEqualTo(1);
+      for (var logged : captured.list) {
+        assertThat(logged.getFormattedMessage()).doesNotContain("PRIVATE-");
+        if (logged.getThrowableProxy() != null)
+          assertThat(ch.qos.logback.classic.spi.ThrowableProxyUtil.asString(logged.getThrowableProxy()))
+              .doesNotContain("PRIVATE-");
+      }
+    } finally {
+      logger.detachAppender(captured);
+      captured.stop();
+    }
+  }
+
   private long approvalPins(org.sqlite.SQLiteDataSource source, String id) {
     return org.springframework.jdbc.core.simple.JdbcClient.create(source)
         .sql("SELECT COUNT(*) FROM model_message_references WHERE kind='APPROVAL' AND owner=?")
