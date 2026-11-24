@@ -20,7 +20,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 class ContextHistoryAdvisorTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-  void durableLogAndTurnPointersTakePriorityWithoutDuplicatingTheirDisplayText(boolean fromLog) {
+  void durableLogAndTurnPointersTakePriorityWithoutDuplicatingTheirDisplayText(boolean fromLog) throws Exception {
     var owner = new AgentRunContext("current-run", "chat", dir, "fixture-project");
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + dir.resolve("model-messages.db"));
@@ -33,20 +33,18 @@ class ContextHistoryAdvisorTest {
         .properties(Map.of("rei.llm.replay-origin-owner", "fixture-owner")).build();
     var ref = payloads.save(scope, "old-run", "one", message);
     var metadata = payloads.historyReference(scope, ref, "turn:old-run");
-    var turns = new ConversationTurnStore((Path) null) {
-      @Override public synchronized java.util.List<Turn> read(String conversation) {
-        return java.util.List.of(new Turn("old-run", "old request", Status.COMPLETED, "display fixture",
-            java.time.Instant.EPOCH, null, null, metadata));
-      }
-    };
-    var logs = new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), java.time.Clock.systemUTC(),
-        new com.fasterxml.jackson.databind.ObjectMapper()) {
-      @Override public java.util.List<dev.mikoto2000.rei.conversation.ConversationLogEntry> readConversation(String conversation) {
-        return fromLog ? java.util.List.of(new dev.mikoto2000.rei.conversation.ConversationLogEntry("chat", "chat", "assistant",
-            java.time.OffsetDateTime.ofInstant(java.time.Instant.EPOCH, java.time.ZoneOffset.UTC), "display fixture", 1, null, null, metadata))
-            : java.util.List.of();
-      }
-    };
+    try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(dir)) { migration.prepare(); }
+    var writingTurns = new dev.mikoto2000.rei.conversation.SqliteConversationTurnStore(dir);
+    var oldOwner = new AgentRunContext("old-run", "chat", dir, "fixture-project");
+    writingTurns.start(oldOwner, "old request", java.time.Instant.EPOCH);
+    writingTurns.recordMetadata(oldOwner, metadata);
+    writingTurns.finish(oldOwner, ConversationTurnStore.Status.COMPLETED, "display fixture");
+    var mapper = new com.fasterxml.jackson.databind.ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+    var clock = java.time.Clock.fixed(java.time.Instant.EPOCH, java.time.ZoneOffset.UTC);
+    if (fromLog) new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper)
+        .append("chat", "assistant", "display fixture", metadata);
+    var turns = new dev.mikoto2000.rei.conversation.SqliteConversationTurnStore(dir);
+    var logs = new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper);
     var advisor = new ContextHistoryAdvisor(turns, WindowedConversationMemory.builder().build(),
         new ConversationSummaryRepository(dir), logs,
         () -> new dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore(source));
