@@ -16,6 +16,17 @@ import org.springframework.ai.chat.messages.part.ToolCallPart;
 class ModelMessageCodecTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void encoderCannotPersistPartsThatItsDecoderWouldReject(boolean missingCallId) {
+    var attributes = new java.util.HashMap<String, String>();
+    for (int i = 0; i < 65; i++) attributes.put("fixture" + i, "value");
+    org.springframework.ai.chat.messages.part.MessagePart part = missingCallId
+        ? ToolCallPart.of(new AssistantMessage.ToolCall(null, "function", "fixture_tool", "{}"))
+        : new TextPart("fixture", null, attributes);
+    assertThatThrownBy(() -> new ModelMessageCodec().encode(AssistantMessage.builder().part(part).build()))
+        .isInstanceOf(IllegalArgumentException.class).hasMessage("Invalid model message schema").hasNoCause();
+  }
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void rawIndexedStreamPartsCannotBePersistedEvenWhenOneItemIsComplete(boolean partial) {
     var text = TextPart.of("fixture");
     var part = partial ? org.springframework.ai.chat.messages.part.StreamingParts.partial(text, 0)
