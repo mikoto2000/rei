@@ -110,8 +110,8 @@ public class RunExecutionContext {
                     entry.reference(),
                     dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReferenceKind.RUN,
                     exchange.run());
-        if (message instanceof org.springframework.ai.chat.messages.AssistantMessage)
-          origin.requireMatch(message);
+        if (message instanceof org.springframework.ai.chat.messages.AssistantMessage assistant
+            && !grant.permits(assistant, origin.owner(), origin.endpoint())) origin.requireMatch(message);
       }
       protocolHistory = resumeProtocolHistory;
     }
