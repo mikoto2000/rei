@@ -73,7 +73,7 @@ final class ResponsesReasoningReplay {
               }
               // Spring's MessageAggregator rebuilds Usage from three totals. Its message
               // metadata is retained, so carry only the normalized numeric details here.
-              if (usage != null) metadata.put(USAGE_KEY, usage);
+              metadata.put(USAGE_KEY, usage == null ? new dev.mikoto2000.rei.modelmessage.ModelTokenUsage(null, null, null, null, null) : usage);
               return new org.springframework.ai.chat.model.Generation(
                   output.mutate().properties(metadata).build(), generation.getMetadata());
             })
