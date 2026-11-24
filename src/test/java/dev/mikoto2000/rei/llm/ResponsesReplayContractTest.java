@@ -43,6 +43,79 @@ class ResponsesReplayContractTest {
   private final List<JsonNode> requests = new CopyOnWriteArrayList<>();
   private final ArrayDeque<String> replies = new ArrayDeque<>();
   private final AtomicInteger executions = new AtomicInteger();
+  private String owner = "fixture-owner";
+  private String endpointId = "fixture";
+  private long generation = 1;
+  private String modelName = "fixture-model";
+  private String baseUrl = "https://responses-fixture.invalid/v1";
+  private ReasoningReplayMode replayMode = ReasoningReplayMode.ENCRYPTED;
+
+  @Test
+  void encryptedRequestsRequireAnExplicitOwnerBeforeAnyHttp() {
+    owner = null;
+    var options = options();
+    assertThatThrownBy(() -> model(options).call(new Prompt("fixture", options)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("owner");
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
+  void anotherOwnerCannotReplayAResponseFromTheSameEndpoint() {
+    replies.add(reasoningDone());
+    var options = options();
+    var assistant = model(options).call(new Prompt("fixture", options)).getResult().getOutput();
+    owner = "foreign-owner";
+    var changed = options();
+    assertThatThrownBy(() -> model(changed).call(new Prompt(List.of(new UserMessage("fixture"), assistant), changed)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("owner")
+        .hasMessageNotContaining("foreign-owner");
+    assertThat(requests).hasSize(1);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"endpoint", "generation", "model", "url", "mode"})
+  void incompatibleEndpointIdentityCannotReceiveEncryptedReplay(String changed) {
+    replies.add(reasoningDone());
+    var options = options();
+    var assistant = model(options).call(new Prompt("fixture", options)).getResult().getOutput();
+    switch (changed) {
+      case "endpoint" -> endpointId = "other-endpoint";
+      case "generation" -> generation = 2;
+      case "model" -> modelName = "other-model";
+      case "url" -> baseUrl = "https://other.invalid/v1";
+      case "mode" -> replayMode = ReasoningReplayMode.NONE;
+      default -> throw new AssertionError(changed);
+    }
+    var target = options();
+    assertThatThrownBy(() -> model(target).call(new Prompt(List.of(new UserMessage("fixture"), assistant), target)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("replay");
+    assertThat(requests).hasSize(1);
+  }
+
+  @Test
+  void anUnboundReasoningPartCannotClaimCurrentEndpointProvenance() {
+    var part = new ReasoningPart(null, null, new OpaquePayload(OpenAiResponsesMetadata.PROVIDER,
+        OpenAiResponsesMetadata.ENCRYPTED_CONTENT_KIND, "opaque"),
+        Map.of(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE, "rs_fixture"));
+    var assistant = AssistantMessage.builder().part(part).build();
+    var options = options();
+    assertThatThrownBy(() -> model(options).call(new Prompt(List.of(new UserMessage("fixture"), assistant), options)))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("origin");
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
+  void credentialRotationDoesNotInvalidateAnOtherwiseIdenticalReplayBinding() {
+    replies.add(reasoningDone());
+    var options = options();
+    var assistant = model(options).call(new Prompt("fixture", options)).getResult().getOutput();
+    var originalParts = List.copyOf(assistant.getParts());
+    var rotated = options.mutate().apiKey("rotated-fixture-secret").build();
+    model(rotated).call(new Prompt(List.of(new UserMessage("fixture"), assistant), rotated));
+    assertThat(requests).hasSize(2);
+    assertThat(requests.getLast().path("input").get(1).path("encrypted_content").asText()).isEqualTo("opaque-bound");
+    assertThat(assistant.getParts()).containsExactlyElementsOf(originalParts);
+  }
 
   @Test
   void existingToolDispatchReplaysEveryEncryptedPartIdAndPhaseWithoutRewriting() {
@@ -106,14 +179,15 @@ class ResponsesReplayContractTest {
       }
       @Override public String call(String input) { executions.incrementAndGet(); return "fixture result"; }
     };
-    return OpenAiResponsesChatOptions.builder().baseUrl("https://responses-fixture.invalid/v1")
-        .apiKey("fixture-secret").model("fixture-model").maxOutputTokens(64).maxRetries(0)
+    return OpenAiResponsesChatOptions.builder().baseUrl(baseUrl)
+        .apiKey("fixture-secret").model(modelName).maxOutputTokens(64).maxRetries(0)
+        .toolContext(owner == null ? Map.of() : Map.of("rei.llm.replay-owner", owner))
         .toolCallbacks(callback).build();
   }
 
   private ResponsesAdapter model(OpenAiResponsesChatOptions options) {
-    var endpoint = new ResolvedLlmEndpoint("fixture", 1, LlmApiType.RESPONSES, options.getBaseUrl(),
-        "fixture-credential", options.getModel(), new LlmCapabilities(ReasoningReplayMode.ENCRYPTED, 128),
+    var endpoint = new ResolvedLlmEndpoint(endpointId, generation, LlmApiType.RESPONSES, options.getBaseUrl(),
+        "fixture-credential", options.getModel(), new LlmCapabilities(replayMode, 128),
         options.getMaxOutputTokens(), null, Duration.ofMinutes(5));
     return ResponsesAdapter.create(endpoint, options, List.of(builder -> builder.interceptor(chain -> {
       var buffer = new okio.Buffer();
@@ -129,6 +203,14 @@ class ResponsesReplayContractTest {
   private String done() {
     return response("resp_done", """
         [{"type":"message","id":"msg_done","role":"assistant","status":"completed","phase":"final_answer",
+          "content":[{"type":"output_text","text":"done","annotations":[]}]}]
+        """);
+  }
+
+  private String reasoningDone() {
+    return response("resp_bound", """
+        [{"type":"reasoning","id":"rs_bound","summary":[],"encrypted_content":"opaque-bound","status":"completed"},
+         {"type":"message","id":"msg_bound","role":"assistant","status":"completed","phase":"final_answer",
           "content":[{"type":"output_text","text":"done","annotations":[]}]}]
         """);
   }
