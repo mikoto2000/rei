@@ -42,7 +42,7 @@ class CompressionPolicyTest {
                 List.of(new ToolResponseMessage.ToolResponse("id", "readFile", "x".repeat(200))))
             .build();
     List<Message> messages = List.of(new UserMessage("old".repeat(300)), call, result);
-    assertThat(new CompressionPolicy(estimator).prefixToCompress(messages, 40)).isEqualTo(1);
+    assertThat(new CompressionPolicy(estimator).prefixToCompress(messages, 40)).isZero();
   }
 
   /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
@@ -58,4 +58,38 @@ class CompressionPolicyTest {
     assertThat(result.included()).containsExactly("SYSTEM", "CURRENT_USER");
     assertThat(result.dropped()).containsExactly("TOOL_RESULTS");
   }
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"missing", "orphan", "duplicate", "name"})
+  void incompleteOrInconsistentToolTransactionsCannotBeCompressed(String defect) {
+    var call = AssistantMessage.builder().content("").toolCalls(List.of(
+        new AssistantMessage.ToolCall("one", "function", "readFile", "{}"),
+        new AssistantMessage.ToolCall("two", "function", "readFile", "{}"))).build();
+    var results = new java.util.ArrayList<ToolResponseMessage.ToolResponse>();
+    results.add(new ToolResponseMessage.ToolResponse("one", "readFile", "first result"));
+    switch (defect) {
+      case "orphan" -> results.add(new ToolResponseMessage.ToolResponse("foreign", "readFile", "orphan"));
+      case "duplicate" -> {
+        results.add(new ToolResponseMessage.ToolResponse("one", "readFile", "duplicate"));
+        results.add(new ToolResponseMessage.ToolResponse("two", "readFile", "second result"));
+      }
+      case "name" -> results.add(new ToolResponseMessage.ToolResponse("two", "writeFile", "wrong name"));
+      default -> { }
+    }
+    List<Message> messages = List.of(call, ToolResponseMessage.builder().responses(results).build(),
+        new AssistantMessage("latest answer".repeat(100)));
+    assertThat(new CompressionPolicy(estimator).prefixToCompress(messages, 1)).isZero();
+  }
+
+  @Test
+  void userAndAllResultsStayWithTheirOriginalAssistantInOneCompressionUnit() {
+    var call = AssistantMessage.builder().content("commentary").toolCalls(List.of(
+        new AssistantMessage.ToolCall("one", "function", "readFile", "{}"),
+        new AssistantMessage.ToolCall("two", "function", "readFile", "{}"))).build();
+    List<Message> messages = List.of(new UserMessage("old request"), call,
+        ToolResponseMessage.builder().responses(List.of(new ToolResponseMessage.ToolResponse("one", "readFile", "first"))).build(),
+        ToolResponseMessage.builder().responses(List.of(new ToolResponseMessage.ToolResponse("two", "readFile", "second"))).build(),
+        new UserMessage("current request"), new AssistantMessage("latest answer".repeat(100)));
+    assertThat(new CompressionPolicy(estimator).prefixToCompress(messages, 1)).isEqualTo(4);
+  }
+
 }
