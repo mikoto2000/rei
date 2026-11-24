@@ -19,8 +19,8 @@ import org.springframework.ai.chat.prompt.Prompt;
 @org.junit.jupiter.api.Tag("integration")
 class ContextHistoryAdvisorTest {
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-  void durableLogAndTurnPointersTakePriorityWithoutDuplicatingTheirDisplayText(boolean fromLog) throws Exception {
+  @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1, 2})
+  void durableLogAndTurnPointersTakePriorityWithoutDuplicatingTheirDisplayText(int logMode) throws Exception {
     var owner = new AgentRunContext("current-run", "chat", dir, "fixture-project");
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + dir.resolve("model-messages.db"));
@@ -41,8 +41,10 @@ class ContextHistoryAdvisorTest {
     writingTurns.finish(oldOwner, ConversationTurnStore.Status.COMPLETED, "display fixture");
     var mapper = new com.fasterxml.jackson.databind.ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
     var clock = java.time.Clock.fixed(java.time.Instant.EPOCH, java.time.ZoneOffset.UTC);
-    if (fromLog) new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper)
+    if (logMode == 1) new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper)
         .append("chat", "assistant", "display fixture", metadata);
+    if (logMode == 2) new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper)
+        .append("chat", "assistant", "display fixture");
     var turns = new dev.mikoto2000.rei.conversation.SqliteConversationTurnStore(dir);
     var logs = new dev.mikoto2000.rei.conversation.ConversationLogStore(dir.resolve("logs"), clock, mapper);
     var advisor = new ContextHistoryAdvisor(turns, WindowedConversationMemory.builder().build(),
