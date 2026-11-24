@@ -96,6 +96,38 @@ class ResponsesReplayContractTest {
     if (tokenLimit) assertThat(budget.usageUnknown()).isTrue();
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"false,1,1,2,true", "true,1,1,1,false", "false,0,1,1,false", "false,1,2,2,false"})
+  void nativeReadTimeoutUsesOnlyTheExistingMainRetryAllowance(boolean tokenLimit, int retryCount,
+      int failures, int expectedRequests, boolean success) throws Exception {
+    contentType = "text/event-stream";
+    timeoutFailures.set(failures);
+    replies.add(sse(done()));
+    var budget = new OutputLimitRunBudget(1, 4, null, tokenLimit ? 1000 : 0);
+    budget.tryConsumeLlmCall();
+    var owner = new dev.mikoto2000.rei.core.chat.AgentRunContext("fixture-run", "session", protocolDirectory, "project");
+    var context = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(owner.runId(), budget,
+        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(protocolDirectory),
+        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), ignored -> {});
+    context.setRunContext(owner);
+    var defaults = controlledOptions(context, options());
+    context.setModelOptions(defaults);
+    var options = ((OpenAiResponsesChatOptions) context.modelOptions()).mutate()
+        .toolContext(Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, context)).build();
+    var request = new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(model(defaults), null, retryCount)
+        .stream(new Prompt("timeout fixture", options)).collectList();
+    if (success) {
+      var chunks = request.block(Duration.ofSeconds(10));
+      assertThat(chunks.getLast().getResult().getOutput().getText()).isEqualTo("done");
+      assertThat(chunks.stream().filter(chunk -> ToolLoopSupport.streamRetryAttempt(chunk) > 0).count()).isEqualTo(1);
+    } else assertThatThrownBy(() -> request.block(Duration.ofSeconds(10)))
+        .isInstanceOf(RuntimeException.class).hasMessageNotContaining("PRIVATE");
+    assertThat(requests).hasSize(expectedRequests);
+    assertThat(budget.snapshot().llmCalls()).isEqualTo(expectedRequests);
+    assertThat(executions.get()).isZero();
+    if (tokenLimit) assertThat(budget.usageUnknown()).isTrue();
+  }
+
   @Test
   void configuredNativeModelOptionsAndClientShareOneImmutableEndpointSnapshot() {
     var properties = nativeProperties();
@@ -2356,6 +2388,7 @@ class ResponsesReplayContractTest {
   private ReasoningReplayMode replayMode = ReasoningReplayMode.ENCRYPTED;
   private String contentType = "application/json";
   private String retryHint;
+  private final AtomicInteger timeoutFailures = new AtomicInteger();
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
@@ -3167,6 +3200,8 @@ class ResponsesReplayContractTest {
         var buffer = new okio.Buffer();
         chain.request().body().writeTo(buffer);
         requests.add(new ObjectMapper().readTree(buffer.readByteArray()));
+        if (timeoutFailures.getAndUpdate(value -> Math.max(0, value - 1)) > 0)
+          throw new java.net.SocketTimeoutException("PRIVATE-timeout-fixture");
         var reply = replies.isEmpty() ? done() : replies.removeFirst();
         var fixtureReply = new okhttp3.Response.Builder()
             .request(chain.request())
