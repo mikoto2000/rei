@@ -50,8 +50,9 @@ class ResponsesReplayContractTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {"endpoint", "owner", "binding-only"})
-  void backendOriginIsTheAuthoritativeRequestBinding(String mode) {
+  @org.junit.jupiter.params.provider.CsvSource({"ENCRYPTED,endpoint", "ENCRYPTED,owner", "ENCRYPTED,binding-only", "NONE,endpoint", "NONE,owner", "NONE,binding-only"})
+  void backendOriginIsTheAuthoritativeRequestBinding(ReasoningReplayMode replay, String mode) {
+    replayMode = replay;
     var defaults = options();
     var context = new java.util.HashMap<>(defaults.getToolContext());
     if (mode.equals("binding-only")) context.remove(ResponsesReasoningReplay.OWNER_CONTEXT_KEY);
