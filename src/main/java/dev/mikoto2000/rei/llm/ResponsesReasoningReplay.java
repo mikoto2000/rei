@@ -18,6 +18,9 @@ final class ResponsesReasoningReplay {
         var payload = reasoning.payload();
         if (payload == null || payload.data().isBlank())
           throw new IllegalArgumentException("Responses reasoning payload is required");
+        if (!OpenAiResponsesMetadata.PROVIDER.equals(payload.provider())
+            || !OpenAiResponsesMetadata.ENCRYPTED_CONTENT_KIND.equals(payload.kind()))
+          throw new IllegalArgumentException("Responses reasoning payload is incompatible");
         var itemId = reasoning.attributes().get(OpenAiResponsesMetadata.ITEM_ID_ATTRIBUTE);
         if (itemId == null || itemId.isBlank())
           throw new IllegalArgumentException("Responses reasoning item id is required");
