@@ -213,7 +213,7 @@ public final class ChatEndpointCatalog {
         LlmEndpointCapabilities.resolve(server, provider, api, defaultMaxTools, field, named));
   }
 
-  private static void validateBaseUrl(String field, String value) {
+  static void validateBaseUrl(String field, String value) {
     if (value != null && !value.isBlank()) {
       try {
         var uri = new java.net.URI(value.strip());
