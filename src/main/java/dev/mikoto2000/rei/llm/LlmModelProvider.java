@@ -97,6 +97,9 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
           org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
       responsesFixtureCustomizers;
   private Map<String, ResolvedLlmEndpoint> responsesAcceptanceEndpoints;
+  private java.util.List<
+          org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
+      responsesProductionTransport = java.util.List.of();
 
   /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
@@ -208,6 +211,17 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
           "Explicit acceptance endpoints and transport policy required");
     var provider = forResponsesFixture(defaults, properties, customizers);
     provider.responsesAcceptanceEndpoints = Map.copyOf(accepted);
+    return provider;
+  }
+
+  /** Owned transport fixture retaining the normal production profile gate; no configuration path. */
+  static LlmModelProvider forResponsesProductionTransport(
+      ChatModel defaults, LlmProperties properties,
+      java.util.List<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer> customizers) {
+    if (customizers == null || customizers.isEmpty())
+      throw new IllegalArgumentException("Owned production transport fixture required");
+    var provider = new LlmModelProvider(defaults, properties);
+    provider.responsesProductionTransport = java.util.List.copyOf(customizers);
     return provider;
   }
 
@@ -367,7 +381,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         context.put(LlmCapabilities.MAX_TOOLS_CONTEXT_KEY, endpoint.capabilities().maxTools());
       builder.toolContext(context);
       return ResponsesAdapter.create(
-          endpoint, builder.build(), production ? java.util.List.of() : responsesFixtureCustomizers);
+          endpoint, builder.build(), production ? responsesProductionTransport : responsesFixtureCustomizers);
     }
     if (LlmFeature.VOICE_CORRECTION.equals(feature)) {
       // An explicitly selected correction endpoint must never fall back to a different remote
