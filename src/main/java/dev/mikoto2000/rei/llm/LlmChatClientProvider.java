@@ -429,7 +429,41 @@ public class LlmChatClientProvider {
   /** Builds a main-chat client whose inference is routed through the accepted Run connection. */
   public ChatClient runChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode,
       LlmApiType api, ChatModel model) {
-    return parallelChatClient(mode);
+    ToolCallingChatOptions defaults = switch (api) {
+      // Native constructors substitute an OpenAI model for null. Leave this unresolved until
+      // the caller supplies accepted options; the Run dispatcher rejects unbound requests.
+      case CHAT_COMPLETIONS -> org.springframework.ai.openai.OpenAiChatOptions.builder().model("").maxRetries(0).build();
+      case RESPONSES -> org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder().model("").maxRetries(0).build();
+    };
+    model = new ProtocolDefaultsChatModel(java.util.Objects.requireNonNull(model), defaults);
+    return mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE
+        ? createChatClient(LlmFeature.CHAT, model, defaults)
+        : createParallelChatClient(mode, model, defaults);
+  }
+
+  /** Spring's option merge takes its native type from the model, even for a routed delegate. */
+  private record ProtocolDefaultsChatModel(ChatModel delegate, ToolCallingChatOptions defaults)
+      implements ChatModel, dev.mikoto2000.rei.timing.TimingAwareModel {
+    @Override
+    public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
+      return defaults.mutate().build();
+    }
+
+    @Override
+    public org.springframework.ai.chat.model.ChatResponse call(org.springframework.ai.chat.prompt.Prompt prompt) {
+      return delegate.call(prompt);
+    }
+
+    @Override
+    public reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> stream(
+        org.springframework.ai.chat.prompt.Prompt prompt) {
+      return delegate.stream(prompt);
+    }
+
+    @Override
+    public dev.mikoto2000.rei.timing.TimingExecution timing() {
+      return delegate instanceof dev.mikoto2000.rei.timing.TimingAwareModel timed ? timed.timing() : null;
+    }
   }
 
   /**
@@ -442,8 +476,11 @@ public class LlmChatClientProvider {
       return chatClient(LlmFeature.CHAT);
     return cache.computeIfAbsent(
         "parallel-" + mode,
-        ignored -> {
-          var options = featureOptions.apply(LlmFeature.CHAT);
+        ignored -> createParallelChatClient(mode, subAgentModel.get(), featureOptions.apply(LlmFeature.CHAT)));
+  }
+
+  private ChatClient createParallelChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode,
+      ChatModel model, ToolCallingChatOptions options) {
           dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
           var callbacks = new ArrayList<org.springframework.ai.tool.ToolCallback>();
           if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY) {
@@ -470,7 +507,7 @@ public class LlmChatClientProvider {
           var builder =
               ChatClient.builder(
                       new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-                              subAgentModel.get(), contextAssembler, maxStreamTimeoutRetries)
+                              model, contextAssembler, maxStreamTimeoutRetries)
                           .withToolDiscovery(toolDiscovery))
                   .defaultAdvisors(new RunAwareToolCallingAdvisor())
                   .defaultOptions(
@@ -480,7 +517,6 @@ public class LlmChatClientProvider {
             builder.defaultSystem(
                 dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.INSTRUCTIONS);
           return builder.build();
-        });
   }
 
   /** 新たな対象を利用できるよう、モデルへ対話を依頼する窓口を作成する。 */
@@ -497,6 +533,10 @@ public class LlmChatClientProvider {
           .defaultOptions(defaults.mutate())
           .build();
     }
+    return createChatClient(feature, featureModel.apply(feature), featureOptions.apply(feature));
+  }
+
+  private ChatClient createChatClient(String feature, ChatModel model, ToolCallingChatOptions options) {
     List<Advisor> advisors = new ArrayList<>();
     if (LlmFeature.CHAT.equals(feature)
         && resumeContext != null
@@ -533,7 +573,7 @@ public class LlmChatClientProvider {
     ChatClient.Builder builder =
         ChatClient.builder(
                 new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-                        featureModel.apply(feature),
+                        model,
                         LlmFeature.CHAT.equals(feature) ? contextAssembler : null,
                         LlmFeature.CHAT.equals(feature) ? maxStreamTimeoutRetries : 0)
                     .withToolDiscovery(LlmFeature.CHAT.equals(feature) ? toolDiscovery : null))
@@ -541,7 +581,7 @@ public class LlmChatClientProvider {
             .defaultSystem(
                 dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(
                     systemPromptService.systemPrompt()))
-            .defaultOptions(featureOptions.apply(feature).mutate())
+            .defaultOptions(options.mutate())
             .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors));
 
     // Reply generation returns text; only the caller may publish the reply.

@@ -54,10 +54,25 @@ class RunChatClientCompositionTest {
     assertThat(api == LlmApiType.RESPONSES
         ? options instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions
         : options instanceof org.springframework.ai.openai.OpenAiChatOptions).isTrue();
-    assertThat(options.getModel()).isNull();
+    assertThat(options.getModel()).isEmpty();
     assertThat(options.getTemperature()).isNull();
     assertThat(options.getMaxTokens()).isNull();
     if (mode == AgentRunContext.Mode.CONVERSATION) assertThat(options.getToolCallbacks()).isEmpty();
+    var endpoint = new ResolvedLlmEndpoint("fixture", 1, api, "http://fixture.invalid/v1", "fixture",
+        "accepted-model", new LlmCapabilities(ReasoningReplayMode.NONE, 36, java.util.Set.of()),
+        200, 0.2, java.time.Duration.ofSeconds(5));
+    var pin = new RunLlmConnection("fixture", true, LlmProvider.OPENAI_COMPATIBLE,
+        LlmAuthentication.NONE, null, null, endpoint, java.util.Map.of(),
+        java.util.Map.of("temperature", 0.2,
+            api == LlmApiType.RESPONSES ? "max_output_tokens" : "max_tokens", 200));
+    assertThat(client.prompt().user("fixture").options(RunNativeOptions.options(pin).mutate()).call().content())
+        .isEqualTo("pinned-answer");
+    var accepted = (ToolCallingChatOptions) prompts.getLast().getOptions();
+    assertThat(accepted.getModel()).isEqualTo("accepted-model");
+    assertThat(accepted.getTemperature()).isEqualTo(0.2);
+    assertThat(accepted.getMaxTokens()).isEqualTo(200);
+    assertThat(accepted.getToolContext()).containsEntry(
+        dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY, pin);
   }
 
   private <T> ObjectProvider<T> optional() {
