@@ -113,6 +113,18 @@ public final class ChatEndpointCatalog {
     return profiles;
   }
 
+  LlmProperties.Server connection(String name) {
+    return new LlmProperties.Server();
+  }
+
+  public LlmProperties.Server feature(String feature) {
+    return new LlmProperties.Server();
+  }
+
+  public List<String> diagnostics() {
+    return List.of();
+  }
+
   public record Profile(String id, String model, LlmProvider provider, LlmApiType api,
       String accountRef, long generation) {}
 }
