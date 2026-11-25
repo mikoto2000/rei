@@ -4,7 +4,12 @@ import java.util.function.Function;
 
 /** Resolves immutable settings only; credentials are obtained at the HTTP boundary. */
 final class RunLlmConnectionFactory {
-  record LegacySettings(ResolvedLlmEndpoint endpoint, java.util.Map<String, Object> generation) {}
+  record LegacySettings(ResolvedLlmEndpoint endpoint, java.util.Map<String, Object> generation) {
+    LegacySettings {
+      java.util.Objects.requireNonNull(endpoint, "endpoint");
+      generation = RunGenerationSettings.copy(generation);
+    }
+  }
 
   @FunctionalInterface
   interface LegacySettingsResolver {
@@ -14,20 +19,28 @@ final class RunLlmConnectionFactory {
   static RunLlmConnectionFactory withLegacySettings(
       ChatEndpointCatalog catalog, LlmProperties properties, LegacySettingsResolver legacy,
       Function<String, String> registration) {
-    return new RunLlmConnectionFactory(catalog, properties,
-        selected -> legacy.resolve(selected).endpoint(), registration);
+    return new RunLlmConnectionFactory(catalog, properties, legacy, registration);
   }
 
   private final ChatEndpointCatalog catalog;
   private final java.time.Duration readTimeout;
   private final int defaultOutputTokens;
-  private final Function<String, ResolvedLlmEndpoint> legacy;
+  private final LegacySettingsResolver legacy;
   private final Function<String, String> registration;
 
   RunLlmConnectionFactory(
       ChatEndpointCatalog catalog,
       LlmProperties properties,
       Function<String, ResolvedLlmEndpoint> legacy,
+      Function<String, String> registration) {
+    this(catalog, properties, (LegacySettingsResolver) selected -> {
+      var endpoint = legacy.apply(selected);
+      return new LegacySettings(endpoint, generation(endpoint));
+    }, registration);
+  }
+
+  private RunLlmConnectionFactory(
+      ChatEndpointCatalog catalog, LlmProperties properties, LegacySettingsResolver legacy,
       Function<String, String> registration) {
     this.catalog = catalog;
     this.readTimeout = properties.getReadTimeout();
@@ -41,7 +54,8 @@ final class RunLlmConnectionFactory {
     var metadata =
         catalog.profiles().stream().filter(p -> p.id().equals(profile)).findFirst().orElseThrow();
     if (!catalog.hasNamedProfiles()) {
-      var resolved = legacy.apply(modelOverride);
+      var settings = legacy.resolve(modelOverride);
+      var resolved = settings.endpoint();
       return new RunLlmConnection(
           profile,
           false,
@@ -51,7 +65,7 @@ final class RunLlmConnectionFactory {
           null,
           resolved,
           metadata.capabilities().effective(),
-          generation(resolved));
+          settings.generation());
     }
     var model = modelOverride == null ? metadata.model() : modelOverride;
     if (model == null || model.isBlank() || model.codePoints().anyMatch(Character::isISOControl))
@@ -133,7 +147,7 @@ final class RunLlmConnectionFactory {
         || saved.authentication() != metadata.authentication()
         || !java.util.Objects.equals(saved.accountRef(), metadata.accountRef()))
       throw new IllegalStateException("Run connection authentication binding changed");
-    var current = saved.named() ? null : legacy.apply(saved.endpoint().model());
+    var current = saved.named() ? null : legacy.resolve(saved.endpoint().model()).endpoint();
     var baseUrl = saved.named() ? source.getBaseUrl() : current.baseUrl();
     var api = saved.named() ? metadata.api() : current.apiType();
     var credentialRef =
