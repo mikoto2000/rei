@@ -113,6 +113,10 @@ final class ResponsesAcceptanceBudget {
     return transaction((channel, state) -> snapshot(state));
   }
 
+  synchronized void authorizeTimeExtension(String approval) {
+    throw rejected();
+  }
+
   synchronized long remainingMillis() {
     return transaction((channel, state) -> {
       if (state.started == 0) return limits.time().toMillis();
