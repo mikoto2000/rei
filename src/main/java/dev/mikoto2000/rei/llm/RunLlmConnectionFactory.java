@@ -5,7 +5,8 @@ import java.util.function.Function;
 /** Resolves immutable settings only; credentials are obtained at the HTTP boundary. */
 final class RunLlmConnectionFactory {
   private final ChatEndpointCatalog catalog;
-  private final LlmProperties properties;
+  private final java.time.Duration readTimeout;
+  private final int defaultOutputTokens;
   private final Function<String, ResolvedLlmEndpoint> legacy;
   private final Function<String, String> registration;
 
@@ -15,7 +16,8 @@ final class RunLlmConnectionFactory {
       Function<String, ResolvedLlmEndpoint> legacy,
       Function<String, String> registration) {
     this.catalog = catalog;
-    this.properties = properties;
+    this.readTimeout = properties.getReadTimeout();
+    this.defaultOutputTokens = properties.getMaxOutputTokens();
     this.legacy = legacy;
     this.registration = registration;
   }
@@ -37,9 +39,14 @@ final class RunLlmConnectionFactory {
           metadata.capabilities().effective(),
           generation(resolved));
     }
-    if (modelOverride != null && !modelOverride.equals(metadata.model()))
-      throw new IllegalStateException("Chat model override resolution is not verified");
-    var capabilities = metadata.capabilities().effective();
+    var model = modelOverride == null ? metadata.model() : modelOverride;
+    if (model == null || model.isBlank() || model.codePoints().anyMatch(Character::isISOControl))
+      throw new IllegalArgumentException(
+          "chat model must be explicit and contain no control characters");
+    var capabilities =
+        model.equals(metadata.model())
+            ? metadata.capabilities().effective()
+            : metadata.capabilities().forUnconfirmedModel().effective();
     var replay =
         connection.getApi() == LlmApiType.CHAT_COMPLETIONS
             ? ReasoningReplayMode.NONE
@@ -62,7 +69,10 @@ final class RunLlmConnectionFactory {
       if (output != null)
         throw new IllegalStateException("max-output-tokens is unsupported or unconfirmed");
       output = null;
-    } else if (output == null) output = properties.getMaxOutputTokens();
+    } else if (output == null) output = defaultOutputTokens;
+    if (connection.getTemperature() != null
+        && !settings.contains(LlmCapabilities.Setting.TEMPERATURE))
+      throw new IllegalStateException("temperature is unsupported or unconfirmed");
     var resolved =
         new ResolvedLlmEndpoint(
             profile,
@@ -70,11 +80,11 @@ final class RunLlmConnectionFactory {
             metadata.api(),
             connection.getBaseUrl(),
             "chat-endpoint:" + profile,
-            metadata.model(),
+            model,
             new LlmCapabilities(replay, metadata.capabilities().maxTools(), settings),
             output,
             connection.getTemperature(),
-            properties.getReadTimeout());
+            readTimeout);
     var accountRegistration =
         metadata.accountRef() == null ? null : registration.apply(metadata.accountRef());
     if (metadata.provider() == LlmProvider.CHATGPT_PLAN && accountRegistration == null)

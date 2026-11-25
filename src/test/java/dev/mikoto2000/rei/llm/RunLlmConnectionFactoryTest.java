@@ -22,21 +22,28 @@ class RunLlmConnectionFactoryTest {
     settings.put(prefix + "model-capabilities.vision", "supported");
     settings.put(prefix + "server-capabilities.vision", "supported");
     var factory = factory(properties(settings));
-    assertThat(factory.capture("local", null).capabilities().get(LlmEndpointCapabilities.Capability.VISION))
+    assertThat(
+            factory
+                .capture("local", null)
+                .capabilities()
+                .get(LlmEndpointCapabilities.Capability.VISION))
         .isEqualTo(LlmEndpointCapabilities.Support.SUPPORTED);
     var other = factory.capture("local", "other-model");
     assertThat(other.endpoint().model()).isEqualTo("other-model");
     assertThat(other.capabilities().get(LlmEndpointCapabilities.Capability.VISION))
         .isEqualTo(LlmEndpointCapabilities.Support.UNKNOWN);
-    assertThat(other.endpoint().capabilities().supportedSettings()).doesNotContain(LlmCapabilities.Setting.IMAGE_INPUT);
+    assertThat(other.endpoint().capabilities().supportedSettings())
+        .doesNotContain(LlmCapabilities.Setting.IMAGE_INPUT);
   }
 
   @Test
   void explicitUnsupportedTemperatureIsRejectedBeforeAnyClientCanBeConstructed() {
     var settings = local();
-    settings.put("rei.llm.features.chat.endpoints.local.model-capabilities.temperature", "unsupported");
+    settings.put(
+        "rei.llm.features.chat.endpoints.local.model-capabilities.temperature", "unsupported");
     assertThatThrownBy(() -> factory(properties(settings)).capture("local", null))
-        .isInstanceOf(IllegalStateException.class).hasMessageContaining("temperature");
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("temperature");
   }
 
   @Test
@@ -59,7 +66,8 @@ class RunLlmConnectionFactoryTest {
     var json = new ObjectMapper().findAndRegisterModules();
     var restored = json.readValue(json.writeValueAsBytes(snapshot), RunLlmConnection.class);
     assertThat(restored).isEqualTo(snapshot);
-    assertThatThrownBy(() -> restored.generation().clear()).isInstanceOf(UnsupportedOperationException.class);
+    assertThatThrownBy(() -> restored.generation().clear())
+        .isInstanceOf(UnsupportedOperationException.class);
   }
 
   @Test
