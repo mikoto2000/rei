@@ -116,7 +116,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             var request = chain.request();
             var body = request.body();
             if (body != null)
-              request = request.newBuilder().method(request.method(), nonReplayable(body)).build();
+              request = request.newBuilder().method(request.method(), PinnedOpenAiClients.nonReplayable(body)).build();
             return chain.proceed(request);
           })
           .interceptor(chain -> {
@@ -182,35 +182,6 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   }
 
   private record RequestReadTimeout(int millis) {}
-
-  private static okhttp3.RequestBody nonReplayable(okhttp3.RequestBody body) {
-    return new okhttp3.RequestBody() {
-      @Override
-      public okhttp3.MediaType contentType() {
-        return body.contentType();
-      }
-
-      @Override
-      public long contentLength() throws java.io.IOException {
-        return body.contentLength();
-      }
-
-      @Override
-      public boolean isOneShot() {
-        return true;
-      }
-
-      @Override
-      public boolean isDuplex() {
-        return body.isDuplex();
-      }
-
-      @Override
-      public void writeTo(okio.BufferedSink sink) throws java.io.IOException {
-        body.writeTo(sink);
-      }
-    };
-  }
 
   private ResponsesAdapter(
       ResolvedLlmEndpoint endpoint,

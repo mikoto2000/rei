@@ -113,6 +113,9 @@ final class PinnedOpenAiClients {
       requireAttribute(request, "OpenAI-Project", attributes.get("project_id"));
       requireAttribute(request, "OpenAI-Beta", attributes.get("api_beta"));
       verify.run();
+      var body = request.body();
+      if (body != null)
+        request = request.newBuilder().method(request.method(), nonReplayable(body)).build();
       return chain.proceed(request);
     });
     return builder.build();
@@ -129,5 +132,35 @@ final class PinnedOpenAiClients {
     if (value == null || value.isBlank() || value.codePoints().anyMatch(Character::isISOControl))
       throw new IllegalStateException("Accepted inference credentials are unavailable");
     return value;
+  }
+
+  /** Keep OkHttp's HTTP follow-up handling from repeating an accepted inference. */
+  static okhttp3.RequestBody nonReplayable(okhttp3.RequestBody body) {
+    return new okhttp3.RequestBody() {
+      @Override
+      public okhttp3.MediaType contentType() {
+        return body.contentType();
+      }
+
+      @Override
+      public long contentLength() throws java.io.IOException {
+        return body.contentLength();
+      }
+
+      @Override
+      public boolean isOneShot() {
+        return true;
+      }
+
+      @Override
+      public boolean isDuplex() {
+        return body.isDuplex();
+      }
+
+      @Override
+      public void writeTo(okio.BufferedSink sink) throws java.io.IOException {
+        body.writeTo(sink);
+      }
+    };
   }
 }
