@@ -8,6 +8,7 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 /** Native request option transformations; no execution, storage or connection resolution. */
 public final class ModelOptions {
   public static final String ENDPOINT_CONTEXT_KEY = "rei.llm.resolved-endpoint";
+  public static final String RUN_CONNECTION_CONTEXT_KEY = "rei.llm.run-connection";
   public static final String MAX_TOOLS_CONTEXT_KEY = "rei.llm.max-tools";
   public static final String PREPARATION_CONTEXT_KEY = "rei.modelOptions.preparation-fingerprint";
   public static final String SINGLE_REQUEST_CONTEXT_KEY = "rei.modelOptions.single-request";

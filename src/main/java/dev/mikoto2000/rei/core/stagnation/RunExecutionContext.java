@@ -453,6 +453,10 @@ public class RunExecutionContext {
       @com.fasterxml.jackson.annotation.JsonInclude(
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
           dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory) {
+    public dev.mikoto2000.rei.llm.RunLlmConnection connection() {
+      return null;
+    }
+
     public ProgressState(
         InformationLedger.State information,
         OutputLimitRunBudget.Snapshot budget,
