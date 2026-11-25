@@ -9,6 +9,7 @@ final class PinnedChatModels implements AutoCloseable {
   private final Function<RunLlmConnection, String> credential;
   private final Consumer<RunLlmConnection> verify;
   private final dev.mikoto2000.rei.llm.capture.CaptureStore captures;
+  private final Function<ChatModel, ChatModel> decorate;
   private final org.springframework.util.ConcurrentLruCache<RunLlmConnection, ChatModel> cache;
   private final java.util.concurrent.atomic.AtomicBoolean closed =
       new java.util.concurrent.atomic.AtomicBoolean();
@@ -25,10 +26,17 @@ final class PinnedChatModels implements AutoCloseable {
       Consumer<RunLlmConnection> verify,
       dev.mikoto2000.rei.llm.capture.CaptureStore captures,
       int capacity) {
+    this(credential, verify, captures, capacity, Function.identity());
+  }
+
+  PinnedChatModels(Function<RunLlmConnection, String> credential, Consumer<RunLlmConnection> verify,
+      dev.mikoto2000.rei.llm.capture.CaptureStore captures, int capacity,
+      Function<ChatModel, ChatModel> decorate) {
     if (capacity < 1) throw new IllegalArgumentException("Model cache capacity must be positive");
     this.credential = java.util.Objects.requireNonNull(credential);
     this.verify = java.util.Objects.requireNonNull(verify);
     this.captures = captures;
+    this.decorate = java.util.Objects.requireNonNull(decorate);
     this.cache = new org.springframework.util.ConcurrentLruCache<>(capacity, this::create);
   }
 
@@ -44,9 +52,9 @@ final class PinnedChatModels implements AutoCloseable {
     var client = client(connection, java.util.List.of());
     try {
       if (connection.endpoint().apiType() == LlmApiType.RESPONSES)
-        return ResponsesAdapter.createWithClient(connection.endpoint(),
+        return decorate.apply(ResponsesAdapter.createWithClient(connection.endpoint(),
             (org.springframework.ai.openai.responses.OpenAiResponsesChatOptions) RunNativeOptions.options(connection),
-            client, true);
+            client, true));
       var model =
           org.springframework.ai.openai.OpenAiChatModel.builder()
               .options(
@@ -55,10 +63,10 @@ final class PinnedChatModels implements AutoCloseable {
               .openAiClient(client)
               .openAiClientAsync(client.async())
               .build();
-      return captures == null
+      return decorate.apply(captures == null
           ? model
           : new CapturingChatModel(
-              model, captures, interceptor -> client(connection, java.util.List.of(interceptor)));
+              model, captures, interceptor -> client(connection, java.util.List.of(interceptor))));
     } catch (RuntimeException | Error failed) {
       client.close();
       throw failed;
