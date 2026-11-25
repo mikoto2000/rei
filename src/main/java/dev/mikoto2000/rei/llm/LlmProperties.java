@@ -159,6 +159,7 @@ public class LlmProperties {
       copy.accountRef = accountRef;
       copy.usagePath = usagePath;
       copy.modelCapabilities = modelCapabilities;
+      copy.serverCapabilities = serverCapabilities;
       return copy;
     }
 
@@ -169,6 +170,15 @@ public class LlmProperties {
     private String accountRef;
     private String usagePath;
     private Map<String, String> modelCapabilities = Map.of();
+    private Map<String, String> serverCapabilities = Map.of();
+
+    public Map<String, String> getServerCapabilities() {
+      return Map.copyOf(serverCapabilities);
+    }
+
+    public void setServerCapabilities(Map<String, String> serverCapabilities) {
+      this.serverCapabilities = serverCapabilities == null ? Map.of() : Map.copyOf(serverCapabilities);
+    }
 
     public String getUsagePath() {
       return usagePath;

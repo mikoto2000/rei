@@ -119,6 +119,7 @@ public final class ChatEndpointCatalog {
     fields.put("account-ref", chat.getAccountRef() != null);
     fields.put("usage-path", chat.getUsagePath() != null);
     fields.put("model-capabilities", !chat.getModelCapabilities().isEmpty());
+    fields.put("server-capabilities", !chat.getServerCapabilities().isEmpty());
     fields.put("temperature", chat.getTemperature() != null);
     fields.put("max-output-tokens", chat.getMaxOutputTokens() != null);
     fields.put("max-tools", chat.getMaxTools() != null);
@@ -197,7 +198,7 @@ public final class ChatEndpointCatalog {
         server == null ? 1 : server.getEndpointGeneration(),
         LlmUsagePath.configured(
             server == null ? null : server.getUsagePath(), provider, field + ".usage-path"),
-        LlmEndpointCapabilities.resolve(server, provider, api, defaultMaxTools, field));
+        LlmEndpointCapabilities.resolve(server, provider, api, defaultMaxTools, field, named));
   }
 
   private static void validateBaseUrl(String field, String value) {
