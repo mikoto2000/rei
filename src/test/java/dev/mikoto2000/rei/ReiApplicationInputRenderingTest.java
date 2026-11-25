@@ -47,23 +47,29 @@ class ReiApplicationInputRenderingTest {
 
   @Test
   void promptShowsTheConfiguredResponsesChatModel() {
-    ReiApplication app = newAppWithFixedTime("deepseek-v4.1-flash-1017", LocalTime.of(9, 42));
     var selected = new ModelHolderService("deepseek-v4.1-flash-1017");
+    ReiApplication app = newAppWithFixedTime(selected, LocalTime.of(9, 42));
     var properties = new LlmProperties();
     var chat = new LlmProperties.Server();
     chat.setApi(LlmApiType.RESPONSES);
     chat.setModel("gpt-6.2-sol");
     properties.setFeatures(java.util.Map.of(LlmFeature.CHAT, chat));
-    app.configurePromptModel(new LlmModelProvider(null, properties), selected);
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+        selected,
+        "setChatModelResolver",
+        new LlmModelProvider(null, properties).chatModelResolver());
 
     assertEquals("09:42 gpt-6.2-sol> ", app.buildPrompt());
   }
 
   @Test
   void promptFollowsTheSelectedModelWhenChatHasNoDedicatedModel() {
-    ReiApplication app = newAppWithFixedTime("default-model", LocalTime.of(9, 42));
     var selected = new ModelHolderService("default-model");
-    app.configurePromptModel(new LlmModelProvider(null, new LlmProperties()), selected);
+    ReiApplication app = newAppWithFixedTime(selected, LocalTime.of(9, 42));
+    org.springframework.test.util.ReflectionTestUtils.invokeMethod(
+        selected,
+        "setChatModelResolver",
+        new LlmModelProvider(null, new LlmProperties()).chatModelResolver());
 
     assertEquals("09:42 default-model> ", app.buildPrompt());
     selected.set("another-model");
@@ -120,11 +126,14 @@ class ReiApplicationInputRenderingTest {
 
   /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private ReiApplication newAppWithFixedTime(String modelName, LocalTime fixedTime) {
+    return newAppWithFixedTime(new ModelHolderService(modelName), fixedTime);
+  }
+
+  private ReiApplication newAppWithFixedTime(
+      ModelHolderService modelHolderService, LocalTime fixedTime) {
     AsyncVectorDocumentService asyncVectorDocumentService =
         Mockito.mock(AsyncVectorDocumentService.class);
     when(asyncVectorDocumentService.hasActiveEmbeddings()).thenReturn(false);
-    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
-    when(modelHolderService.get()).thenReturn(modelName);
     return new ReiApplication(
         Mockito.mock(RootCommand.class),
         CommandLine.defaultFactory(),

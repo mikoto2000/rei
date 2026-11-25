@@ -9,9 +9,6 @@ import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.event.AgentEventBus;
-import dev.mikoto2000.rei.llm.LlmFeature;
-import dev.mikoto2000.rei.llm.LlmModelProvider;
-import dev.mikoto2000.rei.storage.StorageInUseException;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.ui.shell.JLineShellEventOutput;
 import dev.mikoto2000.rei.ui.shell.RootCommand;
@@ -90,12 +87,7 @@ public class ReiApplication {
   private final CommandLine.IFactory factory;
 
   /** 通常チャットで使うモデル名の表示。 */
-  private Supplier<String> readChatModel;
-
-  @Autowired
-  void configurePromptModel(LlmModelProvider models, ModelHolderService selectedModel) {
-    readChatModel = () -> models.model(LlmFeature.CHAT, selectedModel.get());
-  }
+  private final Supplier<String> readChatModel;
 
   /** escキャンセル排他制御。 */
   private final EscCancellationMonitor escCancellationMonitor;
@@ -182,7 +174,7 @@ public class ReiApplication {
       Environment environment) {
     this.rootCommand = rootCommand;
     this.factory = factory;
-    this.readChatModel = currentModelHolder::get;
+    this.readChatModel = currentModelHolder::getChatModel;
     this.escCancellationMonitor = escCancellationMonitor;
     this.cancelCommand = () -> commandCancellationService.cancel();
     this.commandCompletionNotificationPolicy = commandCompletionNotificationPolicy;
@@ -267,19 +259,7 @@ public class ReiApplication {
                     "reiBackendMode", java.util.Map.of("rei.backend-mode", backend))));
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
     dev.mikoto2000.rei.web.WebApplication.configure(application, System.getenv("REI_API_KEY"));
-    ConfigurableApplicationContext context;
-    try {
-      context = application.run(args);
-    } catch (RuntimeException failure) {
-      for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
-        if (cause instanceof StorageInUseException conflict) {
-          System.err.println(conflict.getMessage());
-          System.exit(1);
-          return;
-        }
-      }
-      throw failure;
-    }
+    ConfigurableApplicationContext context = application.run(args);
     boolean consoleExit =
         context.getEnvironment().getProperty(ForegroundConsole.PROPERTY, Boolean.class, false);
     if (mode == dev.mikoto2000.rei.launcher.BackendMode.SERVER && !consoleExit) return;
