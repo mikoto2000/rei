@@ -91,7 +91,7 @@ public record LlmEndpointCapabilities(
       Integer defaultMaxTools,
       String field) {
     var transport = filled(Support.UNKNOWN);
-    if (provider == LlmProvider.OPENAI_COMPATIBLE) {
+    if (provider != LlmProvider.CHATGPT_PLAN) {
       transport = filled(Support.SUPPORTED);
       transport.put(
           Capability.CHAT_COMPLETIONS,

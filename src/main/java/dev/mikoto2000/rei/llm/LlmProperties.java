@@ -155,6 +155,7 @@ public class LlmProperties {
       copy.active = active;
       copy.endpoints = endpoints == null ? null : copyFeatures(endpoints);
       copy.provider = provider;
+      copy.authentication = authentication;
       copy.accountRef = accountRef;
       copy.usagePath = usagePath;
       copy.modelCapabilities = modelCapabilities;
@@ -164,6 +165,7 @@ public class LlmProperties {
     private String active;
     private Map<String, Server> endpoints;
     private String provider;
+    private String authentication;
     private String accountRef;
     private String usagePath;
     private Map<String, String> modelCapabilities = Map.of();
@@ -186,6 +188,14 @@ public class LlmProperties {
 
     public String getProvider() {
       return provider;
+    }
+
+    public String getAuthentication() {
+      return authentication;
+    }
+
+    public void setAuthentication(String authentication) {
+      this.authentication = authentication;
     }
 
     public void setProvider(String provider) {

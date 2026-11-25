@@ -45,7 +45,7 @@ public final class ChatEndpointCatalog {
       if (chat != null && chat.getAccountRef() != null)
         throw invalid(CHAT + ".account-ref", "is only supported for chatgpt-plan named endpoints");
       initial = "default";
-      profiles = List.of(profile("default", chat, CHAT, properties.getMaxTools()));
+      profiles = List.of(profile("default", chat, CHAT, properties.getMaxTools(), false));
     } else {
       if (endpoints.isEmpty()) throw invalid(CHAT + ".endpoints", "must not be empty");
       for (var name : endpoints.keySet())
@@ -63,14 +63,14 @@ public final class ChatEndpointCatalog {
                       entry.getKey(),
                       entry.getValue(),
                       CHAT + ".endpoints." + entry.getKey(),
-                      properties.getMaxTools()))
+                      properties.getMaxTools(), true))
               .toList();
     }
     var resolved = new java.util.LinkedHashMap<String, LlmProperties.Server>();
-    if (endpoints == null) resolved.put("default", canonicalConnection(chat, CHAT));
+    if (endpoints == null) resolved.put("default", canonicalConnection(chat, CHAT, false));
     else
       endpoints.forEach((name, server) ->
-          resolved.put(name, canonicalConnection(server, CHAT + ".endpoints." + name)));
+          resolved.put(name, canonicalConnection(server, CHAT + ".endpoints." + name, true)));
     connections = java.util.Collections.unmodifiableMap(resolved);
     var staticFeatures = new java.util.LinkedHashMap<>(features);
     if (endpoints != null) {
@@ -78,6 +78,7 @@ public final class ChatEndpointCatalog {
       auxiliaryChat.setActive(null);
       auxiliaryChat.setEndpoints(null);
       auxiliaryChat.setProvider(null);
+      auxiliaryChat.setAuthentication(null);
       auxiliaryChat.setAccountRef(null);
       staticFeatures.put(LlmFeature.CHAT, auxiliaryChat);
       diagnostics = legacyDiagnostics(chat);
@@ -86,10 +87,11 @@ public final class ChatEndpointCatalog {
   }
 
   private static LlmProperties.Server canonicalConnection(
-      LlmProperties.Server source, String field) {
+      LlmProperties.Server source, String field, boolean named) {
     var copy = source == null ? new LlmProperties.Server() : source.copy();
     var provider = provider(copy, field);
     copy.setProvider(provider.id());
+    copy.setAuthentication(LlmAuthentication.resolve(source, provider, named, field).id());
     copy.setActive(null);
     copy.setEndpoints(null);
     if (provider == LlmProvider.CHATGPT_PLAN) {
@@ -112,6 +114,7 @@ public final class ChatEndpointCatalog {
     fields.put("model", chat.getModel() != null && !chat.getModel().isBlank());
     fields.put("api", chat.getApi() != null);
     fields.put("provider", chat.getProvider() != null);
+    fields.put("authentication", chat.getAuthentication() != null);
     fields.put("account-ref", chat.getAccountRef() != null);
     fields.put("usage-path", chat.getUsagePath() != null);
     fields.put("model-capabilities", !chat.getModelCapabilities().isEmpty());
@@ -141,6 +144,7 @@ public final class ChatEndpointCatalog {
     if (server.isFallbackToDefault())
       throw invalid(
           field + ".fallback-to-default", "must be false; named profiles cannot fall back");
+    LlmAuthentication.resolve(server, provider(server, field), true, field);
     if (provider(server, field) == LlmProvider.CHATGPT_PLAN) {
       if (server.getBaseUrl() != null)
         throw invalid(field + ".base-url", "is not allowed for chatgpt-plan");
@@ -158,6 +162,8 @@ public final class ChatEndpointCatalog {
         throw invalid(field + ".account-ref", "is only supported for chatgpt-plan");
       requireNoControlCharacters(field + ".api-key", server.getApiKey());
       validateBaseUrl(field + ".base-url", server.getBaseUrl());
+      if (provider(server, field) == LlmProvider.OPENAI_API)
+        validateOpenAiUrl(field + ".base-url", server.getBaseUrl());
     }
   }
 
@@ -172,7 +178,7 @@ public final class ChatEndpointCatalog {
   }
 
   private static Profile profile(
-      String name, LlmProperties.Server server, String field, Integer defaultMaxTools) {
+      String name, LlmProperties.Server server, String field, Integer defaultMaxTools, boolean named) {
     var provider = provider(server, field);
     var api =
         server == null || server.getApi() == null ? LlmApiType.CHAT_COMPLETIONS : server.getApi();
@@ -181,6 +187,7 @@ public final class ChatEndpointCatalog {
         server == null ? null : server.getModel(),
         provider,
         api,
+        LlmAuthentication.resolve(server, provider, named, field),
         server == null ? null : server.getAccountRef(),
         server == null ? 1 : server.getEndpointGeneration(),
         LlmUsagePath.configured(
@@ -204,6 +211,15 @@ public final class ChatEndpointCatalog {
       }
     }
     throw invalid(field, "must be an absolute http(s) URL without user info, query, or fragment");
+  }
+
+  private static void validateOpenAiUrl(String field, String value) {
+    var uri = java.net.URI.create(value.strip());
+    if (!"https".equalsIgnoreCase(uri.getScheme())
+        || !"api.openai.com".equalsIgnoreCase(uri.getHost())
+        || uri.getPort() != -1 && uri.getPort() != 443
+        || !java.util.Set.of("", "/", "/v1", "/v1/").contains(uri.getRawPath()))
+      throw invalid(field, "must be the official OpenAI HTTPS API destination");
   }
 
   private static IllegalArgumentException invalid(String field, String reason) {
@@ -238,6 +254,7 @@ public final class ChatEndpointCatalog {
       String model,
       LlmProvider provider,
       LlmApiType api,
+      LlmAuthentication authentication,
       String accountRef,
       long generation,
       LlmUsagePath usagePath,

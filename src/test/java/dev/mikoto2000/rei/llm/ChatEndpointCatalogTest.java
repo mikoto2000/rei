@@ -24,7 +24,9 @@ class ChatEndpointCatalogTest {
     assertThat(json.at("/1/api").asText()).isEqualTo("RESPONSES");
     assertThat(json.at("/1/accountRef").asText()).isEqualTo("personal");
     assertThat(json.at("/1/generation").asLong()).isEqualTo(1);
-    assertThat(json.toString()).doesNotContain("PRIVATE_CANARY", "apiKey", "api-key");
+    assertThat(json.toString()).doesNotContain("PRIVATE_CANARY");
+    assertThat(json.findValues("apiKey")).isEmpty();
+    assertThat(json.findValues("api-key")).isEmpty();
   }
 
   @org.junit.jupiter.params.ParameterizedTest(name = "{0}")

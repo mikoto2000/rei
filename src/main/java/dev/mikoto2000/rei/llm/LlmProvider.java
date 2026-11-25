@@ -1,8 +1,9 @@
 package dev.mikoto2000.rei.llm;
 
-/** Connection/authentication mode, independently of the wire API. */
+/** Explicit server contract, independently of authentication and wire API. */
 public enum LlmProvider {
   OPENAI_COMPATIBLE("openai-compatible"),
+  OPENAI_API("openai-api"),
   CHATGPT_PLAN("chatgpt-plan");
 
   private final String id;
