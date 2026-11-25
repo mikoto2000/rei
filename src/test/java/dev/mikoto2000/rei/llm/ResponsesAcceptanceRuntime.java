@@ -99,8 +99,10 @@ final class ResponsesAcceptanceRuntime {
     properties.setReadTimeout(Duration.ofSeconds(120));
     properties.setMaxOutputTokens(8192);
     properties.setMaxStreamTimeoutRetries(0);
-    properties.getOutputLimit().setMaxLlmCallsPerRun(80);
-    properties.getOutputLimit().setMaxTotalTokensPerRun(1000000);
+    properties.updateOutputLimit(limits -> {
+      limits.setMaxLlmCallsPerRun(80);
+      limits.setMaxTotalTokensPerRun(1000000);
+    });
     var server = new LlmProperties.Server();
     server.setApi(LlmApiType.RESPONSES);
     server.setBaseUrl(base);
