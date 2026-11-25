@@ -22,6 +22,9 @@ import java.util.function.Consumer;
  * <p>Owns input mailboxes and active views; ProjectRunQueue owns all AGENT scheduling.
  */
 public final class ConversationInputRouter {
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setChatRunAdmission(ChatRunAdmission admission) {}
+
   /** 会話の実行における扱いの選択肢。 */
   public enum Disposition {
     /** 開始。 */
