@@ -26,15 +26,18 @@ public enum LlmAuthentication {
     LlmAuthentication authentication;
     if (value == null) {
       if (!named && provider == LlmProvider.OPENAI_COMPATIBLE) return LEGACY;
-      authentication = provider == LlmProvider.CHATGPT_PLAN ? CHATGPT_OAUTH
-          : key == null || key.isBlank() ? UNCONFIGURED : API_KEY;
+      authentication =
+          provider == LlmProvider.CHATGPT_PLAN
+              ? CHATGPT_OAUTH
+              : key == null || key.isBlank() ? UNCONFIGURED : API_KEY;
     } else {
-      authentication = switch (value.strip().toLowerCase(java.util.Locale.ROOT).replace('_', '-')) {
-        case "none" -> NONE;
-        case "api-key" -> API_KEY;
-        case "chatgpt-oauth" -> CHATGPT_OAUTH;
-        default -> throw invalid(field + ".authentication", "unsupported authentication mode");
-      };
+      authentication =
+          switch (value.strip().toLowerCase(java.util.Locale.ROOT).replace('_', '-')) {
+            case "none" -> NONE;
+            case "api-key" -> API_KEY;
+            case "chatgpt-oauth" -> CHATGPT_OAUTH;
+            default -> throw invalid(field + ".authentication", "unsupported authentication mode");
+          };
     }
     if (provider == LlmProvider.CHATGPT_PLAN && authentication != CHATGPT_OAUTH
         || provider != LlmProvider.CHATGPT_PLAN && authentication == CHATGPT_OAUTH

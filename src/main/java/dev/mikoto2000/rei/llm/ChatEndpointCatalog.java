@@ -63,7 +63,8 @@ public final class ChatEndpointCatalog {
                       entry.getKey(),
                       entry.getValue(),
                       CHAT + ".endpoints." + entry.getKey(),
-                      properties.getMaxTools(), true))
+                      properties.getMaxTools(),
+                      true))
               .toList();
     }
     var resolved = new java.util.LinkedHashMap<String, LlmProperties.Server>();
@@ -178,7 +179,11 @@ public final class ChatEndpointCatalog {
   }
 
   private static Profile profile(
-      String name, LlmProperties.Server server, String field, Integer defaultMaxTools, boolean named) {
+      String name,
+      LlmProperties.Server server,
+      String field,
+      Integer defaultMaxTools,
+      boolean named) {
     var provider = provider(server, field);
     var api =
         server == null || server.getApi() == null ? LlmApiType.CHAT_COMPLETIONS : server.getApi();

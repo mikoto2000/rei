@@ -102,8 +102,10 @@ class ChatEndpointAuthenticationTest {
   }
 
   private ChatEndpointCatalog catalog(Map<String, String> settings) {
-    return new ChatEndpointCatalog(new Binder(new MapConfigurationPropertySource(settings))
-        .bind("rei.llm", LlmProperties.class).get());
+    return new ChatEndpointCatalog(
+        new Binder(new MapConfigurationPropertySource(settings))
+            .bind("rei.llm", LlmProperties.class)
+            .get());
   }
 
   private JsonNode view(ChatEndpointCatalog catalog) {
