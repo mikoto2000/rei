@@ -86,8 +86,9 @@ final class CapturingChatModel implements ChatModel {
       owner = execution.runContext();
     if (owner == null
         && context.get(AgentRunContext.class.getName()) instanceof AgentRunContext run) owner = run;
-    // Store contains only Root Runs atomically admitted by the keyboard submission boundary.
-    return owner != null && owner.requestSource() == AgentRunContext.RequestSource.SHELL
+    // Store contains only Root Runs explicitly admitted by the local or remote CLI capture boundary.
+    return owner != null && (owner.requestSource() == AgentRunContext.RequestSource.SHELL
+        || owner.requestSource() == AgentRunContext.RequestSource.WEB)
         ? store.logicalCall(owner.runId(), null)
         : null;
   }
