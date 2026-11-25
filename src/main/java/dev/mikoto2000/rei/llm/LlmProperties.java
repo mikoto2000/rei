@@ -139,7 +139,7 @@ public class LlmProperties {
   /** 用途に応じたモデル利用に必要なサーバーを扱う。 */
   public static class Server {
     /** 現在の設定値のコピーを返す。 */
-    private Server copy() {
+    Server copy() {
       var copy = new Server();
       copy.maxOutputTokens = maxOutputTokens;
       copy.baseUrl = baseUrl;
