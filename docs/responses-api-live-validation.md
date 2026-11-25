@@ -9,6 +9,7 @@ Spring AI 2.1.0 / OpenAI Java SDK 4.101.0。依存更新、本番設定・DB・�
 
 最新の実Core、承認/拒否、Checkpoint、構造化/画像/出力上限、3試行の継続性結果は
 [Phase7受入記録](responses-api-phase7-acceptance.md)を参照する。
+指定ローカルの追加検証は [Phase8受入記録](responses-api-phase8-acceptance.md)。
 下記の初期試験・準備開始時点の表は履歴であり、現在の受入状態とは区別する。
 
 ## 初期実接続試験（2026-11-25）

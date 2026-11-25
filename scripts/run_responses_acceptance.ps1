@@ -2,7 +2,7 @@
 # This launcher is opt-in and never reads application.yaml or inherits general environment variables.
 param(
  [Parameter(Mandatory=$true)][ValidateSet('openai','local-deepseek')][string]$Target,
- [Parameter(Mandatory=$true)][ValidateSet('core','discovery-verified','discovery-metrics','checkpoint-write','checkpoint-read','approval-write','approval-read','approval-deny-write','approval-deny','features','output-limit','continuity','storage-metrics')][string]$Action,
+ [Parameter(Mandatory=$true)][ValidateSet('core','discovery-verified','discovery-metrics','checkpoint-write','checkpoint-read','approval-write','approval-read','approval-deny-write','approval-deny','features','output-limit','continuity','storage-metrics','local-common','local-structured','local-image','local-summary','local-continuity','local-output-limit')][string]$Action,
  [Parameter(Mandatory=$true)][string]$EvidenceRoot,
  [Parameter(Mandatory=$true)][switch]$ApprovedExtendedBudget,
  [string]$JavaExecutable=(Get-Command java -ErrorAction Stop).Source
@@ -42,7 +42,8 @@ $taskKeyValue=[Environment]::GetEnvironmentVariable($taskKeyName,'Process')
 if ($taskKeyValue) { $taskStart.Environment[$taskKeyName]=$taskKeyValue }
 $taskMockito=@($taskClasspath.Split(';') | Where-Object { $_ -match '[\\/]mockito-core-[^\\/]+\.jar$' })
 if ($taskMockito.Count -ne 1) { throw 'Pinned Mockito agent not uniquely resolved' }
-$taskArguments=@('--enable-native-access=ALL-UNNAMED','-Xshare:off',('-javaagent:' + $taskMockito[0]),'-Xmx1024m','-Dfile.encoding=UTF-8',('-Djava.io.tmpdir=' + $taskRoot + '/tmp'),('-Duser.home=' + $taskRoot + '/home'),'-cp',$taskClasspath,'dev.mikoto2000.rei.llm.ResponsesCoreLiveAcceptance',$Target,$taskRoot,$Action)
+$taskMain=if ($Action.StartsWith('local-')) { 'dev.mikoto2000.rei.llm.ResponsesLocalLiveAcceptance' } else { 'dev.mikoto2000.rei.llm.ResponsesCoreLiveAcceptance' }
+$taskArguments=@('--enable-native-access=ALL-UNNAMED','-Xshare:off',('-javaagent:' + $taskMockito[0]),'-Xmx1024m','-Dfile.encoding=UTF-8',('-Djava.io.tmpdir=' + $taskRoot + '/tmp'),('-Duser.home=' + $taskRoot + '/home'),'-cp',$taskClasspath,$taskMain,$Target,$taskRoot,$Action)
 $taskArgumentLines=@($taskArguments | ForEach-Object { '"' + $_.Replace('\','/').Replace('"','\"') + '"' })
 $taskArgumentFile=$taskRoot + '/' + $Action + '.java.args'
 [IO.File]::WriteAllLines($taskArgumentFile,$taskArgumentLines,[Text.UTF8Encoding]::new($false))

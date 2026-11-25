@@ -16,7 +16,8 @@ final class ResponsesAcceptanceMeter implements ChatModel {
     this(delegate, budget, false);
   }
 
-  ResponsesAcceptanceMeter(ChatModel delegate, ResponsesAcceptanceBudget budget, boolean defaultTierOnly) {
+  ResponsesAcceptanceMeter(
+      ChatModel delegate, ResponsesAcceptanceBudget budget, boolean defaultTierOnly) {
     this.delegate = delegate;
     this.budget = budget;
     this.defaultTierOnly = defaultTierOnly;
@@ -24,7 +25,8 @@ final class ResponsesAcceptanceMeter implements ChatModel {
 
   private Prompt priced(Prompt prompt) {
     if (!defaultTierOnly) return prompt;
-    if (!(prompt.getOptions() instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions options))
+    if (!(prompt.getOptions()
+        instanceof org.springframework.ai.openai.responses.OpenAiResponsesChatOptions options))
       throw new IllegalArgumentException("Explicit native acceptance options required");
     if (options.getServiceTier() != null && !options.getServiceTier().equals("default"))
       throw new IllegalArgumentException("Acceptance requires the approved default service tier");

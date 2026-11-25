@@ -1,7 +1,9 @@
 # Phase 7 OpenAI 実接続受入記録
 
 更新: 2026-11-25 10:30 JST。対象 main は `38a13f1d38f0759049290e37df40cdd078a58e54`。
-PR #635 の実装・検証中であり、最新 head の全 CI・通常マージ・マージ後 CI は未完了。
+PR #635 は通常merge `6e104b3d434d22873c8f45083d78063c07d0edb2` 済み。
+PR headとexact merge SHAの全CI成功、Backend8,301件・成功8,289・期待skip12・failure/error0、
+品質0/0・全Client成功を確認し、専用worktreeとLocal/Remote作業branchを通常削除した。
 本番 gate、利用者設定、実行中の Rei、本番 DB は変更していない。
 
 ## 接続と隔離
@@ -120,7 +122,11 @@ heap傾向、長時間の圧縮・参照GC評価はPhase9に残る。
 
 writer/readは同じ証拠ディレクトリで各一度、別JVMとして順に実行する。
 同じwriterの繰返しは副作用の重複を防ぐため拒否する。
-全回帰・品質・PRレビュー・最新SHA CI・通常マージ・merge SHA CIが次工程。
+全回帰・品質・セルフレビュー・最新SHA CI・通常マージ・merge SHA CIは完了した。
+[PR](https://github.com/mikoto2000/rei/pull/635)、merge SHAの
+[Java](https://github.com/mikoto2000/rei/actions/runs/45528169163)・
+[品質](https://github.com/mikoto2000/rei/actions/runs/45528169073)・
+[Client](https://github.com/mikoto2000/rei/actions/runs/45528169100)。
 最新のローカル関連回帰は370件すべて成功、failure/error/skip0（architecture7件を含む）。
 Checkstyle0・SpotBugs0を確認。SDKの共通builder戻り値の暗黙cast指摘1件はチェーンを分離して解消した。
 解析除外・閾値・設定値は変えていない。境界12件の再確認も成功。
