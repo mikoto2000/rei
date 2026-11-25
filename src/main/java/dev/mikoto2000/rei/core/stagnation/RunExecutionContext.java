@@ -34,6 +34,7 @@ import java.util.UUID;
  */
 public class RunExecutionContext {
   private volatile org.springframework.ai.model.tool.ToolCallingChatOptions modelOptions;
+  private volatile dev.mikoto2000.rei.llm.RunLlmConnection acceptedConnection;
   private volatile List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference>
       resumeReplayReferences = List.of();
   private volatile dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History
@@ -46,6 +47,11 @@ public class RunExecutionContext {
       throw new IllegalStateException("Run model options cannot be replaced");
     modelOptions = options.mutate().build();
     var suppliedContext = modelOptions.getToolContext();
+    var connection = suppliedContext == null ? null : suppliedContext.get(
+        dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY);
+    if (connection != null && !(connection instanceof dev.mikoto2000.rei.llm.RunLlmConnection))
+      throw new IllegalArgumentException("Invalid accepted Run connection");
+    acceptedConnection = (dev.mikoto2000.rei.llm.RunLlmConnection) connection;
     var boundary =
         suppliedContext == null
             ? null
@@ -452,9 +458,15 @@ public class RunExecutionContext {
       Continuity continuity,
       @com.fasterxml.jackson.annotation.JsonInclude(
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
-          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory) {
-    public dev.mikoto2000.rei.llm.RunLlmConnection connection() {
-      return null;
+          dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+          com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          dev.mikoto2000.rei.llm.RunLlmConnection connection) {
+    public ProgressState(InformationLedger.State information, OutputLimitRunBudget.Snapshot budget,
+        int acquisitionOnlyIterations, int unknownIterations, int unknownReplanNotices,
+        Continuity continuity, dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.History protocolHistory) {
+      this(information, budget, acquisitionOnlyIterations, unknownIterations, unknownReplanNotices,
+          continuity, protocolHistory, null);
     }
 
     public ProgressState(
@@ -510,7 +522,8 @@ public class RunExecutionContext {
             unknownIterations,
             unknownReplanNotices,
             null,
-            protocolHistory);
+            protocolHistory,
+            connection);
       var d = c.detector();
       var batch = c.resumeBatch();
       return new ProgressState(
@@ -546,7 +559,8 @@ public class RunExecutionContext {
                       batch.reviewPageReadArguments(),
                       batch.reviewPageKeys(),
                       false)),
-          protocolHistory);
+          protocolHistory,
+          connection);
     }
 
     /**
@@ -865,7 +879,8 @@ public class RunExecutionContext {
                 resumeReviewPageReadArguments,
                 resumeReviewPageKeys,
                 reconciliationHandoffUsed)),
-        protocolHistory);
+        protocolHistory,
+        acceptedConnection);
   }
 
   /** 保存済みの状態を引き継ぐため、進捗を復元する。 */
