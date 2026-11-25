@@ -106,10 +106,48 @@ class LegacyChatConnectionSourceTest {
         .hasMessageContaining("binding");
   }
 
+  @Test
+  void aNullGlobalUrlUsesTheSameExplicitEnvironmentFallbackAsTheExistingSdk() {
+    var properties = new LlmProperties();
+    var common = common(null, "PRIVATE_FIRST");
+    var url = new AtomicReference<>("http://environment.invalid");
+    var source = source(properties,
+        () -> OpenAiAutoConfigurationUtil.resolveCommonProperties(common, new OpenAiChatProperties()),
+        () -> null, url::get);
+    var accepted = factory(properties, source).capture("default", null);
+    assertThat(accepted.endpoint().baseUrl()).isEqualTo("http://environment.invalid/v1");
+    assertThat(source.credential(accepted)).isEqualTo("PRIVATE_FIRST");
+    url.set("http://other.invalid");
+    assertThatThrownBy(() -> source.credential(accepted))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("binding");
+  }
+
+  @Test
+  void anExplicitFeatureNeverReadsTheEnvironmentReceiver() {
+    var properties = new LlmProperties();
+    var feature = new LlmProperties.Server();
+    feature.setBaseUrl("http://feature.invalid");
+    feature.setModel("model");
+    properties.setFeature(LlmFeature.CHAT, feature);
+    var source = source(properties,
+        () -> { throw new AssertionError("Read global connection"); },
+        () -> { throw new AssertionError("Read global key"); },
+        () -> { throw new AssertionError("Read environment receiver"); });
+    assertThat(factory(properties, source).capture("default", null).endpoint().baseUrl())
+        .isEqualTo("http://feature.invalid/v1");
+  }
+
   private LegacyChatConnectionSource source(
       LlmProperties properties,
       java.util.function.Supplier<OpenAiAutoConfigurationUtil.ResolvedConnectionProperties> global,
       java.util.function.Supplier<String> environmentKey) {
+    return source(properties, global, environmentKey, () -> null);
+  }
+
+  private LegacyChatConnectionSource source(LlmProperties properties,
+      java.util.function.Supplier<OpenAiAutoConfigurationUtil.ResolvedConnectionProperties> global,
+      java.util.function.Supplier<String> environmentKey,
+      java.util.function.Supplier<String> environmentBaseUrl) {
     var model = mock(ChatModel.class);
     when(model.getOptions())
         .thenReturn(
@@ -121,7 +159,7 @@ class LegacyChatConnectionSourceTest {
                 .maxRetries(0)
                 .build());
     return new LegacyChatConnectionSource(
-        new LlmModelProvider(model, properties), properties, global, environmentKey);
+        new LlmModelProvider(model, properties), properties, global, environmentKey, environmentBaseUrl);
   }
 
   private RunLlmConnectionFactory factory(

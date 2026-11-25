@@ -15,6 +15,12 @@ final class LegacyChatConnectionSource {
       LlmProperties properties,
       Supplier<ResolvedConnectionProperties> global,
       Supplier<String> environmentKey) {
+    this(models, properties, global, environmentKey, () -> System.getenv("OPENAI_BASE_URL"));
+  }
+
+  LegacyChatConnectionSource(LlmModelProvider models, LlmProperties properties,
+      Supplier<ResolvedConnectionProperties> global, Supplier<String> environmentKey,
+      Supplier<String> environmentBaseUrl) {
     this.models = models;
     this.feature = properties.feature(LlmFeature.CHAT);
     this.global = global;
