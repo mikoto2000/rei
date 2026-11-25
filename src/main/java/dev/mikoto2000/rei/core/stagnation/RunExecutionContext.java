@@ -45,12 +45,15 @@ public class RunExecutionContext {
       org.springframework.ai.model.tool.ToolCallingChatOptions options) {
     if (modelOptions != null || options == null)
       throw new IllegalStateException("Run model options cannot be replaced");
-    modelOptions = options.mutate().build();
-    var suppliedContext = modelOptions.getToolContext();
+    var prepared = options.mutate().build();
+    var suppliedContext = prepared.getToolContext();
     var connection = suppliedContext == null ? null : suppliedContext.get(
         dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY);
     if (connection != null && !(connection instanceof dev.mikoto2000.rei.llm.RunLlmConnection))
       throw new IllegalArgumentException("Invalid accepted Run connection");
+    if (acceptedConnection != null && !acceptedConnection.equals(connection))
+      throw new IllegalStateException("Run connection does not match saved connection");
+    modelOptions = prepared;
     acceptedConnection = (dev.mikoto2000.rei.llm.RunLlmConnection) connection;
     var boundary =
         suppliedContext == null
@@ -887,6 +890,7 @@ public class RunExecutionContext {
   public synchronized void restoreProgress(
       ProgressState saved,
       List<dev.mikoto2000.rei.modelmessage.ModelMessagePayloadStore.ReplayReference> references) {
+    if (saved != null) restoreConnection(saved.connection());
     if (saved == null
         || saved.protocolHistory() == null
         || references == null
@@ -963,6 +967,7 @@ public class RunExecutionContext {
   }
 
   public synchronized void restoreProgress(ProgressState saved) {
+    if (saved != null) restoreConnection(saved.connection());
     finishResumeBatch();
     reviewPageReconciled = false;
     reconciliationHandoffUsed = false;
@@ -1340,6 +1345,7 @@ public class RunExecutionContext {
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public synchronized void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved) {
     if (saved != null) {
+      restoreConnection(saved.connection());
       budget.restore(saved.budget());
       evaluator.restoreInformation(null);
       resumeMessages = List.copyOf(saved.messages());
@@ -1349,6 +1355,14 @@ public class RunExecutionContext {
       resumeProtocolHistory = saved.protocolHistory();
       if (modelOptions != null) restoreReplayAuthority();
     }
+  }
+
+  private void restoreConnection(dev.mikoto2000.rei.llm.RunLlmConnection saved) {
+    if (saved == null) return;
+    if ((acceptedConnection != null && !acceptedConnection.equals(saved))
+        || (modelOptions != null && acceptedConnection == null))
+      throw new IllegalStateException("Saved Run connection does not match accepted connection");
+    acceptedConnection = saved;
   }
 
   /** 実行の停滞への対処で用いる取り出し待機中承認ツール一覧を返す。 */
