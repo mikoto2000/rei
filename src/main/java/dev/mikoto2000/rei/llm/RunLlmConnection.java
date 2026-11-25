@@ -19,7 +19,7 @@ public record RunLlmConnection(
     java.util.Objects.requireNonNull(authentication, "authentication");
     java.util.Objects.requireNonNull(endpoint, "endpoint");
     capabilities = Map.copyOf(capabilities);
-    generation = Map.copyOf(generation);
+    generation = RunGenerationSettings.copy(generation);
   }
 
   @Override
@@ -29,7 +29,7 @@ public record RunLlmConnection(
 
   @Override
   public Map<String, Object> generation() {
-    return Map.copyOf(generation);
+    return generation;
   }
 
   @Override
