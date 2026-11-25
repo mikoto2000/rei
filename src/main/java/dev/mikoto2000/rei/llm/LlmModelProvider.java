@@ -707,15 +707,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   }
 
   private Integer maxTools(LlmProperties.Server server) {
-    if (server == null || !server.hasCustomServer())
-      return server != null && server.getMaxTools() != null
-          ? server.getMaxTools()
-          : defaultMaxTools;
-    if (!server.isFallbackToDefault()) return server.getMaxTools();
-    // Unknown candidates retain the existing conservative outbound bound.
-    return Math.min(
-        server.getMaxTools() == null ? 128 : server.getMaxTools(),
-        defaultMaxTools == null ? 128 : defaultMaxTools);
+    return LlmCapabilities.resolveToolLimit(server, defaultMaxTools);
   }
 
   /** 用途に応じたモデル利用で用いるチャット選択可能な設定組み立てを返す。 */

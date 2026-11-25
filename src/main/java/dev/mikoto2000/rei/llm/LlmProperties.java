@@ -156,6 +156,8 @@ public class LlmProperties {
       copy.endpoints = endpoints == null ? null : copyFeatures(endpoints);
       copy.provider = provider;
       copy.accountRef = accountRef;
+      copy.usagePath = usagePath;
+      copy.modelCapabilities = modelCapabilities;
       return copy;
     }
 
@@ -163,6 +165,24 @@ public class LlmProperties {
     private Map<String, Server> endpoints;
     private String provider;
     private String accountRef;
+    private String usagePath;
+    private Map<String, String> modelCapabilities = Map.of();
+
+    public String getUsagePath() {
+      return usagePath;
+    }
+
+    public void setUsagePath(String usagePath) {
+      this.usagePath = usagePath;
+    }
+
+    public Map<String, String> getModelCapabilities() {
+      return modelCapabilities;
+    }
+
+    public void setModelCapabilities(Map<String, String> modelCapabilities) {
+      this.modelCapabilities = modelCapabilities == null ? Map.of() : Map.copyOf(modelCapabilities);
+    }
 
     public String getProvider() {
       return provider;

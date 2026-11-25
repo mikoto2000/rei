@@ -39,7 +39,7 @@ public final class ChatEndpointCatalog {
       if (chat != null && chat.getAccountRef() != null)
         throw invalid(CHAT + ".account-ref", "is only supported for chatgpt-plan named endpoints");
       initial = "default";
-      profiles = List.of(profile("default", chat, CHAT));
+      profiles = List.of(profile("default", chat, CHAT, properties.getMaxTools()));
     } else {
       if (endpoints.isEmpty()) throw invalid(CHAT + ".endpoints", "must not be empty");
       for (var name : endpoints.keySet())
@@ -50,7 +50,7 @@ public final class ChatEndpointCatalog {
       endpoints.forEach((name, server) -> validate(CHAT + ".endpoints." + name, server));
       initial = chat.getActive();
       profiles = endpoints.entrySet().stream().sorted(Map.Entry.comparingByKey())
-          .map(entry -> profile(entry.getKey(), entry.getValue(), CHAT + ".endpoints." + entry.getKey())).toList();
+          .map(entry -> profile(entry.getKey(), entry.getValue(), CHAT + ".endpoints." + entry.getKey(), properties.getMaxTools())).toList();
     }
     var resolved = new java.util.LinkedHashMap<String, LlmProperties.Server>();
     if (endpoints == null) resolved.put("default", canonicalConnection(chat, CHAT));
@@ -80,6 +80,7 @@ public final class ChatEndpointCatalog {
       copy.setBaseUrl(dev.mikoto2000.rei.chatgpt.PlanOAuth.RESOURCE);
       copy.setApiKey(null);
       copy.setApi(LlmApiType.RESPONSES);
+      if (copy.getReasoningReplay() == null) copy.setReasoningReplay(ReasoningReplayMode.ENCRYPTED);
     } else {
       copy.setBaseUrl(OpenAiCompatibleEndpoint.baseUrl(copy.getBaseUrl()));
       if (copy.getApi() == null) copy.setApi(LlmApiType.CHAT_COMPLETIONS);
@@ -96,6 +97,8 @@ public final class ChatEndpointCatalog {
     fields.put("api", chat.getApi() != null);
     fields.put("provider", chat.getProvider() != null);
     fields.put("account-ref", chat.getAccountRef() != null);
+    fields.put("usage-path", chat.getUsagePath() != null);
+    fields.put("model-capabilities", !chat.getModelCapabilities().isEmpty());
     fields.put("temperature", chat.getTemperature() != null);
     fields.put("max-output-tokens", chat.getMaxOutputTokens() != null);
     fields.put("max-tools", chat.getMaxTools() != null);
@@ -130,6 +133,8 @@ public final class ChatEndpointCatalog {
         throw invalid(field + ".api", "must be responses for chatgpt-plan");
       if (server.getAccountRef() == null || !server.getAccountRef().matches("[a-zA-Z0-9_-]{1,64}"))
         throw invalid(field + ".account-ref", "must name a valid ChatGPT account label");
+      if (server.getReasoningReplay() != null && server.getReasoningReplay() != ReasoningReplayMode.ENCRYPTED)
+        throw invalid(field + ".reasoning-replay", "must be encrypted for chatgpt-plan");
     } else {
       if (server.getAccountRef() != null)
         throw invalid(field + ".account-ref", "is only supported for chatgpt-plan");
@@ -147,10 +152,13 @@ public final class ChatEndpointCatalog {
     return LlmProvider.configured(server == null ? null : server.getProvider(), field + ".provider");
   }
 
-  private static Profile profile(String name, LlmProperties.Server server, String field) {
-    return new Profile(name, server == null ? null : server.getModel(), provider(server, field),
-        server == null || server.getApi() == null ? LlmApiType.CHAT_COMPLETIONS : server.getApi(),
-        server == null ? null : server.getAccountRef(), server == null ? 1 : server.getEndpointGeneration());
+  private static Profile profile(String name, LlmProperties.Server server, String field, Integer defaultMaxTools) {
+    var provider = provider(server, field);
+    var api = server == null || server.getApi() == null ? LlmApiType.CHAT_COMPLETIONS : server.getApi();
+    return new Profile(name, server == null ? null : server.getModel(), provider, api,
+        server == null ? null : server.getAccountRef(), server == null ? 1 : server.getEndpointGeneration(),
+        LlmUsagePath.configured(server == null ? null : server.getUsagePath(), provider, field + ".usage-path"),
+        LlmEndpointCapabilities.resolve(server, provider, api, defaultMaxTools, field));
   }
 
   private static void validateBaseUrl(String field, String value) {
@@ -199,5 +207,5 @@ public final class ChatEndpointCatalog {
   }
 
   public record Profile(String id, String model, LlmProvider provider, LlmApiType api,
-      String accountRef, long generation) {}
+      String accountRef, long generation, LlmUsagePath usagePath, LlmEndpointCapabilities capabilities) {}
 }
