@@ -311,6 +311,7 @@ public final class ResponsesLiveAcceptance {
 
   static StoredAnswer storedAnswer(ModelMessagePayloadStore store, org.sqlite.SQLiteDataSource source,
       ModelMessagePayloadStore.Scope savedScope, String run) throws Exception {
+    var references = new java.util.ArrayList<ModelMessagePayloadStore.Ref>();
     try (var connection = source.getConnection();
         var query = connection.prepareStatement("SELECT id,sha256 FROM model_message_payloads WHERE project=? AND root_path=? AND conversation=? AND run=? ORDER BY rowid DESC")) {
       query.setString(1, savedScope.project());
@@ -319,15 +320,16 @@ public final class ResponsesLiveAcceptance {
       query.setString(4, run);
       try (var rows = query.executeQuery()) {
         while (rows.next()) {
-          var ref = new ModelMessagePayloadStore.Ref(rows.getString(1), rows.getString(2));
-          var message = store.load(savedScope, ref);
-          if (message instanceof AssistantMessage assistant && assistant.getToolCalls().isEmpty()
-              && "7417".equals(assistant.getText().trim())
-              && assistant.getParts().stream().anyMatch(ReasoningPart.class::isInstance)) {
-            return new StoredAnswer(assistant, ref.sha256());
-          }
+          references.add(new ModelMessagePayloadStore.Ref(rows.getString(1), rows.getString(2)));
         }
       }
+    }
+    for (var ref : references) {
+      var message = store.load(savedScope, ref);
+      if (message instanceof AssistantMessage assistant && assistant.getToolCalls().isEmpty()
+          && "7417".equals(assistant.getText().trim())
+          && assistant.getParts().stream().anyMatch(ReasoningPart.class::isInstance))
+        return new StoredAnswer(assistant, ref.sha256());
     }
     throw new IllegalStateException("Completed owned reasoning answer missing");
   }
