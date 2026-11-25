@@ -39,10 +39,14 @@ final class PinnedChatModels implements AutoCloseable {
 
   private ChatModel create(RunLlmConnection connection) {
     verify(connection);
-    if (connection.endpoint().apiType() != LlmApiType.CHAT_COMPLETIONS)
-      throw new IllegalStateException("Pinned Responses requires its verified protocol adapter");
+    if (connection.endpoint().apiType() == LlmApiType.RESPONSES && connection.named())
+      throw new IllegalStateException("Named Responses requires its verified profile policy");
     var client = client(connection, java.util.List.of());
     try {
+      if (connection.endpoint().apiType() == LlmApiType.RESPONSES)
+        return ResponsesAdapter.createWithClient(connection.endpoint(),
+            (org.springframework.ai.openai.responses.OpenAiResponsesChatOptions) RunNativeOptions.options(connection),
+            client, true);
       var model =
           org.springframework.ai.openai.OpenAiChatModel.builder()
               .options(
