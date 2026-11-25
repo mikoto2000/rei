@@ -1770,6 +1770,13 @@ public class RunExecutionContext {
     toolResultsCheckpoint = observer;
   }
 
+  /** Persist the current connection and reserved call budget before inference leaves the host. */
+  public synchronized void preserveInferenceProgress(dev.mikoto2000.rei.llm.RunLlmConnection expected) {
+    if (!java.util.Objects.equals(acceptedConnection, expected))
+      throw new IllegalStateException("Inference connection differs from accepted execution");
+    toolResultsCheckpoint.accept(List.of());
+  }
+
   /** 実行の停滞への対処に関するpreserveツールの結果一覧を処理する。 */
   public synchronized void preserveToolResults(
       List<org.springframework.ai.chat.messages.Message> messages) {

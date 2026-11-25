@@ -97,6 +97,9 @@ final class RunLlmConnectionModel implements ChatModel {
     if (override)
       throw new IllegalStateException("Run request cannot override accepted connection");
     verify.accept(connection);
+    if (options.getToolContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+        instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
+      execution.preserveInferenceProgress(connection);
     return Objects.requireNonNull(models.apply(connection), "Run transport is unavailable");
   }
 
