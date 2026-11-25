@@ -9,6 +9,7 @@ import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.event.AgentEventBus;
+import dev.mikoto2000.rei.storage.StorageInUseException;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.ui.shell.JLineShellEventOutput;
 import dev.mikoto2000.rei.ui.shell.RootCommand;
@@ -259,7 +260,19 @@ public class ReiApplication {
                     "reiBackendMode", java.util.Map.of("rei.backend-mode", backend))));
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
     dev.mikoto2000.rei.web.WebApplication.configure(application, System.getenv("REI_API_KEY"));
-    ConfigurableApplicationContext context = application.run(args);
+    ConfigurableApplicationContext context;
+    try {
+      context = application.run(args);
+    } catch (RuntimeException failure) {
+      for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+        if (cause instanceof StorageInUseException conflict) {
+          System.err.println(conflict.getMessage());
+          System.exit(1);
+          return;
+        }
+      }
+      throw failure;
+    }
     boolean consoleExit =
         context.getEnvironment().getProperty(ForegroundConsole.PROPERTY, Boolean.class, false);
     if (mode == dev.mikoto2000.rei.launcher.BackendMode.SERVER && !consoleExit) return;

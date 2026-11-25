@@ -101,14 +101,21 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
             root.resolve(".storage/instance.lock"),
             StandardOpenOption.CREATE,
             StandardOpenOption.WRITE);
-    FileLock acquired = null;
+    FileLock acquired;
     try {
       acquired = channel.tryLock();
-      if (acquired == null)
-        throw new IOException("Storage is owned by another application: " + root);
     } catch (IOException | OverlappingFileLockException error) {
+      var conflict = new StorageInUseException(root, error);
+      try {
+        channel.close();
+      } catch (IOException closeFailure) {
+        conflict.addSuppressed(closeFailure);
+      }
+      throw conflict;
+    }
+    if (acquired == null) {
       channel.close();
-      throw new IOException("Storage is owned by another application: " + root, error);
+      throw new StorageInUseException(root, null);
     }
     lease = acquired;
   }
