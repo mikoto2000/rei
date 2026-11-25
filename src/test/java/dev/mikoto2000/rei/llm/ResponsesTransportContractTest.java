@@ -15,6 +15,34 @@ import org.springframework.ai.openai.responses.OpenAiResponsesChatOptions;
 /** Exercises the pinned SDK's serialized HTTP request, without external traffic. */
 class ResponsesTransportContractTest {
   @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void flatToolRequestsRejectNamespacedCallsBeforeSpringCanDiscardTheNamespace(boolean streaming)
+      throws Exception {
+    var output =
+        "{\"type\":\"function_call\",\"id\":\"fc_fixture\",\"call_id\":\"call_fixture\","
+            + "\"name\":\"fixture\",\"namespace\":\"unregistered\",\"arguments\":\"{}\",\"status\":\"completed\"}";
+    var response =
+        (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(completed());
+    response.set("output", new ObjectMapper().readTree("[" + output + "]"));
+    reply = response.toString();
+    if (streaming) {
+      contentType = "text/event-stream";
+      reply =
+          event("response.output_item.done", "\"output_index\":0,\"item\":" + output)
+              + event("response.completed", "\"response\":" + reply);
+    }
+    var options = options().build();
+    assertThatThrownBy(
+            () -> {
+              var model = transport(options);
+              if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
+              else model.call(new Prompt("fixture", options));
+            })
+        .isInstanceOf(ResponsesTransportException.class);
+    assertThat(requests).hasSize(1);
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({"408,false", "408,true", "503,false", "503,true"})
   void underlyingHttpLayerCannotReplayAResponsesRequest(int status, boolean streaming)
       throws Exception {

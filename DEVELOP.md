@@ -18,7 +18,9 @@ Backend が Session と Run を所有します。軽量 CLI の Project / Sessio
 
 Responses API の段階実装は [設計と安全境界](docs/responses-api-design.md) と
 [進捗・検証記録](docs/responses-api-implementation-progress.md) を参照してください。
-接続構成の基盤を整備している段階で、Responses の本番利用は有効にしていません。
+現行の Responses は明示設定された限定構成だけを本番 policy で許可します。
+利用条件は [運用手順](docs/responses-api-operations.md)、通常チャットの動的切り替えと
+ChatGPT 利用枠対応の調査は [実装記録](docs/chat-endpoints-implementation.md) を参照してください。
 
 明示指定時の暗黙選択省略・モデル完了待ち上限・比較方法は
 [スキル選択の待ち時間](docs/skill-selection-latency.md)を参照してください。
