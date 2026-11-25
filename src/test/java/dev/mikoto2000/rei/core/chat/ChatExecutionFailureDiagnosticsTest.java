@@ -78,6 +78,25 @@ class ChatExecutionFailureDiagnosticsTest {
         .toList();
   }
 
+  @Test
+  void unsupportedResponsesConfigurationBeforeStartHasAnActionableTerminal() {
+    var checkpoints = mock(dev.mikoto2000.rei.checkpoint.PersistentCheckpointService.class);
+    org.mockito.Mockito.doThrow(
+            new dev.mikoto2000.rei.modeloptions.ResponsesConfigurationException())
+        .when(checkpoints)
+        .start(owner, "work");
+    var service = service(new IllegalStateException("unused"));
+    service.setCheckpoints(checkpoints);
+    var result = service.execute(owner, "work", new UserInterventionQueue());
+    assertThat(modelCalls).hasValue(0);
+    assertThat(result.stopCode()).isEqualTo("responses_configuration_unsupported");
+    assertThat(result.errorMessage()).contains("rei.llm.features", "再起動");
+    assertThat(terminals()).hasSize(1);
+    var error = ((AgentRunFailedPayload) terminals().getFirst().payload()).error();
+    assertThat(error.code()).isEqualTo(result.stopCode());
+    assertThat(error.message()).isEqualTo(result.errorMessage());
+  }
+
   /** 会話の実行で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @CsvSource({

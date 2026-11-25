@@ -22,9 +22,15 @@ class ResponsesProductionTransportTest {
   private final List<JsonNode> requests = new CopyOnWriteArrayList<>();
 
   private LlmModelProvider provider() {
+    return provider(2048);
+  }
+
+  private LlmModelProvider provider(int tokens) {
     return LlmModelProvider.forResponsesProductionTransport(
         org.mockito.Mockito.mock(ChatModel.class),
-        ResponsesProductionGateTest.properties(LlmFeature.CHAT, Map.of("model", "gpt-6.2-sol")),
+        ResponsesProductionGateTest.properties(
+            LlmFeature.CHAT,
+            Map.of("model", "gpt-6.2-sol", "max-output-tokens", Integer.toString(tokens))),
         List.of(http ->
             http.interceptor(chain -> {
               assertThat(chain.request().url().toString())
@@ -68,6 +74,15 @@ class ResponsesProductionTransportTest {
   private void invoke(ChatModel model, OpenAiResponsesChatOptions options, boolean stream) {
     if (stream) model.stream(new Prompt("owned synthetic request", options)).collectList().block();
     else model.call(new Prompt("owned synthetic request", options));
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void configured8192TokenBudgetReachesTheWireWithoutBeingReduced(boolean stream) {
+    var provider = provider(8192);
+    invoke(provider.chatModel(LlmFeature.CHAT), options(provider), stream);
+    assertThat(requests).hasSize(1);
+    assertThat(requests.getFirst().path("max_output_tokens").asInt()).isEqualTo(8192);
   }
 
   @ParameterizedTest

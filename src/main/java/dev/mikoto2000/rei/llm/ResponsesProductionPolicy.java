@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.llm;
 
+import dev.mikoto2000.rei.modeloptions.ResponsesConfigurationException;
 import java.time.Duration;
 import java.util.Set;
 
@@ -43,7 +44,7 @@ final class ResponsesProductionPolicy {
                 ReasoningReplayMode.ENCRYPTED,
                 36,
                 Set.of(LlmCapabilities.Setting.REASONING_EFFORT)),
-            2048,
+            endpoint.maxOutputTokens(),
             null,
             TIMEOUT);
     if (!accepted.equals(endpoint)) throw unavailable();
@@ -67,8 +68,7 @@ final class ResponsesProductionPolicy {
     return options.mutate().reasoningEffort("low").serviceTier("default").build();
   }
 
-  private static IllegalStateException unavailable() {
-    return new IllegalStateException(
-        "Responses requires an explicit OpenAI model and compatible endpoint settings");
+  private static ResponsesConfigurationException unavailable() {
+    return new ResponsesConfigurationException();
   }
 }

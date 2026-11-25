@@ -37,7 +37,10 @@ rei:
 ```
 
 OpenAI Responsesの推論設定は `low`、サービス層は `default`。temperatureは指定しない。
-`max-output-tokens` は推論と表示本文を合わせた生成枠。指定ローカルResponsesは本番構成の対象外。
+`max-output-tokens` は推論と表示本文を合わせた生成枠。正の設定値を使用でき、例の2048に限定しない。
+たとえば8192を指定すると、その値を `max_output_tokens` として送信する。モデル側の上限は利用するモデルで確認する。
+接続設定が対応条件に合わない場合は `responses_configuration_unsupported` と確認項目を表示する。
+設定変更後はアプリを再起動して新規Runへ適用する。指定ローカルResponsesは本番構成の対象外。
 SDK の型が存在することと、特定接続先・モデル・thinking mode がその設定を受理することは別である。
 
 `max-tools` は接続先の要求上限。動的公開の枠は `rei.llm.tool-discovery.max-active-tools` で別に制限する。
