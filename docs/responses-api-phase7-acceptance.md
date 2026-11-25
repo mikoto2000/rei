@@ -1,13 +1,13 @@
 # Phase 7 OpenAI 実接続受入記録
 
-更新: 2026-11-25 10:18 JST。対象 main は `38a13f1d38f0759049290e37df40cdd078a58e54`。
+更新: 2026-11-25 10:30 JST。対象 main は `38a13f1d38f0759049290e37df40cdd078a58e54`。
 PR #635 の実装・検証中であり、最新 head の全 CI・通常マージ・マージ後 CI は未完了。
 本番 gate、利用者設定、実行中の Rei、本番 DB は変更していない。
 
 ## 接続と隔離
 
 ユーザー指定の `https://api.openai.com` / `gpt-5.6-sol`、`OPENAI_API_KEY` を使用した。
-通常 low、計算課題 medium。Spring AI 2.1.0 / OpenAI Java SDK 4.101.0 の既存 Adapter を通る。
+初期通常 low・初期計算 medium、追加Coreはモデル既定、feature/継続性で明示 low/medium。Spring AI 2.1.0 / OpenAI Java SDK 4.101.0 の既存 Adapter を通る。
 `store:false`、手動履歴、SDK retry 0、既存 one-shot transport を維持した。
 別 API への fallback はない。提供元の会話 ID は利用しない。
 
@@ -31,8 +31,8 @@ fixture / 本番 / acceptance の境界を追加8テストと従来4テストで
 追加枠は別台帳で200要求・入力100万・出力30万・3時間・追加USD20。
 開始は約09:27 JST、期限は約12:27 JST。再実行で時計やカウンターをリセットしない。
 
-追加枠の現在値は55要求、入力45,415・出力3,564、完了55・usage不明0。
-入力USD10/M・出力USD30/Mという保守的な上限単価でUSD0.561070。
+追加枠の現在値は65要求、入力65,391・出力4,222、完了65・usage不明0。
+入力USD10/M・出力USD30/Mという保守的な上限単価でUSD0.780570。
 これは請求照合済みの実費ではない。失敗した試験も要求数・usage に含む。
 送信前に永続予約し、完全な数値 usage だけを精算する。不明、取消、クラッシュは最悪予約を保持する。
 超過を観測した場合は違反を保存して次要求を拒否する。予算8テスト、meter5テストを追加した。
@@ -82,7 +82,7 @@ Bの推論省略対照は未実施。最新の公式仕様は対応モデルで�
 
 ## 失敗を含む記録
 
-実HTTPは追加55件すべて200だが、Core組立・判定で5回の失敗を記録している。
+実HTTPは追加65件すべて200だが、Core組立・判定で5回の失敗を記録している。
 3回はハーネスが既存 `RunAwareToolCallingAdvisor` を組み込み忘れ、Springの追加tool loopが動いたため。
 既存本番構成は正しく、fixtureで再現後に同じadvisorを組み込んだ。
 1回は試験側が出力枯渇を例外のみと期待した判定誤り。既存契約はLENGTHで、上限だけ再試行して成功。
@@ -96,11 +96,15 @@ HTTP前に正しく拒否された。既存要約と同じ未束縛optionsに直
 ## 性能と限界
 
 初期streamの可視本文TTFTは1521.189msの1標本。
-追加枠wire JSONは累積428,075bytes、最大21,075bytes。
+追加55要求時のwire JSONは累積428,075bytes、最大21,075bytes。
 HTTP header到着240.387〜4124.062msはTTFTとは区別する。
-追加試験終了時、payload.db471,040bytes、checkpoint.db73,728bytes、discovery.db61,440bytes、WALファイルなし。
+追加55要求時の断面で、payload.db471,040bytes、checkpoint.db73,728bytes、discovery.db61,440bytes、WALファイルなし。
 これはDB全体のサイズであり、payload本文の合計byte数そのものではない。
-tool時間とpayload保存/復元時間の分離計測、heap傾向、長時間の圧縮・参照GC評価はPhase9に残る。
+実受信payload4,144bytesを5回保存/復元して全件hash・byte一致。load中央値1.781ms（初回29.366ms）、save中央値8.907ms（初回46.238ms）。
+その時点のpayload本文合計162,302bytes・119件・参照118件。保存計測はAPI要求を追加していない。
+専門toolの権限判定を含む合成処理は1.331msの1標本。この追加試行は専門tool1回・成功したが検索を繰り返して10要求、公開枠は32→36となった。
+検索の非決定性と余分な往復を性能上の限界として残す。業務toolの所要時間とは一般化しない。
+heap傾向、長時間の圧縮・参照GC評価はPhase9に残る。
 短い入力・cached0からキャッシュの不具合や実用性能を判断しない。
 
 ## 再現と次工程
@@ -118,6 +122,8 @@ writer/readは同じ証拠ディレクトリで各一度、別JVMとして順に
 同じwriterの繰返しは副作用の重複を防ぐため拒否する。
 全回帰・品質・PRレビュー・最新SHA CI・通常マージ・merge SHA CIが次工程。
 最新のローカル関連回帰は370件すべて成功、failure/error/skip0（architecture7件を含む）。
+Checkstyle0・SpotBugs0を確認。SDKの共通builder戻り値の暗黙cast指摘1件はチェーンを分離して解消した。
+解析除外・閾値・設定値は変えていない。境界12件の再確認も成功。
 新規テストは28件。Python計画検査10件は別集計。全Backend CIの結果にこの件数を代用しない。
 ローカル互換サービスの先行結果はPhase8で独立評価し、DeepSeek公式API成功へ読み替えない。
 本番gateはPhase9と接続先別受入が完了するまで閉鎖する。

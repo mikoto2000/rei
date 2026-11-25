@@ -2,7 +2,7 @@
 # This launcher is opt-in and never reads application.yaml or inherits general environment variables.
 param(
  [Parameter(Mandatory=$true)][ValidateSet('openai','local-deepseek')][string]$Target,
- [Parameter(Mandatory=$true)][ValidateSet('core','discovery-verified','checkpoint-write','checkpoint-read','approval-write','approval-read','approval-deny-write','approval-deny','features','output-limit','continuity')][string]$Action,
+ [Parameter(Mandatory=$true)][ValidateSet('core','discovery-verified','discovery-metrics','checkpoint-write','checkpoint-read','approval-write','approval-read','approval-deny-write','approval-deny','features','output-limit','continuity','storage-metrics')][string]$Action,
  [Parameter(Mandatory=$true)][string]$EvidenceRoot,
  [Parameter(Mandatory=$true)][switch]$ApprovedExtendedBudget,
  [string]$JavaExecutable=(Get-Command java -ErrorAction Stop).Source

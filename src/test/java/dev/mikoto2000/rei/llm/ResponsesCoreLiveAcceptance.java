@@ -174,10 +174,16 @@ public final class ResponsesCoreLiveAcceptance {
               if (!name.equals(specialist))
                 throw new dev.mikoto2000.rei.core.policy.ToolPermissionException(
                     name, dev.mikoto2000.rei.core.policy.PermissionDecision.DENY);
-              guard.validateArguments(name, input, owner);
+            long started = System.nanoTime();
+            guard.validateArguments(name, input, owner);
               guard.check(name, input, owner);
               if (executions.incrementAndGet() != 1)
                 throw new IllegalStateException("Synthetic specialist repeated");
+            try {
+              runtime.report("TOOL_DURATION", Map.of("tool", name, "duration_ms", (System.nanoTime() - started) / 1000000.0));
+            } catch (java.io.IOException failure) {
+              throw new IllegalStateException("Owned tool timing evidence failed");
+            }
               return "{\"accepted-value\":\"" + nonce + "\"}";
             }
           });
@@ -403,12 +409,14 @@ public final class ResponsesCoreLiveAcceptance {
         else if (args[2].equals("discovery-debug")) discovery(runtime, "debug");
         else if (args[2].equals("discovery-trace")) discovery(runtime, "trace");
         else if (args[2].equals("discovery-verified")) discovery(runtime, "verified");
+        else if (args[2].equals("discovery-metrics")) discovery(runtime, "metrics");
         else if (args[2].equals("checkpoint-write")) checkpoint(runtime, true);
         else if (args[2].equals("checkpoint-read")) checkpoint(runtime, false);
         else if (args[2].startsWith("approval-"))
           ResponsesApprovalLiveScenario.run(runtime, args[2]);
         else if (args[2].equals("features")) ResponsesFeatureLiveScenario.run(runtime);
         else if (args[2].equals("continuity")) ResponsesContinuityLiveScenario.run(runtime);
+        else if (args[2].equals("storage-metrics")) ResponsesStorageLiveMetrics.run(runtime);
         else if (args[2].equals("output-limit")) {
           var owner =
               new dev.mikoto2000.rei.core.chat.AgentRunContext(

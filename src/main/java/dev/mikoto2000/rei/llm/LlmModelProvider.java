@@ -339,16 +339,15 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
               || !(host.endsWith(".invalid")
                   || java.util.Set.of("localhost", "127.0.0.1", "::1", "[::1]").contains(host))))
         throw new IllegalStateException("Responses fixture endpoint must be owned locally");
-      var builder =
-          org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder()
-              .baseUrl(endpoint.baseUrl())
-              .apiKey(nativeServer.getApiKey() == null ? "fixture-key" : nativeServer.getApiKey())
-              .model(endpoint.model())
-              .temperature(endpoint.temperature())
-              .maxOutputTokens(endpoint.maxOutputTokens())
-              .maxRetries(0)
-              .timeout(endpoint.readTimeout())
-              .strict(false);
+      var builder = org.springframework.ai.openai.responses.OpenAiResponsesChatOptions.builder();
+      builder.baseUrl(endpoint.baseUrl());
+      builder.apiKey(nativeServer.getApiKey() == null ? "fixture-key" : nativeServer.getApiKey());
+      builder.model(endpoint.model());
+      builder.temperature(endpoint.temperature());
+      builder.maxOutputTokens(endpoint.maxOutputTokens());
+      builder.maxRetries(0);
+      builder.timeout(endpoint.readTimeout());
+      builder.strict(false);
       var context = new java.util.HashMap<String, Object>();
       context.put(ResolvedLlmEndpoint.CONTEXT_KEY, endpoint);
       if (endpoint.capabilities().maxTools() != null)
