@@ -24,7 +24,7 @@ import org.springframework.ai.openai.setup.OpenAiSetup;
 import org.springframework.ai.tool.ToolCallback;
 import reactor.core.publisher.Flux;
 
-/** Responses wire boundary. Not registered for production before durable integration. */
+/** Responses wire/replay boundary; production requires explicit operational acceptance. */
 final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   private static final Set<String> PROTECTED_FIELDS =
       Set.of(
@@ -60,6 +60,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   private final OpenAiResponsesChatModel delegate;
   private final com.openai.client.OpenAIClient syncClient;
   private final com.openai.client.OpenAIClientAsync asyncClient;
+  private final boolean acceptedProfile;
   private static final ObjectMapper JSON =
       new ObjectMapper(
               JsonFactory.builder()
@@ -77,6 +78,15 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       ResolvedLlmEndpoint endpoint,
       OpenAiResponsesChatOptions options,
       List<OpenAiHttpClientBuilderCustomizer> customizers) {
+    return create(endpoint, options, customizers, false);
+  }
+
+  static ResponsesAdapter create(
+      ResolvedLlmEndpoint endpoint,
+      OpenAiResponsesChatOptions options,
+      List<OpenAiHttpClientBuilderCustomizer> customizers,
+      boolean acceptedProfile) {
+    if (acceptedProfile) ResponsesProductionProfile.requireEndpoint(endpoint);
     if (endpoint.apiType() != LlmApiType.RESPONSES
         || options.getDeploymentName() != null
         || options.isMicrosoftFoundry()
@@ -168,7 +178,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             .openAiClientAsync(asyncClient)
             .httpClientBuilderCustomizers(transportCustomizers)
             .build();
-    return new ResponsesAdapter(endpoint, model, syncClient, asyncClient);
+    return new ResponsesAdapter(endpoint, model, syncClient, asyncClient, acceptedProfile);
   }
 
   private record RequestReadTimeout(int millis) {}
@@ -206,11 +216,13 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
       ResolvedLlmEndpoint endpoint,
       OpenAiResponsesChatModel delegate,
       com.openai.client.OpenAIClient syncClient,
-      com.openai.client.OpenAIClientAsync asyncClient) {
+      com.openai.client.OpenAIClientAsync asyncClient,
+      boolean acceptedProfile) {
     this.endpoint = Objects.requireNonNull(endpoint, "endpoint");
     this.delegate = Objects.requireNonNull(delegate, "delegate");
     this.syncClient = Objects.requireNonNull(syncClient, "syncClient");
     this.asyncClient = Objects.requireNonNull(asyncClient, "asyncClient");
+    this.acceptedProfile = acceptedProfile;
     if (endpoint.apiType() != LlmApiType.RESPONSES)
       throw new IllegalArgumentException("Responses endpoint required");
   }
@@ -218,6 +230,8 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
   /** An explicit model shares the same resolved connection and SDK clients, never another API. */
   ResponsesAdapter forModel(String model) {
     if (model == null || model.equals(endpoint.model())) return this;
+    if (acceptedProfile)
+      throw new IllegalArgumentException("Responses child model has not passed operational acceptance");
     if (model.isBlank()) throw new IllegalArgumentException("Responses model is required");
     var resolved =
         new ResolvedLlmEndpoint(
@@ -243,7 +257,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             .openAiClient(syncClient)
             .openAiClientAsync(asyncClient)
             .build();
-    return new ResponsesAdapter(resolved, selected, syncClient, asyncClient);
+    return new ResponsesAdapter(resolved, selected, syncClient, asyncClient, acceptedProfile);
   }
 
   @Override
@@ -272,6 +286,7 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
     if (supplied != null && !(supplied instanceof OpenAiResponsesChatOptions))
       throw new IllegalArgumentException("Responses native options required");
     var options = supplied == null ? getOptions() : (OpenAiResponsesChatOptions) supplied;
+    if (acceptedProfile) options = ResponsesProductionProfile.requestOptions(options);
     var include = options.getInclude();
     var metadata = options.getMetadata();
     if (endpoint.capabilities().reasoningReplay() == ReasoningReplayMode.PLAINTEXT

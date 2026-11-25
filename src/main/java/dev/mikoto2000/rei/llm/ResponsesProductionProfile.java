@@ -35,6 +35,14 @@ final class ResponsesProductionProfile {
         || server.getApiKey().isBlank()
         || "dummy-key".equals(server.getApiKey()))
       throw unavailable();
+    if (!feature.equals(endpoint.endpointId())) throw unavailable();
+    requireEndpoint(endpoint);
+  }
+
+  static void requireEndpoint(ResolvedLlmEndpoint endpoint) {
+    String feature = endpoint.endpointId();
+    if (!Set.of(LlmFeature.CHAT, LlmFeature.OUTPUT_LIMIT_PLANNER).contains(feature))
+      throw unavailable();
     var accepted = new ResolvedLlmEndpoint(
         feature,
         1,
@@ -48,6 +56,21 @@ final class ResponsesProductionProfile {
         null,
         TIMEOUT);
     if (!accepted.equals(endpoint)) throw unavailable();
+  }
+
+  /** Reapply the accepted request values without mutating the caller's authority or options. */
+  static org.springframework.ai.openai.responses.OpenAiResponsesChatOptions requestOptions(
+      org.springframework.ai.openai.responses.OpenAiResponsesChatOptions options) {
+    var include = options.getInclude();
+    if (options.getReasoningEffort() != null && !"low".equals(options.getReasoningEffort())
+        || options.getServiceTier() != null && !"default".equals(options.getServiceTier())
+        || options.getMetadata() != null && !options.getMetadata().isEmpty()
+        || options.getPromptCacheKey() != null
+        || options.getSafetyIdentifier() != null
+        || include != null && !include.isEmpty()
+            && !include.equals(java.util.List.of("reasoning.encrypted_content")))
+      throw new IllegalArgumentException("Responses request differs from the accepted operational profile");
+    return options.mutate().reasoningEffort("low").serviceTier("default").build();
   }
 
   private static IllegalStateException unavailable() {

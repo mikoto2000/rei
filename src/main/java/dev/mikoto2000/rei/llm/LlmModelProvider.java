@@ -381,7 +381,8 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         context.put(LlmCapabilities.MAX_TOOLS_CONTEXT_KEY, endpoint.capabilities().maxTools());
       builder.toolContext(context);
       return ResponsesAdapter.create(
-          endpoint, builder.build(), production ? responsesProductionTransport : responsesFixtureCustomizers);
+          endpoint, builder.build(), production ? responsesProductionTransport : responsesFixtureCustomizers,
+          production);
     }
     if (LlmFeature.VOICE_CORRECTION.equals(feature)) {
       // An explicitly selected correction endpoint must never fall back to a different remote
