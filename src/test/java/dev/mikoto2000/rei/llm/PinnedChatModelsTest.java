@@ -140,7 +140,7 @@ class PinnedChatModelsTest {
         .isEqualTo("fixture-answer");
   }
 
-  private static final class Fixture implements AutoCloseable {
+  static final class Fixture implements AutoCloseable {
     final com.sun.net.httpserver.HttpServer server;
     final List<String> headers = new CopyOnWriteArrayList<>();
     final List<JsonNode> bodies = new CopyOnWriteArrayList<>();
