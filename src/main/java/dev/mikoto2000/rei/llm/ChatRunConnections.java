@@ -62,4 +62,14 @@ final class ChatRunConnections {
             })
         .connection();
   }
+
+  RunLlmConnection require(AgentRunContext owner) {
+    return accept(owner);
+  }
+
+  void release(AgentRunContext owner) {}
+
+  void restore(AgentRunContext owner, RunLlmConnection saved) {
+    accept(owner);
+  }
 }

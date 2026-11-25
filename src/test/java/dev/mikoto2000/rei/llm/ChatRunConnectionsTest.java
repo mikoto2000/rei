@@ -12,6 +12,55 @@ import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
 
 class ChatRunConnectionsTest {
+  @Test
+  void continuationWithoutAnAcceptedConnectionMustStopInsteadOfSamplingSelection() {
+    var connections = connections();
+    assertThatThrownBy(() -> connections.require(owner("not-accepted", "session")))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("unavailable");
+  }
+
+  @Test
+  void releaseDoesNotAllowLaterContinuationToCreateANewBinding() {
+    var connections = connections();
+    var owner = owner("run", "session");
+    connections.accept(owner);
+    connections.release(owner);
+    connections.select("second");
+    assertThatThrownBy(() -> connections.require(owner))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("unavailable");
+  }
+
+  @Test
+  void restoredConnectionIgnoresTheNewProcessesSelectedEndpoint() {
+    var original = connections().accept(owner("old-run", "session"));
+    var restarted = connections();
+    restarted.select("second");
+    var resumed = owner("resumed-run", "session");
+    restarted.restore(resumed, original);
+    assertThat(restarted.require(resumed)).isEqualTo(original);
+    assertThat(restarted.selectedEndpoint()).isEqualTo("second");
+  }
+
+  @Test
+  void restoreCannotReplaceAnotherAcceptedConnection() {
+    var connections = connections();
+    var owner = owner("run", "session");
+    var original = connections.accept(owner);
+    connections.select("second");
+    var different = connections.accept(owner("other-run", "session"));
+    assertThatThrownBy(() -> connections.restore(owner, different))
+        .isInstanceOf(IllegalStateException.class).hasMessageContaining("replaced");
+    assertThat(connections.require(owner)).isSameAs(original);
+  }
+
+  @Test
+  void deletedProfileCannotBeRestoredIntoTheCurrentDefault() {
+    var original = connections().accept(owner("old-run", "session"));
+    var restarted = connections("second");
+    assertThatThrownBy(() -> restarted.restore(owner("resumed", "session"), original))
+        .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("endpoint-name");
+  }
+
   @TempDir Path root;
 
   @Test
@@ -76,9 +125,13 @@ class ChatRunConnectionsTest {
   }
 
   private ChatRunConnections connections() {
+    return connections("first", "second");
+  }
+
+  private ChatRunConnections connections(String... names) {
     var values = new HashMap<String, String>();
-    values.put("rei.llm.features.chat.active", "first");
-    for (var name : java.util.List.of("first", "second")) {
+    values.put("rei.llm.features.chat.active", names[0]);
+    for (var name : names) {
       var prefix = "rei.llm.features.chat.endpoints." + name + ".";
       values.put(prefix + "base-url", "http://" + name + ".invalid");
       values.put(prefix + "authentication", "none");
