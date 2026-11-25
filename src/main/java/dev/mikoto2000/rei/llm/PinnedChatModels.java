@@ -10,13 +10,20 @@ final class PinnedChatModels implements AutoCloseable {
   private final Consumer<RunLlmConnection> verify;
   private final dev.mikoto2000.rei.llm.capture.CaptureStore captures;
   private final org.springframework.util.ConcurrentLruCache<RunLlmConnection, ChatModel> cache;
-  private final java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
-  private final okhttp3.OkHttpClient transport = new okhttp3.OkHttpClient.Builder()
-      .proxy(java.net.Proxy.NO_PROXY).followRedirects(false).followSslRedirects(false)
-      .retryOnConnectionFailure(false).build();
+  private final java.util.concurrent.atomic.AtomicBoolean closed =
+      new java.util.concurrent.atomic.AtomicBoolean();
+  private final okhttp3.OkHttpClient transport =
+      new okhttp3.OkHttpClient.Builder()
+          .proxy(java.net.Proxy.NO_PROXY)
+          .followRedirects(false)
+          .followSslRedirects(false)
+          .retryOnConnectionFailure(false)
+          .build();
 
-  PinnedChatModels(Function<RunLlmConnection, String> credential,
-      Consumer<RunLlmConnection> verify, dev.mikoto2000.rei.llm.capture.CaptureStore captures,
+  PinnedChatModels(
+      Function<RunLlmConnection, String> credential,
+      Consumer<RunLlmConnection> verify,
+      dev.mikoto2000.rei.llm.capture.CaptureStore captures,
       int capacity) {
     if (capacity < 1) throw new IllegalArgumentException("Model cache capacity must be positive");
     this.credential = java.util.Objects.requireNonNull(credential);
@@ -36,27 +43,39 @@ final class PinnedChatModels implements AutoCloseable {
       throw new IllegalStateException("Pinned Responses requires its verified protocol adapter");
     var client = client(connection, java.util.List.of());
     try {
-      var model = org.springframework.ai.openai.OpenAiChatModel.builder()
-          .options((org.springframework.ai.openai.OpenAiChatOptions) RunNativeOptions.options(connection))
-          .openAiClient(client).openAiClientAsync(client.async()).build();
-      return captures == null ? model : new CapturingChatModel(model, captures,
-          interceptor -> client(connection, java.util.List.of(interceptor)));
+      var model =
+          org.springframework.ai.openai.OpenAiChatModel.builder()
+              .options(
+                  (org.springframework.ai.openai.OpenAiChatOptions)
+                      RunNativeOptions.options(connection))
+              .openAiClient(client)
+              .openAiClientAsync(client.async())
+              .build();
+      return captures == null
+          ? model
+          : new CapturingChatModel(
+              model, captures, interceptor -> client(connection, java.util.List.of(interceptor)));
     } catch (RuntimeException | Error failed) {
       client.close();
       throw failed;
     }
   }
 
-  private com.openai.client.OpenAIClient client(RunLlmConnection connection,
-      java.util.List<okhttp3.Interceptor> extra) {
+  private com.openai.client.OpenAIClient client(
+      RunLlmConnection connection, java.util.List<okhttp3.Interceptor> extra) {
     var interceptors = new java.util.ArrayList<okhttp3.Interceptor>();
     interceptors.add(new ChatStreamTimeoutInterceptor(connection.endpoint().readTimeout()));
     interceptors.add(new ShowUiSdkRequestInterceptor());
     interceptors.addAll(extra);
-    return PinnedOpenAiClients.open(connection, () -> {
-      verify(connection);
-      return credential.apply(connection);
-    }, transport, interceptors, () -> verify(connection));
+    return PinnedOpenAiClients.open(
+        connection,
+        () -> {
+          verify(connection);
+          return credential.apply(connection);
+        },
+        transport,
+        interceptors,
+        () -> verify(connection));
   }
 
   private void verify(RunLlmConnection connection) {

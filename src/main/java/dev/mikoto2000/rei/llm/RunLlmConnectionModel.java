@@ -60,27 +60,39 @@ final class RunLlmConnectionModel implements ChatModel {
     if (options instanceof OpenAiChatOptions chat) {
       override =
           overrides(
-              connection,
-              chat.getBaseUrl(),
-              chat.getApiKey(),
-              chat.getCredential(),
-              chat.getCustomHeaders(),
-              chat.getOrganizationId())
-          || transportOverrides(connection, chat.getMaxRetries(), chat.getTimeout(), chat.getProxy(),
-              chat.getDeploymentName(), chat.getMicrosoftFoundryServiceVersion(), chat.isMicrosoftFoundry())
-          || chat.isGitHubModels();
+                  connection,
+                  chat.getBaseUrl(),
+                  chat.getApiKey(),
+                  chat.getCredential(),
+                  chat.getCustomHeaders(),
+                  chat.getOrganizationId())
+              || transportOverrides(
+                  connection,
+                  chat.getMaxRetries(),
+                  chat.getTimeout(),
+                  chat.getProxy(),
+                  chat.getDeploymentName(),
+                  chat.getMicrosoftFoundryServiceVersion(),
+                  chat.isMicrosoftFoundry())
+              || chat.isGitHubModels();
     } else {
       var responses = (OpenAiResponsesChatOptions) options;
       override =
           overrides(
-              connection,
-              responses.getBaseUrl(),
-              responses.getApiKey(),
-              responses.getCredential(),
-              responses.getCustomHeaders(),
-              responses.getOrganizationId())
-          || transportOverrides(connection, responses.getMaxRetries(), responses.getTimeout(), responses.getProxy(),
-              responses.getDeploymentName(), responses.getMicrosoftFoundryServiceVersion(), responses.isMicrosoftFoundry());
+                  connection,
+                  responses.getBaseUrl(),
+                  responses.getApiKey(),
+                  responses.getCredential(),
+                  responses.getCustomHeaders(),
+                  responses.getOrganizationId())
+              || transportOverrides(
+                  connection,
+                  responses.getMaxRetries(),
+                  responses.getTimeout(),
+                  responses.getProxy(),
+                  responses.getDeploymentName(),
+                  responses.getMicrosoftFoundryServiceVersion(),
+                  responses.isMicrosoftFoundry());
     }
     if (override)
       throw new IllegalStateException("Run request cannot override accepted connection");
@@ -102,10 +114,22 @@ final class RunLlmConnectionModel implements ChatModel {
         || organization != null;
   }
 
-  private static boolean transportOverrides(RunLlmConnection connection, int retries,
-      java.time.Duration timeout, Object proxy, String deployment, Object version, boolean cloud) {
-    return retries != 0 || proxy != null || deployment != null || version != null || cloud
-        || timeout != null && (timeout.isNegative() || timeout.isZero()
-            || timeout.compareTo(connection.requestTimeout()) > 0);
+  private static boolean transportOverrides(
+      RunLlmConnection connection,
+      int retries,
+      java.time.Duration timeout,
+      Object proxy,
+      String deployment,
+      Object version,
+      boolean cloud) {
+    return retries != 0
+        || proxy != null
+        || deployment != null
+        || version != null
+        || cloud
+        || timeout != null
+            && (timeout.isNegative()
+                || timeout.isZero()
+                || timeout.compareTo(connection.requestTimeout()) > 0);
   }
 }

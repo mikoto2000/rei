@@ -116,7 +116,11 @@ final class ResponsesAdapter implements LlmProtocolAdapter, ChatModel {
             var request = chain.request();
             var body = request.body();
             if (body != null)
-              request = request.newBuilder().method(request.method(), PinnedOpenAiClients.nonReplayable(body)).build();
+              request =
+                  request
+                      .newBuilder()
+                      .method(request.method(), PinnedOpenAiClients.nonReplayable(body))
+                      .build();
             return chain.proceed(request);
           })
           .interceptor(chain -> {

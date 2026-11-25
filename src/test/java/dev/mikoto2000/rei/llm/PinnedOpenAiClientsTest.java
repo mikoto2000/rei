@@ -293,14 +293,32 @@ class PinnedOpenAiClientsTest {
   void aRetryAfterZeroServiceFailureCannotResendAnInference(LlmApiType api) throws Exception {
     try (var fixture = new Fixture()) {
       fixture.unavailableOnce.set(true);
-      try (var client = new Owned(PinnedOpenAiClients.open(fixture.endpoint(api), LlmAuthentication.NONE,
-          () -> { throw new AssertionError("No-auth read credentials"); }, fixture.transport, List.of()))) {
-        assertThatThrownBy(() -> {
-          if (api == LlmApiType.RESPONSES) request(client.client());
-          else client.client().chat().completions().create(
-              com.openai.models.chat.completions.ChatCompletionCreateParams.builder()
-                  .model("fixture-model").addUserMessage("fixture").build()).id();
-        }).isInstanceOf(RuntimeException.class);
+      try (var client =
+          new Owned(
+              PinnedOpenAiClients.open(
+                  fixture.endpoint(api),
+                  LlmAuthentication.NONE,
+                  () -> {
+                    throw new AssertionError("No-auth read credentials");
+                  },
+                  fixture.transport,
+                  List.of()))) {
+        assertThatThrownBy(
+                () -> {
+                  if (api == LlmApiType.RESPONSES) request(client.client());
+                  else
+                    client
+                        .client()
+                        .chat()
+                        .completions()
+                        .create(
+                            com.openai.models.chat.completions.ChatCompletionCreateParams.builder()
+                                .model("fixture-model")
+                                .addUserMessage("fixture")
+                                .build())
+                        .id();
+                })
+            .isInstanceOf(RuntimeException.class);
       }
       assertThat(fixture.requests).hasValue(1);
     }
@@ -334,7 +352,8 @@ class PinnedOpenAiClientsTest {
             .build();
     final AtomicInteger requests = new AtomicInteger();
     final AtomicReference<String> redirect = new AtomicReference<>();
-    final java.util.concurrent.atomic.AtomicBoolean unavailableOnce = new java.util.concurrent.atomic.AtomicBoolean();
+    final java.util.concurrent.atomic.AtomicBoolean unavailableOnce =
+        new java.util.concurrent.atomic.AtomicBoolean();
     final List<String> authorizations = new CopyOnWriteArrayList<>();
     final List<String> alternativeKeys = new CopyOnWriteArrayList<>();
 

@@ -185,7 +185,8 @@ final class RunNativeOptions {
     var builder = OpenAiChatOptions.StreamOptions.builder();
     map.forEach((name, flag) -> {
       if ("include_usage".equals(name)) builder.includeUsage(bool("stream_options", flag));
-      else if ("include_obfuscation".equals(name)) builder.includeObfuscation(bool("stream_options", flag));
+      else if ("include_obfuscation".equals(name))
+        builder.includeObfuscation(bool("stream_options", flag));
       else throw unsupported("stream_options");
     });
     return builder.build();

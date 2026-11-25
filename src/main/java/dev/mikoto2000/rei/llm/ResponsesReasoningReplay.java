@@ -14,7 +14,8 @@ final class ResponsesReasoningReplay {
 
   private ResponsesReasoningReplay() {}
 
-  static String identity(org.springframework.ai.chat.prompt.ChatOptions options, ResolvedLlmEndpoint endpoint) {
+  static String identity(
+      org.springframework.ai.chat.prompt.ChatOptions options, ResolvedLlmEndpoint endpoint) {
     if (options instanceof org.springframework.ai.model.tool.ToolCallingChatOptions tools) {
       var context = tools.getToolContext();
       var key = dev.mikoto2000.rei.modeloptions.ModelOptions.RUN_CONNECTION_CONTEXT_KEY;
