@@ -51,6 +51,11 @@ final class CapturingChatModel implements ChatModel {
     this.meters = meters;
   }
 
+  CapturingChatModel(OpenAiChatModel delegate, CaptureStore store,
+      java.util.function.Function<CaptureStore.LogicalCall, com.openai.client.OpenAIClient> clients) {
+    this(delegate, store, List.of(), io.micrometer.observation.ObservationRegistry.NOOP, null);
+  }
+
   /** 用途に応じたモデル利用で参照する選択可能な設定を返す。 */
   public ChatOptions getOptions() {
     return delegate.getOptions();
