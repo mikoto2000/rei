@@ -108,8 +108,7 @@ final class ResponsesSdkBoundary {
   /** This adapter only advertises flat tools. Never let Spring discard a foreign namespace. */
   private static void requireFlatToolCall(com.openai.models.responses.ResponseOutputItem output) {
     if (output.functionCall().filter(call -> call.namespace().isPresent()).isPresent())
-      throw new ResponsesTransportException(
-          ResponsesTransportException.Category.INVALID_RESPONSE);
+      throw new ResponsesTransportException(ResponsesTransportException.Category.INVALID_RESPONSE);
   }
 
   /** Unknown plaintext fields cannot be dropped before the canonical ReasoningPart is stored. */

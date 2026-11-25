@@ -21,20 +21,24 @@ class ResponsesTransportContractTest {
     var output =
         "{\"type\":\"function_call\",\"id\":\"fc_fixture\",\"call_id\":\"call_fixture\","
             + "\"name\":\"fixture\",\"namespace\":\"unregistered\",\"arguments\":\"{}\",\"status\":\"completed\"}";
-    var response = (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(completed());
+    var response =
+        (com.fasterxml.jackson.databind.node.ObjectNode) new ObjectMapper().readTree(completed());
     response.set("output", new ObjectMapper().readTree("[" + output + "]"));
     reply = response.toString();
     if (streaming) {
       contentType = "text/event-stream";
-      reply = event("response.output_item.done", "\"output_index\":0,\"item\":" + output)
-          + event("response.completed", "\"response\":" + reply);
+      reply =
+          event("response.output_item.done", "\"output_index\":0,\"item\":" + output)
+              + event("response.completed", "\"response\":" + reply);
     }
     var options = options().build();
-    assertThatThrownBy(() -> {
-      var model = transport(options);
-      if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
-      else model.call(new Prompt("fixture", options));
-    }).isInstanceOf(ResponsesTransportException.class);
+    assertThatThrownBy(
+            () -> {
+              var model = transport(options);
+              if (streaming) model.stream(new Prompt("fixture", options)).collectList().block();
+              else model.call(new Prompt("fixture", options));
+            })
+        .isInstanceOf(ResponsesTransportException.class);
     assertThat(requests).hasSize(1);
   }
 
