@@ -15,8 +15,17 @@ final class RunNativeOptions {
     put(values, "temperature", options.getTemperature());
     put(values, "top_p", options.getTopP());
     if (options instanceof OpenAiChatOptions chat) {
+      if (chat.getOutputModalities() != null && !chat.getOutputModalities().isEmpty())
+        throw unsupported("modalities");
+      if (chat.getOutputAudio() != null) throw unsupported("audio");
       if (chat.getExtraBody() != null && !chat.getExtraBody().isEmpty())
         throw unsupported("extra_body");
+      put(values, "tool_choice", chat.getToolChoice());
+      put(values, "metadata", chat.getMetadata());
+      put(values, "prompt_cache_key", chat.getPromptCacheKey());
+      put(values, "user", chat.getUser());
+      put(values, "replay_reasoning_content", chat.getReplayReasoningContent());
+      put(values, "stream_options", streamSettings(chat.getStreamOptions()));
       put(values, "response_format", formatSettings(chat.getResponseFormat()));
       put(values, "max_tokens", chat.getMaxTokens());
       put(values, "max_completion_tokens", chat.getMaxCompletionTokens());
@@ -35,8 +44,14 @@ final class RunNativeOptions {
       put(values, "parallel_tool_calls", chat.getParallelToolCalls());
       put(values, "store", chat.getStore());
     } else if (options instanceof OpenAiResponsesChatOptions responses) {
+      if (responses.getHostedTools() != null && !responses.getHostedTools().isEmpty())
+        throw unsupported("hosted_tools");
       if (responses.getExtraBody() != null && !responses.getExtraBody().isEmpty())
         throw unsupported("extra_body");
+      put(values, "tool_choice", responses.getToolChoice());
+      put(values, "metadata", responses.getMetadata());
+      put(values, "prompt_cache_key", responses.getPromptCacheKey());
+      put(values, "safety_identifier", responses.getSafetyIdentifier());
       put(values, "response_format", formatSettings(responses.getResponseFormat()));
       put(values, "max_output_tokens", responses.getMaxOutputTokens());
       put(values, "reasoning_effort", responses.getReasoningEffort());
@@ -94,6 +109,12 @@ final class RunNativeOptions {
               case "parallel_tool_calls" -> builder.parallelToolCalls(bool(name, value));
               case "store" -> builder.store(bool(name, value));
               case "response_format" -> builder.responseFormat(format(value));
+              case "tool_choice" -> builder.toolChoice(toolChoice(value));
+              case "metadata" -> builder.metadata(stringMap(name, value));
+              case "prompt_cache_key" -> builder.promptCacheKey(string(name, value));
+              case "user" -> builder.user(string(name, value));
+              case "replay_reasoning_content" -> builder.replayReasoningContent(bool(name, value));
+              case "stream_options" -> builder.streamOptions(streamOptions(value));
               default -> throw unsupported(name);
             }
           });
@@ -122,6 +143,10 @@ final class RunNativeOptions {
             case "include" -> builder.include(strings(name, value));
             case "truncation" -> builder.truncation(string(name, value));
             case "response_format" -> builder.responseFormat(format(value));
+            case "tool_choice" -> builder.toolChoice(toolChoice(value));
+            case "metadata" -> builder.metadata(stringMap(name, value));
+            case "prompt_cache_key" -> builder.promptCacheKey(string(name, value));
+            case "safety_identifier" -> builder.safetyIdentifier(string(name, value));
             default -> throw unsupported(name);
           }
         });
@@ -131,6 +156,39 @@ final class RunNativeOptions {
   private static Double number(String name, Object value) {
     if (value instanceof Number number) return number.doubleValue();
     throw unsupported(name);
+  }
+
+  private static Object toolChoice(Object value) {
+    if (value instanceof String || value instanceof Map<?, ?>) return value;
+    throw unsupported("tool_choice");
+  }
+
+  private static Map<String, String> stringMap(String name, Object value) {
+    if (!(value instanceof Map<?, ?> map)) throw unsupported(name);
+    var copy = new java.util.LinkedHashMap<String, String>();
+    map.forEach((key, item) -> copy.put(string(name, key), string(name, item)));
+    return Map.copyOf(copy);
+  }
+
+  private static Map<String, Object> streamSettings(OpenAiChatOptions.StreamOptions stream) {
+    if (stream == null) return null;
+    if (stream.additionalProperties() != null && !stream.additionalProperties().isEmpty())
+      throw unsupported("stream_options");
+    var values = new java.util.LinkedHashMap<String, Object>();
+    put(values, "include_usage", stream.includeUsage());
+    put(values, "include_obfuscation", stream.includeObfuscation());
+    return Map.copyOf(values);
+  }
+
+  private static OpenAiChatOptions.StreamOptions streamOptions(Object value) {
+    if (!(value instanceof Map<?, ?> map)) throw unsupported("stream_options");
+    var builder = OpenAiChatOptions.StreamOptions.builder();
+    map.forEach((name, flag) -> {
+      if ("include_usage".equals(name)) builder.includeUsage(bool("stream_options", flag));
+      else if ("include_obfuscation".equals(name)) builder.includeObfuscation(bool("stream_options", flag));
+      else throw unsupported("stream_options");
+    });
+    return builder.build();
   }
 
   private static Integer integer(String name, Object value) {
