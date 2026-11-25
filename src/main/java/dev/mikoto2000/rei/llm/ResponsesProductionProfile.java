@@ -64,9 +64,10 @@ final class ResponsesProductionProfile {
   static org.springframework.ai.openai.responses.OpenAiResponsesChatOptions requestOptions(
       org.springframework.ai.openai.responses.OpenAiResponsesChatOptions options) {
     var include = options.getInclude();
+    var metadata = options.getMetadata();
     if (options.getReasoningEffort() != null && !"low".equals(options.getReasoningEffort())
         || options.getServiceTier() != null && !"default".equals(options.getServiceTier())
-        || options.getMetadata() != null && !options.getMetadata().isEmpty()
+        || metadata != null && !metadata.isEmpty()
         || options.getPromptCacheKey() != null
         || options.getSafetyIdentifier() != null
         || include != null
