@@ -7,6 +7,11 @@ ChatGPT 利用枠が利用可能になったという意味ではない。実ア
 
 ## 正本と参照資料
 
+2026-11-26: 全体方針を [共通 LLM 接続基盤](llm-connection-foundation-design.md)として整理した。
+OpenAI API、ChatGPT Plan、local の責務を同じプロファイルで表し、Provider、API、認証、
+Capability、Replay を分離する。以下の Phase 0 の記録は調査時点の状態を表す。
+Phase 1 は作業中であり、通常チャットへの接続先選択はまだ提供していない。
+
 コードを正本として、以下を照合した。
 
 - [既存のサブエージェント](chatgpt-plan-subagents.md)

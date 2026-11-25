@@ -1,7 +1,7 @@
 # chat 用 LLM エンドポイントの動的切り替え設計案
 
 作成日: 2026-11-24
-状態: レビュー用。実装は未着手。
+状態: 旧設計案。全体方針は [共通 LLM 接続基盤](llm-connection-foundation-design.md)を参照。
 
 2026-11-25: 通常チャットの ChatGPT 利用枠対応を含む実装に向けて
 [Phase 0 の棚卸しと SDK 検証](chat-endpoints-implementation.md)を開始した。
