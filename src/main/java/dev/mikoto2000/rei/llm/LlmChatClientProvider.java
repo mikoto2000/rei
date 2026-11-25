@@ -426,6 +426,12 @@ public class LlmChatClientProvider {
     return cache.computeIfAbsent(feature, this::createChatClient);
   }
 
+  /** Builds a main-chat client whose inference is routed through the accepted Run connection. */
+  public ChatClient runChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode,
+      LlmApiType api, ChatModel model) {
+    return parallelChatClient(mode);
+  }
+
   /**
    * 用途に応じたモデル利用で用いる並列モデルへ対話を依頼する窓口を返す。
    *
