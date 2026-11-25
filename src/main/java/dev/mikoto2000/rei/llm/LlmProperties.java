@@ -152,7 +152,28 @@ public class LlmProperties {
       copy.maxTools = maxTools;
       copy.reasoningReplay = reasoningReplay;
       copy.supportedSettings = supportedSettings;
+      copy.active = active;
+      copy.endpoints = endpoints == null ? null : copyFeatures(endpoints);
       return copy;
+    }
+
+    private String active;
+    private Map<String, Server> endpoints;
+
+    public String getActive() {
+      return active;
+    }
+
+    public void setActive(String active) {
+      this.active = active;
+    }
+
+    public Map<String, Server> getEndpoints() {
+      return endpoints == null ? null : copyFeatures(endpoints);
+    }
+
+    public void setEndpoints(Map<String, Server> endpoints) {
+      this.endpoints = endpoints == null ? null : copyFeatures(endpoints);
     }
 
     /** 最大出力トークン数。 */
